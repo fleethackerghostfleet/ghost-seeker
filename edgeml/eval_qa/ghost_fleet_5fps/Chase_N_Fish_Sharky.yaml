@@ -1,0 +1,7 @@
+reviewed: true
+gt_status: incomplete
+drop: [1]
+notes: >-
+  Track 1 ("whale") sits on a burned-in emoji overlay -> false positive, dropped. The real shark fins and the small boat in
+  this vertical phone clip were not detected and were not hand-labelled (glare, 16-px fins). Sequence kept with zero GT
+  for FP review only; exclude from headline metrics.
