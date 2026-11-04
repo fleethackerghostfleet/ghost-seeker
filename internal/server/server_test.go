@@ -158,6 +158,11 @@ func TestIngestValidationAndToken(t *testing.T) {
 	if err := (&edgesim.Uploader{BaseURL: ts.URL, Token: "s3cret", Client: http.DefaultClient}).Upload(context.Background(), fr); err != nil {
 		t.Errorf("upload with token: %v", err)
 	}
+	bad := fr
+	bad.Report.Detections = append([]catalog.Detection{{Class: "warship", Conf: 2e21}}, fr.Report.Detections...)
+	if err := (&edgesim.Uploader{BaseURL: ts.URL, Token: "s3cret", Client: http.DefaultClient}).Upload(context.Background(), bad); err == nil {
+		t.Error("out-of-range confidence should be rejected")
+	}
 	fr.Report.Source = "BOGUS"
 	if err := (&edgesim.Uploader{BaseURL: ts.URL, Token: "s3cret", Client: http.DefaultClient}).Upload(context.Background(), fr); err == nil {
 		t.Error("unknown source should be rejected")

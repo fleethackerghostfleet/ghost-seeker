@@ -24,6 +24,9 @@ var Sources = []Source{
 	{"SAR-7", "Commercial SAR Pass · Sector 7", "sat", "sar", "Sector 7 strip", "On-orbit FPGA", "CFAR + tiny CNN", "Ground-station downlink", "per pass"},
 }
 
+// Attrs are the behavior flags an edge model may report on a detection.
+var Attrs = map[string]bool{"approaching": true, "moving": true, "dark": true, "loitering": true, "new": true}
+
 func SourceByID(id string) (Source, bool) {
 	for _, s := range Sources {
 		if s.ID == id {

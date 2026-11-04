@@ -31,6 +31,8 @@ type Server struct {
 	ingestToken string
 }
 
+const maxDetections = 32
+
 func New(st *store.Store, web fs.FS, ingestToken string) *Server {
 	return &Server{store: st, hub: newHub(), web: web, ingestToken: ingestToken}
 }
@@ -85,11 +87,32 @@ func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, "unknown source "+strconv.Quote(rep.Source))
 		return
 	}
-	for _, d := range rep.Detections {
+	unit := func(f float64) bool { return f >= 0 && f <= 1 }
+	if len(rep.Detections) > maxDetections || !unit(rep.EdgeScore) {
+		httpError(w, http.StatusBadRequest, fmt.Sprintf("edge_score must be within [0,1] and at most %d detections", maxDetections))
+		return
+	}
+	for i := range rep.Detections {
+		d := &rep.Detections[i]
 		if _, ok := catalog.Classes[d.Class]; !ok {
 			httpError(w, http.StatusBadRequest, "unknown class "+strconv.Quote(d.Class))
 			return
 		}
+		if !unit(d.Conf) || !unit(d.Box.X) || !unit(d.Box.Y) || !unit(d.Box.W) || !unit(d.Box.H) {
+			httpError(w, http.StatusBadRequest, fmt.Sprintf("detection %d: conf and box must be within [0,1]", i))
+			return
+		}
+		attrs := map[string]bool{}
+		for k, v := range d.Attrs {
+			if !catalog.Attrs[k] {
+				httpError(w, http.StatusBadRequest, "unknown attribute "+strconv.Quote(k))
+				return
+			}
+			if v {
+				attrs[k] = true
+			}
+		}
+		d.Attrs = attrs
 	}
 	if rep.CapturedAt == 0 {
 		rep.CapturedAt = time.Now().UnixMilli()
