@@ -567,13 +567,14 @@ def main():
     if a.append and (out / "summary.json").exists():
         prev = json.loads((out / "summary.json").read_text())
         new_ids = {r[0] for r in rows}
-        names = {budget_name(b) for b in a.budgets}
+        want = {budget_name(b): b for b in a.budgets}
         kept = []
         for cid, m in prev.items():
             if cid in new_ids:
                 continue
-            if not names <= set(m.get("selection", {})):
-                print(f"!! --append: dropping earlier row {cid} (budgets {sorted(m.get('selection', {}))} != {sorted(names)})")
+            have = {n: v.get("budget_bytes_per_window") for n, v in m.get("selection", {}).items()}
+            if any(have.get(n) != b for n, b in want.items()):  # compare exact bytes, not the rounded names
+                print(f"!! --append: dropping earlier row {cid} (budgets {have} != {want})")
                 continue
             kept.append((cid, m["fps"], m))
         rows = kept + rows
