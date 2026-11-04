@@ -1,0 +1,5 @@
+{
+  "class_weights": {"boat": 1.0, "person": 0.9},
+  "default_object_weight": 0.2,
+  "novelty_weight": 0.65
+}

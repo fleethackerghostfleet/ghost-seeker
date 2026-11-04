@@ -1,4 +1,9 @@
 # ghost-seeker
+
+## Algorithm baseline
+
+[`algorithm/README.md`](algorithm/README.md) describes the CPU-only image/video scoring, configurable default prioritization, and offline byte-budget evaluation. Image evidence is cached separately from policy, so operator overrides can rerank observations without repeating inference. Detection annotations enter evaluation only.
+
 ## UI mockup
 
 `ui-mockup/index.html` is a self-contained interactive mockup of the Ghost Seeker operator UI (open it in a browser, no server needed). All imagery is synthetic.
