@@ -69,30 +69,12 @@ the UI shows one card per sighting with the crop, and the strip's "N duplicate f
 the edge" is `GetStatus.items_deduped`. When a sighting closes, the edge sends a ~200 B contact
 report (RECORD item); the card then shows "n frames seen" from it.
 
-**Known caveat (F1 follow-up in progress):** in `-dedup sightings` mode the edge still stores
-every *object-free* frame as its own per-frame item (sea/sky frames with no track), so the raw
-item count on shore grows at 5 fps between sightings and those frames compete for the link.
-The feed hides them by default ("sightings only" toggle; the count of hidden frames is shown
-next to it) and the review queue only lists sightings, but the strip's "items on shore / on
-edge" and bytes include them. F1's throttle will stop the edge forwarding them.
-
-**Link control.** The web app hosts the ship→shore link itself: `internal/shaper` is a TCP
-proxy with a token bucket on `:18080`; the edge's `-shore` points at it, so the 0 / 9.6 kbps
-/ 64 kbps / 256 kbps / 2 Mbps buttons change the real bytes-on-wire rate (0 drops the
-connection). `edge/link` has no console hook for its simulator, and this needs no Docker.
-The compose stack keeps Toxiproxy: `deploy/compose/degrade.sh 9k6|64k|256k|2m` applies the
-same ladder; in that setup run the UI with `-link-listen ""` and the strip shows the edge's
-own link estimate instead.
-
-**Status strip.** current kbps (shaper setting + edge's estimate), items on shore / on edge
-(+ queued items and bytes on the edge), unique objects with an image on shore (by
-`sighting_id`; items without one count as one object each), bytes through the link.
-
-**Actions.** The directive box calls shore `SetPolicy` (free text is parsed:
-"ignore cargo ships; prioritize submarines" → suppress `cargo ship`, boost `submarine`;
-the edge picks the policy up on its next exchange). "Pull full image" calls shore
-`RequestPull` for FORM_KIND_FULL. "Relabel…" calls `OverrideLabel`. Confirm/Dismiss/Escalate
-are local to the browser (localStorage).
+**Object-free frames.** In `-dedup sightings` mode the edge folds frames with no tracked object
+into one FACT+THUMB **scene** item per source per `-scene-every` (default 60 s; `tags.event:
+"scene"`, no FULL). The feed shows them as dim "Scene / context" tiles with a "Pull full frame"
+button; they are not objects, so they are excluded from the unique-object count, the review queue
+and the commander view (the strip says "N scene tiles not counted"). Any per-frame leftovers
+(`-scene-every 0`) are hidden by the "sightings only" toggle.
 
 ## 3. Three-minute presenter script
 
