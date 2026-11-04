@@ -67,7 +67,7 @@ def delivered_vs_budget(events: list[dict], sighting_match: dict[str, Optional[i
                     gt_here = dict(gt_at.get(fr, {}))
                     prev_, next_ = gt_at.get(fr - 1, {}), gt_at.get(fr + 1, {})
                     for oid, gb in next_.items():
-                        if oid not in gt_here and (oid in prev_ or first_frame.get(oid) == fr + 1):
+                        if oid not in gt_here and (oid in prev_ or (fr <= 1 and first_frame.get(oid) == fr + 1)):
                             gt_here[oid] = gb
                     for oid, gb in gt_here.items():
                         if _covers(region, gb, W, H):
