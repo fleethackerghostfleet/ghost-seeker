@@ -474,9 +474,9 @@ python edgeml/tools/d_eval_zeroshot.py --embedders mobileclip-s0 mobileclip-s1 s
 python edgeml/tools/d_eval_zeroshot.py --embedders mobileclip-s0 mobileclip-s1 --seaships --e1 --e1-n 60 \
   --seaships-ann ~/data/catalog/ann/seaships7000.jsonl --seaships-ids ~/data/seaships_dev_ids.txt --seaships-images ~/data/seaships/dev --out results/e1
 # end to end
-taskset -c 0-3 python -m edgeml.runtime.e2e --det ~/models/export/yolo11n-416/int8/model.xml --embed ~/models/clip/mobileclip-s1/int8 --clips ~/data/clips/Submarine_surfacing ~/data/clips/Sailing_POV_Corfu_Paxos ~/data/clips/Whale_Watching_in_Northern_Peru --detect-hz 1 --threads 4 --out e2e.json --events-out e2e.jsonl
+taskset -c 0-3 python -m edgeml.runtime.e2e --det ~/models/export/yolo11n-416/int8/model.xml --embed ~/models/clip/mobileclip-s1/int8 --clips ~/data/clips/Submarine_surfacing ~/data/clips/Sailing_POV_Corfu_Paxos ~/data/clips/Whale_Watching_in_Northern_Peru --detect-hz 1 --threads 4 --out results/e2e/yolo11n-416-mobileclip-s1-int8.json --events-out results/e2e/yolo11n-416-mobileclip-s1-int8.jsonl
 # tables for this report
-python edgeml/tools/d_report_tables.py --bench results/bench_merged --acc results/det_acc*.jsonl --gate results/gate.json --zeroshot results/zeroshot --e1 results/e1 --e2e results/e2e --embed results/embed/embed_cost.json --sustained results/sustained --calib results/calib
+python edgeml/tools/d_report_tables.py --bench results/bench_merged --acc results/det_acc*.jsonl --gate results/gate.json --zeroshot results/zeroshot3 --e1 results/e1 --e2e results/e2e --embed results/embed/embed_cost.json --sustained results/sustained --calib results/calib
 ```
 
 Run artefacts: ``gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/` —
