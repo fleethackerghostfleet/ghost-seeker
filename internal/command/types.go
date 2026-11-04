@@ -1,6 +1,10 @@
 package command
 
-import "time"
+import (
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+)
 
 type Rule struct {
 	Type        string   `json:"type"`
@@ -42,10 +46,11 @@ type Attributes struct {
 }
 
 type Detection struct {
-	Class string     `json:"cls"`
-	Box   Box        `json:"b"`
-	Conf  float64    `json:"conf"`
-	Attrs Attributes `json:"attrs"`
+	Class string             `json:"cls"`
+	Box   Box                `json:"b"`
+	Conf  float64            `json:"conf"`
+	Attrs Attributes         `json:"attrs"`
+	Ship  *catalog.ShipClass `json:"ship,omitempty"`
 }
 
 type DetectionScore struct {

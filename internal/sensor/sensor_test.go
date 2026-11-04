@@ -1,6 +1,7 @@
 package sensor
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -22,6 +23,26 @@ func TestTickUsesLibraryImageDetections(t *testing.T) {
 	if len(images) == 0 {
 		t.Fatalf("source %q has no library images", source.ID)
 	}
+
+	expectedShip := &catalog.ShipClass{
+		Type: "tanker", Label: "Tanker", Conf: .82, Aspect: "beam",
+		Size: "large", Features: []string{"cranes"}, Markings: "visible", Model: "test",
+	}
+	originalShips := make([][]*catalog.ShipClass, len(images))
+	for i := range images {
+		originalShips[i] = make([]*catalog.ShipClass, len(images[i].Dets))
+		for j := range images[i].Dets {
+			originalShips[i][j] = images[i].Dets[j].Ship
+			images[i].Dets[j].Ship = expectedShip
+		}
+	}
+	defer func() {
+		for i := range images {
+			for j := range images[i].Dets {
+				images[i].Dets[j].Ship = originalShips[i][j]
+			}
+		}
+	}()
 
 	generator := NewGenerator()
 	var itemReturned bool
@@ -59,6 +80,9 @@ func TestTickUsesLibraryImageDetections(t *testing.T) {
 			if detection.Conf < .55 || detection.Conf > .98 {
 				t.Errorf("detection %d confidence = %.2f, outside [.55, .98]", i, detection.Conf)
 			}
+			if detection.Ship != want.Ship || !reflect.DeepEqual(detection.Ship, expectedShip) {
+				t.Errorf("detection %d ship = %+v, want %+v", i, detection.Ship, expectedShip)
+			}
 		}
 		return
 	}
@@ -75,6 +99,11 @@ func TestTickFallsBackWithoutLibraryImages(t *testing.T) {
 		if item != nil {
 			if item.Img != "" {
 				t.Fatalf("fallback item image = %q, want empty", item.Img)
+			}
+			for i, detection := range item.Dets {
+				if detection.Ship != nil {
+					t.Errorf("fallback detection %d has ship classification %+v, want nil", i, detection.Ship)
+				}
 			}
 			return
 		}
