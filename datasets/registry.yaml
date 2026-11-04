@@ -1,52 +1,13 @@
-- dataset_id: yt_30_days_at_sea_timelapse
-  name: 30 Days at Sea Timelapse
-  source_type: repo
-  source_url: https://github.com/fleethackerghostfleet/ghost-seeker
+- dataset_id: video_frames
+  dataset_id_pattern: video_*
+  name: Video frame datasets
+  source_type: mixed
+  source_url: null
   license: unknown
   viewpoint: surface
   modality: rgb
   synthetic: false
-  ingest_script: datasets/ingest/legacy_frames.py
-  status: ingested
-- dataset_id: yt_argentina_to_alaska_cruise_bridge_timelapse
-  name: Argentina to Alaska Cruise Bridge Timelapse
-  source_type: repo
-  source_url: https://github.com/fleethackerghostfleet/ghost-seeker
-  license: unknown
-  viewpoint: surface
-  modality: rgb
-  synthetic: false
-  ingest_script: datasets/ingest/legacy_frames.py
-  status: ingested
-- dataset_id: yt_cargo_ship_storm_first_hour
-  name: Cargo Ship Storm first hour
-  source_type: repo
-  source_url: https://github.com/fleethackerghostfleet/ghost-seeker
-  license: unknown
-  viewpoint: surface
-  modality: rgb
-  synthetic: false
-  ingest_script: datasets/ingest/legacy_frames.py
-  status: ingested
-- dataset_id: yt_cargo_ship_uncut_view
-  name: Cargo Ship Uncut View
-  source_type: repo
-  source_url: https://github.com/fleethackerghostfleet/ghost-seeker
-  license: unknown
-  viewpoint: surface
-  modality: rgb
-  synthetic: false
-  ingest_script: datasets/ingest/legacy_frames.py
-  status: ingested
-- dataset_id: yt_dolphins_pungo_ferry_bridge
-  name: Dolphins Pungo Ferry Bridge
-  source_type: repo
-  source_url: https://github.com/fleethackerghostfleet/ghost-seeker
-  license: unknown
-  viewpoint: surface
-  modality: rgb
-  synthetic: false
-  ingest_script: datasets/ingest/legacy_frames.py
+  ingest_script: datasets/ingest/video_frames.py
   status: ingested
 - dataset_id: seaships7000
   name: SeaShips 7000
@@ -168,3 +129,13 @@
   synthetic: false
   ingest_script: datasets/ingest/web.py
   status: planned
+- dataset_id: smd_vis_onboard_sample
+  name: Singapore Maritime Dataset VIS Onboard sample
+  source_type: repo
+  source_url: https://sites.google.com/site/dilipprasad/home/singapore-maritime-dataset
+  license: unknown (academic research use)
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: datasets/ingest/smd_vis_onboard.py
+  status: ingested

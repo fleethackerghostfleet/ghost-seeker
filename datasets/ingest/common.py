@@ -149,6 +149,23 @@ def upsert_dataset_row(row):
         run_gcloud("storage", "cp", str(path), gcs_uri("catalog/datasets.jsonl"))
 
 
+def delete_dataset_rows_by_prefix(prefix):
+    rows = _read_dataset_catalog()
+    retained = [
+        row
+        for row in rows
+        if not str(row.get("dataset_id", "")).startswith(prefix)
+    ]
+    removed = len(rows) - len(retained)
+    if not removed:
+        return 0
+    with tempfile.TemporaryDirectory(prefix="ghost-seeker-catalog-") as tmp:
+        path = Path(tmp) / "datasets.jsonl"
+        _write_jsonl(path, retained, DATASET_FIELDS)
+        run_gcloud("storage", "cp", str(path), gcs_uri("catalog/datasets.jsonl"))
+    return removed
+
+
 def write_catalog(dataset_row, image_rows, annotation_rows):
     dataset_id = dataset_row["dataset_id"]
     with tempfile.TemporaryDirectory(prefix="ghost-seeker-catalog-") as tmp:
