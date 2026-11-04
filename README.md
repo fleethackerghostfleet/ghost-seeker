@@ -1,9 +1,14 @@
 # ghost-seeker
-## UI mockup
 
-`ui-mockup/index.html` is a self-contained interactive mockup of the Ghost Seeker operator UI (open it in a browser, no server needed). All imagery is synthetic.
+## Running the app
 
-- **Live Feed** – dense grid of prioritized images from edge sensors; click an image for detections, priority reasoning, and processing chain.
-- **Review queue** – one image at a time for sleep-deprived reviewers: `1`–`4` set P1–P4, `Space` agree with model, `X` not relevant, `C` send to CDR, `→` skip, `Z` undo, `N` night (red) mode.
-- **Reprioritize** – natural-language directives (keyword-based in the mockup) that rescore the feed.
-- **[Iterative reprioritization workbench](ui-mockup/reprioritize.html)** – standalone live preview on 80 seeded synthetic images: editable rules, scored specificity suggestions, image corrections and tier pins, version comparison/undo, and simulated apply. Open directly in a browser; no server or dependencies. Use ←/→ or J/K to focus images, ↑/↓/X to propose corrections, and Ctrl+Z / Ctrl+Shift+Z to undo/redo.
+Run with Go 1.22 or later: `go run ./cmd/ghost-seeker`, then open http://localhost:8080.
+Use `-addr`, `-retain`, and `-backfill` for the listen address, item retention, and startup historical images.
+
+- **Live Feed** — browse prioritized sensor imagery, inspect detections, and set priority.
+- **Review** — `1`–`4` set priority, Space accepts, X dismisses, C sends to commander, →/S skips, Z undoes, N toggles night mode.
+- **Reprioritize** — live iterative workbench: debounced previews, weighted/source/time-scoped editable chips, scored specificity suggestions, image corrections, tier pins, version comparison/revert, Ctrl+Z / Ctrl+Shift+Z. J/K or ←/→ move image focus; ↑/↓/X propose corrections. Apply publishes the draft and pins to all browser sessions. Active directives, the base-model selector, and effective object weights remain on the page.
+
+Preview adds draft rules on top of currently active directives without mutating server state. Apply adds a new active directive; Reset clears only the local draft. The feed continues streaming during iteration. Imagery is synthetic; keyword/regex parsing does not use an LLM. All server state is in memory and resets on restart.
+
+The [standalone design reference](ui-mockup/reprioritize.html) retains 80 seeded synthetic images and simulated apply; open it directly without a server.
