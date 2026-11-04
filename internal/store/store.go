@@ -67,11 +67,14 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	s.items = append(s.items, cloneItem(*item))
 	evicted := ""
 	if len(s.items) > s.retain {
-		oldest := oldestIndex(s.items, func(it command.Item) bool { return !it.Sent && it.Decision == "" })
+		oldest := oldestIndex(s.items[:len(s.items)-1], func(it command.Item) bool { return !it.Sent && it.Decision == "" })
 		if oldest < 0 {
 			oldest = oldestIndex(s.items, func(command.Item) bool { return true })
 		}
 		evicted = s.items[oldest].ID
+		if s.items[oldest].Sent {
+			s.cdr--
+		}
 		s.items = append(s.items[:oldest], s.items[oldest+1:]...)
 	}
 	return cloneItem(*item), evicted
@@ -216,7 +219,7 @@ func (s *Store) Decide(id, decision, note string) (command.Item, int, error) {
 		now := time.Now()
 		switch {
 		case decision == DecisionReturn && item.Sent:
-			item.Sent, item.SentAt, item.Reviewed = false, nil, false
+			item.Sent, item.SentAt, item.Reviewed, item.Dismissed = false, nil, false, false
 			s.cdr--
 		case decision != DecisionReturn && !item.Sent:
 			item.Sent, item.SentAt, item.Reviewed = true, &now, true

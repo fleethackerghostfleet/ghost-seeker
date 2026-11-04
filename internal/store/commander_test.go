@@ -32,8 +32,10 @@ func TestDecideLifecycle(t *testing.T) {
 	if err != nil || item.Decision != "track" || item.DecisionNote != "keep eyes on it" || item.DecidedAt == nil || cdr != 1 {
 		t.Fatalf("track: item=%+v cdr=%d err=%v", item, cdr, err)
 	}
+	dismissed := true
+	data.PatchItem("a", nil, nil, &dismissed, nil)
 	item, cdr, err = data.Decide("a", DecisionReturn, "")
-	if err != nil || item.Sent || item.Reviewed || cdr != 0 {
+	if err != nil || item.Sent || item.Reviewed || item.Dismissed || cdr != 0 {
 		t.Fatalf("return: sent=%v reviewed=%v cdr=%d err=%v", item.Sent, item.Reviewed, cdr, err)
 	}
 	item, cdr, err = data.Decide("a", "", "")
@@ -51,6 +53,20 @@ func TestEvictionKeepsEscalatedItems(t *testing.T) {
 	addItem(data, "mid", "bird", .5, start.Add(time.Minute))
 	if _, evicted := data.Add(&command.Item{ID: "new", TS: start.Add(2 * time.Minute)}, 0); evicted != "mid" {
 		t.Fatalf("evicted %q, want mid (escalated items are kept)", evicted)
+	}
+}
+
+func TestEvictionWhenBacklogIsAllEscalated(t *testing.T) {
+	data := New(1)
+	start := time.Now().Add(-time.Hour)
+	addItem(data, "old", "warship", .95, start)
+	sent := true
+	data.PatchItem("old", nil, nil, nil, &sent)
+	if _, evicted := data.Add(&command.Item{ID: "new", TS: start.Add(time.Minute)}, 0); evicted != "old" {
+		t.Fatalf("evicted %q, want old (new captures must still be kept)", evicted)
+	}
+	if _, cdr, _ := data.PatchItem("new", nil, nil, nil, nil); cdr != 0 {
+		t.Fatalf("cdr = %d after evicting the only escalated item, want 0", cdr)
 	}
 }
 
