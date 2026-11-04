@@ -9,7 +9,11 @@ requires-python = ">=3.10"
 dependencies = ["numpy", "opencv-python-headless", "pyyaml"]
 
 [project.optional-dependencies]
-eval = ["pycocotools", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git"]
+eval = ["pycocotools", "faster-coco-eval", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git"]
+# workstream B detectors (GPU eval box); CPU boxes install [onnx] only
+gpu = ["torch", "torchvision", "ultralytics", "transformers>=4.50", "timm", "huggingface_hub", "onnxruntime-gpu",
+       "onnx", "onnxslim", "faster-coco-eval", "pillow"]
+onnx = ["onnx", "onnxruntime", "onnxslim"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
