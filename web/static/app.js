@@ -145,7 +145,7 @@ async function init(){
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if($('settings').open)return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
-  if((k==='enter'||k===' ')&&e.target.closest?.('header'))return;
+  if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
   if(k==='b'&&(state.page==='rv'||state.page==='feed')){const it=state.page==='rv'?rv.cur:findItem(state.sel);const bands=it?bandsFor(it):[];if(bands.length>1){e.preventDefault();if(!e.repeat)selectBand(it,bands[(bands.indexOf(bandFor(it))+1)%bands.length])}return}

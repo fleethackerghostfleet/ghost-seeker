@@ -28,6 +28,45 @@ test('spectral controls are metadata-driven and preserve the frame and boxes',()
  }
  assert.equal(vm.runInContext("bandControls({id:'other',src:{id:'EO-P7'}})",context),'');
 });
+test('band controls keep native Enter and Space activation without accepting review items',()=>{
+ const context=setup();
+ vm.runInContext(`
+  actions=[];prevented=false;insideBands=true;
+  document.addEventListener=(type,handler)=>{keydown=handler};
+  rvAct=action=>actions.push(action);
+  reviewAskKey=key=>actions.push('ask:'+key);
+  step=direction=>actions.push('step:'+direction);
+  setManual=(id,tier)=>actions.push('tier:'+tier);
+  selectBand=(item,band)=>actions.push('band:'+band);
+  location={hash:''};
+  state.page='rv';state.sel='multi';
+  items=[{id:'multi',bands:['EO','IR']}];rv.cur=items[0];
+  function press(key){
+   prevented=false;
+   keydown({key,target:{tagName:'BUTTON',closest:selector=>insideBands&&selector.includes('.band-controls')?{}:null},preventDefault(){prevented=true}});
+  }
+ `,context);
+ const start=source.indexOf(" document.addEventListener('keydown'");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ for(const key of ['Enter',' ']){
+  context.key=key;
+  for(const asking of [false,true]){
+   context.asking=asking;
+   vm.runInContext("rv.ask=asking?{}:null;actions=[];press(key)",context);
+   assert.equal(vm.runInContext('actions.length',context),0);
+   assert.equal(vm.runInContext('prevented',context),false);
+  }
+  vm.runInContext("rv.ask=null;insideBands=false;actions=[];press(key);insideBands=true",context);
+  assert.equal(vm.runInContext("actions.join(',')",context),'accept');
+ }
+ vm.runInContext("actions=[];press('B');press('1');press('2');press('3');press('4');press('Escape')",context);
+ assert.equal(vm.runInContext("actions.join(',')",context),'band:IR,1,2,3,4');
+ assert.equal(vm.runInContext('location.hash',context),'#feed');
+ vm.runInContext("state.page='feed';actions=[];press('ArrowRight');press('ArrowLeft');press('1')",context);
+ assert.equal(vm.runInContext("actions.join(',')",context),'step:1,step:-1,tier:1');
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
