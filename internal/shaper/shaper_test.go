@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -52,6 +53,31 @@ func TestShaperRateAndDown(t *testing.T) {
 		t.Fatalf("bytes = %d", s.Bytes())
 	}
 	c.Close()
+
+	// Two connections share the link: the same payload on each takes about
+	// twice as long, not the same time.
+	start = time.Now()
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cc, err := net.Dial("tcp", addr)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer cc.Close()
+			go cc.Write(payload)
+			if _, err := io.ReadFull(cc, make([]byte, len(payload))); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if el := time.Since(start); el < 700*time.Millisecond {
+		t.Fatalf("two connections echoed in %v; the cap must be shared", el)
+	}
 
 	s.SetBps(0)
 	c2, err := net.Dial("tcp", addr)

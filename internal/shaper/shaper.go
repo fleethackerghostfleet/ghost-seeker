@@ -27,6 +27,29 @@ type Shaper struct {
 	mu     sync.Mutex
 	conns  map[net.Conn]struct{}
 	ln     net.Listener
+	pacers [2]pacer // 0 = ship->shore, 1 = shore->ship; shared by all connections
+}
+
+// pacer is a per-direction leaky bucket: every chunk books its airtime at
+// the current rate, so concurrent connections share one link, not one each.
+type pacer struct {
+	mu   sync.Mutex
+	next time.Time
+}
+
+// reserve books n bytes and returns how long the caller must wait before
+// putting them on the wire.
+func (p *pacer) reserve(n int, bps int64) time.Duration {
+	air := time.Duration(float64(n*8) / float64(bps) * float64(time.Second))
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	if p.next.Before(now) {
+		p.next = now
+	}
+	wait := p.next.Sub(now)
+	p.next = p.next.Add(air)
+	return wait
 }
 
 // New creates a shaper forwarding to target (host:port) at bps bits/second.
@@ -98,8 +121,8 @@ func (s *Shaper) handle(ctx context.Context, down net.Conn) {
 		up.Close()
 	}()
 	done := make(chan struct{}, 2)
-	go func() { s.pipe(ctx, up, down); done <- struct{}{} }()
-	go func() { s.pipe(ctx, down, up); done <- struct{}{} }()
+	go func() { s.pipe(ctx, up, down, &s.pacers[0]); done <- struct{}{} }()
+	go func() { s.pipe(ctx, down, up, &s.pacers[1]); done <- struct{}{} }()
 	<-done
 }
 
@@ -113,12 +136,11 @@ func (s *Shaper) track(c net.Conn, add bool) {
 	s.mu.Unlock()
 }
 
-// pipe copies src -> dst paced so that each direction gets the full rate
-// (the trace semantics in edge/link are per-direction too). Chunks are
-// sized to ~100 ms of airtime so rate changes take effect quickly.
-func (s *Shaper) pipe(ctx context.Context, dst, src net.Conn) {
+// pipe copies src -> dst, booking each chunk on the direction's shared pacer
+// (the trace semantics in edge/link are per-direction too). Chunks are sized
+// to ~100 ms of airtime so rate changes take effect quickly.
+func (s *Shaper) pipe(ctx context.Context, dst, src net.Conn, p *pacer) {
 	buf := make([]byte, 64<<10)
-	var debt time.Duration
 	for {
 		bps := s.Bps()
 		if bps == 0 {
@@ -133,21 +155,20 @@ func (s *Shaper) pipe(ctx context.Context, dst, src net.Conn) {
 		}
 		n, err := src.Read(buf[:chunk])
 		if n > 0 {
-			start := time.Now()
+			if wait := p.reserve(n, bps); wait > 0 {
+				select {
+				case <-time.After(wait):
+				case <-ctx.Done():
+					return
+				}
+			}
+			if s.Bps() == 0 {
+				return
+			}
 			if _, werr := dst.Write(buf[:n]); werr != nil {
 				return
 			}
 			s.bytes.Add(int64(n))
-			air := time.Duration(float64(n*8) / float64(bps) * float64(time.Second))
-			debt += air - time.Since(start)
-			if debt > 0 {
-				select {
-				case <-time.After(debt):
-				case <-ctx.Done():
-					return
-				}
-				debt = 0
-			}
 		}
 		if err != nil {
 			if err != io.EOF {
