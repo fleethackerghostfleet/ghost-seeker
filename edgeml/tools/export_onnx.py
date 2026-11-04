@@ -150,15 +150,72 @@ def export_copy(det, dst: Path) -> dict:
     return {"exporter": "upstream onnx (copied)", "source": det.onnx_path, "nms_in_graph": False}
 
 
+def _head_scope(path: Path) -> str:
+    """Name prefix of the detection-head nodes (what to keep FP32 when quantising). Ultralytics: last `/model.N/`
+    module; HF RT-DETR/D-FINE: `/model/decoder/`; raw ONNX zoo graphs: no scope info (head = everything after the
+    last Concat that produces the output)."""
+    import onnx
+    import re
+
+    m = onnx.load(str(path), load_external_data=False)
+    idx = [int(x) for n in m.graph.node for x in re.findall(r"^/model\.(\d+)/", n.name)]
+    if idx:
+        return f"/model.{max(idx)}/"
+    if any(n.name.startswith("/model/decoder") for n in m.graph.node):
+        return "/model/decoder/ (+ /model/encoder/enc_output, enc_score_head, enc_bbox_head)"
+    return "n/a (no module scopes in graph)"
+
+
+HEAD_NOTE = {
+    "ultralytics": "Detection head IS in the graph: output is decoded boxes (xywh, input-pixel units) + per-class scores, "
+                   "no NMS. Keep the head scope (below) in FP32 when quantising (Workstream D saw 4-7 AP50 loss otherwise).",
+    "hf": "Full model incl. transformer decoder/head in the graph; set prediction, no NMS. Boxes cxcywh normalised 0-1.",
+    "onnx": "Upstream ONNX graph; head is in the graph but outputs are RAW (grid/DFL decode + NMS done outside; see postprocess).",
+}
+
+
+def readme(meta: dict) -> str:
+    kind = "ultralytics" if "ultralytics" in str(meta.get("exporter", "")) or "letterbox" in str(meta.get("preprocess", "")) else "hf" if "logits" in str(meta.get("postprocess", "")) else "onnx"
+    info = meta.get("detector_info", {})
+    lines = [
+        f"# {meta['name']} (ONNX export for CPU benchmarking, Workstream B -> D)", "",
+        f"- source checkpoint: `{meta.get('source') or meta.get('hf_model_id') or meta.get('weights') or info.get('name')}`",
+        f"- training data: {info.get('training_data')}; params: {info.get('params_m')} M; GFLOPs@imgsz: {info.get('gflops')}",
+        f"- opset: {meta.get('opset')}; IR: {meta.get('ir_version')}; fixed input: `{meta.get('inputs')}` (batch 1, NCHW fp32)",
+        f"- outputs: `{meta.get('outputs')}`",
+        f"- preprocess: {meta.get('preprocess')}",
+        f"- postprocess: {meta.get('postprocess')}",
+        f"- head: {HEAD_NOTE[kind]}",
+        f"- head node-name scope: `{meta.get('head_scope')}`",
+        f"- label map: {meta.get('label_map')}" + (f"; prompts: {info.get('prompts')}" if info.get("prompts") else ""),
+        f"- file: model.onnx {meta.get('size_mb')} MB, sha256 `{meta.get('sha256')}`", "",
+        "Export command (edgeml/tools/export_onnx.py):", "",
+        f"    python edgeml/tools/export_onnx.py --models {meta['name']} --imgsz {meta.get('imgsz')} --out ~/exports --gcs gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models", "",
+        "Accuracy reference (zero-shot, GPU fp16/fp32, same preprocessing): see edgeml/reports/B.md. Any INT8/FP16 variant should be",
+        "re-scored with `edgeml/tools/bench_detectors.py` on the same dev sets to measure the AP50 delta.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", required=True)
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--out", default=os.path.expanduser("~/exports"))
     ap.add_argument("--gcs", default=None)
+    ap.add_argument("--readme-only", action="store_true", help="only (re)write README.md from an existing export.json")
     args = ap.parse_args()
     for name in args.models.split(","):
         try:
+            if args.readme_only:
+                d = Path(args.out) / name
+                meta = json.loads((d / "export.json").read_text())
+                meta["head_scope"] = _head_scope(d / "model.onnx")
+                (d / "export.json").write_text(json.dumps(meta, indent=1, default=str))
+                (d / "README.md").write_text(readme(meta))
+                if args.gcs:
+                    subprocess.run(["gcloud", "storage", "rsync", "-r", str(d), f"{args.gcs.rstrip('/')}/{name}"], check=False)
+                continue
             _export_one(name, args)
         except Exception:  # noqa: BLE001
             import traceback
@@ -190,7 +247,9 @@ def _export_one(name, args):
             "ir_version": m.ir_version, "size_mb": round(dst.stat().st_size / 1e6, 2), "sha256": sha256(dst),
             "export_seconds": round(time.time() - t0, 1), "label_map": "COCO-80" if "COCO" in str(det.info().get("training_data")) else "see prompts",
         })
+        meta["head_scope"] = _head_scope(dst)
         (d / "export.json").write_text(json.dumps(meta, indent=1, default=str))
+        (d / "README.md").write_text(readme(meta))
         print(name, meta["inputs"], meta["outputs"], meta["size_mb"], "MB")
         if args.gcs:
             subprocess.run(["gcloud", "storage", "rsync", "-r", str(d), f"{args.gcs.rstrip('/')}/{name}"], check=False)
