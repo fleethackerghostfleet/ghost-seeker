@@ -5,6 +5,29 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+test('spectral controls are metadata-driven and preserve the frame and boxes',()=>{
+ const context=setup();
+ vm.runInContext(`
+  imageFor=()=>'/frame.jpg';boxesHTML=()=>'<div class="box">contact</div>';
+  renderReview=()=>{};state.page='rv';
+  multi={id:'multi',src:{name:'Mast'},bands:['EO','IR']};
+  before=largeImage(multi);selectBand(multi,'IR');after=largeImage(multi);
+ `,context);
+ assert.match(vm.runInContext('before',context),/aria-pressed="true"[^>]*>EO/);
+ assert.match(vm.runInContext('after',context),/class="spectrum-ir"/);
+ assert.match(vm.runInContext('after',context),/IR · white-hot · simulated LWIR/);
+ for(const name of ['before','after']){
+  assert.match(vm.runInContext(name,context),/src="\/frame.jpg"/);
+  assert.match(vm.runInContext(name,context),/<div class="box">contact<\/div>/);
+ }
+ vm.runInContext("selectBand(multi,'EO');selectBand(multi,'UV')",context);
+ assert.equal(vm.runInContext("bandFor(multi)",context),'EO');
+ for(const bands of [undefined,[],['EO'],['IR'],'EO/IR',[null,42,'EO','EO']]){
+  context.input=bands;
+  assert.equal(vm.runInContext("bandControls({id:'single',bands:input})",context),'');
+ }
+ assert.equal(vm.runInContext("bandControls({id:'other',src:{id:'EO-P7'}})",context),'');
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
