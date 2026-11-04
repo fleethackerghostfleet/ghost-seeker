@@ -156,7 +156,8 @@
       if ($('#hide-suppressed').checked) list = list.filter(o => !o.suppressed);
       if ($('#only-image').checked) list = list.filter(o => o.hasImage);
       const hidden = objs.length - list.length;
-      $('#feed-note').textContent = `${list.filter(o => !o.scene).length} objects${snap.counts.scenes ? ` + ${snap.counts.scenes} scene tiles` : ''} · newest first${onlySightings && hidden ? ` · ${hidden} object-free frames hidden` : ''}`;
+      const scenes = list.filter(o => o.scene).length;
+      $('#feed-note').textContent = `${list.length - scenes} objects${scenes ? ` + ${scenes} scene tiles` : ''} · newest first${onlySightings && hidden ? ` · ${hidden} object-free frames hidden` : ''}`;
       $('#feed').innerHTML = list.length ? list.map(objectCard).join('') : '<div class="empty">No items on shore yet. Start the edge and open the link.</div>';
     } else if (view === 'review') {
       const order = { P1: 0, P2: 1, P3: 2, P4: 3 };
