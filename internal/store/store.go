@@ -222,13 +222,13 @@ func (s *Store) List(source string, limit int) []Item {
 	return out
 }
 
-// Queue returns up to limit records still awaiting review, highest priority first.
-func (s *Store) Queue(limit int) []Item {
+// Queue returns up to limit records still awaiting review, highest priority first, optionally for one source.
+func (s *Store) Queue(source string, limit int) []Item {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := []Item{}
 	for _, it := range s.items {
-		if !it.Reviewed && !it.Dismissed {
+		if !it.Reviewed && !it.Dismissed && (source == "" || it.Source == source) {
 			out = append(out, *it)
 		}
 	}

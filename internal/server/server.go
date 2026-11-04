@@ -173,7 +173,7 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		limit = 300
 	}
 	if r.URL.Query().Get("queue") == "1" {
-		writeJSON(w, http.StatusOK, s.store.Queue(limit))
+		writeJSON(w, http.StatusOK, s.store.Queue(r.URL.Query().Get("src"), limit))
 		return
 	}
 	writeJSON(w, http.StatusOK, s.store.List(r.URL.Query().Get("src"), limit))
