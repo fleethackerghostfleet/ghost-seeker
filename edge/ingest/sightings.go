@@ -227,9 +227,11 @@ func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp 
 		if !g.stateful[c.Source] {
 			// Hash behaviour, except that a scene item (no FULL) holding the
 			// same bytes must not swallow a frame that now shows an object.
-			if id, ok, err := g.st.HasHash(ctx, hash); err != nil {
+			ids, err := g.st.IDsByHash(ctx, hash)
+			if err != nil {
 				return nil, err
-			} else if ok {
+			}
+			for _, id := range ids {
 				if row, err := g.st.Get(ctx, id); err == nil && row.Form(pb.FormKind_FORM_KIND_FULL) != nil {
 					atomic.AddInt64(&g.Dups, 1)
 					return row, nil
