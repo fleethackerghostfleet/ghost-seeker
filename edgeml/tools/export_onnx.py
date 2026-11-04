@@ -150,6 +150,30 @@ def export_copy(det, dst: Path) -> dict:
     return {"exporter": "upstream onnx (copied)", "source": det.onnx_path, "nms_in_graph": False}
 
 
+RAW_ONNX_META = {
+    "yolox-tiny": ("resize+pad (bottom/right, 114) to 416x416, BGR, no normalisation (YOLOX takes 0-255 BGR), NCHW fp32",
+                   "raw head [1, 3549, 85] = (xy, wh, obj, 80 cls) per anchor on strides 8/16/32; grid/stride decode + sigmoid obj*cls + NMS outside the graph"),
+    "nanodet-plus": ("resize (letterbox) to 416x416, BGR->RGB, ImageNet mean/std normalisation, NCHW fp32",
+                     "raw head per stride [1, anchors, 80 cls + 4*(reg_max+1) DFL] (outputs 792/814/...); DFL softmax decode + NMS outside the graph"),
+}
+
+
+def _fixup(meta: dict, path: Path) -> dict:
+    """Make export.json self-describing even for graphs we did not trace ourselves."""
+    import onnx
+
+    m = onnx.load(str(path), load_external_data=False)
+    meta["opset"] = max((o.version for o in m.opset_import if o.domain in ("", "ai.onnx")), default=meta.get("opset"))
+    if meta["name"] in RAW_ONNX_META and (not meta.get("preprocess") or not meta.get("postprocess")):
+        meta["preprocess"], meta["postprocess"] = RAW_ONNX_META[meta["name"]]
+    outs = meta.get("outputs") or []
+    if outs and len(outs[0][1]) == 3 and outs[0][1][2] == 6:
+        meta["postprocess"] = "end-to-end (NMS-free) head: output [1, 300, 6] = xyxy (input px), score, class; already top-300, no NMS needed"
+        meta["nms_in_graph"] = "not needed (NMS-free head)"
+    meta["head_scope"] = _head_scope(path)
+    return meta
+
+
 def _head_scope(path: Path) -> str:
     """Name prefix of the detection-head nodes (what to keep FP32 when quantising). Ultralytics: last `/model.N/`
     module; HF RT-DETR/D-FINE: `/model/decoder/`; raw ONNX zoo graphs: no scope info (head = everything after the
@@ -209,8 +233,7 @@ def main():
         try:
             if args.readme_only:
                 d = Path(args.out) / name
-                meta = json.loads((d / "export.json").read_text())
-                meta["head_scope"] = _head_scope(d / "model.onnx")
+                meta = _fixup(json.loads((d / "export.json").read_text()), d / "model.onnx")
                 (d / "export.json").write_text(json.dumps(meta, indent=1, default=str))
                 (d / "README.md").write_text(readme(meta))
                 if args.gcs:
@@ -247,7 +270,7 @@ def _export_one(name, args):
             "ir_version": m.ir_version, "size_mb": round(dst.stat().st_size / 1e6, 2), "sha256": sha256(dst),
             "export_seconds": round(time.time() - t0, 1), "label_map": "COCO-80" if "COCO" in str(det.info().get("training_data")) else "see prompts",
         })
-        meta["head_scope"] = _head_scope(dst)
+        meta = _fixup(meta, dst)
         (d / "export.json").write_text(json.dumps(meta, indent=1, default=str))
         (d / "README.md").write_text(readme(meta))
         print(name, meta["inputs"], meta["outputs"], meta["size_mb"], "MB")
