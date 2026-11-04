@@ -74,7 +74,8 @@ func main() {
 		if st.Stats().DB > 0 {
 			bf = 0
 		}
-		up := &edgesim.Uploader{BaseURL: "http://" + net.JoinHostPort(host, port), Token: *token}
+		up := &edgesim.Uploader{BaseURL: "http://" + net.JoinHostPort(host, port), Token: *token,
+			Client: &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{}}}
 		go edgesim.Run(ctx, up, edgesim.Options{Sources: catalog.Sources, Interval: [2]time.Duration{1200 * time.Millisecond, 2400 * time.Millisecond}, Backfill: bf})
 		log.Printf("edge simulator: %d sensors uploading to %s", len(catalog.Sources), up.BaseURL)
 	}
