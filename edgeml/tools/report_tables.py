@@ -21,7 +21,8 @@ def buckets(t):
     """Recall for <32² (tiny+small merged, per literature.md), medium, large, with GT counts."""
     rb, n = t["recall_by_bucket"], t.get("n_gt_by_bucket", {})
     nt, ns = n.get("tiny", 0), n.get("small", 0)
-    r32 = ((rb.get("tiny") or 0) * nt + (rb.get("small") or 0) * ns) / (nt + ns) if (nt + ns) else float("nan")
+    rt_, rs_ = (rb.get("tiny") if nt else 0) or 0, (rb.get("small") if ns else 0) or 0
+    r32 = (rt_ * nt + rs_ * ns) / (nt + ns) if (nt + ns) else float("nan")
     return r32, nt + ns, rb.get("medium"), n.get("medium", 0), rb.get("large"), n.get("large", 0)
 
 
