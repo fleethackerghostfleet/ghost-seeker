@@ -59,7 +59,6 @@ def leaderboard(args):
                 continue
             v = e["vessel"]
             t = v["at_tau"]
-            rb = t["recall_by_bucket"]
             row += [f(v["mAP50"]), f(v["mAP50-95"]), f(t["recall"]), f(t["precision"]), f(e["tau"], 2),
                     bstr(t), f(t.get("fp_per_sea_only_frame"), 2)]
             if s == sets[0]:
@@ -87,7 +86,7 @@ def compare(args):
                 cells.append("–")
                 continue
             v, t = e["vessel"], e["vessel"]["at_tau"]
-            r32, n32, rm, nm, _, _ = buckets(t)
+            r32, _, rm, _, _, _ = buckets(t)
             cells.append(f"{f(v['mAP50'])} / {f(v['mAP50-95'])} / {f(t['recall'], 2)} / {f(r32, 2)} / {f(rm, 2)} / {f(t.get('fp_per_sea_only_frame'), 2)} / {f(e['latency'].get('ms_p50'), 1)}")
         print("| " + " | ".join(cells) + " |")
 

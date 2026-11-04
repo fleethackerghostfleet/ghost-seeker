@@ -195,7 +195,7 @@ def match_at_threshold(images, dets_by_image, tau: float, mode: str = "vessel", 
     return summarize(images, match_all(images, dets_by_image, mode, iou_thr), tau)
 
 
-def best_threshold(images, dets_by_image, mode="vessel", taus: Iterable[float] = None) -> dict:
+def best_threshold(images, dets_by_image, mode="vessel", taus: Iterable[float] | None = None) -> dict:
     """Pick tau maximising F1 at IoU 0.5 (call on dev only)."""
     taus = list(taus) if taus is not None else [round(x, 2) for x in np.arange(0.05, 0.96, 0.05)]
     best = None

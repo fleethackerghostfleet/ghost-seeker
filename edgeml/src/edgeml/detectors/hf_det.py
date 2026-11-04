@@ -74,7 +74,7 @@ class HFOpenVocabDetector(BaseDetector):
         self.processor = AutoProcessor.from_pretrained(model_id, **pkw)
         self.model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id).to(self.device, self.dtype).eval()
         self.model_id = model_id
-        self.imgsz = imgsz or (960 if self.is_gdino else 960)
+        self.imgsz = imgsz or 960
         self.text_thr = text_thr
         self.name = name or model_id.rsplit("/", 1)[-1]
         self.params_m = _count_params(self.model)

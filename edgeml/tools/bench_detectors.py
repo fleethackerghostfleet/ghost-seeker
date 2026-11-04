@@ -123,7 +123,7 @@ def main():
     for s in args.sets.split(","):
         ds, _, stride = s.partition(":")
         sets.append((ds, int(stride or 1)))
-    fixed_taus = json.loads(open(args.taus).read()) if args.taus else {}
+    fixed_taus = json.loads(Path(args.taus).read_text()) if args.taus else {}
     if args.split == "test":
         assert fixed_taus, "test runs need --taus chosen on dev"
 
