@@ -67,8 +67,10 @@ def interp_keyframes(kf, start, end):
 
 def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     teacher = seq_dir / "teacher" / "gt_teacher.txt"
-    if not teacher.exists():
-        shutil.copy(seq_dir / "gt" / "gt.txt", teacher)
+    gt = seq_dir / "gt" / "gt.txt"
+    labels_src = json.loads((seq_dir / "gt" / "labels.json").read_text()).get("label_source", "teacher")
+    if not teacher.exists() or (labels_src == "teacher" and gt.stat().st_mtime > teacher.stat().st_mtime):
+        shutil.copy(gt, teacher)  # gt/ is still raw teacher output (fresh rerun): refresh the snapshot
     rows = read_rows(teacher)
     name_to_id = {v: int(k) for k, v in classes.items()}
     drop = set(corr.get("drop") or [])
@@ -79,9 +81,9 @@ def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     for f, i, x, y, w, h, c, k, v in rows:
         if i in drop:
             continue
-        i = remap.get(i, i)
         if i in trim and not (trim[i][0] <= f <= trim[i][1]):
-            continue
+            continue  # trim is by teacher id, before merge renames it
+        i = remap.get(i, i)
         if i in relabel:
             if relabel[i] not in name_to_id:
                 name_to_id[relabel[i]] = max(name_to_id.values(), default=0) + 1
@@ -94,11 +96,11 @@ def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
         boxes = interp_keyframes(kf, min(kf), max(kf))
         for f, (x, y, w, h) in boxes.items():
             out.append([f, int(t["id"]), x, y, w, h, 1, name_to_id[t["cls"]], 1.0 if f in kf else 0.5])
-    # after merges a frame may hold two boxes with the same id: keep the larger (the detected one wins over interp)
+    # after merges a frame may hold two boxes with the same id: keep the larger box (full object extent), vis breaks ties
     best = {}
     for r in out:
         key = (r[0], r[1])
-        if key not in best or (r[8], r[4] * r[5]) > (best[key][8], best[key][4] * best[key][5]):
+        if key not in best or (r[4] * r[5], r[8]) > (best[key][4] * best[key][5], best[key][8]):
             best[key] = r
     out = sorted(best.values(), key=lambda r: (r[0], r[1]))
     return out, {str(v): k for k, v in sorted(name_to_id.items(), key=lambda kv: kv[1])}

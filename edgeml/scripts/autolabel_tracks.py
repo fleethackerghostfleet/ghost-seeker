@@ -15,6 +15,7 @@ Runs on the L4 VM (edgeml-a-l4). CPU is fine for small clips.
 import argparse
 import itertools
 import json
+import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -201,6 +202,8 @@ def label_sequence(seq_dir: Path, proc, model, device, args):
     with open(seq_dir / "gt" / "gt.txt", "w") as fh:
         for f, tid, x, y, w, h, conf, cls, vis in gt_rows:
             fh.write(f"{f},{tid},{x:.1f},{y:.1f},{w:.1f},{h:.1f},{conf},{cls},{vis}\n")
+    (seq_dir / "teacher").mkdir(exist_ok=True)
+    shutil.copy(seq_dir / "gt" / "gt.txt", seq_dir / "teacher" / "gt_teacher.txt")
     (seq_dir / "gt" / "labels.json").write_text(json.dumps({
         "classes": {str(v): k for k, v in CLASS_IDS.items()},
         "label_source": "teacher",
