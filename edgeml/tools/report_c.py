@@ -201,7 +201,7 @@ def contact_sheet(tiles: list[tuple[np.ndarray, str]], out: Path, cols=6, size=1
     return True
 
 
-def failure_sheets(run_dir: Path, cfg: str, seqs: list, out_dir: Path, max_tiles=18):
+def failure_sheets(run_dir: Path, cfg: str, seqs: list, out_dir: Path, max_tiles=18, title="dev"):
     """Three sheets: duplicates (several sightings on one GT object), missed GT objects, merged/false sightings."""
     dup_tiles, miss_tiles, false_tiles = [], [], []
     for seq in seqs:
@@ -241,7 +241,7 @@ def failure_sheets(run_dir: Path, cfg: str, seqs: list, out_dir: Path, max_tiles
                 false_tiles.append((_tile(img, e["best_box"]), f"{seq.seq_id[:10]} {sid.split(':')[-1]} {e['label'][:8]} {e['best_score']:.2f}"))
     made = {}
     for name, tiles in (("duplicates", dup_tiles), ("missed", miss_tiles), ("false_or_merged", false_tiles)):
-        p = out_dir / f"failures_{name}.jpg"
+        p = out_dir / f"failures_{title}_{name}.jpg"
         if contact_sheet(tiles, p):
             made[name] = (p, len(tiles))
     return made
@@ -286,7 +286,7 @@ def main():
                      naive_run=Path(a.naive_run).expanduser() if a.naive_run else None)
     if a.failure_cfg:
         rd = Path(a.failure_run or a.runs[0]).expanduser()
-        made = failure_sheets(rd, a.failure_cfg, list(seq_by_id.values()), out)
+        made = failure_sheets(rd, a.failure_cfg, list(seq_by_id.values()), out, title=a.title)
         print("failure sheets:", {k: (str(p), n) for k, (p, n) in made.items()})
     print("wrote", out)
 

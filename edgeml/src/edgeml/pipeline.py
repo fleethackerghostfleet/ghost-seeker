@@ -52,6 +52,9 @@ def run_clip(frames: Iterable, detector, tracker, aggregator, embedder=None, det
              fps: Optional[float] = None, record_dets: bool = True) -> dict:
     """Returns {"events", "dets": [(frame_idx,t_s,[Detection])], "tracks": [(frame_idx,t_s,[Track])],
     "sighting_tracks": [(sighting_id, frame_idx, box, score)], "timing": {...}, "n_frames", "n_detect_frames"}."""
+    if embedder is not None and hasattr(aggregator, "embedder"):
+        aggregator.embedder = embedder   # embeddings are computed once per track at key-frame time, for relink only (literature §2)
+
     events: list[dict] = []
     dets_out: list[tuple[int, float, list[Detection]]] = []
     tracks_out: list[tuple[int, float, list[Track]]] = []
@@ -73,12 +76,6 @@ def run_clip(frames: Iterable, detector, tracker, aggregator, embedder=None, det
         t0 = time.perf_counter()
         dets = detector.detect(img)
         t1 = time.perf_counter()
-        if embedder is not None and dets:
-            from .tracking.embed import crop
-
-            embs = embedder.embed_crops([crop(img, d.box, 0.1) for d in dets])
-            for d, e in zip(dets, embs):
-                d.embedding = e
         if stabilizer is not None:
             M = stabilizer.estimate(img)
             Minv = stabilizer.inverse(M)
