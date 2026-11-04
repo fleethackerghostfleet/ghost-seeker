@@ -45,10 +45,14 @@ def _json(o):
     raise TypeError(str(type(o)))
 
 
-def load_sets(data: Path, sets: list[str], split: str | None) -> list[MotSequence]:
+def load_sets(data: Path, sets: list[str], split: str | None, include_incomplete: bool = False) -> list[MotSequence]:
+    """Sequences of the given sets/split. index.jsonl `gt_status=incomplete` sequences (A's label QA) are skipped unless asked."""
     seqs = []
     for s in sets:
-        seqs += list_sequences(data / s, split)
+        for q in list_sequences(data / s, split):
+            if q.meta.get("gt_status") == "incomplete" and not include_incomplete:
+                continue
+            seqs.append(q)
     return seqs
 
 
@@ -128,7 +132,8 @@ def cmd_matrix(a):
 
     def record(cfg: str, seq: MotSequence, ev: list[dict], straj, extra: dict):
         r = eval_seq(seq, ev, straj, selector_kw)
-        row = {"cfg": cfg, "seq": seq.seq_id, "set": seq.root.parent.name, "split": seq.meta.get("split"), **extra, **r}
+        row = {"cfg": cfg, "seq": seq.seq_id, "set": seq.root.parent.name, "split": seq.meta.get("split"),
+               "gt_status": seq.meta.get("gt_status", "complete"), "platform_motion": seq.meta.get("platform_motion"), **extra, **r}
         results.write(json.dumps(row, default=_json) + "\n")
         results.flush()
         per_cfg.setdefault(cfg, {})[seq.seq_id] = r
