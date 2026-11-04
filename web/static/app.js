@@ -52,6 +52,12 @@ function applySnapshot(data){
  renderAll();
 }
 function applyItemUpdate(raw){
+ if(state.paused&&!findItem(raw.id)){
+  if(evictedIDs.has(raw.id))return;
+  const pending=pendingItems.find(event=>event.item.id===raw.id);
+  if(pending)pending.item=raw;else pendingItems.push({item:raw});
+  renderStats();return;
+ }
  const item=normalizeItem(raw);mergeItem(item,false);
  if(state.sel===item.id)renderDetail();
  renderFeed();renderStats();renderRp(true);if(state.page==='rv'&&!rv.busy)renderReview();
