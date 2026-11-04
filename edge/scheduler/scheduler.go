@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
+	"google.golang.org/protobuf/proto"
 	"log/slog"
 	"math"
 	"sort"
@@ -569,8 +570,14 @@ func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
 	if err := s.st.MarkManifestSent(ctx, mids, now); err != nil {
 		return s.cfg.Tick, err
 	}
-	// Generous timeout: three times the expected airtime, at least 10 s.
-	est := time.Duration(float64(payload+4096)*8/math.Max(ls.EstimateBps, 300)*float64(time.Second)) * 3
+	// Generous timeout: three times the expected airtime of the whole request
+	// (manifest included: with a deep backlog it outweighs the chunks), at
+	// least 10 s.
+	wire := int64(proto.Size(req))
+	if wire < payload {
+		wire = payload
+	}
+	est := time.Duration(float64(wire+4096)*8/math.Max(ls.EstimateBps, 300)*float64(time.Second)) * 3
 	if est < 10*time.Second {
 		est = 10 * time.Second
 	}

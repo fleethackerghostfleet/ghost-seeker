@@ -5,14 +5,25 @@ Requires-Python: >=3.10
 Requires-Dist: numpy
 Requires-Dist: opencv-python-headless
 Requires-Dist: pyyaml
+Requires-Dist: scipy
 Provides-Extra: eval
 Requires-Dist: pycocotools; extra == "eval"
 Requires-Dist: faster-coco-eval; extra == "eval"
 Requires-Dist: trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git ; extra == "eval"
+Requires-Dist: matplotlib; extra == "eval"
+Provides-Extra: tracking
+Requires-Dist: boxmot>=13; extra == "tracking"
+Requires-Dist: lap; extra == "tracking"
+Provides-Extra: detect
+Requires-Dist: ultralytics>=8.3; extra == "detect"
+Requires-Dist: torch; extra == "detect"
+Requires-Dist: torchvision; extra == "detect"
+Provides-Extra: test
+Requires-Dist: pytest; extra == "test"
 Provides-Extra: gpu
 Requires-Dist: torch; extra == "gpu"
 Requires-Dist: torchvision; extra == "gpu"
-Requires-Dist: ultralytics; extra == "gpu"
+Requires-Dist: ultralytics>=8.3; extra == "gpu"
 Requires-Dist: transformers>=4.50; extra == "gpu"
 Requires-Dist: timm; extra == "gpu"
 Requires-Dist: huggingface_hub; extra == "gpu"
