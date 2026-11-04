@@ -43,11 +43,46 @@ def export_ultralytics(det, imgsz: int, dst: Path) -> dict:
             "prompts": getattr(det, "prompts", None)}
 
 
+def _freeze_sincos(model, x):
+    """RT-DETR/D-FINE build their encoder position embedding in float64 at every forward; ORT has no float64
+    Cos/Sin kernel. With a fixed input size the embedding is a constant, so cache it from one eager forward and
+    return the cached tensor while tracing -> it becomes an initializer."""
+    import importlib
+    import torch
+
+    for modname in ("transformers.models.d_fine.modeling_d_fine", "transformers.models.rt_detr_v2.modeling_rt_detr_v2",
+                    "transformers.models.rt_detr.modeling_rt_detr"):
+        try:
+            mod = importlib.import_module(modname)
+        except Exception:  # noqa: BLE001
+            continue
+        orig = getattr(mod, "build_2d_sincos_position_embedding", None)
+        if orig is None or getattr(orig, "_frozen", False):
+            continue
+        cache = {}
+
+        def patched(*a, _orig=orig, _cache=cache, **k):
+            key = (tuple(int(v) if isinstance(v, (int, torch.Tensor)) and not isinstance(v, bool) else str(v) for v in a),
+                   tuple(sorted((kk, str(vv)) for kk, vv in k.items())))
+            if key not in _cache:
+                _cache[key] = _orig(*a, **k).detach().clone()
+            return _cache[key]
+
+        patched._frozen = True
+        setattr(mod, "build_2d_sincos_position_embedding", patched)
+        for cls in vars(mod).values():  # the encoder calls it as a staticmethod on the class
+            if isinstance(cls, type) and "build_2d_sincos_position_embedding" in vars(cls):
+                setattr(cls, "build_2d_sincos_position_embedding", staticmethod(patched))
+    with torch.no_grad():
+        model(pixel_values=x)
+
+
 def export_hf(det, imgsz: int, dst: Path) -> dict:
     import torch
 
     model = det.model.eval().float().cpu()
     x = torch.randn(1, 3, imgsz, imgsz)
+    _freeze_sincos(model, x)
     torch.onnx.export(model, (x,), str(dst), input_names=["pixel_values"], output_names=["logits", "pred_boxes"],
                       opset_version=OPSET, dynamo=False, do_constant_folding=True)
     try:
@@ -74,6 +109,16 @@ def main():
     ap.add_argument("--gcs", default=None)
     args = ap.parse_args()
     for name in args.models.split(","):
+        try:
+            _export_one(name, args)
+        except Exception:  # noqa: BLE001
+            import traceback
+
+            traceback.print_exc()
+
+
+def _export_one(name, args):
+    if True:
         det = build(name, imgsz=args.imgsz, device="cpu", half=False) if name not in ("yolox-tiny", "nanodet-plus") else build(name)
         d = Path(args.out) / name
         d.mkdir(parents=True, exist_ok=True)
