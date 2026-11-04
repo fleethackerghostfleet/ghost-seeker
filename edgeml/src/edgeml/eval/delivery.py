@@ -37,6 +37,7 @@ def delivered_vs_budget(events: list[dict], sighting_match: dict[str, Optional[i
     for oid, rows in gt_tracks.items():
         for fr, box in rows:
             gt_at[fr][oid] = box
+    first_frame = {oid: min(fr for fr, _ in rows) for oid, rows in gt_tracks.items() if rows}
     windows: dict[int, list[dict]] = defaultdict(list)
     for e in events:
         if e.get("event") == "close" or not e.get("forms"):
@@ -61,8 +62,13 @@ def delivered_vs_budget(events: list[dict], sighting_match: dict[str, Optional[i
                 else:
                     fr = ev.get("best_frame_idx", ev["frame_idx"])
                     region = c["form"].get("region")
-                    # per object, tolerate a 1-frame GT gap (e.g. FVessel labels start at frame 2): prefer the key frame's row
-                    gt_here = {**gt_at.get(fr - 1, {}), **gt_at.get(fr + 1, {}), **gt_at.get(fr, {})}
+                    # per object, tolerate a 1-frame GT gap only when the object is provably present: a hole between two
+                    # labelled frames, or labels starting one frame late (FVessel starts at frame 2) — never entries/exits
+                    gt_here = dict(gt_at.get(fr, {}))
+                    prev_, next_ = gt_at.get(fr - 1, {}), gt_at.get(fr + 1, {})
+                    for oid, gb in next_.items():
+                        if oid not in gt_here and (oid in prev_ or first_frame.get(oid) == fr + 1):
+                            gt_here[oid] = gb
                     for oid, gb in gt_here.items():
                         if _covers(region, gb, W, H):
                             img_objs.add(oid)
