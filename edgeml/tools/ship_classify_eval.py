@@ -161,10 +161,11 @@ def main():
         clfs = []
         if not m.startswith("dinov2"):
             clfs.append(("zeroshot", st.ShipTypeClassifier(emb, unknown_floor=a.unknown_floor, name=m)))
-        tr = out / "emb" / f"{m}_seaships_train.npy"
-        if tr.exists():
-            ytr = [i["gt"] for i in json.load(open(out / "items_seaships_train.json"))]
-            clfs.append(("probe", st.ProbeClassifier(emb).fit(np.load(tr), ytr)))
+        if "seaships_train" in sets:
+            clfs.append(("probe", st.ProbeClassifier(emb).fit(
+                E["seaships_train"], [i["gt"] for i in sets["seaships_train"]])))
+        else:
+            print(f"{m} probe skipped: seaships_train is not in this run", flush=True)
         for kind, c in clfs:
             for s in sets:
                 if s == "seaships_train":
