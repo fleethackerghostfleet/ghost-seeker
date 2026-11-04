@@ -35,6 +35,7 @@ func main() {
 	listen := flag.String("listen", env("LISTEN", ":8081"), "console listen address")
 	shoreURL := flag.String("shore", env("SHORE_URL", "http://localhost:8080"), "shore base URL (put Toxiproxy here to degrade)")
 	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference sidecar URL, or 'mock'")
+	sceneEvery := flag.Duration("scene-every", 60*time.Second, "sightings mode: store at most one object-free 'scene' frame (FACT+THUMB) per source per interval; 0 = one item per frame")
 	dedup := flag.String("dedup", env("DEDUP", "hash"), "naive (item per frame) | hash (exact-duplicate frames fold) | sightings (one item per object; needs a sidecar that returns sightings)")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	scen := flag.String("scenario", env("SCENARIO", ""), "scenario JSON to replay into the store (optional)")
@@ -66,6 +67,7 @@ func main() {
 	icfg.EdgeID = *id
 	icfg.Dedup, err = ingest.ParseDedup(*dedup)
 	fatal(err)
+	icfg.SceneEvery = *sceneEvery
 	ing := ingest.New(icfg, st, an, sch, clk, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
