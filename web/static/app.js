@@ -33,9 +33,18 @@ function flash(id){const element=$(id);if(!element)return;element.classList.add(
 function applySnapshot(data){
  const selection=state.sel;
  const elements=new Map(items.map(item=>[item.id,item.el]));
- items=data.items.map(item=>{item=normalizeItem(item);item.el=elements.get(item.id);return item});
+ if(state.paused){
+  const snapshot=new Map(data.items.map(item=>[item.id,item]));
+  items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
+  pendingItems=pendingItems.map(event=>({...event,item:snapshot.get(event.item.id)||event.item}));
+  const queued=new Set(pendingItems.map(event=>event.item.id));
+  for(const item of data.items)if(!elements.has(item.id)&&!queued.has(item.id)&&!evictedIDs.has(item.id))pendingItems.push({item});
+ }else{
+  items=data.items.map(item=>{item=normalizeItem(item);item.el=elements.get(item.id);return item});
+  pendingItems=[];evictedIDs.clear();
+ }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
- pendingItems=[];evictedIDs.clear();state.model=data.state.model;state.directives=data.state.directives;
+ state.model=data.state.model;state.directives=data.state.directives;
  stats=data.stats;cdr=data.cdr;weightData=data.weights||{};
  state.sel=items.some(item=>item.id===selection)?selection:null;
  if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML=''}
