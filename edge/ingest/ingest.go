@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"image"
-	"image/jpeg"
 	_ "image/png"
 	"io"
 	"log/slog"
@@ -19,7 +18,6 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
-	"golang.org/x/image/draw"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scheduler"
@@ -47,14 +45,28 @@ type Source interface {
 }
 
 type Config struct {
-	EdgeID      string // seeds id entropy; must differ per edge
+	EdgeID string // seeds id entropy; must differ per edge
+	// THUMB: JPEG fitted within ThumbWidth × ThumbHeight px (0 = unbounded).
 	ThumbWidth  int
+	ThumbHeight int
 	ThumbQual   int
+	// CROP: JPEG of the union of detection boxes (confidence >= CropMinConf)
+	// at native resolution, padded by CropPad × box size per side. Skipped
+	// when there are no boxes or the crop exceeds CropMaxArea of the frame.
+	CropQual    int
+	CropPad     float64
+	CropMinConf float64
+	CropMaxArea float64
+	// FULL: JPEG/WebP captures are sent as-is; other formats are re-encoded
+	// as JPEG at FullQual if smaller (<= 0 keeps the original bytes).
+	FullQual    int
 	KnownLabels []string
 }
 
 func DefaultConfig() Config {
-	return Config{ThumbWidth: 160, ThumbQual: 55,
+	return Config{ThumbWidth: 160, ThumbHeight: 160, ThumbQual: 55,
+		CropQual: 80, CropPad: 0.15, CropMinConf: 0, CropMaxArea: 0.6,
+		FullQual:    90,
 		KnownLabels: []string{"cargo ship", "container ship", "sailboat", "fishing vessel", "tanker", "small boat", "buoy"}}
 }
 
@@ -120,12 +132,23 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		}
 		it.Features.Detections, it.Features.Embedding, it.Features.Unknownness, it.Features.ModelId =
 			resp.Detections, resp.Embedding, resp.Unknownness, resp.ModelId
-		if th, err := g.thumb(c.Data); err == nil {
+		img, _, err := image.Decode(bytes.NewReader(c.Data))
+		if err != nil {
+			g.log.Warn("decode", "err", err)
+			payloads[pb.FormKind_FORM_KIND_FULL] = c.Data
+			break
+		}
+		if th, err := g.thumbForm(img); err == nil {
 			payloads[pb.FormKind_FORM_KIND_THUMB] = th
 		} else {
 			g.log.Warn("thumb", "err", err)
 		}
-		payloads[pb.FormKind_FORM_KIND_FULL] = c.Data
+		if cr, err := g.cropForm(img, resp.Detections); err != nil {
+			g.log.Warn("crop", "err", err)
+		} else if cr != nil {
+			payloads[pb.FormKind_FORM_KIND_CROP] = cr
+		}
+		payloads[pb.FormKind_FORM_KIND_FULL] = g.fullForm(c.Data, img)
 	case pb.ItemType_ITEM_TYPE_RECORD, pb.ItemType_ITEM_TYPE_DIGEST:
 		// Small structured items: the record is its own FACT; no ladder.
 		payloads[pb.FormKind_FORM_KIND_FULL] = c.Data
@@ -153,26 +176,6 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		g.OnItem(row)
 	}
 	return row, nil
-}
-
-func (g *Ingester) thumb(data []byte) ([]byte, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	b := img.Bounds()
-	w := g.cfg.ThumbWidth
-	h := b.Dy() * w / max(b.Dx(), 1)
-	if h < 1 {
-		h = 1
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
-	var out bytes.Buffer
-	if err := jpeg.Encode(&out, dst, &jpeg.Options{Quality: g.cfg.ThumbQual}); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
 }
 
 // entropyFor seeds ULID entropy from the edge id, so two edges capturing

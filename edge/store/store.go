@@ -12,9 +12,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -151,7 +153,7 @@ func (s *Store) Put(ctx context.Context, it *pb.Item, payloads map[pb.FormKind][
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			return 0, err
 		}
-		mime := mimeFor(k, it.Type)
+		mime := mimeFor(k, it.Type, data)
 		it.Forms = append(it.Forms, &pb.Form{Kind: k, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true})
 		if _, err := tx.ExecContext(ctx, `INSERT INTO forms(item_id,kind,bytes,hash,mime,path) VALUES(?,?,?,?,?,?)`,
 			it.Id, int(k), len(data), h, mime, path); err != nil {
@@ -175,15 +177,16 @@ func (s *Store) Put(ctx context.Context, it *pb.Item, payloads map[pb.FormKind][
 	return seq, tx.Commit()
 }
 
-func mimeFor(k pb.FormKind, t pb.ItemType) string {
-	switch k {
-	case pb.FormKind_FORM_KIND_FACT:
+// mimeFor labels a form for shore. Image rungs are sniffed from their bytes
+// so the Mime stays accurate whatever encoder (or passthrough) produced them.
+func mimeFor(k pb.FormKind, t pb.ItemType, data []byte) string {
+	if k == pb.FormKind_FORM_KIND_FACT {
 		return "application/json"
-	case pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIND_CROP:
-		return "image/jpeg"
 	}
-	if t == pb.ItemType_ITEM_TYPE_IMAGE {
-		return "image/jpeg"
+	if t == pb.ItemType_ITEM_TYPE_IMAGE || k == pb.FormKind_FORM_KIND_THUMB || k == pb.FormKind_FORM_KIND_CROP {
+		if m := http.DetectContentType(data); strings.HasPrefix(m, "image/") {
+			return m
+		}
 	}
 	return "application/octet-stream"
 }

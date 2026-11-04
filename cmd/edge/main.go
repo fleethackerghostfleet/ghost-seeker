@@ -41,6 +41,13 @@ func main() {
 	period := flag.Duration("period", 5*time.Second, "capture period for replay")
 	tick := flag.Duration("tick", 3*time.Second, "scheduler tick")
 	initBps := flag.Float64("init-bps", 64000, "initial link estimate (bits/s)")
+	icfg := ingest.DefaultConfig()
+	flag.IntVar(&icfg.ThumbWidth, "thumb-width", icfg.ThumbWidth, "THUMB max width in px (0 = unbounded)")
+	flag.IntVar(&icfg.ThumbHeight, "thumb-height", icfg.ThumbHeight, "THUMB max height in px (0 = unbounded)")
+	flag.IntVar(&icfg.ThumbQual, "thumb-quality", icfg.ThumbQual, "THUMB JPEG quality 1-100")
+	flag.IntVar(&icfg.CropQual, "crop-quality", icfg.CropQual, "CROP JPEG quality 1-100")
+	flag.Float64Var(&icfg.CropPad, "crop-pad", icfg.CropPad, "CROP padding per side, as a fraction of the detection box size")
+	flag.IntVar(&icfg.FullQual, "full-quality", icfg.FullQual, "JPEG quality for re-encoding non-JPEG FULL captures (0 = send original bytes)")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
@@ -61,7 +68,6 @@ func main() {
 	} else {
 		an = inference.NewRemote(*inferURL)
 	}
-	icfg := ingest.DefaultConfig()
 	icfg.EdgeID = *id
 	ing := ingest.New(icfg, st, an, sch, clk, log)
 

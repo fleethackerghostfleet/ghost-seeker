@@ -97,15 +97,47 @@ order, promoting an item's next rung when a form fits entirely; suppressed or
 below-threshold images sort in a lower tier and drain only when nothing
 better is waiting ("if we have bandwidth, use it").
 
+## Payload encoding
+
+Form generation (`edge/ingest/forms.go`) and the transport (`edge/link`) own
+compression; the scheduler only sees each form's byte count and `Mime`.
+
+| form | encoding | defaults (`ingest.DefaultConfig`, `bin/edge` flags) |
+|---|---|---|
+| `FACT` | compact JSON (`internal/fact`) | — |
+| `THUMB` | JPEG, fitted within W×H (aspect kept, never upscaled), CatmullRom downscale; grayscale (IR) stays single-channel | 160×160, q55 (`-thumb-width`, `-thumb-height`, `-thumb-quality`) |
+| `CROP` | JPEG at native resolution of the union of the analyzer's detection boxes, padded per side by a fraction of the box size. Skipped when there are no boxes or the crop would exceed 60% of the frame (FULL is the next useful rung) | pad 0.15, q80 (`-crop-pad`, `-crop-quality`) |
+| `FULL` | JPEG/WebP captures are sent byte-for-byte (re-encoding only adds generation loss); PNG and other formats are re-encoded as JPEG when that is smaller | q90; `-full-quality 0` always sends the original bytes |
+
+`Mime` is sniffed from each form's bytes when it is stored (`edge/store`), so
+it always matches what was produced; shore stores it per form and serves
+`/blob/...` with that `Content-Type`. JPEG rather than WebP because Go has no
+pure-Go lossy WebP encoder (`x/image/webp` only decodes) and the build is
+CGO-free; an encoder can be swapped in inside `forms.go` without touching
+the scheduler, link or shore.
+
+On the replay frames, THUMB averages ~2.1 KB (was ~2.5 KB with the previous
+bilinear 160 px-wide resize), CROP ~8 KB, FULL
+~68 KB.
+
+The Connect/gRPC link gzips `ExchangeRequest`s (BestSpeed, messages ≥ 512 B)
+and the shore `SyncService` handler gzips responses to edges that accept it
+(`link.HandlerOptions`). Manifest batches and FACT JSON shrink ~10× (a
+65-item manifest+FACT exchange: 16 KB → 1.4 KB); JPEG chunks are already
+compressed and pass through at negligible overhead. The link estimator and
+budget stay in uncompressed protobuf bytes, so compression shows up as a
+higher estimated rate. The in-process simulator (`link.Sim`) charges
+uncompressed bytes.
+
 ## Simulator results (satcom_contested, 60 min, mock analyzer)
 
 | strategy | first unknown fact at shore | first unknown full | manifests at shore | unknowns at FACT | FULL images |
 |---|---|---|---|---|---|
 | FIFO | never | 14 s | 265 / 360 | 0 / 5 | 265 |
-| prioritized | 4 s | 8 s | 360 / 360 | 5 / 5 | 208 |
+| prioritized | 3 s | 7 s | 360 / 360 | 5 / 5 | 208 |
 
-FIFO wins raw image count because it spends zero bytes on manifests, facts and
-thumbnails; prioritized gives shore a complete picture of the backlog and
+FIFO wins raw image count because it spends zero bytes on manifests, facts,
+thumbnails and crops; prioritized gives shore a complete picture of the backlog and
 every unknown, and puts the bytes it has into what the operator asked for.
 
 ## Operator web app
