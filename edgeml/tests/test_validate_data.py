@@ -124,6 +124,27 @@ def test_exact_leak_quarantines_dev_not_test(tmp_path):
     assert [r["record"] for r in audit.issues if r["reason"] == "dev_exact_content_leak"] == ["dev.jpg"]
 
 
+@pytest.mark.parametrize("other_split", ["dev", "quarantine", "test"])
+@pytest.mark.parametrize("test_first", [False, True])
+def test_duplicate_selection_preserves_locked_test(tmp_path, other_split, test_first):
+    output = tmp_path / "out"
+    output.mkdir()
+    audit = validate.Audit(TOOLS.parents[1], None, output)
+    frames = [("clip05.jpg", other_split), ("clip07.jpg", "test")]
+    if test_first:
+        frames.reverse()
+    for ref, split in frames:
+        audit.image(ref, jpeg(), "fvessel_clip10", ref, split)
+    audit.duplicates()
+    audit.finish()
+    selections = {r["ref"]: r for r in validate.read_jsonl(output / "selection.jsonl")}
+    assert selections["clip07.jpg"]["status"] == "keep"
+    if other_split == "test":
+        assert selections["clip05.jpg"]["status"] == "keep"
+    else:
+        assert selections["clip05.jpg"]["status"] == "quarantine"
+
+
 def test_eval_loader_honours_quarantine(monkeypatch):
     def image(key, split):
         return catalog.EvalImage(key, "singapore_maritime", "", "", 24, 16, "train", key, eval_split=split)

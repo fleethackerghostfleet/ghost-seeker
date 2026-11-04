@@ -538,8 +538,10 @@ class Audit:
             for row in rows:
                 groups[row["dataset_id"]].append(row)
             for group in groups.values():
+                group.sort(key=lambda r: (r["eval_split"] != "test", r["ref"]))
                 for row in group[1:]:
-                    self.issue("exact_duplicate_within_dataset", row["ref"], canonical=group[0]["ref"])
+                    reason = "exact_duplicate_locked_test" if row["eval_split"] == "test" else "exact_duplicate_within_dataset"
+                    self.issue(reason, row["ref"], canonical=group[0]["ref"])
             if len(groups) > 1:
                 self.issue("exact_copy_across_artifacts", rows[0]["ref"], copies=len(rows), datasets=sorted(groups))
             splits = {r["eval_split"] for r in rows}
