@@ -290,6 +290,83 @@ duplicates, 0 false) where naive emits 72–108 reports; with IoU association Bo
 the two dolphins, the helicopter on deck and the surfacing submarine, which are not COCO classes, while the oracle rows (8/9)
 show tracking itself is fine. The `false/min` there is dominated by unlabelled stretches (A's `partial` flag).
 
+## 6b. Locked test, enlarged set (A2's six extra `ghost_fleet_5fps` test sequences; run once, exact §11 config)
+
+Run `test_enlarged` (edgeml/main `56bc67b`, same recommended configuration as §11 — `botsort_cmc` + centroid, `max_lost_s=6`,
+`min_hits=1`, `relink_gap_s=20`, `min_update_interval_s=10`, score floor 0.35 — no parameter changes; `detect_every` 1 and 2 both
+shown, ByteTrack fallback and oracle boxes for reference). 15 test sequences = the 9 of §9 + `US_Destroyer_POV_Warship_Crossing`,
+`Sailboat_on_the_horizon_seg0`, `Arriving_In_Norfolk_seg1h10`, `Ferry_Passing_By_On_River` (`complete`) and
+`Arriving_In_Norfolk_seg1h13`, `Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats` (`partial`). YOLO11s detections were cached
+once on the new clips (`run_c.py cache`), nothing was retuned. Artifacts:
+`gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/c-20261104-test-enlarged/`.
+
+Sequences (15; `partial` = known unlabelled stretches, used for false-sighting review only, excluded from recall/delivery pooling):
+
+| set | sequence | gt_status | min | GT objs | recall yolo11s|naive|every1 | recall yolo11s|imgdedup|every1 | recall yolo11s|botsort_cmc|every1 | recall yolo11s|botsort_cmc|every2 | recall yolo11s|bytetrack|every2 | recall oracle|botsort_cmc|every2 | false/min botsort_cmc every2 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| fvessel_clip10 | fvessel_clip07 | complete | 11.2 | 4 | 4/4 | 3/4 | 3/4 | 3/4 | 3/4 | 4/4 | 2.0 |
+| fvessel_clip10 | fvessel_clip09 | complete | 8.7 | 3 | 3/3 | 3/3 | 2/3 | 1/3 | 1/3 | 3/3 | 1.7 |
+| ghost_fleet_5fps | Arriving_In_Norfolk_seg1h10 | complete | 3.0 | 6 | 4/6 | 4/6 | 3/6 | 3/6 | 3/6 | 5/6 | 1.3 |
+| ghost_fleet_5fps | Ferry_Passing_By_On_River | complete | 0.7 | 1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 0.0 |
+| ghost_fleet_5fps | Sailboat_on_the_horizon_seg0 | complete | 3.0 | 2 | 2/2 | 2/2 | 2/2 | 2/2 | 2/2 | 2/2 | 0.0 |
+| ghost_fleet_5fps | Ship_in_the_Distance_Ian | complete | 0.5 | 1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 0.0 |
+| ghost_fleet_5fps | Spotted_A_Submarine | complete | 2.5 | 1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1.2 |
+| ghost_fleet_5fps | US_Destroyer_POV_Warship_Crossing | complete | 0.5 | 1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 5.9 |
+| ghost_fleet_5fps | Arriving_In_Norfolk_seg1h13 | partial | 3.0 | 4 | 1/4 | 1/4 | 1/4 | 1/4 | 1/4 | 4/4 | 0.3 |
+| ghost_fleet_5fps | Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats | partial | 2.3 | 29 | 28/29 | 26/29 | 9/29 | 9/29 | 7/29 | 11/29 | 1.8 |
+| mvtd_5fps | 18-SailBoat | complete | 0.2 | 1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 14.5 |
+| mvtd_5fps | 22-Boat | complete | 0.1 | 1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 0.0 |
+| mvtd_5fps | 7-Boat | complete | 0.3 | 1 | 0/1 | 0/1 | 0/1 | 0/1 | 0/1 | 1/1 | 3.0 |
+| smd_vis_onboard_1fps | MVI_0797 | complete | 0.3 | 1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 6.0 |
+| smd_vis_onboard_1fps | MVI_0801 | complete | 0.3 | 2 | 2/2 | 2/2 | 1/2 | 1/2 | 1/2 | 1/2 | 0.0 |
+
+Pooled over the `complete` test sequences (old 9 + 4 new; TTFR = mean over matched objects):
+
+| config | GT objs | recall | dup/obj | false/min | TTFR s | reports/obj | reports | HOTA | HOTA@.3 | IDF1 | IDSW | Frag | img@72KB | img@480KB | img@1.92MB | img@15MB | KB/obj@480KB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| yolo11s|naive|every1 | 25 | 0.88 | 114.16 | 150.4 | 3.1 | 136.1 | 8672 | - | - | - | - | - | 0.20 | 0.92 | 0.96 | 1.00 | 719 |
+| yolo11s|imgdedup|every1 | 25 | 0.84 | 5.96 | 8.1 | 45.0 | 7.7 | 397 | - | - | - | - | - | 0.56 | 0.96 | 1.00 | 1.00 | 548 |
+| yolo11s|botsort_cmc|every1 | 25 | 0.72 | 0.15 | 2.1 | 30.6 | 4.1 | 262 | 0.48 | 0.54 | 0.50 | 32 | 161 | 0.92 | 0.92 | 0.92 | 0.92 | 599 |
+| yolo11s|botsort_cmc|every2 | 25 | 0.68 | 0.04 | 1.7 | 36.2 | 3.6 | 207 | 0.46 | 0.53 | 0.48 | 32 | 106 | 0.92 | 0.96 | 0.96 | 0.96 | 513 |
+| yolo11s|bytetrack|every2 | 25 | 0.68 | 0.17 | 1.7 | 36.1 | 3.8 | 209 | 0.43 | 0.52 | 0.46 | 27 | 107 | 0.96 | 0.96 | 0.96 | 0.96 | 522 |
+| oracle|botsort_cmc|every2 | 25 | 0.92 | 0.27 | 0.1 | 1.0 | 4.3 | 117 | 0.88 | 0.92 | 0.91 | 24 | 49 | 0.96 | 0.96 | 0.96 | 0.96 | 335 |
+| yolo11s|bytetrack|every1 | 25 | 0.76 | 0.23 | 2.1 | 22.3 | 4.1 | 266 | 0.44 | 0.53 | 0.47 | 36 | 190 | 0.92 | 0.92 | 0.92 | 0.92 | 582 |
+| oracle|botsort_cmc|every1 | 25 | 0.92 | 0.38 | 0.1 | 0.4 | 4.6 | 123 | 0.92 | 0.93 | 0.91 | 23 | 14 | 0.96 | 0.96 | 0.96 | 0.96 | 338 |
+
+Pooled over the 2 `partial` sequences (false-sighting review only; recall is not meaningful here):
+
+| config | GT objs | recall | dup/obj | false/min | TTFR s | reports/obj | reports | HOTA | HOTA@.3 | IDF1 | IDSW | Frag | img@72KB | img@480KB | img@1.92MB | img@15MB | KB/obj@480KB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| yolo11s|naive|every1 | 33 | 0.88 | 100.91 | 184.6 | 0.2 | 287.8 | 3777 | - | - | - | - | - | 0.00 | 0.27 | 0.39 | 0.70 | 286 |
+| yolo11s|imgdedup|every1 | 33 | 0.82 | 6.94 | 34.6 | 2.5 | 9.8 | 593 | - | - | - | - | - | 0.00 | 0.12 | 0.52 | 0.82 | 557 |
+| yolo11s|botsort_cmc|every2 | 33 | 0.30 | 0.07 | 1.0 | 1.2 | 6.6 | 76 | - | - | - | - | - | 0.48 | 0.79 | 0.79 | 0.79 | 75 |
+| oracle|botsort_cmc|every2 | 33 | 0.45 | 0.05 | 0.0 | 0.3 | 3.7 | 58 | - | - | - | - | - | 0.73 | 0.94 | 0.94 | 0.94 | 64 |
+
+Pooled over the 4 new `complete` ghost_fleet_5fps sequences only:
+
+| config | GT objs | recall | dup/obj | false/min | TTFR s | reports/obj | reports | HOTA | HOTA@.3 | IDF1 | IDSW | Frag | img@72KB | img@480KB | img@1.92MB | img@15MB | KB/obj@480KB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| yolo11s|naive|every1 | 10 | 0.80 | 225.96 | 76.5 | 2.9 | 261.2 | 3260 | - | - | - | - | - | 0.00 | 0.90 | 0.90 | 1.00 | 393 |
+| yolo11s|imgdedup|every1 | 10 | 0.80 | 4.67 | 2.9 | 21.0 | 6.1 | 66 | - | - | - | - | - | 0.40 | 1.00 | 1.00 | 1.00 | 190 |
+| yolo11s|botsort_cmc|every1 | 10 | 0.70 | 0.08 | 1.0 | 2.6 | 4.8 | 50 | - | - | - | - | - | 0.90 | 0.90 | 0.90 | 0.90 | 258 |
+| yolo11s|botsort_cmc|every2 | 10 | 0.70 | 0.00 | 1.0 | 18.5 | 4.4 | 48 | - | - | - | - | - | 0.90 | 1.00 | 1.00 | 1.00 | 245 |
+| yolo11s|bytetrack|every2 | 10 | 0.70 | 0.00 | 1.1 | 18.5 | 4.3 | 48 | - | - | - | - | - | 1.00 | 1.00 | 1.00 | 1.00 | 228 |
+| oracle|botsort_cmc|every2 | 10 | 0.90 | 0.00 | 0.0 | 0.3 | 4.1 | 43 | - | - | - | - | - | 1.00 | 1.00 | 1.00 | 1.00 | 194 |
+
+**Reading it.** On the 13 `complete` test sequences (25 GT objects, 35 min) the recommended pipeline keeps the §9 picture:
+**0.15 duplicates/object vs 114 naive / 6.0 image-dedup, 2.1 false/min vs 150 / 8.1, 4.1 reports/object vs 136 / 7.7, and 92 %
+of objects delivered with an image at 72 KB/60 s vs 20 % naive / 56 % image-dedup**; `detect_every=2` lowers dup/object to 0.04
+and Frag 161 → 106 at the cost of one more missed object (recall 0.68 vs 0.72). Recall against naive (0.88) is lost on the same
+kinds of objects as before: `Arriving_In_Norfolk_seg1h10` (3 of 6 — small moored craft that YOLO fires on only intermittently;
+oracle boxes give 5/6), `fvessel_clip09` (1–2 of 3 at 1 Hz, fragments absorbed by the neighbouring hull), `MVI_0801` and `7-Boat`
+(no detector hits ≥0.35). The four new `complete` own-ship clips alone: 7/10 objects, 0.08 → 0.00 dup/object, 1.0 false/min,
+90–100 % delivered at every budget. On the `partial` clips recall is not meaningful (unlabelled stretches), but
+`Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats` is a real failure mode worth recording: 29 GT dinghies in 2.3 min, sightings cover
+9/29 and even oracle boxes only 11/29 — adjacent small boats at 5 fps merge into one track under the centroid gate (merged objects),
+which the §5 one-sighting-per-GT matching then counts as misses. Its false-sighting rate stays low (1.8/min, 0.3/min on
+`seg1h13`). Note the delivery metric matches an event to a GT object by box IoU at the event frame, not by the 30 % coverage rule,
+so "delivered" can exceed `recall` by one or two objects.
+
 ## 7. E2: horizon-pinned stabilisation (onboard dev sets)
 
 `HorizonStabilizer` (Canny + Hough on a 480 px frame, EMA roll/offset, affine warp of detections and of the GMC

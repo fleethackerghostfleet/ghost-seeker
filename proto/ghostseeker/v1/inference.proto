@@ -59,6 +59,8 @@ message Sighting {
   int64 first_seen_unix_ms = 8;
   int64 last_seen_unix_ms = 9;
   int32 n_frames = 10;
+  repeated float embedding = 11; // key-crop embedding of this object (same space as AnalyzeResponse.embedding)
+  float unknownness = 12; // zero-shot unknownness of this object's key crop
 }
 
 // FormHint sizes a form without shipping its bytes.
