@@ -194,7 +194,7 @@ function renderStats(){
 
 /* ---- detail drawer ---- */
 function openDetail(id){const prev=items.find(i=>i.id===state.sel);state.sel=id;document.body.classList.add('drawer-open');prev&&updateCard(prev);const it=items.find(i=>i.id===id);it&&updateCard(it);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
-function openZoom(){state.zoom=true;renderZoom()}
+function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
 function renderZoom(){const it=items.find(i=>i.id===state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
  z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}">P${it.tier}</span><b>${it.src.name}</b><span class="mono">${zulu(it.ts)}</span><span>DB #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe"><img src="${imageFor(it)}">${boxesHTML(it,true)}</div>`;z.onclick=closeZoom}
