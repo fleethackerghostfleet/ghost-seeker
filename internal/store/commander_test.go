@@ -32,8 +32,10 @@ func TestDecideLifecycle(t *testing.T) {
 	if err != nil || item.Decision != "track" || item.DecisionNote != "keep eyes on it" || item.DecidedAt == nil || cdr != 1 {
 		t.Fatalf("track: item=%+v cdr=%d err=%v", item, cdr, err)
 	}
+	dismissed := true
+	data.PatchItem("a", nil, nil, &dismissed, nil)
 	item, cdr, err = data.Decide("a", DecisionReturn, "")
-	if err != nil || item.Sent || item.Reviewed || cdr != 0 {
+	if err != nil || item.Sent || item.Reviewed || item.Dismissed || cdr != 0 {
 		t.Fatalf("return: sent=%v reviewed=%v cdr=%d err=%v", item.Sent, item.Reviewed, cdr, err)
 	}
 	item, cdr, err = data.Decide("a", "", "")

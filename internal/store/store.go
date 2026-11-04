@@ -216,7 +216,7 @@ func (s *Store) Decide(id, decision, note string) (command.Item, int, error) {
 		now := time.Now()
 		switch {
 		case decision == DecisionReturn && item.Sent:
-			item.Sent, item.SentAt, item.Reviewed = false, nil, false
+			item.Sent, item.SentAt, item.Reviewed, item.Dismissed = false, nil, false, false
 			s.cdr--
 		case decision != DecisionReturn && !item.Sent:
 			item.Sent, item.SentAt, item.Reviewed = true, &now, true
