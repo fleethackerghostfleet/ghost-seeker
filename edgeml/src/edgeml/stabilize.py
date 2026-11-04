@@ -36,7 +36,7 @@ class HorizonStabilizer:
         if lines is None:
             return None
         best, best_len = None, 0.0
-        for x1, y1, x2, y2 in lines[:, 0]:
+        for x1, y1, x2, y2 in lines.reshape(-1, 4):
             ang = math.degrees(math.atan2(y2 - y1, x2 - x1))
             if abs(ang) > self.max_tilt:
                 continue
