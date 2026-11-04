@@ -163,16 +163,10 @@ type ClassWeight struct {
 // behavior flags, sorted by effective weight.
 func Weights(c Config) []ClassWeight {
 	rules := c.rules()
-	var unconditional []ruleWithRef
-	for _, r := range rules {
-		if len(r.Attrs) == 0 {
-			unconditional = append(unconditional, r)
-		}
-	}
 	out := make([]ClassWeight, 0, len(catalog.ClassOrder))
 	for _, k := range catalog.ClassOrder {
 		d := catalog.Detection{Class: k, Conf: 1, Attrs: map[string]bool{}}
-		cw := ClassWeight{Class: k, Base: catalog.Models[c.Model].Weights[k], Eff: scoreDet(c.Model, d, unconditional).S}
+		cw := ClassWeight{Class: k, Base: catalog.Models[c.Model].Weights[k], Eff: scoreDet(c.Model, d, rules).S}
 		for _, r := range rules {
 			if r.Type == "boost" && len(r.Attrs) > 0 && (len(r.Classes) == 0 || slices.Contains(r.Classes, k)) {
 				cw.Cond = true
