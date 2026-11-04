@@ -64,6 +64,7 @@ type Latency struct {
 
 type Item struct {
 	ID          string     `json:"id"`
+	Img         string     `json:"img,omitempty"`
 	DBID        int        `json:"dbId"`
 	Frame       int        `json:"frame"`
 	SourceID    string     `json:"src"`

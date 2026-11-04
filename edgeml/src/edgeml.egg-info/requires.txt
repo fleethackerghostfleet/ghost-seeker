@@ -1,0 +1,26 @@
+numpy
+opencv-python-headless
+pyyaml
+
+[eval]
+pycocotools
+faster-coco-eval
+trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git
+
+[gpu]
+torch
+torchvision
+ultralytics
+transformers>=4.50
+timm
+huggingface_hub
+onnxruntime-gpu
+onnx
+onnxslim
+faster-coco-eval
+pillow
+
+[onnx]
+onnx
+onnxruntime
+onnxslim

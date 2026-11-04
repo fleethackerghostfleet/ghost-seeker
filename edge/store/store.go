@@ -438,8 +438,15 @@ func (s *Store) originalPath(itemID string) string {
 }
 
 // PutOriginal keeps the capture's original bytes when FULL was re-encoded,
-// so an operator can still have the original sent (RestoreOriginal).
+// so an operator can still have the original sent (RestoreOriginal). nil
+// means FULL is the original (e.g. after a key-frame replacement).
 func (s *Store) PutOriginal(itemID string, data []byte) error {
+	if data == nil {
+		if err := os.Remove(s.originalPath(itemID)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
 	return os.WriteFile(s.originalPath(itemID), data, 0o644)
 }
 

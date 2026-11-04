@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/shorebridge"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
+	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
 func main() {
@@ -18,7 +23,17 @@ func main() {
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
+	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
+	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
+	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
+	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
+	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	flag.Parse()
+
+	if *shoreURL != "" {
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll)
+		return
+	}
 
 	data := store.New(*retain)
 	generator := sensor.NewGenerator()
@@ -69,6 +84,60 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 			app.PublishUpdate(item, cdr)
 		}
 	}
+}
+
+// runShoreMode serves the operator UI on top of a live shore node: the
+// bridge polls the shore ConsoleService and the shaper is the ship-to-shore
+// link the edge talks through (so the bandwidth buttons are real).
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var link shorebridge.LinkControl
+	if linkListen != "" {
+		target, err := shaperTarget(shoreURL)
+		if err != nil {
+			log.Fatalf("-shore: %v", err)
+		}
+		sh := shaper.New(target, linkBps)
+		go func() {
+			if err := sh.ListenAndServe(ctx, linkListen); err != nil {
+				log.Fatalf("shaper: %v", err)
+			}
+		}()
+		log.Printf("link shaper on %s -> %s at %d bit/s (start the edge with -shore http://localhost%s)", linkListen, target, linkBps, linkListen)
+		link = sh
+	}
+	bridge := shorebridge.New(shoreURL, edgeURL, link)
+	go bridge.Run(ctx, poll)
+
+	mux := http.NewServeMux()
+	mux.Handle("/api/shore/", bridge.Handler())
+	mux.Handle("/blob/", bridge.Handler())
+	static := web.Handler()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/cdr" {
+			r.URL.Path = "/shore.html"
+		}
+		static.ServeHTTP(w, r)
+	})
+	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+func shaperTarget(shoreURL string) (string, error) {
+	u, err := url.Parse(shoreURL)
+	if err != nil {
+		return "", err
+	}
+	host := u.Host
+	if u.Port() == "" {
+		if u.Scheme == "https" {
+			host += ":443"
+		} else {
+			host += ":80"
+		}
+	}
+	return host, nil
 }
 
 func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server) {

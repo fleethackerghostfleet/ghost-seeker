@@ -1,0 +1,14 @@
+.brief-workspace{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:0;flex:1;overflow:auto}
+.brief-controls{background:var(--panel);border-right:1px solid var(--line);padding:20px;overflow:auto}
+.brief-controls label{display:block;font-weight:600;margin:20px 0 7px}
+.brief-controls input,.brief-controls select,.brief-controls textarea{width:100%;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:9px}
+.brief-controls textarea{resize:vertical;line-height:1.5}
+#briefSelection{margin:15px 0}.brief-selected{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:10px 0}.brief-selected div{flex:1;min-width:0;overflow-wrap:anywhere}.brief-selected small{display:block;color:var(--muted)}
+#briefPreview{padding:24px;overflow:auto;min-width:0}.brief-slide-wrap{position:relative;width:100%;aspect-ratio:16/9;margin-bottom:24px;overflow:hidden;background:white;border-radius:4px;box-shadow:0 8px 30px #0005}
+.brief-slide{position:absolute;width:1280px;height:720px;background:white;color:#172e40;transform-origin:top left;font-family:Arial,sans-serif}
+.brief-element{position:absolute;white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;line-height:1.15}.brief-element img{width:100%;height:100%;object-fit:contain}
+.brief-empty{padding:60px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:8px}
+#briefStatus{padding:8px 18px;color:var(--muted);background:var(--panel2)}
+.brief-detection{display:block;width:100%;text-align:left;margin:6px 0;white-space:normal}.brief-detection[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+#pgBrief :focus-visible,.brief-detection:focus-visible{outline:3px solid var(--accent);outline-offset:2px}button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:850px){.brief-workspace{display:block}.brief-controls{overflow:visible;border-right:0}.brief-slide-wrap{min-width:600px}#briefPreview{padding:12px}.brief-controls textarea{min-height:80px}}

@@ -11,13 +11,18 @@ import (
 	"fmt"
 	"hash/fnv"
 	"image"
+	"image/jpeg"
 	_ "image/png"
 	"io"
 	"log/slog"
+	"maps"
+	"math"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"golang.org/x/image/draw"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scheduler"
@@ -51,13 +56,18 @@ type Config struct {
 	ThumbWidth  int
 	ThumbHeight int
 	ThumbQual   int
-	// CROP: JPEG of the union of detection boxes (confidence >= CropMinConf)
-	// at native resolution, padded by CropPad × box size per side. Skipped
-	// when there are no boxes or the crop exceeds CropMaxArea of the frame.
+	// CROP is a JPEG at CropQual, cut at native resolution. For sighting
+	// items: key_detection.box scaled by CropMargin about its centre, at
+	// least CropMinShort px on the short side. Otherwise: the union of
+	// detection boxes (confidence >= CropMinConf) padded by CropPad × box
+	// size per side, skipped when there are no boxes or the crop exceeds
+	// CropMaxArea of the frame. A CROP no smaller than FULL is dropped.
 	// Unknowns (unknownness >= the policy's UnknownMin) get no CROP unless
 	// CropUnknowns is set: their whole frame is kept for training, so the
 	// ladder goes THUMB → FULL.
 	CropQual     int
+	CropMargin   float64
+	CropMinShort int
 	CropPad      float64
 	CropMinConf  float64
 	CropMaxArea  float64
@@ -66,6 +76,8 @@ type Config struct {
 	// as JPEG at FullQual if smaller (<= 0 keeps the original bytes).
 	FullQual    int
 	KnownLabels []string
+	// Dedup selects how captures become items; see DedupMode.
+	Dedup DedupMode
 }
 
 // unknown reports whether an analyzer unknownness score marks the item
@@ -80,8 +92,8 @@ func (g *Ingester) unknown(u float32) bool {
 
 func DefaultConfig() Config {
 	return Config{ThumbWidth: 160, ThumbHeight: 160, ThumbQual: 55,
-		CropQual: 80, CropPad: 0.15, CropMinConf: 0, CropMaxArea: 0.6,
-		FullQual:    90,
+		CropQual: 80, CropMargin: 1.5, CropMinShort: 96, CropPad: 0.15, CropMinConf: 0, CropMaxArea: 0.6,
+		FullQual: 90, Dedup: DedupHash,
 		KnownLabels: []string{"cargo ship", "container ship", "sailboat", "fishing vessel", "tanker", "small boat", "buoy"}}
 }
 
@@ -96,15 +108,25 @@ type Ingester struct {
 	// OnItem is called after each item is stored and scored.
 	OnItem func(*store.Row)
 	Count  int64
-	Dups   int64
+	Dups   int64 // captures folded into an existing item (exact hash or sighting DUPLICATE); read via Deduped
+	// Replaced counts in-place key-frame replacements (sightings mode).
+	Replaced int64
+	// sightings maps an open sighting id to the item currently carrying its
+	// key frame. In-memory only: after a restart a later key frame opens a
+	// new item linked by tags["sighting_id"].
+	sightings map[string]string
 }
 
 func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Scheduler, clk clock.Clock, log *slog.Logger) *Ingester {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Ingester{cfg: cfg, st: st, an: an, sch: sch, clk: clk, log: log, ent: ulid.Monotonic(entropyFor(cfg.EdgeID), 0)}
+	return &Ingester{cfg: cfg, st: st, an: an, sch: sch, clk: clk, log: log, ent: ulid.Monotonic(entropyFor(cfg.EdgeID), 0),
+		sightings: map[string]string{}}
 }
+
+// Deduped is safe to read from other goroutines (console GetStatus).
+func (g *Ingester) Deduped() int64 { return atomic.LoadInt64(&g.Dups) }
 
 // Run drains a source until done or ctx is cancelled.
 func (g *Ingester) Run(ctx context.Context, src Source) error {
@@ -122,16 +144,51 @@ func (g *Ingester) Run(ctx context.Context, src Source) error {
 	}
 }
 
-// Ingest stores one capture: dedup by hash, analyze, build forms, score.
+// Ingest stores one capture. In hash mode (default) an exact-hash duplicate
+// folds into the existing item; in sightings mode the engine decides which
+// frames are new objects, better key frames, or duplicates (see sightings.go),
+// and a response without sightings behaves like hash mode.
 func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	sum := sha256.Sum256(c.Data)
 	hash := hex.EncodeToString(sum[:])
-	if id, ok, err := g.st.HasHash(ctx, hash); err != nil {
-		return nil, err
-	} else if ok {
-		g.Dups++
-		return g.st.Get(ctx, id)
+	image := c.Type == pb.ItemType_ITEM_TYPE_IMAGE
+	if g.cfg.Dedup == DedupHash || (g.cfg.Dedup == DedupSightings && !image) {
+		if row, err := g.existing(ctx, hash); row != nil || err != nil {
+			return row, err
+		}
 	}
+	var resp *pb.AnalyzeResponse
+	if image {
+		var err error
+		resp, err = g.an.Analyze(ctx, inference.Frame{Image: c.Data, Source: c.Source, CapturedAt: c.CapturedAt}, g.cfg.KnownLabels, c.Hints)
+		if err != nil {
+			return nil, fmt.Errorf("analyze: %w", err)
+		}
+		if g.cfg.Dedup == DedupSightings {
+			if len(resp.Sightings) > 0 {
+				return g.applySightings(ctx, c, hash, resp)
+			}
+			if row, err := g.existing(ctx, hash); row != nil || err != nil {
+				return row, err
+			}
+		}
+	}
+	return g.newItem(ctx, c, hash, resp, nil)
+}
+
+// existing returns the item already holding this exact content, if any.
+func (g *Ingester) existing(ctx context.Context, hash string) (*store.Row, error) {
+	id, ok, err := g.st.HasHash(ctx, hash)
+	if err != nil || !ok {
+		return nil, err
+	}
+	atomic.AddInt64(&g.Dups, 1)
+	return g.st.Get(ctx, id)
+}
+
+// newItem builds, stores and scores one item. s, when set, is the sighting
+// this image item reports: it tags the item and shapes its CROP form.
+func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting) (*store.Row, error) {
 	ts := c.CapturedAt
 	if ts.IsZero() {
 		ts = g.clk.Now()
@@ -142,36 +199,10 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	var original []byte // kept when FULL is re-encoded, for an operator's original pull
 	switch c.Type {
 	case pb.ItemType_ITEM_TYPE_IMAGE:
-		resp, err := g.an.Analyze(ctx, c.Data, g.cfg.KnownLabels, c.Hints)
-		if err != nil {
-			return nil, fmt.Errorf("analyze: %w", err)
-		}
-		it.Features.Detections, it.Features.Embedding, it.Features.Unknownness, it.Features.ModelId =
-			resp.Detections, resp.Embedding, resp.Unknownness, resp.ModelId
-		img, _, err := image.Decode(bytes.NewReader(c.Data))
-		if err != nil {
-			g.log.Warn("decode", "err", err)
-			payloads[pb.FormKind_FORM_KIND_FULL] = c.Data
-			break
-		}
-		if th, err := g.thumbForm(img); err == nil {
-			payloads[pb.FormKind_FORM_KIND_THUMB] = th
-		} else {
-			g.log.Warn("thumb", "err", err)
-		}
-		full := g.fullForm(c.Data, img)
-		payloads[pb.FormKind_FORM_KIND_FULL] = full
-		if !bytes.Equal(full, c.Data) {
-			original = c.Data
-		}
-		if !g.cfg.CropUnknowns && g.unknown(resp.Unknownness) {
-			// No CROP: the whole frame goes as FULL, for training.
-		} else if cr, err := g.cropForm(img, resp.Detections); err != nil {
-			g.log.Warn("crop", "err", err)
-		} else if cr != nil && len(cr) < len(full) {
-			// A CROP no smaller than FULL only delays FULL on the ladder.
-			payloads[pb.FormKind_FORM_KIND_CROP] = cr
-		}
+		g.applyFeatures(it, resp, s)
+		forms, orig := g.imageForms(c.Data, resp, s)
+		maps.Copy(payloads, forms)
+		original = orig
 	case pb.ItemType_ITEM_TYPE_RECORD, pb.ItemType_ITEM_TYPE_DIGEST:
 		// Small structured items: the record is its own FACT; no ladder.
 		payloads[pb.FormKind_FORM_KIND_FULL] = c.Data
@@ -204,6 +235,96 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		g.OnItem(row)
 	}
 	return row, nil
+}
+
+// applyFeatures copies the engine's view of the frame into the item. For a
+// sighting the key detection is what the item is about, so it is the item's
+// detection list; the per-frame list stays with per-frame items.
+func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Sighting) {
+	f := it.Features
+	f.Detections, f.Embedding, f.Unknownness, f.ModelId = resp.Detections, resp.Embedding, resp.Unknownness, resp.ModelId
+	if s == nil {
+		return
+	}
+	if s.KeyDetection != nil {
+		f.Detections = []*pb.Detection{s.KeyDetection}
+	}
+	if f.Tags == nil {
+		f.Tags = map[string]string{}
+	}
+	f.Tags["sighting_id"] = s.Id
+	f.Tags["event"] = eventTag(s.Event)
+	if s.Subtype != "" {
+		f.Tags["subtype"] = s.Subtype
+	}
+}
+
+// imageForms produces THUMB, FULL and CROP (see Config). original is the
+// capture when FULL was re-encoded, else nil.
+func (g *Ingester) imageForms(data []byte, resp *pb.AnalyzeResponse, s *pb.Sighting) (payloads map[pb.FormKind][]byte, original []byte) {
+	payloads = map[pb.FormKind][]byte{pb.FormKind_FORM_KIND_FULL: data}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		g.log.Warn("decode", "err", err)
+		return payloads, nil
+	}
+	if th, err := g.thumbForm(img); err == nil {
+		payloads[pb.FormKind_FORM_KIND_THUMB] = th
+	} else {
+		g.log.Warn("thumb", "err", err)
+	}
+	full := g.fullForm(data, img)
+	payloads[pb.FormKind_FORM_KIND_FULL] = full
+	if !bytes.Equal(full, data) {
+		original = data
+	}
+	if !g.cfg.CropUnknowns && g.unknown(resp.GetUnknownness()) {
+		return payloads, original // no CROP: the whole frame goes as FULL, for training
+	}
+	var cr []byte
+	if b := s.GetKeyDetection().GetBox(); b != nil {
+		cr, err = g.crop(img, b)
+	} else {
+		cr, err = g.cropForm(img, resp.GetDetections())
+	}
+	if err != nil {
+		g.log.Warn("crop", "err", err)
+	} else if cr != nil && len(cr) < len(full) {
+		// A CROP no smaller than FULL only delays FULL on the ladder.
+		payloads[pb.FormKind_FORM_KIND_CROP] = cr
+	}
+	return payloads, original
+}
+
+// crop cuts the normalized box with CropMargin context about its centre, at
+// least CropMinShort px per side; a window that would leave the frame slides
+// inside it rather than shrinking. No resampling.
+func (g *Ingester) crop(img image.Image, b *pb.Box) ([]byte, error) {
+	r := img.Bounds()
+	W, H := float64(r.Dx()), float64(r.Dy())
+	cx, cy := (float64(b.X)+float64(b.W)/2)*W, (float64(b.Y)+float64(b.H)/2)*H
+	w, h := math.Max(float64(b.W)*W*g.cfg.CropMargin, float64(g.cfg.CropMinShort)), math.Max(float64(b.H)*H*g.cfg.CropMargin, float64(g.cfg.CropMinShort))
+	x0, x1 := window(cx, w, W)
+	y0, y1 := window(cy, h, H)
+	rect := image.Rect(x0, y0, x1, y1).Add(r.Min)
+	if rect.Dx() < 1 || rect.Dy() < 1 {
+		return nil, fmt.Errorf("crop: empty box %v", b)
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, rect.Dx(), rect.Dy()))
+	draw.Draw(dst, dst.Bounds(), img, rect.Min, draw.Src)
+	var out bytes.Buffer
+	if err := jpeg.Encode(&out, dst, &jpeg.Options{Quality: g.cfg.CropQual}); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+// window places a span of size n centred on c inside [0, limit].
+func window(c, n, limit float64) (int, int) {
+	n = math.Min(n, limit)
+	lo := math.Max(c-n/2, 0)
+	lo = math.Min(lo, limit-n)
+	return int(math.Round(lo)), int(math.Round(lo + n))
 }
 
 // entropyFor seeds ULID entropy from the edge id, so two edges capturing

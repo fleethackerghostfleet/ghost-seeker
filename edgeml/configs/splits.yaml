@@ -1,0 +1,27 @@
+# Split by source recording, never by frame. Tune on dev; evaluate test once per candidate.
+version: 2
+rule: "split by source video / camera; adjacent frames never cross splits"
+test:
+  # locked held-out sources (do not tune on these)
+  smd_vis_onboard_sample: [MVI_0797, MVI_0801]
+  ghost_fleet_clips: [Spotted_A_Submarine, US_Destroyer_POV_Warship_Crossing, Ship_in_the_Distance_Ian, Dolphin_from_far_distance_in_Bay_of_Bengal]
+  seaships7000: "upstream test split"
+  # MOT identity sets (edgeml/eval/<set>/, workstream A). Same source clip => same split as ghost_fleet_clips above.
+  ghost_fleet_5fps:
+    - Spotted_A_Submarine
+    - Ship_in_the_Distance_Ian
+    - Dolphin_from_far_distance_in_Bay_of_Bengal
+    # WS-A2 additions (identity-labelled, test only; never move to dev)
+    - US_Destroyer_POV_Warship_Crossing
+    - Sailboat_on_the_horizon_seg0
+    - Arriving_In_Norfolk_seg1h10
+    - Arriving_In_Norfolk_seg1h13
+    - Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats
+    - Ferry_Passing_By_On_River
+  fvessel_clip10: [fvessel_clip07, fvessel_clip09]   # separate recordings (both 2022-11-20, same fixed camera as dev clips; see reports/A.md)
+dev:
+  smd_vis_onboard_sample: [MVI_0790, MVI_0799]
+  ghost_fleet_clips: "all other clips"
+  seaships7000: "upstream train/valid splits"
+  ghost_fleet_5fps: [A_ship_in_the_distance, Canadian_Coast_Guard_Helicopter_Landing, Chase_N_Fish_Sharky, Cruise_ship_Mediterranean_sunset_off_Italy, Far_away_but_did_you_see_that_splash, Sailing_POV_Corfu_Paxos, Ship_in_the_Distance_Utopia_of_the_Seas, Submarine_surfacing, Two_Dolphins_near_the_coast_of_Gibraltar]
+  fvessel_clip10: [fvessel_clip01, fvessel_clip02, fvessel_clip03, fvessel_clip04, fvessel_clip05, fvessel_clip06, fvessel_clip08, fvessel_clip10]

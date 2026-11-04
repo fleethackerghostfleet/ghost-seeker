@@ -1,0 +1,6 @@
+reviewed: true
+gt_status: incomplete
+drop: [1]
+notes: >-
+  Track 1 ("boat", 54 frames) is the bow of the camera's own boat -> own-platform false positive, dropped. The distant dolphin
+  splashes were not detected and not hand-labelled. Zero GT, FP-review only; exclude from headline metrics.

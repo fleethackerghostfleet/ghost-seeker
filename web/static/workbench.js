@@ -105,7 +105,7 @@ const workbench=(()=>{
   $('wbGrid').querySelectorAll('.wb-tile').forEach(el=>el.classList.toggle('selected',el.dataset.id===id));
  }
  async function correct(id,action){
-  await flush();const it=findItem(id);if(!it)return;const det=[...it.dets].sort((a,b)=>MODELS[state.model].w[b.cls]*b.conf-MODELS[state.model].w[a.cls]*a.conf)[0];if(!det)return;
+  await flush();const it=findItem(id);if(!it)return;const score=(d,i)=>it.det?.[i]?.s??MODELS[state.model].w[d.cls]*d.conf,det=it.dets.map((d,i)=>({d,s:score(d,i)})).sort((a,b)=>b.s-a.s)[0]?.d;if(!det)return;
   const attr=['dark','approaching','moving','loitering','new'].find(a=>det.attrs[a]),rule=normalize({type:action==='higher'?'boost':'suppress',classes:[det.cls],attrs:attr?[attr]:[],sources:[it.src.id],weight:action==='irrelevant'?2:1,edited:true});
   proposal={id,label:ruleText(rule),rules:[...copy(draft.rules),rule]};await preview();$('wbProposal').scrollIntoView({block:'nearest',behavior:'smooth'});
  }
@@ -140,7 +140,7 @@ const workbench=(()=>{
   $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;unknown=[];renderChips();await preview({label:'Version restored'})}};
   $('wbUndo').onclick=()=>travel(-1);$('wbRedo').onclick=()=>travel(1);$('wbReset').onclick=()=>reset();
   document.addEventListener('keydown',e=>{
-   if(state.page!=='rp'||busy||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
+   if(state.page!=='rp'||busy||$('settings').open||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
    const k=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();travel(e.shiftKey?1:-1);return}if(e.ctrlKey||e.metaKey)return;
    if(e.target.closest('select,input,button'))return;
    const tile=e.target.closest('.wb-tile');if(!tile)return;

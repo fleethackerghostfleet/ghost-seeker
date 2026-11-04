@@ -1,0 +1,412 @@
+{
+ "stats": {
+  "n_frames": 111,
+  "n_detector_frames": 56,
+  "n_gated_out": 55,
+  "gate_reasons": {
+   "pass": 1,
+   "no_change": 55,
+   "forced": 55
+  },
+  "n_detections": 78,
+  "n_tracks": 3,
+  "wall_s": 4.0677632969998285,
+  "processed_fps": 27.28772347247143,
+  "frame_ms_p50": 37.11362299986831,
+  "frame_ms_p95": 83.67569799997909,
+  "detector_frame_ms_p50": 37.11362299986831,
+  "det_ms_p50": 33.03237399995851,
+  "det_ms_p95": 38.03774250002334,
+  "gate_ms_p50": 3.797360999897137,
+  "n_open": 3,
+  "n_update": 7,
+  "n_close": 3,
+  "embed_calls": 10,
+  "embed_ms_total": 448.15125400054967,
+  "n_relinks": 0
+ },
+ "sighting": {
+  "n_gt_objects": 2,
+  "n_sightings": 3,
+  "n_events": 13,
+  "n_reports": 10,
+  "object_recall": 1.0,
+  "duplicates_per_object": 0.0,
+  "false_sightings": 1,
+  "false_per_min": 0.5405405405405405,
+  "ttfr_median_s": 1.0,
+  "ttfr_mean_s": 1.0,
+  "reports_per_object": 4.0,
+  "minutes": 1.85,
+  "matched_sightings": {
+   "fvessel_clip01__force2s:0002": 2,
+   "fvessel_clip01__force2s:0001": 1
+  }
+ },
+ "delivery": {
+  "sightings": {
+   "window_s": 60.0,
+   "n_windows": 2,
+   "n_gt_objects": 2,
+   "budgets": {
+    "72KB": {
+     "budget_bytes_per_window": 72000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 113451,
+     "bytes_per_delivered_object": 56725.5,
+     "n_forms_sent": 35
+    },
+    "480KB": {
+     "budget_bytes_per_window": 480000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 800697,
+     "bytes_per_delivered_object": 400348.5,
+     "n_forms_sent": 47
+    },
+    "1.92MB": {
+     "budget_bytes_per_window": 1920000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 1078866,
+     "bytes_per_delivered_object": 539433.0,
+     "n_forms_sent": 50
+    },
+    "15MB": {
+     "budget_bytes_per_window": 15000000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 1078866,
+     "bytes_per_delivered_object": 539433.0,
+     "n_forms_sent": 50
+    }
+   }
+  },
+  "naive": {
+   "window_s": 60.0,
+   "n_windows": 2,
+   "n_gt_objects": 2,
+   "budgets": {
+    "72KB": {
+     "budget_bytes_per_window": 72000,
+     "objects_delivered_image": 0,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 0.0,
+     "frac_fact": 1.0,
+     "bytes_used": 19487,
+     "bytes_per_delivered_object": null,
+     "n_forms_sent": 78
+    },
+    "480KB": {
+     "budget_bytes_per_window": 480000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 877026,
+     "bytes_per_delivered_object": 438513.0,
+     "n_forms_sent": 87
+    },
+    "1.92MB": {
+     "budget_bytes_per_window": 1920000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 3755505,
+     "bytes_per_delivered_object": 1877752.5,
+     "n_forms_sent": 116
+    },
+    "15MB": {
+     "budget_bytes_per_window": 15000000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 7771650,
+     "bytes_per_delivered_object": 3885825.0,
+     "n_forms_sent": 156
+    }
+   },
+   "n_reports": 78
+  },
+  "image_dedup": {
+   "window_s": 60.0,
+   "n_windows": 2,
+   "n_gt_objects": 2,
+   "budgets": {
+    "72KB": {
+     "budget_bytes_per_window": 72000,
+     "objects_delivered_image": 0,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 0.0,
+     "frac_fact": 1.0,
+     "bytes_used": 1511,
+     "bytes_per_delivered_object": null,
+     "n_forms_sent": 6
+    },
+    "480KB": {
+     "budget_bytes_per_window": 480000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 588500,
+     "bytes_per_delivered_object": 294250.0,
+     "n_forms_sent": 12
+    },
+    "1.92MB": {
+     "budget_bytes_per_window": 1920000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 588500,
+     "bytes_per_delivered_object": 294250.0,
+     "n_forms_sent": 12
+    },
+    "15MB": {
+     "budget_bytes_per_window": 15000000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 588500,
+     "bytes_per_delivered_object": 294250.0,
+     "n_forms_sent": 12
+    }
+   },
+   "n_reports": 6
+  }
+ },
+ "selection": {
+  "72KB": {
+   "budget_bytes_per_window": 72000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 2,
+   "bytes_used": 113451,
+   "n_forms_sent": 35,
+   "n_sightings_touched": 3,
+   "forms_by_kind": {
+    "fact": 10,
+    "crop": 20,
+    "thumb": 5
+   },
+   "delivered": {
+    "sightings": {
+     "budget_bytes_per_window": 72000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 113451,
+     "bytes_per_delivered_object": 56725.5,
+     "n_forms_sent": 35
+    },
+    "naive": {
+     "budget_bytes_per_window": 72000,
+     "objects_delivered_image": 0,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 0.0,
+     "frac_fact": 1.0,
+     "bytes_used": 19487,
+     "bytes_per_delivered_object": null,
+     "n_forms_sent": 78
+    },
+    "image_dedup": {
+     "budget_bytes_per_window": 72000,
+     "objects_delivered_image": 0,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 0.0,
+     "frac_fact": 1.0,
+     "bytes_used": 1511,
+     "bytes_per_delivered_object": null,
+     "n_forms_sent": 6
+    }
+   },
+   "n_sightings_received": 3,
+   "n_tiles": 3
+  },
+  "480KB": {
+   "budget_bytes_per_window": 480000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 2,
+   "bytes_used": 800697,
+   "n_forms_sent": 47,
+   "n_sightings_touched": 3,
+   "forms_by_kind": {
+    "fact": 10,
+    "crop": 20,
+    "thumb": 10,
+    "full": 7
+   },
+   "delivered": {
+    "sightings": {
+     "budget_bytes_per_window": 480000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 800697,
+     "bytes_per_delivered_object": 400348.5,
+     "n_forms_sent": 47
+    },
+    "naive": {
+     "budget_bytes_per_window": 480000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 877026,
+     "bytes_per_delivered_object": 438513.0,
+     "n_forms_sent": 87
+    },
+    "image_dedup": {
+     "budget_bytes_per_window": 480000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 588500,
+     "bytes_per_delivered_object": 294250.0,
+     "n_forms_sent": 12
+    }
+   },
+   "n_sightings_received": 3,
+   "n_tiles": 3
+  },
+  "1.92MB": {
+   "budget_bytes_per_window": 1920000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 2,
+   "bytes_used": 1078866,
+   "n_forms_sent": 50,
+   "n_sightings_touched": 3,
+   "forms_by_kind": {
+    "fact": 10,
+    "crop": 20,
+    "thumb": 10,
+    "full": 10
+   },
+   "delivered": {
+    "sightings": {
+     "budget_bytes_per_window": 1920000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 1078866,
+     "bytes_per_delivered_object": 539433.0,
+     "n_forms_sent": 50
+    },
+    "naive": {
+     "budget_bytes_per_window": 1920000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 3755505,
+     "bytes_per_delivered_object": 1877752.5,
+     "n_forms_sent": 116
+    },
+    "image_dedup": {
+     "budget_bytes_per_window": 1920000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 588500,
+     "bytes_per_delivered_object": 294250.0,
+     "n_forms_sent": 12
+    }
+   },
+   "n_sightings_received": 3,
+   "n_tiles": 3
+  },
+  "15MB": {
+   "budget_bytes_per_window": 15000000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 2,
+   "bytes_used": 1078866,
+   "n_forms_sent": 50,
+   "n_sightings_touched": 3,
+   "forms_by_kind": {
+    "fact": 10,
+    "crop": 20,
+    "thumb": 10,
+    "full": 10
+   },
+   "delivered": {
+    "sightings": {
+     "budget_bytes_per_window": 15000000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 1078866,
+     "bytes_per_delivered_object": 539433.0,
+     "n_forms_sent": 50
+    },
+    "naive": {
+     "budget_bytes_per_window": 15000000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 7771650,
+     "bytes_per_delivered_object": 3885825.0,
+     "n_forms_sent": 156
+    },
+    "image_dedup": {
+     "budget_bytes_per_window": 15000000,
+     "objects_delivered_image": 2,
+     "objects_delivered_fact": 2,
+     "objects_delivered_any": 2,
+     "frac_image": 1.0,
+     "frac_fact": 1.0,
+     "bytes_used": 588500,
+     "bytes_per_delivered_object": 294250.0,
+     "n_forms_sent": 12
+    }
+   },
+   "n_sightings_received": 3,
+   "n_tiles": 3
+  }
+ }
+}

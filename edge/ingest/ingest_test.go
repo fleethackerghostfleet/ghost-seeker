@@ -6,13 +6,10 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
-	"image/png"
-	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
-	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scheduler"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scoring"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
@@ -20,14 +17,32 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 )
 
-type nopLink struct{ est *link.Estimator }
+// scripted returns the sightings scripted for the n-th Analyze call (1-based)
+// and records the frames it was handed.
+type scripted struct {
+	script map[int][]*pb.Sighting
+	calls  int
+	frames []inference.Frame
+}
 
-func (l nopLink) Exchange(context.Context, *pb.ExchangeRequest) (*pb.ExchangeResponse, error) {
+func (f *scripted) Analyze(_ context.Context, fr inference.Frame, _ []string, _ map[string]string) (*pb.AnalyzeResponse, error) {
+	f.calls++
+	f.frames = append(f.frames, fr)
+	return &pb.AnalyzeResponse{ModelId: "scripted", Embedding: []float32{1, 0}, Unknownness: 0.2,
+		Detections: []*pb.Detection{{Label: "boat", Confidence: 0.5, Box: &pb.Box{X: 0.1, Y: 0.1, W: 0.2, H: 0.2}}},
+		Sightings:  f.script[f.calls]}, nil
+}
+
+func (f *scripted) EmbedText(context.Context, []string) ([][]float32, error) { return nil, nil }
+
+type noLink struct{}
+
+func (noLink) Exchange(context.Context, *pb.ExchangeRequest) (*pb.ExchangeResponse, error) {
 	return &pb.ExchangeResponse{}, nil
 }
-func (l nopLink) State() *pb.LinkState { return l.est.State() }
+func (noLink) State() *pb.LinkState { return &pb.LinkState{} }
 
-func newIngester(t *testing.T, cfg Config) (*Ingester, *store.Store) {
+func newIngester(t *testing.T, mode DedupMode, an inference.Analyzer) (*Ingester, *store.Store, *clock.Virtual) {
 	t.Helper()
 	st, err := store.Open(t.TempDir())
 	if err != nil {
@@ -35,303 +50,251 @@ func newIngester(t *testing.T, cfg Config) (*Ingester, *store.Store) {
 	}
 	t.Cleanup(func() { st.Close() })
 	clk := clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	sch, err := scheduler.New(scheduler.DefaultConfig("t"), st, nopLink{link.NewEstimator(64000, 300, 1e9)}, scoring.Default(), clk, nil)
+	sch, err := scheduler.New(scheduler.DefaultConfig("t"), st, noLink{}, scoring.Default(), clk, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(cfg, st, inference.NewMock(), sch, clk, nil), st
-}
-
-// scene is a gradient with sensor noise: PNG compresses it poorly, like a
-// real photo, and JPEG well.
-func scene(w, h int) *image.RGBA {
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	r := rand.New(rand.NewSource(1))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			n := uint8(r.Intn(24))
-			img.Set(x, y, color.RGBA{uint8(x*230/w) + n, uint8(y*230/h) + n, 120 + n, 255})
-		}
-	}
-	return img
-}
-
-func encPNG(t *testing.T, img image.Image) []byte {
-	var b bytes.Buffer
-	if err := png.Encode(&b, img); err != nil {
-		t.Fatal(err)
-	}
-	return b.Bytes()
-}
-
-func encJPEG(t *testing.T, img image.Image) []byte {
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, img, &jpeg.Options{Quality: 92}); err != nil {
-		t.Fatal(err)
-	}
-	return b.Bytes()
-}
-
-func decode(t *testing.T, data []byte) (image.Image, string) {
-	t.Helper()
-	img, f, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return img, f
-}
-
-func ingest(t *testing.T, g *Ingester, st *store.Store, data []byte, hints map[string]string) *store.Row {
-	t.Helper()
-	row, err := g.Ingest(context.Background(), &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, Source: "cam", Hints: hints})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return row
-}
-
-func form(t *testing.T, st *store.Store, row *store.Row, k pb.FormKind) ([]byte, *store.FormState) {
-	t.Helper()
-	f := row.Form(k)
-	if f == nil {
-		t.Fatalf("no %v form", k)
-	}
-	data, err := st.ReadFormAll(row.Item.Id, k)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data, f
-}
-
-func TestImageFormsPNGSource(t *testing.T) {
-	g, st := newIngester(t, DefaultConfig())
-	src := encPNG(t, scene(1280, 720))
-	// Mock analyzer reports one box at (0.3,0.3) size 0.4×0.4.
-	row := ingest(t, g, st, src, map[string]string{"label": "cargo ship", "conf": "0.9"})
-
-	th, thf := form(t, st, row, pb.FormKind_FORM_KIND_THUMB)
-	img, f := decode(t, th)
-	if f != "jpeg" || thf.Mime != "image/jpeg" {
-		t.Fatalf("thumb format %s mime %s", f, thf.Mime)
-	}
-	if b := img.Bounds(); b.Dx() != 160 || b.Dy() != 90 {
-		t.Fatalf("thumb %v, want 160x90", b)
-	}
-
-	cr, crf := form(t, st, row, pb.FormKind_FORM_KIND_CROP)
-	img, f = decode(t, cr)
-	if f != "jpeg" || crf.Mime != "image/jpeg" {
-		t.Fatalf("crop format %s mime %s", f, crf.Mime)
-	}
-	// 0.4 box + 15% padding per side = 0.52 of each dimension, native res.
-	if b := img.Bounds(); b.Dx() < 660 || b.Dx() > 670 || b.Dy() < 370 || b.Dy() > 377 {
-		t.Fatalf("crop %v, want ~666x374", b)
-	}
-
-	full, ff := form(t, st, row, pb.FormKind_FORM_KIND_FULL)
-	img, f = decode(t, full)
-	if f != "jpeg" || ff.Mime != "image/jpeg" {
-		t.Fatalf("full format %s mime %s", f, ff.Mime)
-	}
-	if img.Bounds().Dx() != 1280 || len(full) >= len(src) {
-		t.Fatalf("full %v %dB, source %dB", img.Bounds(), len(full), len(src))
-	}
-	if !(len(th) < len(cr) && len(cr) < len(full)) {
-		t.Fatalf("ladder not ascending: thumb %d crop %d full %d", len(th), len(cr), len(full))
-	}
-}
-
-func TestJPEGFullPassthroughAndNoCropWithoutBoxes(t *testing.T) {
-	g, st := newIngester(t, DefaultConfig())
-	src := encJPEG(t, scene(640, 480))
-	row := ingest(t, g, st, src, map[string]string{"unknownness": "0.9"})
-	if row.Form(pb.FormKind_FORM_KIND_CROP) != nil {
-		t.Fatal("crop without detections")
-	}
-	full, ff := form(t, st, row, pb.FormKind_FORM_KIND_FULL)
-	if !bytes.Equal(full, src) || ff.Mime != "image/jpeg" {
-		t.Fatalf("jpeg FULL should pass through unchanged (mime %s)", ff.Mime)
-	}
-}
-
-func TestCropDroppedWhenNotSmallerThanFull(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.CropQual = 100
-	g, st := newIngester(t, cfg)
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, scene(640, 480), &jpeg.Options{Quality: 10}); err != nil {
-		t.Fatal(err)
-	}
-	// A low-quality JPEG source: a q100 crop of it encodes larger than FULL.
-	row := ingest(t, g, st, b.Bytes(), map[string]string{"label": "cargo ship", "conf": "0.9"})
-	if f := row.Form(pb.FormKind_FORM_KIND_CROP); f != nil {
-		t.Fatalf("crop %dB kept although FULL is %dB", f.Bytes, b.Len())
-	}
+	cfg.EdgeID, cfg.Dedup = "t", mode
+	return New(cfg, st, an, sch, clk, nil), st, clk
 }
 
-func TestTransparentPNGFullKept(t *testing.T) {
-	g, st := newIngester(t, DefaultConfig())
-	img := image.NewNRGBA(image.Rect(0, 0, 320, 240))
-	sc := scene(320, 240)
+func frameJPEG(shade uint8) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 320, 240))
 	for y := 0; y < 240; y++ {
 		for x := 0; x < 320; x++ {
-			c := sc.RGBAAt(x, y)
-			c.A = uint8(x * 255 / 320)
-			img.SetNRGBA(x, y, color.NRGBA(c))
+			img.Set(x, y, color.RGBA{shade, uint8(x), uint8(y), 255})
 		}
 	}
-	src := encPNG(t, img)
-	row := ingest(t, g, st, src, nil)
-	full, ff := form(t, st, row, pb.FormKind_FORM_KIND_FULL)
-	if !bytes.Equal(full, src) || ff.Mime != "image/png" {
-		t.Fatalf("transparent PNG should keep original bytes, got mime %s", ff.Mime)
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, img, &jpeg.Options{Quality: 80}); err != nil {
+		panic(err)
 	}
+	return b.Bytes()
 }
 
-func TestUnknownsSkipCrop(t *testing.T) {
-	src := encPNG(t, scene(640, 480))
-	hints := map[string]string{"label": "small boat", "conf": "0.3", "unknownness": "0.8"}
-
-	g, st := newIngester(t, DefaultConfig())
-	row := ingest(t, g, st, src, hints)
-	if row.Form(pb.FormKind_FORM_KIND_CROP) != nil {
-		t.Fatal("unknown item got a CROP")
-	}
-	form(t, st, row, pb.FormKind_FORM_KIND_THUMB)
-	form(t, st, row, pb.FormKind_FORM_KIND_FULL)
-
-	cfg := DefaultConfig()
-	cfg.CropUnknowns = true
-	g, st = newIngester(t, cfg)
-	if row := ingest(t, g, st, src, hints); row.Form(pb.FormKind_FORM_KIND_CROP) == nil {
-		t.Fatal("CropUnknowns: want a CROP for the unknown item")
-	}
-
-	g, st = newIngester(t, DefaultConfig())
-	hints["unknownness"] = "0.3"
-	if row := ingest(t, g, st, src, hints); row.Form(pb.FormKind_FORM_KIND_CROP) == nil {
-		t.Fatal("known item (unknownness below threshold) should still get a CROP")
-	}
+func capture(clk *clock.Virtual, shade uint8) *Capture {
+	clk.Advance(200 * time.Millisecond)
+	return &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: frameJPEG(shade), CapturedAt: clk.Now(), Source: "cam-a"}
 }
 
-func TestFullQualityZeroKeepsPNG(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.FullQual = 0
-	g, st := newIngester(t, cfg)
-	src := encPNG(t, scene(320, 240))
-	row := ingest(t, g, st, src, nil)
-	full, ff := form(t, st, row, pb.FormKind_FORM_KIND_FULL)
-	if !bytes.Equal(full, src) || ff.Mime != "image/png" {
-		t.Fatalf("want original PNG bytes with image/png, got mime %s", ff.Mime)
-	}
+func sighting(id string, ev pb.Sighting_Event, key bool, subtype string) *pb.Sighting {
+	return &pb.Sighting{Id: id, Event: ev, IsKeyFrame: key, Subtype: subtype, Value: 0.7, NFrames: 3,
+		KeyDetection: &pb.Detection{Label: "boat", Confidence: 0.9, Box: &pb.Box{X: 0.45, Y: 0.45, W: 0.05, H: 0.05}}}
 }
 
-func TestThumbConfigurable(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.ThumbWidth, cfg.ThumbHeight, cfg.ThumbQual = 96, 96, 40
-	g, st := newIngester(t, cfg)
-	// Portrait: height is the binding constraint.
-	row := ingest(t, g, st, encJPEG(t, scene(522, 928)), nil)
-	th, _ := form(t, st, row, pb.FormKind_FORM_KIND_THUMB)
-	img, _ := decode(t, th)
-	if b := img.Bounds(); b.Dy() != 96 || b.Dx() != 54 {
-		t.Fatalf("thumb %v, want 54x96", b)
+func items(t *testing.T, st *store.Store) []*store.Row {
+	t.Helper()
+	rows, err := st.All(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
-	// Never upscale.
-	row = ingest(t, g, st, encJPEG(t, scene(64, 48)), nil)
-	th, _ = form(t, st, row, pb.FormKind_FORM_KIND_THUMB)
-	if img, _ = decode(t, th); img.Bounds().Dx() != 64 {
-		t.Fatalf("thumb upscaled to %v", img.Bounds())
-	}
+	return rows
 }
 
-func TestCropRect(t *testing.T) {
-	b := image.Rect(0, 0, 1000, 500)
-	box := func(x, y, w, h, c float32) *pb.Detection {
-		return &pb.Detection{Label: "x", Confidence: c, Box: &pb.Box{X: x, Y: y, W: w, H: h}}
-	}
-	cases := []struct {
-		name string
-		dets []*pb.Detection
-		want image.Rectangle
-		ok   bool
-	}{
-		{"none", nil, image.Rectangle{}, false},
-		{"no box", []*pb.Detection{{Label: "x", Confidence: 0.9}}, image.Rectangle{}, false},
-		{"single padded", []*pb.Detection{box(0.4, 0.4, 0.2, 0.2, 0.9)}, image.Rect(370, 185, 630, 315), true},
-		{"union of two", []*pb.Detection{box(0.1, 0.1, 0.1, 0.1, 0.9), box(0.5, 0.5, 0.1, 0.2, 0.9)},
-			image.Rect(24, 5, 675, 395), true},
-		{"clamped at edge", []*pb.Detection{box(0, 0, 0.2, 0.2, 0.9)}, image.Rect(0, 0, 230, 115), true},
-		{"low conf ignored", []*pb.Detection{box(0.4, 0.4, 0.2, 0.2, 0.9), box(0, 0, 0.1, 0.1, 0.1)},
-			image.Rect(370, 185, 630, 315), true},
-	}
-	for _, c := range cases {
-		got, ok := cropRect(b, c.dets, 0.15, 0.3)
-		if ok != c.ok || got != c.want {
-			t.Errorf("%s: got %v %v, want %v %v", c.name, got, ok, c.want, c.ok)
-		}
-	}
-}
-
-func TestCropSkippedWhenNearlyFullFrame(t *testing.T) {
-	g, _ := newIngester(t, DefaultConfig())
-	img := scene(400, 300)
-	r, err := g.cropForm(img, []*pb.Detection{{Confidence: 0.9, Box: &pb.Box{X: 0.05, Y: 0.05, W: 0.9, H: 0.9}}})
-	if err != nil || r != nil {
-		t.Fatalf("crop over most of the frame should be skipped (err %v, %d bytes)", err, len(r))
-	}
-}
-
-func TestOriginalPullSendsCaptureBytes(t *testing.T) {
-	g, st := newIngester(t, DefaultConfig())
-	src := encPNG(t, scene(640, 480))
-	row := ingest(t, g, st, src, map[string]string{"label": "cargo ship", "conf": "0.9"})
-	if full, _ := form(t, st, row, pb.FormKind_FORM_KIND_FULL); bytes.Equal(full, src) {
-		t.Fatal("precondition: FULL should be re-encoded")
-	}
+func TestSightingsStateMachine(t *testing.T) {
 	ctx := context.Background()
-	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Original: true}); err == nil {
-		t.Fatal("original pull without requested_by should fail")
+	an := &scripted{script: map[int][]*pb.Sighting{
+		2: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "tug")},
+		3: {sighting("s1", pb.Sighting_EVENT_DUPLICATE, false, "tug")},
+		4: {sighting("s1", pb.Sighting_EVENT_UPDATE, true, "tug")},
+		5: {sighting("s1", pb.Sighting_EVENT_UPDATE, false, "tanker")},
+		6: {sighting("s1", pb.Sighting_EVENT_UPDATE, true, "tanker")},
+		7: {sighting("s1", pb.Sighting_EVENT_CLOSE, false, "tanker")},
+		8: {sighting("s2", pb.Sighting_EVENT_OPEN, true, ""), sighting("s3", pb.Sighting_EVENT_OPEN, true, "")},
+	}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+
+	// 1: stateless response -> per-frame item, as in hash mode.
+	first, err := g.Ingest(ctx, capture(clk, 1))
+	if err != nil || first == nil || first.Item.Features.Tags["sighting_id"] != "" {
+		t.Fatalf("frame 1: row=%v err=%v (no sighting expected)", first, err)
 	}
-	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Original: true, RequestedBy: "op1"}); err != nil {
-		t.Fatal(err)
+	if fr := an.frames[0]; fr.Source != "cam-a" || fr.CapturedAt.IsZero() {
+		t.Fatalf("analyzer must see source + timestamp: %+v", fr)
 	}
-	row, err := st.Get(ctx, row.Item.Id)
+
+	// 2: OPEN -> item tagged with the sighting, CROP form cut from the key box.
+	opened, err := g.Ingest(ctx, capture(clk, 2))
 	if err != nil {
 		t.Fatal(err)
 	}
-	full, ff := form(t, st, row, pb.FormKind_FORM_KIND_FULL)
-	if !row.PullOriginal || !bytes.Equal(full, src) || ff.Mime != "image/png" || ff.Bytes != int64(len(src)) {
-		t.Fatalf("original pull: flag %v, FULL %dB mime %s; want original %dB image/png", row.PullOriginal, len(full), ff.Mime, len(src))
+	tags := opened.Item.Features.Tags
+	if tags["sighting_id"] != "s1" || tags["event"] != "open" || tags["subtype"] != "tug" {
+		t.Fatalf("tags = %v", tags)
 	}
-	plan := g.sch.BuildPlan([]*store.Row{row}, 1e9, time.Now())
-	var forms []pb.FormKind
-	for _, c := range plan.Chunks {
-		forms = append(forms, c.Form)
-		if c.Form == pb.FormKind_FORM_KIND_THUMB || c.Form == pb.FormKind_FORM_KIND_CROP {
-			t.Fatalf("original pull should skip THUMB/CROP, plan has %v", forms)
+	if d := opened.Item.Features.Detections; len(d) != 1 || d[0].Confidence != 0.9 {
+		t.Fatalf("sighting item carries the key detection, got %v", d)
+	}
+	crop := opened.Form(pb.FormKind_FORM_KIND_CROP)
+	if crop == nil {
+		t.Fatal("no CROP form")
+	}
+	data, err := st.ReadFormAll(opened.Item.Id, pb.FormKind_FORM_KIND_CROP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cimg, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 5% of 320x240 is 16x12 px; margin 1.5x is still tiny, so the floor of 96 px applies.
+	if b := cimg.Bounds(); b.Dx() != 96 || b.Dy() != 96 {
+		t.Fatalf("crop bounds %v, want 96x96", b)
+	}
+	fullBefore := opened.Form(pb.FormKind_FORM_KIND_FULL).Hash
+
+	// 3: DUPLICATE -> no item, counted.
+	if row, err := g.Ingest(ctx, capture(clk, 3)); err != nil || row != nil {
+		t.Fatalf("duplicate: row=%v err=%v", row, err)
+	}
+	if n := len(items(t, st)); n != 2 || g.Deduped() != 1 {
+		t.Fatalf("after duplicate: items=%d dups=%d", n, g.Deduped())
+	}
+
+	// 4: better key frame before anything shipped -> payloads replaced in place.
+	rep, err := g.Ingest(ctx, capture(clk, 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Item.Id != opened.Item.Id || len(items(t, st)) != 2 || g.Replaced != 1 {
+		t.Fatalf("expected in-place replacement of %s, got %s (items=%d replaced=%d)", opened.Item.Id, rep.Item.Id, len(items(t, st)), g.Replaced)
+	}
+	if f := rep.Form(pb.FormKind_FORM_KIND_FULL); f.Hash == fullBefore || f.AckedThrough != 0 || f.Complete {
+		t.Fatalf("FULL not replaced/reset: %+v", f)
+	}
+	if rep.Item.Features.Tags["event"] != "update" {
+		t.Fatalf("tags = %v", rep.Item.Features.Tags)
+	}
+
+	// 5: non-key UPDATE (subtype flip) -> same item, tags refreshed, FACT re-queued.
+	rt, err := g.Ingest(ctx, capture(clk, 5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rt.Item.Id != opened.Item.Id || rt.Item.Features.Tags["subtype"] != "tanker" || len(items(t, st)) != 2 {
+		t.Fatalf("retag: id=%s tags=%v items=%d", rt.Item.Id, rt.Item.Features.Tags, len(items(t, st)))
+	}
+
+	// 6: FULL started shipping -> a better key frame becomes a new item with the same sighting_id.
+	if err := st.SetAcked(ctx, opened.Item.Id, pb.FormKind_FORM_KIND_FULL, 1000, false); err != nil {
+		t.Fatal(err)
+	}
+	second, err := g.Ingest(ctx, capture(clk, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Item.Id == opened.Item.Id || second.Item.Features.Tags["sighting_id"] != "s1" || len(items(t, st)) != 3 {
+		t.Fatalf("expected a linked new item, got %s tags=%v items=%d", second.Item.Id, second.Item.Features.Tags, len(items(t, st)))
+	}
+
+	// 7: CLOSE -> tiny RECORD contact report pointing at the current item.
+	rec, err := g.Ingest(ctx, capture(clk, 7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Item.Type != pb.ItemType_ITEM_TYPE_RECORD || rec.Item.Features.Tags["event"] != "close" || rec.Item.Features.Tags["sighting_id"] != "s1" {
+		t.Fatalf("close record: %v", rec.Item)
+	}
+	if f := rec.Form(pb.FormKind_FORM_KIND_FACT); f == nil || f.Bytes > 400 || !bytes.Contains(mustRead(t, st, rec.Item.Id, pb.FormKind_FORM_KIND_FACT), []byte(second.Item.Id)) {
+		t.Fatalf("contact report should be a small FACT naming the item: %+v", f)
+	}
+	if _, open := g.sightings["s1"]; open {
+		t.Fatal("state not dropped on close")
+	}
+
+	// 8: two objects in one frame -> two items from the same bytes (hash dedup must not fold them).
+	if _, err := g.Ingest(ctx, capture(clk, 8)); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(items(t, st)); n != 6 {
+		t.Fatalf("items after two OPENs = %d, want 6", n)
+	}
+	if g.Count != 6 {
+		t.Fatalf("Count = %d", g.Count)
+	}
+}
+
+func TestSightingsFallsBackToHash(t *testing.T) {
+	ctx := context.Background()
+	g, st, clk := newIngester(t, DedupSightings, &scripted{})
+	a, _ := g.Ingest(ctx, capture(clk, 9))
+	b, _ := g.Ingest(ctx, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: frameJPEG(9), CapturedAt: clk.Now(), Source: "cam-a"})
+	if a.Item.Id != b.Item.Id || g.Deduped() != 1 || len(items(t, st)) != 1 {
+		t.Fatalf("identical frames without sightings must fold: %s %s dups=%d", a.Item.Id, b.Item.Id, g.Deduped())
+	}
+}
+
+func TestHashAndNaiveModes(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		mode  DedupMode
+		items int
+		dups  int64
+	}{{DedupHash, 1, 1}, {DedupNaive, 2, 0}} {
+		an := &scripted{script: map[int][]*pb.Sighting{1: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "")}}}
+		g, st, clk := newIngester(t, tc.mode, an)
+		data := frameJPEG(5)
+		row, err := g.Ingest(ctx, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, CapturedAt: clk.Now()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Per-frame detections, not the sighting's key detection (conf 0.9).
+		if d := row.Item.Features.Detections; len(d) != 1 || d[0].Confidence == 0.9 || row.Item.Features.Tags["sighting_id"] != "" {
+			t.Fatalf("%v: sightings must be ignored outside sightings mode", tc.mode)
+		}
+		clk.Advance(time.Second)
+		if _, err := g.Ingest(ctx, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, CapturedAt: clk.Now()}); err != nil {
+			t.Fatal(err)
+		}
+		if n := len(items(t, st)); n != tc.items || g.Deduped() != tc.dups {
+			t.Fatalf("%v: items=%d dups=%d, want %d/%d", tc.mode, n, g.Deduped(), tc.items, tc.dups)
 		}
 	}
-	// Once FULL is delivered, THUMB/CROP follow so the item completes.
-	if err := st.SetAcked(ctx, row.Item.Id, pb.FormKind_FORM_KIND_FULL, int64(len(src)), true); err != nil {
-		t.Fatal(err)
+}
+
+func TestParseDedup(t *testing.T) {
+	for in, want := range map[string]DedupMode{"": DedupHash, "hash": DedupHash, "NAIVE": DedupNaive, "sightings": DedupSightings} {
+		if got, err := ParseDedup(in); err != nil || got != want {
+			t.Fatalf("ParseDedup(%q) = %v, %v", in, got, err)
+		}
 	}
-	done, err := st.Get(ctx, row.Item.Id)
+	if _, err := ParseDedup("fuzzy"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestCropGeometry(t *testing.T) {
+	g := &Ingester{cfg: DefaultConfig()}
+	img := image.NewRGBA(image.Rect(0, 0, 640, 480))
+	for _, tc := range []struct {
+		box  *pb.Box
+		w, h int
+	}{
+		{&pb.Box{X: 0.25, Y: 0.25, W: 0.5, H: 0.5}, 480, 360}, // 320x240 box * 1.5
+		{&pb.Box{X: 0.0, Y: 0.0, W: 0.1, H: 0.1}, 96, 96},     // corner: floor applies, window slides inside the frame
+		{&pb.Box{X: 0.9, Y: 0.9, W: 0.1, H: 0.1}, 96, 96},     // far corner likewise
+		{&pb.Box{X: 0.0, Y: 0.0, W: 1, H: 1}, 640, 480},       // whole frame: never larger than the frame
+	} {
+		data, err := g.crop(img, tc.box)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b := c.Bounds(); b.Dx() != tc.w || b.Dy() != tc.h {
+			t.Errorf("box %v: crop %dx%d, want %dx%d", tc.box, b.Dx(), b.Dy(), tc.w, tc.h)
+		}
+	}
+}
+
+func mustRead(t *testing.T, st *store.Store, id string, k pb.FormKind) []byte {
+	t.Helper()
+	b, err := st.ReadFormAll(id, k)
 	if err != nil {
 		t.Fatal(err)
 	}
-	thumb := false
-	for _, c := range g.sch.BuildPlan([]*store.Row{done}, 1e9, time.Now()).Chunks {
-		thumb = thumb || c.Form == pb.FormKind_FORM_KIND_THUMB
-	}
-	if !thumb {
-		t.Fatal("THUMB should be sent after the original FULL completes")
-	}
-	// Repeating it is a no-op: FULL already is the original.
-	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Original: true, RequestedBy: "op1"}); err != nil {
-		t.Fatal(err)
-	}
-	if full, _ := form(t, st, row, pb.FormKind_FORM_KIND_FULL); !bytes.Equal(full, src) {
-		t.Fatal("second original pull changed FULL")
-	}
+	return b
 }

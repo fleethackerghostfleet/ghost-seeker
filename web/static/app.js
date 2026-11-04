@@ -1,6 +1,6 @@
 let SOURCES=[],SRC={},CLS={},MODELS={},ATTR_LAB={},EXAMPLES=[];
 let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[]};
-let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set();
+let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null;
 
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>CLS[k].lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>CLS[k].lab).join(' / ')):'Any object';
@@ -35,25 +35,27 @@ function applySnapshot(data){
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
+  heldSnapshotIDs=new Set(snapshot.keys());
   items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
   pendingItems=pendingItems.map(event=>({...event,item:snapshot.get(event.item.id)||event.item}));
   const queued=new Set(pendingItems.map(event=>event.item.id));
   for(const item of data.items)if(!elements.has(item.id)&&!queued.has(item.id)&&!evictedIDs.has(item.id))pendingItems.push({item});
  }else{
   items=data.items.map(item=>{item=normalizeItem(item);item.el=elements.get(item.id);return item});
-  pendingItems=[];evictedIDs.clear();
+  pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
  }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
  state.model=data.state.model;state.directives=data.state.directives;
  stats=data.stats;cdr=data.cdr;weightData=data.weights||{};
  state.sel=items.some(item=>item.id===selection)?selection:null;
- if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML=''}
+ if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML='';closeZoom()}
  rv.cur=rv.cur&&items.find(item=>item.id===rv.cur.id)||null;
  renderAll();
 }
 function applyItemUpdate(raw){
  if(state.paused&&!findItem(raw.id)){
   if(evictedIDs.has(raw.id))return;
+  heldSnapshotIDs?.add(raw.id);
   const pending=pendingItems.find(event=>event.item.id===raw.id);
   if(pending)pending.item=raw;else pendingItems.push({item:raw});
   renderStats();return;
@@ -72,12 +74,26 @@ async function patchItem(id,changes){
  const result=await request(`/api/items/${encodeURIComponent(id)}`,'PATCH',changes);
  cdr=result.cdr;applyItemUpdate(result.item);return findItem(id);
 }
+function renderLive(){
+ const live=$('live');live.classList.toggle('off',!!state.offline);live.classList.toggle('paused',!state.offline&&state.paused);
+ live.querySelector('span').textContent=state.offline?'RECONNECTING':state.paused?'FEED HELD':'FEED ACTIVE';
+ const action=state.paused?'resume':'hold';
+ live.title=state.offline?`Reconnecting — click to ${action}`:state.paused?'Feed held — click to resume':'Feed active — click to hold';
+ live.setAttribute('aria-label',live.title);live.setAttribute('aria-pressed',String(!!state.paused));
+ $('pauseBtn').textContent=state.paused?'Resume':'Hold';$('wbHeld').hidden=!state.paused;
+}
+function toggleHold(){
+ state.paused=!state.paused;renderLive();
+ if(!state.paused){if(heldSnapshotIDs){const keep=heldSnapshotIDs;for(const item of items)if(!keep.has(item.id)){imageCache.delete(item.id);if(state.sel===item.id)closeDetail();if(rv.cur?.id===item.id){rv.cur=null;rv.shown=null}}items=items.filter(item=>keep.has(item.id));pendingItems=pendingItems.filter(event=>keep.has(event.item.id));heldSnapshotIDs=null}for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}
+}
 function openStream(){
  const stream=new EventSource('/api/stream');
+ stream.onopen=()=>{state.offline=false;renderLive()};
+ stream.onerror=()=>{state.offline=true;renderLive()};
  stream.addEventListener('snapshot',event=>applySnapshot(JSON.parse(event.data)));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
-  stats=data.stats;if(state.paused){pendingItems.push(data);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
+  stats=data.stats;if(state.paused){pendingItems.push(data);heldSnapshotIDs?.add(data.item.id);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
  });
  stream.addEventListener('stats',event=>{
   stats=JSON.parse(event.data).stats;renderStats();
@@ -105,22 +121,27 @@ async function init(){
  $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
  workbench.init();
+ briefing.init();
  $('clearDir').onclick=async()=>{if(!state.directives.length)return;try{await request('/api/directives','DELETE');toast('Directives cleared — base model restored')}catch(error){toast(error.message)}};
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderFeed()};
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens};
  $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
- $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Hold';$('live').classList.toggle('paused',state.paused);$('live').querySelector('span').textContent=state.paused?'FEED HELD':'FEED ACTIVE';if(!state.paused){for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}};
+ $('pauseBtn').onclick=toggleHold;$('live').onclick=toggleHold;$('wbResume').onclick=toggleHold;
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
- document.addEventListener('keydown',e=>{const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ document.addEventListener('keydown',e=>{if($('settings').open)return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
+  if((k==='enter'||k===' ')&&e.target.closest?.('header'))return;
+  if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
   if(state.page==='rv'){if(k==='escape'){location.hash='#feed';return}const a=RVKEYS[k];if(a){e.preventDefault();if(!e.repeat)rvAct(a)}return}
   if(state.page!=='feed')return;
   if(k==='r'){location.hash='#review';return}
-  if(k==='escape')closeDetail();
+  if(k==='escape'){if(state.zoom)closeZoom();else closeDetail();return}
+  if(k==='f'&&state.sel){state.zoom?closeZoom():openZoom();return}
   if(state.sel&&['1','2','3','4'].includes(k))setManual(state.sel,+k);
   if(state.sel&&['arrowright','arrowdown','arrowleft','arrowup'].includes(k)){e.preventDefault();step(k==='arrowright'||k==='arrowdown'?1:-1)}});
- $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b){b.blur();rvAct(b.dataset.a)}};
+ $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b&&(!rv.ask||b.dataset.a==='undo')){b.blur();rvAct(b.dataset.a)}};
+ $('rvAsk').onclick=e=>{const b=e.target.closest('[data-ask]');if(!b)return;if(b.dataset.ask==='why')answerWhy(b.dataset.choice);else answerSuggestion(b.dataset.answer)};
  $('rvOrder').onclick=e=>{const b=e.target.closest('button');if(!b)return;rv.order=b.dataset.o;[...$('rvOrder').children].forEach(x=>x.classList.toggle('on',x===b));rv.cur=null;renderReview()};
  $('nightBtn').onclick=toggleNight;
  window.addEventListener('hashchange',route);
@@ -128,10 +149,12 @@ async function init(){
  route();renderFeed(true);renderStats();renderRp();openStream();
 }
 function route(){
- state.page=location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
+ state.page=location.hash==='#briefing'?'brief':location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
+ $('pgBrief').classList.toggle('on',state.page==='brief');
  $('pgFeed').classList.toggle('on',state.page==='feed');$('pgRp').classList.toggle('on',state.page==='rp');$('pgRv').classList.toggle('on',state.page==='rv');$('navRv').classList.toggle('on',state.page==='rv');
  $('navFeed').classList.toggle('on',state.page==='feed');$('navRp').classList.toggle('on',state.page==='rp');
- if(state.page==='feed')renderFeed(true);else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
+ if(state.page!=='rv'&&rv.ask){rv.ask=null;rv.askBusy=false;renderAsk()}
+ if(state.page==='feed')renderFeed(true);else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
 function visible(){
@@ -147,7 +170,7 @@ function renderTierSeg(counts){
 }
 function boxesHTML(it,labels){
  return it.dets.map((d,i)=>{const sd=it.det[i];const c=sd.sup?'sup':sd.matched?'match':sd.s>=.6?'hi':sd.s>=.3?'md':'lo';const b=d.b;
-  return`<div class="box ${c}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
+  return`<div class="box ${c}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
 function topLine(it){
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return'—';
@@ -193,7 +216,11 @@ function renderStats(){
 
 /* ---- detail drawer ---- */
 function openDetail(id){const prev=items.find(i=>i.id===state.sel);state.sel=id;document.body.classList.add('drawer-open');prev&&updateCard(prev);const it=items.find(i=>i.id===id);it&&updateCard(it);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
-function closeDetail(){const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
+function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
+function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
+function renderZoom(){const it=items.find(i=>i.id===state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
+ z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}">P${it.tier}</span><b>${it.src.name}</b><span class="mono">${zulu(it.ts)}</span><span>DB #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe"><img src="${imageFor(it)}">${boxesHTML(it,true)}</div>`;z.onclick=closeZoom}
+function closeDetail(){closeZoom();const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
 function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function buildWhy(it,rows){
  const why=[];const top=rows[0];
@@ -215,11 +242,12 @@ function renderDetail(){
  const l=visible().l,idx=l.findIndex(x=>x.id===it.id);
  D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}">P${it.tier}</span>${tierName}</h2><small>${it.src.name} · <span class="mono">${zulu(it.ts)}</span> · DB #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
   <div class="dnav"><button id="dPrev" title="Previous (←)">‹</button><button id="dNext" title="Next (→)">›</button><button id="dClose" title="Close (Esc)">×</button></div></div>
- <div class="dimg"><img src="${imageFor(it)}">${boxesHTML(it,true)}</div>
+ <div class="dimg" id="dImg" title="Enlarge (F)"><img src="${imageFor(it)}">${boxesHTML(it,true)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
   <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">${t} · P${t}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
   <div class="scores"><div class="sc"><span>Edge triage</span><b>${it.edge.toFixed(2)}</b></div><div class="sc"><span>Command score</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span>Directive Δ</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
   <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n">Conf</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${CLS[d.cls].lab}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(CLS[d.cls].g))).map(a=>ATTR_LAB[a]).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`).join('')}</table></div>
+  <div class="dsec" id="briefDetections"></div>
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   <div class="dsec"><h4>Processing chain</h4><ul class="tl">
    <li class="edge"><i></i><div>Captured &amp; triaged on sensor<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
@@ -230,7 +258,8 @@ function renderDetail(){
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}" id="aCdr">${it.sent?'✓ Sent to Commander':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis">Dismiss</button></div>
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
- D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;
+ D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
+ briefing.renderDetections(it);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
  $('aSim').onclick=()=>{const k=rows[0]&&rows[0][0].cls;if(!k)return;$('nlIn').value=`Prioritize ${CLS[k].lab.toLowerCase()}s`;location.hash='#reprioritize';toast('Drafted a directive from this image — review and apply')};
@@ -261,15 +290,57 @@ async function requestFullRes(it){
  try{await request(`/api/items/${encodeURIComponent(it.id)}/full-res`,'POST',{by:by.trim()});toast(`Full-size send requested by ${by.trim()}`)}catch(error){toast(error.message)}
 }
 async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} — logged as model feedback`)}catch(error){toast(error.message)}}
-function toggleNight(){document.body.classList.toggle('night');$('nightBtn').textContent=document.body.classList.contains('night')?'Day mode (N)':'Night mode (N)'}
+function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
-let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{}};
+let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
 function rvQueue(){const l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
+function renderAsk(){
+ const box=$('rvAsk');if(!box)return;
+ if(!rv.ask){box.hidden=true;box.innerHTML='';return}
+ box.hidden=false;
+ if(rv.ask.kind==='why'){
+  const tier=findItem(rv.ask.id)?.tier||'?';
+  box.innerHTML=`<div class="rvask-copy"><b>Why did you set the last image to P${tier}?</b><span>Two contacts scored close. Pick the one that drove your call.</span></div><div class="rvask-actions">${rv.ask.classes.map((cls,i)=>`<button class="kb rvask-btn" data-ask="why" data-choice="${esc(cls)}" ${rv.askBusy?'disabled':''}><kbd>${i+1}</kbd>${esc(CLS[cls]?.lab||cls)}</button>`).join('')}<button class="kb rvask-btn" data-ask="why" data-choice="wrong" ${rv.askBusy?'disabled':''}><kbd>${rv.ask.classes.length+1}</kbd>Wrong detection</button><button class="kb rvask-btn rvask-skip" data-ask="why" data-choice="skip" ${rv.askBusy?'disabled':''}><kbd>Esc</kbd>Skip</button></div>`;
+  return;
+ }
+ const s=rv.ask.s,label=CLS[s.cls]?.lab||s.cls,verb=s.dir==='lower'?'lowered':'raised',action=s.dir==='lower'?'Lower':'Raise';
+ box.innerHTML=`<div class="rvask-copy"><b>You ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact. ${action} ${esc(label)} priority?</b>${s.highRisk?`<span class="rvask-warning">${esc(label)} is normally high priority — confirm this change.</span>`:''}</div><div class="rvask-actions"><button class="kb rvask-btn" data-ask="sug" data-answer="yes" ${rv.askBusy?'disabled':''}><kbd>Y</kbd>Yes</button><button class="kb rvask-btn" data-ask="sug" data-answer="no" ${rv.askBusy?'disabled':''}><kbd>N</kbd>No</button><button class="kb rvask-btn rvask-skip" data-ask="sug" data-answer="later" ${rv.askBusy?'disabled':''}><kbd>L</kbd>Later</button></div>`;
+}
+function checkLearningSuggestion(){
+ if(rv.ask||typeof gsLearn==='undefined')return;
+ const s=gsLearn.suggestion();if(s){rv.ask={kind:'sug',s};rv.askBusy=false;renderAsk()}
+}
+function answerWhy(choice){
+ const ask=rv.ask;if(!ask||ask.kind!=='why'||rv.askBusy||typeof gsLearn==='undefined')return;
+ if(choice==='wrong'){gsLearn.attribute(ask.id,'wrong');toast('Marked as wrong detection — not used for rule suggestions')}
+ else gsLearn.attribute(ask.id,choice==='skip'?null:choice);
+ rv.ask=null;rv.askBusy=false;renderAsk();checkLearningSuggestion();
+}
+function answerSuggestion(answer){
+ const ask=rv.ask;if(!ask||ask.kind!=='sug'||rv.askBusy||typeof gsLearn==='undefined')return;
+ const s=ask.s;
+ if(answer!=='yes'){gsLearn.resolve(s,answer);rv.ask=null;rv.askBusy=false;renderAsk();return}
+ rv.askBusy=true;renderAsk();
+ const label=CLS[s.cls]?.lab||s.cls;
+ request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]})
+  .then(()=>{gsLearn.resolve(s,'yes');toast('Rule added — review it on Collection Priorities')})
+  .catch(error=>{gsLearn.resolve(s,'later');toast(error.message)})
+  .finally(()=>{rv.askBusy=false;if(rv.ask===ask)rv.ask=null;renderAsk()});
+}
+function reviewAskKey(k){
+ if(!rv.ask||rv.askBusy)return;
+ if(rv.ask.kind==='why'){
+  if(k==='escape'){answerWhy('skip');return}
+  const n=Number(k);if(n>=1&&n<=rv.ask.classes.length)answerWhy(rv.ask.classes[n-1]);else if(n===rv.ask.classes.length+1)answerWhy('wrong');
+  return;
+ }
+ if(k==='y')answerSuggestion('yes');else if(k==='n')answerSuggestion('no');else if(k==='l'||k==='escape')answerSuggestion('later');
+}
 function renderReview(){
  let it=rv.cur;if(!it||it.reviewed||it.dismissed||!items.includes(it))it=rv.cur=rvQueue()[0]||null;
- rvProgress();
+ rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a&&b.dataset.a!=='undo')b.disabled=!it});
  if(!it){rv.shown=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>All caught up</b><div>New images will appear here as sensors report.</div></div><div class="rvflash" id="rvFlash"></div>`;return}
  const key=it.id+':'+it.centralTier+':'+it.central;if(rv.shown===key)return;rv.shown=key;
@@ -288,7 +359,7 @@ function rvFlash(msg,col){const f=$('rvFlash');if(!f)return;f.textContent=msg;f.
 function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)return;b.classList.add('pressed');setTimeout(()=>b.classList.remove('pressed'),140)}
 function rvAct(a){
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;patchItem(p.id,{manual:p.manual,reviewed:p.reviewed,dismissed:p.dismissed,sent:p.sent}).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;rv.cur=it;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;patchItem(p.id,{manual:p.manual,reviewed:p.reviewed,dismissed:p.dismissed,sent:p.sent}).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
  const it=rv.cur;if(!it)return;
  if(a==='skip'){rv.skipped[it.id]=Date.now();rv.cur=null;rv.shown=null;renderReview();return}
  const sug=it.centralTier,p={id:it.id,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
@@ -300,7 +371,7 @@ function rvAct(a){
  else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Forwarded to CO';col='var(--good)'}
  else return;
  rv.busy=true;
- patchItem(it.id,changes).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
+ patchItem(it.id,changes).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 init();
