@@ -116,6 +116,7 @@ type NodeStatus struct {
 	Queued      int64   `json:"queuedItems"`
 	QueuedBytes int64   `json:"queuedBytes"`
 	LinkUp      bool    `json:"linkUp"`
+	Failures    int64   `json:"consecutiveFailures"`
 	EstimateBps float64 `json:"estimateBps"`
 	PolicyID    string  `json:"policyId"`
 	LastSeenMs  int64   `json:"lastSeenMs"`
@@ -344,6 +345,7 @@ func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 		Queued:      st.GetHeartbeat().GetQueuedItems(),
 		QueuedBytes: st.GetHeartbeat().GetQueuedBytes(),
 		LinkUp:      st.GetLink().GetUp(),
+		Failures:    st.GetLink().GetConsecutiveFailures(),
 		EstimateBps: st.GetLink().GetEstimateBps(),
 		PolicyID:    st.GetPolicyId(),
 		LastSeenMs:  st.GetLink().GetLastSuccessUnixMs(),

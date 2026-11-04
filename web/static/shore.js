@@ -33,8 +33,11 @@
     c.className = 'conn ' + (shore.ok ? 'ok' : 'bad');
     const kbps = link.controllable ? link.bps : (shore.estimateBps || 0);
     $('#kbps').textContent = fmtRate(kbps);
+    const est = edge.ok ? edge.estimateBps : shore.estimateBps;
+    const relearn = edge.ok && edge.consecutiveFailures > 0
+      ? ` · re-learning: ${edge.consecutiveFailures} failed exchange${edge.consecutiveFailures === 1 ? '' : 's'}` : '';
     $('#link-src').textContent = link.controllable
-      ? (shore.estimateBps ? `edge estimates ${fmtRate(shore.estimateBps)}` : '')
+      ? (est ? `edge estimates ${fmtRate(est)}${relearn}` : '')
       : '(edge estimate; control via degrade.sh)';
     const pr = $('#presets');
     if (!pr.childElementCount) {
