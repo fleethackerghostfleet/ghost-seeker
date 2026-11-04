@@ -486,7 +486,8 @@ def main():
               "detect_every": a.detect_every, "score_thr": a.score_thr, "det_low_thr": a.det_low_thr, "gate": not a.no_gate, "gate_force_every_s": a.gate_force_s, "threads": a.threads, "cpus": sorted(os.sched_getaffinity(0)),
               "aggregator": asdict(agg_params), "selector": selector_kw, "budgets": a.budgets, "window_s": a.window_s,
               "hardware": platform.processor() or platform.machine(), "python": platform.python_version(), "git_sha": sha}
-    (out / ("config.json" if not a.append else f"config_{a.tag or 'append'}.json")).write_text(json.dumps(config, indent=1, default=_json))
+    cfg_name = f"config_{a.tag or 'append'}.json" if a.append and (out / "config.json").exists() else "config.json"
+    (out / cfg_name).write_text(json.dumps(config, indent=1, default=_json))
 
     rows = []
     for clip_path in a.clip:
