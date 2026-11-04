@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package ghostseeker.v1;
+
+option go_package = "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1;ghostseekerv1";
+
+// Policy is the operator-controlled "scope out". It is small (target < 2 KB)
+// so it can be downlinked over any link. The edge applies it to the whole
+// backlog immediately. Natural-language intent is compiled (shore side) into
+// this structure; the text is kept for audit/readback only.
+message Policy {
+  string id = 1;
+  int64 issued_at_unix_ms = 2;
+  string issued_by = 3;
+  string text = 4; // operator's words, for audit; never interpreted on the edge
+  Interest interest = 5;
+  Thresholds thresholds = 6;
+  EmconMode emcon = 7;
+  int32 digest_interval_s = 8; // 0 = no periodic digest
+  map<string, double> scorer_weights = 9; // override default weights by scorer name
+}
+
+message Interest {
+  repeated string boost_labels = 1; // e.g. "cargo ship", "container"
+  repeated string suppress_labels = 2; // e.g. "sailboat"
+  repeated float positive_embedding = 3; // text embedding of what matters now
+  repeated float negative_embedding = 4; // text embedding of what to ignore
+  double boost_factor = 5; // default 2.0
+  double suppress_factor = 6; // default 0.05 (deprioritize, never drop)
+}
+
+message Thresholds {
+  float unknown_min = 1; // unknownness above this counts as "unknown" (default 0.5)
+  float detection_min_conf = 2; // detections below are ignored by scorers
+  double min_priority_for_images = 3; // below this only FACT is sent until link is idle
+}
+
+enum EmconMode {
+  EMCON_MODE_UNSPECIFIED = 0;
+  EMCON_MODE_NORMAL = 1;
+  EMCON_MODE_BURST = 2; // only FACT/manifest, in short bursts
+  EMCON_MODE_SILENT = 3; // queue only
+}
