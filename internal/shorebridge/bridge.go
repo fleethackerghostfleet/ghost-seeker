@@ -73,7 +73,7 @@ type Card struct {
 	Conf        float64               `json:"conf"`
 	Override    string                `json:"override,omitempty"`
 	Unknownness float64               `json:"unknownness"`
-	Priority    string                `json:"priority"`
+	Priority    string                `json:"priority"` // P1..P4, relative rank in the current shore picture (assignTiers)
 	Score       float64               `json:"score"`
 	Suppressed  bool                  `json:"suppressed"`
 	Tags        map[string]string     `json:"tags,omitempty"`
@@ -280,18 +280,37 @@ var formNames = map[pb.FormKind]string{
 	pb.FormKind_FORM_KIND_FULL:  "full",
 }
 
-// priorityName buckets the shore score (0..1) into the P1..P4 tiers the
-// operator UI uses.
-func priorityName(p float64) string {
-	switch {
-	case p >= 0.75:
-		return "P1"
-	case p >= 0.5:
-		return "P2"
-	case p >= 0.25:
-		return "P3"
-	default:
-		return "P4"
+// assignTiers maps the edge's unbounded priority score onto the P1..P4
+// tiers the operator UI uses by rank within the current shore picture:
+// top 10% P1, next 25% P2, next 35% P3, rest P4. Suppressed objects are P4.
+func assignTiers(objs []*Object) {
+	ranked := make([]*Object, 0, len(objs))
+	for _, o := range objs {
+		if o.Best != nil && !o.Suppressed {
+			ranked = append(ranked, o)
+		} else {
+			o.Priority = "P4"
+		}
+	}
+	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].Best.Score > ranked[j].Best.Score })
+	n := float64(len(ranked))
+	for i, o := range ranked {
+		pos := float64(i+1) / n
+		switch {
+		case pos <= 0.10 || i == 0:
+			o.Priority = "P1"
+		case pos <= 0.35:
+			o.Priority = "P2"
+		case pos <= 0.70:
+			o.Priority = "P3"
+		default:
+			o.Priority = "P4"
+		}
+	}
+	for _, o := range objs {
+		for _, c := range o.Items {
+			c.Priority = o.Priority
+		}
 	}
 }
 
@@ -305,7 +324,6 @@ func ToCard(v *pb.ItemView) *Card {
 		Source:      it.GetSource(),
 		Unknownness: float64(it.GetFeatures().GetUnknownness()),
 		Override:    it.GetFeatures().GetLabelOverride(),
-		Priority:    priorityName(v.GetScore().GetPriority()),
 		Score:       v.GetScore().GetPriority(),
 		Suppressed:  v.GetScore().GetSuppressed(),
 		Tags:        it.GetFeatures().GetTags(),
@@ -385,7 +403,7 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 		}
 		o := byKey[key]
 		if o == nil {
-			o = &Object{Key: key, SightingID: sid, FirstMs: c.CapturedMs, LastMs: c.CapturedMs, Priority: c.Priority}
+			o = &Object{Key: key, SightingID: sid, FirstMs: c.CapturedMs, LastMs: c.CapturedMs}
 			byKey[key] = o
 			order = append(order, o)
 		}
@@ -409,9 +427,6 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 				o.Frames = fr
 			}
 		}
-		if c.Priority < o.Priority { // "P1" < "P2"
-			o.Priority = c.Priority
-		}
 		o.Suppressed = o.Suppressed || c.Suppressed
 		o.Unknown = o.Unknown || c.Unknownness >= unknownThreshold
 		if o.Best == nil || better(c, o.Best) {
@@ -432,6 +447,7 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 			cnt.ObjectsWithImage++
 		}
 	}
+	assignTiers(order)
 	sort.SliceStable(order, func(i, j int) bool { return order[i].LastMs > order[j].LastMs })
 	return order, cnt
 }

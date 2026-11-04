@@ -23,6 +23,7 @@ func TestGroupBySighting(t *testing.T) {
 		view("c", 1500, nil, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true}),
 	}
 	views[2].Item.Features.Unknownness = 0.9
+	views[2].Score.Priority = 0.2
 	objs, cnt := Group(views, []string{"submarine"})
 	if cnt.Objects != 2 || cnt.ObjectsWithImage != 1 || cnt.Items != 3 || cnt.Grouped != 2 {
 		t.Fatalf("counts = %+v", cnt)
@@ -45,7 +46,11 @@ func TestGroupBySighting(t *testing.T) {
 	if objs[1].Suppressed || !objs[1].Unknown {
 		t.Fatal("unknown contacts are never suppressed by a label")
 	}
-	if objs[0].Priority != "P1" {
-		t.Fatalf("priority = %s", objs[0].Priority)
+	if objs[0].Priority != "P4" || objs[1].Priority != "P1" || objs[1].Best.Priority != "P1" {
+		t.Fatalf("tiers: suppressed=%s unknown=%s", objs[0].Priority, objs[1].Priority)
+	}
+	objs, _ = Group(views, nil)
+	if objs[0].Priority != "P1" || objs[1].Priority != "P4" {
+		t.Fatalf("rank tiers: %s %s", objs[0].Priority, objs[1].Priority)
 	}
 }
