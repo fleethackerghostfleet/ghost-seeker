@@ -80,12 +80,15 @@
     factCache.set(card.id, null);
     try {
       const r = await fetch(card.factUrl);
-      if (!r.ok) return;
+      if (!r.ok) { // fact not on shore yet (409): retry on a later render
+        setTimeout(() => factCache.delete(card.id), 5000);
+        return;
+      }
       const j = await r.json().catch(() => null);
       const text = j ? Object.entries(j).filter(([k]) => !/embedding|hash/i.test(k)).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n') : await r.text();
       factCache.set(card.id, text.slice(0, 400));
       render();
-    } catch { /* keep placeholder */ }
+    } catch { setTimeout(() => factCache.delete(card.id), 5000); }
   }
   function objectCard(o) {
     const b = o.best;
