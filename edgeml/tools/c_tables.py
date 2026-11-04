@@ -24,13 +24,14 @@ def pooled(rows):
     matched = sum(len(set(r["sighting"]["matched_sightings"].values())) for r in rows)
     mins = sum(r["sighting"]["minutes"] for r in rows)
     dup = [r["sighting"]["duplicates_per_object"] for r in rows if r["sighting"]["duplicates_per_object"] is not None]
-    ttfr = [r["sighting"]["ttfr_mean_s"] for r in rows if r["sighting"]["ttfr_mean_s"] is not None]
+    ttfr_w = [(r["sighting"]["ttfr_mean_s"], r["sighting"].get("n_ttfr") or len(set(r["sighting"]["matched_sightings"].values())) or 1)
+              for r in rows if r["sighting"]["ttfr_mean_s"] is not None]
     rpo = [r["sighting"]["reports_per_object"] for r in rows if r["sighting"]["reports_per_object"] is not None]
     d = {b: (sum(r["delivery"]["budgets"][b]["objects_delivered_image"] for r in rows) / ngt if ngt else None) for b in B}
     bpo = {b: (sum(r["delivery"]["budgets"][b]["bytes_used"] for r in rows) / max(1, sum(r["delivery"]["budgets"][b]["objects_delivered_image"] for r in rows))) for b in B}
     return {"n_gt": ngt, "recall": matched / ngt if ngt else None, "dup": float(np.mean(dup)) if dup else None,
             "false_min": sum(r["sighting"]["false_sightings"] for r in rows) / mins if mins else None,
-            "ttfr": float(np.mean(ttfr)) if ttfr else None, "rpo": float(np.mean(rpo)) if rpo else None,
+            "ttfr": (sum(t * n for t, n in ttfr_w) / sum(n for _, n in ttfr_w)) if ttfr_w else None, "rpo": float(np.mean(rpo)) if rpo else None,
             "n_rep": sum(r["sighting"]["n_reports"] for r in rows), "img": d, "bpo": bpo}
 
 

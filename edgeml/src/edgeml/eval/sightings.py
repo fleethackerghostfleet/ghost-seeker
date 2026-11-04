@@ -87,6 +87,7 @@ def sighting_metrics(events: list[dict], sighting_tracks: list[tuple[str, int, l
         "false_per_min": len(false_s) / minutes,
         "ttfr_median_s": float(np.median(ttfr)) if ttfr else None,
         "ttfr_mean_s": float(np.mean(ttfr)) if ttfr else None,
+        "n_ttfr": len(ttfr),
         "reports_per_object": float(np.mean(rpo)) if rpo else None,
         "matched_sightings": {sid: oid for sid, oid in m.items() if oid is not None},
         "false_sighting_ids": false_s,
@@ -101,7 +102,7 @@ def aggregate_metrics(per_seq: dict[str, dict]) -> dict:
     dups = sum(v["duplicates_per_object"] * v["n_gt_objects"] for v in per_seq.values() if v["duplicates_per_object"] is not None)
     minutes = sum(v["minutes"] for v in per_seq.values())
     false_n = sum(v["false_sightings"] for v in per_seq.values())
-    ttfr = [v["ttfr_mean_s"] for v in per_seq.values() if v["ttfr_mean_s"] is not None]
+    ttfr_w = [(v["ttfr_mean_s"], v.get("n_ttfr", 1)) for v in per_seq.values() if v["ttfr_mean_s"] is not None]
     rpo_w = [(v["reports_per_object"], len({o for o in v["matched_sightings"].values()})) for v in per_seq.values() if v["reports_per_object"] is not None]
     return {
         "n_seqs": len(per_seq),
@@ -110,7 +111,7 @@ def aggregate_metrics(per_seq: dict[str, dict]) -> dict:
         "duplicates_per_object": dups / n_gt if n_gt else None,
         "false_per_min": false_n / minutes if minutes else None,
         "false_sightings": false_n,
-        "ttfr_mean_s": float(np.mean(ttfr)) if ttfr else None,
+        "ttfr_mean_s": (sum(t * n for t, n in ttfr_w) / max(1, sum(n for _, n in ttfr_w))) if ttfr_w else None,
         "reports_per_object": (sum(r * n for r, n in rpo_w) / max(1, sum(n for _, n in rpo_w))) if rpo_w else None,
         "n_reports": sum(v["n_reports"] for v in per_seq.values()),
         "n_sightings": sum(v["n_sightings"] for v in per_seq.values()),
