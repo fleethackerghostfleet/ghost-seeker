@@ -642,6 +642,21 @@ def load_v1_responses(
     return parsed_by_frame, sorted(errors, key=lambda row: row["frame"])
 
 
+def verifier_cache_path(
+    cache_dir: Path, frame: int, detection: dict[str, Any]
+) -> Path:
+    signature = json.dumps(
+        [
+            [round(float(coordinate), 1) for coordinate in detection["box"]],
+            detection["label"],
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(signature.encode("utf-8")).hexdigest()
+    return cache_dir / "verifier" / f"frame_{frame:06d}_{digest}.json"
+
+
 def annotate_sequence(
     seq_dir: Path,
     prompt_path: Path,
@@ -758,11 +773,7 @@ def annotate_sequence(
                         }
                     )
                     continue
-                cache_path = (
-                    cache_dir
-                    / "verifier"
-                    / f"frame_{frame:06d}_box_{box_index:04d}.json"
-                )
+                cache_path = verifier_cache_path(cache_dir, frame, detection)
                 future = pool.submit(
                     request_verification,
                     frame,

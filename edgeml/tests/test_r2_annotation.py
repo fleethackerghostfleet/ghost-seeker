@@ -13,6 +13,7 @@ from autolabel_gemini import (
     filter_frame_runaway,
     filter_repeated_boxes,
     load_v1_responses,
+    verifier_cache_path,
 )
 from autolabel_owlv2 import read_gemini
 from qa_apply import apply, apply_sample_provenance, rewrite_attrs
@@ -130,6 +131,18 @@ def test_verifier_crop_expands_clips_and_upscales():
     crop, bounds = crop_verifier_box(larger_image, [100, 120, 40, 60])
     assert bounds == (80, 90, 160, 210)
     assert crop.shape == (384, 256, 3)
+
+
+def test_verifier_cache_key_tracks_rounded_box_and_label(tmp_path):
+    first = {"box": [1.04, 2.04, 3.04, 4.04], "label": "ship"}
+    same_rounded = {"box": [1.03, 2.03, 3.03, 4.03], "label": "ship"}
+    changed_box = {"box": [1.2, 2.04, 3.04, 4.04], "label": "ship"}
+    changed_label = {"box": [1.04, 2.04, 3.04, 4.04], "label": "boat"}
+
+    first_path = verifier_cache_path(tmp_path, 7, first)
+    assert verifier_cache_path(tmp_path, 7, same_rounded) == first_path
+    assert verifier_cache_path(tmp_path, 7, changed_box) != first_path
+    assert verifier_cache_path(tmp_path, 7, changed_label) != first_path
 
 
 def _make_sequence(tmp_path):
