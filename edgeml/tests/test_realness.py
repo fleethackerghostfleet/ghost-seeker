@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from edgeml.tracking import AggregatorParams, SightingAggregator
@@ -32,7 +34,8 @@ def test_realness_rejects_noise_and_invalid_boxes():
 
 
 def test_unknown_gate_emits_material_update_and_value_floor():
-    p = AggregatorParams(min_update_interval_s=0, unknown_bonus_age_s=2)
+    p = AggregatorParams(min_update_interval_s=0, unknown_bonus_age_s=2,
+                         gate_unknown_bonus_on_realness=True)
     a = SightingAggregator('unknown', p)
     events = []
     for i, t, box, score in trajectory():
@@ -54,7 +57,7 @@ def test_unknown_gate_emits_material_update_and_value_floor():
 
 
 def test_real_trajectory_below_unknown_threshold_has_no_unknown_bonus():
-    a = SightingAggregator('known')
+    a = SightingAggregator('known', AggregatorParams(gate_unknown_bonus_on_realness=True))
     for i, t, box, score in trajectory():
         a.update([Track(1, box, score, 'object', i, t)], None, i, t)
     st = next(iter(a.states.values()))
@@ -67,3 +70,32 @@ def test_real_trajectory_below_unknown_threshold_has_no_unknown_bonus():
     st.s.unknownness = a.p.unknown_threshold
     assert a._value(st) > baseline
     assert st.s.unknown_real
+
+
+@pytest.mark.parametrize('rows,unknownness,expected_real', [
+    (trajectory(), .49, False),
+    ([(i, t, [100 + (i % 2) * 100, 100, 20, 10], s)
+      for i, t, b, s in trajectory()], .8, False),
+    ([(0, 0, [100, 100, 20, 10], .2), (1, 3, [100, 100, 20, 10], .2)], .8, False),
+    (trajectory(), .5, True),
+    (trajectory(2), .8, False),
+])
+def test_default_value_matches_main_despite_realness(rows, unknownness, expected_real):
+    a = SightingAggregator('default')
+    assert not a.p.gate_unknown_bonus_on_realness
+    for i, t, box, score in trajectory():
+        a.update([Track(1, box, score, 'object', i, t)], None, i, t)
+    st = next(iter(a.states.values()))
+    st.traj = rows
+    st.s.first_t_s, st.s.last_t_s = rows[0][1], rows[-1][1]
+    st.s.best_score = 0
+    st.s.unknownness = unknownness
+    size = min(1.0, math.sqrt(max(1.0, st.s.best_box[2] * st.s.best_box[3])) / (0.15 * a._W()))
+    age = st.s.last_t_s - st.s.first_t_s
+    unk = unknownness if age >= a.p.unknown_bonus_age_s else 0.0
+    closing = min(1.0, max(0.0, a._growth(st) / .3))
+    expected = min(1.0, max(0.0, .5 * st.s.best_score + .2 * unk + .2 * size + .1 * closing))
+    assert a._value(st) == pytest.approx(expected)
+    assert st.s.unknown_real == expected_real
+    if expected_real:
+        assert expected < .3 + .2 * size

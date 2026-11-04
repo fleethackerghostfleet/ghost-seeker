@@ -47,7 +47,8 @@ class AggregatorParams:
     min_update_interval_s: float = 3.0
     max_updates: int = 6                 # cap on update events per sighting (open/close not counted)
     # value
-    unknown_bonus_age_s: float = 2.0     # minimum trajectory duration for unknown realness
+    unknown_bonus_age_s: float = 2.0     # minimum age for unknown bonus and trajectory realness
+    gate_unknown_bonus_on_realness: bool = False
     unknown_min_hits: int = 3
     unknown_threshold: float = 0.5
     realness_threshold: float = 0.5
@@ -447,10 +448,14 @@ class SightingAggregator:
         self._refresh_realness(st)
         s = st.s
         size = min(1.0, math.sqrt(max(1.0, s.best_box[2] * s.best_box[3])) / (0.15 * self._W()))
-        unk = s.unknownness if s.unknown_real else 0.0
+        age = s.last_t_s - s.first_t_s
+        if self.p.gate_unknown_bonus_on_realness:
+            unk = s.unknownness if s.unknown_real else 0.0
+        else:
+            unk = s.unknownness if age >= self.p.unknown_bonus_age_s else 0.0
         closing = min(1.0, max(0.0, self._growth(st) / 0.3))
         v = 0.5 * s.best_score + 0.2 * unk + 0.2 * size + 0.1 * closing
-        if s.unknown_real:
+        if self.p.gate_unknown_bonus_on_realness and s.unknown_real:
             v = max(v, 0.3 + 0.2 * size)  # at least the confidence contribution of a 0.6 known contact
         return float(min(1.0, max(0.0, v)))
 

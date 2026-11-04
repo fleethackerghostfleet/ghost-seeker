@@ -21,7 +21,7 @@ Requirement: "If an object is unknown but not noise it should still be prioritiz
 
 ### Edge ML (edgeml)
 - New `edgeml/src/edgeml/tracking/realness.py`: a "not noise" test on a sighting's trajectory. It checks persistence (≥N distinct frames and ≥T s), size stability (coefficient of variation of sqrt(area)) and motion consistency (constant-velocity residual, normalised by box size). Stationary contacts are allowed. The output is `realness` in [0,1].
-- `aggregator.py` / `types.py` / `CONTRACTS.md`: sightings and events gain `realness` and `unknown_real` (unknownness ≥ τ and realness ≥ ρ). The unknown priority bonus now applies only when `unknown_real` is true. A real unknown gets a value floor equal to a known contact at 0.6 confidence. Library defaults are N=3, ρ=0.5.
+- `aggregator.py` / `types.py` / `CONTRACTS.md`: sightings and events gain informational `realness` and `unknown_real` (unknownness ≥ τ and realness ≥ ρ). The realness bonus gate is **off by default** (`gate_unknown_bonus_on_realness=False`): the bonus remains keyed on unknownness alone after `unknown_bonus_age_s`, exactly as before, with no real-unknown value floor. Opting into the flag requires `unknown_real` for the bonus and enables a floor equal to a known contact at 0.6 confidence. Library defaults are N=3, ρ=0.5.
 - `edgeml/tools/eval_unknown.py`: replays cached detections through ByteTrack and the aggregator, with MobileCLIP-S1 zero-shot MCM unknownness calibrated on 136 dev GT crops. It matches sightings to GT and reports per-split metrics. It checks splits against `configs/splits.yaml`.
 
 ## Measured results
@@ -66,7 +66,7 @@ OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 ~/edgeml-venv/bin/python -u edgeml/tools/eva
 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 ~/edgeml-venv/bin/python -u edgeml/tools/eval_unknown.py --data ~/data/edgeml_eval --split test --out ~/unknown-eval-flush --frozen ~/unknown-eval/frozen.json
 ```
 
-"Before" means unknownness ≥ τ alone (the current behaviour). "After" also requires `unknown_real`.
+These locked evaluation metrics measure flag eligibility, not default bonus gating. "Before" means unknownness ≥ τ alone. "After" also requires `unknown_real`; the realness bonus gate remains off by default. No evaluation was re-run for the default-policy change.
 
 | Split | Mode | GT objects surfaced | Matched unknown sightings flagged | False unknowns / complete sea-only frame |
 |---|---|---:|---:|---:|
@@ -76,6 +76,8 @@ OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 ~/edgeml-venv/bin/python -u edgeml/tools/eva
 | test | after | 26/52 (50.0%) | **4/9 (44.4%)** | 0/214 |
 
 **Key finding:** at the frozen N=8 operating point, the realness gate cut held-out recall of real unknown objects from 9/9 to 4/9. It showed no reduction in false unknowns, because there were zero false unknowns before the gate on these complete sea-only frames. On these clips the gate costs recall and has not been shown to remove noise. Sample sizes are tiny: 9 unknown sightings, 391 dev and 214 test sea-only frames. Only 3 dev and 6 test sequences have complete GT. Unmatched flags on sequences with partial or unspecified GT are not counted as noise (dev 3 → 3, test 1 → 0).
+
+**Recommendation:** keep `gate_unknown_bonus_on_realness=False` until the gate demonstrates noise reduction on more complete-GT sea-only data. Recall comes first; the current evidence does not justify suppressing unknown priority by default.
 
 ## Limits
 - There is no restricted-area or geofence data model, so "P1 in a restricted area" is **not implemented**. Today P1 comes from approaching or dark.
