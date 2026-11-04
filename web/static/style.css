@@ -55,9 +55,9 @@ select:focus,input[type=text]:focus{border-color:var(--accent)}
 .feed{--dw:clamp(430px,46vw,780px);container-type:size}
 body.drawer-open .feed{padding-right:calc(var(--dw) + 16px)}
 .grid{display:grid;gap:8px}
-.grid.s{grid-template-columns:repeat(7,minmax(0,1fr))}
-.grid.m{grid-template-columns:repeat(5,minmax(0,1fr))}
-.grid.l{grid-template-columns:repeat(2,minmax(0,1fr));max-width:calc(((100cqh - 58px)/2 - var(--cap,34px))*3.2 + 8px);margin:0 auto}
+.grid.s{grid-template-columns:repeat(auto-fill,minmax(max(120px,(100% - 48px)/7),1fr))}
+.grid.m{grid-template-columns:repeat(auto-fill,minmax(max(160px,(100% - 32px)/5),1fr))}
+.grid.l{grid-template-columns:repeat(auto-fill,minmax(max(240px,(100% - 8px)/2),1fr));max-width:calc(((100cqh - 58px)/2 - var(--cap,34px))*3.2 + 8px);margin:0 auto}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;cursor:pointer;position:relative;will-change:transform}
 .card:hover{border-color:#4a6a88}
 .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
