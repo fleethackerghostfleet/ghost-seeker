@@ -17,6 +17,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
+	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
 	flag.Parse()
 
 	data := store.New(*retain)
@@ -24,6 +25,12 @@ func main() {
 	fillBacklog(data, generator, *backfill)
 	app := server.New(data)
 	go runSimulation(data, generator, app)
+	if *autoCDR > 0 {
+		for i := 0; i < 4; i++ {
+			data.AutoEscalate()
+		}
+		go runWatchOfficer(data, app, *autoCDR)
+	}
 
 	log.Printf("Ghost Seeker listening on %s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, app))
@@ -41,6 +48,16 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 			kept++
 		} else {
 			data.Add(nil, extra)
+		}
+	}
+}
+
+func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration) {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		time.Sleep(every/2 + time.Duration(rng.Int63n(int64(every))))
+		if item, cdr, ok := data.AutoEscalate(); ok {
+			app.PublishUpdate(item, cdr)
 		}
 	}
 }

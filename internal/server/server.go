@@ -32,6 +32,8 @@ func New(data *store.Store) *Server {
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
 	s.mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
+	s.mux.HandleFunc("POST /api/items/{id}/decision", s.decide)
+	s.mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
 	s.mux.Handle("GET /", web.Handler())
 	return s
 }
@@ -42,6 +44,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) PublishItem(item command.Item, stats command.Stats) {
 	s.hub.publish("item", map[string]any{"item": item, "stats": stats})
+}
+
+// PublishUpdate broadcasts a review or commander decision on one item.
+func (s *Server) PublishUpdate(item command.Item, cdr int) {
+	s.hub.publish("update", map[string]any{"item": item, "cdr": cdr})
 }
 
 func (s *Server) PublishStats(stats command.Stats) {
@@ -178,7 +185,32 @@ func (s *Server) patchItem(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	s.hub.publish("update", map[string]any{"item": item, "cdr": cdr})
+	s.PublishUpdate(item, cdr)
+	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
+}
+
+func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	item, cdr, err := s.store.Decide(r.PathValue("id"), body.Decision, body.Note)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.Is(err, store.ErrUnknownDecision):
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	case err != nil:
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	s.PublishUpdate(item, cdr)
 	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 

@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +12,21 @@ import (
 const MaxActiveDirectives = 20
 
 var ErrTooManyActiveDirectives = errors.New("Too many active directives — remove one first")
+
+// Decisions are the commander's final-review outcomes. DecisionReturn hands
+// the image back to the watch floor for another look.
+var Decisions = map[string]bool{"action": true, "track": true, "intel": true, "close": true, DecisionReturn: true}
+
+const (
+	DecisionReturn = "return"
+	maxNoteRunes   = 280
+)
+
+var (
+	ErrNotFound        = errors.New("no such item")
+	ErrNotEscalated    = errors.New("item has not been sent to the commander")
+	ErrUnknownDecision = errors.New("unknown decision")
+)
 
 type State struct {
 	Model      string              `json:"model"`
@@ -51,11 +67,9 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	s.items = append(s.items, cloneItem(*item))
 	evicted := ""
 	if len(s.items) > s.retain {
-		oldest := 0
-		for i := 1; i < len(s.items); i++ {
-			if s.items[i].TS.Before(s.items[oldest].TS) {
-				oldest = i
-			}
+		oldest := oldestIndex(s.items, func(it command.Item) bool { return !it.Sent && it.Decision == "" })
+		if oldest < 0 {
+			oldest = oldestIndex(s.items, func(command.Item) bool { return true })
 		}
 		evicted = s.items[oldest].ID
 		s.items = append(s.items[:oldest], s.items[oldest+1:]...)
@@ -164,8 +178,11 @@ func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *boo
 		if sent != nil && item.Sent != *sent {
 			if *sent {
 				s.cdr++
+				now := time.Now()
+				item.SentAt, item.Decision, item.DecisionNote, item.DecidedAt = &now, "", "", nil
 			} else {
 				s.cdr--
+				item.SentAt = nil
 			}
 			item.Sent = *sent
 		}
@@ -173,6 +190,80 @@ func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *boo
 		return cloneItem(*item), s.cdr, true
 	}
 	return command.Item{}, s.cdr, false
+}
+
+// Decide records the commander's decision on an escalated item. An empty
+// decision reopens it; DecisionReturn sends it back to the watch floor.
+func (s *Store) Decide(id, decision, note string) (command.Item, int, error) {
+	if decision != "" && !Decisions[decision] {
+		return command.Item{}, 0, ErrUnknownDecision
+	}
+	if r := []rune(strings.TrimSpace(note)); len(r) > maxNoteRunes {
+		note = string(r[:maxNoteRunes])
+	} else {
+		note = string(r)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.items {
+		item := &s.items[i]
+		if item.ID != id {
+			continue
+		}
+		if !item.Sent && item.Decision != DecisionReturn {
+			return command.Item{}, s.cdr, ErrNotEscalated
+		}
+		now := time.Now()
+		switch {
+		case decision == DecisionReturn && item.Sent:
+			item.Sent, item.SentAt, item.Reviewed = false, nil, false
+			s.cdr--
+		case decision != DecisionReturn && !item.Sent:
+			item.Sent, item.SentAt, item.Reviewed = true, &now, true
+			s.cdr++
+		}
+		item.Decision, item.DecisionNote, item.DecidedAt = decision, note, &now
+		if decision == "" {
+			item.DecisionNote, item.DecidedAt = "", nil
+		}
+		return cloneItem(*item), s.cdr, nil
+	}
+	return command.Item{}, s.cdr, ErrNotFound
+}
+
+// AutoEscalate stands in for a watch officer: it confirms the highest-scoring
+// unreviewed P1/P2 item at its model tier and sends it to the commander.
+func (s *Store) AutoEscalate() (command.Item, int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	best := -1
+	for i, item := range s.items {
+		if item.Reviewed || item.Dismissed || item.Sent || item.Decision != "" || item.Tier > 2 {
+			continue
+		}
+		if best < 0 || item.Central > s.items[best].Central {
+			best = i
+		}
+	}
+	if best < 0 {
+		return command.Item{}, s.cdr, false
+	}
+	item := &s.items[best]
+	now := time.Now()
+	item.Manual, item.Reviewed, item.Sent, item.SentAt = item.Tier, true, true, &now
+	s.cdr++
+	command.Rescore(item, s.model, s.directives)
+	return cloneItem(*item), s.cdr, true
+}
+
+func oldestIndex(items []command.Item, eligible func(command.Item) bool) int {
+	oldest := -1
+	for i, item := range items {
+		if eligible(item) && (oldest < 0 || item.TS.Before(items[oldest].TS)) {
+			oldest = i
+		}
+	}
+	return oldest
 }
 
 func (s *Store) GetItem(id string) (command.Item, bool) {
