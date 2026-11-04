@@ -36,7 +36,7 @@ def load_detector(name="IDEA-Research/grounding-dino-base", device="cuda"):
 
 
 @torch.no_grad()
-def detect(proc, model, img_bgr, device, box_thr=0.25, text_thr=0.2):
+def detect(proc, model, img_bgr, device, box_thr=0.2, text_thr=0.15):
     rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     text = ". ".join(PROMPT_CLASSES) + "."
     inputs = proc(images=rgb, text=text, return_tensors="pt").to(device)
@@ -65,8 +65,9 @@ def detect(proc, model, img_bgr, device, box_thr=0.25, text_thr=0.2):
 def make_tracker(fps):
     from boxmot import BotSort, BotSortConfig
 
-    cfg = BotSortConfig(track_high_thresh=0.35, track_low_thresh=0.1, new_track_thresh=0.4,
-                        max_lost_frames=int(6 * fps), match_thresh=0.8, det_thresh=0.2, use_cmc=True)
+    # low thresholds: far/tiny vessels score 0.2-0.35 with Grounding DINO; QA removes the FPs
+    cfg = BotSortConfig(track_high_thresh=0.22, track_low_thresh=0.08, new_track_thresh=0.25,
+                        max_lost_frames=int(6 * fps), match_thresh=0.8, det_thresh=0.1, use_cmc=True)
     return BotSort(cfg)
 
 
@@ -185,7 +186,7 @@ def label_sequence(seq_dir: Path, proc, model, device, args):
         "label_source": "teacher",
         "method": {"detector": args.detector, "box_thr": args.box_thr, "text_thr": args.text_thr,
                    "tracker": "boxmot BoT-SORT + ReID (default encoder)", "min_hits": args.min_hits,
-                   "max_gap_s": args.max_gap_s, "conf_field": "1=detected, 0=interpolated"},
+                   "max_gap_s": args.max_gap_s, "visibility_field": "1.0=detected, 0.5=interpolated (conf=1 for both)"},
     }, indent=1))
     if gt_rows:
         contact_sheets(seq_dir, gt_rows, shape)
