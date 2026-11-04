@@ -44,7 +44,7 @@ function flags(it){
 }
 function boxes(it){
  return it.dets.map((d,i)=>{const s=(it.det[i]||{}).s||0,b=d.b,c=s>=.6?'hi':s>=.3?'md':'lo';
-  return`<div class="box ${c}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%"><em>${esc(lab(d.cls))} ${Math.round(d.conf*100)}%</em></div>`}).join('');
+  return`<div class="box ${c}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%"><em>${esc(lab(d.cls))} ${Math.round(d.conf*100)}%</em></div>`}).join('');
 }
 
 function renderKpis(){

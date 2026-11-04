@@ -259,3 +259,5 @@ nav a{flex:none}
 @media(max-width:520px){.kb{flex-basis:calc(50% - 6px)}.rvsug .tier{font-size:20px}.wb-grid{grid-template-columns:minmax(0,1fr)}.wb-counts{grid-template-columns:repeat(2,1fr)}.seg button{padding-left:6px;padding-right:6px}}
 @media(max-height:640px){.rvkeys{padding-top:6px;padding-bottom:8px}.kb{min-height:48px}}
 @media(max-width:900px){.logo>div{display:none}}
+.box.r em{left:auto;right:-1.5px;border-radius:2px 2px 0 0}.box.t em{bottom:auto;top:100%;border-radius:0 0 2px 2px}
+.rvframe .box.r em{right:-2.5px}
