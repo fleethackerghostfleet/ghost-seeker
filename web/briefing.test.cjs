@@ -43,6 +43,12 @@ test('maximum analyst text shrinks rather than truncating the data',()=>{
   assert(e);assert(Math.ceil(value.length/(e.w/e.size))*e.size*1.15<=e.h);
  }
 });
+test('many short analyst lines reflow without losing notes',()=>{
+ const d=draft();d.assessment=Array.from({length:10},(_,i)=>'Note '+i).join('\n');
+ const e=B.scenes(d)[0].find(e=>e.value?.startsWith('Note 0'));
+ assert.equal(e.value,d.assessment.replace(/\s+/g,' '));
+ assert(Math.ceil(e.value.length/(e.w/e.size))*e.size*1.15<=e.h);
+});
 test('real bundled PowerPoint writer produces editable text and embedded imagery',async()=>{
  const context=vm.createContext({console,setTimeout,clearTimeout,Uint8Array,ArrayBuffer,TextEncoder,TextDecoder});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'static/pptxgen.bundle.js'),'utf8'),context);

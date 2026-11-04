@@ -20,6 +20,7 @@
    const elements=[];
    const text=(value,x,y,w,h,size=16,color='172E40',bold=false)=>{
     value=String(value);
+    if(value.split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil(line.length/(w/9))),0)*9*1.15>h)value=value.replace(/\s+/g,' ').trim();
     // Conservative character width keeps long analyst text inside the shared geometry.
     while(size>9&&value.split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil(line.length/(w/size))),0)*size*1.15>h)size--;
     elements.push({type:'text',value,x,y,w,h,size,color,bold});
