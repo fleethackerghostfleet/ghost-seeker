@@ -77,7 +77,7 @@ func ScoreDet(d Detection, rules []Rule, model string, opticalNight ...bool) Det
 			w *= .6
 		}
 	}
-	signal := gateLightSignal(d.Lights, d.Signal)
+	signal := gateLightSignal(d.Lights, d.Box, d.Signal)
 	light := len(opticalNight) > 0 && opticalNight[0] && signal != nil && signal.Boost > 0
 	if light {
 		w = 1 - (1-w)*(1-min(1, max(0, signal.Boost)))
@@ -160,7 +160,7 @@ func RescoreAt(item *Item, model string, directives []Directive, now time.Time) 
 	eligible := OpticalNight(item)
 	if eligible {
 		for i := range item.Dets {
-			item.Dets[i].Signal = gateLightSignal(item.Dets[i].Lights, item.Dets[i].Signal)
+			item.Dets[i].Signal = gateLightSignal(item.Dets[i].Lights, item.Dets[i].Box, item.Dets[i].Signal)
 		}
 	}
 	if !eligible {

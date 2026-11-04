@@ -28,7 +28,27 @@ type LightSignal struct {
 	ConfidenceNote string  `json:"confidenceNote,omitempty"`
 }
 
-func gateLightSignal(lights []Light, signal *LightSignal) *LightSignal {
+func gateLightSignal(lights []Light, box Box, signal *LightSignal) *LightSignal {
+	if signal == nil {
+		return nil
+	}
+	external := ""
+	if signal.Assisted {
+		for _, rule := range catalog.LightRules {
+			if rule.ID == signal.RuleID {
+				external = rule.Pattern.Signal
+				break
+			}
+		}
+	}
+	current := InterpretLights(lights, box, external)
+	if current == nil || current.RuleID != signal.RuleID {
+		return nil
+	}
+	return current
+}
+
+func completeLightSignal(lights []Light, signal *LightSignal) *LightSignal {
 	if signal == nil {
 		return nil
 	}
@@ -164,7 +184,7 @@ func InterpretLights(lights []Light, box Box, signal string) *LightSignal {
 			matched = slices.ContainsFunc(lights, func(p Light) bool { return p.Flashing == *rule.Flashing })
 		}
 		if matched {
-			return gateLightSignal(lights, &LightSignal{RuleID: rule.ID, Line: rule.Line, Meaning: rule.Meaning, Ref: rule.Ref, Severity: rule.Severity, Aspect: aspect, Boost: rule.Boost, Assisted: signal != ""})
+			return completeLightSignal(lights, &LightSignal{RuleID: rule.ID, Line: rule.Line, Meaning: rule.Meaning, Ref: rule.Ref, Severity: rule.Severity, Aspect: aspect, Boost: rule.Boost, Assisted: signal != ""})
 		}
 	}
 	return nil

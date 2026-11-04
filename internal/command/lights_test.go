@@ -104,6 +104,23 @@ func TestNightLightScoringGate(t *testing.T) {
 
 func boolPointer(value bool) *bool { return &value }
 
+func TestStaleNUCGeometryCannotBoost(t *testing.T) {
+	box := Box{W: 200, H: 150}
+	lights := []Light{{Colour: "red", X: 20, Y: 40}, {Colour: "red", X: 180, Y: 40}}
+	if InterpretLights(lights, box, "") != nil {
+		t.Fatal("horizontal reds should not match a vertical NUC pattern")
+	}
+	det := Detection{Class: "small boat", Box: box, Conf: 1, Lights: lights, Signal: &LightSignal{RuleID: "nuc", Boost: .9}}
+	if ScoreDet(det, nil, "maritime", true).Light {
+		t.Fatal("stale NUC boosted horizontally separated reds")
+	}
+	item := Item{SourceID: "EO-P7", Night: boolPointer(true), Dets: []Detection{det}}
+	RescoreAt(&item, "maritime", nil, time.Now())
+	if item.Det[0].Light || item.Dets[0].Signal != nil {
+		t.Fatal("rescore retained geometrically invalid NUC")
+	}
+}
+
 func TestExtraLightsCannotBoost(t *testing.T) {
 	box := Box{W: 200, H: 150}
 	stack := []Light{{Colour: "red", X: 100, Y: 30}, {Colour: "red", X: 100, Y: 60}}
