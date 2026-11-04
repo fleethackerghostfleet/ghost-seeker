@@ -155,8 +155,17 @@ func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Captu
 	}
 	payloads[pb.FormKind_FORM_KIND_FACT] = fact.FromItem(it).Marshal()
 	for k, data := range payloads {
-		if _, err := g.st.ReplaceForm(ctx, it.Id, k, data); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		nf, err := g.st.ReplaceForm(ctx, it.Id, k, data)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
 			return nil, fmt.Errorf("replace %s: %w", k, err)
+		}
+		for i, f := range it.Forms {
+			if f.Kind == k {
+				it.Forms[i] = nf
+			}
 		}
 	}
 	if err := g.st.UpdateItem(ctx, it); err != nil {

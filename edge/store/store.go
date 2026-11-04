@@ -409,7 +409,28 @@ func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind
 		len(data), h, mime, itemID, int(kind)); err != nil {
 		return nil, err
 	}
-	return &pb.Form{Kind: kind, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true}, nil
+	f := &pb.Form{Kind: kind, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true}
+	return f, s.syncItemForm(ctx, itemID, f)
+}
+
+// syncItemForm keeps the item blob's copy of a form in step with the forms
+// table, so item APIs advertise the bytes, hash and Mime actually sent.
+func (s *Store) syncItemForm(ctx context.Context, itemID string, f *pb.Form) error {
+	var raw []byte
+	if err := s.db.QueryRowContext(ctx, `SELECT item FROM items WHERE id=?`, itemID).Scan(&raw); err != nil {
+		return err
+	}
+	it := &pb.Item{}
+	if err := proto.Unmarshal(raw, it); err != nil {
+		return err
+	}
+	for i, o := range it.Forms {
+		if o.Kind == f.Kind {
+			it.Forms[i] = f
+			return s.UpdateItem(ctx, it)
+		}
+	}
+	return nil
 }
 
 // SetAcked records shore's contiguous receipt of a form.
@@ -463,10 +484,6 @@ func (s *Store) RestoreOriginal(ctx context.Context, itemID string) (bool, error
 		return false, err
 	}
 	if _, err := s.ReplaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data); err != nil {
-		return false, err
-	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET mime=? WHERE item_id=? AND kind=?`,
-		mimeFor(pb.FormKind_FORM_KIND_FULL, pb.ItemType_ITEM_TYPE_IMAGE, data), itemID, int(pb.FormKind_FORM_KIND_FULL)); err != nil {
 		return false, err
 	}
 	return true, os.Remove(s.originalPath(itemID))

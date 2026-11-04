@@ -52,4 +52,7 @@ func TestReplaceFormRelabelsMime(t *testing.T) {
 	if err != nil || row.Form(pb.FormKind_FORM_KIND_FULL).Mime != "image/png" {
 		t.Fatalf("stored mime: %+v %v", row.Form(pb.FormKind_FORM_KIND_FULL), err)
 	}
+	if fs := row.Item.Forms; len(fs) != 1 || fs[0].Mime != "image/png" || fs[0].ContentHash != f.ContentHash || fs[0].Bytes != int64(len(png)) {
+		t.Fatalf("item blob forms not updated: %v", fs)
+	}
 }
