@@ -220,33 +220,41 @@ def labels(args):
             }
             frames[(seq_dir.name, frame)] = record
             groups.setdefault(stratum, []).append((seq_dir.name, frame))
-    rng = np.random.default_rng(0)
-    selected = []
-    for stratum in sorted(groups):
-        members = groups[stratum]
-        count = min(len(members), max(2, math.ceil(len(members) * 0.10)))
-        indexes = rng.choice(len(members), size=count, replace=False)
-        selected.extend((members[int(index)], stratum) for index in indexes)
-    if len(selected) > 130:
-        selected = sorted(selected, key=lambda item: rng.random())[:130]
-    selected.sort(key=lambda item: item[0])
     sample_path = root / "qa_sample.csv"
-    with sample_path.open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(
-            stream, fieldnames=("seq_id", "frame", "stratum", "n_boxes", "verdict", "notes")
-        )
-        writer.writeheader()
-        for (seq_id, frame), stratum in selected:
-            writer.writerow(
-                {
-                    "seq_id": seq_id,
-                    "frame": frame,
-                    "stratum": stratum,
-                    "n_boxes": len(frames[(seq_id, frame)]["boxes"]),
-                    "verdict": "",
-                    "notes": "",
-                }
+    selected = []
+    if sample_path.exists():
+        with sample_path.open(encoding="utf-8", newline="") as stream:
+            for row in csv.DictReader(stream):
+                key = row["seq_id"], int(row["frame"])
+                if key not in frames:
+                    raise ValueError(f"QA sample frame is missing from the set: {key}")
+                selected.append((key, row["stratum"]))
+    else:
+        rng = np.random.default_rng(0)
+        for stratum in sorted(groups):
+            members = groups[stratum]
+            count = min(len(members), max(2, math.ceil(len(members) * 0.10)))
+            indexes = rng.choice(len(members), size=count, replace=False)
+            selected.extend((members[int(index)], stratum) for index in indexes)
+        if len(selected) > 130:
+            selected = sorted(selected, key=lambda item: rng.random())[:130]
+        selected.sort(key=lambda item: item[0])
+        with sample_path.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(
+                stream, fieldnames=("seq_id", "frame", "stratum", "n_boxes", "verdict", "notes")
             )
+            writer.writeheader()
+            for (seq_id, frame), stratum in selected:
+                writer.writerow(
+                    {
+                        "seq_id": seq_id,
+                        "frame": frame,
+                        "stratum": stratum,
+                        "n_boxes": len(frames[(seq_id, frame)]["boxes"]),
+                        "verdict": "",
+                        "notes": "",
+                    }
+                )
 
     colors = [
         (0, 220, 255), (0, 165, 255), (0, 255, 100), (255, 180, 0), (255, 0, 200),
@@ -260,8 +268,14 @@ def labels(args):
         if image is None:
             raise FileNotFoundError(image_path)
         original_h, original_w = image.shape[:2]
-        scale = 640 / original_w
-        display = cv2.resize(image, (640, max(1, round(original_h * scale))))
+        scale = min(640 / original_w, 360 / original_h)
+        display_w = max(1, round(original_w * scale))
+        display_h = max(1, round(original_h * scale))
+        resized = cv2.resize(image, (display_w, display_h))
+        x_offset = (640 - display_w) // 2
+        y_offset = (360 - display_h) // 2
+        display = np.full((360, 640, 3), 28, np.uint8)
+        display[y_offset : y_offset + display_h, x_offset : x_offset + display_w] = resized
         insets = []
         for fields in record["boxes"]:
             frame, track_id = int(fields[0]), int(fields[1])
@@ -281,8 +295,9 @@ def labels(args):
             )
             tag_text = f" {tags}" if tags else ""
             color = colors[(class_id - 1) % len(colors)]
-            x1, y1 = round(x * scale), round(y * scale)
-            x2, y2 = round((x + width) * scale), round((y + height) * scale)
+            x1, y1 = x_offset + round(x * scale), y_offset + round(y * scale)
+            x2 = x_offset + round((x + width) * scale)
+            y2 = y_offset + round((y + height) * scale)
             cv2.rectangle(display, (x1, y1), (x2, y2), color, 2)
             cv2.putText(
                 display,
@@ -294,7 +309,7 @@ def labels(args):
                 1,
                 cv2.LINE_AA,
             )
-            if min(width, height) < 32:
+            if min(width, height) < 32 and len(insets) < 8:
                 side = max(24, round(max(width, height) * 1.25))
                 cx, cy = x + width / 2, y + height / 2
                 crop_x1 = max(0, round(cx - side / 2))
@@ -311,30 +326,32 @@ def labels(args):
                     insets.append((track_id, zoom, color))
         inset_cells = []
         for track_id, crop, color in insets:
-            patch = np.full((136, 156, 3), 32, np.uint8)
+            patch = np.full((64, 156, 3), 32, np.uint8)
             height, width = crop.shape[:2]
-            factor = min(148 / width, 108 / height, 1.0)
+            factor = min(148 / width, 40 / height, 1.0)
             resized = cv2.resize(crop, (max(1, round(width * factor)), max(1, round(height * factor))))
-            y_offset = 2 + (108 - resized.shape[0]) // 2
+            y_offset = 2 + (42 - resized.shape[0]) // 2
             x_offset = 4 + (148 - resized.shape[1]) // 2
             patch[y_offset : y_offset + resized.shape[0], x_offset : x_offset + resized.shape[1]] = resized
-            cv2.rectangle(patch, (0, 0), (155, 135), color, 2)
+            cv2.rectangle(patch, (0, 0), (155, 63), color, 2)
             cv2.putText(
-                patch, f"id {track_id} 4x", (4, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.38,
+                patch, f"id {track_id} 4x", (4, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.32,
                 (255, 255, 255), 1, cv2.LINE_AA
             )
             inset_cells.append(patch)
-        inset_rows = math.ceil(len(inset_cells) / 4) if inset_cells else 0
-        tile = np.full((display.shape[0] + inset_rows * 136 + 26, 640, 3), 28, np.uint8)
+        inset_strip_height = 136
+        tile = np.full((display.shape[0] + inset_strip_height + 26, 640, 3), 28, np.uint8)
         tile[: display.shape[0], :] = display
         for index, patch in enumerate(inset_cells):
             row, col = divmod(index, 4)
-            y_offset = display.shape[0] + row * 136
+            y_offset = display.shape[0] + row * 68
             x_offset = col * 160
-            tile[y_offset : y_offset + 136, x_offset : x_offset + 156] = patch
+            tile[y_offset : y_offset + 64, x_offset : x_offset + 156] = patch
+        luma = record["luma"]
+        luma_text = f"{luma:.1f}" if luma is not None else "unknown"
         caption = (
             f"{record['seq_id']} f{record['frame']} night={str(record['night']).lower()} "
-            f"luma={record['luma'] if record['luma'] is not None else 'unknown'}"
+            f"luma={luma_text}"
         )
         cv2.putText(
             tile, caption[:100], (4, tile.shape[0] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.42,
@@ -358,7 +375,7 @@ def labels(args):
         while len(cells) < 9:
             cells.append(np.full_like(cells[0], 28))
         sheet = np.vstack([np.hstack(cells[row : row + 3]) for row in range(0, 9, 3)])
-        path = output_dir / f"sheet_{sheet_index + 1:02d}.jpg"
+        path = output_dir / f"{args.sheet_prefix}{sheet_index + 1:02d}.jpg"
         cv2.imwrite(str(path), sheet, [cv2.IMWRITE_JPEG_QUALITY, 85])
         print(path)
     print(f"sample: {sample_path} ({len(selected)} frames)")
@@ -389,6 +406,7 @@ def main():
     c.set_defaults(fn=clips)
     l = sub.add_parser("labels")
     l.add_argument("--root", required=True, help="MOT set root")
+    l.add_argument("--sheet-prefix", default="sheet_")
     l.set_defaults(fn=labels)
     args = ap.parse_args()
     args.fn(args)

@@ -135,7 +135,7 @@ def sequence_frame_count(seq_dir: Path) -> int:
     return int(parser["Sequence"]["seqLength"])
 
 
-def run(root: Path) -> dict[str, Any]:
+def run(root: Path, stride_override: int | None = None) -> dict[str, Any]:
     sequences = sorted(path for path in root.iterdir() if (path / "seqinfo.ini").exists())
     total_frames = sum(sequence_frame_count(path) for path in sequences)
     processor, model, torch = load_model()
@@ -152,10 +152,10 @@ def run(root: Path) -> dict[str, Any]:
         timings.append(time.monotonic() - start)
     average = sum(timings) / len(timings)
     estimate_seconds = average * total_frames
-    stride = 2 if estimate_seconds > 90 * 60 else 1
+    stride = stride_override or (2 if estimate_seconds > 90 * 60 else 1)
     print(
         f"OWLv2 CPU estimate: {estimate_seconds / 60:.1f} min for {total_frames} frames; "
-        f"using stride={stride}"
+        f"using stride={stride}; selected-run estimate={estimate_seconds / 60 / stride:.1f} min"
     )
     summaries = {}
     for seq_dir in sequences:
@@ -191,6 +191,7 @@ def run(root: Path) -> dict[str, Any]:
             "score_threshold": 0.2,
             "prompts": prompts,
             "full_run_eta_minutes": estimate_seconds / 60,
+            "selected_run_eta_minutes": estimate_seconds / 60 / stride,
         }
         (teacher_dir / "owlv2_meta.json").write_text(json.dumps(metadata, indent=2) + "\n")
         result = compare(read_gemini(seq_dir), by_frame)
@@ -200,7 +201,13 @@ def run(root: Path) -> dict[str, Any]:
             f"owlv2_unmatched={result['owlv2_boxes_without_gemini_match_fraction']} "
             f"frames={result['frames_compared']}"
         )
-    summary = {"model": MODEL, "device": "cpu", "stride": stride, "sequences": summaries}
+    summary = {
+        "model": MODEL,
+        "device": "cpu",
+        "stride": stride,
+        "stride_override": stride_override,
+        "sequences": summaries,
+    }
     (root / "owlv2_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary
 
@@ -208,8 +215,9 @@ def run(root: Path) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path("~/eval/ghost_fleet_r2_1fps").expanduser())
+    parser.add_argument("--stride", type=int, choices=(1, 2, 3), default=None)
     args = parser.parse_args()
-    run(args.root.expanduser())
+    run(args.root.expanduser(), args.stride)
 
 
 if __name__ == "__main__":

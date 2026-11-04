@@ -2,10 +2,17 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from autolabel_gemini import box_2d_to_xywh
+from autolabel_gemini import (
+    box_2d_to_xywh,
+    crop_verifier_box,
+    filter_frame_runaway,
+    filter_repeated_boxes,
+)
 from qa_apply import apply, rewrite_attrs
 
 
@@ -24,6 +31,41 @@ def test_box_2d_to_xywh_scales_and_clips():
     ]
     assert box_2d_to_xywh([100, 100, 102, 102], 1000, 500) is None
     assert box_2d_to_xywh([0, 0, 1000, 700], 1000, 500) is None
+
+
+def test_f2_drops_all_boxes_for_runaway_raw_frame():
+    detections = [{"box": [0, 0, 4, 4]}]
+    kept, dropped = filter_frame_runaway([{}] * 24, detections)
+    assert kept == detections
+    assert dropped is False
+    kept, dropped = filter_frame_runaway([{}] * 25, detections)
+    assert kept == []
+    assert dropped is True
+
+
+def test_f1_drops_only_connected_components_of_six_or_more():
+    detections = [
+        {"box": [0, center - 5, 3, 10]} for center in range(20, 26)
+    ] + [
+        {"box": [20, center - 5, 3, 10]} for center in range(50, 55)
+    ] + [{"box": [40, 85, 10, 30]}]
+    kept, dropped = filter_repeated_boxes(detections, 100)
+    assert dropped == 6
+    assert len(kept) == 6
+    assert kept == detections[6:]
+
+
+def test_verifier_crop_expands_clips_and_upscales():
+    image = np.zeros((100, 200, 3), dtype=np.uint8)
+    crop, bounds = crop_verifier_box(image, [0, 0, 10, 20])
+    assert bounds == (0, 0, 64, 64)
+    assert crop.shape == (256, 256, 3)
+    assert crop[0, 0].tolist() == [0, 0, 255]
+
+    larger_image = np.zeros((400, 400, 3), dtype=np.uint8)
+    crop, bounds = crop_verifier_box(larger_image, [100, 120, 40, 60])
+    assert bounds == (80, 90, 160, 210)
+    assert crop.shape == (384, 256, 3)
 
 
 def _make_sequence(tmp_path):
