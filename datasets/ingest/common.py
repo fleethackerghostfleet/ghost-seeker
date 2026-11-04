@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import io
 import json
 import os
 import random
@@ -76,15 +77,59 @@ def image_size(path):
 
 
 def convert_to_jpeg(source, destination):
-    source = Path(source)
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(source, (bytes, bytearray, memoryview)):
+        source_bytes = bytes(source)
+        with Image.open(io.BytesIO(source_bytes)) as image:
+            if image.format == "JPEG":
+                destination.write_bytes(source_bytes)
+            else:
+                image.convert("RGB").save(destination, format="JPEG", quality=95)
+        return destination
+
+    source = Path(source)
     with Image.open(source) as image:
-        if image.format == "JPEG" and source.suffix.lower() in (".jpg", ".jpeg"):
+        if image.format == "JPEG":
             shutil.copyfile(source, destination)
         else:
             image.convert("RGB").save(destination, format="JPEG", quality=95)
     return destination
+
+
+def load_yolo_boxes(label_path, classes, width, height):
+    label_path = Path(label_path)
+    annotations = []
+    if not label_path.exists():
+        return annotations
+    for line_number, line in enumerate(
+        label_path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        values = line.split()
+        if len(values) != 5:
+            raise ValueError(f"Invalid YOLO row at {label_path}:{line_number}")
+        class_id = int(values[0])
+        if class_id < 0 or class_id >= len(classes):
+            raise ValueError(f"Unknown class id {class_id} in {label_path}")
+        center_x, center_y, box_width, box_height = map(float, values[1:])
+        annotations.append(
+            {
+                "label": classes[class_id],
+                "label_norm": None,
+                "box": [
+                    (center_x - box_width / 2) * width,
+                    (center_y - box_height / 2) * height,
+                    box_width * width,
+                    box_height * height,
+                ],
+                "conf": 1.0,
+                "source": "gt",
+                "attrs": json.dumps(
+                    {"class_id": class_id}, separators=(",", ":"), ensure_ascii=False
+                ),
+            }
+        )
+    return annotations
 
 
 def gcs_uri(path):

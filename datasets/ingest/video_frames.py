@@ -167,7 +167,9 @@ def catalog_frame_set(name, frames_uri, metadata, source_revision):
                 source_type_from_url(source_url) if has_metadata else "repo"
             ),
             "source_url": source_url,
-            "source_revision": None if has_metadata else source_revision,
+            "source_revision": (
+                metadata.get("youtube_id") if has_metadata else source_revision
+            ),
             "license": (
                 metadata.get("license") or "unknown" if has_metadata else "unknown"
             ),

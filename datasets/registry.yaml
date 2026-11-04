@@ -21,14 +21,16 @@
   status: ingested
 - dataset_id: singapore_maritime
   name: Singapore Maritime Dataset
+  hf_repo: ARG-NCTU/Singapore_Maritime_Dataset_coco
   source_type: huggingface
   source_url: https://huggingface.co/datasets/ARG-NCTU/Singapore_Maritime_Dataset_coco
   license: unknown
-  viewpoint: aerial
+  viewpoint: surface
   modality: rgb
   synthetic: false
-  ingest_script: datasets/ingest/hf_generic.py
-  status: planned
+  annotation_format: hf-parquet image+objects (bbox_xywh px)
+  ingest_script: datasets/ingest/hf_dataset.py
+  status: ingested
 - dataset_id: mvtd
   name: Maritime Visual Tracking Dataset
   source_type: huggingface

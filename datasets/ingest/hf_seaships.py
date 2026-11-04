@@ -1,7 +1,5 @@
-import json
 import random
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -10,11 +8,11 @@ from huggingface_hub import snapshot_download
 from PIL import Image, ImageDraw
 
 from common import (
-    GCLOUD,
     ensure_raw_matches_or_upload,
     gcs_uri,
     convert_to_jpeg,
     image_size,
+    load_yolo_boxes,
     sha256_file,
     upload_directory,
     utc_timestamp,
@@ -35,40 +33,6 @@ def load_classes(data_yaml):
     if isinstance(names, dict):
         return [names[index] for index in sorted(names, key=lambda value: int(value))]
     return names
-
-
-def load_yolo_boxes(label_path, classes, width, height):
-    annotations = []
-    if not label_path.exists():
-        return annotations
-    for line_number, line in enumerate(
-        label_path.read_text(encoding="utf-8").splitlines(), start=1
-    ):
-        values = line.split()
-        if len(values) != 5:
-            raise ValueError(f"Invalid YOLO row at {label_path}:{line_number}")
-        class_id = int(values[0])
-        if class_id < 0 or class_id >= len(classes):
-            raise ValueError(f"Unknown class id {class_id} in {label_path}")
-        center_x, center_y, box_width, box_height = map(float, values[1:])
-        annotations.append(
-            {
-                "label": classes[class_id],
-                "label_norm": None,
-                "box": [
-                    (center_x - box_width / 2) * width,
-                    (center_y - box_height / 2) * height,
-                    box_width * width,
-                    box_height * height,
-                ],
-                "conf": 1.0,
-                "source": "gt",
-                "attrs": json.dumps(
-                    {"class_id": class_id}, separators=(",", ":"), ensure_ascii=False
-                ),
-            }
-        )
-    return annotations
 
 
 def save_overlays(samples, output_dir):
@@ -227,20 +191,6 @@ def main():
             random.SystemRandom().sample(image_annotation_pairs, 3),
             Path.home() / "verify",
         )
-
-
-def list_remote_prefix(uri):
-    result = subprocess.run(
-        [GCLOUD, "storage", "ls", uri],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode:
-        if "matched no objects" in result.stderr or "No URLs matched" in result.stderr:
-            return []
-        raise RuntimeError(f"Could not inspect {uri}: {result.stderr.strip()}")
-    return result.stdout.splitlines()
 
 
 if __name__ == "__main__":
