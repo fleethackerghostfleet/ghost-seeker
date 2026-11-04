@@ -490,7 +490,11 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 		c := ToCard(v)
 		for _, l := range suppressLabels {
 			// Mirrors edge/scoring: a negative interest never suppresses an unknown.
-			if c.Unknownness < unknownThreshold && (strings.EqualFold(l, c.Label) || (c.Override != "" && strings.EqualFold(l, c.Override))) {
+			if c.Unknownness >= unknownThreshold {
+				continue
+			}
+			// Detector class, operator override or the sidecar's zero-shot subtype.
+			if strings.EqualFold(l, c.Label) || (c.Override != "" && strings.EqualFold(l, c.Override)) || strings.EqualFold(l, c.Tags["subtype"]) {
 				c.Suppressed = true
 			}
 		}

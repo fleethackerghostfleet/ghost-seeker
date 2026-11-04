@@ -99,11 +99,20 @@ are local to the browser (localStorage).
 | t | do | say |
 |---|---|---|
 | 0:00 | Stack already running, link preset **2 Mbps**, feed tab. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." Point at the strip: items on edge vs shore are equal, every card has a crop/thumb. |
-| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." The edge's estimator needs ~30–60 s to re-learn the link (watch "edge estimates" in the strip fall from Mbps to ~10 kbps); then the edge queue grows while *new objects still appear* as cards: fact first (text card), then the crop. Form chips go pending → received. |
+| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." The edge's estimator needs ~100 s to re-learn the link (strip: "edge estimates … · re-learning: n failed exchanges", 4 failures from 2 Mbps); then the edge queue keeps growing (object-free frames, see caveat) while *new sightings still land* as cards. A sighting is ~5–10 KB (fact + thumb + crop + full of the key crop), so one arrives per ~5–10 s of link time. |
 | 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card with its crop, the zero-shot subtype, and we know exactly which forms have landed; 'duplicate frames folded on the edge' in the strip is what we did *not* send. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
-| 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed), submarines keep arriving. Policy text shows in the strip. |
-| 2:15 | On a submarine card click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. |
-| 2:45 | Click **2 Mbps**; switch to **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
+| 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed; matched on the sidecar subtype, the detector class or an operator override), submarines keep arriving. Policy text shows in the strip. Cards the edge flagged *unknown* are never suppressed (same rule as `edge/scoring`), so a low-confidence "Cargo Ship (Unknown)" stays — say so, it is the point of the unknown gate. |
+| 2:15 | On a card whose FULL chip is still pending click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. With the current edge a sighting ships thumb + crop + full of the key crop together, so at 9.6 kbps the button is usually already "full received" by the time the card appears; the pull path is live for anything still pending (e.g. an object-free frame with "sightings only" unticked). |
+| 2:45 | Click **2 Mbps**; switch to **Review queue** / **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
+
+Dry run (2026-11-04, real sidecar, 8-core laptop-class VM): the three clips replay **interleaved** (same
+frame names, so `edge/ingest` sorts them together) and the sidecar tracks them as three sources; the
+whole replay is 1270 frames = 254 s, so start the script within a minute of `make demo-edge`. Over
+the run the sidecar reported 20+ sightings (subtypes: submarine, marine mammal, cargo ship, tanker,
+buoy, coast guard) and folded ~650 duplicate frames; every sighting had a crop on shore within one
+exchange at 9.6 kbps once the estimator had settled. Right after a drop the estimator oscillates once
+(a successful small exchange bumps it back toward half the last good rate, the next exchange fails,
+it quarters again) — expect one more "re-learning: 1 failed exchange" ~30 s after the first recovery.
 
 Reset between runs: `rm -rf data/ && ` restart the three processes (the browser's
 confirm/dismiss state is in localStorage: DevTools → Application → Clear).

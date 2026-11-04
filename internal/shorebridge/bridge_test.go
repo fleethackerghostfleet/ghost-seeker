@@ -49,6 +49,9 @@ func TestGroupBySighting(t *testing.T) {
 	if objs[0].Priority != "P4" || objs[1].Priority != "P1" || objs[1].Best.Priority != "P1" {
 		t.Fatalf("tiers: suppressed=%s unknown=%s", objs[0].Priority, objs[1].Priority)
 	}
+	if objs, _ := Group(views, []string{"ssbn"}, nil); !objs[0].Suppressed {
+		t.Fatal("suppress list should also match the sidecar subtype tag")
+	}
 	objs, _ = Group(views, nil, nil)
 	if objs[0].Priority != "P1" || objs[1].Priority != "P4" {
 		t.Fatalf("rank tiers: %s %s", objs[0].Priority, objs[1].Priority)
