@@ -21,7 +21,7 @@ grades are explicit:
 | 4 | **Baseline tracker = ByteTrack (no appearance) with BoT-SORT-style camera motion compensation; add appearance (embedding) only in the aggregator's re-link step, not in per-frame association.** ByteTrack's two-stage association on *all* boxes is what suppresses the fragmented tracks that become duplicate sightings; OC-SORT's observation-centric re-update fixes drift during gaps; BoT-SORT's GMC (sparse optical flow / ECC) handles platform motion. All three are in `boxmot`. | C | ByteTrack [11] [read], OC-SORT [12] [read], BoT-SORT [13] [read]; §3.1 |
 | 5 | **Stabilise around the horizon before tracking on ship-mounted cameras.** Horizon detection + roll/pitch correction is the standard trick in maritime tracking from moving platforms and is far cheaper than full image registration. | C, A | Fefilatyev & Goldgof [16] [recalled], Prasad et al. survey [22] [read]; §3.2 |
 | 6 | **Best key frame = argmax of a cheap quality score (detector confidence × box area × sharpness × distance from image border), not just detector confidence.** Face/person "best shot" literature (QAN, SER-FIQ, MagFace) shows set-level recognition improves when frames are weighted by a learned quality that correlates with blur/size/occlusion; a hand-built proxy captures most of it. | C | QAN [17], SER-FIQ [18], MagFace [19] [recalled]; §3.3 |
-| 7 | **Report `Frag` (fragmentations) and IDSW from TrackEval alongside HOTA/IDF1; our "duplicates per object" is `Frag` at the sighting layer.** Also report HOTA at a low localisation threshold (α=0.3) since far vessels have tiny boxes. | C, A | CLEAR MOT [14], HOTA [15] [read]; §3.4 |
+| 7 | **Report `Frag` (fragmentations) and IDSW from TrackEval alongside HOTA/IDF1; `Frag` is the track-layer leading indicator of "duplicates per object" (a fragmented track becomes a duplicate sighting unless re-linked), though not the same number: the aggregator can also duplicate from a continuous track.** Also report HOTA at a low localisation threshold (α=0.3) since far vessels have tiny boxes. | C, A | CLEAR MOT [14], HOTA [15] [read]; §3.4 |
 | 8 | **Benchmark detectors class-agnostically ("vessel") and bucket by box area; expect zero-shot COCO detectors to be fine on near/large vessels and to collapse on <32² px.** ABOships measured exactly this for COCO-pretrained detectors; SAHI tiling recovers +5–7 AP for small objects with no fine-tuning. Tile **only a horizon band** to keep CPU cost flat. | B, D | ABOships [25] [read], SAHI [28] [read]; §4 |
 | 9 | **CPU detector candidates, in order: YOLO11n/YOLO26n (≈40 mAP, ~2.5 M params) → D-FINE-N (42.8 AP) → YOLO-World-S only if open-vocab is needed at the detector. RT-DETR-R18 is too heavy for 4 threads at ≥2 FPS.** Expect ~2–3× speed-up from OpenVINO INT8 via NNCF PTQ at <1 mAP loss. | D, B | Ultralytics tables [31] [read], D-FINE [33] [read], NNCF [35] [read] ; §5 |
 | 10 | **Frame gate: Reducto-style cheap differencing (pixel/edge/area features with a per-clip calibrated threshold), target 1–5 Hz into the detector; never gate below 1 Hz because time-to-first-report is a headline metric.** | D, C | Reducto [2], Glimpse [5], FilterForward [7] [read/recalled]; §5.3 |
@@ -80,8 +80,10 @@ profiles; greedy value/byte is near-optimal when items are small relative to the
 
 1. **Diminishing returns per object.** DDS and Vigil value a region by the *new* information it adds. Multiply the
    k-th form of a sighting by a decay (e.g. 1, 0.5, 0.25, 0.1 for fact→crop→thumb→full) so bytes spread across objects
-   before upgrading one; the Go scheduler's `ladder_weight` already has this shape — reuse its weights in
-   `edgeml.select.greedy` so numbers are comparable.
+   before upgrading one. The Go scheduler's `ladderWeight` (fact 1 / thumb 0.6 / crop 0.4 / full 0.3) has this
+   shape but a **different send order** (thumb before crop) from the CONTRACTS ladder (crop before thumb). Pick one
+   order before comparing numbers — either adopt the Go order in edgeml or propose the Go side change — and make the
+   decay follow that order rather than copying the weights by form name.
 2. **Byte cap per object per window.** At the two lowest budgets forbid `full` unless `value` is very high, or one
    frame starves everything. **Implication (C):** add `ladder_decay` and `max_bytes_per_object` to the selector.
 
@@ -130,8 +132,10 @@ cosine(embedding) ≥ τ_e **and** predicted position (Kalman or horizon-relativ
 
 ### 3.5 Metrics
 HOTA [15] separates detection from association; IDF1 [14] rewards identity persistence; CLEAR MOT [14] adds
-**Frag** and IDSW. CONTRACTS "duplicates per object" is Frag at the sighting layer; "reports per object" has no
-standard analog. **Implication (C, A):** report HOTA/IDF1/MOTA/IDSW/Frag via TrackEval, plus HOTA at α=0.3 (IoU
+**Frag** and IDSW. Frag is the closest standard analog to CONTRACTS "duplicates per object" but they differ:
+Frag counts interrupted trajectories, while duplicates count extra sightings per GT object, which can also arise from
+a continuous track (e.g. an aggregator close/reopen or a label-flip reopening). Report both so the two causes can be
+separated; "reports per object" has no standard analog. **Implication (C, A):** report HOTA/IDF1/MOTA/IDSW/Frag via TrackEval, plus HOTA at α=0.3 (IoU
 thresholds tuned for pedestrians punish 10-px boxes).
 
 ---
@@ -255,7 +259,8 @@ a label flip, or a confidence jump > 0.2.
   kNN unknownness; if they rank as "unknown", the `value` bonus needs the track-age gate.
 
 Proposed contract changes (not applied here): optional `bearing_deg`, `size_class`, `aspect`, `closing` on
-`Sighting`; selector params `ladder_decay` and `max_bytes_per_object`; TrackEval `Frag` added to the tracking row.
+`Sighting`; selector params `ladder_decay` and `max_bytes_per_object`; TrackEval `Frag` added to the tracking row;
+a single form send order shared with the Go scheduler's `ladderWeight` (currently thumb before crop there).
 
 ---
 
