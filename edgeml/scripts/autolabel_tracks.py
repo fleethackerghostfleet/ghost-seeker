@@ -52,7 +52,7 @@ def detect(proc, model, img_bgr, device, box_thr=0.25, text_thr=0.2):
     dets = []
     for b, s, lab in zip(res["boxes"].cpu().numpy(), res["scores"].cpu().numpy(), labels):
         lab = str(lab).strip()
-        cls = next((CLASS_IDS[c] for c in PROMPT_CLASSES if c in lab), None)
+        cls = next((CLASS_IDS[c] for c in sorted(PROMPT_CLASSES, key=len, reverse=True) if c in lab), None)
         if cls is None:
             continue
         x1, y1, x2, y2 = (float(v) for v in b)
@@ -97,9 +97,10 @@ def postprocess(track_rows, fps, min_hits=5, max_gap_s=2.0):
                 pa, pb = np.array(frames[a][:4]), np.array(frames[b][:4])
                 for f in range(a + 1, b):
                     t = (f - a) / (b - a)
-                    frames[f] = (*(pa * (1 - t) + pb * t), 0.0)  # conf 0 marks interpolated
+                    frames[f] = (*(pa * (1 - t) + pb * t), -1.0)  # conf<0 marks interpolated (internal)
         for f, (x1, y1, x2, y2, conf) in sorted(frames.items()):
-            out.append((f, tid, x1, y1, x2 - x1, y2 - y1, 1 if conf > 0 else 0, cls, 1.0))
+            # interpolated boxes are still evaluated (conf=1); visibility=0.5 flags them for audit
+            out.append((f, tid, x1, y1, x2 - x1, y2 - y1, 1, cls, 1.0 if conf >= 0 else 0.5))
     out.sort()
     return out
 
@@ -118,14 +119,14 @@ def contact_sheets(seq_dir, rows, img_shape, n_tiles=16, tile=160):
         idx = np.linspace(0, len(rs) - 1, min(n_tiles, len(rs))).astype(int)
         tiles = []
         for i in idx:
-            f, _, x, y, bw, bh, conf, cls, _ = rs[i]
+            f, _, x, y, bw, bh, _conf, cls, _ = rs[i]
             img = cv2.imread(str(seq_dir / "img1" / f"{f:06d}.jpg"))
             cx, cy = x + bw / 2, y + bh / 2
             s = max(bw, bh) * 2.5 + 40
             x0, y0 = int(max(0, cx - s / 2)), int(max(0, cy - s / 2))
             x1, y1 = int(min(w, cx + s / 2)), int(min(h, cy + s / 2))
             crop = img[y0:y1, x0:x1].copy()
-            cv2.rectangle(crop, (int(x - x0), int(y - y0)), (int(x + bw - x0), int(y + bh - y0)), (0, 255, 0) if conf else (0, 165, 255), 1)
+            cv2.rectangle(crop, (int(x - x0), int(y - y0)), (int(x + bw - x0), int(y + bh - y0)), (0, 255, 0) if rs[i][8] >= 1 else (0, 165, 255), 1)
             crop = cv2.resize(crop, (tile, tile))
             cv2.putText(crop, f"f{f}", (3, 14), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
             tiles.append(crop)
