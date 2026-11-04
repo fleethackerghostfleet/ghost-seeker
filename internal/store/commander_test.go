@@ -54,6 +54,17 @@ func TestEvictionKeepsEscalatedItems(t *testing.T) {
 	}
 }
 
+func TestEvictionWhenBacklogIsAllEscalated(t *testing.T) {
+	data := New(1)
+	start := time.Now().Add(-time.Hour)
+	addItem(data, "old", "warship", .95, start)
+	sent := true
+	data.PatchItem("old", nil, nil, nil, &sent)
+	if _, evicted := data.Add(&command.Item{ID: "new", TS: start.Add(time.Minute)}, 0); evicted != "old" {
+		t.Fatalf("evicted %q, want old (new captures must still be kept)", evicted)
+	}
+}
+
 func TestAutoEscalatePicksTopPending(t *testing.T) {
 	data := New(10)
 	addItem(data, "bird", "bird", .9, time.Now())
