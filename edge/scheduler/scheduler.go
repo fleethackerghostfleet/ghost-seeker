@@ -517,7 +517,24 @@ func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
 	req := &pb.ExchangeRequest{EdgeId: s.cfg.EdgeID, Manifest: plan.Manifest}
 	cursor, _ := s.st.GetCursor(ctx)
 	req.DownlinkCursor = cursor
-	req.Overrides, _ = s.st.PendingOverrides(ctx)
+	// Only uplink overrides for items shore knows (manifest acked, or in
+	// this request's manifest); the rest stay queued until it does.
+	if pend, _ := s.st.PendingOverrides(ctx); len(pend) > 0 {
+		known := map[string]bool{}
+		for _, r := range rows {
+			if r.ManifestAcked {
+				known[r.Item.Id] = true
+			}
+		}
+		for _, m := range plan.Manifest {
+			known[m.ItemId] = true
+		}
+		for _, o := range pend {
+			if known[o.ItemId] {
+				req.Overrides = append(req.Overrides, o)
+			}
+		}
+	}
 	var payload int64
 	for _, c := range plan.Chunks {
 		data, err := s.st.ReadForm(c.ItemId, c.Form, c.Offset, int64(len(c.Data)))

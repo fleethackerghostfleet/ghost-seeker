@@ -42,6 +42,16 @@ func TestEdgeOverrideResendsFact(t *testing.T) {
 	if pend, _ := st.PendingOverrides(ctx); len(pend) != 0 {
 		t.Fatalf("override still pending after successful exchange: %+v", pend)
 	}
+	// An override on an item shore hasn't been told about waits for its manifest.
+	fresh := addImage(t, s, st, clk, "", 0, 0.2, 1000)
+	sh.overrides = nil
+	if err := s.Override(ctx, &pb.LabelOverride{ItemId: fresh.Item.Id, Label: "buoy", By: "oow"}); err != nil {
+		t.Fatal(err)
+	}
+	s.Tick(ctx)
+	if len(sh.overrides) != 1 || sh.overrides[0].ItemId != fresh.Item.Id {
+		t.Fatalf("override should ride with the manifest in the same exchange: %+v", sh.overrides)
+	}
 	// Overrides that came down from shore are not echoed back.
 	sh.overrides = nil
 	if err := s.applyOverride(ctx, &pb.LabelOverride{ItemId: img.Item.Id, Label: "dolphin", By: "shore"}); err != nil {
