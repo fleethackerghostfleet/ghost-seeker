@@ -52,6 +52,12 @@ function renderKpis(){
  const oldest=p.reduce((m,i)=>i.sentAt&&(!m||i.sentAt<m)?i.sentAt:m,null);$('kOld').textContent=oldest?ago(oldest):'—';
  $('tPend').textContent=p.length;$('tDone').textContent=decided().length;
 }
+function renderLearned(directives){
+ const root=$('learned'),prefix='Operator feedback:';
+ const learned=(directives||[]).filter(d=>typeof d.text==='string'&&d.text.startsWith(prefix));
+ root.hidden=!learned.length;
+ root.innerHTML=learned.length?`<b>Learned from operator</b><ul>${learned.map(d=>`<li>${esc(d.text.slice(prefix.length).trim())}</li>`).join('')}</ul>`:'';
+}
 function renderQueue(){
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here as the watch floor sends them up.':'No decisions yet.'}</div>`;return}
@@ -120,7 +126,7 @@ let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on'
 function connect(){
  const es=new EventSource('/api/stream');
  es.onopen=()=>setLive(true);es.onerror=()=>setLive(false);
- es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);model=m.state.model;items=new Map();m.items.forEach(upsert);render()});
+ es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
  es.addEventListener('update',e=>{
   const m=JSON.parse(e.data),prev=view.sel,{it,isNew}=upsert(m.item);
   if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}

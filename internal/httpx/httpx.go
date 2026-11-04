@@ -5,7 +5,6 @@ package httpx
 import (
 	"net/http"
 	"os"
-	"path/filepath"
 )
 
 // CORS allows a UI served from anywhere (file://, another port) to call the
@@ -38,12 +37,4 @@ func StaticUI(mux *http.ServeMux, dir string, apiHint string) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte("<pre>ghost-seeker " + apiHint + "\nAPI: POST /ghostseeker.v1.ConsoleService/&lt;Method&gt; (JSON)\nBlobs: GET /blob/{item_id}/{form}\n</pre>"))
 	})
-}
-
-func Abs(p string) string {
-	a, err := filepath.Abs(p)
-	if err != nil {
-		return p
-	}
-	return a
 }
