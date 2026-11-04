@@ -25,6 +25,12 @@ file and explains why.
   `open` is the first report. `update` is sent only on a *material* change (label flip, confidence jump,
   size/closing change, or new subtype). `close` is sent when the object is gone longer than `close_after_s`.
   A track re-acquired within `relink_gap_s` that matches by appearance + position continues the same sighting.
+- Every `open`/`update` event also carries the inputs for the **selection step** (bandwidth-aware, see §5b):
+  `value` (0..1, model-agnostic priority estimate from confidence, unknownness, size/closing; operator interest is
+  applied later by the scheduler) and
+  `forms: [{kind: "fact"|"crop"|"thumb"|"full", bytes, quality, w, h, uri?}]`. These are pre-encoded payloads with
+  **exact byte sizes**, e.g. a fact of ~300 B JSON, a crop of the best box with context at JPEG q≈50/80, a thumbnail
+  of the key frame, and the full key frame.
 
 ## 2. Interfaces (`edgeml/src/edgeml/interfaces.py`)
 ```python
@@ -75,6 +81,19 @@ edgeml/runs/<run_id>/metrics.json
 | Edge cost | ms/frame p50/p95, sustained FPS at a 4-thread cap, peak RSS, model size. Measured on the laptop-proxy VM |
 
 Sighting↔GT matching: a sighting matches the GT track that has the most IoU≥0.3 overlap over the sighting's frames, if that covers ≥30% of the sighting's frames.
+
+## 5b. Two steps: detection → selection (bandwidth)
+Assume a link API reports the bytes available right now (budget per window). **Detection** (this package) emits
+deduplicated sightings with `value` and `forms`. **Selection** picks which forms to send under the budget. This is a
+knapsack over value per byte, with an item's cheaper forms sent before its expensive ones (the Go scheduler already
+ranks `priority × ladder_weight / bytes`). edgeml provides `edgeml.select.greedy(events, budget_bytes)` as the
+reference selector for evaluation only. It must not grow into a second scheduler.
+
+Headline system metric: **unique GT objects delivered to shore vs budget.** An object counts as delivered when a
+crop or full frame containing it is sent, and separately when a fact is sent. Measure it at windows of 60 s × {9.6 kbps,
+64 kbps, 256 kbps, 2 Mbps} (72 KB, 480 KB, 1.92 MB, 15 MB), plus bytes per delivered object. Compare the same greedy
+selector fed by (a) naive per-frame detections (full frames), (b) image-level near-duplicate suppression, and
+(c) sightings.
 
 ## 6. Edge hardware assumption
 Dell Latitude 7230 Rugged Extreme-class laptop: Intel 12th-gen U-series (e.g. i7-1260U, 2P+8E cores), 16 GB RAM, no
