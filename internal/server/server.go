@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
@@ -41,6 +42,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) PublishItem(item command.Item, stats command.Stats) {
 	s.hub.publish("item", map[string]any{"item": item, "stats": stats})
+}
+
+func (s *Server) PublishStats(stats command.Stats) {
+	s.hub.publish("stats", map[string]any{"stats": stats})
 }
 
 func (s *Server) PublishEvict(id string) {
@@ -103,12 +108,20 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	if utf8.RuneCountInString(body.Text) > 500 {
+		writeError(w, http.StatusBadRequest, "Directive text must be 500 characters or fewer")
+		return
+	}
 	rules := command.ParseDirective(body.Text)
 	if len(rules) == 0 {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects or behaviors — try ships, aircraft, drones, people, AIS, approaching…")
 		return
 	}
-	directive := s.store.AddDirective(strings.TrimSpace(body.Text), rules)
+	directive, err := s.store.AddDirective(strings.TrimSpace(body.Text), rules)
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	s.publishSnapshot()
 	writeJSON(w, http.StatusCreated, directive)
 }

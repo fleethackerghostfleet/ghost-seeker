@@ -56,6 +56,9 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 		if item != nil {
 			stats, _ := data.Stats()
 			app.PublishItem(stored, stats)
+		} else {
+			stats, _ := data.Stats()
+			app.PublishStats(stats)
 		}
 	}
 }

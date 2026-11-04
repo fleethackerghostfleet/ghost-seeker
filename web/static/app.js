@@ -179,6 +179,9 @@ function openStream(){
   const data=JSON.parse(event.data);
   if(state.paused)pendingItems.push(data);else{mergeItem(data.item);stats=data.stats;renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
  });
+ stream.addEventListener('stats',event=>{
+  stats=JSON.parse(event.data).stats;renderStats();
+ });
  stream.addEventListener('update',event=>{
   const data=JSON.parse(event.data);cdr=data.cdr;applyItemUpdate(data.item);
  });
@@ -370,7 +373,7 @@ function renderReview(){
  rvProgress();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a&&b.dataset.a!=='undo')b.disabled=!it});
  if(!it){rv.shown=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>All caught up</b><div>New images will appear here as sensors report.</div></div><div class="rvflash" id="rvFlash"></div>`;return}
- if(rv.shown===it.id)return;rv.shown=it.id;
+ const key=it.id+':'+it.centralTier+':'+it.central;if(rv.shown===key)return;rv.shown=key;
  const sug=it.centralTier,rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s),why=buildWhy(it,rows).slice(0,4);
  const age=Math.max(0,Math.round((Date.now()-it.ts)/60000));
  [...$('rvKeys').querySelectorAll('[data-a]')].forEach(b=>b.classList.toggle('sugg',b.dataset.a===String(sug)));

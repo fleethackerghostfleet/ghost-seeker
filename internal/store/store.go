@@ -1,11 +1,16 @@
 package store
 
 import (
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
+
+const MaxActiveDirectives = 20
+
+var ErrTooManyActiveDirectives = errors.New("Too many active directives — remove one first")
 
 type State struct {
 	Model      string              `json:"model"`
@@ -104,16 +109,19 @@ func (s *Store) SetModel(id string) {
 	s.rescoreLocked()
 }
 
-func (s *Store) AddDirective(text string, rules []command.Rule) command.Directive {
+func (s *Store) AddDirective(text string, rules []command.Rule) (command.Directive, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.directives) >= MaxActiveDirectives {
+		return command.Directive{}, ErrTooManyActiveDirectives
+	}
 	directive := command.Directive{ID: time.Now().UTC().Format("d20060102150405.000000000"), Text: text, Rules: append([]command.Rule(nil), rules...)}
 	for i := range directive.Rules {
 		directive.Rules[i].DirectiveID = directive.ID
 	}
 	s.directives = append(s.directives, directive)
 	s.rescoreLocked()
-	return cloneDirectives([]command.Directive{directive})[0]
+	return cloneDirectives([]command.Directive{directive})[0], nil
 }
 
 func (s *Store) DeleteDirective(id string) bool {

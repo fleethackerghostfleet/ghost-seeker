@@ -32,9 +32,12 @@ func TestAddEvictsOldestAtRetentionLimit(t *testing.T) {
 
 func TestDirectiveClonePreservesEmptySlices(t *testing.T) {
 	data := New(2)
-	directive := data.AddDirective("birds", []command.Rule{
+	directive, err := data.AddDirective("birds", []command.Rule{
 		{Type: "suppress", Classes: []string{"bird"}, Attrs: []string{}},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if directive.Rules[0].Attrs == nil {
 		t.Fatal("directive attrs is nil, want an empty array")
 	}
@@ -56,9 +59,12 @@ func TestDirectiveIDIsPresentOnRulesAndRescoredNotes(t *testing.T) {
 	}
 	data.Add(&item, 0)
 
-	directive := data.AddDirective("approaching boats", []command.Rule{
+	directive, err := data.AddDirective("approaching boats", []command.Rule{
 		{Type: "boost", Classes: []string{"small boat"}},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if directive.Rules[0].DirectiveID != directive.ID {
 		t.Fatalf("directive rule id = %q, want %q", directive.Rules[0].DirectiveID, directive.ID)
 	}

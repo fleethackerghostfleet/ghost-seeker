@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,6 +82,46 @@ func TestAPI(t *testing.T) {
 	_, _, _, state := data.Snapshot()
 	if len(state.Directives) != 0 {
 		t.Fatalf("remaining directives = %d, want 0", len(state.Directives))
+	}
+}
+
+func TestDirectiveLengthLimit(t *testing.T) {
+	app := New(store.New(10))
+	response := request(app, http.MethodPost, "/api/directives", map[string]string{"text": strings.Repeat("x", 501)})
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("POST overlong directive status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] == "" {
+		t.Fatal("POST overlong directive response has no error")
+	}
+}
+
+func TestDirectiveCountLimit(t *testing.T) {
+	app := New(store.New(10))
+	for i := 0; i < store.MaxActiveDirectives; i++ {
+		response := request(app, http.MethodPost, "/api/directives", map[string]string{"text": "small boats"})
+		if response.Code != http.StatusCreated {
+			t.Fatalf("POST directive %d status = %d, want %d: %s", i+1, response.Code, http.StatusCreated, response.Body.String())
+		}
+	}
+	response := request(app, http.MethodPost, "/api/directives", map[string]string{"text": "birds"})
+	if response.Code != http.StatusConflict {
+		t.Fatalf("POST directive beyond limit status = %d, want %d", response.Code, http.StatusConflict)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] != store.ErrTooManyActiveDirectives.Error() {
+		t.Fatalf("error = %q, want %q", body["error"], store.ErrTooManyActiveDirectives)
+	}
+	_, _, _, state := app.store.Snapshot()
+	if len(state.Directives) != store.MaxActiveDirectives {
+		t.Fatalf("active directives = %d, want %d", len(state.Directives), store.MaxActiveDirectives)
 	}
 }
 
