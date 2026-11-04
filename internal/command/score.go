@@ -1,6 +1,11 @@
 package command
 
-import "github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+import (
+	"math"
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+)
 
 func RuleMatch(r Rule, d Detection) bool {
 	classMatch := len(r.Classes) == 0
@@ -57,11 +62,18 @@ func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
 			if len(r.Classes) > 0 && len(r.Attrs) > 0 {
 				factor = .06
 			}
+			if r.Weight != 0 && r.Weight != 1 {
+				factor = math.Pow(factor, r.Weight)
+			}
 			w = 1 - (1-w)*factor
 			notes = append(notes, r)
 		} else {
 			suppressed = true
-			w *= .12
+			factor := .12
+			if r.Weight != 0 && r.Weight != 1 {
+				factor = math.Pow(factor, r.Weight)
+			}
+			w *= factor
 			notes = append(notes, r)
 		}
 	}
@@ -98,9 +110,21 @@ func TierFor(score float64) int {
 }
 
 func Rescore(item *Item, model string, directives []Directive) {
+	RescoreAt(item, model, directives, time.Now())
+}
+
+func RescoreAt(item *Item, model string, directives []Directive, now time.Time) {
 	rules := make([]Rule, 0)
 	for _, directive := range directives {
-		rules = append(rules, directive.Rules...)
+		for _, rule := range directive.Rules {
+			if len(rule.Sources) > 0 && !contains(rule.Sources, item.SourceID) {
+				continue
+			}
+			if rule.WithinMin > 0 && item.TS.Before(now.Add(-time.Duration(rule.WithinMin)*time.Minute)) {
+				continue
+			}
+			rules = append(rules, rule)
+		}
 	}
 	item.Det = make([]DetectionScore, len(item.Dets))
 	scores, baseScores := make([]float64, 0, len(item.Dets)), make([]float64, 0, len(item.Dets))
@@ -139,9 +163,9 @@ func EffectiveWeights(model string, directives []Directive) map[string]Weight {
 		unconditional := make([]Rule, 0, len(rules))
 		conditional := false
 		for _, rule := range rules {
-			if len(rule.Attrs) == 0 {
+			if len(rule.Attrs) == 0 && len(rule.Sources) == 0 && rule.WithinMin == 0 {
 				unconditional = append(unconditional, rule)
-			} else if rule.Type == "boost" && (len(rule.Classes) == 0 || contains(rule.Classes, class)) {
+			} else if len(rule.Classes) == 0 || contains(rule.Classes, class) {
 				conditional = true
 			}
 		}

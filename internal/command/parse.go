@@ -2,7 +2,10 @@ package command
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
 type classPattern struct {
@@ -56,16 +59,48 @@ var (
 )
 
 func ParseDirective(text string) []Rule {
+	rules, _ := ParseDirectiveDetailed(text)
+	return rules
+}
+
+var windowPattern = regexp.MustCompile(`\b(last|past)\s+(?:(\d+)\s*(minutes?|mins?|hours?|h)|(?:an?\s+)?hour)\b`)
+var grammarPattern = regexp.MustCompile(`\b(prioriti\w*|boost|show|focus|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
+var wordPattern = regexp.MustCompile(`[a-z][a-z0-9-]*`)
+
+func ParseDirectiveDetailed(text string) ([]Rule, []string) {
 	text = strings.ToLower(text)
+	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
 	text = andNegPattern.ReplaceAllString(text, "; $1")
 	clauses := splitPattern.Split(text, -1)
 	rules := make([]Rule, 0)
+	unknown := make([]string, 0)
+	unknownSeen := make(map[string]bool)
 	for _, clause := range clauses {
 		if strings.TrimSpace(clause) == "" {
 			continue
 		}
 		negative := negativePattern.MatchString(clause)
 		only := onlyPattern.MatchString(clause)
+		sources := make([]string, 0)
+		for _, source := range catalog.Sources {
+			id, name := strings.ToLower(source.ID), strings.ToLower(source.Name)
+			re := regexp.MustCompile(`\b(?:` + regexp.QuoteMeta(id) + "|" + regexp.QuoteMeta(name) + `)\b`)
+			if re.MatchString(clause) {
+				sources = append(sources, source.ID)
+				clause = re.ReplaceAllString(clause, " ")
+			}
+		}
+		within := 0
+		if match := windowPattern.FindStringSubmatch(clause); match != nil {
+			within = 60
+			if match[2] != "" {
+				within, _ = strconv.Atoi(match[2])
+				if strings.HasPrefix(match[3], "h") {
+					within *= 60
+				}
+			}
+			clause = windowPattern.ReplaceAllString(clause, " ")
+		}
 		classes := make([]string, 0)
 		seen := make(map[string]bool)
 		for _, pattern := range synonymPatterns {
@@ -92,12 +127,20 @@ func ParseDirective(text string) []Rule {
 		for _, pattern := range attributePatterns {
 			if pattern.re.MatchString(clause) {
 				attrs = append(attrs, pattern.name)
+				clause = pattern.re.ReplaceAllString(clause, " ")
 			}
 		}
-		if len(classes) == 0 && len(attrs) == 0 {
+		unused := grammarPattern.ReplaceAllString(negativePattern.ReplaceAllString(clause, " "), " ")
+		for _, word := range wordPattern.FindAllString(unused, -1) {
+			if !unknownSeen[word] {
+				unknown = append(unknown, word)
+				unknownSeen[word] = true
+			}
+		}
+		if len(classes) == 0 && len(attrs) == 0 && len(sources) == 0 && within == 0 {
 			continue
 		}
-		rules = append(rules, Rule{Type: map[bool]string{true: "suppress", false: "boost"}[negative], Classes: classes, Attrs: attrs, Only: only && !negative})
+		rules = append(rules, Rule{Type: map[bool]string{true: "suppress", false: "boost"}[negative], Classes: classes, Attrs: attrs, Only: only && !negative, Sources: sources, WithinMin: within})
 	}
-	return rules
+	return rules, unknown
 }
