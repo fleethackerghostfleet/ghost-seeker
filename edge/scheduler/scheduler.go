@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 	"log/slog"
 	"math"
 	"sort"
@@ -198,6 +199,17 @@ func (s *Scheduler) Override(ctx context.Context, o *pb.LabelOverride) error {
 		row.Item.Features = &pb.Features{}
 	}
 	row.Item.Features.LabelOverride, row.Item.Features.OverrideBy = o.Label, o.By
+	// The FACT carries the override to shore: regenerate and re-send it.
+	for i, f := range row.Item.Forms {
+		if f.Kind != pb.FormKind_FORM_KIND_FACT {
+			continue
+		}
+		nf, err := s.st.ReplaceForm(ctx, row.Item.Id, f.Kind, fact.FromItem(row.Item).Marshal())
+		if err != nil {
+			return err
+		}
+		row.Item.Forms[i] = nf
+	}
 	if err := s.st.UpdateItem(ctx, row.Item); err != nil {
 		return err
 	}

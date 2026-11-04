@@ -378,6 +378,26 @@ func (s *Store) execEach(ctx context.Context, q string, ids []string, lead ...an
 	return tx.Commit()
 }
 
+// ReplaceForm rewrites a form's payload in place and resets its delivery
+// state, so the new content is re-sent. Used when a FACT changes (label
+// override) after it has already reached shore.
+func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
+	var path, mime string
+	if err := s.db.QueryRowContext(ctx, `SELECT path, mime FROM forms WHERE item_id=? AND kind=?`, itemID, int(kind)).Scan(&path, &mime); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(data)
+	h := hex.EncodeToString(sum[:])
+	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET bytes=?, hash=?, acked_through=0, complete=0 WHERE item_id=? AND kind=?`,
+		len(data), h, itemID, int(kind)); err != nil {
+		return nil, err
+	}
+	return &pb.Form{Kind: kind, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true}, nil
+}
+
 // SetAcked records shore's contiguous receipt of a form.
 func (s *Store) SetAcked(ctx context.Context, itemID string, kind pb.FormKind, through int64, complete bool) error {
 	c := 0
@@ -386,6 +406,12 @@ func (s *Store) SetAcked(ctx context.Context, itemID string, kind pb.FormKind, t
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE forms SET acked_through=MAX(acked_through,?), complete=MAX(complete,?) WHERE item_id=? AND kind=?`,
 		through, c, itemID, int(kind))
+	if err != nil || !complete {
+		return err
+	}
+	// A pull is satisfied once the requested form (FULL if unspecified) lands.
+	_, err = s.db.ExecContext(ctx, `UPDATE items SET pull_boost=0, pull_form=0, pull_by='' WHERE id=? AND pull_boost>0 AND (pull_form=? OR (pull_form=0 AND ?=?))`,
+		itemID, int(kind), int(kind), int(pb.FormKind_FORM_KIND_FULL))
 	return err
 }
 
