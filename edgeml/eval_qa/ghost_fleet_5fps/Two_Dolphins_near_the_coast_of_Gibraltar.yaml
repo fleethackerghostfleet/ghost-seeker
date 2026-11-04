@@ -1,4 +1,5 @@
 reviewed: true
+gt_status: partial
 notes: >-
   Teacher found 0 tracks (dolphins are ~20x40 px dark shapes, airborne for <1 s). Human-added from a dark-blob finder
   (local background subtraction, rows 250-900) verified on frame crops 7 and 32: one dolphin leaping at right (frames 6-11),

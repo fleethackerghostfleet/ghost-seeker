@@ -1,4 +1,5 @@
 reviewed: true
+gt_status: partial
 merge: {1: [14], 8: [11]}
 relabel: {8: submarine, 1: boat}
 notes: >-

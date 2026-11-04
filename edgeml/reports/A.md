@@ -40,19 +40,19 @@ Split: dev = clips 01–06,08,10; test = `fvessel_clip07`, `fvessel_clip09`.
 | seq | split | viewpoint / motion / sea | frames | tracks | boxes | classes | median box px² | label_source | gt_status |
 |---|---|---|---|---|---|---|---|---|---|
 | A_ship_in_the_distance | dev | shore_handheld / handheld_static / calm | 46 | 1 | 46 | ship | 5749 | teacher+human | complete |
-| Canadian_Coast_Guard_Helicopter_Landing | dev | aerial_helicopter / aircraft_approach / calm | 151 | 2 | 98 | person, ship | 208534 | teacher+human | complete |
+| Canadian_Coast_Guard_Helicopter_Landing | dev | aerial_helicopter / aircraft_approach / calm | 151 | 2 | 98 | person, ship | 208534 | teacher+human | partial |
 | Chase_N_Fish_Sharky | dev | onboard_small_boat / small_boat_moderate / slight_chop_glare | 75 | 0 | 0 | — | 0 | teacher+human | incomplete |
 | Cruise_ship_Mediterranean_sunset_off_Italy | dev | onboard_cruise_ship / large_ship_slow / moderate_swell | 153 | 3 | 62 | ship | 9800 | teacher+human | complete |
 | Dolphin_from_far_distance_in_Bay_of_Bengal | test | onboard_ship_downlook / large_ship_underway / calm | 298 | 0 | 0 | — | 0 | teacher | incomplete |
 | Far_away_but_did_you_see_that_splash | dev | onboard_small_boat / small_boat_slow / calm_harbour | 114 | 0 | 0 | — | 0 | teacher+human | incomplete |
 | Sailing_POV_Corfu_Paxos | dev | onboard_sailboat / sailboat_underway / calm | 300 | 0 | 0 | — | 0 | teacher+human | complete |
 | Ship_in_the_Distance_Ian | test | onboard_ship / large_ship_slow / moderate_whitecaps | 158 | 1 | 158 | ship | 18474 | teacher+human | complete |
-| Ship_in_the_Distance_Utopia_of_the_Seas | dev | shore_handheld / handheld_zoom / calm | 75 | 2 | 49 | boat, ship | 6564 | teacher+human | complete |
-| Spotted_A_Submarine | test | onboard_small_boat / small_boat_underway / calm | 745 | 1 | 707 | submarine | 416798 | teacher+human | complete |
-| Submarine_surfacing | dev | onboard_small_boat / small_boat_moderate / calm_swell | 372 | 2 | 157 | boat, submarine | 33916 | teacher+human | complete |
-| Two_Dolphins_near_the_coast_of_Gibraltar | dev | onboard_ship_bow_downlook / large_ship_underway / calm | 63 | 3 | 14 | dolphin | 1141 | teacher+human | complete |
+| Ship_in_the_Distance_Utopia_of_the_Seas | dev | shore_handheld / handheld_zoom / calm | 75 | 2 | 49 | boat, ship | 6564 | teacher+human | partial |
+| Spotted_A_Submarine | test | onboard_small_boat / small_boat_underway / calm | 745 | 1 | 707 | submarine | 417780 | teacher+human | complete |
+| Submarine_surfacing | dev | onboard_small_boat / small_boat_moderate / calm_swell | 372 | 2 | 157 | boat, submarine | 33916 | teacher+human | partial |
+| Two_Dolphins_near_the_coast_of_Gibraltar | dev | onboard_ship_bow_downlook / large_ship_underway / calm | 63 | 3 | 14 | dolphin | 1141 | teacher+human | partial |
 
-All 12 at 5 fps; resolutions 1080×1920 (vertical phone) or 1920×1080; `hfov_deg` not recorded (consumer phones, unknown). Frames 1–N are the full clip; nothing filtered by box size.
+`gt_status`: `complete` = every visible object boxed in every frame I checked; `partial` = known unlabelled stretches (listed in §5, use frame ranges from the notes when scoring FPs); `incomplete` = objects present, no GT (exclude). All 12 at 5 fps; resolutions 1080×1920 (vertical phone) or 1920×1080; `hfov_deg` not recorded (consumer phones, unknown). Frames 1–N are the full clip; nothing filtered by box size.
 
 
 ## 3. Labelling method (own clips)
@@ -104,7 +104,7 @@ Contact sheets used for review (downscaled): `A_assets/Spotted_A_Submarine_0.jpg
 - **Teacher recall on tiny/far objects is poor**: Grounding DINO at box_thr 0.2 found nothing in 4/12 own clips (cruise ship 140×70 px at sunset, 20×40 px dolphins, 16 px shark fins). Those GT boxes are human-added with tool help (template matching / dark-blob finder) and have ±5–10 px box error; evaluate tiny-box recall at IoU α≤0.3 (literature §3.5), not 0.5.
 - **Box extent inconsistency on the submarine** (`Spotted_A_Submarine`): alternates between "sail only" and "full hull" where the teacher tracked them as separate fragments; after merge the larger box is kept per frame, but hull-only frames remain (~⅓ of the pass). Expect IoU-sensitive metrics to under-report on this sequence.
 - **Incomplete sequences** (`gt_status=incomplete`, 3 clips: Sharky, Splash, Dolphin_Bay_of_Bengal): real objects present but no GT → exclude from recall/duplicate metrics; use for qualitative FP review only. `Dolphin_from_far_distance_in_Bay_of_Bengal` is a locked test clip and stays `label_source=teacher` (0 boxes) — WS-C should report test numbers on `Spotted_A_Submarine` + `Ship_in_the_Distance_Ian` only until it is hand-labelled.
-- **Partial coverage**: CCGS vessel unlabelled from frame 93 (fills frame), Utopia cruise ship unlabelled in frames 1–42 (40 px), `Submarine_surfacing` frames <173 unchecked. Interpolated boxes (visibility 0.5) are 7 % of own-clip boxes.
+- **Partial coverage** (`gt_status=partial`: Helicopter, Utopia, Submarine_surfacing, Two_Dolphins): CCGS vessel unlabelled from frame 93 (fills frame), Utopia cruise ship unlabelled in frames 1–42 (40 px), `Submarine_surfacing` frames <173 unchecked. Interpolated boxes (visibility 0.5) are 7 % of own-clip boxes.
 - **Zero-object sequences** (`Sailing_POV_Corfu_Paxos`) spot-checked at 3 frames only.
 - **Own-platform parts** (bow, deck, helicopter door) are *not* annotated as ignore regions; the pipeline must suppress them itself (one own-bow FP was removed from GT).
 - **FVessel**: 1 Hz only (GT is per second), fixed shore camera, same site/day for all clips → weak hold-out (see §2.1); boxes are AIS-fused and occasionally lag the hull by a few px.
@@ -118,7 +118,8 @@ python edgeml/scripts/ingest_fvessel_mot.py --raw gs://qwiklabs-gcp-02-34a870014
     --out /tmp/eval/fvessel_clip10 && gcloud storage rsync -r /tmp/eval/fvessel_clip10 gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/fvessel_clip10
 # own clips: 5 fps extraction (yt-dlp + ffmpeg fps=5) -> edgeml/eval/ghost_fleet_5fps/<seq>/img1 + seqinfo.ini, then on an L4:
 python edgeml/scripts/autolabel_tracks.py --root ~/eval/ghost_fleet_5fps            # teacher: gt/, teacher/, qa/track_*.jpg
-# human QA: edit <seq>/qa/corrections.yaml (copies of the ones I wrote are in edgeml/eval_qa/ghost_fleet_5fps/), then
+# human QA: edit <seq>/qa/corrections.yaml; to reproduce mine, copy the committed ones in first:
+for f in edgeml/eval_qa/ghost_fleet_5fps/*.yaml; do s=$(basename $f .yaml); [ -d ~/eval/ghost_fleet_5fps/$s ] && mkdir -p ~/eval/ghost_fleet_5fps/$s/qa && cp $f ~/eval/ghost_fleet_5fps/$s/qa/corrections.yaml; done
 python edgeml/scripts/qa_apply.py --root ~/eval/ghost_fleet_5fps --meta edgeml/eval_qa/ghost_fleet_5fps/clips_meta.yaml
 gcloud storage rsync -r ~/eval/ghost_fleet_5fps gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/ghost_fleet_5fps
 # loader / tests
