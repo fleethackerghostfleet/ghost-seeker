@@ -143,12 +143,14 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		} else {
 			g.log.Warn("thumb", "err", err)
 		}
+		full := g.fullForm(c.Data, img)
+		payloads[pb.FormKind_FORM_KIND_FULL] = full
 		if cr, err := g.cropForm(img, resp.Detections); err != nil {
 			g.log.Warn("crop", "err", err)
-		} else if cr != nil {
+		} else if cr != nil && len(cr) < len(full) {
+			// A CROP no smaller than FULL only delays FULL on the ladder.
 			payloads[pb.FormKind_FORM_KIND_CROP] = cr
 		}
-		payloads[pb.FormKind_FORM_KIND_FULL] = g.fullForm(c.Data, img)
 	case pb.ItemType_ITEM_TYPE_RECORD, pb.ItemType_ITEM_TYPE_DIGEST:
 		// Small structured items: the record is its own FACT; no ladder.
 		payloads[pb.FormKind_FORM_KIND_FULL] = c.Data

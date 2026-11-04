@@ -154,6 +154,21 @@ func TestJPEGFullPassthroughAndNoCropWithoutBoxes(t *testing.T) {
 	}
 }
 
+func TestCropDroppedWhenNotSmallerThanFull(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.CropQual = 100
+	g, st := newIngester(t, cfg)
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, scene(640, 480), &jpeg.Options{Quality: 10}); err != nil {
+		t.Fatal(err)
+	}
+	// A low-quality JPEG source: a q100 crop of it encodes larger than FULL.
+	row := ingest(t, g, st, b.Bytes(), map[string]string{"label": "cargo ship", "conf": "0.9"})
+	if f := row.Form(pb.FormKind_FORM_KIND_CROP); f != nil {
+		t.Fatalf("crop %dB kept although FULL is %dB", f.Bytes, b.Len())
+	}
+}
+
 func TestFullQualityZeroKeepsPNG(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.FullQual = 0
