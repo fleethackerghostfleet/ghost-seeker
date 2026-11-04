@@ -116,7 +116,7 @@ def replay(seq, rows, params, embedder, classifier):
     for fi, t, tracks in rows:
         image = cv2.imread(str(seq.frame_path(fi)))
         events.extend(agg.update(tracks, image, fi, t))
-    agg.flush(seq.duration_s + agg.p.close_after_s + 1)
+    events.extend(agg.flush(seq.duration_s + agg.p.close_after_s + 1))
     return events, agg.trajectories()
 
 

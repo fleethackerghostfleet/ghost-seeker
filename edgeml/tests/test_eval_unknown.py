@@ -4,8 +4,9 @@ import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from eval_unknown import measure, pool, verify_split
+from eval_unknown import measure, pool, replay, verify_split
 from edgeml.data.seqs import MotSequence
+from edgeml.types import Track
 
 
 def sequence(status='complete'):
@@ -46,3 +47,21 @@ def test_empty_events_and_ignored_annotations_are_not_false_sea():
     assert pool([result])['after']['unknown_recall'] is None
     with pytest.raises(ValueError, match='canonical dev'):
         verify_split([seq], 'dev')
+
+
+def test_replay_includes_gate_change_only_visible_at_flush(monkeypatch):
+    monkeypatch.setattr('eval_unknown.cv2.imread', lambda path: None)
+    seq = sequence()
+    seq.n_frames = 5
+    box = [0, 0, 10, 10]
+    seq.gt = [(fi, 1, box, 1, 1, 1) for fi in range(1, 6)]
+    rows = [(fi, fi - 1, [Track(1, box, .2, 'object', fi, fi - 1)]) for fi in range(1, 6)]
+    events, trajectories = replay(seq, rows, {'min_update_interval_s': 100}, None, None)
+    assert [e['event'] for e in events] == ['open', 'close']
+    assert not events[0]['unknown_real']
+    assert events[-1]['unknown_real']
+    assert events[-1]['frame_idx'] == 5
+    assert measure(seq, events[:-1], trajectories, .5)['after']['surfaced_gt'] == 0
+    assert measure(seq, events, trajectories, .5)['after']['surfaced_gt'] == 1
+    empty_events, empty_trajectories = replay(seq, [], {}, None, None)
+    assert empty_events == empty_trajectories == []

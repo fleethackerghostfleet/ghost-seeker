@@ -57,14 +57,21 @@ python edgeml/tools/run_c.py cache --data ~/data/edgeml_eval --sets ghost_fleet_
 python edgeml/tools/eval_unknown.py --data ~/data/edgeml_eval --split dev --out ~/unknown-eval
 python edgeml/tools/eval_unknown.py --data ~/data/edgeml_eval --split test --out ~/unknown-eval --frozen ~/unknown-eval/frozen.json
 ```
-Dev sweep: N ∈ {3,5,8} × ρ ∈ {0.3,0.5,0.7}. All nine settings tied on dev: 23/34 GT objects surfaced, 8/9 matched unknown sightings flagged, 0/391 false unknowns. The declared tie-break (stricter persistence) froze **N=8, T=2 s, ρ=0.7, τ=0.5**. Test was evaluated **once** with these frozen parameters and not re-tuned afterwards.
+Original dev sweep: N ∈ {3,5,8} × ρ ∈ {0.3,0.5,0.7}. All nine settings tied on dev: 23/34 GT objects surfaced, 8/9 matched unknown sightings flagged, 0/391 false unknowns. The declared tie-break (stricter persistence) froze **N=8, T=2 s, ρ=0.7, τ=0.5**. The initial test evaluation used these frozen parameters, with no subsequent tuning.
+
+Review found that replay discarded end-of-clip `flush()` events. After including them, dev and test were each replayed once using the **same original frozen.json**, without calibration or a new sweep. Dev surfaced GT increased from 23/34 to **24/34** in both modes (one additional known object in `fvessel_clip01`); all other dev metrics and every test metric were unchanged. The corrected results are below. Original JSON remains in `~/unknown-eval/`; corrected JSON is in `~/unknown-eval-flush/`.
+
+```
+OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 ~/edgeml-venv/bin/python -u edgeml/tools/eval_unknown.py --data ~/data/edgeml_eval --split dev --out ~/unknown-eval-flush --frozen ~/unknown-eval/frozen.json
+OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 ~/edgeml-venv/bin/python -u edgeml/tools/eval_unknown.py --data ~/data/edgeml_eval --split test --out ~/unknown-eval-flush --frozen ~/unknown-eval/frozen.json
+```
 
 "Before" means unknownness ≥ τ alone (the current behaviour). "After" also requires `unknown_real`.
 
 | Split | Mode | GT objects surfaced | Matched unknown sightings flagged | False unknowns / complete sea-only frame |
 |---|---|---:|---:|---:|
-| dev | before | 23/34 (67.6%) | 9/9 (100%) | 0/391 |
-| dev | after | 23/34 (67.6%) | 8/9 (88.9%) | 0/391 |
+| dev | before | 24/34 (70.6%) | 9/9 (100%) | 0/391 |
+| dev | after | 24/34 (70.6%) | 8/9 (88.9%) | 0/391 |
 | test | before | 27/52 (51.9%) | 9/9 (100%) | 0/214 |
 | test | after | 26/52 (50.0%) | **4/9 (44.4%)** | 0/214 |
 
