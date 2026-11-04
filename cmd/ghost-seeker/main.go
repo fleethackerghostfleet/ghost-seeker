@@ -66,12 +66,15 @@ func main() {
 	}()
 
 	if *sim {
-		_, port, _ := net.SplitHostPort(ln.Addr().String())
+		host, port, _ := net.SplitHostPort(ln.Addr().String())
+		if ip := net.ParseIP(host); ip == nil || ip.IsUnspecified() {
+			host = "127.0.0.1"
+		}
 		bf := *backfill
 		if st.Stats().DB > 0 {
 			bf = 0
 		}
-		up := &edgesim.Uploader{BaseURL: "http://127.0.0.1:" + port, Token: *token}
+		up := &edgesim.Uploader{BaseURL: "http://" + net.JoinHostPort(host, port), Token: *token}
 		go edgesim.Run(ctx, up, edgesim.Options{Sources: catalog.Sources, Interval: [2]time.Duration{1200 * time.Millisecond, 2400 * time.Millisecond}, Backfill: bf})
 		log.Printf("edge simulator: %d sensors uploading to %s", len(catalog.Sources), up.BaseURL)
 	}
