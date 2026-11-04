@@ -3,12 +3,14 @@
 package store
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -218,6 +220,25 @@ func (s *Store) List(source string, limit int) []Item {
 		}
 	}
 	return out
+}
+
+// Queue returns up to limit records still awaiting review, highest priority first.
+func (s *Store) Queue(limit int) []Item {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []Item
+	for _, it := range s.items {
+		if !it.Reviewed && !it.Dismissed {
+			out = append(out, *it)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Item) int {
+		if a.Tier != b.Tier {
+			return a.Tier - b.Tier
+		}
+		return cmp.Compare(b.Central, a.Central)
+	})
+	return out[:min(limit, len(out))]
 }
 
 func (s *Store) Get(id string) (Item, error) {

@@ -172,6 +172,10 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > store.MaxItems {
 		limit = 300
 	}
+	if r.URL.Query().Get("queue") == "1" {
+		writeJSON(w, http.StatusOK, s.store.Queue(limit))
+		return
+	}
 	writeJSON(w, http.StatusOK, s.store.List(r.URL.Query().Get("src"), limit))
 }
 

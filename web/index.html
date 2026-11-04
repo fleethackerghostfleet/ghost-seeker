@@ -365,7 +365,7 @@ function applyConfig(c){state.model=c.model;state.directives=c.directives||[];WE
 function hydrate(r,it={}){return Object.assign(it,r,{src:SRC[r.src]||{id:r.src,name:r.src},ts:new Date(r.ts),img:`/api/images/${r.id}/image`,manual:r.manual||null})}
 function addItem(r,fresh){
  const it=hydrate(r);it.fresh=fresh;items.push(it);
- if(items.length>400){const rm=items.filter(x=>x.id!==state.sel&&x!==rv.cur).sort((a,b)=>a.ts-b.ts)[0];items=items.filter(x=>x!==rm);rm.el&&rm.el.remove()}
+ if(items.length>600){const rm=items.filter(x=>x.id!==state.sel&&x!==rv.cur).sort((a,b)=>a.ts-b.ts)[0];items=items.filter(x=>x!==rm);rm.el&&rm.el.remove()}
  if(fresh){['st0','st1','st2','st3','st4','st5'].forEach((s,i)=>setTimeout(()=>flash(s),i*140));setTimeout(()=>{it.fresh=false;it.el&&it.el.classList.remove('fresh')},6000)}
  return it;
 }
@@ -385,7 +385,7 @@ function connect(){
 }
 async function resync(){
  try{const cfg=await api('GET','/api/config');applyConfig(cfg.config);stats=cfg.stats;
-  (await api('GET','/api/images?limit=300')).reverse().forEach(merge);renderFeed(true);renderStats();renderRp();if(state.sel)renderDetail()}catch(e){}
+  (await api('GET','/api/images?limit=300')).reverse().forEach(merge);(await api('GET','/api/images?queue=1&limit=200')).forEach(merge);renderFeed(true);renderStats();renderRp();if(state.sel)renderDetail()}catch(e){}
 }
 function applyRescore(m){
  applyConfig(m.config);const by=new Map(m.scores.map(x=>[x.id,x]));
@@ -448,6 +448,7 @@ async function init(){
  window.addEventListener('hashchange',route);
  setInterval(()=>$('clock').textContent=zulu(new Date()),1000);$('clock').textContent=zulu(new Date());
  (await api('GET','/api/images?limit=300')).reverse().forEach(r=>addItem(r,false));
+ (await api('GET','/api/images?queue=1&limit=200')).forEach(merge);
  connect();setInterval(renderStats,5000);
  route();renderFeed(true);renderStats();renderRp();
 }
