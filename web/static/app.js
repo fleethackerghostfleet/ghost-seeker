@@ -304,9 +304,9 @@ function answerSuggestion(answer){
  rv.askBusy=true;renderAsk();
  const label=CLS[s.cls]?.lab||s.cls;
  request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]})
-  .then(()=>toast('Rule added — review it on Collection Priorities'))
-  .catch(error=>toast(error.message))
-  .finally(()=>{gsLearn.resolve(s,'yes');rv.askBusy=false;if(rv.ask===ask)rv.ask=null;renderAsk()});
+  .then(()=>{gsLearn.resolve(s,'yes');toast('Rule added — review it on Collection Priorities')})
+  .catch(error=>{gsLearn.resolve(s,'later');toast(error.message)})
+  .finally(()=>{rv.askBusy=false;if(rv.ask===ask)rv.ask=null;renderAsk()});
 }
 function reviewAskKey(k){
  if(!rv.ask||rv.askBusy)return;
