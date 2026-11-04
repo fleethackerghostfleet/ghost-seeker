@@ -1,59 +1,52 @@
-"""Adapter for anything the `ultralytics` package loads: YOLOv8/YOLO11, RT-DETR (ultralytics weights),
-YOLO-World (open-vocab, `prompts=`), and community .pt checkpoints (e.g. the Argus maritime models)."""
+"""Ultralytics-backed detector (YOLO11 / RT-DETR / ONNX export) behind the Detector protocol.
+
+Only a maritime-relevant subset of COCO is kept by default and every kept class is reported with
+its COCO name; label_id is the COCO index so later stages can remap. Boxes are pixel [x,y,w,h].
+"""
 from __future__ import annotations
+
+from typing import Iterable, Optional
 
 import numpy as np
 
-from ..types import Detection
-from .base import BaseDetector, xyxy_to_xywh
+from ..types import Detection, xyxy_to_xywh
+
+# COCO ids that can plausibly be a surface contact or something a watch-stander reports.
+MARITIME_COCO = {8: "boat", 4: "airplane", 14: "bird", 0: "person", 33: "kite", 37: "surfboard"}
 
 
-class UltralyticsDetector(BaseDetector):
-    def __init__(self, weights: str, name: str | None = None, imgsz: int = 640, device: str | None = None,
-                 half: bool = True, iou: float = 0.7, prompts: list[str] | None = None,
-                 training_data: str = "COCO", **kw):
-        super().__init__(**kw)
-        import torch
-        from ultralytics import RTDETR, YOLO
+class UltralyticsDetector:
+    def __init__(
+        self,
+        weights: str = "yolo11s.pt",
+        imgsz: int = 1280,
+        conf: float = 0.05,
+        iou: float = 0.6,
+        device: Optional[str] = None,
+        keep: Optional[Iterable[int]] = (8,),
+        half: bool = False,
+        max_det: int = 100,
+    ):
+        from ultralytics import YOLO, RTDETR
 
-        self.torch = torch
-        self.device = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.half = half and self.device.startswith("cuda")
-        cls = RTDETR if "rtdetr" in weights.lower() else YOLO
-        self.model = cls(weights)
-        self.weights = weights
-        self.prompts = list(prompts) if prompts else None
-        if prompts:
-            self.model.set_classes(prompts)
+        w = weights if weights.endswith((".pt", ".onnx", ".engine")) else weights + ".pt"
+        self.model = RTDETR(w) if "rtdetr" in w.lower() else YOLO(w)
+        self.name = w.rsplit("/", 1)[-1].rsplit(".", 1)[0] + f"@{imgsz}"
+        self.imgsz, self.conf, self.iou, self.device, self.half, self.max_det = imgsz, conf, iou, device, half, max_det
+        self.keep = set(keep) if keep is not None else None
         self.names = self.model.names
-        self.imgsz = imgsz
-        self.iou = iou
-        self.name = name or weights.rsplit("/", 1)[-1].replace(".pt", "")
-        self.training_data = training_data
-        try:
-            from ultralytics.utils.torch_utils import get_flops, get_num_params
 
-            self.params_m = get_num_params(self.model.model) / 1e6
-            self.gflops = get_flops(self.model.model, imgsz) or None
-        except Exception:
-            pass
-        # warm-up
-        self.model.predict(np.zeros((imgsz, imgsz, 3), dtype=np.uint8), imgsz=imgsz, device=self.device,
-                           half=self.half, verbose=False)
-
-    def _sync(self):
-        if self.device.startswith("cuda"):
-            self.torch.cuda.synchronize()
-
-    def _infer(self, image_bgr: np.ndarray) -> list[Detection]:
-        r = self.model.predict(image_bgr, imgsz=self.imgsz, conf=self.score_thr, iou=self.iou,
-                               device=self.device, half=self.half, verbose=False, max_det=self.max_det)[0]
-        out = []
+    def detect(self, image_bgr: np.ndarray) -> list[Detection]:
+        r = self.model.predict(
+            image_bgr, imgsz=self.imgsz, conf=self.conf, iou=self.iou, device=self.device, half=self.half,
+            max_det=self.max_det, verbose=False, classes=sorted(self.keep) if self.keep else None,
+        )[0]
+        out: list[Detection] = []
         if r.boxes is None:
             return out
         xyxy = r.boxes.xyxy.cpu().numpy()
         conf = r.boxes.conf.cpu().numpy()
         cls = r.boxes.cls.cpu().numpy().astype(int)
         for b, s, c in zip(xyxy, conf, cls):
-            out.append(Detection(box=xyxy_to_xywh(b), score=float(s), label=str(self.names[int(c)]), label_id=int(c)))
+            out.append(Detection(box=xyxy_to_xywh(b), score=float(s), label=str(self.names.get(int(c), c)), label_id=int(c)))
         return out

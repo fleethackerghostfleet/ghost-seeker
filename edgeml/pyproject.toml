@@ -6,12 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "edgeml"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = ["numpy", "opencv-python-headless", "pyyaml"]
+dependencies = ["numpy", "opencv-python-headless", "pyyaml", "scipy"]
 
 [project.optional-dependencies]
-eval = ["pycocotools", "faster-coco-eval", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git"]
+eval = ["pycocotools", "faster-coco-eval", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git", "matplotlib"]
+tracking = ["boxmot>=13", "lap"]
+detect = ["ultralytics>=8.3", "torch", "torchvision"]
+test = ["pytest"]
 # workstream B detectors (GPU eval box); CPU boxes install [onnx] only
-gpu = ["torch", "torchvision", "ultralytics", "transformers>=4.50", "timm", "huggingface_hub", "onnxruntime-gpu",
+gpu = ["torch", "torchvision", "ultralytics>=8.3", "transformers>=4.50", "timm", "huggingface_hub", "onnxruntime-gpu",
        "onnx", "onnxslim", "faster-coco-eval", "pillow"]
 onnx = ["onnx", "onnxruntime", "onnxslim"]
 

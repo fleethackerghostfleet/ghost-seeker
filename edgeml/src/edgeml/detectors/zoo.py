@@ -37,9 +37,9 @@ def build(name: str, **kw):
 
 def _ul(weights, name, training="COCO"):
     def f(imgsz=640, **kw):
-        from .ultralytics_det import UltralyticsDetector
+        from .ultralytics_zoo import UltralyticsZooDetector
 
-        return UltralyticsDetector(weights, name=name, imgsz=imgsz, training_data=training, **kw)
+        return UltralyticsZooDetector(weights, name=name, imgsz=imgsz, training_data=training, **kw)
 
     return f
 
@@ -93,9 +93,9 @@ def _nanodet(imgsz=416, **kw):
 # ---- open-vocabulary with maritime prompts -------------------------------------------------------
 @_reg("yolov8s-world", "small")
 def _yworld(imgsz=640, prompts=None, **kw):
-    from .ultralytics_det import UltralyticsDetector
+    from .ultralytics_zoo import UltralyticsZooDetector
 
-    return UltralyticsDetector("yolov8s-worldv2.pt", name="yolov8s-worldv2", imgsz=imgsz,
+    return UltralyticsZooDetector("yolov8s-worldv2.pt", name="yolov8s-worldv2", imgsz=imgsz,
                                prompts=prompts or MARITIME_PROMPTS, training_data="O365+GoldG (YOLO-World)", **kw)
 
 
@@ -125,15 +125,15 @@ def _hf_pt(repo, fname):
 
 @_reg("argus-yolov8s", "small", exclude={"seaships7000"})
 def _argus_v8s(imgsz=640, **kw):
-    from .ultralytics_det import UltralyticsDetector
+    from .ultralytics_zoo import UltralyticsZooDetector
 
-    return UltralyticsDetector(_hf_pt("alimkacar/argus-maritime-yolov8s", "best.pt")(), name="argus-yolov8s", imgsz=imgsz,
+    return UltralyticsZooDetector(_hf_pt("alimkacar/argus-maritime-yolov8s", "best.pt")(), name="argus-yolov8s", imgsz=imgsz,
                                training_data="Marine Surveillance (Roboflow) + SeaShips (trained on SeaShips!)", **kw)
 
 
 @_reg("argus-yolo11l", "large", exclude={"seaships7000"})
 def _argus_11l(imgsz=1280, **kw):
-    from .ultralytics_det import UltralyticsDetector
+    from .ultralytics_zoo import UltralyticsZooDetector
 
-    return UltralyticsDetector(_hf_pt("alimkacar/argus-maritime-yolo11l", "argus-v2.pt")(), name="argus-yolo11l", imgsz=imgsz,
+    return UltralyticsZooDetector(_hf_pt("alimkacar/argus-maritime-yolo11l", "argus-v2.pt")(), name="argus-yolo11l", imgsz=imgsz,
                                training_data="Marine Surveillance + Ship Detection (Roboflow) + SeaShips7000 + WaterScenes", **kw)

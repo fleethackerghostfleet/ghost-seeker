@@ -1,0 +1,9 @@
+reviewed: true
+merge: {13: [2, 9, 76, 105, 109, 110, 112, 113, 114, 126, 128, 130, 131]}
+notes: >-
+  One submarine, in frame continuously from ~f31 to f745 (f1-30 are a black title card). The teacher split it into 14
+  concurrent/sequential fragments: alternating "sail only" boxes (2, 9, 109, 112) and "full hull" boxes (13, 110, 113, 114,
+  128, 131), plus zoomed-in close-ups of the sail after video cuts (76, 105, 126, 130). All verified on contact sheets to be
+  the same vessel -> merged into id 13 (one object, one continuous pass). Per frame the larger box is kept, so box extent
+  still flips between hull and sail where only the sail track existed; treat IoU at alpha<=0.3 as the trustworthy regime here.
+  YouTube end-card overlays (PREVIOUS/PLAYLIST/SUBSCRIBE) appear from ~f635; no boxes on them.
