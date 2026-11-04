@@ -116,7 +116,7 @@ def _tracks(run_dir: Path, cfg: str, seq_id: str) -> dict[int, list[tuple[int, l
     return out
 
 
-def timeline(run_dir: Path, cfg: str, seq, out: Path, naive_cfg: str | None = None):
+def timeline(run_dir: Path, cfg: str, seq, out: Path, naive_cfg: str | None = None, naive_run: Path | None = None):
     """GT tracks (grey bars), sightings (coloured bars with open/update ticks), naive detections per second (top)."""
     ev = _events(run_dir, cfg, seq.seq_id)
     gt = seq.gt_tracks()
@@ -149,7 +149,7 @@ def timeline(run_dir: Path, cfg: str, seq, out: Path, naive_cfg: str | None = No
         ylab.append(sid.split(":")[-1])
         y += 1
     if naive_cfg:
-        nev = _events(run_dir, naive_cfg, seq.seq_id)
+        nev = _events(naive_run or run_dir, naive_cfg, seq.seq_id)
         per_s = defaultdict(int)
         for e in nev:
             per_s[int(e["t_s"])] += 1
@@ -256,6 +256,7 @@ def main():
     ap.add_argument("--timeline-run", default=None)
     ap.add_argument("--timeline-cfg", default=None)
     ap.add_argument("--timeline-seqs", nargs="*", default=[])
+    ap.add_argument("--naive-run", default=None, help="run dir holding the naive baseline events for the timeline overlay")
     ap.add_argument("--failure-run", default=None)
     ap.add_argument("--failure-cfg", default=None)
     ap.add_argument("--chart-keys", nargs="*", default=[], help="run::cfg keys for the delivery/reduction charts")
@@ -281,7 +282,8 @@ def main():
         rd = Path(a.timeline_run or a.runs[0]).expanduser()
         det = a.timeline_cfg.split("|")[0]
         for sid in a.timeline_seqs:
-            timeline(rd, a.timeline_cfg, seq_by_id[sid], out / f"timeline_{sid}.png", naive_cfg=f"{det}|naive|{a.timeline_cfg.split('|')[2]}")
+            timeline(rd, a.timeline_cfg, seq_by_id[sid], out / f"timeline_{sid}.png", naive_cfg=f"{det}|naive|{a.timeline_cfg.split('|')[2]}",
+                     naive_run=Path(a.naive_run).expanduser() if a.naive_run else None)
     if a.failure_cfg:
         rd = Path(a.failure_run or a.runs[0]).expanduser()
         made = failure_sheets(rd, a.failure_cfg, list(seq_by_id.values()), out)
