@@ -79,6 +79,13 @@ def square_pad(crop: np.ndarray) -> np.ndarray:
     return cv2.copyMakeBorder(crop, *pads, cv2.BORDER_CONSTANT, value=[float(v) for v in crop.reshape(-1, 3).mean(0)])
 
 
+def prompt_texts() -> list[str]:
+    groups = [p for _, _, p in SHIP_TYPES.values()] + [UNKNOWN_PROMPTS]
+    prompts = [t.format(p) for ps in groups for p in ps for t in TEMPLATES]
+    prompts.extend(p for group in ASPECTS.values() for p in group)
+    return list(dict.fromkeys(prompts))
+
+
 def size_from_type(t: str) -> str | None:
     return SHIP_TYPES[t][1] if t in SHIP_TYPES else None
 
