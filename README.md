@@ -47,7 +47,7 @@ scenarios/              replay scenarios (datasets + operator events)
 
 ## Quick start
 
-Requires Go 1.23+. No CGO, no GPU.
+Requires Go 1.23+. No CGO, no GPU. The demo imagery in `frames/` is Git LFS: run `git lfs pull` after cloning, or the default replay scenario finds only pointer files.
 
 ```sh
 make build                 # bin/edge bin/shore bin/sim
