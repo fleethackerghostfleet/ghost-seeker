@@ -195,6 +195,36 @@ def test_qa_apply_box_corrections_and_preserve_no_correction_output(tmp_path):
     assert gt_path.read_bytes() == original.encode()
 
 
+def test_qa_apply_rebuilds_attrs_from_pristine_teacher_copy(tmp_path):
+    seq_dir, _ = _make_sequence(tmp_path)
+    original_attrs = (seq_dir / "gt" / "attrs.jsonl").read_bytes()
+    rows, classes = apply(
+        seq_dir, {"drop_boxes": [[1, 2]]}, {"1": "ship", "2": "buoy"}
+    )
+    rewrite_attrs(seq_dir, {"drop_boxes": [[1, 2]]}, rows, classes)
+    assert len((seq_dir / "gt" / "attrs.jsonl").read_text().splitlines()) == 1
+    assert (
+        seq_dir / "teacher" / "attrs_teacher.jsonl"
+    ).read_bytes() == original_attrs
+
+    rows, classes = apply(seq_dir, {}, {"1": "ship", "2": "buoy"})
+    rewrite_attrs(seq_dir, {}, rows, classes)
+    assert (seq_dir / "gt" / "attrs.jsonl").read_bytes() == original_attrs
+
+
+def test_qa_apply_box_relabel_overrides_track_relabel(tmp_path):
+    seq_dir, _ = _make_sequence(tmp_path)
+    corrections = {"relabel": {1: "cargo"}, "relabel_boxes": {"1:1": "tug"}}
+    rows, classes = apply(seq_dir, corrections, {"1": "ship", "2": "buoy"})
+    rewrite_attrs(seq_dir, corrections, rows, classes)
+    attrs = [
+        json.loads(line)
+        for line in (seq_dir / "gt" / "attrs.jsonl").read_text().splitlines()
+    ]
+
+    assert attrs[0]["label"] == "tug"
+
+
 def test_qa_apply_records_frame_and_box_provenance(tmp_path):
     seq_dir = tmp_path / "seq_a"
     gt_dir = seq_dir / "gt"

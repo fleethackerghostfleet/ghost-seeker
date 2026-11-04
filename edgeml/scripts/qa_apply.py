@@ -106,6 +106,10 @@ def rewrite_attrs(seq_dir, corr, rows, classes):
     attrs_path = seq_dir / "gt" / "attrs.jsonl"
     if not attrs_path.exists():
         return
+    teacher_attrs_path = seq_dir / "teacher" / "attrs_teacher.jsonl"
+    teacher_attrs_path.parent.mkdir(parents=True, exist_ok=True)
+    if not teacher_attrs_path.exists():
+        shutil.copyfile(attrs_path, teacher_attrs_path)
     drop = {int(track_id) for track_id in corr.get("drop") or []}
     remap = {
         int(old): int(new)
@@ -121,7 +125,7 @@ def rewrite_attrs(seq_dir, corr, rows, classes):
     survivors = set(class_by_key)
     output = {}
     original_by_key = {}
-    for line in attrs_path.read_text(encoding="utf-8").splitlines():
+    for line in teacher_attrs_path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         row = json.loads(line)
@@ -134,7 +138,7 @@ def rewrite_attrs(seq_dir, corr, rows, classes):
         if key not in survivors:
             continue
         row["id"] = track_id
-        row["label"] = relabel.get(track_id, relabel_boxes.get(key, class_by_key[key]))
+        row["label"] = relabel_boxes.get(key, relabel.get(track_id, class_by_key[key]))
         output[key] = row
     for frame, track_id in sorted(survivors - output.keys()):
         mot_row = next(row for row in rows if (int(row[0]), int(row[1])) == (frame, track_id))
