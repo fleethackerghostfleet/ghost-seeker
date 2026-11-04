@@ -17,6 +17,8 @@
   </div>
   <nav><a href="#feed" id="navFeed" class="on">Imagery Feed</a><a href="#review" id="navRv">Operator Review <span class="bdg" id="rvCount"></span></a><a href="#reprioritize" id="navRp">Collection Priorities <span class="bdg" id="dirCount"></span></a><a href="/cdr.html" target="_blank" rel="noopener">Commander View ↗</a></nav>
   <div class="live" id="live"><i></i><span>FEED ACTIVE</span></div>
+  <button class="btn sm setbtn" id="setBtn" title="Display settings" aria-label="Display settings">⚙</button>
+  <div class="spacer"></div>
   <div class="hstats">
     <div class="hstat"><b id="hsImgs">0</b><span>Images held</span></div>
     <div class="hstat"><b id="hsP1" style="color:var(--p1)">0</b><span>Flash</span></div>
@@ -27,6 +29,7 @@
 </header>
 
 <section class="page on" id="pgFeed">
+ <div class="fhead">
   <div class="toolbar">
     <span class="lbl">Sensor</span>
     <select id="srcSel"></select>
@@ -48,8 +51,12 @@
     <div class="st" id="st5">Command model: <b id="cModel"></b> · <b id="cP1">0</b> P1</div>
     <span class="sv"><span id="cSaved">0%</span> of frames filtered at the edge</span>
   </div>
+ </div>
+ <div class="fbody">
   <div class="feed" id="feed"><div class="grid m" id="grid"></div><div class="empty" id="empty" style="display:none">No images match this filter yet…</div></div>
   <aside class="drawer" id="drawer"></aside>
+  </div>
+  <div class="zoom" id="zoom" hidden></div>
 </section>
 
 <section class="page" id="pgRp">
@@ -121,6 +128,8 @@
  </div>
 </section>
 <div class="toast" id="toast"></div>
+<dialog id="settings" class="setdlg"></dialog>
+<script src="/settings.js" defer></script>
 <script src="/render.js" defer></script>
 <script src="/workbench.js" defer></script>
 <script src="/pptxgen.bundle.js" defer></script>

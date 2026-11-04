@@ -39,13 +39,27 @@ test('paused snapshots refresh existing and queued scores without exposing captu
  const pauseHandler=source.split('\n').find(line=>line.includes("$('pauseBtn').onclick="));
  vm.runInContext(pauseHandler,context);
  vm.runInContext("$('pauseBtn').onclick()",context);
- assert.equal(vm.runInContext("!state.paused&&pendingItems.length===0&&items.length===4&&findItem('queued').tier===1&&!findItem('evicted')",context),true);
+ assert.equal(vm.runInContext("!state.paused&&pendingItems.length===0&&items.length===3&&findItem('queued').tier===1&&!findItem('evicted')&&!findItem('not-in-snapshot')&&!!findItem('snapshot-only')",context),true);
 });
 
 test('empty paused snapshot preserves visible items and queue',()=>{
  const context=setup();
  vm.runInContext("state.paused=true;items=[normalizeItem(raw('visible'))];pendingItems=[{item:raw('queued')}];applySnapshot(snapshot([]))",context);
  assert.equal(vm.runInContext("items.length===1&&pendingItems.length===1",context),true);
+});
+
+test('resume after a held reconnect drops items the server no longer has but keeps later arrivals',()=>{
+ const context=setup();
+ vm.runInContext(`
+  state.paused=true;items=[normalizeItem(raw('stale')),normalizeItem(raw('kept'))];
+  openStream();
+  applySnapshot(snapshot([raw('kept')]));
+  streamHandlers.item({data:JSON.stringify({item:raw('later'),stats:{}})});
+ `,context);
+ assert.equal(vm.runInContext("items.length===2",context),true);
+ vm.runInContext(source.split('\n').find(line=>line.includes("$('pauseBtn').onclick=")),context);
+ vm.runInContext("$('pauseBtn').onclick()",context);
+ assert.equal(vm.runInContext("items.length===2&&!!findItem('kept')&&!!findItem('later')&&!findItem('stale')",context),true);
 });
 
 test('unpaused snapshot still replaces items and clears pending and eviction state',()=>{

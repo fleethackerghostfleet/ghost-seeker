@@ -1,6 +1,6 @@
 let SOURCES=[],SRC={},CLS={},MODELS={},ATTR_LAB={},EXAMPLES=[];
 let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[]};
-let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set();
+let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null;
 
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>CLS[k].lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>CLS[k].lab).join(' / ')):'Any object';
@@ -35,25 +35,27 @@ function applySnapshot(data){
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
+  heldSnapshotIDs=new Set(snapshot.keys());
   items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
   pendingItems=pendingItems.map(event=>({...event,item:snapshot.get(event.item.id)||event.item}));
   const queued=new Set(pendingItems.map(event=>event.item.id));
   for(const item of data.items)if(!elements.has(item.id)&&!queued.has(item.id)&&!evictedIDs.has(item.id))pendingItems.push({item});
  }else{
   items=data.items.map(item=>{item=normalizeItem(item);item.el=elements.get(item.id);return item});
-  pendingItems=[];evictedIDs.clear();
+  pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
  }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
  state.model=data.state.model;state.directives=data.state.directives;
  stats=data.stats;cdr=data.cdr;weightData=data.weights||{};
  state.sel=items.some(item=>item.id===selection)?selection:null;
- if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML=''}
+ if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML='';closeZoom()}
  rv.cur=rv.cur&&items.find(item=>item.id===rv.cur.id)||null;
  renderAll();
 }
 function applyItemUpdate(raw){
  if(state.paused&&!findItem(raw.id)){
   if(evictedIDs.has(raw.id))return;
+  heldSnapshotIDs?.add(raw.id);
   const pending=pendingItems.find(event=>event.item.id===raw.id);
   if(pending)pending.item=raw;else pendingItems.push({item:raw});
   renderStats();return;
@@ -72,12 +74,18 @@ async function patchItem(id,changes){
  const result=await request(`/api/items/${encodeURIComponent(id)}`,'PATCH',changes);
  cdr=result.cdr;applyItemUpdate(result.item);return findItem(id);
 }
+function renderLive(){
+ const live=$('live');live.classList.toggle('off',!!state.offline);live.classList.toggle('paused',!state.offline&&state.paused);
+ live.querySelector('span').textContent=state.offline?'RECONNECTING':state.paused?'FEED HELD':'FEED ACTIVE';
+}
 function openStream(){
  const stream=new EventSource('/api/stream');
+ stream.onopen=()=>{state.offline=false;renderLive()};
+ stream.onerror=()=>{state.offline=true;renderLive()};
  stream.addEventListener('snapshot',event=>applySnapshot(JSON.parse(event.data)));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
-  stats=data.stats;if(state.paused){pendingItems.push(data);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
+  stats=data.stats;if(state.paused){pendingItems.push(data);heldSnapshotIDs?.add(data.item.id);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
  });
  stream.addEventListener('stats',event=>{
   stats=JSON.parse(event.data).stats;renderStats();
@@ -110,15 +118,16 @@ async function init(){
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderFeed()};
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens};
  $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
- $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Hold';$('live').classList.toggle('paused',state.paused);$('live').querySelector('span').textContent=state.paused?'FEED HELD':'FEED ACTIVE';if(!state.paused){for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}};
+ $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Hold';renderLive();if(!state.paused){if(heldSnapshotIDs){const keep=heldSnapshotIDs;for(const item of items)if(!keep.has(item.id)){imageCache.delete(item.id);if(state.sel===item.id)closeDetail();if(rv.cur?.id===item.id){rv.cur=null;rv.shown=null}}items=items.filter(item=>keep.has(item.id));pendingItems=pendingItems.filter(event=>keep.has(event.item.id));heldSnapshotIDs=null}for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
- document.addEventListener('keydown',e=>{const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ document.addEventListener('keydown',e=>{if($('settings').open)return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
   if(k==='n'){toggleNight();return}
   if(state.page==='rv'){if(k==='escape'){location.hash='#feed';return}const a=RVKEYS[k];if(a){e.preventDefault();if(!e.repeat)rvAct(a)}return}
   if(state.page!=='feed')return;
   if(k==='r'){location.hash='#review';return}
-  if(k==='escape')closeDetail();
+  if(k==='escape'){if(state.zoom)closeZoom();else closeDetail();return}
+  if(k==='f'&&state.sel){state.zoom?closeZoom():openZoom();return}
   if(state.sel&&['1','2','3','4'].includes(k))setManual(state.sel,+k);
   if(state.sel&&['arrowright','arrowdown','arrowleft','arrowup'].includes(k)){e.preventDefault();step(k==='arrowright'||k==='arrowdown'?1:-1)}});
  $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b){b.blur();rvAct(b.dataset.a)}};
@@ -149,7 +158,7 @@ function renderTierSeg(counts){
 }
 function boxesHTML(it,labels){
  return it.dets.map((d,i)=>{const sd=it.det[i];const c=sd.sup?'sup':sd.matched?'match':sd.s>=.6?'hi':sd.s>=.3?'md':'lo';const b=d.b;
-  return`<div class="box ${c}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
+  return`<div class="box ${c}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
 function topLine(it){
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return'—';
@@ -195,7 +204,11 @@ function renderStats(){
 
 /* ---- detail drawer ---- */
 function openDetail(id){const prev=items.find(i=>i.id===state.sel);state.sel=id;document.body.classList.add('drawer-open');prev&&updateCard(prev);const it=items.find(i=>i.id===id);it&&updateCard(it);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
-function closeDetail(){const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
+function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
+function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
+function renderZoom(){const it=items.find(i=>i.id===state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
+ z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}">P${it.tier}</span><b>${it.src.name}</b><span class="mono">${zulu(it.ts)}</span><span>DB #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe"><img src="${imageFor(it)}">${boxesHTML(it,true)}</div>`;z.onclick=closeZoom}
+function closeDetail(){closeZoom();const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
 function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function buildWhy(it,rows){
  const why=[];const top=rows[0];
@@ -217,7 +230,7 @@ function renderDetail(){
  const l=visible().l,idx=l.findIndex(x=>x.id===it.id);
  D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}">P${it.tier}</span>${tierName}</h2><small>${it.src.name} · <span class="mono">${zulu(it.ts)}</span> · DB #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
   <div class="dnav"><button id="dPrev" title="Previous (←)">‹</button><button id="dNext" title="Next (→)">›</button><button id="dClose" title="Close (Esc)">×</button></div></div>
- <div class="dimg"><img src="${imageFor(it)}">${boxesHTML(it,true)}</div>
+ <div class="dimg" id="dImg" title="Enlarge (F)"><img src="${imageFor(it)}">${boxesHTML(it,true)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
   <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">${t} · P${t}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
   <div class="scores"><div class="sc"><span>Edge triage</span><b>${it.edge.toFixed(2)}</b></div><div class="sc"><span>Command score</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span>Directive Δ</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
@@ -233,7 +246,7 @@ function renderDetail(){
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}" id="aCdr">${it.sent?'✓ Sent to Commander':'Send to Commander'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis">Dismiss</button></div>
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
- D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;
+ D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
  briefing.renderDetections(it);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aSim').onclick=()=>{const k=rows[0]&&rows[0][0].cls;if(!k)return;$('nlIn').value=`Prioritize ${CLS[k].lab.toLowerCase()}s`;location.hash='#reprioritize';toast('Drafted a directive from this image — review and apply')};
@@ -257,7 +270,7 @@ function renderDirectives(){
  $('directives').querySelectorAll('.x').forEach(b=>b.onclick=async()=>{try{await request(`/api/directives/${encodeURIComponent(b.dataset.id)}`,'DELETE');toast('Directive removed')}catch(error){toast(error.message)}});
 }
 async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} — logged as model feedback`)}catch(error){toast(error.message)}}
-function toggleNight(){document.body.classList.toggle('night');$('nightBtn').textContent=document.body.classList.contains('night')?'Day mode (N)':'Night mode (N)'}
+function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
 let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{}};
