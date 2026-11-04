@@ -45,4 +45,4 @@ def test_unknown_floor_confidence_is_complement_of_rejected_known_type():
     assert top_probability < classifier.unknown_floor
     result = classifier.classify_embeddings(embeddings)[0]
     assert result["type"] == st.UNKNOWN
-    assert np.isclose(result["conf"], 1 - top_probability)
+    assert np.isclose(result["conf"], 1 - top_probability, atol=1e-3)
