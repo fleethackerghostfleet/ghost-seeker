@@ -59,7 +59,27 @@ def detect(proc, model, img_bgr, device, box_thr=0.2, text_thr=0.15):
         if (x2 - x1) * (y2 - y1) > 0.5 * w * h:  # whole-frame hallucinations
             continue
         dets.append([x1, y1, x2, y2, float(s), cls, lab])
-    return dets
+    return nms_class_agnostic(dets)
+
+
+def nms_class_agnostic(dets, iou_thr=0.6):
+    """One prompt per object: 'ship' and 'boat' both fire on the same hull, which otherwise becomes two tracks."""
+    keep = []
+    for d in sorted(dets, key=lambda d: -d[4]):
+        ax1, ay1, ax2, ay2 = d[:4]
+        area_a = (ax2 - ax1) * (ay2 - ay1)
+        ok = True
+        for k in keep:
+            bx1, by1, bx2, by2 = k[:4]
+            iw, ih = max(0.0, min(ax2, bx2) - max(ax1, bx1)), max(0.0, min(ay2, by2) - max(ay1, by1))
+            inter = iw * ih
+            union = area_a + (bx2 - bx1) * (by2 - by1) - inter
+            if union > 0 and inter / union > iou_thr:
+                ok = False
+                break
+        if ok:
+            keep.append(d)
+    return keep
 
 
 def make_tracker(fps):
@@ -101,7 +121,7 @@ def postprocess(track_rows, fps, min_hits=5, max_gap_s=2.0):
                     frames[f] = (*(pa * (1 - t) + pb * t), -1.0)  # conf<0 marks interpolated (internal)
         for f, (x1, y1, x2, y2, conf) in sorted(frames.items()):
             # interpolated boxes are still evaluated (conf=1); visibility=0.5 flags them for audit
-            out.append((f, tid, x1, y1, x2 - x1, y2 - y1, 1, cls, 1.0 if conf >= 0 else 0.5))
+            out.append((f, tid + 1, x1, y1, x2 - x1, y2 - y1, 1, cls, 1.0 if conf >= 0 else 0.5))  # MOT ids are 1-based
     out.sort()
     return out
 
