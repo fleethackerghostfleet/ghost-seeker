@@ -35,6 +35,7 @@ func main() {
 	listen := flag.String("listen", env("LISTEN", ":8081"), "console listen address")
 	shoreURL := flag.String("shore", env("SHORE_URL", "http://localhost:8080"), "shore base URL (put Toxiproxy here to degrade)")
 	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference sidecar URL, or 'mock'")
+	dedup := flag.String("dedup", env("DEDUP", "hash"), "naive (item per frame) | hash (exact-duplicate frames fold) | sightings (one item per object; needs a sidecar that returns sightings)")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	scen := flag.String("scenario", env("SCENARIO", ""), "scenario JSON to replay into the store (optional)")
 	frames := flag.String("frames", env("FRAMES_DIR", ""), "replay the built-in scenario from this frame dir (optional)")
@@ -63,6 +64,8 @@ func main() {
 	}
 	icfg := ingest.DefaultConfig()
 	icfg.EdgeID = *id
+	icfg.Dedup, err = ingest.ParseDedup(*dedup)
+	fatal(err)
 	ing := ingest.New(icfg, st, an, sch, clk, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -88,7 +91,7 @@ func main() {
 		}()
 	}
 
-	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk}
+	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped}
 	mux := http.NewServeMux()
 	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc)
 	mux.Handle(path, h)
