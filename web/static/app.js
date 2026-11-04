@@ -35,8 +35,8 @@ function applySnapshot(data){
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
-  items=items.filter(item=>snapshot.has(item.id)).map(item=>({...normalizeItem(snapshot.get(item.id)),el:item.el}));
-  pendingItems=pendingItems.filter(event=>snapshot.has(event.item.id)).map(event=>({...event,item:snapshot.get(event.item.id)}));
+  items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
+  pendingItems=pendingItems.map(event=>({...event,item:snapshot.get(event.item.id)||event.item}));
   const queued=new Set(pendingItems.map(event=>event.item.id));
   for(const item of data.items)if(!elements.has(item.id)&&!queued.has(item.id)&&!evictedIDs.has(item.id))pendingItems.push({item});
  }else{
