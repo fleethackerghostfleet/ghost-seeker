@@ -21,6 +21,7 @@ message ExchangeRequest {
   repeated ManifestEntry manifest = 3;
   repeated Chunk chunks = 4;
   int64 downlink_cursor = 5; // last downlink seq the edge has applied
+  repeated LabelOverride overrides = 6; // shipboard label corrections not yet seen by shore
 }
 
 message ExchangeResponse {

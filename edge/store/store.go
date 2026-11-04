@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -479,6 +480,66 @@ func (s *Store) SetCursor(ctx context.Context, v int64) error {
 		v >>= 8
 	}
 	return s.setKV(ctx, "downlink_cursor", raw)
+}
+
+// QueueOverride records a shipboard label correction to be uplinked.
+func (s *Store) QueueOverride(ctx context.Context, o *pb.LabelOverride) error {
+	cur, err := s.PendingOverrides(ctx)
+	if err != nil {
+		return err
+	}
+	kept := cur[:0]
+	for _, c := range cur {
+		if c.ItemId != o.ItemId {
+			kept = append(kept, c)
+		}
+	}
+	kept = append(kept, o)
+	return s.saveOverrides(ctx, kept)
+}
+
+// PendingOverrides returns shipboard overrides shore has not acknowledged.
+func (s *Store) PendingOverrides(ctx context.Context) ([]*pb.LabelOverride, error) {
+	raw, err := s.getKV(ctx, "pending_overrides")
+	if err != nil || len(raw) == 0 {
+		return nil, err
+	}
+	var list []*pb.LabelOverride
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// ClearOverrides drops the given overrides once shore has taken them.
+// A newer correction for the same item queued meanwhile is kept.
+func (s *Store) ClearOverrides(ctx context.Context, sent []*pb.LabelOverride) error {
+	cur, err := s.PendingOverrides(ctx)
+	if err != nil {
+		return err
+	}
+	kept := cur[:0]
+	for _, c := range cur {
+		acked := false
+		for _, o := range sent {
+			if o.ItemId == c.ItemId && o.Label == c.Label && o.By == c.By {
+				acked = true
+				break
+			}
+		}
+		if !acked {
+			kept = append(kept, c)
+		}
+	}
+	return s.saveOverrides(ctx, kept)
+}
+
+func (s *Store) saveOverrides(ctx context.Context, list []*pb.LabelOverride) error {
+	raw, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	return s.setKV(ctx, "pending_overrides", raw)
 }
 
 func (s *Store) getKV(ctx context.Context, k string) ([]byte, error) {

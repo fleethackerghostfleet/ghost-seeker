@@ -5,6 +5,7 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"log/slog"
 
 	"connectrpc.com/connect"
@@ -57,6 +58,14 @@ func (s *Service) Exchange(ctx context.Context, req *pb.ExchangeRequest) (*pb.Ex
 			}
 		}
 	}
+	for _, o := range req.Overrides {
+		if !ids.Valid(o.ItemId) {
+			continue
+		}
+		if err := s.st.SetOverride(ctx, o.ItemId, o.Label, o.By); err != nil {
+			s.log.Warn("override", "item", o.ItemId, "err", err)
+		}
+	}
 	if req.Heartbeat != nil {
 		if err := s.st.Heartbeat(ctx, req.EdgeId, req.Heartbeat, bytes, now); err != nil {
 			return nil, err
@@ -85,8 +94,6 @@ func (s *Service) ingestFact(ctx context.Context, itemID string) {
 	if err := s.st.SetFeatures(ctx, itemID, feat, label); err != nil {
 		s.log.Warn("set features", "item", itemID, "err", err)
 	}
-	// Mirror the override column, including clearing it when the edge did.
-	_ = s.st.SetOverride(ctx, itemID, f.Override, f.OverrideBy)
 }
 
 // Connect adapter.

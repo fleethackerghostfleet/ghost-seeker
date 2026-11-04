@@ -190,7 +190,17 @@ func (s *Scheduler) ApplyPolicy(ctx context.Context, p *pb.Policy) (suppressed, 
 }
 
 // Override sets a human label on an item and rescores it.
+// Override applies a shipboard label correction and queues it for uplink so
+// shore learns the new label explicitly (manifests and record FACTs never
+// carry it). Downlinked overrides from shore go through applyOverride.
 func (s *Scheduler) Override(ctx context.Context, o *pb.LabelOverride) error {
+	if err := s.applyOverride(ctx, o); err != nil {
+		return err
+	}
+	return s.st.QueueOverride(ctx, o)
+}
+
+func (s *Scheduler) applyOverride(ctx context.Context, o *pb.LabelOverride) error {
 	row, err := s.st.Get(ctx, o.ItemId)
 	if err != nil {
 		return err
@@ -507,6 +517,7 @@ func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
 	req := &pb.ExchangeRequest{EdgeId: s.cfg.EdgeID, Manifest: plan.Manifest}
 	cursor, _ := s.st.GetCursor(ctx)
 	req.DownlinkCursor = cursor
+	req.Overrides, _ = s.st.PendingOverrides(ctx)
 	var payload int64
 	for _, c := range plan.Chunks {
 		data, err := s.st.ReadForm(c.ItemId, c.Form, c.Offset, int64(len(c.Data)))
@@ -568,6 +579,9 @@ func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
 	s.stats.ManifestSent += int64(len(mids))
 	s.stats.LastExchange = s.clk.Now()
 	s.mu.Unlock()
+	if len(req.Overrides) > 0 {
+		_ = s.st.ClearOverrides(ctx, req.Overrides)
+	}
 	if err := s.applyResponse(ctx, resp); err != nil {
 		return s.cfg.Tick, err
 	}
@@ -612,7 +626,7 @@ func (s *Scheduler) applyResponse(ctx context.Context, resp *pb.ExchangeResponse
 		case *pb.Downlink_Pull:
 			err = s.Pull(ctx, m.Pull)
 		case *pb.Downlink_LabelOverride:
-			err = s.Override(ctx, m.LabelOverride)
+			err = s.applyOverride(ctx, m.LabelOverride)
 		}
 		if err != nil {
 			s.log.Warn("apply downlink", "seq", d.Seq, "err", err)

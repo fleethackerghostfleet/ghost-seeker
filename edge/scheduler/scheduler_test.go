@@ -22,6 +22,7 @@ type fakeShore struct {
 	fail      bool
 	manifests []string
 	chunks    []*pb.Chunk
+	overrides []*pb.LabelOverride
 	recv      map[string]int64 // item/form -> contiguous bytes
 	downlink  []*pb.Downlink
 	est       *link.Estimator
@@ -40,6 +41,7 @@ func (f *fakeShore) Exchange(_ context.Context, req *pb.ExchangeRequest) (*pb.Ex
 	}
 	f.est.Success(1<<20, time.Second, time.Now())
 	resp := &pb.ExchangeResponse{}
+	f.overrides = append(f.overrides, req.Overrides...)
 	for _, m := range req.Manifest {
 		f.manifests = append(f.manifests, m.ItemId)
 		resp.Acks = append(resp.Acks, &pb.Ack{ItemId: m.ItemId, Manifest: true})

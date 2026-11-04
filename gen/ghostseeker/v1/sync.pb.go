@@ -28,6 +28,7 @@ type ExchangeRequest struct {
 	Manifest       []*ManifestEntry       `protobuf:"bytes,3,rep,name=manifest,proto3" json:"manifest,omitempty"`
 	Chunks         []*Chunk               `protobuf:"bytes,4,rep,name=chunks,proto3" json:"chunks,omitempty"`
 	DownlinkCursor int64                  `protobuf:"varint,5,opt,name=downlink_cursor,json=downlinkCursor,proto3" json:"downlink_cursor,omitempty"` // last downlink seq the edge has applied
+	Overrides      []*LabelOverride       `protobuf:"bytes,6,rep,name=overrides,proto3" json:"overrides,omitempty"`                                  // shipboard label corrections not yet seen by shore
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -95,6 +96,13 @@ func (x *ExchangeRequest) GetDownlinkCursor() int64 {
 		return x.DownlinkCursor
 	}
 	return 0
+}
+
+func (x *ExchangeRequest) GetOverrides() []*LabelOverride {
+	if x != nil {
+		return x.Overrides
+	}
+	return nil
 }
 
 type ExchangeResponse struct {
@@ -821,13 +829,14 @@ var File_ghostseeker_v1_sync_proto protoreflect.FileDescriptor
 
 const file_ghostseeker_v1_sync_proto_rawDesc = "" +
 	"\n" +
-	"\x19ghostseeker/v1/sync.proto\x12\x0eghostseeker.v1\x1a\x19ghostseeker/v1/item.proto\x1a\x1bghostseeker/v1/policy.proto\"\xf6\x01\n" +
+	"\x19ghostseeker/v1/sync.proto\x12\x0eghostseeker.v1\x1a\x19ghostseeker/v1/item.proto\x1a\x1bghostseeker/v1/policy.proto\"\xb3\x02\n" +
 	"\x0fExchangeRequest\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x127\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x19.ghostseeker.v1.HeartbeatR\theartbeat\x129\n" +
 	"\bmanifest\x18\x03 \x03(\v2\x1d.ghostseeker.v1.ManifestEntryR\bmanifest\x12-\n" +
 	"\x06chunks\x18\x04 \x03(\v2\x15.ghostseeker.v1.ChunkR\x06chunks\x12'\n" +
-	"\x0fdownlink_cursor\x18\x05 \x01(\x03R\x0edownlinkCursor\"\x9e\x01\n" +
+	"\x0fdownlink_cursor\x18\x05 \x01(\x03R\x0edownlinkCursor\x12;\n" +
+	"\toverrides\x18\x06 \x03(\v2\x1d.ghostseeker.v1.LabelOverrideR\toverrides\"\x9e\x01\n" +
 	"\x10ExchangeResponse\x12'\n" +
 	"\x04acks\x18\x01 \x03(\v2\x13.ghostseeker.v1.AckR\x04acks\x124\n" +
 	"\bdownlink\x18\x02 \x03(\v2\x18.ghostseeker.v1.DownlinkR\bdownlink\x12+\n" +
@@ -920,25 +929,26 @@ var file_ghostseeker_v1_sync_proto_depIdxs = []int32{
 	5,  // 0: ghostseeker.v1.ExchangeRequest.heartbeat:type_name -> ghostseeker.v1.Heartbeat
 	2,  // 1: ghostseeker.v1.ExchangeRequest.manifest:type_name -> ghostseeker.v1.ManifestEntry
 	4,  // 2: ghostseeker.v1.ExchangeRequest.chunks:type_name -> ghostseeker.v1.Chunk
-	6,  // 3: ghostseeker.v1.ExchangeResponse.acks:type_name -> ghostseeker.v1.Ack
-	7,  // 4: ghostseeker.v1.ExchangeResponse.downlink:type_name -> ghostseeker.v1.Downlink
-	10, // 5: ghostseeker.v1.ManifestEntry.type:type_name -> ghostseeker.v1.ItemType
-	3,  // 6: ghostseeker.v1.ManifestEntry.forms:type_name -> ghostseeker.v1.FormSize
-	11, // 7: ghostseeker.v1.ManifestEntry.geo:type_name -> ghostseeker.v1.Geo
-	12, // 8: ghostseeker.v1.FormSize.kind:type_name -> ghostseeker.v1.FormKind
-	12, // 9: ghostseeker.v1.Chunk.form:type_name -> ghostseeker.v1.FormKind
-	12, // 10: ghostseeker.v1.Ack.form:type_name -> ghostseeker.v1.FormKind
-	13, // 11: ghostseeker.v1.Downlink.policy:type_name -> ghostseeker.v1.Policy
-	8,  // 12: ghostseeker.v1.Downlink.pull:type_name -> ghostseeker.v1.Pull
-	9,  // 13: ghostseeker.v1.Downlink.label_override:type_name -> ghostseeker.v1.LabelOverride
-	12, // 14: ghostseeker.v1.Pull.form:type_name -> ghostseeker.v1.FormKind
-	0,  // 15: ghostseeker.v1.SyncService.Exchange:input_type -> ghostseeker.v1.ExchangeRequest
-	1,  // 16: ghostseeker.v1.SyncService.Exchange:output_type -> ghostseeker.v1.ExchangeResponse
-	16, // [16:17] is the sub-list for method output_type
-	15, // [15:16] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	9,  // 3: ghostseeker.v1.ExchangeRequest.overrides:type_name -> ghostseeker.v1.LabelOverride
+	6,  // 4: ghostseeker.v1.ExchangeResponse.acks:type_name -> ghostseeker.v1.Ack
+	7,  // 5: ghostseeker.v1.ExchangeResponse.downlink:type_name -> ghostseeker.v1.Downlink
+	10, // 6: ghostseeker.v1.ManifestEntry.type:type_name -> ghostseeker.v1.ItemType
+	3,  // 7: ghostseeker.v1.ManifestEntry.forms:type_name -> ghostseeker.v1.FormSize
+	11, // 8: ghostseeker.v1.ManifestEntry.geo:type_name -> ghostseeker.v1.Geo
+	12, // 9: ghostseeker.v1.FormSize.kind:type_name -> ghostseeker.v1.FormKind
+	12, // 10: ghostseeker.v1.Chunk.form:type_name -> ghostseeker.v1.FormKind
+	12, // 11: ghostseeker.v1.Ack.form:type_name -> ghostseeker.v1.FormKind
+	13, // 12: ghostseeker.v1.Downlink.policy:type_name -> ghostseeker.v1.Policy
+	8,  // 13: ghostseeker.v1.Downlink.pull:type_name -> ghostseeker.v1.Pull
+	9,  // 14: ghostseeker.v1.Downlink.label_override:type_name -> ghostseeker.v1.LabelOverride
+	12, // 15: ghostseeker.v1.Pull.form:type_name -> ghostseeker.v1.FormKind
+	0,  // 16: ghostseeker.v1.SyncService.Exchange:input_type -> ghostseeker.v1.ExchangeRequest
+	1,  // 17: ghostseeker.v1.SyncService.Exchange:output_type -> ghostseeker.v1.ExchangeResponse
+	17, // [17:18] is the sub-list for method output_type
+	16, // [16:17] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_ghostseeker_v1_sync_proto_init() }
