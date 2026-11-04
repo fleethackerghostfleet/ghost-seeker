@@ -449,7 +449,9 @@ class Audit:
             config = configparser.ConfigParser()
             config.read(ini)
             seq = dict(config["Sequence"])
-            n = len([p for p in (path / seq.get("imdir", "img1")).glob("*") if p.suffix.lower() in IMAGE_SUFFIXES])
+            images = [p for p in (path / seq.get("imdir", "img1")).glob("*") if p.suffix.lower() in IMAGE_SUFFIXES]
+            n = len(images)
+            frame_numbers = {int(p.stem) for p in images if p.stem.isdigit()}
             if int(seq.get("seqlength", 0)) != n:
                 self.issue("sequence_length_mismatch", key, declared=seq.get("seqlength"), actual=n)
             for field in ("framerate", "imwidth", "imheight"):
@@ -480,8 +482,10 @@ class Audit:
                         if len(values) < 8 or not all(math.isfinite(v) for v in values):
                             raise ValueError("invalid MOT fields")
                         frame = int(values[0])
-                        if not 1 <= frame <= n:
+                        if values[0] != frame or frame not in frame_numbers:
                             self.issue("mot_frame_out_of_range", f"{key}:{i}")
+                            self.change("mot_annotation", f"{key}:{i}", line, None, "quarantine_missing_frame")
+                            continue
                         box = values[2:6]
                         clipped, reason = clean_box(box, int(seq["imwidth"]), int(seq["imheight"]))
                         if reason:
@@ -501,6 +505,7 @@ class Audit:
                         clean_lines.append(line)
                     except (ValueError, IndexError) as exc:
                         self.issue("invalid_mot_row", f"{key}:{i}", error=str(exc))
+                        self.change("mot_annotation", f"{key}:{i}", line, None, "quarantine_invalid_mot_row")
             else:
                 self.issue("missing_gt", key)
             dest = self.output / "mot" / path.parent.name / path.name

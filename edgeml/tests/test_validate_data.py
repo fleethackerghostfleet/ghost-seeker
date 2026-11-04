@@ -156,6 +156,27 @@ def test_eval_loader_honours_quarantine(monkeypatch):
         catalog.eval_set("singapore_maritime", "dev", "", "")
 
 
+def test_clean_mot_drops_missing_and_fractional_frames_with_log(tmp_path):
+    repo, _ = policy_repo(tmp_path)
+    mirror = tmp_path / "mirror"
+    sequence = mirror / "edgeml/eval/example/clip"
+    (sequence / "img1").mkdir(parents=True)
+    (sequence / "gt").mkdir()
+    for frame in (1, 3):
+        (sequence / f"img1/{frame:06d}.jpg").write_bytes(jpeg(frame))
+    (sequence / "seqinfo.ini").write_text('[Sequence]\nseqLength=3\nimWidth=24\nimHeight=16\nframeRate=5\n')
+    (sequence / "gt/labels.json").write_text('{"1":"boat"}')
+    lines = [f"{frame},1,1,1,4,4,1,1,1" for frame in (1, 2, 3, 4, 1.5)]
+    (sequence / "gt/gt.txt").write_text("\n".join(lines))
+    audit = validate.Audit(repo, mirror, tmp_path / "out")
+    audit.mot()
+    clean = (tmp_path / "out/mot/example/clip/gt/gt.txt").read_text().splitlines()
+    assert clean == [lines[0], lines[2]]
+    removed = [r for r in audit.changes if r["reason"] == "quarantine_missing_frame"]
+    assert len(removed) == 3
+    assert all(r["after"] is None for r in removed)
+
+
 def test_inventory_does_not_double_count_shallow_objects(tmp_path):
     repo, _ = policy_repo(tmp_path)
     inventory = tmp_path / "objects.jsonl"
