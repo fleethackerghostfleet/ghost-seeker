@@ -6,10 +6,13 @@ build-backend = "setuptools.build_meta"
 name = "edgeml"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = ["numpy", "opencv-python-headless", "pyyaml"]
+dependencies = ["numpy", "opencv-python-headless", "pyyaml", "scipy"]
 
 [project.optional-dependencies]
-eval = ["pycocotools", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git"]
+eval = ["pycocotools", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git", "matplotlib"]
+tracking = ["boxmot>=13", "lap"]
+detect = ["ultralytics>=8.3", "torch", "torchvision"]
+test = ["pytest"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
