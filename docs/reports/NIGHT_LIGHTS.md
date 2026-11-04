@@ -156,7 +156,7 @@ Hard-dev v2 correctly coloured reds: 28/69 versus v1 9/69; red misses 35 versus 
 
 ### Exact historical commands
 
-From repository root; the Python executable was `/home/ubuntu/nightlights-venv/bin/python`. These are the commands that produced the archived measurements, not new runs against current code. v1 archives are copies of their original unversioned report outputs. Re-running historical commands on current code does not reconstruct the old detector; frozen hashes and tuning records are in [STAGE1B](../../edgeml/reports/nightlights/STAGE1B.md) and [STAGE1C](../../edgeml/reports/nightlights/STAGE1C.md).
+From repository root; the Python executable was `/home/ubuntu/nightlights-venv/bin/python`. These are the commands that produced the archived measurements, not new runs against current code. v1 archives are copies of their original unversioned report outputs. Re-running historical commands on current code does not reconstruct the old detector; the split and tuning protocol is recorded above and in [PROTOCOL](../../edgeml/reports/nightlights/PROTOCOL.md).
 
 **easy_dev** → `edgeml/reports/nightlights/easy_dev.{json,md}`
 
@@ -221,7 +221,7 @@ Gemini 2.5 Flash on Vertex, temperature 0, thinking budget 0, max output 1024 to
 | hard/test2 | 112 | 0 | 3 | 1.787 s | 1.277 s | 1.794 s |
 | easy/test | 112 | 0 | 0 | 1.393 s | 1.328 s | 1.909 s |
 
-336 calls total, no retries. Ten truncated MAX_TOKENS JSON responses count as empty detections/incorrect rules, not excluded cases. Cached under `data/nightlights/gemini/`; no new Gemini calls in this boost-gate round. Crop rule strata (ours/Gemini): dev resolvable 6/76 vs 18/76, unresolvable 3/36 vs 2/36; test2 resolvable 8/78 vs 18/78, unresolvable 0/34 vs 3/34. Full per-colour/per-rule and individual results: [gemini_comparison.json](../../edgeml/reports/nightlights/gemini_comparison.json).
+336 calls total, no retries. Ten truncated MAX_TOKENS JSON responses count as empty detections/incorrect rules, not excluded cases. Cached under `data/nightlights/gemini/`; no new Gemini calls in this boost-gate round. Crop rule strata (ours/Gemini): dev resolvable 6/76 vs 18/76, unresolvable 3/36 vs 2/36; test2 resolvable 8/78 vs 18/78, unresolvable 0/34 vs 3/34. Compact per-colour/per-rule summary: [gemini_comparison.json](../../edgeml/reports/nightlights/gemini_comparison.json).
 
 Exact command (datasets hard/dev, hard/test2, easy/test):
 ```sh
@@ -257,7 +257,7 @@ Exact commands, in order:
 /home/ubuntu/nightlights-venv/bin/python edgeml/scripts/nightlights_boost_eval.py --refresh-demos
 ```
 
-Artifacts: [boost_gate_dev.json](../../edgeml/reports/nightlights/boost_gate_dev.json), [boost_gate_test2.json](../../edgeml/reports/nightlights/boost_gate_test2.json). These contain contact-level before/after boosts and explicit denominators. Demo refresh changes interpretation metadata only, not images/detections/truth.
+Artifacts: [boost_gate_dev.json](../../edgeml/reports/nightlights/boost_gate_dev.json), [boost_gate_test2.json](../../edgeml/reports/nightlights/boost_gate_test2.json). These contain summary metrics and explicit denominators; contact-level before/after dumps are under gitignored `data/nightlights/reports/`. Demo refresh changes interpretation metadata only, not images/detections/truth.
 
 ## Existing 48-frame library (measured / visually reviewed)
 

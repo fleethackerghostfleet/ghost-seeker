@@ -1,7 +1,16 @@
 # Night-light candidate: protocol and limitations
 
-Historical stage-1 baseline. See STAGE1B.md and easy_*/hard_* reports for the
-current candidate, tiered paths, mode-aware gate and demo metadata.
+Current consolidated protocol and measurements: [NIGHT_LIGHTS.md](../../../docs/reports/NIGHT_LIGHTS.md).
+Committed JSON contains summary metrics only. Full contact/light observations are
+written to gitignored `data/nightlights/reports/` by the evaluator, Gemini comparison
+and boost evaluator. Regenerate observations with `nightlights_eval.py` before
+running `nightlights_boost_eval.py`; historical v2 reproduction requires its frozen
+detector revision, not the current interpreter. Legacy duplicate reports and
+stage scratch notes were removed; the consolidated report retains their results.
+
+The sections below record the historical stage-1 baseline, not the current
+candidate. See NIGHT_LIGHTS.md above and easy_*/hard_* summaries for current
+tiered paths, mode-aware gating, integration and demo metadata.
 
 CPU only, Python 3.10, NumPy 2.2.6, OpenCV headless 5.0.0.93.
 The system pip/setuptools could not install editable PEP 660 packages. Installation

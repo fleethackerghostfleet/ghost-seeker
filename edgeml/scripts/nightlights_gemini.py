@@ -170,7 +170,10 @@ def compare(data, cache, report, workers=4, max_calls=400):
     output = dict(summary=summary, total_contacts=len(jobs), new_calls=len(missing), cached_calls=len(jobs)-len(missing),
                   endpoint=ENDPOINT, config=dict(workers=workers, max_calls=max_calls, temperature=0, thinking_budget=0, max_output_tokens=1024),
                   protocol="Both methods see identical four-frame padded JPEG crops. No external signals. Colour P/R are per-contact colour-multiset overlap, NOT spatial matching; not comparable to full-frame evaluator P/R. Rule accuracy uses all latent labels including unresolvable cases. API/JSON failures count as empty light predictions and incorrect rules. No retries; errors cached too.", examples=examples)
-    (report/"gemini_comparison.json").write_text(json.dumps(output, indent=2)+"\n")
+    full = Path(data)/"reports"
+    full.mkdir(parents=True, exist_ok=True)
+    (full/"gemini_comparison.json").write_text(json.dumps(output, indent=2)+"\n")
+    (report/"gemini_comparison.json").write_text(json.dumps({k: v for k, v in output.items() if k != "examples"}, indent=2)+"\n")
     print(json.dumps({k: v for k, v in output.items() if k != "examples"}, indent=2))
 
 

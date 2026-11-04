@@ -90,7 +90,10 @@ def evaluate(data, split, report, tier="easy", version=""):
     report = Path(report)
     report.mkdir(parents=True, exist_ok=True)
     stem = f"{tier}_{split}" + (f"_{version}" if version else "")
-    (report/f"{stem}.json").write_text(json.dumps(dict(metrics=metrics, contacts=examples), indent=2)+"\n")
+    full = Path(data)/"reports"
+    full.mkdir(parents=True, exist_ok=True)
+    (full/f"{stem}.json").write_text(json.dumps(dict(metrics=metrics, contacts=examples), indent=2)+"\n")
+    (report/f"{stem}.json").write_text(json.dumps(dict(metrics=metrics), indent=2)+"\n")
     lines = [f"# Night lights: {tier}/{split}", "", f"Command: `{shlex.join([sys.executable]+sys.argv)}`", "", "Synthetic benchmark only; not operational validation.", ""]
     for key in ["light_precision", "light_recall", "rule_accuracy", "automatic_rule_accuracy", "externally_identified_distress_accuracy", "aspect_accuracy", "flashing_accuracy", "night_gate_accuracy", "day_false_night_rate"]:
         lines.append(f"- {key}: {metrics[key]:.4f}")

@@ -27,7 +27,7 @@ def summarize(rows, rules):
 
 
 def evaluate(split):
-    path = ROOT/f"edgeml/reports/nightlights/hard_{split}_v2.json"
+    path = ROOT/f"data/nightlights/reports/hard_{split}_v2.json"
     data = json.loads(path.read_text())
     rules = {r["id"]: r for r in load_rules()}
     before, after = [], []
@@ -50,7 +50,10 @@ def evaluate(split):
                   protocol="Exact colour-multiset coverage; zero white allowance. Signal-assisted distress exempt. Frozen detector observations; no detector rerun or threshold change.",
                   metrics=metrics, without_gate=before, with_gate=after)
     target = ROOT/f"edgeml/reports/nightlights/boost_gate_{split}.json"
-    target.write_text(json.dumps(output, indent=2)+"\n")
+    full = ROOT/"data/nightlights/reports"
+    full.mkdir(parents=True, exist_ok=True)
+    (full/target.name).write_text(json.dumps(output, indent=2)+"\n")
+    target.write_text(json.dumps({k: v for k, v in output.items() if k not in {"without_gate", "with_gate"}}, indent=2)+"\n")
     print(json.dumps(dict(dataset=output["dataset"], metrics=metrics), indent=2))
 
 
