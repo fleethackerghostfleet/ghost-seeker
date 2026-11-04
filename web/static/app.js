@@ -177,7 +177,7 @@ function openStream(){
  stream.addEventListener('snapshot',event=>applySnapshot(JSON.parse(event.data)));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
-  if(state.paused)pendingItems.push(data);else{mergeItem(data.item);stats=data.stats;renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
+  stats=data.stats;if(state.paused){pendingItems.push(data);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
  });
  stream.addEventListener('stats',event=>{
   stats=JSON.parse(event.data).stats;renderStats();
@@ -209,7 +209,7 @@ async function init(){
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderFeed()};
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens};
  $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
- $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Pause';$('live').classList.toggle('paused',state.paused);$('live').querySelector('span').textContent=state.paused?'PAUSED':'LIVE';if(!state.paused){for(const event of pendingItems){mergeItem(event.item);stats=event.stats}pendingItems=[];renderAll()}};
+ $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Pause';$('live').classList.toggle('paused',state.paused);$('live').querySelector('span').textContent=state.paused?'PAUSED':'LIVE';if(!state.paused){for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
  $('topGrid').onclick=e=>{const c=e.target.closest('.card');if(c){location.hash='#feed';openDetail(c.dataset.id)}};
  document.addEventListener('keydown',e=>{const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
