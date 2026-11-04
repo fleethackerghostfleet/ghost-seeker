@@ -40,7 +40,8 @@ cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JS
 inference/              Python sidecar contract + stub (no model yet)
 deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
 frames/                 demo imagery (Git LFS zips)
-ui/                     reserved for the operator console
+ui-mockup/              self-contained HTML mockup of the operator UI (open in a browser)
+ui/                     where the real console will live; served by edge/shore at /
 scenarios/              replay scenarios (datasets + operator events)
 ```
 
@@ -106,6 +107,14 @@ better is waiting ("if we have bandwidth, use it").
 FIFO wins raw image count because it spends zero bytes on manifests, facts and
 thumbnails; prioritized gives shore a complete picture of the backlog and
 every unknown, and puts the bytes it has into what the operator asked for.
+
+## UI mockup
+
+`ui-mockup/index.html` is a self-contained interactive mockup of the Ghost Seeker operator UI (open it in a browser, no server needed). All imagery is synthetic.
+
+- **Live Feed** – dense grid of prioritized images from edge sensors; click an image for detections, priority reasoning, and processing chain.
+- **Review queue** – one image at a time for sleep-deprived reviewers: `1`–`4` set P1–P4, `Space` agree with model, `X` not relevant, `C` send to CDR, `→` skip, `Z` undo, `N` night (red) mode.
+- **Reprioritize** – natural-language directives (keyword-based in the mockup) that rescore the feed.
 
 ## Status / not done
 
