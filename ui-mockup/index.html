@@ -595,7 +595,7 @@ function parseDirective(text){
   for(const[ks,re]of GENERIC){if(c.match(re)){const g=CLS[ks[0]].g;if(![...classes].some(k=>CLS[k].g===g||(g==='aircraft'&&k==='drone')))ks.forEach(k=>classes.add(k));c=c.replace(re,' ')}}
   const attrs=ATTRS.filter(([,re])=>re.test(c)).map(([k])=>k);
   if(!classes.size&&!attrs.length)continue;
-  rules.push({type:neg?'suppress':'boost',classes:[...classes],attrs:neg?[]:attrs,only:only&&!neg});
+  rules.push({type:neg?'suppress':'boost',classes:[...classes],attrs,only:only&&!neg});
  }
  return rules;
 }
