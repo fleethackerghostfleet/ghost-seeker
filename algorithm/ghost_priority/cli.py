@@ -193,7 +193,7 @@ def card(record, records_dir, report_dir):
 
 def render_report(out, records_dir, records, comparison, chosen, summary):
     rows = ''.join('<tr>' + ''.join(f'<td>{html.escape(str(x))}</td>' for x in [
-        r['method'], f"{r['budget_fraction']:.0%}", r['selected_images'], r['selected_payload_bytes'],
+        r['method'], r['budget_label'], r['selected_images'], r['selected_payload_bytes'],
         r['selected_sources'], 'Not evaluated' if r.get('reviewed_interesting_image_recall') is None else f"{r['reviewed_interesting_image_recall']:.3f}"]) + '</tr>' for r in comparison)
     cards = ''.join(card(r, records_dir, out) for r in chosen)
     page = '''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ghost Seeker · CPU baseline</title><style>
@@ -204,7 +204,7 @@ def render_report(out, records_dir, records, comparison, chosen, summary):
     if 'has_source_annotated_object' in summary.get('label_definitions', []):
         page += '<p class="notice">For this evaluation, relevant means the source annotation contains at least one object. This measures annotated-image coverage, not operator interest or detection accuracy. Empty annotation lists do not independently establish a physically empty scene.</p>'
     page += '<h2>Budget comparison</h2><div class="scroll"><table><thead><tr><th>Method</th><th>Budget</th><th>Images</th><th>Payload bytes</th><th>Sources represented</th><th>Reviewed interesting-image recall</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-    page += f'<h2>Default selection at {summary["gallery_fraction"]:.0%} of eligible JPEG bytes</h2><div class="grid">{cards}</div>'
+    page += f'<h2>Default selection: {html.escape(summary["gallery_budget_label"])}</h2><div class="grid">{cards}</div>'
     if not chosen:
         page += '<p>No complete image fits this byte budget.</p>'
     analysis_path = records_dir / 'analysis_summary.json'
@@ -217,6 +217,32 @@ def render_report(out, records_dir, records, comparison, chosen, summary):
     page += '<h2>Policy and measurement notes</h2><pre>' + html.escape(json.dumps(summary, indent=2)) + '</pre></main></html>'
     page = page.replace('object-fit:fill', 'object-fit:contain')
     (out / 'report.html').write_text(page)
+
+
+def ranking_budgets(args, total_bytes):
+    from .bandwidth import (BANDWIDTH_PRESETS_BPS, bandwidth_budget_bytes,
+                            format_bandwidth)
+    if args.fractions is not None:
+        if args.window_seconds is not None:
+            raise ValueError('--window-seconds requires a bandwidth budget, not --fractions')
+        if any(not math.isfinite(x) or not 0 <= x <= 1 for x in args.fractions):
+            raise ValueError('Fractions must be finite and between zero and one')
+        if len({f'{x:.6f}' for x in args.fractions}) != len(args.fractions):
+            raise ValueError('Fractions must be distinct at six-decimal precision')
+        return [{'budget_mode': 'fraction', 'budget_fraction': x,
+                 'budget_bytes': int(total_bytes * x), 'selection_key': f'{x:.6f}',
+                 'budget_label': f'{x * 100:g}% of eligible JPEG bytes ({int(total_bytes * x):,} bytes)'}
+                for x in args.fractions]
+    from .bandwidth import DEFAULT_WINDOW_SECONDS
+    preset = args.bandwidth_preset or ('normal' if args.bandwidth_bps is None else None)
+    bps = BANDWIDTH_PRESETS_BPS[preset] if preset else args.bandwidth_bps
+    seconds = DEFAULT_WINDOW_SECONDS if args.window_seconds is None else args.window_seconds
+    budget = bandwidth_budget_bytes(bps, seconds)
+    return [{'budget_mode': 'bandwidth', 'available_bandwidth_bps': bps,
+             'window_seconds': seconds, 'bandwidth_preset': preset,
+             'budget_bytes': budget, 'budget_fraction': budget / total_bytes if total_bytes else None,
+             'selection_key': 'bandwidth',
+             'budget_label': f'{format_bandwidth(bps)} × {seconds:g} s ({budget:,} bytes)'}]
 
 
 def rank(args):
@@ -232,25 +258,21 @@ def rank(args):
         raise ValueError('Labels must map observation ID to reviewed annotation')
     eligible = [r for r in records if r.get('usable', True)]
     total_bytes = sum(r['payload_bytes'] for r in eligible)
-    fractions = args.fractions
-    if any(not math.isfinite(x) or not 0 <= x <= 1 for x in fractions):
-        raise ValueError('Fractions must be finite and between zero and one')
-    if len({f'{x:.6f}' for x in fractions}) != len(fractions):
-        raise ValueError('Fractions must be distinct at six-decimal precision')
+    budgets = ranking_budgets(args, total_bytes)
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=False)
     methods = ['uniform', 'novelty', 'priority']
     if eligible and all(r.get('detections') is not None for r in eligible):
         methods.insert(2, 'detector')
     comparison, selected_by_key = [], {}
-    for fraction in fractions:
-        budget = int(total_bytes * fraction)
+    for spec in budgets:
+        budget = spec['budget_bytes']
         for method in methods:
             selection_start = time.perf_counter()
             selected = select_records(eligible, budget, policy, method=method)
             selection_ms = (time.perf_counter()-selection_start)*1000
             metrics = evaluate_selection(eligible, selected, labels)
-            row = {'method': method, 'budget_fraction': fraction, 'budget_bytes': budget,
+            row = {'method': method, **spec,
                    'selection_ms': selection_ms,
                    'selected_images': len(selected), 'selected_payload_bytes': sum(r['payload_bytes'] for r in selected),
                    'selected_sources': len({r['source'] for r in selected}),
@@ -258,15 +280,21 @@ def rank(args):
             if 'reviewed_interesting_image_recall' in metrics:
                 row['reviewed_interesting_image_recall'] = metrics['reviewed_interesting_image_recall']
             comparison.append(row)
-            selected_by_key[(method, fraction)] = selected
-            write_jsonl(out / f'{method}-{fraction:.6f}.jsonl', selected)
+            row['unused_budget_bytes'] = budget - row['selected_payload_bytes']
+            selected_by_key[(method, spec['selection_key'])] = selected
+            write_jsonl(out / f'{method}-{spec["selection_key"]}.jsonl', selected)
+    gallery = max(budgets, key=lambda spec: spec['budget_bytes'])
     summary = {'eligible_images': len(eligible), 'excluded_constant_images': len(records)-len(eligible),
-               'reference_payload_bytes': total_bytes, 'gallery_fraction': max(fractions), 'policy': policy,
+               'reference_payload_bytes': total_bytes, 'gallery_fraction': gallery['budget_fraction'],
+               'gallery_budget_label': gallery['budget_label'], 'budgets': budgets, 'policy': policy,
                'labels_supplied': labels is not None,
                'label_definitions': sorted({str(v['interest_definition']) for v in (labels or {}).values() if 'interest_definition' in v}),
                'notes': [
                    'Byte denominator is identical JPEG representations of eligible inputs, not raw source size.',
                    'Payload sizes exclude metadata, protocol overhead, retransmissions, and source video bitrate.',
+                   'Bandwidth is effective outbound JPEG-payload goodput allocated to this application, in decimal bits/s.',
+                   'Bandwidth presets are illustrative scenarios, not destroyer link specifications.',
+                   'Rate × window / 8 is an offline budget; no packet pacing, changing-rate trace, outages, or latency are simulated.',
                    'Ranking uses cached evidence; the --labels file is used only after selection for evaluation.',
                    'Label metrics measure image-ID coverage, not whether annotated details remain visible after JPEG resizing/compression.',
                    'Sampled stills have no inferred video event identities, motion, persistence, or deadlines.',
@@ -275,7 +303,7 @@ def rank(args):
                    'UI subtypes and behavior attributes are unsupported by generic COCO predictions.']}
     write_json(out / 'comparison.json', comparison)
     write_json(out / 'selection_summary.json', summary)
-    chosen = selected_by_key[('priority', max(fractions))]
+    chosen = selected_by_key[('priority', gallery['selection_key'])]
     render_report(out, records_path.parent, records, comparison, chosen, summary)
     print(json.dumps({'report': str(out/'report.html'), 'comparison': comparison}, indent=2))
 
@@ -309,7 +337,16 @@ def main():
     r.add_argument('--out', required=True, help='New output directory')
     r.add_argument('--policy', help='JSON overrides; no inference required')
     r.add_argument('--labels', help='Optional evaluation-only JSON mapping IDs to reviewed annotations')
-    r.add_argument('--fractions', type=float, nargs='+', default=[.01, .05, .10])
+    from .bandwidth import BANDWIDTH_PRESETS_BPS
+    budget = r.add_mutually_exclusive_group()
+    budget.add_argument('--bandwidth-bps', type=int,
+                        help='Effective outbound payload bits/s allocated to this service; 0 means disconnected')
+    budget.add_argument('--bandwidth-preset', choices=BANDWIDTH_PRESETS_BPS,
+                        help='Illustrative connectivity scenario (default: normal, 2000000 bps)')
+    budget.add_argument('--fractions', type=float, nargs='+',
+                        help='Legacy relative budgets, e.g. 0.01 0.05 0.10; replaces bandwidth mode')
+    r.add_argument('--window-seconds', type=float,
+                   help='Transmission budget window in seconds (default: 60); bandwidth mode only')
     r.set_defaults(func=rank)
     args = parser.parse_args()
     if args.command == 'analyze' and (args.limit < 0 or not math.isfinite(args.fps) or args.fps <= 0):

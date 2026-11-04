@@ -18,6 +18,8 @@ python3 -m venv .venv
 
 Open `runs/default/report.html` in a browser. Output directories must be new to avoid overwriting an earlier experiment. The report references JPEG payloads in the evidence directory, so keep both directories when sharing it.
 
+Ranking defaults to an absolute **2 Mbps application payload allowance over 60 seconds** (15,000,000 bytes). Use `--fractions 0.01 0.05 0.10` to reproduce the original relative-budget experiments.
+
 The requirements file pins the versions tested in this prototype. Python wrappers call compiled OpenCV/NumPy routines; this is not an embedded-CPU certification.
 
 The default `--threads 0` disables OpenCV parallel regions for a conservative CPU baseline. Positive thread counts depend on the build's threading backend; macOS GCD does not support positive limits. The summary records both requested and reported settings. See the [OpenCV thread-control documentation](https://docs.opencv.org/4.13.0/db/de0/group__core__utils.html). This does not cap every third-party runtime or emulate another CPU.
@@ -73,9 +75,45 @@ Evidence fields:
 
 The teammate's UI mockup remains unchanged. It currently uses synthetic subtype and behavior fields. Pass measured fields only; do not fabricate `approaching`, `loitering`, identity, or subtype values from a generic detector. See `DATA_NOTES.md`.
 
+## Absolute bandwidth control
+
+The UI/platform variable is **`available_bandwidth_bps`**, an integer number of **outbound payload bits per second allocated to this image service**. Use decimal units: 1 kbps = 1,000 bps; 1 Mbps = 1,000,000 bps. Treat this as the effective allocation after other ship traffic, transport overhead and retries have been accounted for. It is not the ship's total radio capacity or download speed.
+
+The selector uses `budget_bytes = floor(available_bandwidth_bps * window_seconds / 8)`. The default window is 60 seconds. This budget stays fixed when more images arrive; it does not grow with the dataset. Settings and the resulting byte allowance appear in `comparison.json`, `selection_summary.json`, and the HTML report. Absolute-mode selections are saved as `priority-bandwidth.jsonl` and equivalent files for the other baselines.
+
+Illustrative hackathon presets, all adjustable:
+
+| Preset | Application payload allowance | JPEG budget over 60 s |
+|---|---:|---:|
+| `normal` (default) | 2 Mbps | 15,000,000 bytes |
+| `degraded` | 256 kbps | 1,920,000 bytes |
+| `ddil` | 64 kbps | 480,000 bytes |
+| `severe-ddil` | 9.6 kbps | 72,000 bytes |
+| `disconnected` | 0 bps | 0 bytes |
+
+These rates are **test scenarios, not measured or specified destroyer bandwidth**. They let a small image application range from a useful connected allocation to severe restriction without assuming it owns the whole ship's link. For public context, the [2017 Navy Program Guide](https://media.defense.gov/2020/May/18/2002302043/-1/-1/1/NPG17.PDF), page 101, described ADNS Increment III aggregate capacity of 25 Mbps for unit-level ships; that historical aggregate figure is not an available application uplink guarantee. [DON CIO's discussion of DDIL](https://www.doncio.navy.mil/mobile/ContentView.aspx?ID=15161&TypeID=21) describes low bandwidth, high latency and disconnects. It does not prescribe these presets.
+
+```bash
+.venv/bin/python -m ghost_priority rank --records runs/evidence/records.jsonl --bandwidth-bps 64000 --window-seconds 60 --out runs/64kbps
+.venv/bin/python -m ghost_priority rank --records runs/evidence/records.jsonl --bandwidth-preset disconnected --out runs/offline
+```
+
+For direct UI/platform integration:
+
+```python
+from ghost_priority.bandwidth import bandwidth_budget_bytes
+from ghost_priority.policy import select_records
+
+available_bandwidth_bps = 64_000  # UI setting or measured payload allocation
+budget_bytes = bandwidth_budget_bytes(available_bandwidth_bps, window_seconds=60)
+selected = select_records(records, budget_bytes, policy)
+```
+
+Changing the rate only reranks cached evidence. A zero rate selects no payloads and leaves evidence on disk. If one whole JPEG exceeds the window's budget, it cannot be selected; fragmentation or carrying credit across windows belongs in the platform scheduler. This does not implement network pacing, a persistent queue, or a time-varying DDIL simulation. For changing connectivity, the platform should supply updated rates per scheduling window and remove acknowledged payloads from the pending set; a constant low rate does not model outages or latency.
+
 ## Compare methods and incorporate labels
 
-The `rank` command compares uniform representative sampling, novelty-only selection, the default policy, and detector-only selection when all records include detector results. Every method sees the same JPEG representations and byte limit. Default limits are 1%, 5%, and 10% of eligible encoded-image bytes.
+The `rank` command compares uniform representative sampling, novelty-only selection, the default policy, and detector-only selection when all records include detector results. Every method sees the same JPEG representations and byte limit. The default is the absolute `normal` bandwidth preset over 60 seconds; `--fractions 0.01 0.05 0.10` explicitly selects the original percentage limits instead. Fraction mode and bandwidth mode are mutually exclusive.
 
 This is an **offline batch benchmark**, not a causal live queue or a simulation of changing connectivity. Payload bytes exclude metadata, network overhead and retries; they do not establish savings against a compressed video stream. No images are transmitted.
 
