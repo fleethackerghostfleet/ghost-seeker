@@ -128,3 +128,48 @@ python -c "from edgeml.data.mot import load_set; print([s.stats() for s in load_
 ```
 GPU: `edgeml-a-l4` (g2-standard-8, 1×L4, DLVM image), labels `team=edgeml,workstream=a`; 4 teacher runs ≈ 1 GPU-hour; **deleted** after the run. Gemini: 0 images.
 Data added to the bucket: raw FVessel 2.5 GB + eval sets ≈ 1.6 GB (within the 20 GB cap). No `edgeml/runs/` entries: this workstream produces GT, not model runs.
+
+## 7. WS-A2: six more identity-labelled TEST sequences (test only)
+
+Goal: thicken the held-out `ghost_fleet_5fps` test set (only Spotted_A_Submarine and Ship_in_the_Distance_Ian were complete).
+Six new sequences were added to `test` in `edgeml/configs/splits.yaml` (nothing moved between dev and test; the 12 existing
+`gt.txt`/`labels.json` are byte-identical before and after the re-run of `qa_apply.py`). **4 are `gt_status=complete`, 2 are
+`partial`** (declared honestly below; use the partial ones for FP review / qualitative sightings, not headline recall).
+
+Candidate search: the catalog's own clips (`sources/*.json`) had only 2 unseen clips that fit the brief (visible vessels, onboard
+view, <=3 min): `US_Destroyer_POV_Warship_Crossing` (30 s, already a `ghost_fleet_clips` test clip, so test-safe) and the 71-min
+`Sailboat_on_the_horizon` (first 3 min used). `Dolphin_from_far_distance_in_Bay_of_Bengal` stays incomplete (§4: submerged animals, splashes only). The rest are **new test sources** (never used in dev): two 3-min segments of the CC-BY
+`Arriving In Norfolk` bridge-cam clip (1:10:00 and 1:13:40, chosen because an outbound ship, a tug+barge and a buoy pass close),
+and two CC-BY YouTube clips ingested with the `ghost-fleet-dataset-ingest` skill (`sources/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats.json`,
+`sources/Ferry_Passing_By_On_River.json`, 1 fps frame sets + zips uploaded; the BigQuery catalog refresh `datasets/ingest/video_frames.py`
+was NOT re-run, it re-downloads every frame set — run it once from the catalog branch).
+
+Pipeline identical to §3: ffmpeg `fps=5 -q:v 2` at native resolution, `autolabel_tracks.py` (Grounding DINO base + class-agnostic
+NMS + BoT-SORT, unchanged) on one GPU VM, per-track contact-sheet review + full-frame crops where needed, `qa_apply.py`. One
+deviation: every L4 shape (`g2-standard-4/8`) was `STOCKOUT` in all four `us-central1` zones, so the teacher ran on `edgeml-a2-t4`
+(n1-standard-8 + 1x T4, labels team=edgeml,workstream=a2; deleted after the run). Teacher output is unchanged by the GPU type.
+Gemini was not used (0 images).
+
+| seq | frames, px | view / motion | teacher tracks → final | teacher boxes → final | dropped | merged | added | gt_status | what QA found |
+|---|---|---|---|---|---|---|---|---|---|
+| US_Destroyer_POV_Warship_Crossing | 153, 854×472 | bridge wing of USS Chung-Hoon, large ship underway | 5 → 1 | 449 → 153 | 4 | 0 | 0 | complete | Track 1 = PLA Navy destroyer crossing the bow, in frame all 153 frames, tight boxes, no switch (126×59 → 30×35 px as it opens range). 2, 3, 8, 9 = own bow / forward gun mount / deck edge → own-platform FPs dropped. |
+| Sailboat_on_the_horizon_seg0 | 900, 1920×1080 | fixed mount on a boat, gentle roll | 5 → 2 | 870 → 865 | 0 | 3 | 0 | complete | One sailboat right→left f6-523 was split into 1 (f6-170), 3 (f39-64, fills a gap of 1), 6 (f172-515), 11 (hull only, leaving the left edge) → merged into 1. A sailboat enters from the right at f552 and stays to f900 (id 12); kept as a second identity (cannot be the same hull without a cut). ~80×112 px boxes, verified tile by tile. |
+| Arriving_In_Norfolk_seg1h10 | 900, 1920×1080 | container-ship bow cam, slow ahead in Thimble Shoal | 13 → 6 | 3124 → 2635 | 6 | 1 | 1 (gap fill) | complete | Kept: red pilot boat (1), outbound MSC ship passing to port (2), low barge on the horizon (3), tiny white vessel dead ahead (4: fragments 4+6 merged and the 160-frame gap f125-285 filled by interpolation after checking crops, 12-22 px), tug+barge to port (10), second tiny vessel (11, low confidence). Dropped: 5, 9, 12 whole-frame boxes on own deck cargo; 13, 15, 16 = parts/duplicates of the tug+barge already tracked as 10. |
+| Arriving_In_Norfolk_seg1h13 | 900, 1920×1080 | same cam, 3.5 min later | 10 → 4 | 2738 → 729 | 5 | 1 | 1 (gap fill) | **partial** | Kept: outbound ship to port (1, relabelled ship), red lateral buoy passing close to starboard (9+10 merged, relabelled buoy, 38-frame gap filled), distant vessel ahead only where the teacher boxed it (21: 7 fr, 22: 29 fr). Dropped 2, 3, 8, 19, 20 = own-deck boxes. Partial: 1-2 horizon specks <15 px (and the vessel of 21/22 for most of the clip) and a green buoy far to port are visible but not reliably boxable at 1080p. |
+| Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats | 676, 1920×1080 | onboard a cruise ship, tender operation, camera cuts | 38 → 29 | 2848 → 2225 | 8 | 1 | 0 | **partial** | Ship fragments 10 (f5-119) and 118 (f150-483) merged (same docked ship across a cut). 20 tender tracks verified as real boats with boxes on the tender; 62 trimmed to f37-96. Dropped 8 tracks (68, 121, 147, 153, 159, 164, 170, 173) whose boxes sit on the cruise ship's lifeboat/hull rows while the tender is below them — a systematic Grounding DINO "boat" failure mode worth a WS-C check. Partial: several tenders never boxed, tender identities fragmented across cuts, aerial scene f485+ has only one boat (180) + a 9-frame group (182). |
+| Ferry_Passing_By_On_River | 209, 1920×1080 | fixed shore camera | 1 → 1 | 67 → 67 | 0 | 0 | 0 | complete | One passenger ferry left→right, track 3 f68-134, tight boxes (verified on f85/110/130 full frames); f1-67 and f135-209 empty. Two <10 px white specks (buoys/gulls) and a distant aircraft deliberately unlabelled. |
+
+**Label-noise summary for C (A2 only):** teacher 72 tracks / 10 096 boxes → final 43 tracks / 6 674 boxes; dropped 23 tracks,
+merged 6, added 2 gap fills. Dominant teacher failure modes on these clips: (i) **own-platform boxes** on the filming ship — whole
+deck-cargo boxes in both Norfolk segments and bow/gun boxes on the destroyer (11 of the 23 drops); (ii) **boxes locking onto the
+large ship's hull instead of the small boat beside it** (8 drops, Cruise); (iii) **fragmentation of one slow object into several
+sequential tracks** (sailboat 4→1, Norfolk horizon vessel 2→1, buoy 2→1, cruise ship 2→1); (iv) **loss of 10-20 px objects** for tens
+of seconds (filled by interpolation only where crops confirmed the object stayed put). Duplicate part-boxes of one tug+barge
+(Norfolk 13/15/16 vs 10) are the same duplicate-identity problem WS-C measures.
+
+Weaknesses specific to A2: both Norfolk segments share one camera/day (treat as one domain, not two independent samples); the
+Norfolk source is a 4K60 timelapse-free clip fetched at 1080p, so horizon targets are blurrier than native; Cruise has camera
+cuts inside the sequence (tracker resets are expected, not errors); the destroyer clip is 854×472 and the only non-1080p sequence.
+Review evidence (downscaled): `A_assets/a2_destroyer_overview.jpg`, `A_assets/a2_norfolk1h10_tracks.jpg`, `A_assets/a2_cruise_hull_drift.jpg`
+(hull-drift tracks 68/121/147), `A_assets/a2_norfolk_gap_crops.jpg` (gap-fill check). Full-size sheets and the untouched teacher output:
+`gs://.../edgeml/eval/ghost_fleet_5fps/<seq>/{qa,teacher}/`; corrections mirrored in `edgeml/eval_qa/ghost_fleet_5fps/<seq>.yaml`.

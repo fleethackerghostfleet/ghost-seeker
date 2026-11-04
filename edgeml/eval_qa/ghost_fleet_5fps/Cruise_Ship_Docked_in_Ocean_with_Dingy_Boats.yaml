@@ -1,0 +1,19 @@
+reviewed: true
+drop: [68, 121, 147, 153, 159, 164, 170, 173]
+merge:
+  10: [118]
+trim:
+  62: [37, 96]
+gt_status: partial
+notes: >-
+  Tender operation off a docked cruise ship, filmed from another ship (several camera cuts / zoom changes at ~f120-150,
+  ~f485). Ship: teacher fragments 10 (f5-119) and 118 (f150-483) are the same docked cruise ship -> merged into id 10
+  (teacher lost it across the cut). Tenders: 20 teacher tracks verified on contact sheets as real boats with boxes on
+  the hull of the tender (38, 39, 50, 51, 54, 55, 60, 61, 62 trimmed to f37-96, 67, 89, 119, 120, 123, 146, 151, 152,
+  156, 157, 158, 162, 163, 168, 169, 171, 172); 180 is the close-up tender after the f485 cut and 182 the other boats
+  in that aerial scene (f581-589). DROPPED 8 tracks (68, 121, 147, 153, 159, 164, 170, 173) whose boxes sit on the
+  cruise ship's hull/deck rows while the actual tender is below them: Grounding DINO 'boat' fires on the lifeboat
+  rows and the tracker locks onto the hull. PARTIAL because (a) several tenders visible in the overview are never
+  boxed, (b) tender identities are fragmented across cuts and not re-linked, (c) in the aerial scene (f485+) only
+  one boat is tracked continuously. Use for sighting/qualitative review, not headline recall; the ship track (id 10)
+  and the 20 kept tender tracks have tight boxes.
