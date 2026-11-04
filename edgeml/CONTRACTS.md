@@ -22,6 +22,7 @@ file and explains why.
 - `Sighting` holds one record per object per continuous pass. JSONL, one line per *event*:
   `{sighting_id, clip_id, event: "open"|"update"|"close", t_s, frame_idx, label, label_scores{}, subtype?,
     unknownness, box, best_frame_idx, best_box, best_score, first_t_s, last_t_s, n_frames, track_ids[]}`.
+  `realness` (0..1 trajectory persistence/size/motion consistency) and `unknown_real` (unknownness and realness thresholds both passed) accompany every event; only real unknowns receive the unknown priority bonus.
   Optional lookout-report fields (see `reports/literature.md` §7): `bearing_deg` (box centre x + camera FOV, when
   known), `size_class` (by box-area bucket), `aspect` (bow/stern/beam, if the subtype model can say), `closing`
   (sign of box-area growth).

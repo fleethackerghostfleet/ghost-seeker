@@ -27,6 +27,7 @@ import numpy as np
 
 from ..types import Box, Form, Sighting, Track, box_iou
 from .embed import ColorHistEmbedder, crop
+from .realness import trajectory_realness
 
 
 @dataclass
@@ -46,7 +47,10 @@ class AggregatorParams:
     min_update_interval_s: float = 3.0
     max_updates: int = 6                 # cap on update events per sighting (open/close not counted)
     # value
-    unknown_bonus_age_s: float = 2.0     # unknownness counts in `value` only after this track age
+    unknown_bonus_age_s: float = 2.0     # minimum trajectory duration for unknown realness
+    unknown_min_hits: int = 3
+    unknown_threshold: float = 0.5
+    realness_threshold: float = 0.5
     # camera / size geometry
     hfov_deg: float = 90.0
     size_px: tuple = (24.0, 64.0, 160.0)  # sqrt(area) thresholds: tiny | small | medium | large
@@ -405,9 +409,10 @@ class SightingAggregator:
                 st.emb = self.embedder.embed_crops([c])[0]
 
     def _snapshot(self, st: _State) -> dict:
+        self._refresh_realness(st)
         s = st.s
         return {"label": s.label, "score": s.best_score, "bearing": s.bearing_deg, "size_class": s.size_class,
-                "aspect": s.aspect, "closing": s.closing, "key_q": s.key_q}
+                "aspect": s.aspect, "closing": s.closing, "key_q": s.key_q, "unknown_real": s.unknown_real}
 
     def _material_change(self, st: _State, t_s: float) -> Optional[str]:
         if t_s - st.last_report_t < self.p.min_update_interval_s or st.n_updates >= self.p.max_updates:
@@ -415,6 +420,8 @@ class SightingAggregator:
         now, last = self._snapshot(st), st.last_report
         if not last:
             return None
+        if now["unknown_real"] != last.get("unknown_real", False):
+            return "unknown_real"
         if now["label"] != last["label"]:
             return "label_flip"
         if now["score"] - last["score"] > self.p.score_jump:
@@ -431,13 +438,20 @@ class SightingAggregator:
             return "better_keyframe"
         return None
 
+    def _refresh_realness(self, st: _State) -> None:
+        st.s.realness = trajectory_realness(st.traj, self.p.unknown_min_hits, self.p.unknown_bonus_age_s)
+        st.s.unknown_real = (st.s.unknownness >= self.p.unknown_threshold
+                             and st.s.realness > 0 and st.s.realness >= self.p.realness_threshold)
+
     def _value(self, st: _State) -> float:
+        self._refresh_realness(st)
         s = st.s
         size = min(1.0, math.sqrt(max(1.0, s.best_box[2] * s.best_box[3])) / (0.15 * self._W()))
-        age = s.last_t_s - s.first_t_s
-        unk = s.unknownness if age >= self.p.unknown_bonus_age_s else 0.0
+        unk = s.unknownness if s.realness > 0 and s.realness >= self.p.realness_threshold else 0.0
         closing = min(1.0, max(0.0, self._growth(st) / 0.3))
         v = 0.5 * s.best_score + 0.2 * unk + 0.2 * size + 0.1 * closing
+        if s.unknown_real:
+            v = max(v, 0.3 + 0.2 * size)  # at least the confidence contribution of a 0.6 known contact
         return float(min(1.0, max(0.0, v)))
 
     def _forms(self, st: _State, fact: dict) -> list[Form]:
@@ -472,4 +486,5 @@ class SightingAggregator:
         return ev
 
     def _close(self, st: _State, frame_idx: int, t_s: float) -> dict:
+        self._refresh_realness(st)
         return st.s.event("close", t_s, frame_idx)

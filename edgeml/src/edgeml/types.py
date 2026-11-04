@@ -69,6 +69,8 @@ class Sighting:
     label_scores: dict = field(default_factory=dict)
     subtype: Optional[str] = None
     unknownness: float = 0.0
+    realness: float = 0.0
+    unknown_real: bool = False
     frames: list[int] = field(default_factory=list)  # frames where the object was tracked
     # lookout-report fields (literature.md §7; optional in CONTRACTS)
     bearing_deg: Optional[float] = None   # relative bearing from the camera axis (box centre x, camera HFOV)
@@ -89,6 +91,8 @@ class Sighting:
             "label_scores": {k: float(v) for k, v in self.label_scores.items()},
             "subtype": self.subtype,
             "unknownness": float(self.unknownness),
+            "realness": float(self.realness),
+            "unknown_real": bool(self.unknown_real),
             "box": [float(v) for v in self.box],
             "best_frame_idx": int(self.best_frame_idx),
             "best_box": [float(v) for v in self.best_box],
