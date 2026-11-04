@@ -1,14 +1,26 @@
 """HOTA (mean and at alpha=0.3) / IDF1 / MOTA / IDSW / Frag via TrackEval on MOT-layout sequences (CONTRACTS §3 layout, class-agnostic)."""
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 from pathlib import Path
 from typing import Optional
 
 
-def run_trackeval(seq_roots: list[Path], tracker_files: dict[str, Path], tracker_name: str = "edgeml", workdir: Optional[Path] = None) -> dict:
-    """seq_roots: MOT sequence dirs; tracker_files: seq_id -> tracks.txt. Returns per-seq + COMBINED metrics."""
+def run_trackeval(seq_roots: list[Path], tracker_files: dict[str, Path], tracker_name: str = "edgeml", workdir: Optional[Path] = None,
+                  frame_stride: int = 1) -> dict:
+    """seq_roots: MOT sequence dirs; tracker_files: seq_id -> tracks.txt. Returns per-seq + COMBINED metrics.
+
+    frame_stride > 1 evaluates on detector frames only (frames 1, 1+stride, ...): GT and tracker rows on other frames are
+    dropped and frames renumbered, so a `detect_every=N` run is scored against the frames it actually processed."""
+
+    def _keep(fr: int) -> bool:
+        return (fr - 1) % frame_stride == 0
+
+    def _renum(fr: int) -> int:
+        return (fr - 1) // frame_stride + 1
+
     import numpy as np
     for _n, _t in (("float", float), ("int", int), ("bool", bool)):   # the PyPI TrackEval still uses np.float etc.
         if not hasattr(np, _n):
@@ -28,7 +40,10 @@ def run_trackeval(seq_roots: list[Path], tracker_files: dict[str, Path], tracker
         if d.exists():
             shutil.rmtree(d)
         d.mkdir(parents=True)
-        shutil.copy(s / "seqinfo.ini", d / "seqinfo.ini")
+        info = (s / "seqinfo.ini").read_text()
+        if frame_stride > 1:
+            info = re.sub(r"(?m)^seqLength\s*=\s*(\d+)", lambda m: f"seqLength={_renum(int(m.group(1)))}", info)
+        (d / "seqinfo.ini").write_text(info)
         (d / "gt").mkdir()
         # TrackEval expects class 1 = evaluated; conf column as evaluate flag. We make every GT row class 1.
         rows, seen = [], set()
@@ -38,14 +53,28 @@ def run_trackeval(seq_roots: list[Path], tracker_files: dict[str, Path], tracker
             v = line.split(",")
             v = v[:9] + ["1"] * (9 - len(v))
             v[7] = "1"
-            key = (int(float(v[0])), int(float(v[1])))
+            fr = int(float(v[0]))
+            if not _keep(fr):
+                continue
+            v[0] = str(_renum(fr))
+            key = (fr, int(float(v[1])))
             if key in seen:   # TrackEval rejects duplicate (frame, id) rows; keep the first
                 continue
             seen.add(key)
             rows.append(",".join(v))
         (d / "gt" / "gt.txt").write_text("\n".join(rows) + "\n")
         src = tracker_files.get(name)
-        (tr_root / f"{name}.txt").write_text(Path(src).read_text() if src and Path(src).exists() else "")
+        trows = []
+        if src and Path(src).exists():
+            for line in Path(src).read_text().splitlines():
+                if not line.strip():
+                    continue
+                v = line.split(",")
+                fr = int(float(v[0]))
+                if _keep(fr):
+                    v[0] = str(_renum(fr))
+                    trows.append(",".join(v))
+        (tr_root / f"{name}.txt").write_text("\n".join(trows) + ("\n" if trows else ""))
     (gt_root.parent / "seqmaps").mkdir(exist_ok=True)
     (gt_root.parent / "seqmaps" / "edgeml-all.txt").write_text("name\n" + "\n".join(names) + "\n")
 

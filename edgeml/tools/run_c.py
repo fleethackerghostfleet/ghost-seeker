@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+from collections import defaultdict
 import sys
 import time
 from dataclasses import asdict
@@ -179,7 +180,8 @@ def cmd_matrix(a):
 
         for cfg, files in track_files.items():
             try:
-                te[cfg] = run_trackeval([s.root for s in seqs], {k: str(v) for k, v in files.items()}, workdir=out / "_trackeval" / cfg.replace("|", "_"))
+                te[cfg] = run_trackeval([s.root for s in seqs], {k: str(v) for k, v in files.items()}, workdir=out / "_trackeval" / cfg.replace("|", "_"),
+                                        frame_stride=int(cfg.rsplit("every", 1)[1]))
             except Exception as e:  # keep going; report the failure
                 te[cfg] = {"error": repr(e)}
         (out / "trackeval.json").write_text(json.dumps(te, indent=1, default=_json))
@@ -205,6 +207,67 @@ def print_summary(summary: dict):
                 f(t.get("HOTA")), f(t.get("IDF1")), f(t.get("IDSW")), f(t.get("Frag")),
                 f(d["9.6kbps"]["frac_image"]), f(d["64kbps"]["frac_image"]), f(d["256kbps"]["frac_image"]), f(d["2Mbps"]["frac_image"])]
         print(f"{cfg:42s} " + " ".join(f"{v:>8s}" for v in vals))
+
+
+# ----------------------------------------------------------------------------- delivery (E3: selector ablation on saved events)
+def cmd_delivery(a):
+    """Re-score saved events of a matrix run through `select.greedy` variants (no tracking rerun)."""
+    data = Path(a.data).expanduser()
+    run = Path(a.run).expanduser()
+    seqs = {s.seq_id: s for s in load_sets(data, a.sets, a.split)}
+    rows = [json.loads(l) for l in (run / "results.jsonl").read_text().splitlines() if l.strip()]
+    variants = json.loads(a.variants)
+    want = set(a.cfgs) if a.cfgs else None
+    out: dict = {}
+    for name, kw in variants.items():
+        per_cfg: dict[str, dict] = defaultdict(dict)
+        for r in rows:
+            cfg, seq_id = r["cfg"], r["seq"]
+            if (want and cfg not in want) or seq_id not in seqs:
+                continue
+            seq = seqs[seq_id]
+            ep = run / "events" / cfg / f"{seq_id}.jsonl"
+            events = [json.loads(l) for l in ep.read_text().splitlines() if l.strip()] if ep.exists() else []
+            sm = {k: v for k, v in r["sighting"]["matched_sightings"].items()}
+            for sid in r["sighting"].get("false_sighting_ids", []):
+                sm.setdefault(sid, None)
+            per_cfg[cfg][seq_id] = delivered_vs_budget(events, sm, seq.gt_tracks(), seq.width, seq.height, duration_s=seq.duration_s, selector_kw=kw)
+        out[name] = {"selector": kw, "cfgs": {cfg: pool_delivery(per) for cfg, per in per_cfg.items()}}
+        print(f"== selector {name} {kw}")
+        for cfg, d in out[name]["cfgs"].items():
+            b = d["budgets"]
+            print(f"  {cfg:40s} " + " ".join(f"{n}:{(b[n]['frac_image'] or 0):.2f}/{(b[n]['bytes_per_delivered_object'] or 0)/1024:.0f}KB" for n in ("9.6kbps", "64kbps", "256kbps", "2Mbps")))
+    (run / f"delivery_{a.tag}.json").write_text(json.dumps(out, indent=1, default=_json))
+
+
+# ----------------------------------------------------------------------------- trackeval (re-score saved tracks)
+def cmd_trackeval(a):
+    from edgeml.eval.trackeval_wrapper import run_trackeval
+
+    data = Path(a.data).expanduser()
+    run = Path(a.run).expanduser()
+    seqs = load_sets(data, a.sets, a.split)
+    te = {}
+    sp = run / "summary.json"
+    names = {c.replace("|", "_"): c for c in json.loads(sp.read_text())} if sp.exists() else {}
+    for d in sorted((run / "tracks").iterdir()):
+        cfg = names.get(d.name, d.name)
+        every = int(cfg.rsplit("every", 1)[1])
+        files = {s.seq_id: str(d / f"{s.seq_id}.txt") for s in seqs}
+        try:
+            te[cfg] = run_trackeval([s.root for s in seqs], files, workdir=run / "_trackeval" / d.name, frame_stride=every)
+        except Exception as e:
+            te[cfg] = {"error": repr(e)}
+    (run / "trackeval.json").write_text(json.dumps(te, indent=1, default=_json))
+    # refresh summary.json trackeval column
+    sp = run / "summary.json"
+    if sp.exists():
+        summary = json.loads(sp.read_text())
+        for cfg in summary:
+            t = te.get(cfg)
+            summary[cfg]["trackeval"] = t.get("COMBINED_SEQ") if isinstance(t, dict) else None
+        sp.write_text(json.dumps(summary, indent=1, default=_json))
+        print_summary(summary)
 
 
 def main():
@@ -235,8 +298,21 @@ def main():
     m.add_argument("--stabilize", action="store_true", help="horizon-pinned stabilisation pre-step (E2 ablation)")
     m.add_argument("--no-trackeval", action="store_true")
     m.add_argument("--out", required=True)
+    d = sub.add_parser("delivery", help="E3: re-score a run's saved events with selector variants")
+    d.add_argument("--data", required=True)
+    d.add_argument("--sets", nargs="+", required=True)
+    d.add_argument("--split", default="dev")
+    d.add_argument("--run", required=True)
+    d.add_argument("--cfgs", nargs="*", default=None)
+    d.add_argument("--variants", default='{"decay":{},"nodecay":{"ladder_decay":null},"decay_cap48k":{"max_bytes_per_object":49152},"nodecay_cap48k":{"ladder_decay":null,"max_bytes_per_object":49152}}')
+    d.add_argument("--tag", default="e3")
+    t = sub.add_parser("trackeval", help="re-run TrackEval on a run's saved tracks (detector-frame stride aware)")
+    t.add_argument("--data", required=True)
+    t.add_argument("--sets", nargs="+", required=True)
+    t.add_argument("--split", default="dev")
+    t.add_argument("--run", required=True)
     a = ap.parse_args()
-    {"cache": cmd_cache, "matrix": cmd_matrix}[a.cmd](a)
+    {"cache": cmd_cache, "matrix": cmd_matrix, "delivery": cmd_delivery, "trackeval": cmd_trackeval}[a.cmd](a)
 
 
 if __name__ == "__main__":
