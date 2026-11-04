@@ -592,6 +592,56 @@ def load_lumas(seq_dir: Path) -> dict[int, float]:
     }
 
 
+def load_v1_responses(
+    seq_dir: Path,
+    frame_map: dict[str, dict[str, Any]],
+    count: int,
+    prompt: str,
+    workers: int,
+) -> tuple[dict[int, dict[str, Any] | None], list[dict[str, Any]]]:
+    cache_dir = seq_dir / "teacher" / "cache"
+    parsed_by_frame: dict[int, dict[str, Any] | None] = {}
+    uncached_frames = []
+    for frame in range(1, count + 1):
+        cache_path = cache_dir / f"frame_{frame:06d}.json"
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if isinstance(cached, dict) and isinstance(cached.get("objects"), list):
+                parsed_by_frame[frame] = cached
+                continue
+        except (json.JSONDecodeError, OSError):
+            pass
+        uncached_frames.append(frame)
+
+    errors = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, max(1, workers))
+    ) as pool:
+        futures = {
+            pool.submit(
+                request_frame,
+                frame,
+                frame_map[str(frame)]["gs_uri"],
+                prompt,
+                cache_dir / f"frame_{frame:06d}.json",
+            ): frame
+            for frame in uncached_frames
+        }
+        for future in concurrent.futures.as_completed(futures):
+            frame = futures[future]
+            parsed, error = future.result()
+            parsed_by_frame[frame] = parsed
+            if error:
+                errors.append(
+                    {
+                        "frame": frame,
+                        "source_uri": frame_map[str(frame)]["gs_uri"],
+                        "error": error,
+                    }
+                )
+    return parsed_by_frame, sorted(errors, key=lambda row: row["frame"])
+
+
 def annotate_sequence(
     seq_dir: Path,
     prompt_path: Path,
@@ -603,6 +653,7 @@ def annotate_sequence(
         verify_prompt_path = Path("~/r2/gemini_verify_prompt.txt").expanduser()
     verify_prompt = verify_prompt_path.read_text(encoding="utf-8")
     verify_prompt_sha = hashlib.sha256(verify_prompt_path.read_bytes()).hexdigest()
+    prompt = prompt_path.read_text(encoding="utf-8")
     info = configparser_values(seq_dir / "seqinfo.ini")
     count = int(info["seqLength"])
     frame_map = json.loads((seq_dir / "frame_map.json").read_text())
@@ -610,18 +661,13 @@ def annotate_sequence(
     cache_dir = teacher_dir / "cache"
     teacher_dir.mkdir(parents=True, exist_ok=True)
 
-    parsed_by_frame: dict[int, dict[str, Any] | None] = {}
-    for frame in range(1, count + 1):
-        cache_path = cache_dir / f"frame_{frame:06d}.json"
-        try:
-            cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            parsed_by_frame[frame] = (
-                cached
-                if isinstance(cached, dict) and isinstance(cached.get("objects"), list)
-                else None
-            )
-        except (json.JSONDecodeError, OSError):
-            parsed_by_frame[frame] = None
+    parsed_by_frame, v1_errors = load_v1_responses(
+        seq_dir, frame_map, count, prompt, workers
+    )
+    (teacher_dir / "errors.jsonl").write_text(
+        "".join(json.dumps(error, ensure_ascii=False) + "\n" for error in v1_errors),
+        encoding="utf-8",
+    )
 
     lumas = load_lumas(seq_dir)
     f2_by_frame: dict[int, list[dict[str, Any]]] = {}
@@ -654,7 +700,7 @@ def annotate_sequence(
         if runaway:
             frame_attrs["teacher_status"] = "runaway_dropped"
         elif parsed is None:
-            frame_attrs["teacher_status"] = "v1_cache_missing"
+            frame_attrs["teacher_status"] = "v1_request_failed"
         frame_attrs_by_frame[frame] = frame_attrs
 
     verified_by_frame: dict[int, list[dict[str, Any]]] = {
@@ -797,12 +843,7 @@ def annotate_sequence(
         ),
         encoding="utf-8",
     )
-    v1_errors_path = teacher_dir / "errors.jsonl"
-    v1_error_count = (
-        sum(bool(line.strip()) for line in v1_errors_path.read_text().splitlines())
-        if v1_errors_path.exists()
-        else 0
-    )
+    v1_error_count = len(v1_errors)
     stage_counts = {
         "v1_raw": v1_raw_count,
         "after_f2": after_f2_count,

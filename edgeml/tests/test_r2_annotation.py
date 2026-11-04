@@ -12,6 +12,7 @@ from autolabel_gemini import (
     crop_verifier_box,
     filter_frame_runaway,
     filter_repeated_boxes,
+    load_v1_responses,
 )
 from qa_apply import apply, apply_sample_provenance, rewrite_attrs
 
@@ -53,6 +54,51 @@ def test_f1_drops_only_connected_components_of_six_or_more():
     assert dropped == 6
     assert len(kept) == 6
     assert kept == detections[6:]
+
+
+def test_uncached_v1_frames_are_requested_and_cached(tmp_path, monkeypatch):
+    seq_dir = tmp_path / "seq_a"
+    cache_dir = seq_dir / "teacher" / "cache"
+    cache_dir.mkdir(parents=True)
+    cached = {"objects": [{"label": "buoy"}], "night": False}
+    (cache_dir / "frame_000002.json").write_text(json.dumps(cached))
+    requested = []
+    fresh = {"objects": [{"label": "ship"}], "night": True}
+
+    def fake_request_frame(frame, image_uri, prompt, cache_path):
+        requested.append((frame, image_uri, prompt))
+        if frame == 3:
+            return None, "frame 3: request failed"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(fresh))
+        return fresh, None
+
+    monkeypatch.setattr("autolabel_gemini.request_frame", fake_request_frame)
+    parsed, errors = load_v1_responses(
+        seq_dir,
+        {
+            "1": {"gs_uri": "gs://bucket/1.jpg"},
+            "2": {"gs_uri": "gs://bucket/2.jpg"},
+            "3": {"gs_uri": "gs://bucket/3.jpg"},
+        },
+        3,
+        "verbatim prompt",
+        8,
+    )
+
+    assert requested == [
+        (1, "gs://bucket/1.jpg", "verbatim prompt"),
+        (3, "gs://bucket/3.jpg", "verbatim prompt"),
+    ]
+    assert parsed == {2: cached, 1: fresh, 3: None}
+    assert json.loads((cache_dir / "frame_000001.json").read_text()) == fresh
+    assert errors == [
+        {
+            "frame": 3,
+            "source_uri": "gs://bucket/3.jpg",
+            "error": "frame 3: request failed",
+        }
+    ]
 
 
 def test_verifier_crop_expands_clips_and_upscales():
