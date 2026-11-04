@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package ghostseeker.v1;
+
+import "ghostseeker/v1/item.proto";
+import "ghostseeker/v1/policy.proto";
+import "ghostseeker/v1/sync.proto";
+
+option go_package = "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1;ghostseekerv1";
+
+// ConsoleService is the operator/UI API. The same service is served by the
+// edge (ship-side reviewer) and by shore (shore-side reviewer); shore
+// forwards policy, pulls and overrides to the edge via the downlink.
+// Speaks JSON over HTTP POST (Connect protocol) so a plain HTML page can use
+// fetch(). Raw bytes of a form are served at GET /blob/{item_id}/{form}.
+service ConsoleService {
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
+  rpc GetItem(GetItemRequest) returns (GetItemResponse);
+  rpc GetQueue(GetQueueRequest) returns (GetQueueResponse); // edge only: current send order
+  rpc GetPolicy(GetPolicyRequest) returns (GetPolicyResponse);
+  rpc SetPolicy(SetPolicyRequest) returns (SetPolicyResponse);
+  rpc OverrideLabel(OverrideLabelRequest) returns (OverrideLabelResponse);
+  rpc RequestPull(RequestPullRequest) returns (RequestPullResponse);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message ListItemsRequest {
+  int32 limit = 1;
+  string page_token = 2;
+  ItemType type = 3; // optional filter
+  bool unknown_only = 4;
+  string label = 5; // optional filter
+}
+
+// ItemView is what a UI needs in one row: the item, its score, and what
+// shore has (shore) or what has been acked (edge).
+message ItemView {
+  Item item = 1;
+  Score score = 2;
+  repeated FormState form_states = 3;
+  bool manifest_sent = 4;
+}
+
+message FormState {
+  FormKind kind = 1;
+  int64 bytes = 2;
+  int64 acked_through = 3;
+  bool complete = 4;
+}
+
+message ListItemsResponse {
+  repeated ItemView items = 1;
+  string next_page_token = 2;
+  int64 total = 3;
+}
+
+message GetItemRequest {
+  string item_id = 1;
+}
+
+message GetItemResponse {
+  ItemView item = 1;
+}
+
+message GetQueueRequest {
+  int32 limit = 1;
+}
+
+message QueueEntry {
+  string item_id = 1;
+  FormKind form = 2;
+  int64 bytes_remaining = 3;
+  double rank = 4; // priority per byte after ladder weighting
+  Score score = 5;
+  string top_label = 6;
+}
+
+message GetQueueResponse {
+  repeated QueueEntry entries = 1;
+  int64 total_items = 2;
+  int64 total_bytes_remaining = 3;
+}
+
+message GetPolicyRequest {}
+
+message GetPolicyResponse {
+  Policy policy = 1;
+}
+
+message SetPolicyRequest {
+  Policy policy = 1;
+}
+
+message SetPolicyResponse {
+  Policy policy = 1;
+  // Preview of effect on the current backlog so the operator can confirm.
+  int64 suppressed_count = 2;
+  int64 boosted_count = 3;
+}
+
+message OverrideLabelRequest {
+  LabelOverride override = 1;
+}
+
+message OverrideLabelResponse {}
+
+message RequestPullRequest {
+  Pull pull = 1;
+}
+
+message RequestPullResponse {}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  string node_id = 1;
+  string role = 2; // "edge" | "shore"
+  Heartbeat heartbeat = 3; // last heartbeat (shore) or current (edge)
+  LinkState link = 4;
+  int64 items_total = 5;
+  int64 items_complete = 6; // shore: fully received; edge: fully acked
+  int64 items_manifested = 7;
+  int64 items_unknown = 8;
+  int64 bytes_sent = 9;
+  string policy_id = 10;
+}
+
+message LinkState {
+  bool up = 1;
+  double estimate_bps = 2;
+  int64 last_success_unix_ms = 3;
+  int64 consecutive_failures = 4;
+}

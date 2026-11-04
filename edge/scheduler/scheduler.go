@@ -1,0 +1,612 @@
+// Package scheduler decides, every time the link can carry something, which
+// (item, form) pairs leave the ship and in what order.
+//
+// Rules, in order:
+//  1. Manifest entries for every unmanifested item go first (shore must know
+//     what exists before it gets any payload).
+//  2. Among payloads, rank by priority × ladder weight / remaining bytes:
+//     the most information per byte goes first.
+//  3. Per item, the fidelity ladder is enforced: FACT before THUMB before
+//     CROP before FULL. Partial transfers are still useful.
+//  4. Items under the image threshold (or suppressed) only send FACT until
+//     nothing better is waiting; then everything drains. Nothing is dropped.
+//  5. The plan is rebuilt every tick from the current link estimate and
+//     policy, so a bandwidth change or operator change takes effect on the
+//     next exchange.
+//  6. Chunks resume from the last acked offset; acks are idempotent.
+package scheduler
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"math"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/scoring"
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+)
+
+type Strategy string
+
+const (
+	// Prioritized is the real scheduler.
+	Prioritized Strategy = "prioritized"
+	// FIFO is the baseline: arrival order, full payload only, no manifest.
+	FIFO Strategy = "fifo"
+)
+
+type Config struct {
+	EdgeID           string
+	Strategy         Strategy
+	Tick             time.Duration // planning interval when the link is up
+	ProbeInterval    time.Duration // how often to try a dead link
+	MaxExchangeBytes int64
+	MinChunk         int64
+	MaxChunk         int64
+	RescoreEvery     time.Duration // freshness refresh
+	ManifestRetry    time.Duration // resend manifest if unacked for this long
+	PullBoost        float64
+}
+
+func DefaultConfig(edgeID string) Config {
+	return Config{
+		EdgeID: edgeID, Strategy: Prioritized, Tick: 5 * time.Second, ProbeInterval: 15 * time.Second,
+		MaxExchangeBytes: 4 << 20, MinChunk: 256, MaxChunk: 64 << 10,
+		RescoreEvery: 5 * time.Minute, ManifestRetry: 2 * time.Minute, PullBoost: 100,
+	}
+}
+
+type Stats struct {
+	Exchanges, Failures         int64
+	BytesPayload, BytesManifest int64
+	ChunksSent, ManifestSent    int64
+	LastExchange                time.Time
+}
+
+type Scheduler struct {
+	cfg    Config
+	st     *store.Store
+	lk     link.Link
+	eng    *scoring.Engine
+	clk    clock.Clock
+	log    *slog.Logger
+	mu     sync.Mutex
+	policy *pb.Policy
+	last   time.Time // last full rescore
+	stats  Stats
+	// OnDownlink is called for every applied downlink message (for UIs/tests).
+	OnDownlink func(*pb.Downlink)
+}
+
+func New(cfg Config, st *store.Store, lk link.Link, eng *scoring.Engine, clk clock.Clock, log *slog.Logger) (*Scheduler, error) {
+	if log == nil {
+		log = slog.Default()
+	}
+	s := &Scheduler{cfg: cfg, st: st, lk: lk, eng: eng, clk: clk, log: log}
+	p, err := st.GetPolicy(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		p = DefaultPolicy()
+	}
+	s.policy = p
+	return s, nil
+}
+
+func DefaultPolicy() *pb.Policy {
+	return &pb.Policy{Id: "default", IssuedBy: "system", Text: "default scope: everything by value, unknowns first",
+		Emcon: pb.EmconMode_EMCON_MODE_NORMAL, DigestIntervalS: 3600,
+		Interest:   &pb.Interest{BoostFactor: scoring.DefaultBoostFactor, SuppressFactor: scoring.DefaultSuppressFactor},
+		Thresholds: &pb.Thresholds{UnknownMin: scoring.DefaultUnknownMin, DetectionMinConf: scoring.DefaultDetectionMin}}
+}
+
+func (s *Scheduler) Policy() *pb.Policy {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.policy
+}
+
+func (s *Scheduler) Stats() Stats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stats
+}
+
+func (s *Scheduler) Link() link.Link { return s.lk }
+
+// Run ticks until ctx is done.
+func (s *Scheduler) Run(ctx context.Context) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		wait, err := s.Tick(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			s.log.Debug("tick", "err", err)
+		}
+		if err := s.clk.Sleep(ctx, wait); err != nil {
+			return err
+		}
+	}
+}
+
+// ScoreItem scores (or rescores) one item and persists it. Called by ingest
+// for new items and after overrides.
+func (s *Scheduler) ScoreItem(ctx context.Context, row *store.Row) error {
+	s.mu.Lock()
+	sc := s.eng.Score(row.Item, &scoring.Context{Policy: s.policy, Now: s.clk.Now()}, row.PullBoost)
+	s.mu.Unlock()
+	row.Score = sc
+	return s.st.UpdateScores(ctx, map[string]*pb.Score{row.Item.Id: sc})
+}
+
+// ApplyPolicy installs a new policy and rescores the whole backlog. Returns
+// how many items are now suppressed / boosted, for operator preview.
+func (s *Scheduler) ApplyPolicy(ctx context.Context, p *pb.Policy) (suppressed, boosted int64, err error) {
+	if p.Id == "" {
+		p.Id = fmt.Sprintf("p-%d", s.clk.Now().UnixMilli())
+	}
+	if p.IssuedAtUnixMs == 0 {
+		p.IssuedAtUnixMs = s.clk.Now().UnixMilli()
+	}
+	if p.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+		p.Emcon = pb.EmconMode_EMCON_MODE_NORMAL
+	}
+	s.mu.Lock()
+	s.policy = p
+	s.mu.Unlock()
+	if err := s.st.SetPolicy(ctx, p); err != nil {
+		return 0, 0, err
+	}
+	_ = s.st.Event(ctx, s.clk.Now(), "policy", "", p.Id+": "+p.Text)
+	rows, err := s.st.All(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := s.rescore(ctx, rows); err != nil {
+		return 0, 0, err
+	}
+	for _, r := range rows {
+		if r.Score.Suppressed {
+			suppressed++
+		}
+		for _, rs := range r.Score.Reasons {
+			if rs.Scorer == "interest" && rs.Value > 0 {
+				boosted++
+				break
+			}
+		}
+	}
+	return suppressed, boosted, nil
+}
+
+// Override sets a human label on an item and rescores it.
+func (s *Scheduler) Override(ctx context.Context, o *pb.LabelOverride) error {
+	row, err := s.st.Get(ctx, o.ItemId)
+	if err != nil {
+		return err
+	}
+	if row.Item.Features == nil {
+		row.Item.Features = &pb.Features{}
+	}
+	row.Item.Features.LabelOverride, row.Item.Features.OverrideBy = o.Label, o.By
+	if err := s.st.UpdateItem(ctx, row.Item); err != nil {
+		return err
+	}
+	_ = s.st.Event(ctx, s.clk.Now(), "override", o.ItemId, o.By+": "+o.Label)
+	return s.ScoreItem(ctx, row)
+}
+
+// Pull boosts an item because shore asked for it.
+func (s *Scheduler) Pull(ctx context.Context, p *pb.Pull) error {
+	boost := p.PriorityBoost
+	if boost <= 0 {
+		boost = s.cfg.PullBoost
+	}
+	if err := s.st.SetPull(ctx, p.ItemId, p.Form, boost, p.RequestedBy); err != nil {
+		return err
+	}
+	row, err := s.st.Get(ctx, p.ItemId)
+	if err != nil {
+		return err
+	}
+	_ = s.st.Event(ctx, s.clk.Now(), "pull", p.ItemId, p.RequestedBy)
+	return s.ScoreItem(ctx, row)
+}
+
+func (s *Scheduler) rescore(ctx context.Context, rows []*store.Row) error {
+	s.mu.Lock()
+	sctx := &scoring.Context{Policy: s.policy, Now: s.clk.Now()}
+	scores := make(map[string]*pb.Score, len(rows))
+	for _, r := range rows {
+		r.Score = s.eng.Score(r.Item, sctx, r.PullBoost)
+		scores[r.Item.Id] = r.Score
+	}
+	s.last = sctx.Now
+	s.mu.Unlock()
+	return s.st.UpdateScores(ctx, scores)
+}
+
+// Plan is what one tick decided to send; exposed for the console and tests.
+type Plan struct {
+	Budget   int64
+	Manifest []*pb.ManifestEntry
+	Chunks   []*pb.Chunk
+	Queue    []*pb.QueueEntry // full ranked backlog (not just what fits)
+}
+
+type cand struct {
+	row       *store.Row
+	form      *store.FormState
+	remaining int64
+	rank      float64
+	tier      int // 0 = normal, 1 = fact-only items' non-fact forms
+}
+
+func ladderWeight(k pb.FormKind) float64 {
+	switch k {
+	case pb.FormKind_FORM_KIND_FACT:
+		return 1
+	case pb.FormKind_FORM_KIND_THUMB:
+		return 0.6
+	case pb.FormKind_FORM_KIND_CROP:
+		return 0.4
+	default:
+		return 0.3
+	}
+}
+
+// nextForm returns the next form to send for a row under the strategy and
+// EMCON mode, or nil if the item is fully delivered (or blocked).
+func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState {
+	if s.cfg.Strategy == FIFO {
+		// Baseline: whole file, nothing else.
+		var last *store.FormState
+		for i := range r.Forms {
+			if r.Forms[i].Ready {
+				last = &r.Forms[i]
+			}
+		}
+		if last == nil || last.Complete {
+			return nil
+		}
+		return last
+	}
+	for i := range r.Forms {
+		f := &r.Forms[i]
+		if !f.Ready || f.Complete {
+			continue
+		}
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
+			return nil
+		}
+		return f
+	}
+	return nil
+}
+
+// nextFormAfter returns the ladder rung following kind, if sendable.
+func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.EmconMode) *store.FormState {
+	for i := range r.Forms {
+		f := &r.Forms[i]
+		if f.Kind <= kind || !f.Ready || f.Complete {
+			continue
+		}
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
+			return nil
+		}
+		return f
+	}
+	return nil
+}
+
+func (s *Scheduler) mkCand(r *store.Row, f *store.FormState, minImg float64) *cand {
+	c := &cand{row: r, form: f, remaining: f.Bytes - f.AckedThrough}
+	if c.remaining <= 0 {
+		c.remaining = 1
+	}
+	switch s.cfg.Strategy {
+	case FIFO:
+		c.rank = -float64(r.Item.IngestSeq)
+	default:
+		c.rank = r.Score.Priority * ladderWeight(f.Kind) / float64(c.remaining)
+		if f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 &&
+			(r.Score.Suppressed || r.Score.Priority < minImg) {
+			c.tier = 1
+		}
+	}
+	return c
+}
+
+func sortCands(cands []*cand) {
+	sort.SliceStable(cands, func(i, j int) bool {
+		if cands[i].tier != cands[j].tier {
+			return cands[i].tier < cands[j].tier
+		}
+		return cands[i].rank > cands[j].rank
+	})
+}
+
+// BuildPlan ranks the backlog and fills the byte budget. Pure function of
+// (rows, link estimate, policy); no side effects.
+func (s *Scheduler) BuildPlan(rows []*store.Row, bps float64, now time.Time) *Plan {
+	s.mu.Lock()
+	policy := s.policy
+	s.mu.Unlock()
+	emcon := policy.GetEmcon()
+	plan := &Plan{}
+	if emcon == pb.EmconMode_EMCON_MODE_SILENT {
+		return plan
+	}
+	budget := int64(bps / 8 * s.cfg.Tick.Seconds())
+	if budget < 512 {
+		budget = 512
+	}
+	if budget > s.cfg.MaxExchangeBytes {
+		budget = s.cfg.MaxExchangeBytes
+	}
+	if emcon == pb.EmconMode_EMCON_MODE_BURST && budget > 8<<10 {
+		budget = 8 << 10
+	}
+	plan.Budget = budget
+	left := budget
+
+	// 1. Manifest, highest priority first.
+	if s.cfg.Strategy == Prioritized {
+		var pend []*store.Row
+		for _, r := range rows {
+			if r.ManifestAcked {
+				continue
+			}
+			if r.ManifestSent && now.Sub(r.ManifestSentAt) < s.cfg.ManifestRetry {
+				continue
+			}
+			pend = append(pend, r)
+		}
+		sort.SliceStable(pend, func(i, j int) bool { return pend[i].Score.Priority > pend[j].Score.Priority })
+		for _, r := range pend {
+			me := manifestEntry(r, policy)
+			sz := int64(estimateManifestBytes(me))
+			if left-sz < 0 {
+				break
+			}
+			left -= sz
+			plan.Manifest = append(plan.Manifest, me)
+		}
+	}
+
+	// 2. Payload candidates: the next form of every item.
+	minImg := policy.GetThresholds().GetMinPriorityForImages()
+	var cands []*cand
+	for _, r := range rows {
+		f := s.nextForm(r, emcon)
+		if f == nil {
+			continue
+		}
+		if s.cfg.Strategy == Prioritized && !r.ManifestAcked && !containsManifest(plan.Manifest, r.Item.Id) {
+			// Don't send payload for an item shore doesn't know about yet,
+			// unless it's a pull (shore knows, we just lost the ack).
+			if r.PullBoost == 0 {
+				continue
+			}
+		}
+		cands = append(cands, s.mkCand(r, f, minImg))
+	}
+	sortCands(cands)
+	for _, c := range cands {
+		label, _ := scoring.TopLabel(c.row.Item, 0)
+		plan.Queue = append(plan.Queue, &pb.QueueEntry{ItemId: c.row.Item.Id, Form: c.form.Kind,
+			BytesRemaining: c.remaining, Rank: c.rank, Score: c.row.Score, TopLabel: label})
+	}
+
+	// 3. Fill chunks, strictly in rank order: the best candidate gets all
+	// the bytes it needs before the next one gets any. Small, valuable forms
+	// already rank first by priority-per-byte, so nothing starves behind a
+	// large file; a large file simply spans several exchanges. When a form
+	// fits entirely, the item's next form joins the candidates (ranked on
+	// its own merits), so one exchange can carry fact+thumb+full of a hot
+	// item instead of one rung per tick.
+	maxChunk := int64(bps / 8 * 2)
+	if maxChunk < s.cfg.MinChunk {
+		maxChunk = s.cfg.MinChunk
+	}
+	if maxChunk > s.cfg.MaxChunk {
+		maxChunk = s.cfg.MaxChunk
+	}
+	for len(cands) > 0 && left >= s.cfg.MinChunk && len(plan.Chunks) < 256 {
+		c := cands[0]
+		cands = cands[1:]
+		var sent int64
+		for sent < c.remaining && left >= s.cfg.MinChunk && len(plan.Chunks) < 256 {
+			n := min(c.remaining-sent, maxChunk, left)
+			plan.Chunks = append(plan.Chunks, &pb.Chunk{ItemId: c.row.Item.Id, Form: c.form.Kind,
+				Offset: c.form.AckedThrough + sent, TotalBytes: c.form.Bytes, ContentHash: c.form.Hash, Mime: c.form.Mime,
+				Data: make([]byte, n)}) // placeholder for sizing; real bytes read at send time
+			sent += n
+			left -= n + 48
+		}
+		if sent >= c.remaining && s.cfg.Strategy == Prioritized {
+			if nf := s.nextFormAfter(c.row, c.form.Kind, emcon); nf != nil {
+				nc := s.mkCand(c.row, nf, minImg)
+				cands = append(cands, nc)
+				sortCands(cands)
+			}
+		}
+	}
+	return plan
+}
+
+func containsManifest(m []*pb.ManifestEntry, id string) bool {
+	for _, e := range m {
+		if e.ItemId == id {
+			return true
+		}
+	}
+	return false
+}
+
+func manifestEntry(r *store.Row, p *pb.Policy) *pb.ManifestEntry {
+	label, conf := scoring.TopLabel(r.Item, p.GetThresholds().GetDetectionMinConf())
+	me := &pb.ManifestEntry{ItemId: r.Item.Id, Type: r.Item.Type, CapturedAtUnixMs: r.Item.CapturedAtUnixMs,
+		Source: r.Item.Source, TopLabel: label, TopConf: conf, Unknownness: r.Item.GetFeatures().GetUnknownness(),
+		Priority: r.Score.Priority, Geo: r.Item.Geo}
+	for _, f := range r.Forms {
+		me.Forms = append(me.Forms, &pb.FormSize{Kind: f.Kind, Bytes: f.Bytes})
+	}
+	return me
+}
+
+func estimateManifestBytes(me *pb.ManifestEntry) int {
+	return 40 + len(me.ItemId) + len(me.Source) + len(me.TopLabel) + 4*len(me.Forms)
+}
+
+// Tick runs one planning + exchange cycle and returns how long to wait
+// before the next one.
+func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
+	now := s.clk.Now()
+	rows, err := s.st.All(ctx)
+	if err != nil {
+		return s.cfg.Tick, err
+	}
+	s.mu.Lock()
+	needRescore := now.Sub(s.last) >= s.cfg.RescoreEvery
+	s.mu.Unlock()
+	if needRescore {
+		if err := s.rescore(ctx, rows); err != nil {
+			return s.cfg.Tick, err
+		}
+	}
+	ls := s.lk.State()
+	if s.Policy().GetEmcon() == pb.EmconMode_EMCON_MODE_SILENT {
+		return s.cfg.Tick, nil
+	}
+	plan := s.BuildPlan(rows, ls.EstimateBps, now)
+	req := &pb.ExchangeRequest{EdgeId: s.cfg.EdgeID, Manifest: plan.Manifest}
+	cursor, _ := s.st.GetCursor(ctx)
+	req.DownlinkCursor = cursor
+	var payload int64
+	for _, c := range plan.Chunks {
+		data, err := s.st.ReadForm(c.ItemId, c.Form, c.Offset, int64(len(c.Data)))
+		if err != nil {
+			s.log.Warn("read form", "item", c.ItemId, "err", err)
+			continue
+		}
+		c.Data = data
+		payload += int64(len(data))
+		req.Chunks = append(req.Chunks, c)
+	}
+	var queued, queuedBytes, unman int64
+	for _, r := range rows {
+		if !r.ManifestAcked {
+			unman++
+		}
+		for _, f := range r.Forms {
+			if !f.Complete {
+				queued++
+				queuedBytes += f.Bytes - f.AckedThrough
+				break
+			}
+		}
+	}
+	req.Heartbeat = &pb.Heartbeat{SentAtUnixMs: now.UnixMilli(), QueuedItems: queued, QueuedBytes: queuedBytes,
+		UnmanifestedItems: unman, PolicyId: s.Policy().Id, LinkEstimateBps: ls.EstimateBps}
+
+	var mids []string
+	for _, m := range plan.Manifest {
+		mids = append(mids, m.ItemId)
+	}
+	if err := s.st.MarkManifestSent(ctx, mids, now); err != nil {
+		return s.cfg.Tick, err
+	}
+	// Generous timeout: three times the expected airtime, at least 10 s.
+	est := time.Duration(float64(payload+4096)*8/math.Max(ls.EstimateBps, 300)*float64(time.Second)) * 3
+	if est < 10*time.Second {
+		est = 10 * time.Second
+	}
+	xctx, cancel := context.WithTimeout(ctx, est)
+	resp, err := s.lk.Exchange(xctx, req)
+	cancel()
+	s.mu.Lock()
+	s.stats.Exchanges++
+	s.mu.Unlock()
+	if err != nil {
+		s.mu.Lock()
+		s.stats.Failures++
+		s.mu.Unlock()
+		_ = s.st.ClearManifestSent(ctx, mids)
+		if !s.lk.State().Up {
+			return s.cfg.ProbeInterval, err
+		}
+		return s.cfg.Tick, err
+	}
+	s.mu.Lock()
+	s.stats.BytesPayload += payload
+	s.stats.ChunksSent += int64(len(req.Chunks))
+	s.stats.ManifestSent += int64(len(mids))
+	s.stats.LastExchange = s.clk.Now()
+	s.mu.Unlock()
+	if err := s.applyResponse(ctx, resp); err != nil {
+		return s.cfg.Tick, err
+	}
+	// If we used the whole budget there is more to send: go again right away.
+	if payload > 0 && plan.Budget-payload < s.cfg.MinChunk*4 {
+		return 0, nil
+	}
+	if len(req.Chunks) == 0 && len(mids) == 0 {
+		return s.cfg.Tick, nil
+	}
+	// Otherwise wait out the rest of the tick in link time.
+	spent := s.clk.Now().Sub(now)
+	if spent >= s.cfg.Tick {
+		return 0, nil
+	}
+	return s.cfg.Tick - spent, nil
+}
+
+func (s *Scheduler) applyResponse(ctx context.Context, resp *pb.ExchangeResponse) error {
+	var mack []string
+	for _, a := range resp.Acks {
+		if a.Manifest {
+			mack = append(mack, a.ItemId)
+			continue
+		}
+		if err := s.st.SetAcked(ctx, a.ItemId, a.Form, a.AckedThrough, a.Complete); err != nil {
+			return err
+		}
+	}
+	if err := s.st.MarkManifestAcked(ctx, mack); err != nil {
+		return err
+	}
+	var maxSeq int64
+	for _, d := range resp.Downlink {
+		if d.Seq > maxSeq {
+			maxSeq = d.Seq
+		}
+		var err error
+		switch m := d.Msg.(type) {
+		case *pb.Downlink_Policy:
+			_, _, err = s.ApplyPolicy(ctx, m.Policy)
+		case *pb.Downlink_Pull:
+			err = s.Pull(ctx, m.Pull)
+		case *pb.Downlink_LabelOverride:
+			err = s.Override(ctx, m.LabelOverride)
+		}
+		if err != nil {
+			s.log.Warn("apply downlink", "seq", d.Seq, "err", err)
+		} else if s.OnDownlink != nil {
+			s.OnDownlink(d)
+		}
+	}
+	if maxSeq > 0 {
+		return s.st.SetCursor(ctx, maxSeq)
+	}
+	return nil
+}

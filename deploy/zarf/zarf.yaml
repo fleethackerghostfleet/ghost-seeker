@@ -1,0 +1,17 @@
+# Zarf package skeleton for UDS: one package, two components. Images come
+# from deploy/Dockerfile. Manifests are left as TODO until the k8s shape
+# (edge on a single-node k3s aboard, shore on UDS Core) is agreed.
+kind: ZarfPackageConfig
+metadata:
+  name: ghost-seeker
+  description: Ship-to-shore prioritized sync (edge + shore)
+  version: 0.1.0
+components:
+  - name: shore
+    required: false
+    images: [ghost-seeker:0.1.0]
+    # manifests: [{name: shore, files: [manifests/shore.yaml]}]
+  - name: edge
+    required: false
+    images: [ghost-seeker:0.1.0]
+    # manifests: [{name: edge, files: [manifests/edge.yaml]}]

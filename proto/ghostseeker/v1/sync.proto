@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package ghostseeker.v1;
+
+import "ghostseeker/v1/item.proto";
+import "ghostseeker/v1/policy.proto";
+
+option go_package = "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1;ghostseekerv1";
+
+// SyncService is the ship->shore wire contract. One Exchange per scheduler
+// tick: the edge pushes manifest entries, chunks and a heartbeat; shore
+// answers with acks and any pending downlink (policy, pulls, overrides).
+// Everything is idempotent and resumable by (item_id, form, offset).
+service SyncService {
+  rpc Exchange(ExchangeRequest) returns (ExchangeResponse);
+}
+
+message ExchangeRequest {
+  string edge_id = 1;
+  Heartbeat heartbeat = 2;
+  repeated ManifestEntry manifest = 3;
+  repeated Chunk chunks = 4;
+  int64 downlink_cursor = 5; // last downlink seq the edge has applied
+}
+
+message ExchangeResponse {
+  repeated Ack acks = 1;
+  repeated Downlink downlink = 2;
+  int64 shore_time_unix_ms = 3;
+}
+
+// ManifestEntry is the ~50-100 byte "this exists" record sent before any
+// payload, so shore always knows what it has not received yet.
+message ManifestEntry {
+  string item_id = 1;
+  ItemType type = 2;
+  int64 captured_at_unix_ms = 3;
+  string source = 4;
+  repeated FormSize forms = 5;
+  string top_label = 6;
+  float top_conf = 7;
+  float unknownness = 8;
+  double priority = 9;
+  Geo geo = 10;
+}
+
+message FormSize {
+  FormKind kind = 1;
+  int64 bytes = 2;
+}
+
+message Chunk {
+  string item_id = 1;
+  FormKind form = 2;
+  int64 offset = 3;
+  int64 total_bytes = 4;
+  bytes data = 5;
+  string content_hash = 6; // of the whole form, for verification on completion
+  string mime = 7;
+}
+
+message Heartbeat {
+  int64 sent_at_unix_ms = 1;
+  int64 queued_items = 2;
+  int64 queued_bytes = 3;
+  int64 unmanifested_items = 4;
+  string policy_id = 5; // policy the edge is currently applying
+  double link_estimate_bps = 6;
+}
+
+message Ack {
+  string item_id = 1;
+  FormKind form = 2;
+  int64 acked_through = 3; // bytes received contiguously from 0
+  bool complete = 4;
+  bool manifest = 5; // ack of a manifest entry (form unused)
+}
+
+// Downlink carries shore->edge control. Ordered by seq; the edge stores the
+// cursor so a lost response is replayed next Exchange.
+message Downlink {
+  int64 seq = 1;
+  oneof msg {
+    Policy policy = 2;
+    Pull pull = 3;
+    LabelOverride label_override = 4;
+  }
+}
+
+// Pull asks the edge to send a specific form of a specific item ahead of its
+// natural order ("send me the full image of that unknown").
+message Pull {
+  string item_id = 1;
+  FormKind form = 2;
+  double priority_boost = 3; // added to the item's priority; default large
+  string requested_by = 4;
+}
+
+message LabelOverride {
+  string item_id = 1;
+  string label = 2;
+  string by = 3;
+}
