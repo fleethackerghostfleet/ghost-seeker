@@ -1,0 +1,99 @@
+{
+ "stats": {
+  "n_frames": 222,
+  "n_detector_frames": 222,
+  "n_gated_out": 0,
+  "gate_reasons": {
+   "pass": 222
+  },
+  "n_detections": 183,
+  "n_tracks": 5,
+  "wall_s": 11.794034978000127,
+  "processed_fps": 18.823074580845763,
+  "frame_ms_p50": 37.83182349991421,
+  "frame_ms_p95": 103.99196489998981,
+  "detector_frame_ms_p50": 37.83182349991421,
+  "det_ms_p50": 33.52374450003026,
+  "det_ms_p95": 44.73176100008231,
+  "gate_ms_p50": 2.0194389998096085,
+  "n_open": 4,
+  "n_update": 3,
+  "n_close": 4,
+  "embed_calls": 46,
+  "embed_ms_total": 2223.6943649995737,
+  "n_relinks": 0
+ },
+ "baseline_reports": {
+  "naive": 183,
+  "image_dedup": 27
+ },
+ "selection": {
+  "72KB": {
+   "budget_bytes_per_window": 72000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 1,
+   "bytes_used": 65253,
+   "n_forms_sent": 21,
+   "n_sightings_touched": 4,
+   "forms_by_kind": {
+    "fact": 7,
+    "crop": 13,
+    "thumb": 1
+   },
+   "n_sightings_received": 4,
+   "n_tiles": 4
+  },
+  "480KB": {
+   "budget_bytes_per_window": 480000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 1,
+   "bytes_used": 393896,
+   "n_forms_sent": 31,
+   "n_sightings_touched": 4,
+   "forms_by_kind": {
+    "fact": 7,
+    "crop": 14,
+    "thumb": 7,
+    "full": 3
+   },
+   "n_sightings_received": 4,
+   "n_tiles": 4
+  },
+  "1.92MB": {
+   "budget_bytes_per_window": 1920000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 1,
+   "bytes_used": 757837,
+   "n_forms_sent": 35,
+   "n_sightings_touched": 4,
+   "forms_by_kind": {
+    "fact": 7,
+    "crop": 14,
+    "thumb": 7,
+    "full": 7
+   },
+   "n_sightings_received": 4,
+   "n_tiles": 4
+  },
+  "15MB": {
+   "budget_bytes_per_window": 15000000,
+   "window_s": 60.0,
+   "selector": {},
+   "n_windows": 1,
+   "bytes_used": 757837,
+   "n_forms_sent": 35,
+   "n_sightings_touched": 4,
+   "forms_by_kind": {
+    "fact": 7,
+    "crop": 14,
+    "thumb": 7,
+    "full": 7
+   },
+   "n_sightings_received": 4,
+   "n_tiles": 4
+  }
+ }
+}

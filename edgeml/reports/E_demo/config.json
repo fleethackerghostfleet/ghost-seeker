@@ -1,0 +1,70 @@
+{
+ "command": "edgeml/scripts/demo.py --clip /home/ubuntu/data/submarine_tail.mp4 --fps 5 --budgets 72000 480000 1920000 15000000 --out /home/ubuntu/runs/e_20261104_2152 --append",
+ "detector": "yolo11n-int8-640-openvino",
+ "detector_path": "~/models/D/yolo11n-640/int8/model.xml",
+ "detector_bytes": 5797887,
+ "embedder": "mobileclip-s1-ort-fp32",
+ "tracker": "bytetrack",
+ "asso": "centroid",
+ "max_lost_s": 6.0,
+ "detect_every": 1,
+ "score_thr": 0.25,
+ "det_low_thr": 0.05,
+ "gate": true,
+ "gate_force_every_s": 10.0,
+ "threads": 4,
+ "cpus": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "aggregator": {
+  "min_hits": 2,
+  "min_duration_s": 0.0,
+  "close_after_s": 5.0,
+  "relink_gap_s": 20.0,
+  "relink_speed_frac": 0.05,
+  "relink_size_ratio": 3.0,
+  "appearance_thr": 0.5,
+  "merge_iou": 0.5,
+  "score_jump": 0.2,
+  "bearing_step_deg": 10.0,
+  "keyframe_improve": 0.3,
+  "min_update_interval_s": 10.0,
+  "max_updates": 6,
+  "unknown_bonus_age_s": 2.0,
+  "hfov_deg": 90.0,
+  "size_px": [
+   24.0,
+   64.0,
+   160.0
+  ],
+  "closing_rate": 0.08,
+  "crop_pad": 0.25,
+  "crop_min_short": 64,
+  "crop_hi_min_short": 96,
+  "crop_max_side": 320,
+  "thumb_width": 320,
+  "full_max_side": 1280,
+  "jpeg_q": {
+   "crop_lo": 50,
+   "crop_hi": 80,
+   "thumb": 75,
+   "full": 80
+  },
+  "emit_closed_as_update": true,
+  "static_mask_s": null
+ },
+ "selector": {},
+ "budgets": [
+  72000,
+  480000,
+  1920000,
+  15000000
+ ],
+ "window_s": 60.0,
+ "hardware": "x86_64",
+ "python": "3.10.12",
+ "git_sha": "edea094"
+}
