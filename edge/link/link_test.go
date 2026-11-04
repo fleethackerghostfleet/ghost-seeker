@@ -42,3 +42,21 @@ func TestTraceAt(t *testing.T) {
 		t.Fatalf("should wrap: %+v", w)
 	}
 }
+
+func TestEstimatorKeepsDecayingWhileDown(t *testing.T) {
+	e := NewEstimator(2_000_000, 300, 1e9)
+	e.Failure()
+	e.Failure()
+	if b := e.Bps(); b != 500_000 {
+		t.Fatalf("after two failures want lastGood/4, got %v", b)
+	}
+	for i := 0; i < 6; i++ {
+		e.Failure()
+	}
+	if b := e.Bps(); b > 10_000 {
+		t.Fatalf("estimate should keep halving toward a 9.6 kbps link, got %v", b)
+	}
+	if b := e.Bps(); b < 300 {
+		t.Fatal("below floor")
+	}
+}
