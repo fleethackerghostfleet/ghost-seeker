@@ -2,7 +2,7 @@ const workbench=(()=>{
  const copy=x=>JSON.parse(JSON.stringify(x));
  const empty=()=>({text:'',rules:[],pins:{}});
  let draft=empty(),unknown=[],after=[],candidates=[],proposal=null,comparison=null;
- let versions=[],cursor=-1,serial=0,selected=null,textTimer=null,weightTimer=null,liveTimer=null,lastPreview=0,sequence=0,busy=false,initialized=false;
+ let versions=[],cursor=-1,serial=0,selected=null,textTimer=null,weightTimer=null,liveTimer=null,lastPreview=0,sequence=0,busy=false,initialized=false,renderDeferred=false;
  const sorted=rows=>[...rows].sort((a,b)=>a.tier-b.tier||b.central-a.central||a.id.localeCompare(b.id));
  const counts=rows=>[1,2,3,4].map(t=>rows.filter(i=>i.tier===t).length);
  const delta=(before,next)=>next.map((n,i)=>`${n-before[i]>=0?'+':'−'}${Math.abs(n-before[i])} P${i+1}`).join(' · ');
@@ -83,6 +83,8 @@ const workbench=(()=>{
   $('wbSuggestions').innerHTML=candidates.filter(c=>c.key!=='correction').map(c=>`<button class="wb-suggestion" data-suggest="${c.key}">${esc(c.label)}<small>${esc(c.effect||'Scoring…')}</small></button>`).join('')||'<p class="hint">Try “prioritize boats” for guided specificity suggestions.</p>';
  }
  function renderResults(){
+  if(document.activeElement.closest('.wb-tile')&&document.activeElement.closest('select,input,button,textarea')){renderDeferred=true;return}
+  renderDeferred=false;
   const focused=document.activeElement.closest('.wb-tile')?.dataset.id;
   const current=rows(),live=sorted(items),before=sorted(comparison?items.map(it=>({...it,...comparison.result.find(r=>r.id===it.id)})):items),bm=new Map(before.map((i,index)=>[i.id,{...i,rank:index+1}])),ac=counts(current),bc=counts(before);
   $('wbCompareLabel').textContent=`Before: ${comparison?'v'+comparison.n+' recorded results':'current live feed'} → After: draft · ${changes(before,current)} images change tier`;
@@ -128,6 +130,7 @@ const workbench=(()=>{
   $('wbSuggestions').onclick=async e=>{const b=e.target.closest('[data-suggest]');if(!b)return;const c=candidates.find(c=>c.key===b.dataset.suggest);if(!c)return;draft.rules=copy(c.rules);rewrite();proposal=null;unknown=[];renderChips();await preview({label:'Suggestion: '+c.label})};
   $('wbGrid').onmouseover=e=>{const t=e.target.closest('.wb-tile');if(t&&selected!==t.dataset.id)why(t.dataset.id)};
   $('wbGrid').onfocusin=e=>{const t=e.target.closest('.wb-tile');if(t)why(t.dataset.id)};
+  $('wbGrid').onfocusout=()=>setTimeout(()=>{if(renderDeferred)renderResults()},0);
   $('wbGrid').onclick=e=>{const t=e.target.closest('.wb-tile');if(!t)return;why(t.dataset.id);const b=e.target.closest('[data-correct]');if(b)correct(t.dataset.id,b.dataset.correct)};
   $('wbGrid').onchange=e=>{if(!e.target.classList.contains('wb-pin'))return;const id=e.target.closest('.wb-tile').dataset.id;if(e.target.value==='')delete draft.pins[id];else draft.pins[id]=+e.target.value;renderResults();save('Tier exception updated')};
   $('wbDropped').onclick=e=>{const b=e.target.closest('[data-why]');if(b)why(b.dataset.why)};
@@ -137,6 +140,7 @@ const workbench=(()=>{
   document.addEventListener('keydown',e=>{
    if(state.page!=='rp'||busy||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
    const k=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();travel(e.shiftKey?1:-1);return}if(e.ctrlKey||e.metaKey)return;
+   if(e.target.closest('select,input,button'))return;
    const tile=e.target.closest('.wb-tile');if(!tile)return;
    if(['arrowup','arrowdown','x'].includes(k)){e.preventDefault();if(!e.repeat)correct(tile.dataset.id,k==='arrowup'?'higher':k==='arrowdown'?'lower':'irrelevant')}
    if(['arrowleft','arrowright','j','k'].includes(k)){e.preventDefault();const tiles=[...$('wbGrid').querySelectorAll('.wb-tile')],index=tiles.indexOf(tile),offset=k==='arrowleft'||k==='k'?-1:1;tiles[Math.max(0,Math.min(tiles.length-1,index+offset))]?.focus()}
