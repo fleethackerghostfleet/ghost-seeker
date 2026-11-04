@@ -165,7 +165,7 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	resp := &pb.GetStatusResponse{NodeId: s.NodeID, Role: "shore", ItemsTotal: c.Items, ItemsManifested: c.Manifested,
-		ItemsUnknown: c.Unknown, ItemsComplete: c.FullComplete}
+		ItemsUnknown: c.Unknown, ItemsComplete: c.AllFormsComplete}
 	if p, _ := s.St.GetPolicy(ctx); p != nil {
 		resp.PolicyId = p.Id
 	}

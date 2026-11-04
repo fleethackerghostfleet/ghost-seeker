@@ -85,6 +85,9 @@ func (s *Service) ingestFact(ctx context.Context, itemID string) {
 	if err := s.st.SetFeatures(ctx, itemID, feat, label); err != nil {
 		s.log.Warn("set features", "item", itemID, "err", err)
 	}
+	if f.Override != "" {
+		_ = s.st.SetOverride(ctx, itemID, f.Override, f.OverrideBy)
+	}
 }
 
 // Connect adapter.

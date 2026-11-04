@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"os"
 	"path/filepath"
 	"time"
@@ -122,6 +123,9 @@ func (it *Item) Form(k pb.FormKind) *FormState {
 
 // UpsertManifest records that an item exists on an edge. Idempotent.
 func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.ManifestEntry, at time.Time) error {
+	if !ids.Valid(me.ItemId) {
+		return fmt.Errorf("invalid item id %q", me.ItemId)
+	}
 	raw, err := proto.Marshal(me)
 	if err != nil {
 		return err
@@ -145,27 +149,46 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 	return tx.Commit()
 }
 
+// MaxBlobBytes bounds any single form shore will accept.
+const MaxBlobBytes = 256 << 20
+
 // WriteChunk stores a chunk at its offset and returns the new contiguous
 // receive count and whether the form is complete. Out-of-order or duplicate
 // chunks are safe: bytes are written in place and "received" only advances
 // contiguously (chunks arrive in order from one edge in practice).
 func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int64, bool, error) {
+	if !ids.Valid(c.ItemId) {
+		return 0, false, fmt.Errorf("invalid item id %q", c.ItemId)
+	}
+	if c.TotalBytes <= 0 || c.TotalBytes > MaxBlobBytes || c.Offset < 0 || c.Offset+int64(len(c.Data)) > c.TotalBytes {
+		return 0, false, fmt.Errorf("chunk out of bounds: off=%d len=%d total=%d", c.Offset, len(c.Data), c.TotalBytes)
+	}
 	path := filepath.Join(s.blobDir, c.ItemId, fmt.Sprintf("%d", c.Form))
+	var received int64
+	var complete int
+	var hash string
+	err := s.db.QueryRowContext(ctx, `SELECT received, complete, hash FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash)
+	if err == nil && complete == 1 {
+		if c.ContentHash == "" || c.ContentHash == hash {
+			return c.TotalBytes, true, nil
+		}
+		// The edge regenerated this form (e.g. FACT after a label override):
+		// start over with the new content.
+		received, complete = 0, 0
+		_ = os.Remove(path)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return 0, false, err
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return 0, false, err
+	f, err2 := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err2 != nil {
+		return 0, false, err2
 	}
 	if _, err := f.WriteAt(c.Data, c.Offset); err != nil {
 		f.Close()
 		return 0, false, err
 	}
 	f.Close()
-	var received int64
-	var complete int
-	err = s.db.QueryRowContext(ctx, `SELECT received, complete FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete)
 	if errors.Is(err, sql.ErrNoRows) {
 		// Payload before manifest (FIFO baseline, or lost manifest): create a stub.
 		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at) VALUES(?,?,?,?,?,?,?)`,
@@ -177,9 +200,6 @@ func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int6
 		}
 	} else if err != nil {
 		return 0, false, err
-	}
-	if complete == 1 {
-		return c.TotalBytes, true, nil
 	}
 	if c.Offset <= received {
 		if end := c.Offset + int64(len(c.Data)); end > received {
@@ -411,7 +431,8 @@ func (s *Store) Get(ctx context.Context, id string) (*Item, error) {
 }
 
 type Counts struct {
-	Items, Manifested, Unknown, AnyFormComplete, FullComplete int64
+	Items, Manifested, Unknown, AnyFormComplete int64
+	AllFormsComplete                            int64 // every announced form has arrived (records: FACT only)
 }
 
 func (s *Store) Counts(ctx context.Context) (Counts, error) {
@@ -421,8 +442,9 @@ func (s *Store) Counts(ctx context.Context) (Counts, error) {
 		(SELECT COUNT(*) FROM items WHERE manifest_at>0),
 		(SELECT COUNT(*) FROM items WHERE unknownness>=0.5 AND label_override=''),
 		(SELECT COUNT(DISTINCT item_id) FROM forms WHERE complete=1),
-		(SELECT COUNT(DISTINCT item_id) FROM forms WHERE complete=1 AND kind=4)`).
-		Scan(&c.Items, &c.Manifested, &c.Unknown, &c.AnyFormComplete, &c.FullComplete)
+		(SELECT COUNT(*) FROM items i WHERE EXISTS(SELECT 1 FROM forms f WHERE f.item_id=i.id)
+			AND NOT EXISTS(SELECT 1 FROM forms f WHERE f.item_id=i.id AND f.complete=0))`).
+		Scan(&c.Items, &c.Manifested, &c.Unknown, &c.AnyFormComplete, &c.AllFormsComplete)
 	return c, err
 }
 
