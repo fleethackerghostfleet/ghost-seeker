@@ -104,7 +104,7 @@
         <div class="meta">${o.sightingId ? `sighting ${esc(o.sightingId)}` : `item ${esc(b.id.slice(-8))}`}</div>
         <div class="forms">${formChips(b)}</div>
         <div class="actions">
-          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${canPull ? '' : 'disabled'}>${b.forms.full?.state === 'received' ? 'full received' : b.forms.full?.state === 'pending' || b.forms.full?.state === 'partial' ? 'full pending…' : 'Pull full image'}</button>
+          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${canPull ? '' : 'disabled'}>${b.forms.full?.state === 'received' ? 'full received' : b.forms.full?.state === 'pending' || b.forms.full?.state === 'partial' ? 'full pending…' : 'Pull full image'}</button><button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>
           <button class="btn" data-act="escalate" data-key="${esc(o.key)}">${escalated.has(o.key) ? 'Escalated ✓' : 'Escalate to CDR'}</button>
         </div>
       </div></div>`;
@@ -120,7 +120,7 @@
         <div class="actions">
           <button class="btn primary" data-act="confirm" data-key="${esc(o.key)}">Confirm ${esc(o.label || '')}</button>
           <button class="btn" data-act="relabel" data-key="${esc(o.key)}" data-id="${esc(b.id)}">Relabel…</button>
-          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full image</button>
+          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full image</button><button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>
           <button class="btn" data-act="escalate" data-key="${esc(o.key)}">Escalate to CDR</button>
           <button class="btn" data-act="dismiss" data-key="${esc(o.key)}">Dismiss</button>
         </div>
@@ -157,6 +157,12 @@
         pulling.add(id); b.disabled = true; b.textContent = 'requesting…';
         await post('/api/shore/pull', { itemId: id, form: 'full' });
         toast('full image requested from edge');
+      } else if (act === 'fullsize') {
+        const by = prompt('Operator override: send this image at FULL SIZE with NO compression.\nThis uses much more link bandwidth than the usual thumbnail/crop.\n\nEnter your name or operator ID to confirm:');
+        if (by === null) return;
+        if (!by.trim()) { toast('not sent: operator name is required', true); return; }
+        await post('/api/shore/pull', { itemId: id, form: 'full', original: true, by: by.trim() });
+        toast(`full-size original requested by ${by.trim()}`);
       } else if (act === 'escalate') {
         escalated.has(key) ? escalated.delete(key) : escalated.add(key);
         localStorage.setItem('shore.escalated', JSON.stringify([...escalated]));

@@ -144,10 +144,13 @@ queue, and the edge event log records `pull-original` with the operator.
     curl -s -H content-type:application/json localhost:8080/ghostseeker.v1.ConsoleService/RequestPull \
       -d '{"pull":{"itemId":"<id>","original":true,"requestedBy":"op1"}}'
 
-In the operator web app this is the **Send full size** button in the image
-drawer. It asks for the operator's name and records the override on the item
-(`POST /api/items/{id}/full-res`). The web app is not wired to shore yet, so
-for now this only updates its own simulation.
+In the operator web app this is the **Send full size** button. In live shore
+mode (`-shore`, the `shore.html` UI) it sits next to "Pull full image" on each
+card, asks for the operator's name and calls shore `RequestPull` with
+`original: true` through the bridge (`POST /api/shore/pull` with
+`{"itemId","form":"full","original":true,"by"}`; a blank `by` is rejected). In
+the standalone simulation it is in the image drawer and only records the
+override on the simulated item (`POST /api/items/{id}/full-res`).
 
 ## Simulator results (satcom_contested, 60 min, mock analyzer)
 
@@ -162,7 +165,7 @@ every unknown, and puts the bytes it has into what the operator asked for.
 
 ## Operator web app
 
-The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.23+, stdlib only, synthetic imagery and its own in-memory simulation for now; wiring it to the edge/shore `ConsoleService` is the next step). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
+The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.23+, stdlib only, synthetic imagery and its own in-memory simulation by default; `-shore` runs it on a live shore instead, see [docs/DEMO.md](docs/DEMO.md)). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
 
 ```sh
 go run ./cmd/ghost-seeker -addr :8090

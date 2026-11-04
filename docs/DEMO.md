@@ -75,7 +75,9 @@ own link estimate instead.
 **Actions.** The directive box calls shore `SetPolicy` (free text is parsed:
 "ignore cargo ships; prioritize submarines" → suppress `cargo ship`, boost `submarine`;
 the edge picks the policy up on its next exchange). "Pull full image" calls shore
-`RequestPull` for FORM_KIND_FULL. "Relabel…" calls `OverrideLabel`. Confirm/Dismiss/Escalate
+`RequestPull` for FORM_KIND_FULL. "Send full size" is the operator override: after a
+name prompt it calls `RequestPull` with `original: true`, so the edge sends the capture's
+original bytes as FULL with no re-encoding. "Relabel…" calls `OverrideLabel`. Confirm/Dismiss/Escalate
 are local to the browser (localStorage).
 
 ## 3. Three-minute presenter script

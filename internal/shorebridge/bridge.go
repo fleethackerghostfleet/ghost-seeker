@@ -569,10 +569,21 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ItemID string `json:"itemId"`
 		Form   string `json:"form"`
+		// Original is the operator override: FULL at full size, no
+		// re-encoding. It needs the operator's name in By.
+		Original bool   `json:"original"`
+		By       string `json:"by"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.ItemID == "" {
 		http.Error(w, "itemId required", http.StatusBadRequest)
 		return
+	}
+	by := "operator-ui"
+	if in.Original {
+		if by = strings.TrimSpace(in.By); by == "" {
+			http.Error(w, "operator name (by) required for a full-size override", http.StatusBadRequest)
+			return
+		}
 	}
 	kind := pb.FormKind_FORM_KIND_FULL
 	for k, n := range formNames {
@@ -581,12 +592,12 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var out pb.RequestPullResponse
-	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: in.ItemID, Form: kind, RequestedBy: "operator-ui"}}
+	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: in.ItemID, Form: kind, RequestedBy: by, Original: in.Original}}
 	if err := b.call(r.Context(), b.shore, "RequestPull", req, &out); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "itemId": in.ItemID, "form": formNames[kind]})
+	writeJSON(w, map[string]any{"ok": true, "itemId": in.ItemID, "form": formNames[kind], "original": in.Original})
 }
 
 func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
