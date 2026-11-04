@@ -88,7 +88,7 @@ processed frames), fraction of GT objects delivered **with an image** through `s
 | yolo11s|botsort_cmc|every2 | 39 | 0.82 | 0.41 | 3.1 | 4.8 | 6.7 | 517 | 0.34 | 0.45 | 0.37 | 39 | 86 | 0.85 | 0.85 | 0.85 | 0.85 | 457 |
 | yolo11s|botsort_cmc|every5 | 39 | 0.72 | 0.33 | 2.4 | 6.5 | 6.0 | 376 | 0.30 | 0.41 | 0.34 | 48 | 52 | 0.82 | 0.82 | 0.82 | 0.82 | 429 |
 
-Same detector with IoU association (`dev_yolo_iou`, ByteTrack and BoT-SORT+CMC only):
+Same detector with IoU association (`dev_yolo_iou`; this run was restarted once, so only the cells that completed are shown):
 
 | config | GT objs | recall | dup/obj | false/min | TTFR s | reports/obj | reports | HOTA | HOTA@.3 | IDF1 | IDSW | Frag | img@72KB | img@480KB | img@1.92MB | img@15MB | KB/obj@480KB |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|

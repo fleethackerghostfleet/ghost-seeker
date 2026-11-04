@@ -36,6 +36,7 @@ def pooled(rows):
 
 def load(run, status=None):
     rows = [json.loads(l) for l in (RUNS / run / "results.jsonl").read_text().splitlines() if l.strip()]
+    rows = list({(r["cfg"], r["seq"]): r for r in rows}.values())  # restarted runs append; keep the last row per (cfg, seq)
     if status:
         rows = [r for r in rows if r.get("gt_status", "complete") in status]
     by = defaultdict(list)
