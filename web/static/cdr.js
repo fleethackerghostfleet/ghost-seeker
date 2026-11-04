@@ -103,10 +103,15 @@ async function decide(decision,id=view.sel){
   upsert(r.item);
   if(decision){view.undo.push(id);if(view.tab==='pending')view.sel=next?.id||null;toast(`${DEC[decision].lab} · P${it.tier} ${title(it)}`)}
   else{setTab('pending');view.sel=id;toast('Decision reopened')}
-  render();
- }catch(e){toast(e.message)}finally{view.busy=false}
+  render();return true;
+ }catch(e){toast(e.message);return false}finally{view.busy=false}
 }
-function undo(){const id=view.undo.pop()||(items.get(view.sel)?.decision?view.sel:null);if(id&&items.get(id)?.decision)decide('',id)}
+async function undo(){
+ if(view.busy)return;
+ const fromStack=view.undo.length>0,id=fromStack?view.undo.pop():(items.get(view.sel)?.decision?view.sel:null);
+ if(!id||!items.get(id)?.decision)return;
+ if(!await decide('',id)&&fromStack)view.undo.push(id);
+}
 function setTab(t){view.tab=t;[...$('tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
 function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue();renderStage()}}
 function setLive(on){$('live').classList.toggle('off',!on);$('live').querySelector('span').textContent=on?'LIVE':'RECONNECTING'}
