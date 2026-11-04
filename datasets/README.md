@@ -24,7 +24,7 @@ catalog/annotations/<dataset_id>.jsonl  # one row per labelled object (ground tr
 |---|---|---|
 | dataset_id | STRING | lowercase snake case, e.g. `seaships7000`, `video_cargo_ship_uncut_view` |
 | name | STRING | human name |
-| source_type | STRING | `huggingface` \| `youtube` \| `openimages` \| `web` \| `repo` |
+| source_type | STRING | `huggingface` \| `youtube` \| `facebook` \| `motionarray` \| `openimages` \| `web` \| `repo` |
 | source_url | STRING | |
 | source_revision | STRING | HF commit sha, YouTube video id, file sha256, … |
 | license | STRING | as published; `unknown` if not stated |
