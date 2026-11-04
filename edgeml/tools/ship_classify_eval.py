@@ -121,7 +121,7 @@ def main():
     out = Path(a.out)
     (out / "emb").mkdir(parents=True, exist_ok=True)
     sets = {s: load_set(s) for s in a.sets}
-    crops = {s: crops_for(v, a.square and not all(m.startswith("gemini") for m in a.models)) for s, v in sets.items()}
+    crops = {s: crops_for(v, False) for s, v in sets.items()}
     for s, v in sets.items():
         json.dump(v, open(out / f"items_{s}.json", "w"))
         print(s, len(v), dict(sorted(defaultdict(int, {g: sum(1 for i in v if i["gt"] == g) for g in {i["gt"] for i in v}}).items())))
@@ -152,11 +152,12 @@ def main():
                 print(m, s, "done", len(idx), f"seq {seq:.0f} ms/call", flush=True)
             continue
         emb = make_embedder(m)
+        model_crops = {s: [st.square_pad(c) for c in v] if a.square else v for s, v in crops.items()}
         E = {}
         for s in sets:
-            E[s] = emb.embed_crops(crops[s]) if crops[s] else np.zeros((0, emb.dim))
+            E[s] = emb.embed_crops(model_crops[s]) if model_crops[s] else np.zeros((0, emb.dim))
             np.save(out / "emb" / f"{m}_{s}.npy", E[s])
-        lat = latency_ms(emb, next(c for c in crops.values() if c))
+        lat = latency_ms(emb, next(c for c in model_crops.values() if c))
         clfs = []
         if not m.startswith("dinov2"):
             clfs.append(("zeroshot", st.ShipTypeClassifier(emb, unknown_floor=a.unknown_floor, name=m)))
