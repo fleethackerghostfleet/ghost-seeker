@@ -194,7 +194,11 @@ func NightDetections(image catalog.NightImage) []Detection {
 	result := make([]Detection, 0, len(image.Dets))
 	for _, d := range image.Dets {
 		det := Detection{Class: d.Cls, Box: Box{X: d.B.X, Y: d.B.Y, W: d.B.W, H: d.B.H}, Conf: .85}
-		for _, p := range d.Lights {
+		lights := d.Lights
+		if d.TrackObservation != nil {
+			lights = d.TrackObservation.Lights
+		}
+		for _, p := range lights {
 			det.Lights = append(det.Lights, Light{Colour: p.Colour, X: p.X / 2, Y: p.Y / 2, Flashing: p.Flashing})
 		}
 		signal := ""

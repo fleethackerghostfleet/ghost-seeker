@@ -42,6 +42,28 @@ func TestNightLibraryPythonParity(t *testing.T) {
 	}
 }
 
+func TestDistressTrackFlashingSurvivesEveryFrame(t *testing.T) {
+	count := 0
+	for _, images := range catalog.NightLibrary {
+		for _, image := range images {
+			if image.File < "imagery/night/night-05.jpg" || image.File > "imagery/night/night-08.jpg" {
+				continue
+			}
+			count++
+			det := NightDetections(image)[0]
+			if len(det.Lights) != 1 || det.Lights[0].Colour != "red" || !det.Lights[0].Flashing {
+				t.Errorf("%s lost flashing track light: %+v", image.File, det.Lights)
+			}
+			if det.Signal == nil || !det.Signal.Assisted || det.Signal.Boost != 1 {
+				t.Errorf("%s lost assisted distress signal", image.File)
+			}
+		}
+	}
+	if count != 4 {
+		t.Fatalf("expected four distress frames, got %d", count)
+	}
+}
+
 func TestLightRulesFromTable(t *testing.T) {
 	for _, rule := range catalog.LightRules {
 		t.Run(rule.ID, func(t *testing.T) {

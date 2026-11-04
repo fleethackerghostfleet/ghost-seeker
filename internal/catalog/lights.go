@@ -38,11 +38,14 @@ type ObservedLight struct {
 }
 
 type NightDetection struct {
-	Cls            string          `json:"cls"`
-	B              Rect            `json:"b"`
-	Lights         []ObservedLight `json:"lights"`
-	Signal         string          `json:"signal"`
-	Assisted       bool            `json:"signal_assisted"`
+	Cls              string          `json:"cls"`
+	B                Rect            `json:"b"`
+	Lights           []ObservedLight `json:"lights"`
+	Signal           string          `json:"signal"`
+	Assisted         bool            `json:"signal_assisted"`
+	TrackObservation *struct {
+		Lights []ObservedLight `json:"lights"`
+	} `json:"track_observation"`
 	Interpretation struct {
 		RuleID        string  `json:"rule_id"`
 		Boost         float64 `json:"boost"`
