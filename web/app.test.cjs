@@ -67,6 +67,55 @@ test('band controls keep native Enter and Space activation without accepting rev
  vm.runInContext("state.page='feed';actions=[];press('ArrowRight');press('ArrowLeft');press('1')",context);
  assert.equal(vm.runInContext("actions.join(',')",context),'step:1,step:-1,tier:1');
 });
+test('consecutive Space and Enter and live renders retain band focus without reviewing',()=>{
+ const context=setup();
+ vm.runInContext(`
+  handlers={};
+  document.addEventListener=(type,handler)=>{handlers[type]=handler};
+  document.activeElement=document.body;
+  const surface={
+   buttons:[],
+   querySelectorAll(){return this.buttons},
+   set innerHTML(html){
+    if(this.buttons.includes(document.activeElement))document.activeElement=document.body;
+    this.buttons=[...html.matchAll(/data-band="([^"]+)" data-band-item="([^"]+)"/g)].map(match=>({
+     tagName:'BUTTON',dataset:{band:match[1],bandItem:match[2]},
+     closest(selector){return selector.includes('#rvMain')?surface:selector.includes('.band-controls')||selector==='[data-band-item]'?this:null},
+     focus(){document.activeElement=this}
+    }));
+   }
+  };
+  const oldDollar=$;
+  $=id=>id==='rvMain'?surface:oldDollar(id);
+  $('rvKeys').children=[];$('rvKeys').querySelectorAll=()=>[];
+  rvProgress=()=>{};renderAsk=()=>{};buildWhy=()=>[];zulu=()=> '12:00:00Z';
+  imageFor=()=>'/frame.jpg';boxesHTML=()=>'';
+  rvAct=()=>{rv.cur.reviewed=true};
+  state.page='rv';
+  const item={...normalizeItem(raw('multi')),bands:['EO','IR'],src:{id:'EO-P7',name:'Mast'},centralTier:1,edge:.5,dets:[],det:[]};
+  SRC['EO-P7']=item.src;
+  items=[item];rv.cur=item;
+  function press(key){
+   let prevented=false;
+   handlers.keydown({key,target:document.activeElement,preventDefault(){prevented=true}});
+   if(!prevented&&(key===' '||key==='Enter'))handlers.click({target:document.activeElement,stopPropagation(){}});
+  }
+  renderReview();
+  surface.buttons.find(b=>b.dataset.band==='IR').focus();
+ `,context);
+ const start=source.indexOf(" document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]')");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext("originalButton=document.activeElement;press(' ');press('Enter')",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
+ vm.runInContext("press('B')",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='EO'&&document.activeElement.dataset.band==='IR'",context),true);
+ vm.runInContext("originalButton=document.activeElement;applyItemUpdate({...rv.cur,src:'EO-P7',central:.95})",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
+ vm.runInContext("press('Enter')",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&!!document.activeElement.closest('.band-controls button')",context),true);
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
