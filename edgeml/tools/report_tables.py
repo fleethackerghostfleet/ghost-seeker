@@ -17,6 +17,19 @@ def f(x, nd=3):
     return f"{x:.{nd}f}" if isinstance(x, float) else str(x)
 
 
+def buckets(t):
+    """Recall for <32² (tiny+small merged, per literature.md), medium, large, with GT counts."""
+    rb, n = t["recall_by_bucket"], t.get("n_gt_by_bucket", {})
+    nt, ns = n.get("tiny", 0), n.get("small", 0)
+    r32 = ((rb.get("tiny") or 0) * nt + (rb.get("small") or 0) * ns) / (nt + ns) if (nt + ns) else float("nan")
+    return r32, nt + ns, rb.get("medium"), n.get("medium", 0), rb.get("large"), n.get("large", 0)
+
+
+def bstr(t):
+    r32, n32, rm, nm, rl, nl = buckets(t)
+    return f"{f(r32, 2)} (n={n32}) / {f(rm, 2)} (n={nm}) / {f(rl, 2)} (n={nl})"
+
+
 def load(run):
     return json.loads((Path(run).expanduser() / "metrics.json").read_text())
 
@@ -27,7 +40,7 @@ def leaderboard(args):
     hdr = ["model", "tier/train", "params M", "GFLOPs", "GPU ms p50"]
     for s in sets:
         short = s.split("__")[0].replace("seaships7000", "SeaShips").replace("smd_vis_onboard_sample", "SMD").replace("singapore_maritime", "SG")
-        hdr += [f"{short} AP50", f"{short} AP", f"{short} R@τ", f"{short} P@τ", f"{short} τ", f"{short} R_sm/med/lg", f"{short} FP/sea-frame"]
+        hdr += [f"{short} AP50", f"{short} AP", f"{short} R@τ", f"{short} P@τ", f"{short} τ", f"{short} R <32²/med/lg", f"{short} FP/sea-frame"]
     rows = []
     for name, sets_m in m.items():
         if "error" in sets_m and len(sets_m) == 1:
@@ -48,7 +61,7 @@ def leaderboard(args):
             t = v["at_tau"]
             rb = t["recall_by_bucket"]
             row += [f(v["mAP50"]), f(v["mAP50-95"]), f(t["recall"]), f(t["precision"]), f(e["tau"], 2),
-                    f"{f(rb.get('small'), 2)}/{f(rb.get('medium'), 2)}/{f(rb.get('large'), 2)}", f(t.get("fp_per_sea_only_frame"), 2)]
+                    bstr(t), f(t.get("fp_per_sea_only_frame"), 2)]
             if s == sets[0]:
                 sort_key = v["mAP50"]
         rows.append((sort_key, row))
@@ -63,7 +76,7 @@ def compare(args):
     runs = dict(kv.split("=", 1) for kv in args.runs.split(","))
     ms = {k: load(v) for k, v in runs.items()}
     models = sorted({n for m in ms.values() for n in m if args.set in m[n]})
-    hdr = ["model"] + [f"{k} AP50 / AP / R@τ / R_small / R_med / FP-sea / ms" for k in runs]
+    hdr = ["model"] + [f"{k}: AP50 / AP / R@τ / R<32² / R_med / FP-sea / ms" for k in runs]
     print("| " + " | ".join(hdr) + " |")
     print("|" + "---|" * len(hdr))
     for n in models:
@@ -74,8 +87,8 @@ def compare(args):
                 cells.append("–")
                 continue
             v, t = e["vessel"], e["vessel"]["at_tau"]
-            rb = t["recall_by_bucket"]
-            cells.append(f"{f(v['mAP50'])} / {f(v['mAP50-95'])} / {f(t['recall'], 2)} / {f(rb.get('small'), 2)} / {f(rb.get('medium'), 2)} / {f(t.get('fp_per_sea_only_frame'), 2)} / {f(e['latency'].get('ms_p50'), 1)}")
+            r32, n32, rm, nm, _, _ = buckets(t)
+            cells.append(f"{f(v['mAP50'])} / {f(v['mAP50-95'])} / {f(t['recall'], 2)} / {f(r32, 2)} / {f(rm, 2)} / {f(t.get('fp_per_sea_only_frame'), 2)} / {f(e['latency'].get('ms_p50'), 1)}")
         print("| " + " | ".join(cells) + " |")
 
 
