@@ -11,7 +11,7 @@ import (
 
 const MaxActiveDirectives = 20
 
-var ErrTooManyActiveDirectives = errors.New("Too many active directives — remove one first")
+var ErrTooManyActiveDirectives = errors.New("too many active directives — remove one first")
 
 // Decisions are the commander's final-review outcomes. DecisionReturn hands
 // the image back to the watch floor for another look.
@@ -78,13 +78,6 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 		s.items = append(s.items[:oldest], s.items[oldest+1:]...)
 	}
 	return cloneItem(*item), evicted
-}
-
-func (s *Store) RecordDropped(extra int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.stats.Cap += extra + 1
-	s.stats.Drop += extra + 1
 }
 
 func (s *Store) Snapshot() ([]command.Item, command.Stats, int, State) {

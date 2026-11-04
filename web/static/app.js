@@ -122,6 +122,7 @@ async function init(){
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
  document.addEventListener('keydown',e=>{if($('settings').open)return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
+  if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
   if(state.page==='rv'){if(k==='escape'){location.hash='#feed';return}const a=RVKEYS[k];if(a){e.preventDefault();if(!e.repeat)rvAct(a)}return}
   if(state.page!=='feed')return;
@@ -130,7 +131,8 @@ async function init(){
   if(k==='f'&&state.sel){state.zoom?closeZoom():openZoom();return}
   if(state.sel&&['1','2','3','4'].includes(k))setManual(state.sel,+k);
   if(state.sel&&['arrowright','arrowdown','arrowleft','arrowup'].includes(k)){e.preventDefault();step(k==='arrowright'||k==='arrowdown'?1:-1)}});
- $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b){b.blur();rvAct(b.dataset.a)}};
+ $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b&&(!rv.ask||b.dataset.a==='undo')){b.blur();rvAct(b.dataset.a)}};
+ $('rvAsk').onclick=e=>{const b=e.target.closest('[data-ask]');if(!b)return;if(b.dataset.ask==='why')answerWhy(b.dataset.choice);else answerSuggestion(b.dataset.answer)};
  $('rvOrder').onclick=e=>{const b=e.target.closest('button');if(!b)return;rv.order=b.dataset.o;[...$('rvOrder').children].forEach(x=>x.classList.toggle('on',x===b));rv.cur=null;renderReview()};
  $('nightBtn').onclick=toggleNight;
  window.addEventListener('hashchange',route);
@@ -142,6 +144,7 @@ function route(){
  $('pgBrief').classList.toggle('on',state.page==='brief');
  $('pgFeed').classList.toggle('on',state.page==='feed');$('pgRp').classList.toggle('on',state.page==='rp');$('pgRv').classList.toggle('on',state.page==='rv');$('navRv').classList.toggle('on',state.page==='rv');
  $('navFeed').classList.toggle('on',state.page==='feed');$('navRp').classList.toggle('on',state.page==='rp');
+ if(state.page!=='rv'&&rv.ask){rv.ask=null;rv.askBusy=false;renderAsk()}
  if(state.page==='feed')renderFeed(true);else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
@@ -273,12 +276,54 @@ async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{m
 function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
-let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{}};
+let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
 function rvQueue(){const l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
+function renderAsk(){
+ const box=$('rvAsk');if(!box)return;
+ if(!rv.ask){box.hidden=true;box.innerHTML='';return}
+ box.hidden=false;
+ if(rv.ask.kind==='why'){
+  const tier=findItem(rv.ask.id)?.tier||'?';
+  box.innerHTML=`<div class="rvask-copy"><b>Why did you set the last image to P${tier}?</b><span>Two contacts scored close. Pick the one that drove your call.</span></div><div class="rvask-actions">${rv.ask.classes.map((cls,i)=>`<button class="kb rvask-btn" data-ask="why" data-choice="${esc(cls)}" ${rv.askBusy?'disabled':''}><kbd>${i+1}</kbd>${esc(CLS[cls]?.lab||cls)}</button>`).join('')}<button class="kb rvask-btn" data-ask="why" data-choice="wrong" ${rv.askBusy?'disabled':''}><kbd>${rv.ask.classes.length+1}</kbd>Wrong detection</button><button class="kb rvask-btn rvask-skip" data-ask="why" data-choice="skip" ${rv.askBusy?'disabled':''}><kbd>Esc</kbd>Skip</button></div>`;
+  return;
+ }
+ const s=rv.ask.s,label=CLS[s.cls]?.lab||s.cls,verb=s.dir==='lower'?'lowered':'raised',action=s.dir==='lower'?'Lower':'Raise';
+ box.innerHTML=`<div class="rvask-copy"><b>You ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact. ${action} ${esc(label)} priority?</b>${s.highRisk?`<span class="rvask-warning">${esc(label)} is normally high priority — confirm this change.</span>`:''}</div><div class="rvask-actions"><button class="kb rvask-btn" data-ask="sug" data-answer="yes" ${rv.askBusy?'disabled':''}><kbd>Y</kbd>Yes</button><button class="kb rvask-btn" data-ask="sug" data-answer="no" ${rv.askBusy?'disabled':''}><kbd>N</kbd>No</button><button class="kb rvask-btn rvask-skip" data-ask="sug" data-answer="later" ${rv.askBusy?'disabled':''}><kbd>L</kbd>Later</button></div>`;
+}
+function checkLearningSuggestion(){
+ if(rv.ask||typeof gsLearn==='undefined')return;
+ const s=gsLearn.suggestion();if(s){rv.ask={kind:'sug',s};rv.askBusy=false;renderAsk()}
+}
+function answerWhy(choice){
+ const ask=rv.ask;if(!ask||ask.kind!=='why'||rv.askBusy||typeof gsLearn==='undefined')return;
+ if(choice==='wrong'){gsLearn.attribute(ask.id,'wrong');toast('Marked as wrong detection — not used for rule suggestions')}
+ else gsLearn.attribute(ask.id,choice==='skip'?null:choice);
+ rv.ask=null;rv.askBusy=false;renderAsk();checkLearningSuggestion();
+}
+function answerSuggestion(answer){
+ const ask=rv.ask;if(!ask||ask.kind!=='sug'||rv.askBusy||typeof gsLearn==='undefined')return;
+ const s=ask.s;
+ if(answer!=='yes'){gsLearn.resolve(s,answer);rv.ask=null;rv.askBusy=false;renderAsk();return}
+ rv.askBusy=true;renderAsk();
+ const label=CLS[s.cls]?.lab||s.cls;
+ request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]})
+  .then(()=>{gsLearn.resolve(s,'yes');toast('Rule added — review it on Collection Priorities')})
+  .catch(error=>{gsLearn.resolve(s,'later');toast(error.message)})
+  .finally(()=>{rv.askBusy=false;if(rv.ask===ask)rv.ask=null;renderAsk()});
+}
+function reviewAskKey(k){
+ if(!rv.ask||rv.askBusy)return;
+ if(rv.ask.kind==='why'){
+  if(k==='escape'){answerWhy('skip');return}
+  const n=Number(k);if(n>=1&&n<=rv.ask.classes.length)answerWhy(rv.ask.classes[n-1]);else if(n===rv.ask.classes.length+1)answerWhy('wrong');
+  return;
+ }
+ if(k==='y')answerSuggestion('yes');else if(k==='n')answerSuggestion('no');else if(k==='l'||k==='escape')answerSuggestion('later');
+}
 function renderReview(){
  let it=rv.cur;if(!it||it.reviewed||it.dismissed||!items.includes(it))it=rv.cur=rvQueue()[0]||null;
- rvProgress();
+ rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a&&b.dataset.a!=='undo')b.disabled=!it});
  if(!it){rv.shown=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>All caught up</b><div>New images will appear here as sensors report.</div></div><div class="rvflash" id="rvFlash"></div>`;return}
  const key=it.id+':'+it.centralTier+':'+it.central;if(rv.shown===key)return;rv.shown=key;
@@ -297,7 +342,7 @@ function rvFlash(msg,col){const f=$('rvFlash');if(!f)return;f.textContent=msg;f.
 function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)return;b.classList.add('pressed');setTimeout(()=>b.classList.remove('pressed'),140)}
 function rvAct(a){
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;patchItem(p.id,{manual:p.manual,reviewed:p.reviewed,dismissed:p.dismissed,sent:p.sent}).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;rv.cur=it;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;patchItem(p.id,{manual:p.manual,reviewed:p.reviewed,dismissed:p.dismissed,sent:p.sent}).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
  const it=rv.cur;if(!it)return;
  if(a==='skip'){rv.skipped[it.id]=Date.now();rv.cur=null;rv.shown=null;renderReview();return}
  const sug=it.centralTier,p={id:it.id,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
@@ -309,7 +354,7 @@ function rvAct(a){
  else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Forwarded to CO';col='var(--good)'}
  else return;
  rv.busy=true;
- patchItem(it.id,changes).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
+ patchItem(it.id,changes).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 init();
