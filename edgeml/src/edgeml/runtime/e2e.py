@@ -99,7 +99,8 @@ def main():
     embedder = classifier = None
     if args.embed:
         meta = json.loads((Path(args.embed) / "meta.json").read_text())
-        embedder = ClipEmbedder(meta["model"], backend=args.embed_backend, onnx_dir=args.embed, threads=args.threads)
+        prec = meta.get("precision") or (Path(args.embed).name if Path(args.embed).name in ("fp32", "fp16", "int8") else "fp32")
+        embedder = ClipEmbedder(meta["model"], backend=args.embed_backend, onnx_dir=args.embed, threads=args.threads, precision=prec)
         classifier = ZeroShotClassifier(embedder)
     results = []
     all_events = []
