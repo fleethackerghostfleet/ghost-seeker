@@ -486,7 +486,7 @@ def main():
               "detect_every": a.detect_every, "score_thr": a.score_thr, "det_low_thr": a.det_low_thr, "gate": not a.no_gate, "gate_force_every_s": a.gate_force_s, "threads": a.threads, "cpus": sorted(os.sched_getaffinity(0)),
               "aggregator": asdict(agg_params), "selector": selector_kw, "budgets": a.budgets, "window_s": a.window_s,
               "hardware": platform.processor() or platform.machine(), "python": platform.python_version(), "git_sha": sha}
-    (out / "config.json").write_text(json.dumps(config, indent=1, default=_json))
+    (out / ("config.json" if not a.append else f"config_{a.tag or 'append'}.json")).write_text(json.dumps(config, indent=1, default=_json))
 
     rows = []
     for clip_path in a.clip:
@@ -555,6 +555,7 @@ def main():
             sel.update(cs)
             metrics["selection"][budget_name(b)] = {k: v for k, v in sel.items() if k != "windows"}
         timeline_png(src, per_frame_dets, events, stats, cdir / "timeline.png", gt)
+        metrics["config"] = config  # per-clip copy so --append rows keep their own gate/detector settings
         (cdir / "metrics.json").write_text(json.dumps(metrics, indent=1, default=_json))
         rows.append((src.clip_id, src.fps, metrics))
         s = metrics.get("sighting", {})
@@ -584,6 +585,9 @@ def write_summary(out: Path, rows, config: dict, a):
          f"`{config['command']}`", "",
          f"detector `{config['detector']}` ({config['detector_bytes']/1e6:.1f} MB), embedder `{config['embedder']}`, tracker `{config['tracker']}`/{config['asso']}, "
          f"detect_every={config['detect_every']}, gate={'on' if config['gate'] else 'off'}, {config['threads']} threads on CPUs {config['cpus']}, git `{config['git_sha']}`", "",
+         *([f"Rows with a different command (`--append`): " + "; ".join(f"`{cid}`: `{m['config']['command']}`" for cid, _, m in rows
+                                                                       if m.get("config", {}).get("command") not in (None, config["command"])), ""]
+           if any(m.get("config", {}).get("command") not in (None, config["command"]) for _, _, m in rows) else []),
          "## Per clip", "",
          "| clip | fps | frames (det / gated) | dets | tracks | sightings open / update / close | GT obj | reports / obj | object recall | dup / obj | false / min | TTFR s | ms/frame p50 / p95 | det ms p50 | embeds |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
