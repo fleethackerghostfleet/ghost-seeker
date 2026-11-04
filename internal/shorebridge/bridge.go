@@ -368,7 +368,8 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 	for _, v := range views {
 		c := ToCard(v)
 		for _, l := range suppressLabels {
-			if strings.EqualFold(l, c.Label) || (c.Override != "" && strings.EqualFold(l, c.Override)) {
+			// Mirrors edge/scoring: a negative interest never suppresses an unknown.
+			if c.Unknownness < unknownThreshold && (strings.EqualFold(l, c.Label) || (c.Override != "" && strings.EqualFold(l, c.Override))) {
 				c.Suppressed = true
 			}
 		}
@@ -412,7 +413,7 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 			o.Priority = c.Priority
 		}
 		o.Suppressed = o.Suppressed || c.Suppressed
-		o.Unknown = o.Unknown || c.Unknownness >= 0.5
+		o.Unknown = o.Unknown || c.Unknownness >= unknownThreshold
 		if o.Best == nil || better(c, o.Best) {
 			o.Best = c
 		}
@@ -434,6 +435,9 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 	sort.SliceStable(order, func(i, j int) bool { return order[i].LastMs > order[j].LastMs })
 	return order, cnt
 }
+
+// unknownThreshold matches the Object.Unknown flag and edge/scoring's notion of an unknown contact.
+const unknownThreshold = 0.5
 
 var formRank = map[string]int{"": 0, "thumb": 1, "full": 2, "crop": 3}
 

@@ -22,6 +22,7 @@ func TestGroupBySighting(t *testing.T) {
 		view("b", 2000, map[string]string{"sighting_id": "s1", "subtype": "SSBN"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_CROP: true, pb.FormKind_FORM_KIND_FULL: false}),
 		view("c", 1500, nil, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true}),
 	}
+	views[2].Item.Features.Unknownness = 0.9
 	objs, cnt := Group(views, []string{"submarine"})
 	if cnt.Objects != 2 || cnt.ObjectsWithImage != 1 || cnt.Items != 3 || cnt.Grouped != 2 {
 		t.Fatalf("counts = %+v", cnt)
@@ -40,6 +41,9 @@ func TestGroupBySighting(t *testing.T) {
 	}
 	if !objs[0].Suppressed {
 		t.Fatal("policy suppress list should mark the object suppressed")
+	}
+	if objs[1].Suppressed || !objs[1].Unknown {
+		t.Fatal("unknown contacts are never suppressed by a label")
 	}
 	if objs[0].Priority != "P1" {
 		t.Fatalf("priority = %s", objs[0].Priority)
