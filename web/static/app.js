@@ -1,6 +1,6 @@
 let SOURCES=[],SRC={},CLS={},MODELS={},ATTR_LAB={},EXAMPLES=[];
 let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[]};
-let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set();
+let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null;
 
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>CLS[k].lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>CLS[k].lab).join(' / ')):'Any object';
@@ -35,13 +35,14 @@ function applySnapshot(data){
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
+  heldSnapshotIDs=new Set(snapshot.keys());
   items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
   pendingItems=pendingItems.map(event=>({...event,item:snapshot.get(event.item.id)||event.item}));
   const queued=new Set(pendingItems.map(event=>event.item.id));
   for(const item of data.items)if(!elements.has(item.id)&&!queued.has(item.id)&&!evictedIDs.has(item.id))pendingItems.push({item});
  }else{
   items=data.items.map(item=>{item=normalizeItem(item);item.el=elements.get(item.id);return item});
-  pendingItems=[];evictedIDs.clear();
+  pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
  }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
  state.model=data.state.model;state.directives=data.state.directives;
@@ -54,6 +55,7 @@ function applySnapshot(data){
 function applyItemUpdate(raw){
  if(state.paused&&!findItem(raw.id)){
   if(evictedIDs.has(raw.id))return;
+  heldSnapshotIDs?.add(raw.id);
   const pending=pendingItems.find(event=>event.item.id===raw.id);
   if(pending)pending.item=raw;else pendingItems.push({item:raw});
   renderStats();return;
@@ -72,12 +74,18 @@ async function patchItem(id,changes){
  const result=await request(`/api/items/${encodeURIComponent(id)}`,'PATCH',changes);
  cdr=result.cdr;applyItemUpdate(result.item);return findItem(id);
 }
+function renderLive(){
+ const live=$('live');live.classList.toggle('off',!!state.offline);live.classList.toggle('paused',!state.offline&&state.paused);
+ live.querySelector('span').textContent=state.offline?'RECONNECTING':state.paused?'FEED HELD':'FEED ACTIVE';
+}
 function openStream(){
  const stream=new EventSource('/api/stream');
+ stream.onopen=()=>{state.offline=false;renderLive()};
+ stream.onerror=()=>{state.offline=true;renderLive()};
  stream.addEventListener('snapshot',event=>applySnapshot(JSON.parse(event.data)));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
-  stats=data.stats;if(state.paused){pendingItems.push(data);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
+  stats=data.stats;if(state.paused){pendingItems.push(data);heldSnapshotIDs?.add(data.item.id);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
  });
  stream.addEventListener('stats',event=>{
   stats=JSON.parse(event.data).stats;renderStats();
@@ -109,7 +117,7 @@ async function init(){
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderFeed()};
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens};
  $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
- $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Hold';$('live').classList.toggle('paused',state.paused);$('live').querySelector('span').textContent=state.paused?'FEED HELD':'FEED ACTIVE';if(!state.paused){for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}};
+ $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Hold';renderLive();if(!state.paused){if(heldSnapshotIDs){const keep=heldSnapshotIDs;for(const item of items)if(!keep.has(item.id)){imageCache.delete(item.id);if(state.sel===item.id)closeDetail();if(rv.cur?.id===item.id){rv.cur=null;rv.shown=null}}items=items.filter(item=>keep.has(item.id));pendingItems=pendingItems.filter(event=>keep.has(event.item.id));heldSnapshotIDs=null}for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
  document.addEventListener('keydown',e=>{const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
@@ -147,7 +155,7 @@ function renderTierSeg(counts){
 }
 function boxesHTML(it,labels){
  return it.dets.map((d,i)=>{const sd=it.det[i];const c=sd.sup?'sup':sd.matched?'match':sd.s>=.6?'hi':sd.s>=.3?'md':'lo';const b=d.b;
-  return`<div class="box ${c}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
+  return`<div class="box ${c}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
 function topLine(it){
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return'—';
