@@ -37,7 +37,7 @@ def test_prompt_texts_cover_classifier_prototypes():
     assert set(embedder.texts) <= set(st.prompt_texts())
 
 
-def test_unknown_floor_confidence_is_complement_of_rejected_known_type():
+def test_unknown_floor_confidence_is_unknown_group_probability():
     classifier = st.ShipTypeClassifier(FakeEmbedder(), unknown_floor=0.2)
     embeddings = np.ones((1, 4), np.float32)
     top_probability = classifier.probs(embeddings)[0].max()
@@ -45,4 +45,4 @@ def test_unknown_floor_confidence_is_complement_of_rejected_known_type():
     assert top_probability < classifier.unknown_floor
     result = classifier.classify_embeddings(embeddings)[0]
     assert result["type"] == st.UNKNOWN
-    assert np.isclose(result["conf"], 1 - top_probability, atol=1e-3)
+    assert np.isclose(result["conf"], classifier.probs(embeddings)[0][-1], atol=1e-3)

@@ -146,7 +146,7 @@ class ShipTypeClassifier:
             unknown = k == len(TYPES) - 1
             rejected = not unknown and pi[k] < self.unknown_floor
             t = UNKNOWN if unknown or rejected else TYPES[k]
-            conf = pi[k] if unknown or not rejected else 1 - pi[k]
+            conf = pi[-1] if rejected else pi[k]
             out.append(record(t, conf,
                               aspect=list(ASPECTS)[int(ai.argmax())] if t != UNKNOWN else None,
                               size=size_from_type(t), model=f"{self.name} zero-shot"))
