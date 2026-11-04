@@ -293,7 +293,7 @@ function checkLearningSuggestion(){
 }
 function answerWhy(choice){
  const ask=rv.ask;if(!ask||ask.kind!=='why'||rv.askBusy||typeof gsLearn==='undefined')return;
- if(choice==='wrong'){gsLearn.attribute(ask.id,'wrong');toast('Logged as wrong detection for retraining')}
+ if(choice==='wrong'){gsLearn.attribute(ask.id,'wrong');toast('Marked as wrong detection — not used for rule suggestions')}
  else gsLearn.attribute(ask.id,choice==='skip'?null:choice);
  rv.ask=null;rv.askBusy=false;renderAsk();checkLearningSuggestion();
 }
