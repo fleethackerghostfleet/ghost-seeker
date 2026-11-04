@@ -33,7 +33,7 @@ const workbench=(()=>{
   });
   if(proposal)candidates.push({key:'correction',label:proposal.label,rules:proposal.rules});
  }
- async function preview({parse=false,label=null}={}){
+ async function preview({parse=false,label=null,background=false}={}){
   clearTimeout(liveTimer);liveTimer=null;
   const token=++sequence;lastPreview=Date.now();
   $('wbStatus').textContent='Scoring preview…';
@@ -52,7 +52,7 @@ const workbench=(()=>{
    for(const c of candidates){const effect=result.candidates.find(x=>x.key===c.key);if(effect)c.effect=delta(result.counts,effect.counts)+` · ${effect.changed} tier changes`}
    if(label)save(label);else if(!versions.length&&items.length)save('Live starting point');
    $('wbStatus').textContent=`Live · ${result.items.length} retained images · preview updated ${new Date().toLocaleTimeString()}`;
-   renderResults();renderSuggestions();renderProposal();renderHistory();
+   renderResults({background});renderSuggestions();renderProposal();renderHistory();
    return true;
   }catch(error){if(token===sequence){$('wbStatus').textContent='Preview unavailable: '+error.message;toast(error.message)}return false}
  }
@@ -63,7 +63,7 @@ const workbench=(()=>{
  async function flush(){if(textTimer){clearTimeout(textTimer);textTimer=null;return preview({parse:true,label:'Directive edited'})}return true}
  function live(){
   if(!initialized||state.page!=='rp'||textTimer||busy)return;
-  clearTimeout(liveTimer);liveTimer=setTimeout(()=>{liveTimer=null;if(state.page==='rp'&&!textTimer&&!busy)preview()},Math.max(0,3000-(Date.now()-lastPreview)));
+  clearTimeout(liveTimer);liveTimer=setTimeout(()=>{liveTimer=null;if(state.page==='rp'&&!textTimer&&!busy)preview({background:true})},Math.max(0,3000-(Date.now()-lastPreview)));
  }
  function activate(){if($('nlIn').value!==draft.text)textChanged();else live()}
  function opts(entries,values){return entries.map(([v,l])=>`<option value="${esc(String(v))}" ${values.includes(String(v))?'selected':''}>${esc(l)}</option>`).join('')}
@@ -82,10 +82,11 @@ const workbench=(()=>{
  function renderSuggestions(){
   $('wbSuggestions').innerHTML=candidates.filter(c=>c.key!=='correction').map(c=>`<button class="wb-suggestion" data-suggest="${c.key}">${esc(c.label)}<small>${esc(c.effect||'Scoring…')}</small></button>`).join('')||'<p class="hint">Try “prioritize boats” for guided specificity suggestions.</p>';
  }
- function renderResults(){
-  if(document.activeElement.closest('.wb-tile')&&document.activeElement.closest('select,input,button,textarea')){renderDeferred=true;return}
+ function renderResults({background=false}={}){
+  const active=document.activeElement,tile=active.closest('.wb-tile'),control=active.closest('select,input,button,textarea');
+  if(background&&tile&&control){renderDeferred=true;return}
   renderDeferred=false;
-  const focused=document.activeElement.closest('.wb-tile')?.dataset.id;
+  const focused=tile?.dataset.id,controlIndex=tile&&control?[...tile.querySelectorAll('select,input,button,textarea')].indexOf(control):-1;
   const current=rows(),live=sorted(items),before=sorted(comparison?items.map(it=>({...it,...comparison.result.find(r=>r.id===it.id)})):items),bm=new Map(before.map((i,index)=>[i.id,{...i,rank:index+1}])),ac=counts(current),bc=counts(before);
   $('wbCompareLabel').textContent=`Before: ${comparison?'v'+comparison.n+' recorded results':'current live feed'} → After: draft · ${changes(before,current)} images change tier`;
   $('wbCounts').innerHTML=ac.map((n,i)=>`<div class="wb-count" style="--tier:${tcol(i+1)}">P${i+1}<b>${bc[i]} → ${n}</b><span class="hint">${n-bc[i]>=0?'+':''}${n-bc[i]} images</span><div class="wb-track"><i style="width:${before.length?bc[i]/before.length*100:0}%;opacity:.4"></i></div><div class="wb-track"><i style="width:${current.length?n/current.length*100:0}%"></i></div></div>`).join('');
@@ -95,7 +96,8 @@ const workbench=(()=>{
   $('wbGrid').innerHTML=display.map(it=>{const old=bm.get(it.id)||{tier:it.tier,rank:live.length},rank=current.indexOf(it)+1,diff=old.rank-rank,badge=old.rank>16&&rank<=16?'NEW in top':diff>0?'↑'+diff:diff<0?'↓'+Math.abs(diff):'— same rank';return `<article class="wb-tile ${selected===it.id?'selected':''}" tabindex="0" data-id="${it.id}" aria-label="Rank ${rank}, frame ${it.frame}, P${it.tier}"><div class="wb-photo"><img src="${imageFor(it)}" alt="Synthetic ${esc(it.dets.map(d=>CLS[d.cls].lab).join(', '))}"><span class="wb-badge">#${rank} · ${badge}</span></div><div class="wb-tile-body"><div class="wb-tile-title"><span>${it.src.id} · ${Math.max(0,Math.round((Date.now()-it.ts)/60000))}m</span><b style="color:${tcol(it.tier)}">P${old.tier} → P${it.tier}</b></div><div class="wb-actions"><button data-correct="higher" title="Should be higher (↑)">↑ Higher</button><button data-correct="lower" title="Should be lower (↓)">↓ Lower</button><button data-correct="irrelevant" title="Not relevant (X)">× N/A</button></div><select class="wb-pin" aria-label="Pin frame ${it.frame} to tier"><option value="">${draft.pins[it.id]!==undefined?'Remove pending pin':'Pin to tier…'}</option>${[1,2,3,4].map(t=>`<option value="${t}" ${draft.pins[it.id]===t?'selected':''}>Pin P${t} exception</option>`).join('')}<option value="0" ${draft.pins[it.id]===0?'selected':''}>Clear live manual override</option></select></div></article>`}).join('')||'<div class="wb-empty">No tier changes or no retained images. Refine a rule or turn off Diff only.</div>';
   const dropped=before.slice(0,16).filter(it=>!top.some(x=>x.id===it.id));$('wbDropLabel').textContent='Dropped out of top 16 · '+dropped.length;
   $('wbDropped').innerHTML=dropped.map(it=>`<button data-why="${it.id}"><img src="${imageFor(it)}" alt="Dropped synthetic frame ${it.frame}">Frame ${it.frame}</button>`).join('')||'<p class="hint">No images dropped out.</p>';
-  if(selected)why(selected);if(focused)$('wbGrid').querySelector(`[data-id="${focused}"]`)?.focus({preventScroll:true});
+  if(selected)why(selected);
+  if(focused){const restored=$('wbGrid').querySelector(`[data-id="${focused}"]`);(controlIndex>=0?restored?.querySelectorAll('select,input,button,textarea')[controlIndex]:restored)?.focus({preventScroll:true})}
  }
  function why(id){
   const it=rows().find(i=>i.id===id);if(!it)return;selected=id;
@@ -130,9 +132,9 @@ const workbench=(()=>{
   $('wbSuggestions').onclick=async e=>{const b=e.target.closest('[data-suggest]');if(!b)return;const c=candidates.find(c=>c.key===b.dataset.suggest);if(!c)return;draft.rules=copy(c.rules);rewrite();proposal=null;unknown=[];renderChips();await preview({label:'Suggestion: '+c.label})};
   $('wbGrid').onmouseover=e=>{const t=e.target.closest('.wb-tile');if(t&&selected!==t.dataset.id)why(t.dataset.id)};
   $('wbGrid').onfocusin=e=>{const t=e.target.closest('.wb-tile');if(t)why(t.dataset.id)};
-  $('wbGrid').onfocusout=()=>setTimeout(()=>{if(renderDeferred)renderResults()},0);
+  $('wbGrid').onfocusout=()=>setTimeout(()=>{if(renderDeferred)renderResults({background:true})},0);
   $('wbGrid').onclick=e=>{const t=e.target.closest('.wb-tile');if(!t)return;why(t.dataset.id);const b=e.target.closest('[data-correct]');if(b)correct(t.dataset.id,b.dataset.correct)};
-  $('wbGrid').onchange=e=>{if(!e.target.classList.contains('wb-pin'))return;const id=e.target.closest('.wb-tile').dataset.id;if(e.target.value==='')delete draft.pins[id];else draft.pins[id]=+e.target.value;renderResults();save('Tier exception updated')};
+  $('wbGrid').onchange=e=>{if(!e.target.classList.contains('wb-pin'))return;const id=e.target.closest('.wb-tile').dataset.id;if(e.target.value==='')delete draft.pins[id];else draft.pins[id]=+e.target.value;selected=id;renderResults();save('Tier exception updated')};
   $('wbDropped').onclick=e=>{const b=e.target.closest('[data-why]');if(b)why(b.dataset.why)};
   $('wbDiff').onchange=renderResults;$('wbBaseline').onclick=()=>{comparison=null;renderResults()};
   $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;unknown=[];renderChips();await preview({label:'Version restored'})}};
