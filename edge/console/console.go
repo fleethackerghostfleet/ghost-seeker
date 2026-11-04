@@ -23,6 +23,8 @@ type Service struct {
 	St     *store.Store
 	Sch    *scheduler.Scheduler
 	Clk    clock.Clock
+	// Deduped reports captures folded into existing items (ingest.Ingester.Deduped); optional.
+	Deduped func() int64
 }
 
 func view(r *store.Row) *pb.ItemView {
@@ -145,6 +147,9 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 	st := s.Sch.Stats()
 	resp := &pb.GetStatusResponse{NodeId: s.NodeID, Role: "edge", Link: s.Sch.Link().State(), PolicyId: s.Sch.Policy().Id,
 		BytesSent: st.BytesPayload + st.BytesManifest, ItemsTotal: int64(len(rows))}
+	if s.Deduped != nil {
+		resp.ItemsDeduped = s.Deduped()
+	}
 	var queued, qb int64
 	for _, r := range rows {
 		if r.ManifestAcked {

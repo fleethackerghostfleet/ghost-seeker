@@ -964,6 +964,7 @@ type GetStatusResponse struct {
 	ItemsUnknown    int64                  `protobuf:"varint,8,opt,name=items_unknown,json=itemsUnknown,proto3" json:"items_unknown,omitempty"`
 	BytesSent       int64                  `protobuf:"varint,9,opt,name=bytes_sent,json=bytesSent,proto3" json:"bytes_sent,omitempty"`
 	PolicyId        string                 `protobuf:"bytes,10,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
+	ItemsDeduped    int64                  `protobuf:"varint,11,opt,name=items_deduped,json=itemsDeduped,proto3" json:"items_deduped,omitempty"` // edge: captures folded into an existing item (hash or sighting duplicates)
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1066,6 +1067,13 @@ func (x *GetStatusResponse) GetPolicyId() string {
 		return x.PolicyId
 	}
 	return ""
+}
+
+func (x *GetStatusResponse) GetItemsDeduped() int64 {
+	if x != nil {
+		return x.ItemsDeduped
+	}
+	return 0
 }
 
 type LinkState struct {
@@ -1197,7 +1205,7 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	"\x12RequestPullRequest\x12(\n" +
 	"\x04pull\x18\x01 \x01(\v2\x14.ghostseeker.v1.PullR\x04pull\"\x15\n" +
 	"\x13RequestPullResponse\"\x12\n" +
-	"\x10GetStatusRequest\"\xfc\x02\n" +
+	"\x10GetStatusRequest\"\xa1\x03\n" +
 	"\x11GetStatusResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x127\n" +
@@ -1211,7 +1219,8 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	"\n" +
 	"bytes_sent\x18\t \x01(\x03R\tbytesSent\x12\x1b\n" +
 	"\tpolicy_id\x18\n" +
-	" \x01(\tR\bpolicyId\"\xa2\x01\n" +
+	" \x01(\tR\bpolicyId\x12#\n" +
+	"\ritems_deduped\x18\v \x01(\x03R\fitemsDeduped\"\xa2\x01\n" +
 	"\tLinkState\x12\x0e\n" +
 	"\x02up\x18\x01 \x01(\bR\x02up\x12!\n" +
 	"\festimate_bps\x18\x02 \x01(\x01R\vestimateBps\x12/\n" +

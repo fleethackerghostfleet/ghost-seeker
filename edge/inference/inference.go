@@ -19,8 +19,16 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/vec"
 )
 
+// Frame is one captured image plus the context a stateful engine needs to
+// track the same object across frames of one source.
+type Frame struct {
+	Image      []byte
+	Source     string
+	CapturedAt time.Time
+}
+
 type Analyzer interface {
-	Analyze(ctx context.Context, image []byte, knownLabels []string, hints map[string]string) (*pb.AnalyzeResponse, error)
+	Analyze(ctx context.Context, f Frame, knownLabels []string, hints map[string]string) (*pb.AnalyzeResponse, error)
 	EmbedText(ctx context.Context, texts []string) ([][]float32, error)
 }
 
@@ -33,8 +41,12 @@ func NewRemote(url string) *Remote {
 	return &Remote{c: ghostseekerv1connect.NewInferenceServiceClient(&http.Client{Timeout: 60 * time.Second}, url, connect.WithProtoJSON())}
 }
 
-func (r *Remote) Analyze(ctx context.Context, image []byte, known []string, _ map[string]string) (*pb.AnalyzeResponse, error) {
-	resp, err := r.c.Analyze(ctx, connect.NewRequest(&pb.AnalyzeRequest{Image: image, KnownLabels: known, WantEmbedding: true}))
+func (r *Remote) Analyze(ctx context.Context, f Frame, known []string, _ map[string]string) (*pb.AnalyzeResponse, error) {
+	req := &pb.AnalyzeRequest{Image: f.Image, KnownLabels: known, WantEmbedding: true, Source: f.Source}
+	if !f.CapturedAt.IsZero() {
+		req.CapturedAtUnixMs = f.CapturedAt.UnixMilli()
+	}
+	resp, err := r.c.Analyze(ctx, connect.NewRequest(req))
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +76,8 @@ type Mock struct {
 
 func NewMock() *Mock { return &Mock{Dim: 64, Noise: 0.15} }
 
-func (m *Mock) Analyze(_ context.Context, image []byte, _ []string, hints map[string]string) (*pb.AnalyzeResponse, error) {
+func (m *Mock) Analyze(_ context.Context, f Frame, _ []string, hints map[string]string) (*pb.AnalyzeResponse, error) {
+	image := f.Image
 	label := hints["label"]
 	conf := parseF(hints["conf"], 0.9)
 	unk := parseF(hints["unknownness"], 0)

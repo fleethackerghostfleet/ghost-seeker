@@ -21,6 +21,10 @@ message AnalyzeRequest {
   bytes image = 1; // encoded (JPEG/PNG/WebP)
   repeated string known_labels = 2; // current vocabulary; used for unknownness
   bool want_embedding = 3;
+  // Optional, additive: identify the camera/stream so a stateful engine can
+  // track objects across frames of the same source and report sightings.
+  string source = 4;
+  int64 captured_at_unix_ms = 5;
 }
 
 message AnalyzeResponse {
@@ -29,6 +33,39 @@ message AnalyzeResponse {
   float unknownness = 3;
   string model_id = 4;
   int64 latency_ms = 5;
+  // Stateful engines (edgeml sidecar) additionally report sightings: one
+  // record per real object per continuous pass, with lifecycle events.
+  // Stateless engines leave this empty and the edge falls back to per-frame
+  // behaviour.
+  repeated Sighting sightings = 6;
+}
+
+// Sighting is a frame's contribution to one tracked object.
+message Sighting {
+  enum Event {
+    EVENT_UNSPECIFIED = 0;
+    EVENT_OPEN = 1; // first report of a new object (confirmed track)
+    EVENT_UPDATE = 2; // material change (better key frame, subtype flip)
+    EVENT_CLOSE = 3; // object left the field of view
+    EVENT_DUPLICATE = 4; // same object seen again, nothing better to report
+  }
+  string id = 1; // stable per object within a source
+  Event event = 2;
+  Detection key_detection = 3; // best key frame's label/confidence/normalized box
+  bool is_key_frame = 4; // this frame is the best key frame so far
+  string subtype = 5; // zero-shot subtype (e.g. "submarine"), may be empty
+  float value = 6; // engine's interest estimate in [0,1]
+  repeated FormHint forms = 7; // byte-exact forms the engine would produce
+  int64 first_seen_unix_ms = 8;
+  int64 last_seen_unix_ms = 9;
+  int32 n_frames = 10;
+}
+
+// FormHint sizes a form without shipping its bytes.
+message FormHint {
+  FormKind kind = 1;
+  int64 bytes = 2;
+  int32 jpeg_quality = 3;
 }
 
 message EmbedTextRequest {

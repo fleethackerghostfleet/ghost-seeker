@@ -123,6 +123,7 @@ message GetStatusResponse {
   int64 items_unknown = 8;
   int64 bytes_sent = 9;
   string policy_id = 10;
+  int64 items_deduped = 11; // edge: captures folded into an existing item (hash or sighting duplicates)
 }
 
 message LinkState {
