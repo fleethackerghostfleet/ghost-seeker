@@ -98,14 +98,15 @@ def estimate_horizon_y(image_bgr: np.ndarray) -> float:
 class HorizonBandDetector:
     """Crop a horizontal band around the horizon and tile it with square crops of the band height."""
 
-    def __init__(self, base, band_frac: float = 0.25, overlap: float = 0.2, include_full: bool = True,
-                 merge_iou: float = 0.5, max_det: int = 300,
+    def __init__(self, base, band_frac: float = 0.2, overlap: float = 0.2, include_full: bool = True,
+                 merge_iou: float = 0.5, max_det: int = 300, n_tiles: int = 3,
                  horizon_fn: Optional[Callable[[np.ndarray], float]] = None):
         self.base, self.band_frac, self.overlap, self.include_full = base, band_frac, overlap, include_full
+        self.n_tiles = n_tiles
         self.merge_iou, self.max_det = merge_iou, max_det
         self.horizon_fn = horizon_fn or estimate_horizon_y
         self.horizon_override: Optional[float] = None  # set per image to use GT horizon (SMD dev analysis)
-        self.name = f"{base.name}+hband{int(band_frac*100)}"
+        self.name = f"{base.name}+hband{int(band_frac*100)}x{n_tiles or 'sq'}"
         self.n_calls = 0
         self.last_ms = float("nan")
         self.last_horizon_y = float("nan")
@@ -117,6 +118,11 @@ class HorizonBandDetector:
         bh = int(round(h * self.band_frac))
         y0 = int(np.clip(yh - bh / 2, 0, h - bh))
         y1 = y0 + bh
+        if self.n_tiles:
+            # n_tiles crops across the band (literature: full frame + 2-4 band tiles), widened by overlap
+            tw = int(min(w, np.ceil(w / self.n_tiles * (1 + self.overlap))))
+            xs = [int(round(i * (w - tw) / max(self.n_tiles - 1, 1))) for i in range(self.n_tiles)] if self.n_tiles > 1 else [0]
+            return [(x, y0, min(x + tw, w), y1) for x in xs]
         step = int(bh * (1 - self.overlap))
         xs = list(range(0, max(w - bh, 0) + 1, step))
         if xs[-1] + bh < w:
@@ -133,4 +139,4 @@ class HorizonBandDetector:
 
     def info(self):
         return {**self.base.info(), "name": self.name, "tiling": "horizon_band", "band_frac": self.band_frac,
-                "overlap": self.overlap, "include_full": self.include_full}
+                "n_tiles": self.n_tiles, "overlap": self.overlap, "include_full": self.include_full}

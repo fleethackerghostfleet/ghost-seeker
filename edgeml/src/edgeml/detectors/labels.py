@@ -48,5 +48,5 @@ def is_vessel_gt(label: str) -> bool:
 # Prompts for open-vocabulary detectors. Keep them short nouns; the agnostic() map covers them all.
 MARITIME_PROMPTS = [
     "ship", "boat", "sailboat", "ferry", "cargo ship", "fishing boat", "speedboat", "kayak",
-    "warship", "submarine", "buoy",
+    "warship", "submarine", "vessel", "buoy", "person",
 ]

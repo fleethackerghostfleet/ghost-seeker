@@ -49,6 +49,8 @@ _reg("yolov8n", "nano")(_ul("yolov8n.pt", "yolov8n"))
 _reg("yolov8s", "small")(_ul("yolov8s.pt", "yolov8s"))
 _reg("yolo11n", "nano")(_ul("yolo11n.pt", "yolo11n"))
 _reg("yolo11s", "small")(_ul("yolo11s.pt", "yolo11s"))
+_reg("yolo26n", "nano")(_ul("yolo26n.pt", "yolo26n"))
+_reg("yolo26s", "small")(_ul("yolo26s.pt", "yolo26s"))
 _reg("yolo11m", "medium")(_ul("yolo11m.pt", "yolo11m"))
 _reg("rtdetr-l", "large")(_ul("rtdetr-l.pt", "rtdetr-l"))
 

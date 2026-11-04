@@ -111,6 +111,7 @@ def match_at_threshold(images, dets_by_image, tau: float, mode: str = "vessel", 
     """Greedy per-image matching of dets with score>=tau. Returns precision/recall overall and recall per bucket,
     plus GT/FP counts, FP per image, and per-image (tp, fp, fn) for failure mining."""
     tp = fp = 0
+    sea_only_n = sea_only_fp = 0  # frames with no (non-ignored) GT: FPs here become false sightings downstream
     gt_n = {k: 0 for k in AREA_BUCKETS}
     gt_hit = {k: 0 for k in AREA_BUCKETS}
     per_image = {}
@@ -161,6 +162,9 @@ def match_at_threshold(images, dets_by_image, tau: float, mode: str = "vessel", 
                 ifn += 1
         tp += itp
         fp += ifp
+        if not (~g_ign).any():
+            sea_only_n += 1
+            sea_only_fp += ifp
         per_image[im.image_id] = (itp, ifp, ifn)
     n_gt = sum(gt_n.values())
     prec = tp / (tp + fp) if tp + fp else 0.0
@@ -168,6 +172,7 @@ def match_at_threshold(images, dets_by_image, tau: float, mode: str = "vessel", 
     f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
     return {"tau": tau, "precision": prec, "recall": rec, "f1": f1, "tp": tp, "fp": fp, "n_gt": n_gt,
             "fp_per_image": fp / max(len(images), 1),
+            "n_sea_only": sea_only_n, "fp_per_sea_only_frame": (sea_only_fp / sea_only_n) if sea_only_n else float("nan"),
             "recall_by_bucket": {k: (gt_hit[k] / gt_n[k] if gt_n[k] else float("nan")) for k in AREA_BUCKETS},
             "n_gt_by_bucket": gt_n, "per_image": per_image}
 

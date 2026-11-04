@@ -36,7 +36,8 @@ def git_sha() -> str:
     try:
         return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
     except Exception:
-        return "unknown"
+        f = REPO / "GIT_SHA"
+        return f.read_text().strip() if f.exists() else "unknown"
 
 
 def hardware() -> dict:
@@ -102,7 +103,9 @@ def main():
     ap.add_argument("--score-thr", type=float, default=0.05)
     ap.add_argument("--tiling", choices=["none", "sahi", "hband"], default="none")
     ap.add_argument("--tile", type=int, default=640)
-    ap.add_argument("--band-frac", type=float, default=0.25)
+    ap.add_argument("--band-frac", type=float, default=0.2, help="hband: band height as a fraction of H (0.2 = +/-10%%)")
+    ap.add_argument("--n-tiles", type=int, default=3, help="hband: tiles across the band (0 = square tiles of band height)")
+    ap.add_argument("--overlap", type=float, default=0.2)
     ap.add_argument("--no-full", action="store_true", help="tiling without the full-frame pass")
     ap.add_argument("--horizon-gt", action="store_true", help="hband: use catalog GT horizon when present")
     ap.add_argument("--taus", default=None, help="json {model: tau} chosen on dev; required for --split test")
@@ -154,9 +157,10 @@ def main():
                 if det is None:
                     base = build(mname, imgsz=args.imgsz, device=args.device, score_thr=args.score_thr)
                     if args.tiling == "sahi":
-                        det = TiledDetector(base, tile=args.tile, include_full=not args.no_full)
+                        det = TiledDetector(base, tile=args.tile, overlap=args.overlap, include_full=not args.no_full)
                     elif args.tiling == "hband":
-                        det = HorizonBandDetector(base, band_frac=args.band_frac, include_full=not args.no_full)
+                        det = HorizonBandDetector(base, band_frac=args.band_frac, n_tiles=args.n_tiles, overlap=args.overlap,
+                                                  include_full=not args.no_full)
                     else:
                         det = base
                 print(f"  {tag}: {len(images)} images", flush=True)
