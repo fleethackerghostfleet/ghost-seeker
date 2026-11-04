@@ -52,3 +52,9 @@ func TestModelsMeetFloor(t *testing.T) {
 		}
 	}
 }
+
+func TestSmallRunStillRanks(t *testing.T) {
+	if r := Evaluate("maritime", Generate(5, 120)); r.NDCG == 0 {
+		t.Fatal("fewer kept frames than a window should still report NDCG")
+	}
+}

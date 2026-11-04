@@ -135,8 +135,9 @@ func Evaluate(model string, frames []Frame) Result {
 	r.CriticalMiss, r.FalseFlash, r.FlashLoad = ratio(crit, gt1), ratio(falseFlash, low), ratio(pred1, n)
 	var ndcgSum, burdenSum float64
 	var windows, burdenWindows int
-	for start := 0; start+WindowSize <= n; start += WindowSize {
-		w := append([]scored(nil), kept[start:start+WindowSize]...)
+	size := min(WindowSize, n)
+	for start := 0; size > 0 && start+size <= n; start += size {
+		w := append([]scored(nil), kept[start:start+size]...)
 		sort.SliceStable(w, func(i, j int) bool { return w[i].central > w[j].central })
 		gains := make([]int, len(w))
 		for i, s := range w {
