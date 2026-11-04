@@ -153,6 +153,9 @@ func (s *Service) RequestPull(ctx context.Context, req *connect.Request[pb.Reque
 	if p == nil || p.ItemId == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("pull required"))
 	}
+	if req.Msg.Pull.Original && strings.TrimSpace(req.Msg.Pull.RequestedBy) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("original (full-size) pull is an operator override: requestedBy is required"))
+	}
 	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_Pull{Pull: p}}, s.Clk.Now()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

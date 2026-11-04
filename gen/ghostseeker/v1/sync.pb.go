@@ -703,6 +703,9 @@ type Pull struct {
 	Form          FormKind               `protobuf:"varint,2,opt,name=form,proto3,enum=ghostseeker.v1.FormKind" json:"form,omitempty"`
 	PriorityBoost float64                `protobuf:"fixed64,3,opt,name=priority_boost,json=priorityBoost,proto3" json:"priority_boost,omitempty"` // added to the item's priority; default large
 	RequestedBy   string                 `protobuf:"bytes,4,opt,name=requested_by,json=requestedBy,proto3" json:"requested_by,omitempty"`
+	// Operator override: send the capture's original bytes as FULL (no
+	// re-encoding) and skip THUMB/CROP. Requires requested_by.
+	Original      bool `protobuf:"varint,5,opt,name=original,proto3" json:"original,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -763,6 +766,13 @@ func (x *Pull) GetRequestedBy() string {
 		return x.RequestedBy
 	}
 	return ""
+}
+
+func (x *Pull) GetOriginal() bool {
+	if x != nil {
+		return x.Original
+	}
+	return false
 }
 
 type LabelOverride struct {
@@ -883,12 +893,13 @@ const file_ghostseeker_v1_sync_proto_rawDesc = "" +
 	"\x06policy\x18\x02 \x01(\v2\x16.ghostseeker.v1.PolicyH\x00R\x06policy\x12*\n" +
 	"\x04pull\x18\x03 \x01(\v2\x14.ghostseeker.v1.PullH\x00R\x04pull\x12F\n" +
 	"\x0elabel_override\x18\x04 \x01(\v2\x1d.ghostseeker.v1.LabelOverrideH\x00R\rlabelOverrideB\x05\n" +
-	"\x03msg\"\x97\x01\n" +
+	"\x03msg\"\xb3\x01\n" +
 	"\x04Pull\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12,\n" +
 	"\x04form\x18\x02 \x01(\x0e2\x18.ghostseeker.v1.FormKindR\x04form\x12%\n" +
 	"\x0epriority_boost\x18\x03 \x01(\x01R\rpriorityBoost\x12!\n" +
-	"\frequested_by\x18\x04 \x01(\tR\vrequestedBy\"N\n" +
+	"\frequested_by\x18\x04 \x01(\tR\vrequestedBy\x12\x1a\n" +
+	"\boriginal\x18\x05 \x01(\bR\boriginal\"N\n" +
 	"\rLabelOverride\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x0e\n" +

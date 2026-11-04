@@ -139,6 +139,7 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	it := &pb.Item{Id: ulid.MustNew(ulid.Timestamp(ts), g.ent).String(), Type: c.Type, CapturedAtUnixMs: ts.UnixMilli(),
 		Source: c.Source, Geo: c.Geo, ContentHash: hash, Features: &pb.Features{Tags: c.Tags}}
 	payloads := map[pb.FormKind][]byte{}
+	var original []byte // kept when FULL is re-encoded, for an operator's original pull
 	switch c.Type {
 	case pb.ItemType_ITEM_TYPE_IMAGE:
 		resp, err := g.an.Analyze(ctx, c.Data, g.cfg.KnownLabels, c.Hints)
@@ -160,6 +161,9 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		}
 		full := g.fullForm(c.Data, img)
 		payloads[pb.FormKind_FORM_KIND_FULL] = full
+		if !bytes.Equal(full, c.Data) {
+			original = c.Data
+		}
 		if !g.cfg.CropUnknowns && g.unknown(resp.Unknownness) {
 			// No CROP: the whole frame goes as FULL, for training.
 		} else if cr, err := g.cropForm(img, resp.Detections); err != nil {
@@ -182,6 +186,11 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	}
 	if _, err := g.st.Put(ctx, it, payloads); err != nil {
 		return nil, err
+	}
+	if original != nil {
+		if err := g.st.PutOriginal(it.Id, original); err != nil {
+			return nil, err
+		}
 	}
 	row, err := g.st.Get(ctx, it.Id)
 	if err != nil {

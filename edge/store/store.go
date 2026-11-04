@@ -41,6 +41,7 @@ type Row struct {
 	PullBoost      float64
 	PullForm       pb.FormKind
 	PullBy         string
+	PullOriginal   bool // operator override: FULL is the original capture, THUMB/CROP skipped
 	ManifestSentAt time.Time
 }
 
@@ -83,7 +84,8 @@ CREATE TABLE IF NOT EXISTS items (
   manifest_acked INTEGER NOT NULL DEFAULT 0,
   pull_boost REAL NOT NULL DEFAULT 0,
   pull_form INTEGER NOT NULL DEFAULT 0,
-  pull_by TEXT NOT NULL DEFAULT ''
+  pull_by TEXT NOT NULL DEFAULT '',
+  pull_original INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS items_seq ON items(ingest_seq);
 CREATE INDEX IF NOT EXISTS items_hash ON items(content_hash);
@@ -115,6 +117,11 @@ func Open(dataDir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(schema); err != nil {
+		return nil, fmt.Errorf("schema: %w", err)
+	}
+	// Databases created before pull_original existed.
+	if _, err := db.Exec(`ALTER TABLE items ADD COLUMN pull_original INTEGER NOT NULL DEFAULT 0`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
 		return nil, fmt.Errorf("schema: %w", err)
 	}
 	return &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}, nil
@@ -201,7 +208,7 @@ func (s *Store) HasHash(ctx context.Context, h string) (string, bool, error) {
 	return id, err == nil, err
 }
 
-const rowCols = `id, item, score, manifest_sent, manifest_sent_at, manifest_acked, pull_boost, pull_form, pull_by`
+const rowCols = `id, item, score, manifest_sent, manifest_sent_at, manifest_acked, pull_boost, pull_form, pull_by, pull_original`
 
 func scanRow(sc interface{ Scan(...any) error }) (*Row, error) {
 	var (
@@ -212,12 +219,13 @@ func scanRow(sc interface{ Scan(...any) error }) (*Row, error) {
 		pullBoost         float64
 		pullForm          int
 		pullBy            string
+		pullOrig          int
 	)
-	if err := sc.Scan(&id, &itemRaw, &scoreRaw, &ms, &msAt, &ma, &pullBoost, &pullForm, &pullBy); err != nil {
+	if err := sc.Scan(&id, &itemRaw, &scoreRaw, &ms, &msAt, &ma, &pullBoost, &pullForm, &pullBy, &pullOrig); err != nil {
 		return nil, err
 	}
 	r := &Row{Item: &pb.Item{}, Score: &pb.Score{}, ManifestSent: ms == 1, ManifestAcked: ma == 1,
-		PullBoost: pullBoost, PullForm: pb.FormKind(pullForm), PullBy: pullBy}
+		PullBoost: pullBoost, PullForm: pb.FormKind(pullForm), PullBy: pullBy, PullOriginal: pullOrig == 1}
 	if msAt > 0 {
 		r.ManifestSentAt = time.UnixMilli(msAt)
 	}
@@ -419,9 +427,40 @@ func (s *Store) SetAcked(ctx context.Context, itemID string, kind pb.FormKind, t
 	return err
 }
 
-func (s *Store) SetPull(ctx context.Context, itemID string, kind pb.FormKind, boost float64, by string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE items SET pull_boost=?, pull_form=?, pull_by=? WHERE id=?`, boost, int(kind), by, itemID)
+func (s *Store) SetPull(ctx context.Context, itemID string, kind pb.FormKind, boost float64, by string, original bool) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE items SET pull_boost=?, pull_form=?, pull_by=?, pull_original=? WHERE id=?`,
+		boost, int(kind), by, original, itemID)
 	return err
+}
+
+func (s *Store) originalPath(itemID string) string {
+	return filepath.Join(s.blobDir, itemID, "original")
+}
+
+// PutOriginal keeps the capture's original bytes when FULL was re-encoded,
+// so an operator can still have the original sent (RestoreOriginal).
+func (s *Store) PutOriginal(itemID string, data []byte) error {
+	return os.WriteFile(s.originalPath(itemID), data, 0o644)
+}
+
+// RestoreOriginal makes FULL the original capture bytes again, resetting its
+// send state if it changes. It reports whether FULL changed.
+func (s *Store) RestoreOriginal(ctx context.Context, itemID string) (bool, error) {
+	data, err := os.ReadFile(s.originalPath(itemID))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil // FULL already is the original
+	}
+	if err != nil {
+		return false, err
+	}
+	if _, err := s.ReplaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data); err != nil {
+		return false, err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET mime=? WHERE item_id=? AND kind=?`,
+		mimeFor(pb.FormKind_FORM_KIND_FULL, pb.ItemType_ITEM_TYPE_IMAGE, data), itemID, int(pb.FormKind_FORM_KIND_FULL)); err != nil {
+		return false, err
+	}
+	return true, os.Remove(s.originalPath(itemID))
 }
 
 // ReadForm returns up to n bytes of a form starting at offset.

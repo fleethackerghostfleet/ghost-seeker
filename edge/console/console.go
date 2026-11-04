@@ -131,6 +131,9 @@ func (s *Service) RequestPull(ctx context.Context, req *connect.Request[pb.Reque
 	if req.Msg.Pull == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("pull required"))
 	}
+	if req.Msg.Pull.Original && strings.TrimSpace(req.Msg.Pull.RequestedBy) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("original (full-size) pull is an operator override: requestedBy is required"))
+	}
 	if err := s.Sch.Pull(ctx, req.Msg.Pull); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

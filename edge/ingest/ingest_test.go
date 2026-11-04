@@ -281,3 +281,42 @@ func TestCropSkippedWhenNearlyFullFrame(t *testing.T) {
 		t.Fatalf("crop over most of the frame should be skipped (err %v, %d bytes)", err, len(r))
 	}
 }
+
+func TestOriginalPullSendsCaptureBytes(t *testing.T) {
+	g, st := newIngester(t, DefaultConfig())
+	src := encPNG(t, scene(640, 480))
+	row := ingest(t, g, st, src, map[string]string{"label": "cargo ship", "conf": "0.9"})
+	if full, _ := form(t, st, row, pb.FormKind_FORM_KIND_FULL); bytes.Equal(full, src) {
+		t.Fatal("precondition: FULL should be re-encoded")
+	}
+	ctx := context.Background()
+	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Original: true}); err == nil {
+		t.Fatal("original pull without requested_by should fail")
+	}
+	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Original: true, RequestedBy: "op1"}); err != nil {
+		t.Fatal(err)
+	}
+	row, err := st.Get(ctx, row.Item.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	full, ff := form(t, st, row, pb.FormKind_FORM_KIND_FULL)
+	if !row.PullOriginal || !bytes.Equal(full, src) || ff.Mime != "image/png" || ff.Bytes != int64(len(src)) {
+		t.Fatalf("original pull: flag %v, FULL %dB mime %s; want original %dB image/png", row.PullOriginal, len(full), ff.Mime, len(src))
+	}
+	plan := g.sch.BuildPlan([]*store.Row{row}, 1e9, time.Now())
+	var forms []pb.FormKind
+	for _, c := range plan.Chunks {
+		forms = append(forms, c.Form)
+		if c.Form == pb.FormKind_FORM_KIND_THUMB || c.Form == pb.FormKind_FORM_KIND_CROP {
+			t.Fatalf("original pull should skip THUMB/CROP, plan has %v", forms)
+		}
+	}
+	// Repeating it is a no-op: FULL already is the original.
+	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Original: true, RequestedBy: "op1"}); err != nil {
+		t.Fatal(err)
+	}
+	if full, _ := form(t, st, row, pb.FormKind_FORM_KIND_FULL); !bytes.Equal(full, src) {
+		t.Fatal("second original pull changed FULL")
+	}
+}
