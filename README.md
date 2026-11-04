@@ -136,5 +136,6 @@ The [standalone design reference](ui-mockup/reprioritize.html) retains 80 seeded
   this repo consumes the compiled `Policy` (labels, vectors, thresholds).
 - No auth/TLS on either service. Zarf package is a skeleton.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
-- No sailboat dataset in `frames/` yet; `scenarios/sailboats_example.json`
-  shows where it plugs in.
+- Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
+  the boat is not visible in every frame). `scenarios/sailboats_example.json`
+  still uses a placeholder path for the sailboat set.
