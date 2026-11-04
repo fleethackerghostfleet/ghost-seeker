@@ -338,8 +338,14 @@ func (s *Store) Flush() error {
 		return err
 	}
 	tmp := filepath.Join(s.dir, "state.json.tmp")
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
+	err = os.WriteFile(tmp, b, 0o644)
+	if err == nil {
+		err = os.Rename(tmp, filepath.Join(s.dir, "state.json"))
 	}
-	return os.Rename(tmp, filepath.Join(s.dir, "state.json"))
+	if err != nil {
+		s.mu.Lock()
+		s.dirty = true
+		s.mu.Unlock()
+	}
+	return err
 }
