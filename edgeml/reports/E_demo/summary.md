@@ -1,18 +1,21 @@
-# edgeml demo run — e_20261104_2145
+# edgeml demo run — e_20261104_2152
 
-`edgeml/scripts/demo.py --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/A_ship_in_the_distance --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/Submarine_surfacing --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas --clip /home/ubuntu/data/edgeml_eval/fvessel_clip10/fvessel_clip01 --budgets 72000 480000 1920000 15000000 --out /home/ubuntu/runs/e_20261104_2145`
+`edgeml/scripts/demo.py --clip /home/ubuntu/data/submarine_tail.mp4 --fps 5 --budgets 72000 480000 1920000 15000000 --out /home/ubuntu/runs/e_20261104_2152 --append`
 
-detector `yolo11n-int8-640-openvino` (5.8 MB), embedder `mobileclip-s1-ort-fp32`, tracker `bytetrack`/centroid, detect_every=1, gate=on, 4 threads on CPUs [0, 1, 2, 3], git `8b55def`
+detector `yolo11n-int8-640-openvino` (5.8 MB), embedder `mobileclip-s1-ort-fp32`, tracker `bytetrack`/centroid, detect_every=1, gate=on, 4 threads on CPUs [0, 1, 2, 3], git `edea094`
 
 ## Per clip
 
 | clip | fps | frames (det / gated) | dets | tracks | sightings open / update / close | GT obj | reports / obj | object recall | dup / obj | false / min | TTFR s | ms/frame p50 / p95 | det ms p50 | embeds |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| A_ship_in_the_distance | 5 | 46 (44 / 2) | 32 | 1 | 1 / 0 / 1 | 1 | 1.0 | 1.00 | 0.00 | 0.0 | 0.2 | 39 / 88 | 34 | 5 |
-| Cruise_ship_Mediterranean_sunset_off_Italy | 5 | 153 (153 / 0) | 63 | 4 | 4 / 0 / 4 | 3 | 1.0 | 1.00 | 0.00 | 2.0 | 0.4 | 42 / 94 | 35 | 20 |
-| Submarine_surfacing | 5 | 372 (372 / 0) | 184 | 5 | 4 / 3 / 4 | 2 | 3.5 | 1.00 | 1.00 | 0.0 | 0.2 | 40 / 108 | 37 | 53 |
-| Ship_in_the_Distance_Utopia_of_the_Seas | 5 | 75 (46 / 29) | 61 | 3 | 3 / 1 / 3 | 2 | 1.5 | 1.00 | 0.00 | 4.0 | 0.1 | 36 / 105 | 34 | 17 |
-| fvessel_clip01 | 1 | 111 (12 / 99) | 18 | 2 | 2 / 3 / 2 | 2 | 2.5 | 1.00 | 0.00 | 0.0 | 9.0 | 4 / 42 | 34 | 2 |
+| A_ship_in_the_distance | 5 | 46 (44 / 2) | 32 | 1 | 1 / 0 / 1 | 1 | 1.0 | 1.00 | 0.00 | 0.0 | 0.2 | 56 / 119 | 49 | 5 |
+| Cruise_ship_Mediterranean_sunset_off_Italy | 5 | 153 (153 / 0) | 63 | 4 | 4 / 0 / 4 | 3 | 1.0 | 1.00 | 0.00 | 2.0 | 0.4 | 71 / 163 | 59 | 20 |
+| Submarine_surfacing | 5 | 372 (372 / 0) | 184 | 5 | 4 / 3 / 4 | 2 | 3.5 | 1.00 | 1.00 | 0.0 | 0.2 | 44 / 130 | 40 | 52 |
+| Ship_in_the_Distance_Utopia_of_the_Seas | 5 | 75 (46 / 29) | 61 | 3 | 3 / 1 / 3 | 2 | 1.5 | 1.00 | 0.00 | 4.0 | 0.1 | 37 / 146 | 34 | 18 |
+| fvessel_clip01 | 1 | 111 (12 / 99) | 18 | 2 | 2 / 6 / 2 | 2 | 4.0 | 1.00 | 0.00 | 0.0 | 9.0 | 4 / 43 | 34 | 2 |
+| fvessel_clip01__nogate | 1 | 111 (111 / 0) | 154 | 7 | 7 / 11 / 7 | 2 | 5.5 | 1.00 | 0.50 | 2.2 | 0.0 | 39 / 112 | 34 | 22 |
+| fvessel_clip01__force2s | 1 | 111 (56 / 55) | 78 | 3 | 3 / 7 / 3 | 2 | 4.0 | 1.00 | 0.00 | 0.5 | 1.0 | 37 / 84 | 33 | 10 |
+| submarine_tail | 5 | 222 (222 / 0) | 183 | 5 | 4 / 3 / 4 | - | - | - | - | - | - | 38 / 104 | 34 | 46 |
 
 `ms/frame` is wall time per input frame on the pinned CPUs including gate, detector, tracker, aggregator and form encoding (gated-out frames cost only the gate). `reports / obj` = open+update events per matched GT object. `false / min` counts sightings not matched to a GT track — on `partial` clips and FVessel (AIS-equipped vessels only) many of these are real unlabelled boats.
 
@@ -34,10 +37,17 @@ Unique GT objects with an image form (crop/thumb/full) delivered, out of all GT 
 | Ship_in_the_Distance_Utopia_of_the_Seas | **sightings** | 4 | 2/2 / 2/2 / 32 | 2/2 / 2/2 / 179 | 2/2 / 2/2 / 179 | 2/2 / 2/2 / 179 |
 | Ship_in_the_Distance_Utopia_of_the_Seas | image_dedup | 8 | 2/2 / 2/2 / 28 | 2/2 / 2/2 / 214 | 2/2 / 2/2 / 258 | 2/2 / 2/2 / 258 |
 | Ship_in_the_Distance_Utopia_of_the_Seas | naive | 61 | 2/2 / 2/2 / 35 | 2/2 / 2/2 / 227 | 2/2 / 2/2 / 937 | 2/2 / 2/2 / 2048 |
-| fvessel_clip01 | **sightings** | 5 | 2/2 / 2/2 / 35 | 2/2 / 2/2 / 211 | 2/2 / 2/2 / 256 | 2/2 / 2/2 / 256 |
+| fvessel_clip01 | **sightings** | 8 | 2/2 / 2/2 / 41 | 2/2 / 2/2 / 277 | 2/2 / 2/2 / 410 | 2/2 / 2/2 / 410 |
 | fvessel_clip01 | image_dedup | 4 | 0/2 / 2/2 / - | 2/2 / 2/2 / 179 | 2/2 / 2/2 / 179 | 2/2 / 2/2 / 179 |
 | fvessel_clip01 | naive | 18 | 0/2 / 2/2 / - | 2/2 / 2/2 / 417 | 2/2 / 2/2 / 844 | 2/2 / 2/2 / 844 |
-| **all GT clips** | **sightings** | 21 | 10/10 / 10/10 / 33 | 10/10 / 10/10 / 210 | 10/10 / 10/10 / 248 | 10/10 / 10/10 / 248 |
+| fvessel_clip01__nogate | **sightings** | 18 | 2/2 / 2/2 / 69 | 2/2 / 2/2 / 444 | 2/2 / 2/2 / 951 | 2/2 / 2/2 / 951 |
+| fvessel_clip01__nogate | image_dedup | 5 | 0/2 / 2/2 / - | 2/2 / 2/2 / 235 | 2/2 / 2/2 / 235 | 2/2 / 2/2 / 235 |
+| fvessel_clip01__nogate | naive | 154 | 0/2 / 2/2 / - | 2/2 / 2/2 / 422 | 2/2 / 2/2 / 1863 | 2/2 / 2/2 / 7341 |
+| fvessel_clip01__force2s | **sightings** | 10 | 2/2 / 2/2 / 55 | 2/2 / 2/2 / 391 | 2/2 / 2/2 / 527 | 2/2 / 2/2 / 527 |
+| fvessel_clip01__force2s | image_dedup | 6 | 0/2 / 2/2 / - | 2/2 / 2/2 / 287 | 2/2 / 2/2 / 287 | 2/2 / 2/2 / 287 |
+| fvessel_clip01__force2s | naive | 78 | 0/2 / 2/2 / - | 2/2 / 2/2 / 428 | 2/2 / 2/2 / 1834 | 2/2 / 2/2 / 3795 |
+| submarine_tail | (no GT) | sightings 7, naive 183, dedup 27 | 4 sightings, 64 KB | 4 sightings, 385 KB | 4 sightings, 740 KB | 4 sightings, 740 KB |
+| **all GT clips** | **sightings** | 24 | 10/10 / 10/10 / 34 | 10/10 / 10/10 / 223 | 10/10 / 10/10 / 279 | 10/10 / 10/10 / 279 |
 | **all GT clips** | image_dedup | 73 | 2/10 / 10/10 / 37 | 9/10 / 10/10 / 254 | 10/10 / 10/10 / 529 | 10/10 / 10/10 / 828 |
 | **all GT clips** | naive | 358 | 2/10 / 10/10 / 72 | 9/10 / 10/10 / 338 | 9/10 / 10/10 / 1200 | 10/10 / 10/10 / 3442 |
 

@@ -1,5 +1,5 @@
 {
- "command": "edgeml/scripts/demo.py --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/A_ship_in_the_distance --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/Submarine_surfacing --clip /home/ubuntu/data/edgeml_eval/ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas --clip /home/ubuntu/data/edgeml_eval/fvessel_clip10/fvessel_clip01 --budgets 72000 480000 1920000 15000000 --out /home/ubuntu/runs/e_20261104_2145",
+ "command": "edgeml/scripts/demo.py --clip /home/ubuntu/data/submarine_tail.mp4 --fps 5 --budgets 72000 480000 1920000 15000000 --out /home/ubuntu/runs/e_20261104_2152 --append",
  "detector": "yolo11n-int8-640-openvino",
  "detector_path": "~/models/D/yolo11n-640/int8/model.xml",
  "detector_bytes": 5797887,
@@ -8,7 +8,10 @@
  "asso": "centroid",
  "max_lost_s": 6.0,
  "detect_every": 1,
+ "score_thr": 0.25,
+ "det_low_thr": 0.05,
  "gate": true,
+ "gate_force_every_s": 10.0,
  "threads": 4,
  "cpus": [
   0,
@@ -63,5 +66,5 @@
  "window_s": 60.0,
  "hardware": "x86_64",
  "python": "3.10.12",
- "git_sha": "8b55def"
+ "git_sha": "edea094"
 }

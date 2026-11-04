@@ -1,5 +1,6 @@
 {
  "A_ship_in_the_distance": {
+  "fps": 5.0,
   "stats": {
    "n_frames": 46,
    "n_detector_frames": 44,
@@ -10,19 +11,19 @@
    },
    "n_detections": 32,
    "n_tracks": 1,
-   "wall_s": 2.2340758319999168,
-   "processed_fps": 20.59016947460614,
-   "frame_ms_p50": 38.68650649991423,
-   "frame_ms_p95": 87.6290707500118,
-   "detector_frame_ms_p50": 38.68650649991423,
-   "det_ms_p50": 34.15345350003918,
-   "det_ms_p95": 43.16177885004323,
-   "gate_ms_p50": 3.6091339999870797,
+   "wall_s": 3.1666149020002194,
+   "processed_fps": 14.526553251215898,
+   "frame_ms_p50": 56.143103499948666,
+   "frame_ms_p95": 118.60808225009123,
+   "detector_frame_ms_p50": 56.143103499948666,
+   "det_ms_p50": 49.36461799991321,
+   "det_ms_p95": 58.34955450010284,
+   "gate_ms_p50": 4.922545499994158,
    "n_open": 1,
    "n_update": 0,
    "n_close": 1,
    "embed_calls": 5,
-   "embed_ms_total": 226.10322399987126,
+   "embed_ms_total": 332.3648250000133,
    "n_relinks": 0
   },
   "sighting": {
@@ -410,6 +411,7 @@
   }
  },
  "Cruise_ship_Mediterranean_sunset_off_Italy": {
+  "fps": 5.0,
   "stats": {
    "n_frames": 153,
    "n_detector_frames": 153,
@@ -419,19 +421,19 @@
    },
    "n_detections": 63,
    "n_tracks": 4,
-   "wall_s": 8.466339637000033,
-   "processed_fps": 18.071564165858824,
-   "frame_ms_p50": 42.15903499994056,
-   "frame_ms_p95": 93.54497599997559,
-   "detector_frame_ms_p50": 42.15903499994056,
-   "det_ms_p50": 35.01680700003362,
-   "det_ms_p95": 45.581480000055315,
-   "gate_ms_p50": 5.428992000020116,
+   "wall_s": 14.696314690999998,
+   "processed_fps": 10.410773259618411,
+   "frame_ms_p50": 71.32675699995161,
+   "frame_ms_p95": 162.55512819989235,
+   "detector_frame_ms_p50": 71.32675699995161,
+   "det_ms_p50": 59.31691900013902,
+   "det_ms_p95": 93.84546719993523,
+   "gate_ms_p50": 8.101508999970974,
    "n_open": 4,
    "n_update": 0,
    "n_close": 4,
    "embed_calls": 20,
-   "embed_ms_total": 893.3683480000809,
+   "embed_ms_total": 1727.941884999609,
    "n_relinks": 0
   },
   "sighting": {
@@ -821,6 +823,7 @@
   }
  },
  "Submarine_surfacing": {
+  "fps": 5.0,
   "stats": {
    "n_frames": 372,
    "n_detector_frames": 372,
@@ -830,19 +833,19 @@
    },
    "n_detections": 184,
    "n_tracks": 5,
-   "wall_s": 20.88804011700006,
-   "processed_fps": 17.80923427551453,
-   "frame_ms_p50": 40.083188999915365,
-   "frame_ms_p95": 107.51002640004116,
-   "detector_frame_ms_p50": 40.083188999915365,
-   "det_ms_p50": 36.67195599996376,
-   "det_ms_p95": 75.17190895007944,
-   "gate_ms_p50": 2.021431000002849,
+   "wall_s": 22.985904104999918,
+   "processed_fps": 16.183831547399617,
+   "frame_ms_p50": 44.19842899994819,
+   "frame_ms_p95": 130.2320519999853,
+   "detector_frame_ms_p50": 44.19842899994819,
+   "det_ms_p50": 39.80289099990841,
+   "det_ms_p95": 68.6886150000305,
+   "gate_ms_p50": 2.1743154999285252,
    "n_open": 4,
    "n_update": 3,
    "n_close": 4,
-   "embed_calls": 53,
-   "embed_ms_total": 3269.691309000109,
+   "embed_calls": 52,
+   "embed_ms_total": 4145.619711999643,
    "n_relinks": 0
   },
   "sighting": {
@@ -878,8 +881,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 114514,
-      "bytes_per_delivered_object": 57257.0,
+      "bytes_used": 113816,
+      "bytes_per_delivered_object": 56908.0,
       "n_forms_sent": 27
      },
      "480KB": {
@@ -889,8 +892,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 776025,
-      "bytes_per_delivered_object": 388012.5,
+      "bytes_used": 775327,
+      "bytes_per_delivered_object": 387663.5,
       "n_forms_sent": 35
      },
      "1.92MB": {
@@ -900,8 +903,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 776025,
-      "bytes_per_delivered_object": 388012.5,
+      "bytes_used": 775327,
+      "bytes_per_delivered_object": 387663.5,
       "n_forms_sent": 35
      },
      "15MB": {
@@ -911,8 +914,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 776025,
-      "bytes_per_delivered_object": 388012.5,
+      "bytes_used": 775327,
+      "bytes_per_delivered_object": 387663.5,
       "n_forms_sent": 35
      }
     }
@@ -1028,7 +1031,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 2,
-    "bytes_used": 114514,
+    "bytes_used": 113816,
     "n_forms_sent": 27,
     "n_sightings_touched": 4,
     "forms_by_kind": {
@@ -1044,8 +1047,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 114514,
-      "bytes_per_delivered_object": 57257.0,
+      "bytes_used": 113816,
+      "bytes_per_delivered_object": 56908.0,
       "n_forms_sent": 27
      },
      "naive": {
@@ -1079,7 +1082,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 2,
-    "bytes_used": 776025,
+    "bytes_used": 775327,
     "n_forms_sent": 35,
     "n_sightings_touched": 4,
     "forms_by_kind": {
@@ -1096,8 +1099,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 776025,
-      "bytes_per_delivered_object": 388012.5,
+      "bytes_used": 775327,
+      "bytes_per_delivered_object": 387663.5,
       "n_forms_sent": 35
      },
      "naive": {
@@ -1131,7 +1134,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 2,
-    "bytes_used": 776025,
+    "bytes_used": 775327,
     "n_forms_sent": 35,
     "n_sightings_touched": 4,
     "forms_by_kind": {
@@ -1148,8 +1151,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 776025,
-      "bytes_per_delivered_object": 388012.5,
+      "bytes_used": 775327,
+      "bytes_per_delivered_object": 387663.5,
       "n_forms_sent": 35
      },
      "naive": {
@@ -1183,7 +1186,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 2,
-    "bytes_used": 776025,
+    "bytes_used": 775327,
     "n_forms_sent": 35,
     "n_sightings_touched": 4,
     "forms_by_kind": {
@@ -1200,8 +1203,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 776025,
-      "bytes_per_delivered_object": 388012.5,
+      "bytes_used": 775327,
+      "bytes_per_delivered_object": 387663.5,
       "n_forms_sent": 35
      },
      "naive": {
@@ -1233,6 +1236,7 @@
   }
  },
  "Ship_in_the_Distance_Utopia_of_the_Seas": {
+  "fps": 5.0,
   "stats": {
    "n_frames": 75,
    "n_detector_frames": 46,
@@ -1243,19 +1247,19 @@
    },
    "n_detections": 61,
    "n_tracks": 3,
-   "wall_s": 3.2061101409999537,
-   "processed_fps": 23.392833278213033,
-   "frame_ms_p50": 36.007159999940086,
-   "frame_ms_p95": 104.94827169997052,
-   "detector_frame_ms_p50": 36.007159999940086,
-   "det_ms_p50": 33.83276649992695,
-   "det_ms_p95": 46.38965474995871,
-   "gate_ms_p50": 2.5838159999693744,
+   "wall_s": 4.194024032000016,
+   "processed_fps": 17.882587087664955,
+   "frame_ms_p50": 36.96078600000874,
+   "frame_ms_p95": 145.76722790006895,
+   "detector_frame_ms_p50": 36.96078600000874,
+   "det_ms_p50": 34.197991499922864,
+   "det_ms_p95": 75.28187574996537,
+   "gate_ms_p50": 2.6360269998804142,
    "n_open": 3,
    "n_update": 1,
    "n_close": 3,
-   "embed_calls": 17,
-   "embed_ms_total": 830.2964750000683,
+   "embed_calls": 18,
+   "embed_ms_total": 1608.9869900004032,
    "n_relinks": 0
   },
   "sighting": {
@@ -1289,8 +1293,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 65908,
-      "bytes_per_delivered_object": 32954.0,
+      "bytes_used": 65941,
+      "bytes_per_delivered_object": 32970.5,
       "n_forms_sent": 15
      },
      "480KB": {
@@ -1300,8 +1304,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 365884,
-      "bytes_per_delivered_object": 182942.0,
+      "bytes_used": 365917,
+      "bytes_per_delivered_object": 182958.5,
       "n_forms_sent": 20
      },
      "1.92MB": {
@@ -1311,8 +1315,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 365884,
-      "bytes_per_delivered_object": 182942.0,
+      "bytes_used": 365917,
+      "bytes_per_delivered_object": 182958.5,
       "n_forms_sent": 20
      },
      "15MB": {
@@ -1322,8 +1326,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 365884,
-      "bytes_per_delivered_object": 182942.0,
+      "bytes_used": 365917,
+      "bytes_per_delivered_object": 182958.5,
       "n_forms_sent": 20
      }
     }
@@ -1439,7 +1443,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 1,
-    "bytes_used": 65908,
+    "bytes_used": 65941,
     "n_forms_sent": 15,
     "n_sightings_touched": 3,
     "forms_by_kind": {
@@ -1455,8 +1459,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 65908,
-      "bytes_per_delivered_object": 32954.0,
+      "bytes_used": 65941,
+      "bytes_per_delivered_object": 32970.5,
       "n_forms_sent": 15
      },
      "naive": {
@@ -1490,7 +1494,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 1,
-    "bytes_used": 365884,
+    "bytes_used": 365917,
     "n_forms_sent": 20,
     "n_sightings_touched": 3,
     "forms_by_kind": {
@@ -1507,8 +1511,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 365884,
-      "bytes_per_delivered_object": 182942.0,
+      "bytes_used": 365917,
+      "bytes_per_delivered_object": 182958.5,
       "n_forms_sent": 20
      },
      "naive": {
@@ -1542,7 +1546,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 1,
-    "bytes_used": 365884,
+    "bytes_used": 365917,
     "n_forms_sent": 20,
     "n_sightings_touched": 3,
     "forms_by_kind": {
@@ -1559,8 +1563,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 365884,
-      "bytes_per_delivered_object": 182942.0,
+      "bytes_used": 365917,
+      "bytes_per_delivered_object": 182958.5,
       "n_forms_sent": 20
      },
      "naive": {
@@ -1594,7 +1598,7 @@
     "window_s": 60.0,
     "selector": {},
     "n_windows": 1,
-    "bytes_used": 365884,
+    "bytes_used": 365917,
     "n_forms_sent": 20,
     "n_sightings_touched": 3,
     "forms_by_kind": {
@@ -1611,8 +1615,8 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 365884,
-      "bytes_per_delivered_object": 182942.0,
+      "bytes_used": 365917,
+      "bytes_per_delivered_object": 182958.5,
       "n_forms_sent": 20
      },
      "naive": {
@@ -1644,6 +1648,7 @@
   }
  },
  "fvessel_clip01": {
+  "fps": 1.0,
   "stats": {
    "n_frames": 111,
    "n_detector_frames": 12,
@@ -1655,33 +1660,33 @@
    },
    "n_detections": 18,
    "n_tracks": 2,
-   "wall_s": 2.0505670750000036,
-   "processed_fps": 54.131367538903746,
-   "frame_ms_p50": 3.7559610000243993,
-   "frame_ms_p95": 41.7088734999993,
-   "detector_frame_ms_p50": 3.7559610000243993,
-   "det_ms_p50": 34.36184800000319,
-   "det_ms_p95": 40.182816350028354,
-   "gate_ms_p50": 3.723873000012645,
+   "wall_s": 2.095186093999928,
+   "processed_fps": 52.97858759079938,
+   "frame_ms_p50": 3.7383839999165502,
+   "frame_ms_p95": 43.121648500004994,
+   "detector_frame_ms_p50": 3.7383839999165502,
+   "det_ms_p50": 34.266246499896624,
+   "det_ms_p95": 36.42319530000577,
+   "gate_ms_p50": 3.6856389999684325,
    "n_open": 2,
-   "n_update": 3,
+   "n_update": 6,
    "n_close": 2,
    "embed_calls": 2,
-   "embed_ms_total": 94.34357800000726,
+   "embed_ms_total": 148.04993500001729,
    "n_relinks": 0
   },
   "sighting": {
    "n_gt_objects": 2,
    "n_sightings": 2,
-   "n_events": 7,
-   "n_reports": 5,
+   "n_events": 10,
+   "n_reports": 8,
    "object_recall": 1.0,
    "duplicates_per_object": 0.0,
    "false_sightings": 0,
    "false_per_min": 0.0,
    "ttfr_median_s": 9.0,
    "ttfr_mean_s": 9.0,
-   "reports_per_object": 2.5,
+   "reports_per_object": 4.0,
    "minutes": 1.85,
    "matched_sightings": {
     "fvessel_clip01:0002": 2,
@@ -1701,9 +1706,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 70968,
-      "bytes_per_delivered_object": 35484.0,
-      "n_forms_sent": 20
+      "bytes_used": 84207,
+      "bytes_per_delivered_object": 42103.5,
+      "n_forms_sent": 27
      },
      "480KB": {
       "budget_bytes_per_window": 480000,
@@ -1712,9 +1717,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 433004,
-      "bytes_per_delivered_object": 216502.0,
-      "n_forms_sent": 24
+      "bytes_used": 567342,
+      "bytes_per_delivered_object": 283671.0,
+      "n_forms_sent": 37
      },
      "1.92MB": {
       "budget_bytes_per_window": 1920000,
@@ -1723,9 +1728,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 523513,
-      "bytes_per_delivered_object": 261756.5,
-      "n_forms_sent": 25
+      "bytes_used": 838869,
+      "bytes_per_delivered_object": 419434.5,
+      "n_forms_sent": 40
      },
      "15MB": {
       "budget_bytes_per_window": 15000000,
@@ -1734,9 +1739,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 523513,
-      "bytes_per_delivered_object": 261756.5,
-      "n_forms_sent": 25
+      "bytes_used": 838869,
+      "bytes_per_delivered_object": 419434.5,
+      "n_forms_sent": 40
      }
     }
    },
@@ -1850,14 +1855,14 @@
     "budget_bytes_per_window": 72000,
     "window_s": 60.0,
     "selector": {},
-    "n_windows": 1,
-    "bytes_used": 70968,
-    "n_forms_sent": 20,
+    "n_windows": 2,
+    "bytes_used": 84207,
+    "n_forms_sent": 27,
     "n_sightings_touched": 2,
     "forms_by_kind": {
-     "fact": 5,
-     "crop": 10,
-     "thumb": 5
+     "fact": 8,
+     "crop": 16,
+     "thumb": 3
     },
     "delivered": {
      "sightings": {
@@ -1867,9 +1872,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 70968,
-      "bytes_per_delivered_object": 35484.0,
-      "n_forms_sent": 20
+      "bytes_used": 84207,
+      "bytes_per_delivered_object": 42103.5,
+      "n_forms_sent": 27
      },
      "naive": {
       "budget_bytes_per_window": 72000,
@@ -1901,15 +1906,15 @@
     "budget_bytes_per_window": 480000,
     "window_s": 60.0,
     "selector": {},
-    "n_windows": 1,
-    "bytes_used": 433004,
-    "n_forms_sent": 24,
+    "n_windows": 2,
+    "bytes_used": 567342,
+    "n_forms_sent": 37,
     "n_sightings_touched": 2,
     "forms_by_kind": {
-     "fact": 5,
-     "crop": 10,
-     "thumb": 5,
-     "full": 4
+     "fact": 8,
+     "crop": 16,
+     "thumb": 8,
+     "full": 5
     },
     "delivered": {
      "sightings": {
@@ -1919,9 +1924,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 433004,
-      "bytes_per_delivered_object": 216502.0,
-      "n_forms_sent": 24
+      "bytes_used": 567342,
+      "bytes_per_delivered_object": 283671.0,
+      "n_forms_sent": 37
      },
      "naive": {
       "budget_bytes_per_window": 480000,
@@ -1953,15 +1958,15 @@
     "budget_bytes_per_window": 1920000,
     "window_s": 60.0,
     "selector": {},
-    "n_windows": 1,
-    "bytes_used": 523513,
-    "n_forms_sent": 25,
+    "n_windows": 2,
+    "bytes_used": 838869,
+    "n_forms_sent": 40,
     "n_sightings_touched": 2,
     "forms_by_kind": {
-     "fact": 5,
-     "crop": 10,
-     "thumb": 5,
-     "full": 5
+     "fact": 8,
+     "crop": 16,
+     "thumb": 8,
+     "full": 8
     },
     "delivered": {
      "sightings": {
@@ -1971,9 +1976,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 523513,
-      "bytes_per_delivered_object": 261756.5,
-      "n_forms_sent": 25
+      "bytes_used": 838869,
+      "bytes_per_delivered_object": 419434.5,
+      "n_forms_sent": 40
      },
      "naive": {
       "budget_bytes_per_window": 1920000,
@@ -2005,15 +2010,15 @@
     "budget_bytes_per_window": 15000000,
     "window_s": 60.0,
     "selector": {},
-    "n_windows": 1,
-    "bytes_used": 523513,
-    "n_forms_sent": 25,
+    "n_windows": 2,
+    "bytes_used": 838869,
+    "n_forms_sent": 40,
     "n_sightings_touched": 2,
     "forms_by_kind": {
-     "fact": 5,
-     "crop": 10,
-     "thumb": 5,
-     "full": 5
+     "fact": 8,
+     "crop": 16,
+     "thumb": 8,
+     "full": 8
     },
     "delivered": {
      "sightings": {
@@ -2023,9 +2028,9 @@
       "objects_delivered_any": 2,
       "frac_image": 1.0,
       "frac_fact": 1.0,
-      "bytes_used": 523513,
-      "bytes_per_delivered_object": 261756.5,
-      "n_forms_sent": 25
+      "bytes_used": 838869,
+      "bytes_per_delivered_object": 419434.5,
+      "n_forms_sent": 40
      },
      "naive": {
       "budget_bytes_per_window": 15000000,
@@ -2052,6 +2057,929 @@
     },
     "n_sightings_received": 2,
     "n_tiles": 2
+   }
+  }
+ },
+ "fvessel_clip01__nogate": {
+  "fps": 1.0,
+  "stats": {
+   "n_frames": 111,
+   "n_detector_frames": 111,
+   "n_gated_out": 0,
+   "gate_reasons": {},
+   "n_detections": 154,
+   "n_tracks": 7,
+   "wall_s": 6.9820131399999354,
+   "processed_fps": 15.89799356923024,
+   "frame_ms_p50": 39.09832799990909,
+   "frame_ms_p95": 112.171139000111,
+   "detector_frame_ms_p50": 39.09832799990909,
+   "det_ms_p50": 33.900650999839854,
+   "det_ms_p95": 64.38962950005589,
+   "gate_ms_p50": null,
+   "n_open": 7,
+   "n_update": 11,
+   "n_close": 7,
+   "embed_calls": 22,
+   "embed_ms_total": 1186.8897720005407,
+   "n_relinks": 0
+  },
+  "sighting": {
+   "n_gt_objects": 2,
+   "n_sightings": 7,
+   "n_events": 25,
+   "n_reports": 18,
+   "object_recall": 1.0,
+   "duplicates_per_object": 0.5,
+   "false_sightings": 4,
+   "false_per_min": 2.162162162162162,
+   "ttfr_median_s": 0.0,
+   "ttfr_mean_s": 0.0,
+   "reports_per_object": 5.5,
+   "minutes": 1.85,
+   "matched_sightings": {
+    "fvessel_clip01__nogate:0002": 2,
+    "fvessel_clip01__nogate:0001": 1,
+    "fvessel_clip01__nogate:0007": 2
+   }
+  },
+  "delivery": {
+   "sightings": {
+    "window_s": 60.0,
+    "n_windows": 2,
+    "n_gt_objects": 2,
+    "budgets": {
+     "72KB": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 141589,
+      "bytes_per_delivered_object": 70794.5,
+      "n_forms_sent": 53
+     },
+     "480KB": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 909260,
+      "bytes_per_delivered_object": 454630.0,
+      "n_forms_sent": 79
+     },
+     "1.92MB": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1946774,
+      "bytes_per_delivered_object": 973387.0,
+      "n_forms_sent": 90
+     },
+     "15MB": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1946774,
+      "bytes_per_delivered_object": 973387.0,
+      "n_forms_sent": 90
+     }
+    }
+   },
+   "naive": {
+    "window_s": 60.0,
+    "n_windows": 2,
+    "n_gt_objects": 2,
+    "budgets": {
+     "72KB": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 38151,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 154
+     },
+     "480KB": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 864180,
+      "bytes_per_delivered_object": 432090.0,
+      "n_forms_sent": 163
+     },
+     "1.92MB": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 3815954,
+      "bytes_per_delivered_object": 1907977.0,
+      "n_forms_sent": 194
+     },
+     "15MB": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 15033489,
+      "bytes_per_delivered_object": 7516744.5,
+      "n_forms_sent": 308
+     }
+    },
+    "n_reports": 154
+   },
+   "image_dedup": {
+    "window_s": 60.0,
+    "n_windows": 2,
+    "n_gt_objects": 2,
+    "budgets": {
+     "72KB": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1243,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 5
+     },
+     "480KB": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 482115,
+      "bytes_per_delivered_object": 241057.5,
+      "n_forms_sent": 10
+     },
+     "1.92MB": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 482115,
+      "bytes_per_delivered_object": 241057.5,
+      "n_forms_sent": 10
+     },
+     "15MB": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 482115,
+      "bytes_per_delivered_object": 241057.5,
+      "n_forms_sent": 10
+     }
+    },
+    "n_reports": 5
+   }
+  },
+  "selection": {
+   "72KB": {
+    "budget_bytes_per_window": 72000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 141589,
+    "n_forms_sent": 53,
+    "n_sightings_touched": 7,
+    "forms_by_kind": {
+     "fact": 18,
+     "crop": 31,
+     "thumb": 4
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 141589,
+      "bytes_per_delivered_object": 70794.5,
+      "n_forms_sent": 53
+     },
+     "naive": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 38151,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 154
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1243,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 5
+     }
+    },
+    "n_sightings_received": 7,
+    "n_tiles": 7
+   },
+   "480KB": {
+    "budget_bytes_per_window": 480000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 909260,
+    "n_forms_sent": 79,
+    "n_sightings_touched": 7,
+    "forms_by_kind": {
+     "fact": 18,
+     "crop": 36,
+     "thumb": 18,
+     "full": 7
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 909260,
+      "bytes_per_delivered_object": 454630.0,
+      "n_forms_sent": 79
+     },
+     "naive": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 864180,
+      "bytes_per_delivered_object": 432090.0,
+      "n_forms_sent": 163
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 482115,
+      "bytes_per_delivered_object": 241057.5,
+      "n_forms_sent": 10
+     }
+    },
+    "n_sightings_received": 7,
+    "n_tiles": 7
+   },
+   "1.92MB": {
+    "budget_bytes_per_window": 1920000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 1946774,
+    "n_forms_sent": 90,
+    "n_sightings_touched": 7,
+    "forms_by_kind": {
+     "fact": 18,
+     "crop": 36,
+     "thumb": 18,
+     "full": 18
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1946774,
+      "bytes_per_delivered_object": 973387.0,
+      "n_forms_sent": 90
+     },
+     "naive": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 3815954,
+      "bytes_per_delivered_object": 1907977.0,
+      "n_forms_sent": 194
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 482115,
+      "bytes_per_delivered_object": 241057.5,
+      "n_forms_sent": 10
+     }
+    },
+    "n_sightings_received": 7,
+    "n_tiles": 7
+   },
+   "15MB": {
+    "budget_bytes_per_window": 15000000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 1946774,
+    "n_forms_sent": 90,
+    "n_sightings_touched": 7,
+    "forms_by_kind": {
+     "fact": 18,
+     "crop": 36,
+     "thumb": 18,
+     "full": 18
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1946774,
+      "bytes_per_delivered_object": 973387.0,
+      "n_forms_sent": 90
+     },
+     "naive": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 15033489,
+      "bytes_per_delivered_object": 7516744.5,
+      "n_forms_sent": 308
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 482115,
+      "bytes_per_delivered_object": 241057.5,
+      "n_forms_sent": 10
+     }
+    },
+    "n_sightings_received": 7,
+    "n_tiles": 7
+   }
+  }
+ },
+ "fvessel_clip01__force2s": {
+  "fps": 1.0,
+  "stats": {
+   "n_frames": 111,
+   "n_detector_frames": 56,
+   "n_gated_out": 55,
+   "gate_reasons": {
+    "pass": 1,
+    "no_change": 55,
+    "forced": 55
+   },
+   "n_detections": 78,
+   "n_tracks": 3,
+   "wall_s": 4.0677632969998285,
+   "processed_fps": 27.28772347247143,
+   "frame_ms_p50": 37.11362299986831,
+   "frame_ms_p95": 83.67569799997909,
+   "detector_frame_ms_p50": 37.11362299986831,
+   "det_ms_p50": 33.03237399995851,
+   "det_ms_p95": 38.03774250002334,
+   "gate_ms_p50": 3.797360999897137,
+   "n_open": 3,
+   "n_update": 7,
+   "n_close": 3,
+   "embed_calls": 10,
+   "embed_ms_total": 448.15125400054967,
+   "n_relinks": 0
+  },
+  "sighting": {
+   "n_gt_objects": 2,
+   "n_sightings": 3,
+   "n_events": 13,
+   "n_reports": 10,
+   "object_recall": 1.0,
+   "duplicates_per_object": 0.0,
+   "false_sightings": 1,
+   "false_per_min": 0.5405405405405405,
+   "ttfr_median_s": 1.0,
+   "ttfr_mean_s": 1.0,
+   "reports_per_object": 4.0,
+   "minutes": 1.85,
+   "matched_sightings": {
+    "fvessel_clip01__force2s:0002": 2,
+    "fvessel_clip01__force2s:0001": 1
+   }
+  },
+  "delivery": {
+   "sightings": {
+    "window_s": 60.0,
+    "n_windows": 2,
+    "n_gt_objects": 2,
+    "budgets": {
+     "72KB": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 113451,
+      "bytes_per_delivered_object": 56725.5,
+      "n_forms_sent": 35
+     },
+     "480KB": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 800697,
+      "bytes_per_delivered_object": 400348.5,
+      "n_forms_sent": 47
+     },
+     "1.92MB": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1078866,
+      "bytes_per_delivered_object": 539433.0,
+      "n_forms_sent": 50
+     },
+     "15MB": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1078866,
+      "bytes_per_delivered_object": 539433.0,
+      "n_forms_sent": 50
+     }
+    }
+   },
+   "naive": {
+    "window_s": 60.0,
+    "n_windows": 2,
+    "n_gt_objects": 2,
+    "budgets": {
+     "72KB": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 19487,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 78
+     },
+     "480KB": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 877026,
+      "bytes_per_delivered_object": 438513.0,
+      "n_forms_sent": 87
+     },
+     "1.92MB": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 3755505,
+      "bytes_per_delivered_object": 1877752.5,
+      "n_forms_sent": 116
+     },
+     "15MB": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 7771650,
+      "bytes_per_delivered_object": 3885825.0,
+      "n_forms_sent": 156
+     }
+    },
+    "n_reports": 78
+   },
+   "image_dedup": {
+    "window_s": 60.0,
+    "n_windows": 2,
+    "n_gt_objects": 2,
+    "budgets": {
+     "72KB": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1511,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 6
+     },
+     "480KB": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 588500,
+      "bytes_per_delivered_object": 294250.0,
+      "n_forms_sent": 12
+     },
+     "1.92MB": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 588500,
+      "bytes_per_delivered_object": 294250.0,
+      "n_forms_sent": 12
+     },
+     "15MB": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 588500,
+      "bytes_per_delivered_object": 294250.0,
+      "n_forms_sent": 12
+     }
+    },
+    "n_reports": 6
+   }
+  },
+  "selection": {
+   "72KB": {
+    "budget_bytes_per_window": 72000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 113451,
+    "n_forms_sent": 35,
+    "n_sightings_touched": 3,
+    "forms_by_kind": {
+     "fact": 10,
+     "crop": 20,
+     "thumb": 5
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 113451,
+      "bytes_per_delivered_object": 56725.5,
+      "n_forms_sent": 35
+     },
+     "naive": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 19487,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 78
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 72000,
+      "objects_delivered_image": 0,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 0.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1511,
+      "bytes_per_delivered_object": null,
+      "n_forms_sent": 6
+     }
+    },
+    "n_sightings_received": 3,
+    "n_tiles": 3
+   },
+   "480KB": {
+    "budget_bytes_per_window": 480000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 800697,
+    "n_forms_sent": 47,
+    "n_sightings_touched": 3,
+    "forms_by_kind": {
+     "fact": 10,
+     "crop": 20,
+     "thumb": 10,
+     "full": 7
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 800697,
+      "bytes_per_delivered_object": 400348.5,
+      "n_forms_sent": 47
+     },
+     "naive": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 877026,
+      "bytes_per_delivered_object": 438513.0,
+      "n_forms_sent": 87
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 480000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 588500,
+      "bytes_per_delivered_object": 294250.0,
+      "n_forms_sent": 12
+     }
+    },
+    "n_sightings_received": 3,
+    "n_tiles": 3
+   },
+   "1.92MB": {
+    "budget_bytes_per_window": 1920000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 1078866,
+    "n_forms_sent": 50,
+    "n_sightings_touched": 3,
+    "forms_by_kind": {
+     "fact": 10,
+     "crop": 20,
+     "thumb": 10,
+     "full": 10
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1078866,
+      "bytes_per_delivered_object": 539433.0,
+      "n_forms_sent": 50
+     },
+     "naive": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 3755505,
+      "bytes_per_delivered_object": 1877752.5,
+      "n_forms_sent": 116
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 1920000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 588500,
+      "bytes_per_delivered_object": 294250.0,
+      "n_forms_sent": 12
+     }
+    },
+    "n_sightings_received": 3,
+    "n_tiles": 3
+   },
+   "15MB": {
+    "budget_bytes_per_window": 15000000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 2,
+    "bytes_used": 1078866,
+    "n_forms_sent": 50,
+    "n_sightings_touched": 3,
+    "forms_by_kind": {
+     "fact": 10,
+     "crop": 20,
+     "thumb": 10,
+     "full": 10
+    },
+    "delivered": {
+     "sightings": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 1078866,
+      "bytes_per_delivered_object": 539433.0,
+      "n_forms_sent": 50
+     },
+     "naive": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 7771650,
+      "bytes_per_delivered_object": 3885825.0,
+      "n_forms_sent": 156
+     },
+     "image_dedup": {
+      "budget_bytes_per_window": 15000000,
+      "objects_delivered_image": 2,
+      "objects_delivered_fact": 2,
+      "objects_delivered_any": 2,
+      "frac_image": 1.0,
+      "frac_fact": 1.0,
+      "bytes_used": 588500,
+      "bytes_per_delivered_object": 294250.0,
+      "n_forms_sent": 12
+     }
+    },
+    "n_sightings_received": 3,
+    "n_tiles": 3
+   }
+  }
+ },
+ "submarine_tail": {
+  "fps": 5.0,
+  "stats": {
+   "n_frames": 222,
+   "n_detector_frames": 222,
+   "n_gated_out": 0,
+   "gate_reasons": {
+    "pass": 222
+   },
+   "n_detections": 183,
+   "n_tracks": 5,
+   "wall_s": 11.794034978000127,
+   "processed_fps": 18.823074580845763,
+   "frame_ms_p50": 37.83182349991421,
+   "frame_ms_p95": 103.99196489998981,
+   "detector_frame_ms_p50": 37.83182349991421,
+   "det_ms_p50": 33.52374450003026,
+   "det_ms_p95": 44.73176100008231,
+   "gate_ms_p50": 2.0194389998096085,
+   "n_open": 4,
+   "n_update": 3,
+   "n_close": 4,
+   "embed_calls": 46,
+   "embed_ms_total": 2223.6943649995737,
+   "n_relinks": 0
+  },
+  "baseline_reports": {
+   "naive": 183,
+   "image_dedup": 27
+  },
+  "selection": {
+   "72KB": {
+    "budget_bytes_per_window": 72000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 1,
+    "bytes_used": 65253,
+    "n_forms_sent": 21,
+    "n_sightings_touched": 4,
+    "forms_by_kind": {
+     "fact": 7,
+     "crop": 13,
+     "thumb": 1
+    },
+    "n_sightings_received": 4,
+    "n_tiles": 4
+   },
+   "480KB": {
+    "budget_bytes_per_window": 480000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 1,
+    "bytes_used": 393896,
+    "n_forms_sent": 31,
+    "n_sightings_touched": 4,
+    "forms_by_kind": {
+     "fact": 7,
+     "crop": 14,
+     "thumb": 7,
+     "full": 3
+    },
+    "n_sightings_received": 4,
+    "n_tiles": 4
+   },
+   "1.92MB": {
+    "budget_bytes_per_window": 1920000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 1,
+    "bytes_used": 757837,
+    "n_forms_sent": 35,
+    "n_sightings_touched": 4,
+    "forms_by_kind": {
+     "fact": 7,
+     "crop": 14,
+     "thumb": 7,
+     "full": 7
+    },
+    "n_sightings_received": 4,
+    "n_tiles": 4
+   },
+   "15MB": {
+    "budget_bytes_per_window": 15000000,
+    "window_s": 60.0,
+    "selector": {},
+    "n_windows": 1,
+    "bytes_used": 757837,
+    "n_forms_sent": 35,
+    "n_sightings_touched": 4,
+    "forms_by_kind": {
+     "fact": 7,
+     "crop": 14,
+     "thumb": 7,
+     "full": 7
+    },
+    "n_sightings_received": 4,
+    "n_tiles": 4
    }
   }
  }

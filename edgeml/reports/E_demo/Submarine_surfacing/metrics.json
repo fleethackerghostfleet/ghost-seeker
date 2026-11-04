@@ -8,19 +8,19 @@
   },
   "n_detections": 184,
   "n_tracks": 5,
-  "wall_s": 20.88804011700006,
-  "processed_fps": 17.80923427551453,
-  "frame_ms_p50": 40.083188999915365,
-  "frame_ms_p95": 107.51002640004116,
-  "detector_frame_ms_p50": 40.083188999915365,
-  "det_ms_p50": 36.67195599996376,
-  "det_ms_p95": 75.17190895007944,
-  "gate_ms_p50": 2.021431000002849,
+  "wall_s": 22.985904104999918,
+  "processed_fps": 16.183831547399617,
+  "frame_ms_p50": 44.19842899994819,
+  "frame_ms_p95": 130.2320519999853,
+  "detector_frame_ms_p50": 44.19842899994819,
+  "det_ms_p50": 39.80289099990841,
+  "det_ms_p95": 68.6886150000305,
+  "gate_ms_p50": 2.1743154999285252,
   "n_open": 4,
   "n_update": 3,
   "n_close": 4,
-  "embed_calls": 53,
-  "embed_ms_total": 3269.691309000109,
+  "embed_calls": 52,
+  "embed_ms_total": 4145.619711999643,
   "n_relinks": 0
  },
  "sighting": {
@@ -56,8 +56,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 114514,
-     "bytes_per_delivered_object": 57257.0,
+     "bytes_used": 113816,
+     "bytes_per_delivered_object": 56908.0,
      "n_forms_sent": 27
     },
     "480KB": {
@@ -67,8 +67,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 776025,
-     "bytes_per_delivered_object": 388012.5,
+     "bytes_used": 775327,
+     "bytes_per_delivered_object": 387663.5,
      "n_forms_sent": 35
     },
     "1.92MB": {
@@ -78,8 +78,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 776025,
-     "bytes_per_delivered_object": 388012.5,
+     "bytes_used": 775327,
+     "bytes_per_delivered_object": 387663.5,
      "n_forms_sent": 35
     },
     "15MB": {
@@ -89,8 +89,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 776025,
-     "bytes_per_delivered_object": 388012.5,
+     "bytes_used": 775327,
+     "bytes_per_delivered_object": 387663.5,
      "n_forms_sent": 35
     }
    }
@@ -206,7 +206,7 @@
    "window_s": 60.0,
    "selector": {},
    "n_windows": 2,
-   "bytes_used": 114514,
+   "bytes_used": 113816,
    "n_forms_sent": 27,
    "n_sightings_touched": 4,
    "forms_by_kind": {
@@ -222,8 +222,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 114514,
-     "bytes_per_delivered_object": 57257.0,
+     "bytes_used": 113816,
+     "bytes_per_delivered_object": 56908.0,
      "n_forms_sent": 27
     },
     "naive": {
@@ -257,7 +257,7 @@
    "window_s": 60.0,
    "selector": {},
    "n_windows": 2,
-   "bytes_used": 776025,
+   "bytes_used": 775327,
    "n_forms_sent": 35,
    "n_sightings_touched": 4,
    "forms_by_kind": {
@@ -274,8 +274,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 776025,
-     "bytes_per_delivered_object": 388012.5,
+     "bytes_used": 775327,
+     "bytes_per_delivered_object": 387663.5,
      "n_forms_sent": 35
     },
     "naive": {
@@ -309,7 +309,7 @@
    "window_s": 60.0,
    "selector": {},
    "n_windows": 2,
-   "bytes_used": 776025,
+   "bytes_used": 775327,
    "n_forms_sent": 35,
    "n_sightings_touched": 4,
    "forms_by_kind": {
@@ -326,8 +326,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 776025,
-     "bytes_per_delivered_object": 388012.5,
+     "bytes_used": 775327,
+     "bytes_per_delivered_object": 387663.5,
      "n_forms_sent": 35
     },
     "naive": {
@@ -361,7 +361,7 @@
    "window_s": 60.0,
    "selector": {},
    "n_windows": 2,
-   "bytes_used": 776025,
+   "bytes_used": 775327,
    "n_forms_sent": 35,
    "n_sightings_touched": 4,
    "forms_by_kind": {
@@ -378,8 +378,8 @@
      "objects_delivered_any": 2,
      "frac_image": 1.0,
      "frac_fact": 1.0,
-     "bytes_used": 776025,
-     "bytes_per_delivered_object": 388012.5,
+     "bytes_used": 775327,
+     "bytes_per_delivered_object": 387663.5,
      "n_forms_sent": 35
     },
     "naive": {
