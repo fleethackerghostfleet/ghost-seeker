@@ -199,6 +199,25 @@ func mimeFor(k pb.FormKind, t pb.ItemType, data []byte) string {
 }
 
 // HasHash reports whether an item with this content hash already exists (dedup).
+// IDsByHash lists every item holding this exact content (several can: a
+// FACT+THUMB scene item and a full item of the same frame).
+func (s *Store) IDsByHash(ctx context.Context, h string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM items WHERE content_hash=? ORDER BY ingest_seq`, h)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func (s *Store) HasHash(ctx context.Context, h string) (string, bool, error) {
 	var id string
 	err := s.db.QueryRowContext(ctx, `SELECT id FROM items WHERE content_hash=? LIMIT 1`, h).Scan(&id)

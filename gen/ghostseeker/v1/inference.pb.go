@@ -255,6 +255,8 @@ type Sighting struct {
 	FirstSeenUnixMs int64                  `protobuf:"varint,8,opt,name=first_seen_unix_ms,json=firstSeenUnixMs,proto3" json:"first_seen_unix_ms,omitempty"`
 	LastSeenUnixMs  int64                  `protobuf:"varint,9,opt,name=last_seen_unix_ms,json=lastSeenUnixMs,proto3" json:"last_seen_unix_ms,omitempty"`
 	NFrames         int32                  `protobuf:"varint,10,opt,name=n_frames,json=nFrames,proto3" json:"n_frames,omitempty"`
+	Embedding       []float32              `protobuf:"fixed32,11,rep,packed,name=embedding,proto3" json:"embedding,omitempty"` // key-crop embedding of this object (same space as AnalyzeResponse.embedding)
+	Unknownness     float32                `protobuf:"fixed32,12,opt,name=unknownness,proto3" json:"unknownness,omitempty"`    // zero-shot unknownness of this object's key crop
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -355,6 +357,20 @@ func (x *Sighting) GetLastSeenUnixMs() int64 {
 func (x *Sighting) GetNFrames() int32 {
 	if x != nil {
 		return x.NFrames
+	}
+	return 0
+}
+
+func (x *Sighting) GetEmbedding() []float32 {
+	if x != nil {
+		return x.Embedding
+	}
+	return nil
+}
+
+func (x *Sighting) GetUnknownness() float32 {
+	if x != nil {
+		return x.Unknownness
 	}
 	return 0
 }
@@ -684,7 +700,7 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\bmodel_id\x18\x04 \x01(\tR\amodelId\x12\x1d\n" +
 	"\n" +
 	"latency_ms\x18\x05 \x01(\x03R\tlatencyMs\x126\n" +
-	"\tsightings\x18\x06 \x03(\v2\x18.ghostseeker.v1.SightingR\tsightings\"\xed\x03\n" +
+	"\tsightings\x18\x06 \x03(\v2\x18.ghostseeker.v1.SightingR\tsightings\"\xad\x04\n" +
 	"\bSighting\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x124\n" +
 	"\x05event\x18\x02 \x01(\x0e2\x1e.ghostseeker.v1.Sighting.EventR\x05event\x12>\n" +
@@ -697,7 +713,9 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\x12first_seen_unix_ms\x18\b \x01(\x03R\x0ffirstSeenUnixMs\x12)\n" +
 	"\x11last_seen_unix_ms\x18\t \x01(\x03R\x0elastSeenUnixMs\x12\x19\n" +
 	"\bn_frames\x18\n" +
-	" \x01(\x05R\anFrames\"f\n" +
+	" \x01(\x05R\anFrames\x12\x1c\n" +
+	"\tembedding\x18\v \x03(\x02R\tembedding\x12 \n" +
+	"\vunknownness\x18\f \x01(\x02R\vunknownness\"f\n" +
 	"\x05Event\x12\x15\n" +
 	"\x11EVENT_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +

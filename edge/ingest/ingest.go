@@ -18,6 +18,7 @@ import (
 	"maps"
 	"math"
 	"math/rand"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -78,6 +79,10 @@ type Config struct {
 	KnownLabels []string
 	// Dedup selects how captures become items; see DedupMode.
 	Dedup DedupMode
+	// SceneEvery (sightings mode) stores at most one object-free "scene"
+	// frame per source per interval, FACT+THUMB only; 0 keeps hash behaviour
+	// for object-free frames (one item per frame).
+	SceneEvery time.Duration
 }
 
 // unknown reports whether an analyzer unknownness score marks the item
@@ -93,7 +98,7 @@ func (g *Ingester) unknown(u float32) bool {
 func DefaultConfig() Config {
 	return Config{ThumbWidth: 160, ThumbHeight: 160, ThumbQual: 55,
 		CropQual: 80, CropMargin: 1.5, CropMinShort: 96, CropPad: 0.15, CropMinConf: 0, CropMaxArea: 0.6,
-		FullQual: 90, Dedup: DedupHash,
+		FullQual: 90, Dedup: DedupHash, SceneEvery: 60 * time.Second,
 		KnownLabels: []string{"cargo ship", "container ship", "sailboat", "fishing vessel", "tanker", "small boat", "buoy"}}
 }
 
@@ -115,6 +120,8 @@ type Ingester struct {
 	// key frame. In-memory only: after a restart a later key frame opens a
 	// new item linked by tags["sighting_id"].
 	sightings map[string]string
+	lastScene map[string]time.Time // source -> captured-at of the last stored scene item
+	stateful  map[string]bool      // source -> the engine has reported sightings for it
 }
 
 func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Scheduler, clk clock.Clock, log *slog.Logger) *Ingester {
@@ -122,7 +129,7 @@ func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Sche
 		log = slog.Default()
 	}
 	return &Ingester{cfg: cfg, st: st, an: an, sch: sch, clk: clk, log: log, ent: ulid.Monotonic(entropyFor(cfg.EdgeID), 0),
-		sightings: map[string]string{}}
+		sightings: map[string]string{}, lastScene: map[string]time.Time{}, stateful: map[string]bool{}}
 }
 
 // Deduped is safe to read from other goroutines (console GetStatus).
@@ -168,6 +175,9 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 			if len(resp.Sightings) > 0 {
 				return g.applySightings(ctx, c, hash, resp)
 			}
+			if g.cfg.SceneEvery > 0 {
+				return g.sceneItem(ctx, c, hash, resp)
+			}
 			if row, err := g.existing(ctx, hash); row != nil || err != nil {
 				return row, err
 			}
@@ -187,8 +197,9 @@ func (g *Ingester) existing(ctx context.Context, hash string) (*store.Row, error
 }
 
 // newItem builds, stores and scores one item. s, when set, is the sighting
-// this image item reports: it tags the item and shapes its CROP form.
-func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting) (*store.Row, error) {
+// this image item reports: it tags the item and shapes its CROP form. only,
+// when given, restricts the stored forms to those kinds.
+func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting, only ...pb.FormKind) (*store.Row, error) {
 	ts := c.CapturedAt
 	if ts.IsZero() {
 		ts = g.clk.Now()
@@ -215,10 +226,17 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 		payloads[pb.FormKind_FORM_KIND_FACT] = c.Data
 		delete(payloads, pb.FormKind_FORM_KIND_FULL)
 	}
+	if len(only) > 0 {
+		for k := range payloads {
+			if !slices.Contains(only, k) {
+				delete(payloads, k)
+			}
+		}
+	}
 	if _, err := g.st.Put(ctx, it, payloads); err != nil {
 		return nil, err
 	}
-	if original != nil {
+	if _, full := payloads[pb.FormKind_FORM_KIND_FULL]; original != nil && full {
 		if err := g.st.PutOriginal(it.Id, original); err != nil {
 			return nil, err
 		}
@@ -238,8 +256,9 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 }
 
 // applyFeatures copies the engine's view of the frame into the item. For a
-// sighting the key detection is what the item is about, so it is the item's
-// detection list; the per-frame list stays with per-frame items.
+// sighting the item is about that object, so its key detection, key-crop
+// embedding and unknownness take precedence over the per-frame values
+// (which an engine reporting several objects in one frame cannot split).
 func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Sighting) {
 	f := it.Features
 	f.Detections, f.Embedding, f.Unknownness, f.ModelId = resp.Detections, resp.Embedding, resp.Unknownness, resp.ModelId
@@ -248,6 +267,11 @@ func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Si
 	}
 	if s.KeyDetection != nil {
 		f.Detections = []*pb.Detection{s.KeyDetection}
+	}
+	if len(s.Embedding) > 0 {
+		f.Embedding, f.Unknownness = s.Embedding, s.Unknownness
+	} else if len(resp.Sightings) > 1 {
+		f.Embedding = nil // the frame embedding belongs to one of several objects; do not guess
 	}
 	if f.Tags == nil {
 		f.Tags = map[string]string{}

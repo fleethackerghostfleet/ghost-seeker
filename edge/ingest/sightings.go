@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"sort"
 	"strings"
 	"sync/atomic"
 
@@ -50,8 +52,8 @@ func eventTag(e pb.Sighting_Event) string {
 	return strings.ToLower(strings.TrimPrefix(e.String(), "EVENT_"))
 }
 
-// imageForms lists the forms a key-frame replacement rewrites.
-var imageForms = []pb.FormKind{pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIND_CROP, pb.FormKind_FORM_KIND_FULL}
+// replaceableForms lists the image forms a key-frame replacement rewrites.
+var replaceableForms = []pb.FormKind{pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIND_CROP, pb.FormKind_FORM_KIND_FULL}
 
 // applySightings runs the sighting state machine for one frame.
 //
@@ -65,20 +67,28 @@ var imageForms = []pb.FormKind{pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIN
 //
 // The invariant: shore never gets two full frames of one object unless the
 // second is a materially better key frame (the engine decides "better").
+// Every sighting of the frame is attempted; the first error is returned
+// after the rest were applied, so one failing object does not drop the
+// others' reports and the caller still sees the failure.
 // Returns the first item touched this frame, or nil when nothing was stored.
 func (g *Ingester) applySightings(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
+	g.stateful[c.Source] = true
 	var first *store.Row
+	var firstErr error
 	for _, s := range resp.Sightings {
 		row, err := g.applySighting(ctx, c, hash, resp, s)
 		if err != nil {
 			g.log.Warn("sighting", "id", s.Id, "event", eventTag(s.Event), "err", err)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("sighting %s %s: %w", s.Id, eventTag(s.Event), err)
+			}
 			continue
 		}
 		if first == nil {
 			first = row
 		}
 	}
-	return first, nil
+	return first, firstErr
 }
 
 func (g *Ingester) applySighting(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting) (*store.Row, error) {
@@ -126,7 +136,7 @@ func (g *Ingester) openItem(ctx context.Context, c *Capture, hash string, resp *
 // reach shore, after which the item is immutable and a better key frame
 // becomes a new item.
 func imageShipped(row *store.Row) bool {
-	for _, k := range imageForms {
+	for _, k := range replaceableForms {
 		if f := row.Form(k); f != nil && (f.AckedThrough > 0 || f.Complete) {
 			return true
 		}
@@ -162,11 +172,7 @@ func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Captu
 		if err != nil {
 			return nil, fmt.Errorf("replace %s: %w", k, err)
 		}
-		for i, f := range it.Forms {
-			if f.Kind == k {
-				it.Forms[i] = nf
-			}
-		}
+		setForm(it, nf)
 	}
 	if err := g.st.UpdateItem(ctx, it); err != nil {
 		return nil, err
@@ -192,13 +198,81 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 	if s.Subtype != "" {
 		it.Features.Tags["subtype"] = s.Subtype
 	}
-	if _, err := g.st.ReplaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal()); err != nil {
+	nf, err := g.st.ReplaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal())
+	if err != nil {
 		return nil, err
 	}
+	setForm(it, nf)
 	if err := g.st.UpdateItem(ctx, it); err != nil {
 		return nil, err
 	}
 	return g.rescore(ctx, it.Id)
+}
+
+// setForm records a rewritten form's size/hash in the item's form list so
+// the item view agrees with the stored payloads.
+func setForm(it *pb.Item, nf *pb.Form) {
+	for i, f := range it.Forms {
+		if f.Kind == nf.Kind {
+			it.Forms[i] = nf
+			return
+		}
+	}
+	it.Forms = append(it.Forms, nf)
+	sort.Slice(it.Forms, func(i, j int) bool { return it.Forms[i].Kind < it.Forms[j].Kind })
+}
+
+// sceneItem handles a frame without sightings in sightings mode.
+//
+// Frames with detections: once the engine has reported a sighting for this
+// source it is stateful, so a detected-but-unreported frame is the tracker
+// warming up and folds (the OPEN follows with the key frame). Until then the
+// engine may be stateless (inference.Mock, an older sidecar) and the frame
+// keeps hash behaviour, so detected images are never lost.
+//
+// Object-free frames become a FACT+THUMB "scene" item at most once per
+// SceneEvery per source; the rest fold (counted as deduped). A scene item
+// carries no FULL: shore can pull the next scene.
+func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
+	if len(resp.Detections) > 0 {
+		if !g.stateful[c.Source] {
+			// Hash behaviour, except that a scene item (no FULL) holding the
+			// same bytes must not swallow a frame that now shows an object.
+			ids, err := g.st.IDsByHash(ctx, hash)
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range ids {
+				if row, err := g.st.Get(ctx, id); err == nil && row.Form(pb.FormKind_FORM_KIND_FULL) != nil {
+					atomic.AddInt64(&g.Dups, 1)
+					return row, nil
+				}
+			}
+			return g.newItem(ctx, c, hash, resp, nil)
+		}
+		atomic.AddInt64(&g.Dups, 1)
+		return nil, nil
+	}
+	ts := c.CapturedAt
+	if ts.IsZero() {
+		ts = g.clk.Now()
+	}
+	if last, seen := g.lastScene[c.Source]; seen && ts.Sub(last) < g.cfg.SceneEvery {
+		atomic.AddInt64(&g.Dups, 1)
+		return nil, nil
+	}
+	tags := maps.Clone(c.Tags)
+	if tags == nil {
+		tags = map[string]string{}
+	}
+	tags["event"] = "scene"
+	sc := *c
+	sc.Tags = tags
+	row, err := g.newItem(ctx, &sc, hash, resp, nil, pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB)
+	if err == nil {
+		g.lastScene[c.Source] = ts
+	}
+	return row, err
 }
 
 func (g *Ingester) rescore(ctx context.Context, id string) (*store.Row, error) {
