@@ -247,7 +247,7 @@ nav a{flex:none}
 @media(max-width:1400px){.user>div:last-child{display:none}.hstats{gap:14px}}
 @media(max-width:1250px){.logo small{display:none}.clock{display:none}}
 @media(max-width:1080px){.hstats{display:none}.live{margin-left:auto}nav a{padding:0 10px}}
-@media(max-width:760px){header{gap:10px;padding:0 10px}.logo>div{display:none}.live span{display:none}.user{display:none}nav{margin-left:0}
+@media(max-width:760px){header{gap:10px;padding:0 10px}.logo>div{display:none}.live:not(.off) span{display:none}.user{display:none}nav{margin-left:0}
  .toolbar{padding:8px 10px}.toolbar select{min-width:0;flex:1 1 160px}.strip{padding:6px 10px}.feed{padding:10px 10px 24px}
  .drawer{width:100%}body.drawer-open .feed{padding-right:10px}}
 @media(max-width:1100px){body.drawer-open .feed{padding-right:16px}}
