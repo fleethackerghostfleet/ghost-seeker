@@ -42,18 +42,20 @@ type Bridge struct {
 	link        LinkControl
 	client      *http.Client
 
-	mu   sync.Mutex
-	snap []byte
-	subs map[chan []byte]struct{}
+	mu      sync.Mutex
+	snap    []byte
+	subs    map[chan []byte]struct{}
+	records map[string]int // RECORD item id -> n_frames
 }
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	return &Bridge{
-		shore:  strings.TrimRight(shoreURL, "/"),
-		edge:   strings.TrimRight(edgeURL, "/"),
-		link:   link,
-		client: &http.Client{Timeout: 10 * time.Second},
-		subs:   map[chan []byte]struct{}{},
+		shore:   strings.TrimRight(shoreURL, "/"),
+		edge:    strings.TrimRight(edgeURL, "/"),
+		link:    link,
+		client:  &http.Client{Timeout: 10 * time.Second},
+		subs:    map[chan []byte]struct{}{},
+		records: map[string]int{},
 	}
 }
 
@@ -67,6 +69,7 @@ type FormStatus struct {
 
 type Card struct {
 	ID          string                `json:"id"`
+	Type        string                `json:"type"` // image | record | telemetry
 	CapturedMs  int64                 `json:"capturedMs"`
 	Source      string                `json:"source"`
 	Label       string                `json:"label"`
@@ -85,25 +88,28 @@ type Card struct {
 }
 
 type Object struct {
-	Key        string  `json:"key"`
-	SightingID string  `json:"sightingId,omitempty"`
-	Subtype    string  `json:"subtype,omitempty"`
-	Event      string  `json:"event,omitempty"`
-	Label      string  `json:"label"`
-	Frames     int     `json:"frames"`
-	FirstMs    int64   `json:"firstMs"`
-	LastMs     int64   `json:"lastMs"`
-	Priority   string  `json:"priority"`
-	Best       *Card   `json:"best"`
-	Items      []*Card `json:"items"`
-	HasImage   bool    `json:"hasImage"`
-	Unknown    bool    `json:"unknown"`
-	Suppressed bool    `json:"suppressed"`
+	Key         string  `json:"key"`
+	SightingID  string  `json:"sightingId,omitempty"`
+	Subtype     string  `json:"subtype,omitempty"`
+	Event       string  `json:"event,omitempty"`
+	Label       string  `json:"label"`
+	Frames      int     `json:"frames"` // reports on shore, or n_frames from the edge's contact report when known
+	FramesKnown bool    `json:"framesKnown"`
+	Reports     int     `json:"reports"`
+	FirstMs     int64   `json:"firstMs"`
+	LastMs      int64   `json:"lastMs"`
+	Priority    string  `json:"priority"`
+	Best        *Card   `json:"best"`
+	Items       []*Card `json:"items"`
+	HasImage    bool    `json:"hasImage"`
+	Unknown     bool    `json:"unknown"`
+	Suppressed  bool    `json:"suppressed"`
 }
 
 type NodeStatus struct {
 	OK          bool    `json:"ok"`
 	ItemsTotal  int64   `json:"itemsTotal"`
+	Deduped     int64   `json:"itemsDeduped"` // edge: captures folded into an existing item (hash/sighting duplicates)
 	ItemsUnique int64   `json:"itemsComplete"`
 	Unknown     int64   `json:"itemsUnknown"`
 	Bytes       int64   `json:"bytes"`
@@ -134,11 +140,13 @@ type LinkStatus struct {
 }
 
 type Counts struct {
-	Items            int `json:"items"`
-	ItemsWithImage   int `json:"itemsWithImage"`
-	Objects          int `json:"objects"`
-	ObjectsWithImage int `json:"objectsWithImage"`
-	Grouped          int `json:"grouped"` // items carrying a sighting_id
+	Items              int `json:"items"`
+	ItemsWithImage     int `json:"itemsWithImage"`
+	Objects            int `json:"objects"`
+	ObjectsWithImage   int `json:"objectsWithImage"`
+	Grouped            int `json:"grouped"`   // items carrying a sighting_id
+	Sightings          int `json:"sightings"` // objects with a sighting_id
+	SightingsWithImage int `json:"sightingsWithImage"`
 }
 
 // ---- console RPC helpers ----
@@ -233,7 +241,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 			break
 		}
 	}
-	snap.Objects, snap.Counts = Group(items, suppressed)
+	snap.Objects, snap.Counts = Group(items, suppressed, b.recordFrames(ctx, items))
 
 	buf, err := json.Marshal(snap)
 	if err != nil {
@@ -251,10 +259,85 @@ func (b *Bridge) refresh(ctx context.Context) {
 	b.mu.Unlock()
 }
 
+// recordFrames reads n_frames from each closed sighting's contact report
+// (RECORD items, FACT complete). Facts are immutable, so they are fetched
+// once per item.
+func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[string]int {
+	out := map[string]int{}
+	for _, v := range items {
+		it := v.GetItem()
+		if it.GetType() != pb.ItemType_ITEM_TYPE_RECORD {
+			continue
+		}
+		done := false
+		for _, fs := range v.GetFormStates() {
+			if fs.GetKind() == pb.FormKind_FORM_KIND_FACT && fs.GetComplete() {
+				done = true
+			}
+		}
+		if !done {
+			continue
+		}
+		b.mu.Lock()
+		n, ok := b.records[it.GetId()]
+		b.mu.Unlock()
+		if !ok {
+			n = b.fetchRecordFrames(ctx, it.GetId())
+			if n < 0 {
+				continue
+			}
+			b.mu.Lock()
+			b.records[it.GetId()] = n
+			b.mu.Unlock()
+		}
+		out[it.GetId()] = n
+	}
+	return out
+}
+
+func (b *Bridge) fetchRecordFrames(ctx context.Context, id string) int {
+	hr, err := http.NewRequestWithContext(ctx, http.MethodGet, b.shore+"/blob/"+id+"/fact", nil)
+	if err != nil {
+		return -1
+	}
+	res, err := b.client.Do(hr)
+	if err != nil {
+		return -1
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return -1
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return -1
+	}
+	var rep contactReport
+	// The fact may be the report itself or a fact envelope carrying it; try both.
+	if json.Unmarshal(raw, &rep) != nil || rep.NFrames == 0 {
+		var env struct {
+			Record json.RawMessage `json:"record"`
+			Data   json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal(raw, &env) == nil {
+			for _, r := range [][]byte{env.Record, env.Data} {
+				if len(r) > 0 && json.Unmarshal(r, &rep) == nil && rep.NFrames > 0 {
+					break
+				}
+			}
+		}
+	}
+	if rep.NFrames == 0 {
+		return -1
+	}
+	return rep.NFrames
+}
+
 func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 	n := NodeStatus{
 		OK:          true,
 		ItemsTotal:  st.GetItemsTotal(),
+		Deduped:     st.GetItemsDeduped(),
 		ItemsUnique: st.GetItemsComplete(),
 		Unknown:     st.GetItemsUnknown(),
 		Bytes:       st.GetBytesSent(),
@@ -320,6 +403,7 @@ func ToCard(v *pb.ItemView) *Card {
 	it := v.GetItem()
 	c := &Card{
 		ID:          it.GetId(),
+		Type:        itemTypeName(it.GetType()),
 		CapturedMs:  it.GetCapturedAtUnixMs(),
 		Source:      it.GetSource(),
 		Unknownness: float64(it.GetFeatures().GetUnknownness()),
@@ -375,11 +459,28 @@ func ToCard(v *pb.ItemView) *Card {
 	return c
 }
 
+func itemTypeName(t pb.ItemType) string {
+	switch t {
+	case pb.ItemType_ITEM_TYPE_RECORD:
+		return "record"
+	case pb.ItemType_ITEM_TYPE_TELEMETRY:
+		return "telemetry"
+	default:
+		return "image"
+	}
+}
+
+// contactReport is the edge's CLOSE record for a sighting (edge/ingest.ContactReport).
+type contactReport struct {
+	NFrames int `json:"n_frames"`
+}
+
 // Group buckets cards by sighting_id (one object per sighting; items without
 // a tag are their own object), newest first. Items whose label is in the
 // current policy's suppress list are marked suppressed even if they were
 // scored before the policy reached the edge.
-func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
+// reports maps RECORD item id -> n_frames from its contact report (may be nil).
+func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int) ([]*Object, Counts) {
 	var cnt Counts
 	byKey := map[string]*Object{}
 	var order []*Object
@@ -408,7 +509,15 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 			order = append(order, o)
 		}
 		o.Items = append(o.Items, c)
-		o.Frames++
+		o.Reports++
+		if !o.FramesKnown {
+			o.Frames = o.Reports
+		}
+		if c.Type == "record" && c.Forms["fact"].State == "received" && reports != nil {
+			if n, ok := reports[c.ID]; ok && n > o.Frames {
+				o.Frames, o.FramesKnown = n, true
+			}
+		}
 		if c.CapturedMs < o.FirstMs {
 			o.FirstMs = c.CapturedMs
 		}
@@ -424,7 +533,7 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 		if n, ok := c.Tags["frames"]; ok {
 			var fr int
 			if _, err := fmt.Sscanf(n, "%d", &fr); err == nil && fr > o.Frames {
-				o.Frames = fr
+				o.Frames, o.FramesKnown = fr, true
 			}
 		}
 		o.Suppressed = o.Suppressed || c.Suppressed
@@ -446,6 +555,12 @@ func Group(views []*pb.ItemView, suppressLabels []string) ([]*Object, Counts) {
 		if o.HasImage {
 			cnt.ObjectsWithImage++
 		}
+		if o.SightingID != "" {
+			cnt.Sightings++
+			if o.HasImage {
+				cnt.SightingsWithImage++
+			}
+		}
 	}
 	assignTiers(order)
 	sort.SliceStable(order, func(i, j int) bool { return order[i].LastMs > order[j].LastMs })
@@ -458,6 +573,9 @@ const unknownThreshold = 0.5
 var formRank = map[string]int{"": 0, "thumb": 1, "full": 2, "crop": 3}
 
 func better(a, b *Card) bool {
+	if (a.Type == "record") != (b.Type == "record") {
+		return b.Type == "record"
+	}
 	if formRank[a.ImageForm] != formRank[b.ImageForm] {
 		return formRank[a.ImageForm] > formRank[b.ImageForm]
 	}

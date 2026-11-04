@@ -48,14 +48,15 @@
     for (const b of pr.children) b.classList.toggle('on', link.controllable && +b.dataset.bps === link.bps);
     $('#items-shore').textContent = shore.ok ? shore.itemsTotal : '—';
     $('#items-edge').textContent = edge.ok ? edge.itemsTotal : (edge.error ? 'n/a' : '—');
-    $('#edge-queue').textContent = edge.ok ? `(${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)})` : '';
-    $('#obj-img').textContent = counts.objectsWithImage;
-    $('#obj-all').textContent = counts.objects;
-    $('#obj-note').textContent = counts.grouped ? `objects (${counts.grouped} of ${counts.items} items carry a sighting_id)` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
+    $('#edge-queue').textContent = edge.ok ? `${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)}${edge.itemsDeduped ? ` · ${edge.itemsDeduped} duplicate frames folded on the edge` : ''}` : '';
+    const sightingMode = counts.grouped > 0;
+    $('#obj-img').textContent = sightingMode ? counts.sightingsWithImage : counts.objectsWithImage;
+    $('#obj-all').textContent = sightingMode ? counts.sightings : counts.objects;
+    $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id) · ${counts.items - counts.grouped} object-free frames not counted` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
     $('#policy').textContent = policy ? `“${policy}”` : 'none set';
-    const review = snap.objects.filter(o => !decided.has(o.key) && !o.suppressed);
+    const review = snap.objects.filter(o => !decided.has(o.key) && !o.suppressed && (o.sightingId || !sightingMode));
     $('#review-n').textContent = review.length;
   }
 
@@ -92,9 +93,10 @@
   }
   function objectCard(o) {
     const b = o.best;
-    const label = o.label || 'unknown';
-    const sub = o.subtype ? ` · ${esc(o.subtype)}` : '';
-    const frames = o.sightingId ? `${o.frames} frame${o.frames === 1 ? '' : 's'} seen` : '1 frame';
+    // Zero-shot subtype is the operator-facing name; the detector class stays in the meta line.
+    const label = o.subtype || o.label || 'unknown';
+    const sub = o.subtype && o.label && o.label !== o.subtype ? ` · detector: ${esc(o.label)}` : '';
+    const frames = !o.sightingId ? '1 frame' : o.framesKnown ? `${o.frames} frames seen` : `${o.reports} report${o.reports === 1 ? '' : 's'}`;
     const canPull = !pulling.has(b.id) && b.forms.full?.state !== 'received';
     return `<div class="card ${o.priority} ${o.suppressed ? 'suppressed' : ''}" data-key="${esc(o.key)}">
       ${imageBlock(b)}
@@ -114,11 +116,11 @@
     return `<div class="row ${o.priority} ${d ? 'done' : ''}" data-key="${esc(o.key)}">
       ${imageBlock(b)}
       <div>
-        <div class="title"><span class="label">${esc(o.label || 'unknown')}</span> <span class="tier ${o.priority}">${o.priority}</span> ${d ? `<span class="muted">· ${esc(d)}</span>` : ''}</div>
-        <div class="meta">${o.sightingId ? `sighting ${esc(o.sightingId)} · ${o.frames} frames` : `item ${esc(b.id)}`}${o.subtype ? ` · ${esc(o.subtype)}` : ''} · unknownness ${b.unknownness.toFixed(2)} · ${ago(o.lastMs)}</div>
+        <div class="title"><span class="label">${esc(o.subtype || o.label || 'unknown')}</span> <span class="tier ${o.priority}">${o.priority}</span> ${d ? `<span class="muted">· ${esc(d)}</span>` : ''}</div>
+        <div class="meta">${o.sightingId ? `sighting ${esc(o.sightingId)} · ${o.framesKnown ? `${o.frames} frames` : `${o.reports} reports`}` : `item ${esc(b.id)}`}${o.subtype ? ` · ${esc(o.subtype)}` : ''} · unknownness ${b.unknownness.toFixed(2)} · ${ago(o.lastMs)}</div>
         <div class="forms">${formChips(b)}</div>
         <div class="actions">
-          <button class="btn primary" data-act="confirm" data-key="${esc(o.key)}">Confirm ${esc(o.label || '')}</button>
+          <button class="btn primary" data-act="confirm" data-key="${esc(o.key)}">Confirm ${esc(o.subtype || o.label || '')}</button>
           <button class="btn" data-act="relabel" data-key="${esc(o.key)}" data-id="${esc(b.id)}">Relabel…</button>
           <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full image</button>
           <button class="btn" data-act="escalate" data-key="${esc(o.key)}">Escalate to CDR</button>
@@ -133,13 +135,15 @@
     const objs = snap.objects;
     if (view === 'feed') {
       let list = objs;
+      const onlySightings = $('#only-sightings').checked && snap.counts.grouped > 0;
+      if (onlySightings) list = list.filter(o => o.sightingId);
       if ($('#hide-suppressed').checked) list = list.filter(o => !o.suppressed);
       if ($('#only-image').checked) list = list.filter(o => o.hasImage);
-      $('#feed-note').textContent = `${list.length} objects · newest first`;
+      $('#feed-note').textContent = `${list.length} objects · newest first${onlySightings ? ` · ${objs.length - objs.filter(o => o.sightingId).length} object-free frames hidden` : ''}`;
       $('#feed').innerHTML = list.length ? list.map(objectCard).join('') : '<div class="empty">No items on shore yet. Start the edge and open the link.</div>';
     } else if (view === 'review') {
       const order = { P1: 0, P2: 1, P3: 2, P4: 3 };
-      const list = objs.filter(o => !o.suppressed).sort((a, b) => (decided.has(a.key) - decided.has(b.key)) || (b.unknown - a.unknown) || (order[a.priority] - order[b.priority]) || (b.lastMs - a.lastMs));
+      const list = objs.filter(o => !o.suppressed && (o.sightingId || snap.counts.grouped === 0)).sort((a, b) => (decided.has(a.key) - decided.has(b.key)) || (b.unknown - a.unknown) || (order[a.priority] - order[b.priority]) || (b.lastMs - a.lastMs));
       $('#review').innerHTML = list.length ? list.map(reviewRow).join('') : '<div class="empty">Queue empty.</div>';
     } else {
       const list = objs.filter(o => escalated.has(o.key) || o.priority === 'P1').sort((a, b) => escalated.has(b.key) - escalated.has(a.key) || b.lastMs - a.lastMs);
@@ -194,7 +198,7 @@
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
     render();
   };
-  $('#hide-suppressed').onchange = $('#only-image').onchange = render;
+  $('#hide-suppressed').onchange = $('#only-image').onchange = $('#only-sightings').onchange = render;
 
   // ---- data ----
   function connect() {

@@ -1,16 +1,23 @@
 numpy
 opencv-python-headless
 pyyaml
+scipy
+
+[detect]
+ultralytics>=8.3
+torch
+torchvision
 
 [eval]
 pycocotools
 faster-coco-eval
 trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git
+matplotlib
 
 [gpu]
 torch
 torchvision
-ultralytics
+ultralytics>=8.3
 transformers>=4.50
 timm
 huggingface_hub
@@ -24,3 +31,10 @@ pillow
 onnx
 onnxruntime
 onnxslim
+
+[test]
+pytest
+
+[tracking]
+boxmot>=13
+lap
