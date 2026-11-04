@@ -37,8 +37,9 @@ func TestConditionalBoostMatchesMockupFormula(t *testing.T) {
 	item := Item{Dets: []Detection{detection}}
 	Rescore(&item, "maritime", []Directive{directive})
 
-	weight := catalog.Models["maritime"].W[detection.Class] * 1.15
-	expected := (1 - (1-weight)*.06) * detection.Conf
+	model := catalog.Models["maritime"]
+	weight := 1 - (1-model.W[detection.Class])*(1-model.Lift["approaching"])
+	expected := min(.99, (1-(1-weight)*.06)*ConfFactor(detection.Conf))
 	if math.Abs(item.Central-expected) > 1e-12 {
 		t.Fatalf("central score = %.6f, want %.6f", item.Central, expected)
 	}
@@ -71,5 +72,24 @@ func TestTierForThresholds(t *testing.T) {
 		if got := TierFor(test.score); got != test.tier {
 			t.Errorf("TierFor(%v) = %d, want %d", test.score, got, test.tier)
 		}
+	}
+}
+
+func TestFrameScoreDampsCrowds(t *testing.T) {
+	if got := FrameScore([]float64{.3, .3, .3, .3, .3}); got >= .4 {
+		t.Fatalf("five minor contacts scored %.3f, want to stay near the top contact (< .4)", got)
+	}
+	if got := FrameScore([]float64{.9}); got != .9 {
+		t.Fatalf("single contact = %.3f, want .9", got)
+	}
+	if FrameScore(nil) != 0 {
+		t.Fatal("empty frame should score 0")
+	}
+}
+
+func TestLiftsSkipClutter(t *testing.T) {
+	bird := Detection{Class: "bird", Attrs: Attributes{Approaching: true, Dark: true}}
+	if got := ContactWeight(bird, "maritime"); got != catalog.Models["maritime"].W["bird"] {
+		t.Fatalf("approaching bird weight = %.3f, want unlifted", got)
 	}
 }

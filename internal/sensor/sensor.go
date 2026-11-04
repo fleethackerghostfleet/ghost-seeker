@@ -81,7 +81,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	frame := int(g.frame.Add(int64(rng.Intn(37) + 3)))
 	seed := rng.Uint32()
-	if edge < .2 {
+	if edge < EdgeKeep {
 		return nil, extra
 	}
 	up := 0
@@ -114,6 +114,17 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	command.Rescore(item, model, directives)
 	return item, extra
+}
+
+// EdgeKeep is the on-sensor triage threshold; frames scoring below it are dropped before uplink.
+const EdgeKeep = .2
+
+// Attributes draws simulated track attributes for a detection of the given class.
+func Attributes(rng *rand.Rand, class string) command.Attributes { return makeAttributes(rng, class) }
+
+// EdgeScore is the low-compute on-sensor triage score for a frame's detections.
+func EdgeScore(rng *rand.Rand, detections []command.Detection) float64 {
+	return edgeScore(rng, detections)
 }
 
 func makeAttributes(rng *rand.Rand, class string) command.Attributes {

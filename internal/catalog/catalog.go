@@ -31,6 +31,10 @@ type Model struct {
 	Name string             `json:"name"`
 	Desc string             `json:"desc"`
 	W    map[string]float64 `json:"w"`
+	// Lift raises a contact's weight by closing this share of the gap to 1 when it shows the attribute.
+	Lift map[string]float64 `json:"lift"`
+	// LiftGroups lists the class groups the attribute lifts apply to.
+	LiftGroups []string `json:"liftGroups"`
 }
 
 type LibraryImage struct {
@@ -102,16 +106,22 @@ var Pools = map[string]map[string]float64{
 
 var Models = map[string]Model{
 	"maritime": {
-		Name: "Maritime OOI v1 (default)", Desc: "Default command model. Scores ships, aircraft and other objects of interest; boosts contacts that are approaching or not broadcasting AIS.",
-		W: map[string]float64{"submarine": 1, "warship": .95, "military aircraft": .9, "drone": .85, "person": .8, "helicopter": .7, "small boat": .55, "tanker": .55, "cargo ship": .5, "fishing vessel": .35, "civil aircraft": .35, "debris": .3, "buoy": .08, "bird": .04},
+		Name: "Maritime OOI v2 (default)", Desc: "Default command model. Scores ships, aircraft and other objects of interest; raises contacts that are approaching, loitering or not broadcasting AIS.",
+		W:          map[string]float64{"submarine": 1, "person": 1, "warship": .75, "military aircraft": .75, "drone": .75, "small boat": .55, "helicopter": .55, "debris": .35, "tanker": .3, "cargo ship": .3, "fishing vessel": .3, "civil aircraft": .3, "buoy": .05, "bird": .03},
+		Lift:       map[string]float64{"approaching": .45, "dark": .5, "loitering": .4},
+		LiftGroups: []string{"vessel", "aircraft", "other"},
 	},
 	"air": {
-		Name: "Air Picture Focus", Desc: "Weights airborne contacts (military, rotary, UAS) above surface traffic.",
-		W: map[string]float64{"military aircraft": 1, "drone": .95, "helicopter": .85, "civil aircraft": .6, "submarine": .6, "warship": .55, "small boat": .3, "person": .4, "tanker": .25, "cargo ship": .25, "fishing vessel": .15, "debris": .1, "buoy": .04, "bird": .08},
+		Name: "Air Picture Focus", Desc: "Weights airborne contacts (military, rotary, UAS) above surface traffic; raises aircraft that are approaching or not transponding.",
+		W:          map[string]float64{"military aircraft": 1, "drone": .75, "helicopter": .75, "submarine": .75, "warship": .5, "civil aircraft": .3, "person": .3, "small boat": .2, "tanker": .15, "cargo ship": .15, "fishing vessel": .15, "debris": .1, "bird": .05, "buoy": .03},
+		Lift:       map[string]float64{"approaching": .45, "dark": .8, "loitering": .4},
+		LiftGroups: []string{"aircraft", "other"},
 	},
 	"sar": {
-		Name: "Search & Rescue", Desc: "Prioritizes people in the water, debris and small craft for rescue tasking.",
-		W: map[string]float64{"person": 1, "debris": .85, "small boat": .7, "fishing vessel": .55, "helicopter": .5, "buoy": .2, "warship": .2, "cargo ship": .25, "tanker": .25, "submarine": .2, "military aircraft": .2, "civil aircraft": .2, "drone": .3, "bird": .03},
+		Name: "Search & Rescue", Desc: "Prioritizes people in the water, debris and small craft for rescue tasking; raises drifting or non-reporting craft.",
+		W:          map[string]float64{"person": 1, "debris": .55, "small boat": .5, "helicopter": .45, "fishing vessel": .35, "cargo ship": .2, "tanker": .2, "warship": .15, "submarine": .15, "military aircraft": .15, "civil aircraft": .15, "drone": .2, "buoy": .1, "bird": .03},
+		Lift:       map[string]float64{"dark": .4, "loitering": .5},
+		LiftGroups: []string{"vessel", "other"},
 	},
 }
 
