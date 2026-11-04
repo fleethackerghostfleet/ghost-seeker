@@ -34,7 +34,7 @@ catalog/annotations/<dataset_id>.jsonl  # one row per labelled object (ground tr
 | annotation_format | STRING | upstream format: `coco` \| `yolo` \| `voc` \| `mot` \| `none` \| … |
 | native_classes | ARRAY<STRING> | upstream class names, verbatim |
 | num_images | INT64 | rows in catalog/images for this dataset |
-| num_annotations | INT64 | rows in catalog/annotations for this dataset |
+| num_annotations | INT64 | object boxes in catalog/annotations for this dataset (image-level rows such as SMD `horizon` are excluded) |
 | bytes | INT64 | total bytes under datasets/<id>/ (or frames/ for legacy) |
 | raw_prefix | STRING | gs:// prefix of raw files, null if none |
 | images_prefix | STRING | gs:// prefix of model-ready images |
@@ -55,7 +55,7 @@ catalog/annotations/<dataset_id>.jsonl  # one row per labelled object (ground tr
 | sha256 | STRING | of the stored file |
 | source_ref | STRING | upstream file name, or `<youtube_id>@<second>` for video frames |
 | timestamp_s | FLOAT64 | seconds into source video, null for still images |
-| has_annotations | BOOL | |
+| has_annotations | BOOL | true if the image has ≥1 object box |
 
 `catalog/annotations/<dataset_id>.jsonl` — box format matches `Detection` in dynamic-interest (`box` = [x, y, w, h] in **pixels**, top-left origin)
 | field | type | notes |
