@@ -148,7 +148,7 @@ class EdgemlEngine:
             tracks = src.tracker.update(dets, image_bgr, fi, t_s)
             events = src.agg.update(tracks, image_bgr, fi, t_s)
             base_ms = (captured_ms - int(t_s * 1000)) if captured_ms else int(time.time() * 1000) - int(t_s * 1000)
-            sightings = [self._sighting(ev, fi, W, H, base_ms) for ev in events]
+            sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"])) for ev in events]
             reported = {ev["sighting_id"] for ev in events}
             for tr in tracks:
                 sid = src.agg.track_to_sid.get(tr.track_id)
@@ -169,16 +169,22 @@ class EdgemlEngine:
             resp["embedding"] = [round(float(v), 5) for v in np.asarray(emb).ravel()]
         return resp
 
-    def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int) -> dict:
+    def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int, st=None) -> dict:
         label = ev.get("label") or ""
+        is_key = int(ev.get("best_frame_idx", -1)) == fi and ev["event"] != "close"
+        # The edge crops the frame it holds (this one), so report the object's box in *this* frame unless this frame
+        # is the key frame, where best_box is exactly that.
+        box = ev["best_box"] if is_key or not ev.get("box") else ev["box"]
         out = {"id": ev["sighting_id"], "event": EVENTS[ev["event"]],
-               "keyDetection": {"label": label, "confidence": _f(ev.get("best_score")), "box": _norm_box(ev["best_box"], W, H)},
-               "isKeyFrame": int(ev.get("best_frame_idx", -1)) == fi and ev["event"] != "close",
+               "keyDetection": {"label": label, "confidence": _f(ev.get("best_score")), "box": _norm_box(box, W, H)},
+               "isKeyFrame": is_key, "unknownness": _f(ev.get("unknownness")),
                "subtype": ev.get("subtype") or "", "value": _f(ev.get("value")),
                "forms": [_form_hint(f) for f in (ev.get("forms") or [])],
                "firstSeenUnixMs": str(base_ms + int(float(ev.get("first_t_s", 0.0)) * 1000)),
                "lastSeenUnixMs": str(base_ms + int(float(ev.get("last_t_s", ev.get("t_s", 0.0))) * 1000)),
                "nFrames": int(ev.get("n_frames", 0))}
+        if st is not None and st.emb is not None and ev["event"] in ("open", "update"):
+            out["embedding"] = [round(float(v), 5) for v in np.asarray(st.emb).ravel()]
         return out
 
     def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int) -> dict:
@@ -329,7 +335,8 @@ class MockEngine:
             {"kind": "FORM_KIND_THUMB", "bytes": "4000", "jpegQuality": 55}, {"kind": "FORM_KIND_FULL", "bytes": str(int(image_bgr.nbytes // 20) or 1), "jpegQuality": 80}]
         resp["sightings"] = [{"id": sid, "event": event, "keyDetection": det, "isKeyFrame": key, "subtype": sc.subtype,
                               "value": 0.8 if key else 0.0, "forms": forms, "firstSeenUnixMs": str(now - pos * 200),
-                              "lastSeenUnixMs": str(now), "nFrames": pos + 1}]
+                              "lastSeenUnixMs": str(now), "nFrames": pos + 1, "unknownness": 0.0,
+                              **({"embedding": self._vec(sc.subtype)} if key else {})}]
         return resp
 
     def _vec(self, text: str) -> list[float]:
