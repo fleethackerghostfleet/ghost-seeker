@@ -169,6 +169,25 @@ func TestCropDroppedWhenNotSmallerThanFull(t *testing.T) {
 	}
 }
 
+func TestTransparentPNGFullKept(t *testing.T) {
+	g, st := newIngester(t, DefaultConfig())
+	img := image.NewNRGBA(image.Rect(0, 0, 320, 240))
+	sc := scene(320, 240)
+	for y := 0; y < 240; y++ {
+		for x := 0; x < 320; x++ {
+			c := sc.RGBAAt(x, y)
+			c.A = uint8(x * 255 / 320)
+			img.SetNRGBA(x, y, color.NRGBA(c))
+		}
+	}
+	src := encPNG(t, img)
+	row := ingest(t, g, st, src, nil)
+	full, ff := form(t, st, row, pb.FormKind_FORM_KIND_FULL)
+	if !bytes.Equal(full, src) || ff.Mime != "image/png" {
+		t.Fatalf("transparent PNG should keep original bytes, got mime %s", ff.Mime)
+	}
+}
+
 func TestFullQualityZeroKeepsPNG(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.FullQual = 0

@@ -108,13 +108,17 @@ func cropRect(bounds image.Rectangle, dets []*pb.Detection, pad, minConf float64
 // fullForm keeps the capture's own bytes when they are already a lossy
 // format (re-encoding a JPEG only adds generation loss), and re-encodes
 // anything else (PNG, BMP, ...) as JPEG at FullQual when that is smaller.
-// FullQual <= 0 always keeps the original bytes.
+// FullQual <= 0 always keeps the original bytes, as do captures with
+// transparency (JPEG has no alpha channel).
 func (g *Ingester) fullForm(data []byte, img image.Image) []byte {
 	switch http.DetectContentType(data) {
 	case "image/jpeg", "image/webp":
 		return data
 	}
 	if g.cfg.FullQual <= 0 || img == nil {
+		return data
+	}
+	if o, ok := img.(interface{ Opaque() bool }); ok && !o.Opaque() {
 		return data
 	}
 	enc, err := encodeJPEG(img, g.cfg.FullQual)

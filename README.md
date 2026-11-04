@@ -106,8 +106,8 @@ compression; the scheduler only sees each form's byte count and `Mime`.
 |---|---|---|
 | `FACT` | compact JSON (`internal/fact`) | — |
 | `THUMB` | JPEG, fitted within W×H (aspect kept, never upscaled), CatmullRom downscale; grayscale (IR) stays single-channel | 160×160, q55 (`-thumb-width`, `-thumb-height`, `-thumb-quality`) |
-| `CROP` | JPEG at native resolution of the union of the analyzer's detection boxes, padded per side by a fraction of the box size. Skipped when there are no boxes or the crop would exceed 60% of the frame (FULL is the next useful rung) | pad 0.15, q80 (`-crop-pad`, `-crop-quality`) |
-| `FULL` | JPEG/WebP captures are sent byte-for-byte (re-encoding only adds generation loss); PNG and other formats are re-encoded as JPEG when that is smaller | q90; `-full-quality 0` always sends the original bytes |
+| `CROP` | JPEG at native resolution of the union of the analyzer's detection boxes, padded per side by a fraction of the box size. Skipped when there are no boxes, the crop would exceed 60% of the frame, or it would not be smaller than FULL (FULL is the next useful rung) | pad 0.15, q80 (`-crop-pad`, `-crop-quality`) |
+| `FULL` | JPEG/WebP captures are sent byte-for-byte (re-encoding only adds generation loss); PNG and other formats are re-encoded as JPEG when that is smaller, unless they have transparency (JPEG has no alpha) | q90; `-full-quality 0` always sends the original bytes |
 
 `Mime` is sniffed from each form's bytes when it is stored (`edge/store`), so
 it always matches what was produced; shore stores it per form and serves
