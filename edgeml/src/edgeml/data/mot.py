@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import configparser
 import json
+import re
 import os
 import subprocess
 from collections.abc import Iterator
@@ -163,7 +164,8 @@ def sync_set(root: str, set_name: str, cache: Path = DEFAULT_CACHE, refresh: boo
     """Return a local directory for `<root>/<set_name>`, rsyncing from GCS when needed."""
     if not _is_gcs(root):
         return Path(root).expanduser() / set_name
-    local = cache / set_name
+    root_slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", root.rstrip("/").removeprefix("gs://"))
+    local = cache / root_slug / set_name
     if local.exists() and (local / "index.jsonl").exists() and not refresh:
         return local
     local.mkdir(parents=True, exist_ok=True)
