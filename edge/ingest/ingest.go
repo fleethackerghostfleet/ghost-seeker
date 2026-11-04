@@ -9,10 +9,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash/fnv"
 	"image"
 	"image/jpeg"
 	_ "image/png"
+	"io"
 	"log/slog"
+	"math/rand"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -44,6 +47,7 @@ type Source interface {
 }
 
 type Config struct {
+	EdgeID      string // seeds id entropy; must differ per edge
 	ThumbWidth  int
 	ThumbQual   int
 	KnownLabels []string
@@ -72,7 +76,7 @@ func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Sche
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Ingester{cfg: cfg, st: st, an: an, sch: sch, clk: clk, log: log, ent: ulid.Monotonic(seededReader{}, 0)}
+	return &Ingester{cfg: cfg, st: st, an: an, sch: sch, clk: clk, log: log, ent: ulid.Monotonic(entropyFor(cfg.EdgeID), 0)}
 }
 
 // Run drains a source until done or ctx is cancelled.
@@ -171,13 +175,12 @@ func (g *Ingester) thumb(data []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// seededReader gives ULIDs deterministic entropy per process; uniqueness
-// comes from the monotonic counter + timestamp.
-type seededReader struct{}
-
-func (seededReader) Read(p []byte) (int, error) {
-	for i := range p {
-		p[i] = byte(i*7 + 13)
-	}
-	return len(p), nil
+// entropyFor seeds ULID entropy from the edge id, so two edges capturing
+// in the same millisecond never mint the same id, while a single edge stays
+// deterministic for tests and simulations. Uniqueness within an edge comes
+// from the monotonic counter + timestamp.
+func entropyFor(edgeID string) io.Reader {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(edgeID))
+	return rand.New(rand.NewSource(int64(h.Sum64())))
 }

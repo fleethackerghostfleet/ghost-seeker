@@ -61,7 +61,9 @@ func main() {
 	} else {
 		an = inference.NewRemote(*inferURL)
 	}
-	ing := ingest.New(ingest.DefaultConfig(), st, an, sch, clk, log)
+	icfg := ingest.DefaultConfig()
+	icfg.EdgeID = *id
+	ing := ingest.New(icfg, st, an, sch, clk, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

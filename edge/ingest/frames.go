@@ -39,13 +39,22 @@ func (fs FrameSet) frames() ([]frame, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, f := range zr.File {
+		defer zr.Close()
+		path := fs.Path
+		for i, f := range zr.File {
 			if f.FileInfo().IsDir() || !isImage(f.Name) {
 				continue
 			}
-			f := f
+			i := i
+			// Re-open per read so no descriptor outlives the call; the
+			// central directory is small next to a JPEG decode.
 			out = append(out, frame{name: f.Name, read: func() ([]byte, error) {
-				rc, err := f.Open()
+				zr, err := zip.OpenReader(path)
+				if err != nil {
+					return nil, err
+				}
+				defer zr.Close()
+				rc, err := zr.File[i].Open()
 				if err != nil {
 					return nil, err
 				}

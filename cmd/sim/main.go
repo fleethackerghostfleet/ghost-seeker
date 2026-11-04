@@ -138,7 +138,9 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 		return nil, err
 	}
 	mock := inference.NewMock()
-	ing := ingest.New(ingest.DefaultConfig(), est, mock, sch, clk, nil)
+	icfg := ingest.DefaultConfig()
+	icfg.EdgeID = fmt.Sprintf("edge-%v", strat)
+	ing := ingest.New(icfg, est, mock, sch, clk, nil)
 	src, err := ingest.NewReplay(clk, 0, sc.Sets...)
 	if err != nil {
 		return nil, err
