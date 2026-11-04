@@ -107,59 +107,70 @@ def _iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return inter / (a[:, 2:3] * a[:, 3:4] + (b[:, 2] * b[:, 3])[None] - inter + 1e-9)
 
 
-def match_at_threshold(images, dets_by_image, tau: float, mode: str = "vessel", iou_thr: float = 0.5) -> dict:
-    """Greedy per-image matching of dets with score>=tau. Returns precision/recall overall and recall per bucket,
-    plus GT/FP counts, FP per image, and per-image (tp, fp, fn) for failure mining."""
+def _match_image(im, dets, mode: str, iou_thr: float):
+    """Greedy score-ordered matching once per image. Because dets above any tau are a prefix of the
+    score-sorted list, the greedy result for every tau is a prefix of this one. Returns
+    (scores desc, kind per det: 1=TP, 0=FP, -1=ignored, matched-gt index per det or -1, gt areas, gt ignore mask)."""
+    g_boxes, g_ign = [], []
+    for box, lab in zip(im.boxes, im.labels):
+        a = agnostic(lab)
+        g_boxes.append(box)
+        g_ign.append(a != "vessel" if mode == "vessel" else a is None)
+    g = np.array(g_boxes, dtype=np.float64).reshape(-1, 4)
+    g_ign = np.array(g_ign, dtype=bool)
+    ds = [d for d in dets if agnostic(d.label) is not None and (mode != "vessel" or agnostic(d.label) == "vessel")]
+    ds.sort(key=lambda d: -d.score)
+    scores = np.array([d.score for d in ds], dtype=np.float64)
+    d = np.array([x.box for x in ds], dtype=np.float64).reshape(-1, 4)
+    iou = _iou_matrix(d, g)
+    matched_g = np.zeros(len(g), dtype=bool)
+    kind = np.zeros(len(d), dtype=np.int8)
+    gidx = np.full(len(d), -1, dtype=np.int64)
+    for i in range(len(d)):
+        if len(g):
+            cand = np.where(~matched_g & (iou[i] >= iou_thr))[0]
+            if len(cand):
+                bj = cand[np.argmax(iou[i, cand])]
+                matched_g[bj] = True
+                gidx[i] = bj
+                kind[i] = 0 if g_ign[bj] else 1
+                if g_ign[bj]:
+                    kind[i] = -1
+                continue
+            if (iou[i, g_ign] >= iou_thr).any():
+                kind[i] = -1  # overlaps an ignore region: neither TP nor FP
+                continue
+        kind[i] = 0
+    areas = g[:, 2] * g[:, 3] if len(g) else np.zeros(0)
+    return scores, kind, gidx, areas, g_ign
+
+
+def match_all(images, dets_by_image, mode: str = "vessel", iou_thr: float = 0.5) -> dict:
+    return {im.image_id: _match_image(im, dets_by_image.get(im.image_id, []), mode, iou_thr) for im in images}
+
+
+def summarize(images, matches: dict, tau: float) -> dict:
     tp = fp = 0
     sea_only_n = sea_only_fp = 0  # frames with no (non-ignored) GT: FPs here become false sightings downstream
     gt_n = {k: 0 for k in AREA_BUCKETS}
     gt_hit = {k: 0 for k in AREA_BUCKETS}
     per_image = {}
     for im in images:
-        g_boxes, g_ign = [], []
-        for box, lab in zip(im.boxes, im.labels):
-            a = agnostic(lab)
-            if mode == "vessel":
-                ign = a != "vessel"
-            else:
-                ign = a is None
-            g_boxes.append(box)
-            g_ign.append(ign)
-        g = np.array(g_boxes, dtype=np.float64).reshape(-1, 4)
-        g_ign = np.array(g_ign, dtype=bool)
-        ds = [d for d in dets_by_image.get(im.image_id, [])
-              if d.score >= tau and agnostic(d.label) is not None and (mode != "vessel" or agnostic(d.label) == "vessel")]
-        ds.sort(key=lambda d: -d.score)
-        d = np.array([x.box for x in ds], dtype=np.float64).reshape(-1, 4)
-        iou = _iou_matrix(d, g)
-        matched_g = np.zeros(len(g), dtype=bool)
-        itp = ifp = 0
-        for i in range(len(d)):
-            best, bj = iou_thr, -1
-            for j in range(len(g)):
-                if not matched_g[j] and iou[i, j] >= best:
-                    best, bj = iou[i, j], j
-            if bj >= 0:
-                matched_g[bj] = True
-                if not g_ign[bj]:
-                    itp += 1
-            else:
-                # unmatched det overlapping an ignore region (already matched or not) is neither TP nor FP
-                if len(g) and (iou[i, g_ign] >= iou_thr).any():
-                    continue
-                ifp += 1
+        scores, kind, gidx, areas, g_ign = matches[im.image_id]
+        sel = scores >= tau
+        itp = int((kind[sel] == 1).sum())
+        ifp = int((kind[sel] == 0).sum())
+        hit = np.zeros(len(areas), dtype=bool)
+        hit[gidx[sel & (kind == 1)]] = True
         ifn = 0
-        for j in range(len(g)):
+        for j in range(len(areas)):
             if g_ign[j]:
                 continue
-            area = g[j, 2] * g[j, 3]
             for k, (lo, hi) in AREA_BUCKETS.items():
-                if lo <= area < hi:
+                if lo <= areas[j] < hi:
                     gt_n[k] += 1
-                    if matched_g[j]:
-                        gt_hit[k] += 1
-            if not matched_g[j]:
-                ifn += 1
+                    gt_hit[k] += int(hit[j])
+            ifn += int(not hit[j])
         tp += itp
         fp += ifp
         if not (~g_ign).any():
@@ -177,13 +188,20 @@ def match_at_threshold(images, dets_by_image, tau: float, mode: str = "vessel", 
             "n_gt_by_bucket": gt_n, "per_image": per_image}
 
 
+def match_at_threshold(images, dets_by_image, tau: float, mode: str = "vessel", iou_thr: float = 0.5) -> dict:
+    """Precision/recall at score>=tau (IoU 0.5 greedy matching), recall per area bucket, FP per image and per
+    sea-only frame, plus per-image (tp, fp, fn) for failure mining."""
+    return summarize(images, match_all(images, dets_by_image, mode, iou_thr), tau)
+
+
 def best_threshold(images, dets_by_image, mode="vessel", taus: Iterable[float] = None) -> dict:
     """Pick tau maximising F1 at IoU 0.5 (call on dev only)."""
     taus = list(taus) if taus is not None else [round(x, 2) for x in np.arange(0.05, 0.96, 0.05)]
     best = None
     curve = []
+    matches = match_all(images, dets_by_image, mode)
     for t in taus:
-        m = match_at_threshold(images, dets_by_image, t, mode)
+        m = summarize(images, matches, t)
         curve.append({k: m[k] for k in ("tau", "precision", "recall", "f1", "fp_per_image")})
         if best is None or m["f1"] > best["f1"]:
             best = m
