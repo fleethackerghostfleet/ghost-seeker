@@ -28,6 +28,7 @@ func New(data *store.Store) *Server {
 	s.mux.HandleFunc("GET /api/config", s.config)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
 	s.mux.HandleFunc("POST /api/directives", s.addDirective)
+	s.mux.HandleFunc("POST /api/directives/preview", s.previewDirectives)
 	s.mux.HandleFunc("DELETE /api/directives", s.clearDirectives)
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
@@ -102,7 +103,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Text string `json:"text"`
+		Text  string          `json:"text"`
+		Rules *[]command.Rule `json:"rules"`
 	}
 	if err := decodeJSON(r.Body, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -113,6 +115,13 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rules := command.ParseDirective(body.Text)
+	if body.Rules != nil {
+		rules = *body.Rules
+	}
+	if err := validateRules(rules); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if len(rules) == 0 {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects or behaviors — try ships, aircraft, drones, people, AIS, approaching…")
 		return

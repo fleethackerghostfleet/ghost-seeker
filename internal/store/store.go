@@ -209,6 +209,7 @@ func cloneDirectives(directives []command.Directive) []command.Directive {
 		copyOf[i] = directive
 		copyOf[i].Rules = append([]command.Rule(nil), directive.Rules...)
 		for j := range copyOf[i].Rules {
+			copyOf[i].Rules[j].Sources = append([]string(nil), directive.Rules[j].Sources...)
 			classes := make([]string, len(directive.Rules[j].Classes))
 			copy(classes, directive.Rules[j].Classes)
 			copyOf[i].Rules[j].Classes = classes

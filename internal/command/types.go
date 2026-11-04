@@ -8,6 +8,10 @@ type Rule struct {
 	Attrs       []string `json:"attrs"`
 	Only        bool     `json:"only"`
 	DirectiveID string   `json:"directiveId,omitempty"`
+	Weight      float64  `json:"weight,omitempty"`
+	Sources     []string `json:"sources,omitempty"`
+	WithinMin   int      `json:"withinMin,omitempty"`
+	Edited      bool     `json:"edited,omitempty"`
 }
 
 type Directive struct {
