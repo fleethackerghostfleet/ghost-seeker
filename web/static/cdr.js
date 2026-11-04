@@ -62,7 +62,7 @@ function renderQueue(){
  $('qlist').querySelector('.row.on')?.scrollIntoView({block:'nearest'});
 }
 function renderStage(){
- const it=items.get(view.sel),keep=$('note')?.value;
+ const it=items.get(view.sel),old=$('note'),keep=old&&old.dataset.id===view.sel?old.value:'';
  if(!it){
   $('stage').innerHTML=`<div class="idle"><div class="big">✓</div><b>${view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';return;
  }
@@ -84,7 +84,7 @@ function renderBrief(it){
  <h4>Why it reached you</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||'<li>High command-model score</li>'}</ul>
  <h4>Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
  <h4>Decision</h4>${d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
- `<textarea id="note" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
+ `<textarea id="note" data-id="${it.id}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
  <div class="decs">${Object.entries(DEC).map(([k,v])=>`<button class="dec" data-d="${k}" style="--c:${v.c}"><kbd>${v.k.toUpperCase()}</kbd><b>${v.lab}</b><span>${v.sub}</span></button>`).join('')}</div>`}`;
 }
 function render(){ensureSel();renderKpis();renderQueue();renderStage()}
