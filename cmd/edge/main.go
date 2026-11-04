@@ -47,6 +47,7 @@ func main() {
 	flag.IntVar(&icfg.ThumbQual, "thumb-quality", icfg.ThumbQual, "THUMB JPEG quality 1-100")
 	flag.IntVar(&icfg.CropQual, "crop-quality", icfg.CropQual, "CROP JPEG quality 1-100")
 	flag.Float64Var(&icfg.CropPad, "crop-pad", icfg.CropPad, "CROP padding per side, as a fraction of the detection box size")
+	flag.BoolVar(&icfg.CropUnknowns, "crop-unknowns", icfg.CropUnknowns, "also send CROP for unknown items (default: unknowns skip CROP so the whole frame is kept for training)")
 	flag.IntVar(&icfg.FullQual, "full-quality", icfg.FullQual, "JPEG quality for re-encoding non-JPEG FULL captures (0 = send original bytes)")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))

@@ -188,6 +188,32 @@ func TestTransparentPNGFullKept(t *testing.T) {
 	}
 }
 
+func TestUnknownsSkipCrop(t *testing.T) {
+	src := encPNG(t, scene(640, 480))
+	hints := map[string]string{"label": "small boat", "conf": "0.3", "unknownness": "0.8"}
+
+	g, st := newIngester(t, DefaultConfig())
+	row := ingest(t, g, st, src, hints)
+	if row.Form(pb.FormKind_FORM_KIND_CROP) != nil {
+		t.Fatal("unknown item got a CROP")
+	}
+	form(t, st, row, pb.FormKind_FORM_KIND_THUMB)
+	form(t, st, row, pb.FormKind_FORM_KIND_FULL)
+
+	cfg := DefaultConfig()
+	cfg.CropUnknowns = true
+	g, st = newIngester(t, cfg)
+	if row := ingest(t, g, st, src, hints); row.Form(pb.FormKind_FORM_KIND_CROP) == nil {
+		t.Fatal("CropUnknowns: want a CROP for the unknown item")
+	}
+
+	g, st = newIngester(t, DefaultConfig())
+	hints["unknownness"] = "0.3"
+	if row := ingest(t, g, st, src, hints); row.Form(pb.FormKind_FORM_KIND_CROP) == nil {
+		t.Fatal("known item (unknownness below threshold) should still get a CROP")
+	}
+}
+
 func TestFullQualityZeroKeepsPNG(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.FullQual = 0

@@ -21,6 +21,7 @@ import (
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scheduler"
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/scoring"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
@@ -53,14 +54,28 @@ type Config struct {
 	// CROP: JPEG of the union of detection boxes (confidence >= CropMinConf)
 	// at native resolution, padded by CropPad × box size per side. Skipped
 	// when there are no boxes or the crop exceeds CropMaxArea of the frame.
-	CropQual    int
-	CropPad     float64
-	CropMinConf float64
-	CropMaxArea float64
+	// Unknowns (unknownness >= the policy's UnknownMin) get no CROP unless
+	// CropUnknowns is set: their whole frame is kept for training, so the
+	// ladder goes THUMB → FULL.
+	CropQual     int
+	CropPad      float64
+	CropMinConf  float64
+	CropMaxArea  float64
+	CropUnknowns bool
 	// FULL: JPEG/WebP captures are sent as-is; other formats are re-encoded
 	// as JPEG at FullQual if smaller (<= 0 keeps the original bytes).
 	FullQual    int
 	KnownLabels []string
+}
+
+// unknown reports whether an analyzer unknownness score marks the item
+// unknown under the scheduler's current policy threshold.
+func (g *Ingester) unknown(u float32) bool {
+	min := float32(scoring.DefaultUnknownMin)
+	if t := g.sch.Policy().GetThresholds(); t.GetUnknownMin() > 0 {
+		min = t.GetUnknownMin()
+	}
+	return u >= min
 }
 
 func DefaultConfig() Config {
@@ -145,7 +160,9 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		}
 		full := g.fullForm(c.Data, img)
 		payloads[pb.FormKind_FORM_KIND_FULL] = full
-		if cr, err := g.cropForm(img, resp.Detections); err != nil {
+		if !g.cfg.CropUnknowns && g.unknown(resp.Unknownness) {
+			// No CROP: the whole frame goes as FULL, for training.
+		} else if cr, err := g.cropForm(img, resp.Detections); err != nil {
 			g.log.Warn("crop", "err", err)
 		} else if cr != nil && len(cr) < len(full) {
 			// A CROP no smaller than FULL only delays FULL on the ladder.
