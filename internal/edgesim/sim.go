@@ -192,7 +192,9 @@ func (s *Sensor) Capture(now time.Time) Frame {
 	s.pending = 0
 	for _, d := range dets {
 		det := d.Detection
-		det.Box = catalog.Box{X: d.x / W, Y: d.y / H, W: d.w / W, H: d.h / H}
+		x0, y0 := math.Max(0, d.x), math.Max(0, d.y)
+		x1, y1 := math.Min(W, d.x+d.w), math.Min(H, d.y+d.h)
+		det.Box = catalog.Box{X: x0 / W, Y: y0 / H, W: (x1 - x0) / W, H: (y1 - y0) / H}
 		r.Detections = append(r.Detections, det)
 	}
 	return Frame{Report: r, Image: Render(s.Src, dets, ts, s.frame, hz), Kept: true}
