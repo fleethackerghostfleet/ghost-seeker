@@ -72,6 +72,7 @@ var replaceableForms = []pb.FormKind{pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FO
 // others' reports and the caller still sees the failure.
 // Returns the first item touched this frame, or nil when nothing was stored.
 func (g *Ingester) applySightings(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
+	g.stateful[c.Source] = true
 	var first *store.Row
 	var firstErr error
 	for _, s := range resp.Sightings {
@@ -210,22 +211,36 @@ func setForm(it *pb.Item, nf *pb.Form) {
 	sort.Slice(it.Forms, func(i, j int) bool { return it.Forms[i].Kind < it.Forms[j].Kind })
 }
 
-// sceneItem stores an object-free frame as a FACT+THUMB "scene" item, at
-// most once per SceneEvery per source; every other object-free frame is
-// folded (counted as deduped). Frames with detections but no sighting are
-// the tracker warming up: the OPEN will follow with the key frame, so they
-// fold too. A scene item carries no FULL: shore can pull the next scene.
+// sceneItem handles a frame without sightings in sightings mode.
+//
+// Frames with detections: once the engine has reported a sighting for this
+// source it is stateful, so a detected-but-unreported frame is the tracker
+// warming up and folds (the OPEN follows with the key frame). Until then the
+// engine may be stateless (inference.Mock, an older sidecar) and the frame
+// keeps hash behaviour, so detected images are never lost.
+//
+// Object-free frames become a FACT+THUMB "scene" item at most once per
+// SceneEvery per source; the rest fold (counted as deduped). A scene item
+// carries no FULL: shore can pull the next scene.
 func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
+	if len(resp.Detections) > 0 {
+		if !g.stateful[c.Source] {
+			if row, err := g.existing(ctx, hash); row != nil || err != nil {
+				return row, err
+			}
+			return g.newItem(ctx, c, hash, resp, nil)
+		}
+		atomic.AddInt64(&g.Dups, 1)
+		return nil, nil
+	}
 	ts := c.CapturedAt
 	if ts.IsZero() {
 		ts = g.clk.Now()
 	}
-	last, seen := g.lastScene[c.Source]
-	if len(resp.Detections) > 0 || (seen && ts.Sub(last) < g.cfg.SceneEvery) {
+	if last, seen := g.lastScene[c.Source]; seen && ts.Sub(last) < g.cfg.SceneEvery {
 		atomic.AddInt64(&g.Dups, 1)
 		return nil, nil
 	}
-	g.lastScene[c.Source] = ts
 	tags := maps.Clone(c.Tags)
 	if tags == nil {
 		tags = map[string]string{}
@@ -233,7 +248,11 @@ func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp 
 	tags["event"] = "scene"
 	sc := *c
 	sc.Tags = tags
-	return g.newItem(ctx, &sc, hash, resp, nil, pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB)
+	row, err := g.newItem(ctx, &sc, hash, resp, nil, pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB)
+	if err == nil {
+		g.lastScene[c.Source] = ts
+	}
+	return row, err
 }
 
 func (g *Ingester) rescore(ctx context.Context, id string) (*store.Row, error) {

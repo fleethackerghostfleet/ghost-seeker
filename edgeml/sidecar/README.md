@@ -71,7 +71,8 @@ otherwise a new item with the same `sighting_id`; non-key UPDATE → tags + FACT
 contact report (sighting id, item id, label, subtype, first/last seen, n frames). Frames with **no sighting and no
 detection** (open ocean) become at most one `event=scene` item (FACT+THUMB only, no FULL/CROP) per source per
 `-scene-every` (default 60 s); the rest fold into `items_deduped`, as do frames with detections but no sighting yet
-(tracker warming up — the OPEN follows with the key frame). `-scene-every 0` restores one item per object-free frame.
+(tracker warming up — the OPEN follows with the key frame; this only applies once the engine has reported a sighting
+for that source, so a stateless engine such as `-infer mock` keeps per-frame items for detected frames). `-scene-every 0` restores one item per object-free frame.
 
 Tests: `pytest -q edgeml/tests/test_sidecar.py` (mock engine over real HTTP), `go test ./edge/ingest/` (scripted
 sightings through the state machine).

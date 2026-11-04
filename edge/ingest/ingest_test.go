@@ -247,7 +247,7 @@ func TestSightingErrorsPropagate(t *testing.T) {
 
 func TestSceneThrottle(t *testing.T) {
 	ctx := context.Background()
-	an := &scripted{script: map[int][]*pb.Sighting{7: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "")}},
+	an := &scripted{script: map[int][]*pb.Sighting{6: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "")}},
 		empty: map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 8: true, 9: true}}
 	g, st, clk := newIngester(t, DedupSightings, an)
 	g.cfg.SceneEvery = time.Second
@@ -265,15 +265,15 @@ func TestSceneThrottle(t *testing.T) {
 			t.Fatalf("frame %d: row=%v err=%v", i, row, err)
 		}
 	}
-	// 6: detections but no sighting yet (tracker warming up) -> folded even though the window elapsed
+	// 6: OPEN -> normal sighting item with FULL; the engine is now known to be stateful for cam-a
 	clk.Advance(time.Second)
-	if row, err := g.Ingest(ctx, capture(clk, 6)); err != nil || row != nil {
-		t.Fatalf("warm-up frame: row=%v err=%v", row, err)
-	}
-	// 7: OPEN -> normal sighting item with FULL
-	opened, err := g.Ingest(ctx, capture(clk, 7))
+	opened, err := g.Ingest(ctx, capture(clk, 6))
 	if err != nil || opened == nil || opened.Form(pb.FormKind_FORM_KIND_FULL) == nil {
 		t.Fatalf("open: %v %v", opened, err)
+	}
+	// 7: detections but no sighting (tracker warming up on a new object) -> folded
+	if row, err := g.Ingest(ctx, capture(clk, 7)); err != nil || row != nil {
+		t.Fatalf("warm-up frame: row=%v err=%v", row, err)
 	}
 	// 8: object-free again, window elapsed since scene #1 -> second scene item; 9: folded
 	clk.Advance(time.Second)
@@ -290,6 +290,47 @@ func TestSceneThrottle(t *testing.T) {
 	an.empty[10] = true
 	if row, err := g.Ingest(ctx, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: frameJPEG(10), CapturedAt: clk.Now(), Source: "cam-b"}); err != nil || row == nil {
 		t.Fatalf("other source: %v %v", row, err)
+	}
+}
+
+func TestSceneThrottleStatelessAnalyzer(t *testing.T) {
+	// A stateless engine (inference.Mock, an older sidecar) never reports sightings: detected frames must still
+	// be stored per frame, only object-free frames are throttled.
+	ctx := context.Background()
+	an := &scripted{empty: map[int]bool{2: true, 3: true}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	g.cfg.SceneEvery = time.Minute
+	for i := 1; i <= 4; i++ {
+		if _, err := g.Ingest(ctx, capture(clk, uint8(i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows := items(t, st)
+	if len(rows) != 3 || g.Deduped() != 1 { // frames 1 and 4 (detections) + one scene for 2/3
+		t.Fatalf("items=%d dups=%d, want 3/1", len(rows), g.Deduped())
+	}
+	full := 0
+	for _, r := range rows {
+		if r.Form(pb.FormKind_FORM_KIND_FULL) != nil {
+			full++
+		}
+	}
+	if full != 2 {
+		t.Fatalf("detected frames must keep FULL: %d", full)
+	}
+}
+
+func TestSceneWriteFailureDoesNotAdvanceWindow(t *testing.T) {
+	ctx := context.Background()
+	an := &scripted{empty: map[int]bool{1: true}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	g.cfg.SceneEvery = time.Minute
+	st.Close()
+	if _, err := g.Ingest(ctx, capture(clk, 1)); err == nil {
+		t.Fatal("expected store error")
+	}
+	if _, ok := g.lastScene["cam-a"]; ok {
+		t.Fatal("failed scene must not start the throttle window")
 	}
 }
 

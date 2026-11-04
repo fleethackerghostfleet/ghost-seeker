@@ -92,6 +92,7 @@ type Ingester struct {
 	// new item linked by tags["sighting_id"].
 	sightings map[string]string
 	lastScene map[string]time.Time // source -> captured-at of the last stored scene item
+	stateful  map[string]bool      // source -> the engine has reported sightings for it
 }
 
 func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Scheduler, clk clock.Clock, log *slog.Logger) *Ingester {
@@ -99,7 +100,7 @@ func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Sche
 		log = slog.Default()
 	}
 	return &Ingester{cfg: cfg, st: st, an: an, sch: sch, clk: clk, log: log, ent: ulid.Monotonic(entropyFor(cfg.EdgeID), 0),
-		sightings: map[string]string{}, lastScene: map[string]time.Time{}}
+		sightings: map[string]string{}, lastScene: map[string]time.Time{}, stateful: map[string]bool{}}
 }
 
 // Deduped is safe to read from other goroutines (console GetStatus).
