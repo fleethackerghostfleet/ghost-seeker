@@ -13,7 +13,7 @@ from autolabel_gemini import (
     filter_frame_runaway,
     filter_repeated_boxes,
 )
-from qa_apply import apply, rewrite_attrs
+from qa_apply import apply, apply_sample_provenance, rewrite_attrs
 
 
 def test_box_2d_to_xywh_scales_and_clips():
@@ -129,3 +129,26 @@ def test_qa_apply_box_corrections_and_preserve_no_correction_output(tmp_path):
         (2, 3, "person"),
     ]
     assert gt_path.read_bytes() == original.encode()
+
+
+def test_qa_apply_records_frame_and_box_provenance(tmp_path):
+    seq_dir = tmp_path / "seq_a"
+    gt_dir = seq_dir / "gt"
+    gt_dir.mkdir(parents=True)
+    (gt_dir / "frame_attrs.jsonl").write_text(
+        '{"frame":1,"night_gemini":false}\n{"frame":2,"night_gemini":true}\n'
+    )
+    (gt_dir / "attrs.jsonl").write_text(
+        '{"frame":1,"id":1,"label":"unknown"}\n'
+        '{"frame":2,"id":2,"label":"buoy"}\n'
+    )
+    apply_sample_provenance(seq_dir, {1: "pass"})
+    frame_attrs = [
+        json.loads(line) for line in (gt_dir / "frame_attrs.jsonl").read_text().splitlines()
+    ]
+    attrs = [json.loads(line) for line in (gt_dir / "attrs.jsonl").read_text().splitlines()]
+    assert [(row["qa_reviewed"], row["qa_verdict"]) for row in frame_attrs] == [
+        (True, "pass"),
+        (False, None),
+    ]
+    assert [row["label_source"] for row in attrs] == ["teacher+human", "teacher"]

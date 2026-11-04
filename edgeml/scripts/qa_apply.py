@@ -16,6 +16,7 @@ usage: python qa_apply.py --root <set_dir> --meta <set_dir>/clips_meta.yaml
 
 import argparse
 import configparser
+import csv
 import json
 import shutil
 from collections import defaultdict
@@ -159,6 +160,38 @@ def rewrite_attrs(seq_dir, corr, rows, classes):
     )
 
 
+def apply_sample_provenance(seq_dir: Path, verdicts: dict[int, str]) -> None:
+    frame_attrs_path = seq_dir / "gt" / "frame_attrs.jsonl"
+    frame_attrs = []
+    for line in frame_attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        frame = int(row["frame"])
+        row["qa_reviewed"] = frame in verdicts
+        row["qa_verdict"] = verdicts.get(frame)
+        frame_attrs.append(row)
+    frame_attrs_path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in frame_attrs),
+        encoding="utf-8",
+    )
+
+    attrs_path = seq_dir / "gt" / "attrs.jsonl"
+    attrs = []
+    for line in attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        row["label_source"] = (
+            "teacher+human" if int(row["frame"]) in verdicts else "teacher"
+        )
+        attrs.append(row)
+    attrs_path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in attrs),
+        encoding="utf-8",
+    )
+
+
 def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     teacher = seq_dir / "teacher" / "gt_teacher.txt"
     gt = seq_dir / "gt" / "gt.txt"
@@ -205,8 +238,25 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True, type=Path)
     ap.add_argument("--meta", required=True, type=Path, help="yaml: {seq_id: {viewpoint, platform_motion, sea_state, ...}}")
+    ap.add_argument("--verdicts", type=Path, help="CSV with seq_id, frame, verdict QA results")
     a = ap.parse_args()
     meta = yaml.safe_load(a.meta.read_text())
+    verdicts_by_seq = {}
+    verdict_rows_by_seq = {}
+    if a.verdicts:
+        with a.verdicts.open(encoding="utf-8", newline="") as stream:
+            for row in csv.DictReader(stream):
+                seq_id = row["seq_id"]
+                frame = int(row["frame"])
+                verdict = row["verdict"]
+                if verdict not in {"pass", "fail"}:
+                    raise ValueError(f"invalid QA verdict for {seq_id} frame {frame}: {verdict}")
+                if frame in verdicts_by_seq.setdefault(seq_id, {}):
+                    raise ValueError(f"duplicate QA verdict for {seq_id} frame {frame}")
+                verdicts_by_seq[seq_id][frame] = verdict
+                verdict_rows_by_seq.setdefault(seq_id, []).append(row)
+        repo_root = Path(__file__).resolve().parents[2]
+        verdict_file = str(a.verdicts.expanduser().resolve().relative_to(repo_root))
     entries = []
     for seq_dir in sorted(p for p in a.root.iterdir() if (p / "seqinfo.ini").exists()):
         labels = json.loads((seq_dir / "gt" / "labels.json").read_text())
@@ -216,6 +266,9 @@ def main():
         (seq_dir / "gt" / "gt.txt").write_text("".join(
             f"{f},{i},{x:.1f},{y:.1f},{w:.1f},{h:.1f},{c},{k},{v:.2f}\n" for f, i, x, y, w, h, c, k, v in rows))
         rewrite_attrs(seq_dir, corr or {}, rows, classes)
+        if a.verdicts:
+            sample_verdicts = verdicts_by_seq.get(seq_dir.name, {})
+            apply_sample_provenance(seq_dir, sample_verdicts)
         reviewed = bool(corr.get("reviewed"))
         labels.update({"classes": classes, "label_source": "teacher+human" if reviewed else "teacher",
                        "qa": {"reviewed": reviewed, "drop": corr.get("drop") or [], "merge": corr.get("merge") or {},
@@ -227,6 +280,17 @@ def main():
         for key in ("drop_boxes", "relabel_boxes", "fix_boxes", "add_boxes"):
             if key in corr:
                 labels["qa"][key] = corr[key]
+        if a.verdicts:
+            sample_rows = verdict_rows_by_seq.get(seq_dir.name, [])
+            labels["qa"].update(
+                {
+                    "sample_frames": len(sample_rows),
+                    "pass": sum(row["verdict"] == "pass" for row in sample_rows),
+                    "fail": sum(row["verdict"] == "fail" for row in sample_rows),
+                    "verdict_file": verdict_file,
+                    "method": "lead visual spot-check of contact sheets, edgeml/tools/contact_sheets.py labels",
+                }
+            )
         teacher_rows = read_rows(seq_dir / "teacher" / "gt_teacher.txt")
         (seq_dir / "gt" / "labels.json").write_text(json.dumps(labels, indent=1))
         cp = configparser.ConfigParser()

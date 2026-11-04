@@ -1,0 +1,6 @@
+reviewed: false
+drop_boxes:
+- - 24
+  - 2
+notes: 'QA f24 fail (fp): container box covers quay/cranes/water, not a distinct object
+  -> drop'

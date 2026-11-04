@@ -131,6 +131,9 @@ def catalog_rows(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], list
                 label = classes[str(int(float(class_id)))]
                 class_id_int = int(float(class_id))
                 attr = attr_by_id.get(int(track_id), {})
+                box_label_source = attr.get(
+                    "label_source", labels.get("label_source", "teacher")
+                )
                 annotation_rows.append(
                     {
                         "image_id": image_id,
@@ -141,7 +144,7 @@ def catalog_rows(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], list
                         "conf": float(attr.get("confidence", 1.0)),
                         "source": (
                             "model:gemini-2.5-flash+human"
-                            if labels.get("label_source") == "teacher+human"
+                            if box_label_source == "teacher+human"
                             else "model:gemini-2.5-flash"
                         ),
                         "attrs": json.dumps(
@@ -153,7 +156,7 @@ def catalog_rows(root: Path) -> tuple[dict[str, Any], list[dict[str, Any]], list
                                 "nav_lights_visible": attr.get("nav_lights_visible"),
                                 "approaching": attr.get("approaching"),
                                 "wake": attr.get("wake"),
-                                "label_source": labels.get("label_source", "teacher"),
+                                "label_source": box_label_source,
                                 "class_id": class_id_int,
                             },
                             ensure_ascii=False,

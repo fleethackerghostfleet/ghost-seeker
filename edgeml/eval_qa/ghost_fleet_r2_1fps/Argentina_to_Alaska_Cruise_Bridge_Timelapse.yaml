@@ -1,0 +1,8 @@
+reviewed: false
+notes: 'QA f18 fail (fn): small vessel on horizon ahead not labelled
+
+  QA f47 fail (fn): Valparaiso harbour: several moored boats not labelled
+
+  QA f29 pass (no issue): uncertain: faint specks on horizon
+
+  Argentina f18 and f47 missed-vessel FNs remain unfixed and documented.'
