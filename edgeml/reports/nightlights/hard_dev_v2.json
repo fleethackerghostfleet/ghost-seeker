@@ -4,7 +4,7 @@
     "tier": "hard",
     "night_contacts": 112,
     "gate_images": 136,
-    "day_images": 16,
+    "day_images": 8,
     "twilight_images": 16,
     "light_precision": 0.19760479041916168,
     "light_recall": 0.4049079754601227,

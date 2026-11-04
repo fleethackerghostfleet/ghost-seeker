@@ -68,7 +68,7 @@ def evaluate(data, split, report, tier="easy", version=""):
         examples.append(dict(truth=record, expected=record["rule_id"], result=result))
     contacts = sum(v[1] for v in rules.values())
     metrics = dict(split=split, tier=tier, night_contacts=contacts, gate_images=len(labels),
-                   day_images=sum(not r["night"] for r in labels), twilight_images=sum(r.get("gate_only", False) for r in labels),
+                   day_images=sum(not r["night"] and not r.get("gate_only", False) for r in labels), twilight_images=sum(r.get("gate_only", False) for r in labels),
                    light_precision=matched/predicted if predicted else 0, light_recall=matched/actual if actual else 0,
                    light_counts=dict(correct_colour=matched, predicted=predicted, actual=actual),
                    confusion_matrix=confusion, unmatched_predictions=dict(false_positives), false_positive_sources=dict(fp_sources),

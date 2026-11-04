@@ -51,6 +51,8 @@ Source: [colregs_lights.json](../../internal/catalog/colregs_lights.json). Boost
 
 Night-contact seeds add rule_index×100 + repetition (seven repetitions/rule); day/twilight offsets are 9000/9500. Generated datasets/crops/caches live under gitignored `data/nightlights/`. Hard scenes include tiny one-pixel to 1–3 px lights, defocus/motion blur, bloom/merged points, warm whites, orange reds, cyan greens, white saturated cores, reflections, sodium/white shore and pier rows, moon glints, partial occlusion, noise, JPEG compression and twilight.
 
+Hard summary day-image counts were corrected from 16 to 8 using cached labels only: the 16 twilight images (eight labelled daytime) are counted separately, not again as dedicated day images. Totals remain 112 night contacts + 8 day + 16 twilight = 136 gate cases. Detection, interpretation, confusion and accuracy measurements are unchanged; no detector or Gemini rerun.
+
 Unresolvable direct-light patterns are labeled, never removed: permanent occlusion or one-pixel saturation that destroys direct colour. Radius zero renders one pixel, not a subpixel source. Reflections/context/external distress can still give cues. Occluded emitters are excluded from observable-light recall, but full latent rule accuracy retains all contacts. Low SNR alone is not used to discard cases.
 
 Full-frame light matching requires position within 6 px and correct colour. Wrong colour penalizes precision/recall; unmatched predictions populate the background row. Flashing accuracy counts missed observable lights as errors. Aspect includes unknown labels and is not heading accuracy. Automatic rule accuracy excludes 14 externally signaled distress cases.
@@ -307,7 +309,7 @@ go run ./cmd/bench
 go run ./cmd/ghost-seeker -addr :8090 -auto-cdr 0
 ```
 
-Build/vet/all Go tests pass; parity covers all 15 demo contacts including rule ID, gated boost and low-confidence state. Node: 24 tests pass; Python: 73 tests pass. Ordinary-library regression floors pass.
+Build/vet/all Go tests pass; parity covers all 15 demo contacts including rule ID, gated boost and low-confidence state. Node: 24 tests pass; Python: 74 tests pass. Ordinary-library regression floors pass.
 
 Bench seeds 101,102,103 × 6000 frames; results unchanged from origin/main (3699324), using ordinary Library only. **Bench oracle ≠ field truth**.
 
