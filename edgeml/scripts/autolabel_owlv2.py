@@ -92,15 +92,17 @@ def detect(
 
 
 def read_gemini(seq_dir: Path) -> dict[int, list[list[float]]]:
-    path = seq_dir / "teacher" / "dets.jsonl"
+    path = seq_dir / "gt" / "gt.txt"
     rows = {}
     if not path.exists():
         return rows
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        row = json.loads(line)
-        rows[int(row["frame"])] = [detection["box"] for detection in row.get("detections", [])]
+        frame, _, x, y, width, height, *_ = line.split(",")
+        rows.setdefault(int(frame), []).append(
+            [float(x), float(y), float(width), float(height)]
+        )
     return rows
 
 

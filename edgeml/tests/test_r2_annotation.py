@@ -14,6 +14,7 @@ from autolabel_gemini import (
     filter_repeated_boxes,
     load_v1_responses,
 )
+from autolabel_owlv2 import read_gemini
 from qa_apply import apply, apply_sample_provenance, rewrite_attrs
 
 
@@ -99,6 +100,23 @@ def test_uncached_v1_frames_are_requested_and_cached(tmp_path, monkeypatch):
             "error": "frame 3: request failed",
         }
     ]
+
+
+def test_owlv2_reads_final_gemini_gt(tmp_path):
+    seq_dir = tmp_path / "seq_a"
+    (seq_dir / "gt").mkdir(parents=True)
+    (seq_dir / "teacher").mkdir()
+    (seq_dir / "gt" / "gt.txt").write_text(
+        "1,4,10.0,20.0,30.0,40.0,1,2,1.00\n"
+        "1,5,50.0,60.0,70.0,80.0,1,3,0.50\n"
+    )
+    (seq_dir / "teacher" / "dets.jsonl").write_text(
+        '{"frame":1,"detections":[{"box":[900,900,1,1]}]}\n'
+    )
+
+    assert read_gemini(seq_dir) == {
+        1: [[10.0, 20.0, 30.0, 40.0], [50.0, 60.0, 70.0, 80.0]]
+    }
 
 
 def test_verifier_crop_expands_clips_and_upscales():
