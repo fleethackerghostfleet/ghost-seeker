@@ -9,7 +9,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
 	"time"
 
@@ -208,7 +207,7 @@ func (s *Store) Stats() Stats {
 	return s.statsCopy()
 }
 
-// List returns up to limit of the most recently captured records, optionally for one source.
+// List returns up to limit of the most recently received records, newest first, optionally for one source.
 func (s *Store) List(source string, limit int) []Item {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -218,7 +217,6 @@ func (s *Store) List(source string, limit int) []Item {
 			out = append(out, *s.items[i])
 		}
 	}
-	slices.SortFunc(out, func(a, b Item) int { return int(b.CapturedAt - a.CapturedAt) })
 	return out
 }
 
