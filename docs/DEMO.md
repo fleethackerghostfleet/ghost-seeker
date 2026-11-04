@@ -82,7 +82,7 @@ are local to the browser (localStorage).
 | t | do | say |
 |---|---|---|
 | 0:00 | Stack already running, link preset **2 Mbps**, feed tab. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." Point at the strip: items on edge vs shore are equal, every card has a crop/thumb. |
-| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." Watch the edge queue grow in the strip while *new objects still appear* as cards: fact first (text card), then the crop. Form chips go pending → received. |
+| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." The edge's estimator needs ~30–60 s to re-learn the link (watch "edge estimates" in the strip fall from Mbps to ~10 kbps); then the edge queue grows while *new objects still appear* as cards: fact first (text card), then the crop. Form chips go pending → received. |
 | 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card, 'n frames seen', the subtype, and we know exactly which forms have landed. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
 | 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed), submarines keep arriving. Policy text shows in the strip. |
 | 2:15 | On a submarine card click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. |
