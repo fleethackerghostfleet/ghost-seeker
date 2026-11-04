@@ -11,7 +11,7 @@ function ruleLabel(r){
 /* ---------------- UI ---------------- */
 state.dens='m';state.page='feed';
 const tcol=t=>['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'][t];
-const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 function normalizeItem(item){
  item.ts=new Date(item.ts);item.src=SRC[typeof item.src==='string'?item.src:item.src.id];
  return item;
