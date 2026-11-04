@@ -73,8 +73,49 @@ def _freeze_sincos(model, x):
         for cls in vars(mod).values():  # the encoder calls it as a staticmethod on the class
             if isinstance(cls, type) and "build_2d_sincos_position_embedding" in vars(cls):
                 setattr(cls, "build_2d_sincos_position_embedding", staticmethod(patched))
+    # transformers>=5 wraps the same function in an nn.Module (`encoder.aifi.N.position_embedding`): cache its output too
+    for name, sub in model.named_modules():
+        if name.endswith("position_embedding") and "encoder" in name and not getattr(sub, "_frozen", False):
+            cache = {}
+            orig_fwd = sub.forward
+
+            def fwd(*a, _o=orig_fwd, _c=cache, **k):
+                key = (tuple(str(getattr(v, "shape", v)) for v in a), tuple(sorted((kk, str(getattr(vv, "shape", vv))) for kk, vv in k.items())))
+                if key not in _c:
+                    _c[key] = _o(*a, **k).detach().clone()
+                return _c[key]
+
+            sub.forward = fwd
+            sub._frozen = True
     with torch.no_grad():
         model(pixel_values=x)
+
+
+def _trig_to_f32_if_needed(path: Path):
+    """ORT CPU has no float64 Cos/Sin kernel; if the graph still has them, compute them in float32."""
+    import onnx
+    import onnxruntime as ort
+
+    try:
+        ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        return
+    except Exception as e:  # noqa: BLE001
+        if "Cos" not in str(e) and "Sin" not in str(e):
+            raise
+    m = onnx.load(str(path))
+    nodes = []
+    for n in m.graph.node:
+        if n.op_type in ("Cos", "Sin"):
+            i, o = n.input[0], n.output[0]
+            nodes += [onnx.helper.make_node("Cast", [i], [o + "_in_f32"], to=onnx.TensorProto.FLOAT, name=n.name + "_ci"),
+                      onnx.helper.make_node(n.op_type, [o + "_in_f32"], [o + "_f32"], name=n.name),
+                      onnx.helper.make_node("Cast", [o + "_f32"], [o], to=onnx.TensorProto.DOUBLE, name=n.name + "_co")]
+        else:
+            nodes.append(n)
+    del m.graph.node[:]
+    m.graph.node.extend(nodes)
+    onnx.save(m, str(path))
+    print("rewrote float64 Cos/Sin to float32 in", path)
 
 
 def export_hf(det, imgsz: int, dst: Path) -> dict:
@@ -91,6 +132,14 @@ def export_hf(det, imgsz: int, dst: Path) -> dict:
         onnxslim.slim(str(dst), str(dst))
     except Exception as e:  # noqa: BLE001
         print("onnxslim skipped:", e)
+    _trig_to_f32_if_needed(dst)
+    import onnxruntime as ort
+
+    with torch.no_grad():
+        ref = model(pixel_values=x)
+    sess = ort.InferenceSession(str(dst), providers=["CPUExecutionProvider"])
+    out = sess.run(None, {"pixel_values": x.numpy()})
+    print("onnx vs torch max|d|: logits", float(abs(out[0] - ref.logits.numpy()).max()), "boxes", float(abs(out[1] - ref.pred_boxes.numpy()).max()))
     return {"exporter": "torch.onnx.export", "hf_model_id": det.model_id, "nms_in_graph": False,
             "preprocess": f"resize to {imgsz}x{imgsz} (no letterbox), BGR->RGB, /255, ImageNet-free (RT-DETR/D-FINE use raw 0-1), NCHW fp32",
             "postprocess": "logits [1,Q,nc] sigmoid; pred_boxes [1,Q,4] cxcywh normalized; no NMS needed (set-prediction)"}
