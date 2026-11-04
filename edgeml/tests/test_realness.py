@@ -51,3 +51,19 @@ def test_unknown_gate_emits_material_update_and_value_floor():
     st.s.unknownness = 0
     assert a._value(st) == value_unknown_noise
     assert not st.s.unknown_real
+
+
+def test_real_trajectory_below_unknown_threshold_has_no_unknown_bonus():
+    a = SightingAggregator('known')
+    for i, t, box, score in trajectory():
+        a.update([Track(1, box, score, 'object', i, t)], None, i, t)
+    st = next(iter(a.states.values()))
+    st.s.unknownness = 0
+    baseline = a._value(st)
+    st.s.unknownness = a.p.unknown_threshold - .01
+    assert a._value(st) == baseline
+    assert st.s.realness == pytest.approx(1)
+    assert not st.s.unknown_real
+    st.s.unknownness = a.p.unknown_threshold
+    assert a._value(st) > baseline
+    assert st.s.unknown_real

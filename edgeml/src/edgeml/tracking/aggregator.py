@@ -447,7 +447,7 @@ class SightingAggregator:
         self._refresh_realness(st)
         s = st.s
         size = min(1.0, math.sqrt(max(1.0, s.best_box[2] * s.best_box[3])) / (0.15 * self._W()))
-        unk = s.unknownness if s.realness > 0 and s.realness >= self.p.realness_threshold else 0.0
+        unk = s.unknownness if s.unknown_real else 0.0
         closing = min(1.0, max(0.0, self._growth(st) / 0.3))
         v = 0.5 * s.best_score + 0.2 * unk + 0.2 * size + 0.1 * closing
         if s.unknown_real:
