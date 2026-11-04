@@ -65,6 +65,9 @@ func TestEvictionWhenBacklogIsAllEscalated(t *testing.T) {
 	if _, evicted := data.Add(&command.Item{ID: "new", TS: start.Add(time.Minute)}, 0); evicted != "old" {
 		t.Fatalf("evicted %q, want old (new captures must still be kept)", evicted)
 	}
+	if _, cdr, _ := data.PatchItem("new", nil, nil, nil, nil); cdr != 0 {
+		t.Fatalf("cdr = %d after evicting the only escalated item, want 0", cdr)
+	}
 }
 
 func TestAutoEscalatePicksTopPending(t *testing.T) {

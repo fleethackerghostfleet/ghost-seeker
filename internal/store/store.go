@@ -72,6 +72,9 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 			oldest = oldestIndex(s.items, func(command.Item) bool { return true })
 		}
 		evicted = s.items[oldest].ID
+		if s.items[oldest].Sent {
+			s.cdr--
+		}
 		s.items = append(s.items[:oldest], s.items[oldest+1:]...)
 	}
 	return cloneItem(*item), evicted
