@@ -117,6 +117,7 @@
   {
     "id": "two_mastheads",
     "pattern": {
+      "select": ["white"],
       "layout": "set",
       "colours": [
         "white",
@@ -133,6 +134,8 @@
   {
     "id": "head_on",
     "pattern": {
+      "select": ["red", "green"],
+      "isolated": true,
       "layout": "set",
       "colours": [
         "red",
@@ -149,6 +152,8 @@
   {
     "id": "port",
     "pattern": {
+      "select": ["red", "green"],
+      "isolated": true,
       "layout": "set",
       "colours": [
         "red"
@@ -164,6 +169,8 @@
   {
     "id": "starboard",
     "pattern": {
+      "select": ["red", "green"],
+      "isolated": true,
       "layout": "set",
       "colours": [
         "green"
