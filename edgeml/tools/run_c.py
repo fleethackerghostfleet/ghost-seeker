@@ -23,6 +23,9 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import os
+import platform
+import subprocess
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -68,6 +71,14 @@ def cmd_cache(a):
     seqs = load_sets(data, a.sets, a.split)
     det = make_detector(a.detector, imgsz=a.imgsz, conf=a.conf, device=a.device)
     cache_name = a.name or Path(a.detector).stem           # cache dir / detector label used by `matrix --detectors`
+    settings = {"detector": a.detector, "imgsz": a.imgsz, "conf": a.conf}
+    meta_p = data / "_det_cache" / cache_name / "_meta.json"
+    if meta_p.exists() and not a.force:
+        old = json.loads(meta_p.read_text())
+        if {k: old.get(k) for k in settings} != settings:
+            sys.exit(f"cache {cache_name} was built with {old}; pass --force to rebuild with {settings} or use --name")
+    meta_p.parent.mkdir(parents=True, exist_ok=True)
+    meta_p.write_text(json.dumps({**settings, **_run_meta()}, indent=1))
     for seq in seqs:
         out = det_cache_path(data, cache_name, seq)
         if out.exists() and not a.force:
@@ -115,6 +126,22 @@ def eval_seq(seq: MotSequence, events: list[dict], sighting_tracks, selector_kw:
     return {"sighting": m, "delivery": d}
 
 
+def _run_meta() -> dict:
+    """CONTRACTS §4 run metadata: git revision + hardware."""
+    try:
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=Path(__file__).parent, text=True).strip()
+    except Exception:
+        sha = None
+    cpu = None
+    try:
+        cpu = next(l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name"))
+    except Exception:
+        pass
+    import boxmot, ultralytics
+    return {"git_sha": sha, "host": platform.node(), "machine": platform.machine(), "cpu": cpu, "n_threads": os.cpu_count(),
+            "python": platform.python_version(), "boxmot": boxmot.__version__, "ultralytics": ultralytics.__version__, "gpu": None}
+
+
 def cmd_matrix(a):
     data = Path(a.data).expanduser()
     out = Path(a.out).expanduser()
@@ -124,7 +151,7 @@ def cmd_matrix(a):
     trk_over = json.loads(a.trk) if a.trk else {}
     selector_kw = json.loads(a.selector) if a.selector else None
     print(f"{len(seqs)} sequences: {[s.seq_id for s in seqs]}", flush=True)
-    (out / "config.json").write_text(json.dumps({**vars(a), "agg_params": asdict(AggregatorParams(**agg_over))}, indent=1, default=_json))
+    (out / "config.json").write_text(json.dumps({**vars(a), "agg_params": asdict(AggregatorParams(**agg_over)), **_run_meta()}, indent=1, default=_json))
 
     results = open(out / "results.jsonl", "w")
     per_cfg: dict[str, dict[str, dict]] = {}
