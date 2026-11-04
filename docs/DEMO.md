@@ -1,8 +1,9 @@
 # Ghost Fleet demo runbook
 
-What the audience should take away: **at 9.6 kbps the shore still gets an image of every
-object the ship sees**, because the edge sends one *sighting* per object instead of every
-frame. The operator UI shows this live; `make demo` reproduces it headlessly.
+What the audience should take away: **at 9.6 kbps the shore still gets an image of nearly
+every object the ship sees** (5 of 6 in the committed headless run, vs 0 of 6 naive and 1 of 6
+with image-level dedup; all 6 from 64 kbps up), because the edge sends one *sighting* per
+object instead of every frame. The operator UI shows this live; `make demo` reproduces it headlessly.
 
 Background numbers (edgeml reports C §9 / E headline): tracking + sighting aggregation
 → ~0.2 duplicate reports per object vs ~64 naive / ~6.5 image-level dedup; at 72 KB/min
