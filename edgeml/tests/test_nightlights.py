@@ -32,6 +32,32 @@ def test_colour(h, s, expected):
     assert colour(h, s) == expected
 
 
+def test_boost_requires_complete_pattern():
+    stack = [point("red", y=30), point("red", y=60)]
+    assert interpret(stack, True)["boost"] == .9
+    for extras in [[point("white", x=180)], [point("green", x=180)],
+                   [point("white", x=160), point("green", x=190), point("red", x=20)]]:
+        result = interpret(stack+extras, True)
+        assert result["rule_id"] == "nuc"
+        assert result["boost"] == 0 and result["low_confidence"]
+        assert result["confidence_note"] == "extra unexplained lights — verify, no priority boost"
+    result = interpret(stack+[point("green", x=180)], True, signal="sos")
+    assert result["boost"] == 1 and result["assisted"] and not result["low_confidence"]
+    assert interpret(stack, False)["boost"] == 0
+    assert interpret(stack, True, signal="invalid")["boost"] == 0
+
+
+def test_boost_metric_denominators():
+    module = runpy.run_path(str(Path(__file__).parents[1]/"scripts/nightlights_boost_eval.py"))
+    rules = {r["id"]: r for r in load_rules()}
+    summarize = module["summarize"]
+    result = summarize([dict(truth="head_on", rule_id="nuc", boost=.9),
+                        dict(truth="nuc", rule_id="nuc", boost=0)], rules)
+    assert result["false_boost_rate"] == 1 and result["false_boost_per_contact"] == .5
+    assert result["missed_boost_rate"] == 1
+    assert summarize([], rules)["false_boost_rate"] is None
+
+
 def test_gate_image_and_solar():
     dark = np.zeros((100, 100, 3), np.uint8)
     bright = dark+180

@@ -17,3 +17,9 @@ test('empty patterns, assisted labels, escaping and reduced motion',()=>{
  assert.match(lights.section(value),/signal-assisted/);assert.doesNotMatch(lights.section(value),/<img/);
  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname,'static/lights.css'),'utf8'),/prefers-reduced-motion:reduce/);
 });
+test('partial interpretation is muted and never explains an alert boost',()=>{
+ const value={...item,dets:[{...item.dets[0],sig:{...item.dets[0].sig,lowConfidence:true,boost:0}}]};
+ assert.match(lights.section(value),/light-low-confidence/);assert.match(lights.section(value),/extra unexplained lights — verify, no priority boost/);
+ assert.equal(lights.why(value)[0].c,'light-low-confidence');assert.match(lights.why(value)[0].t,/no priority boost/);
+ assert.match(lights.badge(value),/Lights/);
+});

@@ -182,7 +182,13 @@ def interpret(lights, night, modality="EO", rules=None, signal=None):
             matches = colours == sorted(pattern["colours"])
         flashing = rule["flashing"]
         if matches and (flashing is None or any(p["flashing"] == flashing for p in lights)):
-            return dict(result, rule_id=rule["id"], line=rule["line"], boost=rule["priority_boost"], ref=rule["ref"], severity=rule["severity"])
+            assisted = "signal" in pattern and signal == pattern["signal"]
+            low_confidence = not assisted and colours != sorted(pattern["colours"])
+            return dict(result, rule_id=rule["id"], line=rule["line"],
+                        boost=0.0 if low_confidence else rule["priority_boost"],
+                        ref=rule["ref"], severity=rule["severity"], assisted=assisted,
+                        low_confidence=low_confidence,
+                        confidence_note="extra unexplained lights — verify, no priority boost" if low_confidence else "")
     return result
 
 

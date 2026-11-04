@@ -5,5 +5,6 @@
 .light-flash{animation:nav-light-pulse 1.3s ease-in-out infinite}
 .light-contact{display:flex;align-items:flex-start;margin:12px 0;min-width:0}.light-contact>div{min-width:0;overflow-wrap:anywhere}.light-contact p{margin:5px 0}.light-contact small,.light-caveat{color:var(--muted)}.light-caveat{display:inline-block;border:1px solid var(--border,#405064);border-radius:4px;padding:2px 5px;font-size:10px;margin-top:5px}
 .why .light-pattern{float:left}.why li{overflow-wrap:anywhere}
+.light-low-confidence p,.why li.light-low-confidence{color:var(--muted)}
 @keyframes nav-light-pulse{50%{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.light-flash{animation:none}}

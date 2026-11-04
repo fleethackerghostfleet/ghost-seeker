@@ -44,7 +44,9 @@ type NightDetection struct {
 	Signal         string          `json:"signal"`
 	Assisted       bool            `json:"signal_assisted"`
 	Interpretation struct {
-		RuleID string `json:"rule_id"`
+		RuleID        string  `json:"rule_id"`
+		Boost         float64 `json:"boost"`
+		LowConfidence bool    `json:"low_confidence"`
 	} `json:"interpretation"`
 }
 

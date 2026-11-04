@@ -22,6 +22,9 @@ func TestNightLibraryPythonParity(t *testing.T) {
 				if got != image.Dets[i].Interpretation.RuleID {
 					t.Errorf("%s contact %d: Go %q Python %q", image.File, i, got, image.Dets[i].Interpretation.RuleID)
 				}
+				if det.Signal != nil && (det.Signal.Boost != image.Dets[i].Interpretation.Boost || det.Signal.LowConfidence != image.Dets[i].Interpretation.LowConfidence) {
+					t.Errorf("%s contact %d: Python/Go boost confidence differs", image.File, i)
+				}
 				if image.Dets[i].Assisted && (det.Signal == nil || !det.Signal.Assisted) {
 					t.Errorf("assisted flag lost: %s", image.File)
 				}
@@ -100,6 +103,34 @@ func TestNightLightScoringGate(t *testing.T) {
 }
 
 func boolPointer(value bool) *bool { return &value }
+
+func TestExtraLightsCannotBoost(t *testing.T) {
+	box := Box{W: 200, H: 150}
+	stack := []Light{{Colour: "red", X: 100, Y: 30}, {Colour: "red", X: 100, Y: 60}}
+	for _, extras := range [][]Light{{{Colour: "white", X: 180, Y: 20}}, {{Colour: "green", X: 180, Y: 20}}, {{Colour: "white", X: 160, Y: 20}, {Colour: "green", X: 190, Y: 40}, {Colour: "red", X: 20, Y: 80}}} {
+		lights := append(append([]Light(nil), stack...), extras...)
+		signal := InterpretLights(lights, box, "")
+		if signal == nil || signal.RuleID != "nuc" || !signal.LowConfidence || signal.Boost != 0 || signal.ConfidenceNote != "extra unexplained lights — verify, no priority boost" {
+			t.Fatalf("partial NUC must remain visible but unboosted: %+v", signal)
+		}
+		stale := *signal
+		stale.Boost = .9
+		stale.LowConfidence = false
+		det := Detection{Class: "small boat", Box: box, Conf: 1, Lights: lights, Signal: &stale}
+		if ScoreDet(det, nil, "maritime", true).Light {
+			t.Fatal("stale signal bypassed score gate")
+		}
+		item := Item{SourceID: "EO-P7", Night: boolPointer(true), Dets: []Detection{det}}
+		RescoreAt(&item, "maritime", nil, time.Now())
+		if item.Det[0].Light || !item.Dets[0].Signal.LowConfidence || item.Dets[0].Signal.Boost != 0 {
+			t.Fatal("rescore bypassed confidence gate")
+		}
+		assisted := InterpretLights(lights, box, "sos")
+		if assisted.Boost != 1 || assisted.LowConfidence || !assisted.Assisted {
+			t.Fatal("signal-assisted distress was suppressed")
+		}
+	}
+}
 
 func TestNightJSONOmission(t *testing.T) {
 	encoded, _ := json.Marshal(Item{Dets: []Detection{{}}})

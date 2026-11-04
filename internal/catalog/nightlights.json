@@ -2734,11 +2734,14 @@
             "rule_id": "nuc",
             "aspect": "starboard_side_crossing_left_to_right",
             "line": "Vessel showing red-over-red: not under command \u2014 keep clear",
-            "boost": 0.9,
+            "boost": 0.0,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 27(a)",
-            "severity": "urgent"
+            "severity": "urgent",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
           },
           "truth_rule_id": "head_on",
           "truth_lights": [
@@ -2809,11 +2812,14 @@
             "rule_id": "fishing",
             "aspect": "starboard_side_crossing_left_to_right",
             "line": "Vessel showing red-over-white: fishing other than trawling",
-            "boost": 0.1,
+            "boost": 0.0,
             "masthead_horizontal_offset": 59.19999999999999,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 26(c)",
-            "severity": "advisory"
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
           },
           "truth_rule_id": "port",
           "truth_lights": [
@@ -2877,11 +2883,14 @@
             "rule_id": "two_mastheads",
             "aspect": "starboard_side_crossing_left_to_right",
             "line": "Vessel showing white + white: ambiguous: towing (vertical whites) or power-driven vessel 50 m or longer (forward/aft mastheads); geometry alone is insufficient",
-            "boost": 0,
+            "boost": 0.0,
             "masthead_horizontal_offset": -2.965909090909122,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rules 23(a), 24(a)",
-            "severity": "advisory"
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
           },
           "truth_rule_id": "starboard",
           "truth_lights": [
@@ -3169,7 +3178,10 @@
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 27(a)",
-            "severity": "urgent"
+            "severity": "urgent",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "nuc",
           "truth_lights": [
@@ -3244,7 +3256,10 @@
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 28",
-            "severity": "urgent"
+            "severity": "urgent",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "constrained_draught",
           "truth_lights": [
@@ -3347,11 +3362,14 @@
             "rule_id": "trawling",
             "aspect": "unknown",
             "line": "Vessel showing green-over-white: engaged in trawling",
-            "boost": 0.1,
+            "boost": 0.0,
             "masthead_horizontal_offset": 100.26818181818182,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 26(b)",
-            "severity": "advisory"
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
           },
           "truth_rule_id": "trawling",
           "truth_lights": [
@@ -3470,11 +3488,14 @@
             "rule_id": "fishing",
             "aspect": "unknown",
             "line": "Vessel showing red-over-white: fishing other than trawling",
-            "boost": 0.1,
+            "boost": 0.0,
             "masthead_horizontal_offset": 142.0,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 26(c)",
-            "severity": "advisory"
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
           },
           "truth_rule_id": "fishing",
           "truth_lights": [
@@ -3549,7 +3570,10 @@
             "masthead_horizontal_offset": 13.869565217391255,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 24(a)",
-            "severity": "advisory"
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "pilot",
           "truth_lights": [
@@ -3764,7 +3788,10 @@
             "masthead_horizontal_offset": -0.045454545454532536,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rules 23(a), 24(a)",
-            "severity": "advisory"
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "two_mastheads",
           "truth_lights": [
@@ -3839,7 +3866,10 @@
             "masthead_horizontal_offset": 0.06818181818181301,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 24(a)",
-            "severity": "advisory"
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "tow_long",
           "truth_lights": [
@@ -3910,7 +3940,10 @@
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
-            "severity": "urgent"
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "distress_sos",
           "truth_lights": [
@@ -3994,7 +4027,10 @@
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
-            "severity": "urgent"
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "distress_sos",
           "truth_lights": [
@@ -4091,7 +4127,10 @@
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
-            "severity": "urgent"
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "distress_sos",
           "truth_lights": [
@@ -4175,7 +4214,10 @@
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
-            "severity": "urgent"
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "distress_sos",
           "truth_lights": [

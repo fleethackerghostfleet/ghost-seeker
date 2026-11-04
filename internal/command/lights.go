@@ -16,14 +16,45 @@ type Light struct {
 }
 
 type LightSignal struct {
-	RuleID   string  `json:"ruleId"`
-	Line     string  `json:"line"`
-	Meaning  string  `json:"meaning"`
-	Ref      string  `json:"ref"`
-	Severity string  `json:"severity"`
-	Aspect   string  `json:"aspect"`
-	Boost    float64 `json:"boost"`
-	Assisted bool    `json:"assisted,omitempty"`
+	RuleID         string  `json:"ruleId"`
+	Line           string  `json:"line"`
+	Meaning        string  `json:"meaning"`
+	Ref            string  `json:"ref"`
+	Severity       string  `json:"severity"`
+	Aspect         string  `json:"aspect"`
+	Boost          float64 `json:"boost"`
+	Assisted       bool    `json:"assisted,omitempty"`
+	LowConfidence  bool    `json:"lowConfidence,omitempty"`
+	ConfidenceNote string  `json:"confidenceNote,omitempty"`
+}
+
+func gateLightSignal(lights []Light, signal *LightSignal) *LightSignal {
+	if signal == nil {
+		return nil
+	}
+	for _, rule := range catalog.LightRules {
+		if rule.ID != signal.RuleID {
+			continue
+		}
+		result := *signal
+		colours := make([]string, 0, len(lights))
+		for _, light := range lights {
+			colours = append(colours, light.Colour)
+		}
+		want := append([]string(nil), rule.Pattern.Colours...)
+		slices.Sort(colours)
+		slices.Sort(want)
+		assisted := rule.Pattern.Signal != "" && result.Assisted
+		result.LowConfidence = !assisted && (rule.Pattern.Signal != "" || !slices.Equal(colours, want))
+		result.ConfidenceNote = ""
+		result.Boost = rule.Boost
+		if result.LowConfidence {
+			result.Boost = 0
+			result.ConfidenceNote = "extra unexplained lights — verify, no priority boost"
+		}
+		return &result
+	}
+	return nil
 }
 
 func OpticalNight(item *Item) bool {
@@ -133,7 +164,7 @@ func InterpretLights(lights []Light, box Box, signal string) *LightSignal {
 			matched = slices.ContainsFunc(lights, func(p Light) bool { return p.Flashing == *rule.Flashing })
 		}
 		if matched {
-			return &LightSignal{RuleID: rule.ID, Line: rule.Line, Meaning: rule.Meaning, Ref: rule.Ref, Severity: rule.Severity, Aspect: aspect, Boost: rule.Boost, Assisted: signal != ""}
+			return gateLightSignal(lights, &LightSignal{RuleID: rule.ID, Line: rule.Line, Meaning: rule.Meaning, Ref: rule.Ref, Severity: rule.Severity, Aspect: aspect, Boost: rule.Boost, Assisted: signal != ""})
 		}
 	}
 	return nil
