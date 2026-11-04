@@ -1,5 +1,13 @@
 package catalog
 
+import (
+	_ "embed"
+	"encoding/json"
+)
+
+//go:embed imagery.json
+var imageryJSON []byte
+
 type Source struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
@@ -23,6 +31,37 @@ type Model struct {
 	Name string             `json:"name"`
 	Desc string             `json:"desc"`
 	W    map[string]float64 `json:"w"`
+}
+
+type LibraryImage struct {
+	File string       `json:"file"`
+	Src  string       `json:"src"`
+	Dets []LibraryDet `json:"dets"`
+}
+
+type LibraryDet struct {
+	Cls string `json:"cls"`
+	B   Rect   `json:"b"`
+}
+
+type Rect struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
+}
+
+var Library map[string][]LibraryImage
+
+func init() {
+	var images []LibraryImage
+	if err := json.Unmarshal(imageryJSON, &images); err != nil {
+		panic(err)
+	}
+	Library = make(map[string][]LibraryImage)
+	for _, image := range images {
+		Library[image.Src] = append(Library[image.Src], image)
+	}
 }
 
 var Sources = []Source{

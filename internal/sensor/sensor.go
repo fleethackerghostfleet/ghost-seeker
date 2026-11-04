@@ -38,19 +38,40 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	case "sky":
 		hz = .9
 	}
-	n := weightedPick(rng, map[int]float64{0: .6, 1: 4, 2: 3, 3: 1.3})
-	detections := make([]command.Detection, 0, n)
-	boxes := make([]command.Box, 0, n)
-	for i := 0; i < n; i++ {
-		class := weightedPick(rng, catalog.Pools[source.Scene])
-		box := placeDetection(rng, class, source.Scene, hz, boxes)
-		boxes = append(boxes, box)
-		detections = append(detections, command.Detection{
-			Class: class,
-			Box:   box,
-			Conf:  math.Round(randBetween(rng, .55, .98)*100) / 100,
-			Attrs: makeAttributes(rng, class),
-		})
+	var imageFile string
+	detections := make([]command.Detection, 0)
+	if images := catalog.Library[source.ID]; len(images) > 0 {
+		image := images[rng.Intn(len(images))]
+		imageFile = image.File
+		detections = make([]command.Detection, 0, len(image.Dets))
+		for _, detection := range image.Dets {
+			detections = append(detections, command.Detection{
+				Class: detection.Cls,
+				Box: command.Box{
+					X: detection.B.X,
+					Y: detection.B.Y,
+					W: detection.B.W,
+					H: detection.B.H,
+				},
+				Conf:  math.Round(randBetween(rng, .55, .98)*100) / 100,
+				Attrs: makeAttributes(rng, detection.Cls),
+			})
+		}
+	} else {
+		n := weightedPick(rng, map[int]float64{0: .6, 1: 4, 2: 3, 3: 1.3})
+		detections = make([]command.Detection, 0, n)
+		boxes := make([]command.Box, 0, n)
+		for i := 0; i < n; i++ {
+			class := weightedPick(rng, catalog.Pools[source.Scene])
+			box := placeDetection(rng, class, source.Scene, hz, boxes)
+			boxes = append(boxes, box)
+			detections = append(detections, command.Detection{
+				Class: class,
+				Box:   box,
+				Conf:  math.Round(randBetween(rng, .55, .98)*100) / 100,
+				Attrs: makeAttributes(rng, class),
+			})
+		}
 	}
 	edge := 0.0
 	if len(detections) == 0 {
@@ -76,6 +97,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	item := &command.Item{
 		ID:       fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
+		Img:      imageFile,
 		Frame:    frame,
 		SourceID: source.ID,
 		TS:       ts.Truncate(time.Millisecond),
