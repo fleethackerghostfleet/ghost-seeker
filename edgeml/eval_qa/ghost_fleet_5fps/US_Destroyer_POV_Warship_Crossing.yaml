@@ -1,0 +1,8 @@
+reviewed: true
+drop: [2, 3, 8, 9]
+gt_status: complete
+notes: >-
+  One PLA Navy warship crossing the bow, in frame for all 153 frames (track 1, ship) - verified tile by tile on the
+  contact sheet: tight boxes, no ID switch, box shrinks 126x59 -> 30x35 px as the ship opens range. Tracks 2, 3, 8, 9
+  are all own-platform (USS Chung-Hoon's bow, forward gun mount and deck edge) -> dropped as own-ship false positives.
+  Raw DVIDS footage via Reddit (854x472, no overlays). Same source video as the ghost_fleet_clips test clip of the same name.

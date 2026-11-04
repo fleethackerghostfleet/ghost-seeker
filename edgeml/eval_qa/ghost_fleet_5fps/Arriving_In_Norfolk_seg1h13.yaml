@@ -1,0 +1,17 @@
+reviewed: true
+drop: [2, 3, 8, 19, 20]
+merge:
+  9: [10]
+relabel: {1: ship, 9: buoy, 10: buoy}
+add_tracks:
+  - {id: 9, cls: buoy, keyframes: {157: [1194.0, 686.0, 14.0, 23.0], 195: [1264.0, 708.0, 16.0, 26.0]}}
+gt_status: partial
+notes: >-
+  Same bow camera as seg1h10, segment 01:13:40-01:16:40. Kept: 1 = outbound container ship passing to port
+  (f1-529, relabelled boat -> ship); 9+10 = the red lateral buoy approaching and passing close to starboard
+  (teacher fragments 9 f144-156 and 10 f196-307 merged, relabelled boat -> buoy, 38-frame gap filled by linear
+  interpolation of the end boxes); 21 (f563-569) and 22 (f848-876) = a distant vessel ahead on the horizon (~20x11 px),
+  kept only where the teacher boxed it. Dropped 2, 3, 8, 19, 20 = whole-frame / own-deck cargo boxes (own-platform FPs).
+  PARTIAL because the horizon ahead holds 1-2 further specks (<15 px, see full-frame crops) that cannot be reliably
+  boxed at this resolution and the vessel of tracks 21/22 is almost certainly in frame for longer than labelled;
+  a green channel buoy far to port is also not labelled. Gulls over the stern are ignored.
