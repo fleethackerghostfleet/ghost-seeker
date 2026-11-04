@@ -169,7 +169,11 @@
         toast(`override sent: ${label}`);
       }
       render();
-    } catch (err) { toast(err.message, true); }
+    } catch (err) {
+      if (act === 'pull') pulling.delete(id);
+      toast(err.message, true);
+      render();
+    }
   });
   $('#directive-form').addEventListener('submit', async e => {
     e.preventDefault();
