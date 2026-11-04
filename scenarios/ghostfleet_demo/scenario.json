@@ -1,0 +1,12 @@
+{
+  "name": "ghostfleet_demo",
+  "period_s": 0.2,
+  "sets": [
+    {"path": "frames/Submarine_surfacing/img1", "source": "Submarine_surfacing", "label": "submarine", "conf": 0.78, "unknownness": 0.35},
+    {"path": "frames/Cruise_ship_Mediterranean_sunset_off_Italy/img1", "source": "Cruise_ship_Mediterranean_sunset_off_Italy", "label": "cruise ship", "conf": 0.86, "unknownness": 0.05},
+    {"path": "frames/Spotted_A_Submarine/img1", "source": "Spotted_A_Submarine", "label": "submarine", "conf": 0.74, "unknownness": 0.4}
+  ],
+  "events": [
+    {"at_s": 150, "policy": {"issuedBy": "demo", "text": "ignore cruise ships", "interest": {"suppressLabels": ["cruise ship"]}}}
+  ]
+}

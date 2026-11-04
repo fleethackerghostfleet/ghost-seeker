@@ -5,3 +5,7 @@ sim-results.json
 *.db-wal
 *.db-shm
 __pycache__/
+
+# demo clips are downloaded, never committed
+scenarios/ghostfleet_demo/frames/
+scenarios/ghostfleet_demo/out/

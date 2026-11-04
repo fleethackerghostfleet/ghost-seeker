@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
@@ -39,11 +42,16 @@ type sample struct {
 	UnknownsFull  int64   `json:"unknowns_full"`
 	BytesOnAir    int64   `json:"bytes_on_air"`
 	LinkBps       float64 `json:"link_bps"`
+	// Demo comparison (set when -dedup is used and the clips carry MOT gt).
+	ObjectsWithImage int64 `json:"objects_with_image"`
+	ItemsWithImage   int64 `json:"items_with_image"`
 }
 
 type result struct {
 	Strategy            string           `json:"strategy"`
+	Dedup               string           `json:"dedup,omitempty"`
 	Trace               string           `json:"trace"`
+	LinkBps             float64          `json:"link_bps,omitempty"`
 	DurationS           float64          `json:"duration_s"`
 	Ingested            int64            `json:"ingested"`
 	Unknowns            int64            `json:"unknowns"`
@@ -58,7 +66,19 @@ type result struct {
 	FullAfterPolicy     map[string]int64 `json:"full_after_policy_by_label"`
 	Exchanges           int64            `json:"exchanges"`
 	Failures            int64            `json:"failures"`
+	Skipped             int64            `json:"skipped_frames"`
+	ObjectsTotal        int64            `json:"objects_total"`
+	ObjectsWithImage    int64            `json:"objects_with_image"`
+	ItemsWithImage      int64            `json:"items_with_image"`
+	BytesPerObject      float64          `json:"bytes_per_delivered_object"`
+	AllObjectsAtS       float64          `json:"all_objects_with_image_at_s"` // -1 = never
 	Samples             []sample         `json:"samples"`
+}
+
+type runOpts struct {
+	dedup       string
+	gt          *gtIndex
+	updateEvery time.Duration
 }
 
 func main() {
@@ -70,6 +90,10 @@ func main() {
 	out := flag.String("out", "", "write JSON results here")
 	seed := flag.Int64("seed", 7, "loss seed")
 	sampleEvery := flag.Duration("sample", time.Minute, "metrics sample interval")
+	dedup := flag.String("dedup", "", "demo comparison: comma list of naive|hash|sightings (or 'all'); runs each mode under each -bps rate")
+	bpsList := flag.String("bps", "", "comma list of fixed link rates in bit/s that replace -trace (e.g. 9600,64000,256000,2000000; 0 = link down)")
+	md := flag.String("md", "", "write a markdown summary table here")
+	updateEvery := flag.Duration("sighting-update", 30*time.Second, "sightings mode: refresh an object's image at most this often")
 	flag.Parse()
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
 
@@ -89,16 +113,53 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	var results []result
-	for _, s := range splitComma(*strategies) {
-		r, err := run(scheduler.Strategy(s), tr, sc, *dur, *seed, *sampleEvery)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, s, err)
-			os.Exit(1)
+	traces := []link.Trace{tr}
+	if *bpsList != "" {
+		traces = nil
+		for _, b := range splitComma(*bpsList) {
+			bps, err := strconv.ParseFloat(b, 64)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "bad -bps", b)
+				os.Exit(2)
+			}
+			traces = append(traces, fixedTrace(bps))
 		}
-		results = append(results, *r)
 	}
-	printTable(results)
+	modes := []string{""}
+	var gt *gtIndex
+	if *dedup != "" {
+		modes = splitComma(*dedup)
+		if *dedup == "all" {
+			modes = dedupModes
+		}
+		gt = loadGT(sc.Sets)
+	}
+	var results []result
+	for _, tr := range traces {
+		for _, mode := range modes {
+			for _, s := range splitComma(*strategies) {
+				r, err := run(scheduler.Strategy(s), tr, sc, *dur, *seed, *sampleEvery, runOpts{dedup: mode, gt: gt, updateEvery: *updateEvery})
+				if err != nil {
+					fmt.Fprintln(os.Stderr, s, err)
+					os.Exit(1)
+				}
+				results = append(results, *r)
+			}
+		}
+	}
+	if *dedup != "" {
+		printCompare(os.Stdout, results)
+		if *md != "" {
+			var buf strings.Builder
+			printCompare(&buf, results)
+			if err := os.WriteFile(*md, []byte(buf.String()), 0o644); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		}
+	} else {
+		printTable(results)
+	}
 	if *out != "" {
 		b, _ := json.MarshalIndent(results, "", " ")
 		if err := os.WriteFile(*out, b, 0o644); err != nil {
@@ -108,7 +169,7 @@ func main() {
 	}
 }
 
-func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur time.Duration, seed int64, sampleEvery time.Duration) (*result, error) {
+func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur time.Duration, seed int64, sampleEvery time.Duration, opts runOpts) (*result, error) {
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("", "gs-sim-"+string(strat)+"-")
 	if err != nil {
@@ -141,7 +202,11 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 	icfg := ingest.DefaultConfig()
 	icfg.EdgeID = "sim" // same ids across strategies so results can be joined by item
 	ing := ingest.New(icfg, est, mock, sch, clk, nil)
-	src, err := ingest.NewReplay(clk, 0, sc.Sets...)
+	replay, err := ingest.NewReplay(clk, 0, sc.Sets...)
+	if err != nil {
+		return nil, err
+	}
+	src := newDedup(replay, opts.dedup, opts.gt, clk, opts.updateEvery)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +247,13 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 	nextSample := start
 	events := append([]scenario.Event(nil), sc.Events...)
 	sort.Slice(events, func(i, j int) bool { return events[i].AtS < events[j].AtS })
-	res := &result{Strategy: string(strat), Trace: tr.Name, DurationS: dur.Seconds()}
+	res := &result{Strategy: string(strat), Dedup: opts.dedup, Trace: tr.Name, DurationS: dur.Seconds(), AllObjectsAtS: -1}
+	if len(tr.Windows) == 1 {
+		res.LinkBps = tr.Windows[0].Bps
+	}
+	if opts.gt != nil {
+		res.ObjectsTotal = int64(len(opts.gt.objects))
+	}
 	end := start.Add(dur)
 	srcDone := false
 
@@ -223,6 +294,10 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 			}
 			if done {
 				srcDone = true
+				continue
+			}
+			if c == nil { // dropped by the dedup strategy; the clock still moves
+				nextCapture = nextCapture.Add(period)
 				continue
 			}
 			if _, err := ing.Ingest(ctx, c); err != nil {
@@ -308,12 +383,29 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 	}
 	st := sch.Stats()
 	res.Exchanges, res.Failures, res.BytesOnAir = st.Exchanges, st.Failures, lk.BytesOnAir
+	res.Skipped = src.Skipped
+	if last := res.Samples[len(res.Samples)-1]; true {
+		res.ObjectsWithImage, res.ItemsWithImage = last.ObjectsWithImage, last.ItemsWithImage
+	}
+	if res.ObjectsWithImage > 0 {
+		res.BytesPerObject = float64(res.BytesOnAir) / float64(res.ObjectsWithImage)
+	}
+	for _, smp := range res.Samples {
+		if res.ObjectsTotal > 0 && smp.ObjectsWithImage >= res.ObjectsTotal {
+			res.AllObjectsAtS = smp.T
+			break
+		}
+	}
 	return res, nil
 }
 
 func snapshot(ctx context.Context, t time.Duration, sst *sstore.Store, ingested int64, unknown map[string]bool, lk *link.Sim) sample {
 	s := sample{T: t.Seconds(), Ingested: ingested, BytesOnAir: lk.BytesOnAir, LinkBps: lk.Current().Bps}
 	items, _, err := sst.List(ctx, sstore.ListFilter{Limit: 1 << 20})
+	if err == nil {
+		objs, withImage := deliveredObjects(items)
+		s.ObjectsWithImage, s.ItemsWithImage = int64(len(objs)), withImage
+	}
 	if err != nil {
 		return s
 	}
@@ -395,4 +487,59 @@ func splitComma(s string) []string {
 		out = append(out, cur)
 	}
 	return out
+}
+
+// fixedTrace is a flat link at bps bits/s (0 = down) for the preset sweep.
+func fixedTrace(bps float64) link.Trace {
+	rtt := 120 * time.Millisecond
+	if bps > 0 && bps <= 64_000 {
+		rtt = 600 * time.Millisecond
+	}
+	name := fmt.Sprintf("fixed_%gk", bps/1000)
+	if bps == 0 {
+		name = "fixed_down"
+	}
+	return link.Trace{Name: name, Windows: []link.Window{{Duration: 1000 * time.Hour, Bps: bps, RTT: rtt}}}
+}
+
+// printCompare writes the three-way table: one row per link rate × dedup
+// mode, with unique objects delivered with an image over time.
+func printCompare(w io.Writer, rs []result) {
+	var ts []float64
+	if len(rs) > 0 {
+		for _, smp := range rs[0].Samples {
+			ts = append(ts, smp.T)
+		}
+	}
+	fmt.Fprintf(w, "| link | dedup | strategy | items sent | frames dropped | objects w/ image | all objects at | bytes on air | bytes / delivered object |")
+	for _, t := range ts {
+		fmt.Fprintf(w, " t=%s |", secs(t))
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "|---|---|---|---:|---:|---:|---:|---:|---:|")
+	for range ts {
+		fmt.Fprintf(w, "---:|")
+	}
+	fmt.Fprintln(w)
+	for _, r := range rs {
+		linkName := r.Trace
+		if r.LinkBps > 0 {
+			linkName = fmt.Sprintf("%g kbps", r.LinkBps/1000)
+		} else if len(r.Trace) > 0 && r.Trace == "fixed_down" {
+			linkName = "0 (down)"
+		}
+		all := "never"
+		if r.AllObjectsAtS >= 0 {
+			all = secs(r.AllObjectsAtS)
+		}
+		bpo := "-"
+		if r.BytesPerObject > 0 {
+			bpo = fmt.Sprintf("%.0f KB", r.BytesPerObject/1024)
+		}
+		fmt.Fprintf(w, "| %s | %s | %s | %d | %d | %d/%d | %s | %.0f KB | %s |", linkName, r.Dedup, r.Strategy, r.Ingested, r.Skipped, r.ObjectsWithImage, r.ObjectsTotal, all, float64(r.BytesOnAir)/1024, bpo)
+		for _, smp := range r.Samples {
+			fmt.Fprintf(w, " %d |", smp.ObjectsWithImage)
+		}
+		fmt.Fprintln(w)
+	}
 }

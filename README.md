@@ -131,6 +131,26 @@ Preview adds draft rules on top of active directives without mutating server sta
 
 The [standalone design reference](ui-mockup/reprioritize.html) retains 80 seeded synthetic images and simulated apply; open it directly without a server.
 
+### Live shore mode (`-shore`)
+
+```sh
+go run ./cmd/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081
+```
+
+Backs the same app with a running shore node instead of the generator: `internal/shorebridge`
+polls the shore ConsoleService (`ListItems`/`GetStatus`/`GetPolicy`) once a second and streams
+snapshots to the browser over SSE; `/blob/*` is proxied to shore. Items are grouped into one
+card per `features.tags.sighting_id` (falling back to one card per item), showing the best
+received form (crop > thumb > full, fact text otherwise) and a chip per form
+(fact/thumb/crop/full: offered / pending / partial / received). Directives call shore
+`SetPolicy`, "Pull full image" calls `RequestPull`, "Relabel" calls `OverrideLabel`.
+
+The process also hosts the ship→shore link: `internal/shaper` listens on `-link-listen`
+(default `:18080`) and forwards to shore with a token bucket, so start the edge with
+`-shore http://localhost:18080` and the 0 / 9.6 kbps / 64 kbps / 256 kbps / 2 Mbps buttons
+shape the real traffic. Pass `-link-listen ""` when the link is shaped elsewhere (compose +
+Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for the demo.
+
 ## Status / not done
 
 - Inference: mock + Python stub only. Planned sidecar: ONNX Runtime with the
