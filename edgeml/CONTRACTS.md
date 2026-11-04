@@ -22,9 +22,16 @@ file and explains why.
 - `Sighting` holds one record per object per continuous pass. JSONL, one line per *event*:
   `{sighting_id, clip_id, event: "open"|"update"|"close", t_s, frame_idx, label, label_scores{}, subtype?,
     unknownness, box, best_frame_idx, best_box, best_score, first_t_s, last_t_s, n_frames, track_ids[]}`.
-  `open` is the first report. `update` is sent only on a *material* change (label flip, confidence jump,
-  size/closing change, or new subtype). `close` is sent when the object is gone longer than `close_after_s`.
-  A track re-acquired within `relink_gap_s` that matches by appearance + position continues the same sighting.
+  Optional lookout-report fields (see `reports/literature.md` §7): `bearing_deg` (box centre x + camera FOV, when
+  known), `size_class` (by box-area bucket), `aspect` (bow/stern/beam, if the subtype model can say), `closing`
+  (sign of box-area growth).
+  `open` is the first report. `update` is sent only on a *material* change: a change in `size_class`, `aspect` or
+  `closing`, a label flip, a confidence jump > 0.2, a new subtype, or a best key frame whose quality improves by more
+  than `keyframe_improve_frac` (default 0.3). `close` is sent when the object is gone longer than `close_after_s`.
+  A track re-acquired within `relink_gap_s` that matches by appearance **and** position continues the same sighting;
+  prefer a missed re-link (one extra report) over a wrong one (merging two contacts).
+  Key-frame quality is a cheap proxy, `q = score × sqrt(area) × sharpness × border_margin`; the first frame with
+  `q ≥ q_min` is reported immediately so time-to-first-report is not delayed by waiting for the best shot.
 - Every `open`/`update` event also carries the inputs for the **selection step** (bandwidth-aware, see §5b):
   `value` (0..1, model-agnostic priority estimate from confidence, unknownness, size/closing; operator interest is
   applied later by the scheduler) and
@@ -76,7 +83,7 @@ edgeml/runs/<run_id>/metrics.json
 | Layer | Metrics |
 |---|---|
 | Detection | COCO mAP50, mAP50-95, recall@score≥τ by box-area bucket (tiny <16², small <32², medium, large), class-agnostic "vessel" AP |
-| Tracking | HOTA, IDF1, MOTA, ID switches (TrackEval) |
+| Tracking | HOTA, IDF1, MOTA, ID switches, Frag (TrackEval), plus HOTA at α=0.3 for tiny far boxes |
 | **Sightings (headline)** | **object recall** (GT tracks with ≥1 matched sighting), **duplicates per object** (matched sightings − 1, averaged over GT tracks), **false sightings per minute**, **time-to-first-report** (s after the GT track becomes visible), **reports per object** (open+update events) |
 | Edge cost | ms/frame p50/p95, sustained FPS at a 4-thread cap, peak RSS, model size. Measured on the laptop-proxy VM |
 
@@ -86,8 +93,13 @@ Sighting↔GT matching: a sighting matches the GT track that has the most IoU≥
 Assume a link API reports the bytes available right now (budget per window). **Detection** (this package) emits
 deduplicated sightings with `value` and `forms`. **Selection** picks which forms to send under the budget. This is a
 knapsack over value per byte, with an item's cheaper forms sent before its expensive ones (the Go scheduler already
-ranks `priority × ladder_weight / bytes`). edgeml provides `edgeml.select.greedy(events, budget_bytes)` as the
-reference selector for evaluation only. It must not grow into a second scheduler.
+ranks `priority × ladder_weight / bytes`). edgeml provides
+`edgeml.select.greedy(events, budget_bytes, ladder_decay=(1, 0.5, 0.25, 0.1), max_bytes_per_object=None)` as the
+reference selector for evaluation only. It must not grow into a second scheduler. `ladder_decay` multiplies the value
+of each successive form of the same sighting (fact→crop→thumb→full) so bytes spread across objects before upgrading
+one; `max_bytes_per_object` caps what one sighting may consume in a window. Both exist because plain value/byte
+breaks at 72 KB/min, where a single `full` frame is the whole budget (`reports/literature.md` §2.4); report results
+with and without them.
 
 Headline system metric: **unique GT objects delivered to shore vs budget.** An object counts as delivered when a
 crop or full frame containing it is sent, and separately when a fact is sent. Measure it at windows of 60 s × {9.6 kbps,
