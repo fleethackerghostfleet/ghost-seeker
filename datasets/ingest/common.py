@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import os
@@ -96,6 +97,120 @@ def run_gcloud(*args):
 
 def upload_directory(local_dir, destination_uri):
     run_gcloud("storage", "rsync", "--recursive", str(local_dir), destination_uri)
+
+
+def list_remote_prefix(uri):
+    result = subprocess.run(
+        [GCLOUD, "storage", "ls", uri],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        error = result.stderr.lower()
+        if "matched no objects" in error or "no urls matched" in error:
+            return []
+        raise RuntimeError(f"Could not inspect {uri}: {result.stderr.strip()}")
+    return result.stdout.splitlines()
+
+
+def ensure_raw_matches_or_upload(local_path, raw_uri):
+    local_path = Path(local_path)
+    if not local_path.exists():
+        raise FileNotFoundError(f"Raw source does not exist: {local_path}")
+    dataset_name = (
+        raw_uri.rstrip("/").split("/")[-1]
+        if local_path.is_dir()
+        else raw_uri.rstrip("/").split("/")[-2]
+    )
+    existing = list_remote_prefix(raw_uri)
+    if existing:
+        if local_path.is_dir():
+            result = subprocess.run(
+                [
+                    GCLOUD,
+                    "storage",
+                    "rsync",
+                    "--recursive",
+                    "--dry-run",
+                    str(local_path),
+                    raw_uri,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode:
+                raise RuntimeError(
+                    f"Could not verify raw files for {dataset_name}: "
+                    f"{result.stderr.strip()}"
+                )
+            lines = (result.stdout + "\n" + result.stderr).splitlines()
+            changes = [
+                line
+                for line in lines
+                if line.strip().lower().startswith(
+                    (
+                        "copy ",
+                        "copying ",
+                        "would copy ",
+                        "update ",
+                        "updating ",
+                        "would update ",
+                    )
+                )
+            ]
+            if changes:
+                raise RuntimeError(
+                    f"Existing raw files do not match local source for "
+                    f"{dataset_name}: {changes[0].strip()}"
+                )
+        else:
+            result = subprocess.run(
+                [
+                    GCLOUD,
+                    "storage",
+                    "objects",
+                    "describe",
+                    raw_uri,
+                    "--format=value(md5_hash)",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode:
+                raise RuntimeError(
+                    f"Could not verify raw file for {dataset_name}: "
+                    f"{result.stderr.strip()}"
+                )
+            local_md5 = hashlib.md5()
+            with local_path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    local_md5.update(chunk)
+            expected_md5 = base64.b64encode(local_md5.digest()).decode("ascii")
+            if result.stdout.strip() != expected_md5:
+                raise RuntimeError(
+                    f"Existing raw file does not match local source for {dataset_name}"
+                )
+        print(f"raw matches; skipping upload: {raw_uri}")
+        return False
+
+    if local_path.is_dir():
+        upload_directory(local_path, raw_uri)
+    else:
+        subprocess.run(
+            [
+                GCLOUD,
+                "storage",
+                "cp",
+                "--if-generation-match=0",
+                str(local_path),
+                raw_uri,
+            ],
+            check=True,
+        )
+    return True
 
 
 def _normalized_row(row, fields):

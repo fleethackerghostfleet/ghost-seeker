@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 
 from common import (
     GCLOUD,
+    ensure_raw_matches_or_upload,
     gcs_uri,
     convert_to_jpeg,
     image_size,
@@ -117,10 +118,7 @@ def main():
         if metadata_dir.exists():
             shutil.rmtree(metadata_dir)
 
-        if list_remote_prefix(bucket_raw_prefix):
-            print(f"Raw prefix already exists; skipping raw upload: {bucket_raw_prefix}")
-        else:
-            upload_directory(downloaded_snapshot, bucket_raw_prefix)
+        ensure_raw_matches_or_upload(downloaded_snapshot, bucket_raw_prefix)
 
         classes = load_classes(downloaded_snapshot / "data" / "data.yaml")
         image_rows = []

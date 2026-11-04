@@ -10,11 +10,10 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from common import (
-    GCLOUD,
     convert_to_jpeg,
+    ensure_raw_matches_or_upload,
     gcs_uri,
     image_size,
-    run_gcloud,
     sha256_file,
     upload_directory,
     utc_timestamp,
@@ -27,25 +26,6 @@ ARCHIVE_NAME = "SMD_VIS_Onboard_frames.zip"
 SOURCE_URL = "https://sites.google.com/site/dilipprasad/home/singapore-maritime-dataset"
 DATA_ROOT = Path.home() / "data"
 OVERLAY_ROOT = Path.home() / "verify"
-
-
-def list_gcs(uri):
-    result = subprocess.run(
-        [GCLOUD, "storage", "ls", uri],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode:
-        if "matched no objects" in result.stderr or "No URLs matched" in result.stderr:
-            return []
-        raise RuntimeError(f"Could not list {uri}: {result.stderr.strip()}")
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-
-
-def raw_prefix_has_objects():
-    raw_prefix = gcs_uri(f"raw/{DATASET_ID}/")
-    return bool(list_gcs(raw_prefix))
 
 
 def safe_extract(archive, destination):
@@ -133,7 +113,9 @@ def ingest(archive_path, repository_root):
     archive_path = archive_path.resolve()
     if not archive_path.is_file():
         raise FileNotFoundError(f"SMD archive not found: {archive_path}")
-    raw_prefix_exists = raw_prefix_has_objects()
+    ensure_raw_matches_or_upload(
+        archive_path, gcs_uri(f"raw/{DATASET_ID}/{ARCHIVE_NAME}")
+    )
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="smd-vis-onboard-", dir=DATA_ROOT) as tmp:
@@ -300,18 +282,6 @@ def ingest(archive_path, repository_root):
         }
 
         save_overlays(overlay_samples)
-        if raw_prefix_exists:
-            print(
-                f"Raw prefix already exists; skipping raw upload: "
-                f"{gcs_uri(f'raw/{DATASET_ID}/')}"
-            )
-        else:
-            run_gcloud(
-                "storage",
-                "cp",
-                str(archive_path),
-                gcs_uri(f"raw/{DATASET_ID}/{ARCHIVE_NAME}"),
-            )
         upload_directory(ready_root, gcs_uri(f"datasets/{DATASET_ID}"))
         write_catalog(dataset_row, image_rows, annotation_rows)
         print(
