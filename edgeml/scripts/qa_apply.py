@@ -65,6 +65,100 @@ def interp_keyframes(kf, start, end):
     return out
 
 
+def box_key(value):
+    frame, track_id = value.split(":", 1)
+    return int(frame), int(track_id)
+
+
+def apply_box_corrections(out, corr, name_to_id):
+    drop_boxes = {tuple(map(int, item)) for item in corr.get("drop_boxes") or []}
+    relabel_boxes = {box_key(key): value for key, value in (corr.get("relabel_boxes") or {}).items()}
+    fix_boxes = {box_key(key): value for key, value in (corr.get("fix_boxes") or {}).items()}
+    corrected = []
+    for row in out:
+        frame, track_id = int(row[0]), int(row[1])
+        key = (frame, track_id)
+        if key in drop_boxes:
+            continue
+        if key in relabel_boxes:
+            label = relabel_boxes[key]
+            if label not in name_to_id:
+                name_to_id[label] = max(name_to_id.values(), default=0) + 1
+            row[7] = name_to_id[label]
+        if key in fix_boxes:
+            row[2:6] = list(map(float, fix_boxes[key]))
+        corrected.append(row)
+    for item in corr.get("add_boxes") or []:
+        label = item["cls"]
+        if label not in name_to_id:
+            name_to_id[label] = max(name_to_id.values(), default=0) + 1
+        frame, track_id = int(item["frame"]), int(item["id"])
+        if (frame, track_id) in drop_boxes:
+            continue
+        corrected.append(
+            [frame, track_id, *map(float, item["box"]), 1, name_to_id[label], 1.0]
+        )
+    return corrected
+
+
+def rewrite_attrs(seq_dir, corr, rows, classes):
+    attrs_path = seq_dir / "gt" / "attrs.jsonl"
+    if not attrs_path.exists():
+        return
+    drop = {int(track_id) for track_id in corr.get("drop") or []}
+    remap = {
+        int(old): int(new)
+        for new, olds in (corr.get("merge") or {}).items()
+        for old in olds
+    }
+    trim = {int(track_id): interval for track_id, interval in (corr.get("trim") or {}).items()}
+    relabel = {int(track_id): label for track_id, label in (corr.get("relabel") or {}).items()}
+    relabel_boxes = {
+        box_key(key): value for key, value in (corr.get("relabel_boxes") or {}).items()
+    }
+    class_by_key = {(int(row[0]), int(row[1])): classes[str(int(row[7]))] for row in rows}
+    survivors = set(class_by_key)
+    output = {}
+    original_by_key = {}
+    for line in attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        frame, old_id = int(row["frame"]), int(row["id"])
+        original_by_key[(frame, old_id)] = dict(row)
+        if old_id in drop or (old_id in trim and not (trim[old_id][0] <= frame <= trim[old_id][1])):
+            continue
+        track_id = int(remap.get(old_id, old_id))
+        key = (frame, track_id)
+        if key not in survivors:
+            continue
+        row["id"] = track_id
+        row["label"] = relabel.get(track_id, relabel_boxes.get(key, class_by_key[key]))
+        output[key] = row
+    for frame, track_id in sorted(survivors - output.keys()):
+        mot_row = next(row for row in rows if (int(row[0]), int(row[1])) == (frame, track_id))
+        visibility = {1.0: "full", 0.5: "partial", 0.25: "heavy"}.get(
+            float(mot_row[8]), "heavy"
+        )
+        output[(frame, track_id)] = {
+            "frame": frame,
+            "id": track_id,
+            "label": class_by_key[(frame, track_id)],
+            "nav_lights_visible": False,
+            "lights": [],
+            "approaching": None,
+            "wake": False,
+            "visibility": visibility,
+            "confidence": float(mot_row[6]),
+        }
+    if output == original_by_key and len(original_by_key) == len(survivors):
+        return
+    attrs_path.write_text(
+        "".join(json.dumps(output[key], ensure_ascii=False) + "\n" for key in sorted(output)),
+        encoding="utf-8",
+    )
+
+
 def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     teacher = seq_dir / "teacher" / "gt_teacher.txt"
     gt = seq_dir / "gt" / "gt.txt"
@@ -96,6 +190,7 @@ def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
         boxes = interp_keyframes(kf, min(kf), max(kf))
         for f, (x, y, w, h) in boxes.items():
             out.append([f, int(t["id"]), x, y, w, h, 1, name_to_id[t["cls"]], 1.0 if f in kf else 0.5])
+    out = apply_box_corrections(out, corr, name_to_id)
     # after merges a frame may hold two boxes with the same id: keep the larger box (full object extent), vis breaks ties
     best = {}
     for r in out:
@@ -120,6 +215,7 @@ def main():
         rows, classes = apply(seq_dir, corr or {}, labels["classes"])
         (seq_dir / "gt" / "gt.txt").write_text("".join(
             f"{f},{i},{x:.1f},{y:.1f},{w:.1f},{h:.1f},{c},{k},{v:.2f}\n" for f, i, x, y, w, h, c, k, v in rows))
+        rewrite_attrs(seq_dir, corr or {}, rows, classes)
         reviewed = bool(corr.get("reviewed"))
         labels.update({"classes": classes, "label_source": "teacher+human" if reviewed else "teacher",
                        "qa": {"reviewed": reviewed, "drop": corr.get("drop") or [], "merge": corr.get("merge") or {},
@@ -128,6 +224,9 @@ def main():
                               "same_object_groups": corr.get("same_object_groups") or [],
                               "gt_status": corr.get("gt_status", "complete"),
                               "notes": corr.get("notes", "")}})
+        for key in ("drop_boxes", "relabel_boxes", "fix_boxes", "add_boxes"):
+            if key in corr:
+                labels["qa"][key] = corr[key]
         teacher_rows = read_rows(seq_dir / "teacher" / "gt_teacher.txt")
         (seq_dir / "gt" / "labels.json").write_text(json.dumps(labels, indent=1))
         cp = configparser.ConfigParser()

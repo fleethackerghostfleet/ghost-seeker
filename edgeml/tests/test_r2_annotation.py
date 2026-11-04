@@ -1,0 +1,89 @@
+import json
+import sys
+from pathlib import Path
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from autolabel_gemini import box_2d_to_xywh
+from qa_apply import apply, rewrite_attrs
+
+
+def test_box_2d_to_xywh_scales_and_clips():
+    assert box_2d_to_xywh([100, 200, 500, 600], 1000, 500) == [
+        200.0,
+        50.0,
+        400.0,
+        200.0,
+    ]
+    assert box_2d_to_xywh([900, 900, 1100, 1100], 1000, 500) == [
+        900.0,
+        450.0,
+        100.0,
+        50.0,
+    ]
+    assert box_2d_to_xywh([100, 100, 102, 102], 1000, 500) is None
+    assert box_2d_to_xywh([0, 0, 1000, 700], 1000, 500) is None
+
+
+def _make_sequence(tmp_path):
+    seq_dir = tmp_path / "seq_a"
+    (seq_dir / "teacher").mkdir(parents=True)
+    (seq_dir / "gt").mkdir()
+    (seq_dir / "gt" / "labels.json").write_text(
+        json.dumps({"classes": {"1": "ship", "2": "buoy"}})
+    )
+    teacher_rows = (
+        "1,1,10.0,20.0,30.0,40.0,1,1,1.00\n"
+        "1,2,200.0,200.0,20.0,30.0,1,2,0.50\n"
+    )
+    (seq_dir / "gt" / "gt.txt").write_text(teacher_rows)
+    (seq_dir / "teacher" / "gt_teacher.txt").write_text(teacher_rows)
+    (seq_dir / "gt" / "attrs.jsonl").write_text(
+        '{"frame":1,"id":1,"label":"ship","nav_lights_visible":false,"lights":[],"approaching":null,"wake":false,"visibility":"full","confidence":0.9}\n'
+        '{"frame":1,"id":2,"label":"buoy","nav_lights_visible":false,"lights":[],"approaching":null,"wake":false,"visibility":"partial","confidence":0.8}\n'
+    )
+    return seq_dir, teacher_rows
+
+
+def test_qa_apply_box_corrections_and_preserve_no_correction_output(tmp_path):
+    seq_dir, original = _make_sequence(tmp_path)
+    gt_path = seq_dir / "gt" / "gt.txt"
+    rows, classes = apply(seq_dir, {}, {"1": "ship", "2": "buoy"})
+    assert rows == [
+        [1, 1, 10.0, 20.0, 30.0, 40.0, 1, 1, 1.0],
+        [1, 2, 200.0, 200.0, 20.0, 30.0, 1, 2, 0.5],
+    ]
+    assert classes == {"1": "ship", "2": "buoy"}
+    before_attrs = (seq_dir / "gt" / "attrs.jsonl").read_bytes()
+    rewrite_attrs(seq_dir, {}, rows, classes)
+    assert (seq_dir / "gt" / "attrs.jsonl").read_bytes() == before_attrs
+    formatted = "".join(
+        f"{f},{i},{x:.1f},{y:.1f},{w:.1f},{h:.1f},{c},{k},{v:.2f}\n"
+        for f, i, x, y, w, h, c, k, v in rows
+    )
+    gt_path.write_text(formatted)
+    assert gt_path.read_bytes() == original.encode()
+
+    corrections = {
+        "drop_boxes": [[1, 2]],
+        "relabel_boxes": {"1:1": "tug"},
+        "fix_boxes": {"1:1": [11, 21, 32, 42]},
+        "add_boxes": [{"frame": 2, "id": 3, "cls": "person", "box": [4, 5, 6, 7]}],
+    }
+    rows, classes = apply(seq_dir, corrections, {"1": "ship", "2": "buoy"})
+    assert rows == [
+        [1, 1, 11.0, 21.0, 32.0, 42.0, 1, 3, 1.0],
+        [2, 3, 4.0, 5.0, 6.0, 7.0, 1, 4, 1.0],
+    ]
+    assert classes == {"1": "ship", "2": "buoy", "3": "tug", "4": "person"}
+    rewrite_attrs(seq_dir, corrections, rows, classes)
+    attrs = [
+        json.loads(line)
+        for line in (seq_dir / "gt" / "attrs.jsonl").read_text().splitlines()
+    ]
+    assert [(row["frame"], row["id"], row["label"]) for row in attrs] == [
+        (1, 1, "tug"),
+        (2, 3, "person"),
+    ]
+    assert gt_path.read_bytes() == original.encode()
