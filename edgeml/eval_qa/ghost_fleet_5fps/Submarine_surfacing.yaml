@@ -1,0 +1,7 @@
+reviewed: true
+merge: {1: [14], 8: [11]}
+relabel: {8: submarine, 1: boat}
+notes: >-
+  Two real objects. Tug/escort boat: id 1 (f173-187) and id 14 (f314-372, labelled "ship") are the same boat -> merged into 1
+  (boat). Submarine: id 8 (first surfacing, f290-296) and id 11 (f295-372, labelled "boat") are the same white submarine
+  -> merged into 8, relabelled submarine. Nothing labelled before f173 (submerged / boat out of frame); not hand-checked.

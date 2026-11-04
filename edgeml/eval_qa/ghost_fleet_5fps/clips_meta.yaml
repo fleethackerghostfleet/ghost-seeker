@@ -1,0 +1,13 @@
+# viewpoint / platform_motion / sea_state assigned by eye from the 5 fps overview sheets (inferred, not metadata)
+A_ship_in_the_distance:              {viewpoint: shore_handheld, platform_motion: handheld_static, sea_state: calm, notes: "two tiny ships on horizon; beach foreground"}
+Canadian_Coast_Guard_Helicopter_Landing: {viewpoint: aerial_helicopter, platform_motion: aircraft_approach, sea_state: calm, notes: "helicopter approaching/landing on CCGS vessel; own-platform structure in frame"}
+Chase_N_Fish_Sharky:                 {viewpoint: onboard_small_boat, platform_motion: small_boat_moderate, sea_state: slight_chop_glare, notes: "shark fins + one small boat; vertical phone video with overlays"}
+Cruise_ship_Mediterranean_sunset_off_Italy: {viewpoint: onboard_cruise_ship, platform_motion: large_ship_slow, sea_state: moderate_swell, notes: "one distant ship at sunset; vertical video"}
+Dolphin_from_far_distance_in_Bay_of_Bengal: {viewpoint: onboard_ship_downlook, platform_motion: large_ship_underway, sea_state: calm, notes: "dolphins near hull; own-ship deck in some frames"}
+Far_away_but_did_you_see_that_splash: {viewpoint: onboard_small_boat, platform_motion: small_boat_slow, sea_state: calm_harbour, notes: "dolphin splashes far away; person in first frames"}
+Sailing_POV_Corfu_Paxos:             {viewpoint: onboard_sailboat, platform_motion: sailboat_underway, sea_state: calm, notes: "coastline + distant boats; pans down to water"}
+Ship_in_the_Distance_Ian:            {viewpoint: onboard_ship, platform_motion: large_ship_slow, sea_state: moderate_whitecaps, notes: "one ship on horizon, stable framing"}
+Ship_in_the_Distance_Utopia_of_the_Seas: {viewpoint: shore_handheld, platform_motion: handheld_zoom, sea_state: calm, notes: "cruise ship + tug far away; heavy zoom changes"}
+Spotted_A_Submarine:                 {viewpoint: onboard_small_boat, platform_motion: small_boat_underway, sea_state: calm, notes: "submarine on surface, long pass; YouTube end-card overlays in last frames"}
+Submarine_surfacing:                 {viewpoint: onboard_small_boat, platform_motion: small_boat_moderate, sea_state: calm_swell, notes: "submarine far then near; land in background"}
+Two_Dolphins_near_the_coast_of_Gibraltar: {viewpoint: onboard_ship_bow_downlook, platform_motion: large_ship_underway, sea_state: calm, notes: "two dolphins near bow; own-ship bow in frame"}

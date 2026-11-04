@@ -123,7 +123,10 @@ def main():
                        "qa": {"reviewed": reviewed, "drop": corr.get("drop") or [], "merge": corr.get("merge") or {},
                               "relabel": corr.get("relabel") or {}, "trim": corr.get("trim") or {},
                               "added_tracks": [t["id"] for t in corr.get("add_tracks") or []],
+                              "same_object_groups": corr.get("same_object_groups") or [],
+                              "gt_status": corr.get("gt_status", "complete"),
                               "notes": corr.get("notes", "")}})
+        teacher_rows = read_rows(seq_dir / "teacher" / "gt_teacher.txt")
         (seq_dir / "gt" / "labels.json").write_text(json.dumps(labels, indent=1))
         cp = configparser.ConfigParser()
         cp.read(seq_dir / "seqinfo.ini")
@@ -131,6 +134,8 @@ def main():
         m = meta.get(seq_dir.name, {})
         seq = MOTSequence(seq_dir)
         errs = validate_sequence(seq)
+        if not rows and (reviewed or corr.get("gt_status") == "incomplete"):
+            errs = [e for e in errs if "gt.txt empty" not in e]  # declared zero-GT sequence
         if errs:
             print(seq_dir.name, "INVALID", errs)
         st = seq.stats()
@@ -143,7 +148,12 @@ def main():
              "width": int(s["imWidth"]), "height": int(s["imHeight"]),
              "viewpoint": m.get("viewpoint", "unknown"), "platform_motion": m.get("platform_motion", "unknown"),
              "sea_state": m.get("sea_state", "unknown"), "label_source": labels["label_source"],
-             "classes": sorted(set(classes.values())), "box_area_px_median": st.get("box_area_px_median"),
+             "classes": sorted({classes[str(r[7])] for r in rows}), "box_area_px_median": st.get("box_area_px_median"),
+             "gt_status": corr.get("gt_status", "complete"),
+             "n_tracks_teacher": len({r[1] for r in teacher_rows}), "n_boxes_teacher": len(teacher_rows),
+             "qa_dropped_tracks": len(corr.get("drop") or []),
+             "qa_merged_tracks": sum(len(v) for v in (corr.get("merge") or {}).values()),
+             "qa_added_tracks": len(corr.get("add_tracks") or []),
              "license": s.get("license", ""), "upstream": s.get("source_url", m.get("source_url", "")),
              "notes": m.get("notes", "")}
         entries.append(e)

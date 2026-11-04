@@ -1,0 +1,7 @@
+reviewed: true
+drop: [30]
+merge: {27: [29]}
+notes: >-
+  27 (frames 43-57) and 29 (59-75) are the same cruise ship before/after a zoom cut -> merged into 27 (one continuous pass).
+  30 ("boat", 229x53) is a duplicate box on the cruise ship's hull/waterline -> dropped. 31 = tug alongside, real, kept.
+  Frames 1-42 (heavier zoom-out, ship ~40 px) have no boxes -> missed.

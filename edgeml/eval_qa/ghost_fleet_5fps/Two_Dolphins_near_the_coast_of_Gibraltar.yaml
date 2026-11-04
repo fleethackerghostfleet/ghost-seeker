@@ -1,0 +1,27 @@
+reviewed: true
+notes: >-
+  Teacher found 0 tracks (dolphins are ~20x40 px dark shapes, airborne for <1 s). Human-added from a dark-blob finder
+  (local background subtraction, rows 250-900) verified on frame crops 7 and 32: one dolphin leaping at right (frames 6-11),
+  two dolphins leaping together (frames 29-32). Leaps between those frames were not found by the finder and were not
+  hand-checked frame by frame, so additional brief surfacings may be unlabelled (treat extra detections in frames 12-28,
+  33-63 with caution). Boxes are blob extents +6 px.
+add_tracks:
+  - id: 1
+    cls: dolphin
+    keyframes:
+      6: [785, 436, 27, 39]
+      7: [796, 435, 26, 29]
+      8: [797, 444, 34, 30]
+      11: [788, 521, 41, 28]
+  - id: 2
+    cls: dolphin
+    keyframes:
+      29: [346, 461, 30, 41]
+      30: [335, 469, 28, 37]
+      32: [314, 503, 49, 47]
+  - id: 3
+    cls: dolphin
+    keyframes:
+      29: [552, 559, 27, 49]
+      30: [543, 570, 33, 37]
+      32: [540, 610, 42, 27]
