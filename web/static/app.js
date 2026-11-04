@@ -47,7 +47,7 @@ function applySnapshot(data){
  state.model=data.state.model;state.directives=data.state.directives;
  stats=data.stats;cdr=data.cdr;weightData=data.weights||{};
  state.sel=items.some(item=>item.id===selection)?selection:null;
- if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML=''}
+ if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML='';closeZoom()}
  rv.cur=rv.cur&&items.find(item=>item.id===rv.cur.id)||null;
  renderAll();
 }
