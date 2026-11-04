@@ -37,7 +37,8 @@ def ann(fn):
            'generationConfig':dict({'responseMimeType':'application/json','temperature':0,'maxOutputTokens':4096},**({'thinkingConfig':{'thinkingBudget':0}} if 'flash' in os.environ.get('MODEL','') else {}))})
    txt=''.join(p.get('text','') for p in d['candidates'][0]['content']['parts'])
    try: objs=json.loads(txt); break
-   except Exception as e: print('badjson',base,e,file=sys.stderr); objs=[]
+   except Exception as e: print('badjson',base,e,file=sys.stderr)
+  else: print('skip',base,'(no valid JSON; keeping previous entry)',file=sys.stderr); return None
   dets=[]
   for o in objs:
     if not isinstance(o,dict) or o.get('label') not in cls or len(o.get('box_2d') or [])!=4: continue
@@ -53,5 +54,6 @@ if len(sys.argv)>1: files=[f for f in files if any(a in f for a in sys.argv[1:])
 prev={}
 if os.path.exists(f'{G}/'+os.environ.get('LIB','library.json')): prev={e['file']:e for e in json.load(open(f'{G}/'+os.environ.get('LIB','library.json')))}
 with cf.ThreadPoolExecutor(6) as ex: res=list(ex.map(ann,files))
-for r in res: prev[r['file']]=r
+for r in res:
+  if r: prev[r['file']]=r
 json.dump(sorted(prev.values(),key=lambda e:e['file']),open(f'{G}/'+os.environ.get('LIB','library.json'),'w'),indent=1)
