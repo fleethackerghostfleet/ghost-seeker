@@ -1,6 +1,5 @@
 """Workstream B: label mapping, class-agnostic matching/summary, horizon-band tiling (no model weights needed)."""
 import numpy as np
-
 from edgeml.data.catalog import EvalImage
 from edgeml.detectors.labels import agnostic, is_vessel_gt
 from edgeml.detectors.tiled import HorizonBandDetector
@@ -51,5 +50,9 @@ def test_horizon_band_uses_horizon_and_merges_nothing_on_empty():
     img = np.zeros((1080, 1920, 3), np.uint8)
     assert det.detect(img) == []
     assert det.last_horizon_y == 540
-    assert len(list(det.crops(img))) == 4  # full frame + 3 band tiles
+    tiles = list(det.crops(img))  # band tiles only; the full-frame pass is separate
+    assert len(tiles) == 3 and tiles[0][0] == 0 and tiles[-1][2] == 1920
+    for x0, y0, x1, y1 in tiles:
+        assert (y0, y1) == (432, 648) and x0 < x1  # band = 0.2*H centred on the horizon
+    assert tiles[0][2] > tiles[1][0]  # neighbours overlap
     assert "hband20x3" in det.name
