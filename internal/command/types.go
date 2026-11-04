@@ -63,27 +63,32 @@ type Latency struct {
 }
 
 type Item struct {
-	ID          string           `json:"id"`
-	DBID        int              `json:"dbId"`
-	Frame       int              `json:"frame"`
-	SourceID    string           `json:"src"`
-	TS          time.Time        `json:"ts"`
-	Seed        uint32           `json:"seed"`
-	HZ          float64          `json:"hz"`
-	KB          int              `json:"kb"`
-	Edge        float64          `json:"edge"`
-	Central     float64          `json:"central"`
-	Base        float64          `json:"base"`
-	CentralTier int              `json:"centralTier"`
-	BaseTier    int              `json:"baseTier"`
-	Tier        int              `json:"tier"`
-	Manual      int              `json:"manual"`
-	Reviewed    bool             `json:"reviewed"`
-	Dismissed   bool             `json:"dismissed"`
-	Sent        bool             `json:"sent"`
-	Lat         Latency          `json:"lat"`
-	Dets        []Detection      `json:"dets"`
-	Det         []DetectionScore `json:"det"`
+	ID          string     `json:"id"`
+	DBID        int        `json:"dbId"`
+	Frame       int        `json:"frame"`
+	SourceID    string     `json:"src"`
+	TS          time.Time  `json:"ts"`
+	Seed        uint32     `json:"seed"`
+	HZ          float64    `json:"hz"`
+	KB          int        `json:"kb"`
+	Edge        float64    `json:"edge"`
+	Central     float64    `json:"central"`
+	Base        float64    `json:"base"`
+	CentralTier int        `json:"centralTier"`
+	BaseTier    int        `json:"baseTier"`
+	Tier        int        `json:"tier"`
+	Manual      int        `json:"manual"`
+	Reviewed    bool       `json:"reviewed"`
+	Dismissed   bool       `json:"dismissed"`
+	Sent        bool       `json:"sent"`
+	SentAt      *time.Time `json:"sentAt,omitempty"`
+	// Commander's final decision on an image the watch floor escalated.
+	Decision     string           `json:"decision,omitempty"`
+	DecisionNote string           `json:"decisionNote,omitempty"`
+	DecidedAt    *time.Time       `json:"decidedAt,omitempty"`
+	Lat          Latency          `json:"lat"`
+	Dets         []Detection      `json:"dets"`
+	Det          []DetectionScore `json:"det"`
 }
 
 type Stats struct {

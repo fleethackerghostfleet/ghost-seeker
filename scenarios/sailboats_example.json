@@ -1,0 +1,13 @@
+{
+  "name": "sailboat lane demo (fill in dataset paths)",
+  "period_s": 10,
+  "sets": [
+    {"Path": "../frames/Cargo_Ship_Uncut_View_frames.zip", "Source": "cam-fwd", "Label": "cargo ship", "Conf": 0.92, "Every": 60, "Limit": 150},
+    {"Path": "/path/to/sailboats", "Source": "cam-port", "Label": "sailboat", "Conf": 0.9, "Every": 1, "Limit": 200},
+    {"Path": "../frames/Dolphins_Pungo_Ferry_Bridge_frames.zip", "Source": "cam-port", "Unknownness": 0.9, "Truth": "dolphin"}
+  ],
+  "events": [
+    {"at_s": 900, "policy": {"issuedBy": "shore/ops", "text": "we know we're going through an area full of sailboats; ignore those and only show high priority items", "interest": {"suppressLabels": ["sailboat"], "boostLabels": ["cargo ship", "container"]}}},
+    {"at_s": 1800, "pull_nth_unknown": 1}
+  ]
+}
