@@ -3,6 +3,8 @@ package command
 import (
 	"math"
 	"testing"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
 func TestRescoreWithoutRules(t *testing.T) {
@@ -19,6 +21,29 @@ func TestSuppressRuleLowersMatchingScore(t *testing.T) {
 	suppressed := ScoreDet(detection, []Rule{{Type: "suppress", Classes: []string{"warship"}}}, "maritime").Score
 	if suppressed >= base {
 		t.Fatalf("suppressed score %v is not lower than base score %v", suppressed, base)
+	}
+}
+
+func TestConditionalBoostMatchesMockupFormula(t *testing.T) {
+	detection := Detection{
+		Class: "small boat",
+		Conf:  .90,
+		Attrs: Attributes{
+			Approaching: true,
+			Moving:      true,
+		},
+	}
+	directive := Directive{Rules: ParseDirective("Small boats approaching the pier at speed")}
+	item := Item{Dets: []Detection{detection}}
+	Rescore(&item, "maritime", []Directive{directive})
+
+	weight := catalog.Models["maritime"].W[detection.Class] * 1.15
+	expected := (1 - (1-weight)*.06) * detection.Conf
+	if math.Abs(item.Central-expected) > 1e-12 {
+		t.Fatalf("central score = %.6f, want %.6f", item.Central, expected)
+	}
+	if item.Tier != 1 {
+		t.Fatalf("tier = %d, want 1 for score %.6f", item.Tier, item.Central)
 	}
 }
 

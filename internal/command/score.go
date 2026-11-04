@@ -57,7 +57,7 @@ func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
 			if len(r.Classes) > 0 && len(r.Attrs) > 0 {
 				factor = .06
 			}
-			w = 1 - (1-w)*(1-factor)
+			w = 1 - (1-w)*factor
 			notes = append(notes, r)
 		} else {
 			suppressed = true
