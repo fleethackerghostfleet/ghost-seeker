@@ -225,8 +225,15 @@ func setForm(it *pb.Item, nf *pb.Form) {
 func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
 	if len(resp.Detections) > 0 {
 		if !g.stateful[c.Source] {
-			if row, err := g.existing(ctx, hash); row != nil || err != nil {
-				return row, err
+			// Hash behaviour, except that a scene item (no FULL) holding the
+			// same bytes must not swallow a frame that now shows an object.
+			if id, ok, err := g.st.HasHash(ctx, hash); err != nil {
+				return nil, err
+			} else if ok {
+				if row, err := g.st.Get(ctx, id); err == nil && row.Form(pb.FormKind_FORM_KIND_FULL) != nil {
+					atomic.AddInt64(&g.Dups, 1)
+					return row, nil
+				}
 			}
 			return g.newItem(ctx, c, hash, resp, nil)
 		}

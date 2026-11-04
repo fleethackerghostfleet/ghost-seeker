@@ -320,6 +320,31 @@ func TestSceneThrottleStatelessAnalyzer(t *testing.T) {
 	}
 }
 
+func TestSceneDoesNotSwallowDetectedTwin(t *testing.T) {
+	// Same bytes: first analysed as empty (-> scene, no FULL), then with a detection (stateless engine).
+	// The detected frame must become a full item instead of folding into the scene.
+	ctx := context.Background()
+	an := &scripted{empty: map[int]bool{1: true}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	g.cfg.SceneEvery = time.Minute
+	data := frameJPEG(3)
+	if _, err := g.Ingest(ctx, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, CapturedAt: clk.Now(), Source: "cam-a"}); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(time.Second)
+	row, err := g.Ingest(ctx, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, CapturedAt: clk.Now(), Source: "cam-a"})
+	if err != nil || row == nil || row.Form(pb.FormKind_FORM_KIND_FULL) == nil || row.Item.Features.Tags["event"] == "scene" {
+		t.Fatalf("detected twin: %v %v", row, err)
+	}
+	if n := len(items(t, st)); n != 2 || g.Deduped() != 0 {
+		t.Fatalf("items=%d dups=%d, want 2/0", n, g.Deduped())
+	}
+	// and a true duplicate of a full item still folds
+	if row2, err := g.Ingest(ctx, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, CapturedAt: clk.Now(), Source: "cam-a"}); err != nil || row2 == nil || row2.Item.Id != row.Item.Id || g.Deduped() != 1 {
+		t.Fatalf("hash fold: %v %v dups=%d", row2, err, g.Deduped())
+	}
+}
+
 func TestSceneWriteFailureDoesNotAdvanceWindow(t *testing.T) {
 	ctx := context.Background()
 	an := &scripted{empty: map[int]bool{1: true}}
