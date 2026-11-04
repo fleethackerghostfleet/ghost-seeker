@@ -139,7 +139,7 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 	}
 	mock := inference.NewMock()
 	icfg := ingest.DefaultConfig()
-	icfg.EdgeID = fmt.Sprintf("edge-%v", strat)
+	icfg.EdgeID = "sim" // same ids across strategies so results can be joined by item
 	ing := ingest.New(icfg, est, mock, sch, clk, nil)
 	src, err := ingest.NewReplay(clk, 0, sc.Sets...)
 	if err != nil {
