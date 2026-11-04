@@ -21,7 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from edgeml.data.mot import load_sequence  # noqa: E402
+from edgeml.data.seqs import load_sequence  # noqa: E402
 from edgeml.eval.sightings import match_sightings  # noqa: E402
 from edgeml.types import box_iou  # noqa: E402
 

@@ -25,7 +25,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from edgeml.data.mot import MotSequence, gt_by_frame, list_sequences  # noqa: E402
+from edgeml.data.seqs import MotSequence, gt_by_frame, list_sequences  # noqa: E402
 from edgeml.detectors import OracleDetector  # noqa: E402
 from edgeml.detectors.cached import CachedDetector, dets_to_jsonl  # noqa: E402
 from edgeml.eval.baselines import image_dedup_events, naive_events  # noqa: E402
@@ -62,8 +62,9 @@ def cmd_cache(a):
     data = Path(a.data).expanduser()
     seqs = load_sets(data, a.sets, a.split)
     det = make_detector(a.detector, imgsz=a.imgsz, conf=a.conf, device=a.device)
+    cache_name = a.name or Path(a.detector).stem           # cache dir / detector label used by `matrix --detectors`
     for seq in seqs:
-        out = det_cache_path(data, a.detector, seq)
+        out = det_cache_path(data, cache_name, seq)
         if out.exists() and not a.force:
             print("skip", seq.seq_id)
             continue
@@ -213,7 +214,8 @@ def main():
     c.add_argument("--data", required=True)
     c.add_argument("--sets", nargs="+", required=True)
     c.add_argument("--split", default=None)
-    c.add_argument("--detector", default="yolo11s")
+    c.add_argument("--detector", default="yolo11s", help="ultralytics weights name/path (.pt or .onnx, e.g. B's export)")
+    c.add_argument("--name", default=None, help="cache name (default: weights file stem)")
     c.add_argument("--imgsz", type=int, default=1280)
     c.add_argument("--conf", type=float, default=0.05)
     c.add_argument("--device", default="cpu")

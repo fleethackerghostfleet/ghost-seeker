@@ -13,7 +13,7 @@ from pathlib import Path
 
 import cv2
 
-from .mot import append_index, write_sequence
+from .seqs import append_index, write_sequence
 
 SMD_SPLIT = {"MVI_0790": "dev", "MVI_0799": "dev", "MVI_0797": "test", "MVI_0801": "test"}
 
