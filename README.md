@@ -4,6 +4,8 @@
 
 [`algorithm/README.md`](algorithm/README.md) describes the CPU-only image/video scoring, configurable default prioritization, and offline byte-budget evaluation. Image evidence is cached separately from policy, so operator overrides can rerank observations without repeating inference. Detection annotations enter evaluation only.
 
+[`Ranking and selection`](algorithm/RANKING_AND_SELECTION.md) explains the agreed separation: rank images with duplicate suppression, then select from that list using an absolute bandwidth allowance such as **64 kbps over 60 seconds = 480 KB**. It also identifies where the current combined selector still needs to be separated.
+
 ## UI mockup
 
 `ui-mockup/index.html` is a self-contained interactive mockup of the Ghost Seeker operator UI (open it in a browser, no server needed). All imagery is synthetic.
