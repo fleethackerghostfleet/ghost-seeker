@@ -50,7 +50,7 @@ scenarios/              replay scenarios (datasets + operator events)
 Requires Go 1.23+. No CGO, no GPU. The demo imagery in `frames/` is Git LFS: run `git lfs pull` after cloning, or the default replay scenario finds only pointer files.
 
 ```sh
-make build                 # bin/edge bin/shore bin/sim
+make build                 # bin/edge bin/ghost-seeker bin/shore bin/sim
 make sim                   # FIFO vs prioritized, 90 simulated minutes of contested SATCOM, seconds of wall time
 ./bin/sim -trace starlink_turns -duration 60m          # traces: steady_64k trickle_2k4 starlink_turns satcom_contested los_bursty
 ```
@@ -110,7 +110,7 @@ every unknown, and puts the bytes it has into what the operator asked for.
 
 ## Operator web app
 
-The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.22+, stdlib only, synthetic imagery and its own in-memory simulation for now; wiring it to the edge/shore `ConsoleService` is the next step). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
+The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.23+, stdlib only, synthetic imagery and its own in-memory simulation for now; wiring it to the edge/shore `ConsoleService` is the next step). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
 
 ```sh
 go run ./cmd/ghost-seeker -addr :8090

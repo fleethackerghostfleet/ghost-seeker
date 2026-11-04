@@ -39,7 +39,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		hz = .9
 	}
 	var imageFile string
-	detections := make([]command.Detection, 0)
+	var detections []command.Detection
 	if images := catalog.Library[source.ID]; len(images) > 0 {
 		image := images[rng.Intn(len(images))]
 		imageFile = image.File
