@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 import yaml
-from huggingface_hub import HfApi, snapshot_download
+from huggingface_hub import snapshot_download
 from PIL import Image, ImageDraw
 
 from common import (
@@ -24,6 +24,7 @@ from common import (
 DATASET_ID = "seaships7000"
 REPOSITORY_ID = "dronefreak/SeaShips"
 REPOSITORY_URL = f"https://huggingface.co/datasets/{REPOSITORY_ID}"
+REVISION = "bf234011497547de80e02bd75475d8d49ace0416"
 EXPECTED_IMAGES = {"train": 1750, "valid": 1750, "test": 3500}
 
 
@@ -96,19 +97,18 @@ def save_overlays(samples, output_dir):
 
 def main():
     bucket_raw_prefix = gcs_uri(f"raw/{DATASET_ID}/")
+    (Path.home() / "data").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
         prefix="seaships7000-", dir=Path.home() / "data"
     ) as temporary_directory:
         temporary_directory = Path(temporary_directory)
         snapshot_dir = temporary_directory / "snapshot"
         ready_dir = temporary_directory / "ready"
-        info = HfApi().dataset_info(REPOSITORY_ID)
-        revision = info.sha
         downloaded_snapshot = Path(
             snapshot_download(
                 repo_id=REPOSITORY_ID,
                 repo_type="dataset",
-                revision=revision,
+                revision=REVISION,
                 local_dir=snapshot_dir,
                 max_workers=8,
             )
@@ -118,10 +118,9 @@ def main():
             shutil.rmtree(metadata_dir)
 
         if list_remote_prefix(bucket_raw_prefix):
-            raise RuntimeError(
-                f"Refusing to overwrite existing immutable raw prefix: {bucket_raw_prefix}"
-            )
-        upload_directory(downloaded_snapshot, bucket_raw_prefix)
+            print(f"Raw prefix already exists; skipping raw upload: {bucket_raw_prefix}")
+        else:
+            upload_directory(downloaded_snapshot, bucket_raw_prefix)
 
         classes = load_classes(downloaded_snapshot / "data" / "data.yaml")
         image_rows = []
@@ -203,7 +202,7 @@ def main():
                 "name": "SeaShips 7000",
                 "source_type": "huggingface",
                 "source_url": REPOSITORY_URL,
-                "source_revision": revision,
+                "source_revision": REVISION,
                 "license": "unknown",
                 "viewpoint": "surface",
                 "modality": "rgb",

@@ -43,12 +43,9 @@ def list_gcs(uri):
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def ensure_raw_prefix_empty():
+def raw_prefix_has_objects():
     raw_prefix = gcs_uri(f"raw/{DATASET_ID}/")
-    if list_gcs(raw_prefix):
-        raise RuntimeError(
-            f"Refusing to overwrite existing immutable raw prefix: {raw_prefix}"
-        )
+    return bool(list_gcs(raw_prefix))
 
 
 def safe_extract(archive, destination):
@@ -136,7 +133,7 @@ def ingest(archive_path, repository_root):
     archive_path = archive_path.resolve()
     if not archive_path.is_file():
         raise FileNotFoundError(f"SMD archive not found: {archive_path}")
-    ensure_raw_prefix_empty()
+    raw_prefix_exists = raw_prefix_has_objects()
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="smd-vis-onboard-", dir=DATA_ROOT) as tmp:
@@ -303,12 +300,18 @@ def ingest(archive_path, repository_root):
         }
 
         save_overlays(overlay_samples)
-        run_gcloud(
-            "storage",
-            "cp",
-            str(archive_path),
-            gcs_uri(f"raw/{DATASET_ID}/{ARCHIVE_NAME}"),
-        )
+        if raw_prefix_exists:
+            print(
+                f"Raw prefix already exists; skipping raw upload: "
+                f"{gcs_uri(f'raw/{DATASET_ID}/')}"
+            )
+        else:
+            run_gcloud(
+                "storage",
+                "cp",
+                str(archive_path),
+                gcs_uri(f"raw/{DATASET_ID}/{ARCHIVE_NAME}"),
+            )
         upload_directory(ready_root, gcs_uri(f"datasets/{DATASET_ID}"))
         write_catalog(dataset_row, image_rows, annotation_rows)
         print(
