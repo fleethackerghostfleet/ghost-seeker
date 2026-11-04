@@ -394,17 +394,19 @@ func (s *Store) execEach(ctx context.Context, q string, ids []string, lead ...an
 // state, so the new content is re-sent. Used when a FACT changes (label
 // override) after it has already reached shore.
 func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
-	var path, mime string
-	if err := s.db.QueryRowContext(ctx, `SELECT path, mime FROM forms WHERE item_id=? AND kind=?`, itemID, int(kind)).Scan(&path, &mime); err != nil {
+	var path string
+	var typ int
+	if err := s.db.QueryRowContext(ctx, `SELECT f.path, i.type FROM forms f JOIN items i ON i.id=f.item_id WHERE f.item_id=? AND f.kind=?`, itemID, int(kind)).Scan(&path, &typ); err != nil {
 		return nil, err
 	}
+	mime := mimeFor(kind, pb.ItemType(typ), data)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return nil, err
 	}
 	sum := sha256.Sum256(data)
 	h := hex.EncodeToString(sum[:])
-	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET bytes=?, hash=?, acked_through=0, complete=0 WHERE item_id=? AND kind=?`,
-		len(data), h, itemID, int(kind)); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET bytes=?, hash=?, mime=?, acked_through=0, complete=0 WHERE item_id=? AND kind=?`,
+		len(data), h, mime, itemID, int(kind)); err != nil {
 		return nil, err
 	}
 	return &pb.Form{Kind: kind, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true}, nil
