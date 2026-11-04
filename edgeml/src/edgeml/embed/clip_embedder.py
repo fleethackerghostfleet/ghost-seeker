@@ -25,8 +25,6 @@ class ClipEmbedder:
 
     def __init__(self, short: str = "mobileclip-s1", backend: str = "torch", onnx_dir: str | Path | None = None,
                  threads: int = 4, precision: str = "fp32"):
-        import torch
-
         self.short = short
         arch, tag, self.size = MODELS[short]
         self.backend = backend
@@ -39,6 +37,7 @@ class ClipEmbedder:
         self._session = None
         if backend == "torch" or onnx_dir is None:
             import open_clip
+            import torch
 
             self.model, _, pre = open_clip.create_model_and_transforms(arch, pretrained=tag)
             self.model.eval()

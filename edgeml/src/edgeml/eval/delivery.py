@@ -61,7 +61,8 @@ def delivered_vs_budget(events: list[dict], sighting_match: dict[str, Optional[i
                 else:
                     fr = ev.get("best_frame_idx", ev["frame_idx"])
                     region = c["form"].get("region")
-                    for oid, gb in gt_at.get(fr, {}).items():
+                    gt_here = gt_at.get(fr) or gt_at.get(fr + 1) or gt_at.get(fr - 1) or {}  # tolerate 1-frame GT gaps (e.g. labels starting at frame 2)
+                    for oid, gb in gt_here.items():
                         if _covers(region, gb, W, H):
                             img_objs.add(oid)
         n_img = len(img_objs)
