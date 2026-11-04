@@ -18,9 +18,21 @@ import subprocess
 from pathlib import Path
 
 import cv2
+import yaml
 
 LICENSE = "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms"
 SOURCE = "fvessel_clip10"
+
+
+SPLITS_YAML = Path(__file__).resolve().parents[1] / "configs" / "splits.yaml"
+
+
+def split_of(set_name: str, seq_id: str) -> str:
+    cfg = yaml.safe_load(SPLITS_YAML.read_text())
+    for split in ("test", "dev"):
+        if seq_id in (cfg.get(split, {}).get(set_name) or []):
+            return split
+    return "unassigned"
 
 
 def convert_clip(clip_dir: Path, out_dir: Path, fps_native: int = 25) -> dict:
@@ -81,10 +93,12 @@ def convert_clip(clip_dir: Path, out_dir: Path, fps_native: int = 25) -> dict:
     hfov = 2 * math.degrees(math.atan(w / (2 * fx)))
     (seq_dir / "seqinfo.ini").write_text(
         "[Sequence]\n" f"name={seq_id}\nimDir=img1\nframeRate=1\nseqLength={n_frames}\nimWidth={w}\nimHeight={h}\n"
-        f"imExt=.jpg\nsource={SOURCE}\nlicense={LICENSE}\nupstream_video={video.name}\n"
+        f"imExt=.jpg\nsource_dataset={SOURCE}\nlicense={LICENSE}\nupstream_video={video.name}\n"
+        "video_time_offset_s=1\n"
         f"camera_para={cam}\nhfov_deg={hfov:.1f}\nplatform_motion=static\n")
-    return {"seq_id": seq_id, "set": out_dir.name, "source": SOURCE, "upstream": f"Clip-10/{name}",
-            "fps": 1, "frames": n_frames, "tracks": len(ids), "boxes": len(rows), "width": w, "height": h,
+    return {"seq_id": seq_id, "set": out_dir.name, "source_dataset": SOURCE, "split": split_of(out_dir.name, seq_id),
+            "upstream": f"Clip-10/{name}",
+            "fps": 1, "n_frames": n_frames, "n_tracks": len(ids), "n_boxes": len(rows), "width": w, "height": h,
             "viewpoint": "shore_fixed", "platform_motion": "static", "sea_state": "calm_river",
             "hfov_deg": round(hfov, 1), "label_source": "public_gt", "license": "FVessel (gy65896/FVessel) research use"}
 
@@ -100,7 +114,13 @@ def main():
     if a.clips:
         clips = [c for c in clips if c.name in a.clips]
     entries = [convert_clip(c, a.out) for c in clips]
-    with open(a.out / "index.jsonl", "w") as f:
+    index = a.out / "index.jsonl"
+    if index.exists():  # partial re-ingest (--clips): keep untouched sequences
+        new_ids = {e["seq_id"] for e in entries}
+        entries = [json.loads(ln) for ln in index.read_text().splitlines()
+                   if ln.strip() and json.loads(ln)["seq_id"] not in new_ids] + entries
+        entries.sort(key=lambda e: e["seq_id"])
+    with open(index, "w") as f:
         for e in entries:
             f.write(json.dumps(e) + "\n")
             print(e)
