@@ -312,3 +312,6 @@ header{min-width:0;overflow:hidden}
 .theme-day .wb-chip{background:#f2f6f9;border-color:#b6c5d1;border-left-color:var(--accent)}.theme-day .wb-chip.suppress{border-left-color:var(--p2)}
 .theme-day #wbProposal{background:#fbf4e1;border-color:#c9a24a}
 .theme-day .wb mark{background:#fbeec4;color:#6b4e00}
+.logo,.live,.setbtn{flex:none}
+nav{flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none}
+@media(max-width:1150px){.hstats,.clock{display:none}}
