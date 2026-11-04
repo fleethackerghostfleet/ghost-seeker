@@ -1,0 +1,5 @@
+reviewed: true
+notes: >-
+  Teacher found 0 tracks. Human check of frames 1/150/300 (full-frame grids): coastline, sky, water and a
+  production watermark only; no vessels or marine life visible. Kept as a zero-object sequence (false-positive
+  pressure for the sighting pipeline). Not every frame was inspected.

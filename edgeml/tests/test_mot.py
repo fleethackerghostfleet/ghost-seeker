@@ -3,7 +3,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-
 from edgeml.data.mot import MOTSequence, load_set, read_index, validate_sequence
 
 

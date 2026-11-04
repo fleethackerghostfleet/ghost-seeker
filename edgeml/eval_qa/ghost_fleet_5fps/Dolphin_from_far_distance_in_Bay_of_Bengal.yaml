@@ -1,0 +1,7 @@
+reviewed: false
+gt_status: incomplete
+notes: >-
+  Teacher found 0 tracks. Human check (frame 150 grid): dolphins are mostly submerged; only whitewater splashes are
+  visible at 5 fps, with brief surfacings elsewhere in the clip. Objects ARE present but could not be labelled reliably
+  by eye within budget, so this sequence has no GT boxes and must be excluded from headline recall / duplicate metrics
+  (keep for qualitative false-positive review only). It stays in the locked test split.

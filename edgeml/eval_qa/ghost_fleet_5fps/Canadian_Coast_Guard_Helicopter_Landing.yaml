@@ -1,0 +1,6 @@
+reviewed: true
+gt_status: partial
+notes: >-
+  Track 1 (CCGS vessel, frames 1-92) verified, no switch. The vessel stays in frame to the end (helicopter lands on it) but the
+  teacher loses it from frame 93 when it fills most of the frame -> frames 93-151 have no ship box (known miss, not fixed:
+  object is larger than the frame). Track 2 = deck crew member (person) in the open door, real, kept.
