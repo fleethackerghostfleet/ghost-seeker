@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package ghostseeker.v1;
+
+import "ghostseeker/v1/item.proto";
+
+option go_package = "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1;ghostseekerv1";
+
+// InferenceService is the interchangeable image-model engine. The edge calls
+// it for every ingested image; any implementation (ONNX sidecar, mock,
+// remote) satisfies the contract. Text embedding lets shore compile
+// natural-language interest into vectors that the edge compares against
+// stored image embeddings without running a language model aboard.
+service InferenceService {
+  rpc Analyze(AnalyzeRequest) returns (AnalyzeResponse);
+  rpc EmbedText(EmbedTextRequest) returns (EmbedTextResponse);
+  rpc Capabilities(CapabilitiesRequest) returns (CapabilitiesResponse);
+}
+
+message AnalyzeRequest {
+  bytes image = 1; // encoded (JPEG/PNG/WebP)
+  repeated string known_labels = 2; // current vocabulary; used for unknownness
+  bool want_embedding = 3;
+}
+
+message AnalyzeResponse {
+  repeated Detection detections = 1;
+  repeated float embedding = 2;
+  float unknownness = 3;
+  string model_id = 4;
+  int64 latency_ms = 5;
+}
+
+message EmbedTextRequest {
+  repeated string texts = 1;
+}
+
+message EmbedTextResponse {
+  repeated Embedding embeddings = 1;
+  string model_id = 2;
+}
+
+message Embedding {
+  repeated float values = 1;
+}
+
+message CapabilitiesRequest {}
+
+message CapabilitiesResponse {
+  string model_id = 1;
+  bool open_vocabulary = 2;
+  repeated string fixed_labels = 3;
+  int32 embedding_dim = 4;
+}

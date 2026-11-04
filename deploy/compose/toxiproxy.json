@@ -1,0 +1,1 @@
+[{"name": "ship_to_shore", "listen": "0.0.0.0:18080", "upstream": "shore:8080", "enabled": true}]

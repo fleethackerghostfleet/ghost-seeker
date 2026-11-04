@@ -1,3 +1,9 @@
+bin/
+data/
+sim-results.json
+*.db
+*.db-wal
+*.db-shm
 __pycache__/
 *.py[cod]
 .venv/

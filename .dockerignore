@@ -1,0 +1,10 @@
+.git
+bin/
+data/
+sim-results.json
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/__pycache__/
+**/*.pyc
+frames/*.zip

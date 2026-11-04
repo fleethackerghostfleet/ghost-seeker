@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ghost Seeker · Iterative Reprioritization</title>
+<style>
+:root{--bg:#0a1016;--panel:#0f1820;--line:#213140;--text:#d9e3ec;--muted:#91a5b8;--accent:#3fb6ff;--good:#3ddc97}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}
+a{color:var(--accent)}button,select,textarea,input{font:inherit;color:inherit}button,select{background:#182733;border:1px solid #345065;border-radius:6px;min-height:42px;padding:7px 11px;cursor:pointer}button:hover{border-color:var(--accent);background:#203747}button:focus-visible,select:focus-visible,textarea:focus-visible,article:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.primary{background:#156a9e;color:white}.quiet{color:var(--muted)}.eyebrow{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);font-weight:700}.banner{text-align:center;background:#1d633b;padding:3px;font-size:10px;letter-spacing:.18em;font-weight:700}
+header{display:flex;align-items:center;gap:22px;padding:16px 24px;border-bottom:1px solid var(--line)}header b{letter-spacing:.1em}header a{margin-left:auto}h1{font-size:26px;margin:5px 0}h2{font-size:16px;margin:0 0 10px}p{margin:6px 0 14px}.intro{padding:20px 24px 12px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.layout{display:grid;grid-template-columns:355px minmax(0,1fr);gap:18px;padding:0 24px 24px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:16px;margin-bottom:14px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.between{justify-content:space-between}.hint{font-size:12px;color:var(--muted)}textarea{width:100%;min-height:114px;resize:vertical;background:#080f15;border:1px solid #345065;border-radius:6px;padding:12px;line-height:1.5}label{display:block}.chip{border:1px solid #345065;border-left:3px solid var(--accent);padding:10px;margin:9px 0;border-radius:5px;background:#14212b}.chip.suppress{border-left-color:#ff9a3c}.chip strong{font-size:13px}.chip select{max-width:100%;min-height:35px;padding:4px;font-size:12px}.chip button{min-height:36px;padding:3px 9px}.chip input{width:115px;accent-color:var(--accent)}.edited{color:#f0cf4a;font-size:11px}.suggestion{display:block;text-align:left;width:100%;margin-top:8px;padding:10px 12px}.suggestion small{display:block;color:var(--good);margin-top:4px}mark{color:#ffd58a;background:#493920;border-radius:3px;padding:2px 4px}.counts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}.count{padding:9px 12px;background:#14212b;border-radius:5px;border-top:3px solid var(--tier)}.count b{font-size:21px}.track{height:5px;background:#253441;margin-top:6px}.track i{display:block;height:100%;background:var(--tier)}.toolbar{margin:16px 0}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.tile{border:1px solid var(--line);border-radius:7px;background:var(--panel);overflow:hidden;cursor:pointer}.tile:hover,.tile.selected{border-color:var(--accent)}.photo{position:relative}.photo img{width:100%;display:block;aspect-ratio:1.6;object-fit:cover}.badge{position:absolute;bottom:7px;left:7px;padding:3px 6px;border-radius:4px;background:#08121ee8;color:#80d3ff;font-size:12px;font-weight:700}.tile-body{padding:10px}.tile-title{display:flex;justify-content:space-between;gap:6px;font-size:12px}.actions{display:flex;gap:4px;margin-top:8px}.actions button{padding:4px 6px;flex:1;font-size:12px;min-height:40px}.pin{margin-top:7px;width:100%;font-size:12px;min-height:35px}.dropstrip{display:flex;gap:10px;overflow:auto}.dropstrip button{flex:0 0 130px;padding:4px}.dropstrip img{width:100%;display:block;opacity:.65}.history{max-height:280px;overflow:auto}.version{padding:10px 0;border-bottom:1px solid var(--line)}.version button{font-size:12px;min-height:35px}.version.active{color:var(--accent)}#why{min-height:95px}#why ul{padding-left:20px;margin:8px 0}#proposal{border-color:#b28f40;background:#242316}#proposal:empty{display:none}dialog{max-width:500px;background:var(--panel);color:var(--text);border:1px solid #345065;border-radius:10px;padding:24px}dialog::backdrop{background:#000b}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--line);grid-column:1/-1}#status{color:var(--good)}
+@media(min-width:1650px){.layout{grid-template-columns:380px minmax(0,1fr)}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1150px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.layout{grid-template-columns:320px minmax(0,1fr)}}
+@media(max-width:850px){.layout{display:block;padding:0 12px}.intro{display:block}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}header{padding:12px;gap:12px}.counts{gap:5px}.count{padding:8px}.intro .row{margin:12px 0}}
+</style>
+</head>
+<body>
+<div class="banner">UNCLASSIFIED · SYNTHETIC TRAINING DATA · NO LIVE CONNECTION</div>
+<header><b>◈ GHOST SEEKER</b><span class="quiet">/ Reprioritize workbench</span><a href="../README.md#operator-web-app">Run the Go operator app →</a></header>
+<div class="intro"><div><div class="eyebrow">Human intent → visible impact</div><h1>Refine. Preview. Correct.</h1><p class="quiet">80 fixed images. Every edit previews instantly. Nothing goes live until you confirm.</p></div><div><div class="row"><button id="reset">Reset</button><button id="apply" class="primary">Apply to live feed →</button></div><div id="status" class="hint" role="status">Local simulation · baseline: base model</div></div></div>
+<div class="layout">
+<aside>
+<section class="panel"><h2>01 / Your directive</h2><label for="directive" class="hint">Plain language · preview updates as you type</label><textarea id="directive" placeholder="Prioritize boats; suppress birds"></textarea><div id="unknown" class="hint" aria-live="polite"></div><p class="hint">Typing reparses chips. Chip edits override the parsed rules until your next text edit.</p><div class="row between"><strong>Effective rules</strong><button id="add">+ Add rule</button></div><div id="chips"></div></section>
+<section class="panel"><h2>02 / Make it specific</h2><div class="hint">One click refines intent. Effects are scored against the current preview.</div><div id="suggestions"></div></section>
+<section class="panel"><div class="row between"><h2>Iteration history</h2><div><button id="undo" title="Ctrl+Z">↶</button> <button id="redo" title="Ctrl+Shift+Z">↷</button></div></div><p class="hint">Compare a version with now, or restore it.</p><div id="history" class="history"></div></section>
+</aside>
+<main>
+<section class="panel"><div class="row between"><div><h2>Live result preview</h2><div id="compareLabel" class="hint"></div></div><button id="baseline">Compare with applied baseline</button></div><div id="counts" class="counts"></div></section>
+<section id="proposal" class="panel" aria-live="polite"></section>
+<section id="why" class="panel"><h2>Why this image?</h2><div class="hint">Hover, focus or click an image to inspect rule contributions.</div></section>
+<div class="row between toolbar"><div><strong id="resultLabel">After · Top 16</strong><div class="hint">← / → or J / K navigate · ↑ higher · ↓ lower · X not relevant</div></div><label><input type="checkbox" id="diff"> Diff only · tier changed</label></div>
+<div id="grid" class="grid"></div>
+<section class="panel" style="margin-top:16px"><h2 id="dropLabel">Dropped out of top 16</h2><div id="dropped" class="dropstrip"></div></section>
+</main></div>
+<dialog id="confirm"><h2>Apply this intent to the live feed?</h2><p id="confirmText"></p><p class="hint">Mockup only. This makes the current preview your new comparison baseline.</p><div class="row"><button id="cancelApply">Keep iterating</button><button id="confirmApply" class="primary">Confirm apply</button></div></dialog>
+<script>
+const W=480,H=300;
+let seed=73021;
+const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
+const rand=(a,b)=>a+random()*(b-a);
+const pick=a=>a[Math.floor(random()*a.length)];
+const chance=p=>random()<p;
+const $=id=>document.getElementById(id);
+const zulu=d=>d.toISOString().slice(11,19)+'Z';
+const wpick=o=>{const e=Object.entries(o);let t=e.reduce((s,[,v])=>s+v,0),r=random()*t;for(const[k,v]of e){if((r-=v)<=0)return k}return e[0][0]};
+
+const SOURCES=[
+ {id:'ALL',name:'All Sources (fused)'},
+ {id:'EO-P7',name:'EO Mast Cam · Pier 7',scene:'harbor',mode:'eo',loc:'Harbor, Pier 7',hw:'Jetson Orin Nano',em:'YOLOv8-n int8 · 3 coarse classes',link:'Private 5G · 40 Mbps',rate:'2 fps'},
+ {id:'IR-HE',name:'IR Thermal · Harbor Entrance',scene:'harbor',mode:'ir',loc:'Harbor entrance channel',hw:'Jetson Orin Nano',em:'YOLOv8-n int8 · 3 coarse classes',link:'Private 5G · 40 Mbps',rate:'2 fps'},
+ {id:'BY-12',name:'Buoy Sensor B-12 · Offshore',scene:'open',mode:'eo',loc:'Offshore, 30 nm E',hw:'Coral Edge TPU',em:'MobileNet-SSD · 3 coarse classes',link:'Iridium · 64 kbps',rate:'1 frame / 5 s'},
+ {id:'UAV-3',name:'UAV-3 Gimbal · Patrol Orbit',scene:'aerial',mode:'eo',loc:'Patrol orbit, Sector 4',hw:'Qualcomm RB5',em:'YOLOv8-n int8 · 3 coarse classes',link:'MANET · 2 Mbps',rate:'1 fps'},
+ {id:'SKY-1',name:'Sky Cam · Air Station Approach',scene:'sky',mode:'eo',loc:'Runway 28 approach',hw:'Jetson Orin Nano',em:'YOLOv8-n int8 · 3 coarse classes',link:'Fiber · 1 Gbps',rate:'2 fps'},
+ {id:'SAR-7',name:'Commercial SAR Pass · Sector 7',scene:'sat',mode:'sar',loc:'Sector 7 strip',hw:'On-orbit FPGA',em:'CFAR + tiny CNN',link:'Ground-station downlink',rate:'per pass'},
+];
+const SRC=Object.fromEntries(SOURCES.map(s=>[s.id,s]));
+
+const CLS={
+ 'warship':{g:'vessel',L:.34,ar:.3,lab:'Warship'},
+ 'cargo ship':{g:'vessel',L:.4,ar:.3,lab:'Cargo ship'},
+ 'tanker':{g:'vessel',L:.42,ar:.22,lab:'Tanker'},
+ 'fishing vessel':{g:'vessel',L:.15,ar:.6,lab:'Fishing vessel'},
+ 'small boat':{g:'vessel',L:.08,ar:.45,lab:'Small boat'},
+ 'submarine':{g:'vessel',L:.13,ar:.35,lab:'Submarine'},
+ 'military aircraft':{g:'aircraft',L:.14,ar:.42,lab:'Military aircraft'},
+ 'civil aircraft':{g:'aircraft',L:.18,ar:.36,lab:'Civil aircraft'},
+ 'helicopter':{g:'aircraft',L:.11,ar:.5,lab:'Helicopter'},
+ 'drone':{g:'other',L:.05,ar:.6,lab:'Drone / UAS'},
+ 'person':{g:'other',L:.035,ar:.8,lab:'Person in water'},
+ 'debris':{g:'other',L:.06,ar:.5,lab:'Debris'},
+ 'bird':{g:'clutter',L:.035,ar:.5,lab:'Bird'},
+ 'buoy':{g:'clutter',L:.025,ar:1.6,lab:'Buoy'},
+};
+const AIR=new Set(['military aircraft','civil aircraft','helicopter','drone','bird']);
+const POOLS={
+ harbor:{'cargo ship':3,'tanker':2,'small boat':4,'fishing vessel':2,'warship':1.4,'person':.5,'bird':3,'buoy':2,'helicopter':.8,'drone':.8},
+ open:{'cargo ship':3,'tanker':2,'warship':1.2,'submarine':.5,'fishing vessel':2,'small boat':2,'debris':1,'bird':2,'military aircraft':.8,'helicopter':.6},
+ aerial:{'small boat':4,'cargo ship':2,'fishing vessel':3,'warship':1,'debris':1.2,'person':.7,'submarine':.4,'tanker':1},
+ sky:{'civil aircraft':3,'military aircraft':2,'helicopter':1.5,'drone':1.5,'bird':4},
+ sat:{'cargo ship':3,'tanker':2,'warship':1,'fishing vessel':2,'small boat':1.5},
+};
+const MODELS={
+ maritime:{name:'Maritime OOI v1 (default)',desc:'Default command model. Scores ships, aircraft and other objects of interest; boosts contacts that are approaching or not broadcasting AIS.',
+  w:{'submarine':1,'warship':.95,'military aircraft':.9,'drone':.85,'person':.8,'helicopter':.7,'small boat':.55,'tanker':.55,'cargo ship':.5,'fishing vessel':.35,'civil aircraft':.35,'debris':.3,'buoy':.08,'bird':.04}},
+ air:{name:'Air Picture Focus',desc:'Weights airborne contacts (military, rotary, UAS) above surface traffic.',
+  w:{'military aircraft':1,'drone':.95,'helicopter':.85,'civil aircraft':.6,'submarine':.6,'warship':.55,'small boat':.3,'person':.4,'tanker':.25,'cargo ship':.25,'fishing vessel':.15,'debris':.1,'buoy':.04,'bird':.08}},
+ sar:{name:'Search & Rescue',desc:'Prioritizes people in the water, debris and small craft for rescue tasking.',
+  w:{'person':1,'debris':.85,'small boat':.7,'fishing vessel':.55,'helicopter':.5,'buoy':.2,'warship':.2,'cargo ship':.25,'tanker':.25,'submarine':.2,'military aircraft':.2,'civil aircraft':.2,'drone':.3,'bird':.03}},
+};
+const EDGE_W={vessel:.6,aircraft:.65,other:.45,clutter:.12};
+const ATTR_LAB={approaching:'approaching',new:'new / changed',dark:'no AIS',moving:'moving fast',loitering:'loitering'};
+
+let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[]};
+let items=[],frameNo=4200,stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0;
+
+/* ---------------- synthetic imagery ---------------- */
+function grain(ctx,amp){const d=ctx.getImageData(0,0,W,H),p=d.data;for(let i=0;i<p.length;i+=4){const n=(random()-.5)*amp;p[i]+=n;p[i+1]+=n;p[i+2]+=n}ctx.putImageData(d,0,0)}
+function lg(ctx,y0,y1,stops){const g=ctx.createLinearGradient(0,y0,0,y1);stops.forEach((c,i)=>g.addColorStop(i/(stops.length-1),c));return g}
+function poly(ctx,pts,fill){ctx.beginPath();pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle=fill;ctx.fill()}
+
+function drawBackground(ctx,scene,mode,hz){
+ const ir=mode==='ir';
+ if(scene==='harbor'||scene==='open'){
+  const tod=pick(['day','day','overcast','dusk']);
+  const sky=ir?['#1c1c1c','#383838']:tod==='dusk'?['#41506e','#d99a6c']:tod==='overcast'?['#8e9ba6','#c9d0d5']:['#7fa7c9','#d6e3ec'];
+  ctx.fillStyle=lg(ctx,0,hz*H,sky);ctx.fillRect(0,0,W,hz*H);
+  if(scene==='harbor'){let x=-10;ctx.fillStyle=ir?'#4b4b4b':tod==='dusk'?'#2f3442':'#68757f';
+   while(x<W){const bw=rand(12,38),bh=rand(6,34);ctx.fillRect(x,hz*H-bh,bw,bh);x+=bw+rand(0,6)}
+   for(let i=0;i<2;i++){const cx=rand(40,W-40);ctx.fillRect(cx,hz*H-58,3,58);ctx.fillRect(cx-22,hz*H-58,46,3);ctx.fillRect(cx+18,hz*H-58,2,20)}}
+  else{ctx.fillStyle=ir?'rgba(90,90,90,.4)':'rgba(255,255,255,.25)';ctx.fillRect(0,hz*H-3,W,4)}
+  const sea=ir?['#2a2a2a','#121212']:tod==='dusk'?['#3d4a60','#141b26']:tod==='overcast'?['#5b6b77','#27343d']:['#3f6a87','#18324a'];
+  ctx.fillStyle=lg(ctx,hz*H,H,sea);ctx.fillRect(0,hz*H,W,H-hz*H);
+  ctx.strokeStyle=ir?'rgba(120,120,120,.25)':'rgba(255,255,255,.13)';ctx.lineWidth=1;
+  for(let i=0;i<170;i++){const y=rand(hz*H+2,H),s=(y-hz*H)/(H-hz*H),x=rand(0,W),l=4+s*22;ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+l/2,y-1-s*2,x+l,y);ctx.stroke()}
+ }else if(scene==='sky'){
+  ctx.fillStyle=lg(ctx,0,H,['#4f88c0','#a9cbe8','#d7e6f1']);ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,255,255,.55)';for(let c=0;c<5;c++){const cx=rand(0,W),cy=rand(20,H*.7);for(let k=0;k<6;k++){ctx.beginPath();ctx.ellipse(cx+rand(-40,40),cy+rand(-8,8),rand(20,45),rand(8,16),0,0,7);ctx.fill()}}
+  ctx.fillStyle='#2f4030';ctx.fillRect(0,hz*H,W,H);ctx.fillStyle='#253425';for(let x=0;x<W;x+=6){ctx.beginPath();ctx.arc(x,hz*H,rand(3,8),Math.PI,0);ctx.fill()}
+  ctx.fillStyle='#ffd27a';for(let x=20;x<W;x+=34)ctx.fillRect(x,H-6,3,2);
+ }else if(scene==='aerial'){
+  ctx.fillStyle='#1f4a63';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,.07)';for(let i=0;i<260;i++){const x=rand(0,W),y=rand(0,H);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+rand(6,16),y+rand(-2,2));ctx.stroke()}
+  if(chance(.5)){const side=chance(.5);ctx.beginPath();ctx.moveTo(side?0:W,0);let y=0,x=side?rand(40,110):W-rand(40,110);while(y<H){ctx.lineTo(x,y);y+=20;x+=rand(-14,14)}ctx.lineTo(x,H);ctx.lineTo(side?0:W,H);ctx.closePath();ctx.fillStyle='#8a8466';ctx.fill();ctx.strokeStyle='rgba(240,240,220,.5)';ctx.lineWidth=3;ctx.stroke();ctx.lineWidth=1}
+ }else if(scene==='sat'){
+  ctx.fillStyle='#0b0b0b';ctx.fillRect(0,0,W,H);
+  if(chance(.6)){ctx.fillStyle='#3a3a3a';ctx.beginPath();ctx.moveTo(0,0);let x=0,y=rand(30,90);ctx.lineTo(0,y);while(x<W){x+=24;y+=rand(-12,12);ctx.lineTo(x,y)}ctx.lineTo(W,0);ctx.closePath();ctx.fill()}
+ }
+}
+
+function placeDet(cls,scene,hz,existing){
+ const c=CLS[cls];
+ for(let t=0;t<14;t++){let b;
+  if(scene==='aerial'||scene==='sat'){
+   const L=c.L*W*rand(.5,.9)*(scene==='sat'?.6:1),B=L*Math.min(.32,c.ar*.5),a=rand(0,Math.PI),cx=rand(L/2+6,W-L/2-6),cy=rand(L/2*Math.abs(Math.sin(a))+8,H-L/2*Math.abs(Math.sin(a))-8);
+   const w=Math.abs(L*Math.cos(a))+Math.abs(B*Math.sin(a)),h=Math.abs(L*Math.sin(a))+Math.abs(B*Math.cos(a));
+   b={x:cx-w/2,y:cy-h/2,w,h,cx,cy,L,B,a,top:true};
+  }else if(AIR.has(cls)){
+   const L=c.L*W*rand(.7,1.25)*(scene==='sky'?1.5:1),w=L,h=w*c.ar,top=10,bot=hz*H-12-h;
+   b={x:rand(8,W-w-8),y:rand(top,Math.max(top+1,bot)),w,h};
+  }else{
+   const yb=rand(hz+.05,.97),s=(yb-hz)/(1-hz),L=c.L*W*(.35+1.0*s)*rand(.85,1.15),w=L,h=w*c.ar;
+   b={x:rand(4,W-w-4),y:yb*H-h,w,h};
+  }
+  const ok=existing.every(e=>b.x+b.w<e.x||e.x+e.w<b.x||b.y+b.h<e.y||e.y+e.h<b.y);
+  if(ok||t===13)return b;
+ }
+}
+
+function drawSide(ctx,cls,b,mode,att){
+ const mono=mode==='ir';const C=c=>mono?c==='hot'?'#f4f4f4':'#a9a9a9':c;
+ const dir=chance(.5)?1:-1,w=b.w,h=b.h;
+ ctx.save();ctx.translate(dir>0?b.x:b.x+w,b.y);ctx.scale(dir,1);
+ if(mono){ctx.shadowColor='rgba(255,255,255,.55)';ctx.shadowBlur=6}
+ const hull=(top,col,bow=.96)=>poly(ctx,[[0,h*top],[w,h*top-h*.04],[w*bow,h],[w*.04,h]],col);
+ if((cls==='small boat'||cls==='fishing vessel'||cls==='warship')&&att.moving){ctx.fillStyle=mono?'rgba(200,200,200,.4)':'rgba(255,255,255,.55)';ctx.beginPath();ctx.ellipse(-w*.15,h*.95,w*.45,h*.09,0,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(w*.92,h*.93,w*.08,h*.08,0,0,7);ctx.fill()}
+ switch(cls){
+  case 'cargo ship':{hull(.58,C('#2a2f37'));ctx.fillStyle=C('#8b2a2a');ctx.fillRect(w*.04,h*.88,w*.9,h*.12);
+   const cols=['#c0392b','#2e86c1','#d68910','#1e8449','#7d3c98','#ba4a00','#5d6d7e'];for(let x=w*.2;x<w*.86;x+=w*.055)for(let r=0;r<2;r++){ctx.fillStyle=C(pick(cols));ctx.fillRect(x,h*.58-(r+1)*h*.15,w*.05,h*.14)}
+   ctx.fillStyle=C('#e8e8e8');ctx.fillRect(w*.05,h*.05,w*.11,h*.53);ctx.fillStyle=C('#1b2633');ctx.fillRect(w*.06,h*.12,w*.09,h*.06);ctx.fillStyle=C('hot');ctx.fillRect(w*.12,0,w*.03,h*.1);break}
+  case 'tanker':{hull(.55,C('#3a2b2b'));ctx.fillStyle=C('#7a2222');ctx.fillRect(w*.04,h*.85,w*.9,h*.15);ctx.strokeStyle=C('#b5b5b5');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(w*.2,h*.5);ctx.lineTo(w*.9,h*.48);ctx.stroke();
+   ctx.fillStyle=C('#efefef');ctx.fillRect(w*.04,h*.08,w*.1,h*.45);ctx.fillStyle=C('hot');ctx.fillRect(w*.06,0,w*.03,h*.1);break}
+  case 'warship':{poly(ctx,[[0,h*.55],[w*.99,h*.48],[w*.86,h],[w*.03,h]],C('#5c6670'));ctx.fillStyle=C('#6d7782');ctx.fillRect(w*.28,h*.25,w*.3,h*.32);ctx.fillRect(w*.36,h*.08,w*.12,h*.2);
+   ctx.strokeStyle=C('#4a525a');ctx.lineWidth=Math.max(1,w*.012);ctx.beginPath();ctx.moveTo(w*.42,h*.08);ctx.lineTo(w*.42,-h*.25);ctx.moveTo(w*.36,-h*.1);ctx.lineTo(w*.48,-h*.1);ctx.stroke();
+   ctx.fillStyle=C('#4f5861');ctx.fillRect(w*.72,h*.42,w*.06,h*.1);ctx.fillRect(w*.75,h*.44,w*.12,h*.03);ctx.fillStyle=C('hot');ctx.fillRect(w*.2,h*.3,w*.05,h*.2);ctx.fillStyle=C('#ffffff');ctx.font=`bold ${Math.max(6,h*.22)}px sans-serif`;ctx.fillText(String(Math.floor(rand(50,99))),w*.82,h*.8);break}
+  case 'fishing vessel':{hull(.55,C('#e9edf0'));ctx.fillStyle=C('#2364a4');ctx.fillRect(w*.04,h*.82,w*.9,h*.18);ctx.fillStyle=C('#f3f3f3');ctx.fillRect(w*.15,h*.22,w*.3,h*.34);ctx.fillStyle=C('#24323f');ctx.fillRect(w*.18,h*.28,w*.24,h*.1);
+   ctx.strokeStyle=C('#3b3b3b');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(w*.62,h*.55);ctx.lineTo(w*.62,0);ctx.lineTo(w*.95,h*.5);ctx.moveTo(w*.62,0);ctx.lineTo(w*.3,h*.2);ctx.stroke();break}
+  case 'small boat':{poly(ctx,[[0,h*.45],[w,h*.5],[w*.8,h],[w*.06,h]],C(pick(['#f2f2f2','#d9d9d9','#3a3f46'])));ctx.fillStyle=C('#29323b');ctx.fillRect(w*.3,h*.1,w*.25,h*.35);ctx.fillStyle=C('hot');ctx.fillRect(w*.02,h*.4,w*.08,h*.25);break}
+  case 'submarine':{ctx.fillStyle=C('#151a1f');ctx.beginPath();ctx.ellipse(w*.5,h*.92,w*.5,h*.14,0,Math.PI,0);ctx.fill();ctx.fillRect(w*.42,h*.15,w*.16,h*.75);ctx.fillRect(w*.5,-h*.15,w*.02,h*.32);break}
+  case 'military aircraft':{ctx.fillStyle=C('#6b737b');ctx.beginPath();ctx.ellipse(w*.5,h*.55,w*.5,h*.13,0,0,7);ctx.fill();poly(ctx,[[w*.35,h*.55],[w*.62,h*.55],[w*.42,h*.98]],C('#59616a'));poly(ctx,[[w*.02,h*.5],[w*.14,h*.5],[w*.06,h*.05]],C('#59616a'));ctx.fillStyle=C('#22303b');ctx.beginPath();ctx.ellipse(w*.8,h*.45,w*.08,h*.08,0,0,7);ctx.fill();if(mono){ctx.fillStyle='#fff';ctx.fillRect(0,h*.48,w*.05,h*.14)}break}
+  case 'civil aircraft':{ctx.fillStyle=C('#f4f4f4');ctx.beginPath();ctx.ellipse(w*.5,h*.55,w*.5,h*.11,0,0,7);ctx.fill();poly(ctx,[[w*.4,h*.58],[w*.56,h*.58],[w*.36,h]],C('#9aa3ab'));poly(ctx,[[w*.02,h*.5],[w*.12,h*.5],[w*.04,h*.0]],C('#1f5fa8'));ctx.fillStyle=C('#8c949b');ctx.fillRect(w*.4,h*.68,w*.08,h*.08);ctx.fillStyle=C('#3d4b57');for(let x=w*.2;x<w*.88;x+=w*.04)ctx.fillRect(x,h*.5,w*.015,h*.04);break}
+  case 'helicopter':{ctx.fillStyle=C('#3f4a3a');ctx.beginPath();ctx.ellipse(w*.62,h*.6,w*.24,h*.24,0,0,7);ctx.fill();ctx.fillRect(w*.08,h*.52,w*.4,h*.08);ctx.fillRect(w*.04,h*.36,w*.06,h*.22);ctx.strokeStyle=C('#222');ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(w*.15,h*.2);ctx.lineTo(w*1,h*.2);ctx.moveTo(w*.62,h*.2);ctx.lineTo(w*.62,h*.36);ctx.moveTo(w*.45,h*.95);ctx.lineTo(w*.82,h*.95);ctx.stroke();ctx.fillStyle=C('#9fc3d6');ctx.beginPath();ctx.ellipse(w*.76,h*.55,w*.08,h*.13,0,0,7);ctx.fill();break}
+  case 'drone':{ctx.strokeStyle=C('#222');ctx.lineWidth=Math.max(1,w*.06);ctx.beginPath();ctx.moveTo(w*.1,h*.2);ctx.lineTo(w*.9,h*.8);ctx.moveTo(w*.9,h*.2);ctx.lineTo(w*.1,h*.8);ctx.stroke();ctx.fillStyle=C('#333');ctx.fillRect(w*.35,h*.35,w*.3,h*.3);ctx.strokeStyle=C('rgba(40,40,40,.6)');ctx.lineWidth=1;[[.1,.2],[.9,.2],[.1,.8],[.9,.8]].forEach(([x,y])=>{ctx.beginPath();ctx.ellipse(w*x,h*y,w*.14,h*.08,0,0,7);ctx.stroke()});break}
+  case 'person':{ctx.fillStyle=mono?'rgba(150,150,150,.4)':'rgba(255,255,255,.35)';ctx.beginPath();ctx.ellipse(w*.5,h*.85,w*.5,h*.15,0,0,7);ctx.fill();ctx.fillStyle=C('#ff7a1a');ctx.fillRect(w*.25,h*.55,w*.5,h*.3);ctx.fillStyle=C('hot');ctx.beginPath();ctx.arc(w*.5,h*.38,w*.2,0,7);ctx.fill();break}
+  case 'bird':{ctx.strokeStyle=C('#1d1d1d');ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(0,h*.3);ctx.quadraticCurveTo(w*.25,0,w*.5,h*.6);ctx.quadraticCurveTo(w*.75,0,w,h*.3);ctx.stroke();break}
+  case 'buoy':{poly(ctx,[[w*.5,0],[w,h*.85],[0,h*.85]],C(pick(['#c0392b','#1e8449'])));ctx.fillStyle=C('hot');ctx.beginPath();ctx.arc(w*.5,h*.05,w*.15,0,7);ctx.fill();break}
+  case 'debris':{for(let i=0;i<4;i++)poly(ctx,[[rand(0,w*.5),rand(h*.4,h)],[rand(w*.3,w),rand(h*.4,h)],[rand(w*.3,w),rand(h*.7,h)]],C(pick(['#6b4f2f','#8a6a3f','#e07b2b'])));break}
+ }
+ ctx.restore();
+}
+function drawTop(ctx,cls,b,mode,att){
+ const sar=mode==='sar';ctx.save();ctx.translate(b.cx,b.cy);ctx.rotate(b.a);const L=b.L,B=b.B;
+ if(sar){ctx.shadowColor='#fff';ctx.shadowBlur=8;ctx.fillStyle='#f0f0f0';ctx.beginPath();ctx.ellipse(0,0,L/2,B/2,0,0,7);ctx.fill();ctx.globalAlpha=.35;ctx.fillRect(-L*.9,-.5,L*1.8,1.2);ctx.fillRect(-.5,-L*.5,1.2,L);ctx.restore();return}
+ if(att.moving&&cls!=='person'&&cls!=='debris'){ctx.fillStyle='rgba(255,255,255,.45)';ctx.beginPath();ctx.moveTo(-L/2,0);ctx.lineTo(-L*1.8,-B*1.6);ctx.lineTo(-L*1.8,B*1.6);ctx.closePath();ctx.fill();ctx.fillStyle='rgba(255,255,255,.7)';ctx.fillRect(-L*1.1,-B*.25,L*.6,B*.5)}
+ const hullPath=()=>{ctx.beginPath();ctx.moveTo(-L/2,-B/2);ctx.lineTo(L*.3,-B/2);ctx.lineTo(L/2,0);ctx.lineTo(L*.3,B/2);ctx.lineTo(-L/2,B/2);ctx.closePath()};
+ switch(cls){
+  case 'submarine':ctx.globalAlpha=.7;ctx.fillStyle='#0d1b24';ctx.beginPath();ctx.ellipse(0,0,L/2,B/2.4,0,0,7);ctx.fill();ctx.globalAlpha=1;ctx.fillStyle='#091218';ctx.fillRect(-L*.05,-B*.15,L*.12,B*.3);break;
+  case 'person':ctx.fillStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.arc(0,0,L*.6,0,7);ctx.fill();ctx.fillStyle='#ff7a1a';ctx.beginPath();ctx.arc(0,0,L*.32,0,7);ctx.fill();break;
+  case 'debris':for(let i=0;i<5;i++)poly(ctx,[[rand(-L/2,L/2),rand(-B,B)],[rand(-L/2,L/2),rand(-B,B)],[rand(-L/2,L/2),rand(-B,B)]],pick(['#6b4f2f','#8a6a3f','#e07b2b']));break;
+  default:{const col={'warship':'#6a737c','cargo ship':'#30353c','tanker':'#5a2a2a','fishing vessel':'#e8ecef','small boat':'#f4f4f4'}[cls];hullPath();ctx.fillStyle=col;ctx.fill();
+   if(cls==='cargo ship'){const cs=['#c0392b','#2e86c1','#d68910','#1e8449'];for(let x=-L*.3;x<L*.25;x+=L*.07){ctx.fillStyle=pick(cs);ctx.fillRect(x,-B*.38,L*.06,B*.76)}ctx.fillStyle='#eee';ctx.fillRect(-L*.45,-B*.4,L*.1,B*.8)}
+   if(cls==='tanker'){ctx.fillStyle='#8a8a8a';ctx.fillRect(-L*.3,-1,L*.6,2);ctx.fillStyle='#eee';ctx.fillRect(-L*.46,-B*.4,L*.1,B*.8)}
+   if(cls==='warship'){ctx.fillStyle='#7f8892';ctx.fillRect(-L*.15,-B*.3,L*.25,B*.6);ctx.fillStyle='#555';ctx.beginPath();ctx.arc(L*.3,0,B*.15,0,7);ctx.fill()}
+   if(cls==='fishing vessel'||cls==='small boat'){ctx.fillStyle='#2a3743';ctx.fillRect(-L*.15,-B*.3,L*.25,B*.6)}}
+ }
+ ctx.restore();
+}
+
+function renderImage(src,dets,ts,frame,hz){
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
+ drawBackground(ctx,src.scene,src.mode,hz);
+ [...dets].sort((a,b)=>(a.b.y+a.b.h)-(b.b.y+b.b.h)).forEach(d=>d.b.top?drawTop(ctx,d.cls,d.b,src.mode,d.attrs):drawSide(ctx,d.cls,d.b,src.mode,d.attrs));
+ if(src.mode==='ir'||src.mode==='sar'){const d=ctx.getImageData(0,0,W,H),p=d.data;for(let i=0;i<p.length;i+=4){const l=.3*p[i]+.59*p[i+1]+.11*p[i+2];p[i]=p[i+1]=p[i+2]=l}ctx.putImageData(d,0,0)}
+ grain(ctx,src.mode==='sar'?46:src.mode==='ir'?16:9);
+ const vg=ctx.createRadialGradient(W/2,H/2,H*.4,W/2,H/2,H*.9);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.35)');ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+ ctx.font='10px ui-monospace,Menlo,monospace';ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(0,0,W,15);ctx.fillStyle='#e8f1f7';
+ ctx.fillText(`${src.id}  ${ts.toISOString().slice(0,19).replace('T',' ')}Z`,6,11);ctx.textAlign='right';ctx.fillText(`FRM ${String(frame).padStart(6,'0')}  ${src.mode.toUpperCase()}`,W-6,11);
+ return cv.toDataURL('image/jpeg',.82);
+}
+
+/* ---------------- scoring ---------------- */
+function allRules(){return state.directives.flatMap(d=>d.rules).filter(r=>(!r.sensor||r.sensor===scoringItem?.src.id)&&(!r.minutes||(NOW-scoringItem?.ts)/60000<=r.minutes))}
+function ruleMatch(r,d){return(!r.classes.length||r.classes.includes(d.cls))&&(!r.attrs.length||r.attrs.some(a=>d.attrs[a]))}
+function scoreDet(d,rules){
+ const M=MODELS[state.model].w;let w=M[d.cls];const notes=[];
+ if(CLS[d.cls].g==='vessel'||CLS[d.cls].g==='aircraft'){if(d.attrs.approaching)w=Math.min(1,w*1.15);if(d.attrs.dark)w=Math.min(1,w*1.2)}
+ const boosts=rules.filter(r=>r.type==='boost'),only=rules.some(r=>r.only);let matched=false,sup=false;
+ for(const r of rules){if(!ruleMatch(r,d))continue;
+  if(r.type==='boost'){matched=true;w=1-(1-w)*Math.pow(r.classes.length&&r.attrs.length?.06:.22,r.weight??1);notes.push(r)}
+  else{sup=true;w*=Math.pow(.12,r.weight??1);notes.push(r)}}
+ if(boosts.length&&!matched&&!sup)w*=only?.3:.6;
+ return{s:Math.min(.99,w*d.conf),matched,sup,notes,focus:boosts.length&&!matched&&!sup};
+}
+function noisyOr(arr){return 1-arr.reduce((p,s)=>p*(1-s),1)}
+function rescore(it){
+ const rules=allRules();it.det=it.dets.map(d=>scoreDet(d,rules));it.central=noisyOr(it.det.map(x=>x.s));
+ if(rules.length){const save=state.directives;state.directives=[];it.base=noisyOr(it.dets.map(d=>scoreDet(d,[]).s));state.directives=save}else it.base=it.central;
+ it.tier=it.central>=.8?1:it.central>=.6?2:it.central>=.35?3:4;if(it.manual)it.tier=it.manual;
+}
+function edgeScore(dets){return noisyOr(dets.map(d=>EDGE_W[CLS[d.cls].g]*d.conf*rand(.75,1)))}
+
+/* ---------------- generation ---------------- */
+function makeAttrs(cls){const g=CLS[cls].g,a={};
+ if(g==='vessel'){a.moving=chance(.5);a.approaching=a.moving&&chance(.45);a.dark=chance(.16);a.loitering=!a.moving&&chance(.25)}
+ else if(g==='aircraft'||cls==='drone'){a.moving=true;a.approaching=chance(.35);a.loitering=cls!=='civil aircraft'&&chance(.15);a.dark=cls!=='bird'&&chance(.1)}
+ else if(cls==='person'||cls==='debris'){a.loitering=true}
+ a.new=chance(.25);return a}
+function genItem(src,ts){
+ const hz=src.scene==='harbor'?rand(.36,.42):src.scene==='open'?rand(.34,.46):src.scene==='sky'?.9:0;
+ const n=wpick({0:.6,1:4,2:3,3:1.3});const dets=[],boxes=[];
+ for(let i=0;i<n;i++){const cls=wpick(POOLS[src.scene]);const b=placeDet(cls,src.scene,hz,boxes);boxes.push(b);dets.push({cls,b,conf:+rand(.55,.98).toFixed(2),attrs:makeAttrs(cls)})}
+ const edge=dets.length?edgeScore(dets):rand(0,.05);
+ frameNo+=Math.floor(rand(3,40));
+ if(edge<.2)return{dropped:true};
+ const img=renderImage(src,dets,ts,frameNo,hz);
+ const it={id:'img_'+random().toString(16).slice(2,10),frame:frameNo,src,ts,dets,edge,img,kb:Math.round(img.length*.75/1024),fresh:true,
+  lat:{edge:Math.round(rand(14,60)),up:Math.round(src.link.includes('Iridium')?rand(4000,9000):src.link.includes('MANET')?rand(300,900):src.link.includes('downlink')?rand(60000,180000):rand(40,160)),cen:Math.round(rand(70,210))}};
+ rescore(it);return it;
+}
+function tick(backfill=false,forceSrc=null,ts=new Date()){
+ const pool=SOURCES.filter(s=>s.id!=='ALL');
+ const src=forceSrc||(state.src==='ALL'?pick(pool):SRC[state.src]);
+ const extra=Math.floor(rand(3,9));stats.cap+=extra+1;stats.drop+=extra;
+ const it=genItem(src,ts);
+ if(it.dropped){stats.drop++;if(!backfill)flash('st2');return null}
+ stats.keep++;stats.bytes+=it.kb;stats.db++;it.dbId=stats.db+180000;
+ items.push(it);if(items.length>260){const rm=items.filter(x=>x.id!==state.sel).sort((a,b)=>a.ts-b.ts)[0];items=items.filter(x=>x!==rm);rm.el&&rm.el.remove()}
+ if(backfill)it.fresh=false;else{['st1','st2','st3','st4','st5'].forEach((s,i)=>setTimeout(()=>flash(s),i*140));setTimeout(()=>{it.fresh=false;it.el&&it.el.classList.remove('fresh')},6000)}
+ return it;
+}
+function flash(id){const e=$(id);if(!e)return;e.classList.add('flash');setTimeout(()=>e.classList.remove('flash'),350)}
+
+/* ---------------- NL directive parsing ---------------- */
+const SYN=[
+ ['warship',/\b(warships?|destroyers?|frigates?|cruisers?|corvettes?|combatants?|navy (ship|vessel)s?|naval (ship|vessel)s?|military (ship|vessel)s?|grey hulls?|gray hulls?)\b/g],
+ ['submarine',/\b(submarines?|subs?|periscopes?|submersibles?)\b/g],
+ ['tanker',/\b(tankers?|oilers?)\b/g],
+ ['cargo ship',/\b(cargo( ships?| vessels?)?|container ?ships?|freighters?|merchant( ships?| vessels?)?|bulk carriers?)\b/g],
+ ['fishing vessel',/\b(fishing( vessels?| boats?)?|trawlers?|fishermen)\b/g],
+ ['small boat',/\b(small boats?|skiffs?|speed ?boats?|rhibs?|dinghy|dinghies|go-?fasts?|small craft|jet ?skis?|boats?)\b/g],
+ ['military aircraft',/\b(military (aircraft|planes?|jets?)|fighters?|fighter jets?|jets?|bombers?|p-?8s?|patrol aircraft|warplanes?)\b/g],
+ ['civil aircraft',/\b(airliners?|civil(ian)? (aircraft|planes?)|commercial (aircraft|planes?|flights?)|passenger (jets?|planes?)|private (jets?|planes?))\b/g],
+ ['helicopter',/\b(helicopters?|helos?|rotary[- ]wing|rotorcraft|choppers?)\b/g],
+ ['drone',/\b(drones?|uavs?|uas|suas|quadcopters?|unmanned aircraft)\b/g],
+ ['person',/\b(persons?|people|swimmers?|man overboard|mob|divers?|survivors?|someone|humans?)( in the water)?\b/g],
+ ['bird',/\b(birds?|gulls?|seagulls?|pelicans?|wildlife)\b/g],
+ ['buoy',/\b(buoys?|channel markers?|navigation aids?|navaids?)\b/g],
+ ['debris',/\b(debris|wreckage|floating objects?|flotsam|life ?rafts?|oil slicks?)\b/g],
+];
+const GENERIC=[
+ [['warship','cargo ship','tanker','fishing vessel','small boat','submarine'],/\b(ships?|vessels?|surface contacts?|watercraft|maritime traffic)\b/g],
+ [['military aircraft','civil aircraft','helicopter','drone'],/\b(aircraft|planes?|airplanes?|air contacts?|air traffic|airborne|flying objects?)\b/g],
+];
+const ATTRS=[
+ ['approaching',/\b(approach\w*|inbound|toward\w*|closing|heading (to|for|toward)\w*|incoming|nearing)\b/],
+ ['new',/\b(new|newly|appear\w*|arriv\w*|enter\w*|change[sd]?|changes|emerg\w*|first seen|showed up|pop(ped)? up)\b/],
+ ['dark',/\b(ais|dark|unidentified|unknown|no transponder|not broadcasting|unregistered|spoof\w*|suspicious)\b/],
+ ['moving',/\b(moving|fast|speed\w*|underway|high[- ]speed|rapid\w*|racing|quickly)\b/],
+ ['loitering',/\b(loiter\w*|stationary|idle|anchored|circling|lingering|drifting|holding)\b/],
+];
+const NEG=/\b(ignore|deprioriti\w*|de-prioriti\w*|exclude|suppress|filter out|skip|hide|less important|lower priority|don'?t care|not interested|no need|downrank)\b/;
+function originalParseDirective(text){
+ const clauses=text.toLowerCase().split(/[,;.]|\bbut\b|\balso\b|\bthen\b|\band (?=(ignore|deprioriti|exclude|suppress|skip|hide|filter|don))/).filter(Boolean);
+ const rules=[];
+ for(let c of clauses){if(!c||!c.trim())continue;
+  const neg=NEG.test(c),only=/\b(only|exclusively|nothing (else|but))\b/.test(c);const classes=new Set();
+  for(const[k,re]of SYN){if(c.match(re)){classes.add(k);c=c.replace(re,' ')}}
+  for(const[ks,re]of GENERIC){if(c.match(re)){ks.forEach(k=>classes.add(k));c=c.replace(re,' ')}}
+  const attrs=ATTRS.filter(([,re])=>re.test(c)).map(([k])=>k);
+  if(!classes.size&&!attrs.length)continue;
+  rules.push({type:neg?'suppress':'boost',classes:[...classes],attrs,only:only&&!neg});
+ }
+ return rules;
+}
+function ruleLabel(r){
+ const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>CLS[k].lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>CLS[k].lab).join(' / ')):'Any object';
+ const at=r.attrs.length?' · '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):'';
+ return(r.type==='boost'?'▲ ':'▼ ')+cl+at;
+}
+
+const NOW=new Date('2026-11-04T12:00:00Z');
+let scoringItem=null;
+let draft={text:'',rules:[],pins:{}},baselineDraft=null,comparison=null,versions=[],cursor=-1,serial=0,selected=null,proposal=null,timer=null;
+const clone=x=>JSON.parse(JSON.stringify(x));
+const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tierColors=['','#ff4d5e','#ff9a3c','#f0cf4a','#71889d'];
+function parseDirective(text){
+ return text.replace(/fixed[- ]wing/gi,'military aircraft or civil aircraft').split(/[;,.]|\bbut\b|\balso\b/i).flatMap(clause=>{
+  const sensor=SOURCES.find(s=>s.id!=='ALL'&&clause.toUpperCase().includes(s.id));
+  const minutes=clause.match(/last\s+(\d+)\s*(min(?:utes?)?|hours?|h)\b/i);
+  return originalParseDirective(clause).map(r=>({...r,weight:1,sensor:sensor?.id||'',minutes:minutes?Number(minutes[1])*(/^h/i.test(minutes[2])?60:1):0}));
+ });
+}
+function evaluate(snapshot){
+ state.directives=[{rules:snapshot.rules}];
+ const result=items.map(item=>{scoringItem=item;const it={...item,manual:snapshot.pins[item.id]||null};rescore(it);return it});
+ scoringItem=null;return result.sort((a,b)=>a.tier-b.tier||b.central-a.central||a.frame-b.frame);
+}
+const counts=rows=>[1,2,3,4].map(t=>rows.filter(i=>i.tier===t).length);
+function ruleText(r){return `${r.type==='boost'?'Prioritize':'Suppress'} ${r.only?'only ':''}${r.classes.join(' or ')||'any object'}${r.attrs.length?' '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):''}${r.sensor?' from '+r.sensor:''}${r.minutes?' last '+r.minutes+' min':''}`}
+function effect(before,after){const b=counts(before),a=counts(after);return a.map((n,i)=>`${n-b[i]>=0?'+':'−'}${Math.abs(n-b[i])} P${i+1}`).join(' · ')}
+function changed(before,after){const map=new Map(before.map(i=>[i.id,i]));return after.filter(i=>map.get(i.id).tier!==i.tier).length}
+function commit(label){
+ if(cursor>=0&&JSON.stringify(versions[cursor].snapshot)===JSON.stringify(draft)){render();return}
+ const previous=cursor>=0?evaluate(versions[cursor].snapshot):evaluate(draft),next=evaluate(draft);
+ versions=versions.slice(0,cursor+1);versions.push({n:++serial,label,delta:`${changed(previous,next)} tier changes · ${effect(previous,next)}`,snapshot:clone(draft)});cursor=versions.length-1;proposal=null;render();
+}
+function flush(){if(timer){clearTimeout(timer);timer=null;draft.text=$('directive').value;draft.rules=parseDirective(draft.text);commit('Directive edited')}}
+function restore(index,label){flush();draft=clone(versions[index].snapshot);$('directive').value=draft.text;commit(label)}
+function travel(delta){flush();const next=cursor+delta;if(next<0||next>=versions.length)return;cursor=next;draft=clone(versions[cursor].snapshot);$('directive').value=draft.text;proposal=null;render()}
+function unknownWords(){
+ let text=draft.text.toLowerCase().replace(/fixed[- ]wing/g,'military aircraft or civil aircraft');
+ for(const[,re]of [...SYN,...GENERIC,...ATTRS])text=text.replace(new RegExp(re.source,'gi'),' ');
+ text=text.replace(new RegExp(NEG.source,'gi'),' ');
+ for(const s of SOURCES)text=text.replaceAll(s.id.toLowerCase(),' ');
+ text=text.replace(/\blast\s+\d+\s*(minutes?|min|hours?|h)\b/g,' ');
+ text=text.replace(/\b(prioriti\w*|boost|show|focus|on|only|exclusively|and|or|the|a|an|any|all|with|without|no|from|in|of|to|more|please|not|at)\b/g,' ');
+ return [...new Set(text.match(/[a-z][a-z-]*/g)||[])];
+}
+function options(catalog,values){return catalog.map(([value,label])=>`<option value="${esc(value)}" ${values.includes(value)?'selected':''}>${esc(label)}</option>`).join('')}
+function renderChips(){
+ $('chips').innerHTML=draft.rules.length?draft.rules.map((r,i)=>`<div class="chip ${r.type}" data-rule="${i}"><div class="row between"><strong>${esc(ruleLabel(r))}</strong>${r.edited?'<span class="edited">edited</span>':''}</div><div class="row" style="margin-top:8px"><button data-field="flip" aria-label="Flip rule ${i+1} boost or suppress">${r.type==='boost'?'▲ Boost':'▼ Suppress'} ⇄</button><button data-field="remove" aria-label="Remove rule ${i+1}">× Remove</button></div><label class="hint">Classes · Ctrl/click for multiple<select data-field="classes" multiple size="3" style="width:100%">${options(Object.entries(CLS).map(([k,v])=>[k,v.lab]),r.classes)}</select></label><label class="hint">Conditions (any match)<select data-field="attrs" multiple size="2" style="width:100%">${options(Object.entries(ATTR_LAB),r.attrs)}</select></label><div class="row"><label class="hint">Source<select data-field="sensor">${options([['','Any sensor'],...SOURCES.slice(1).map(s=>[s.id,s.id])],[r.sensor||''])}</select></label><label class="hint">Window<select data-field="minutes">${options([['0','Any time'],['15','Last 15 min'],['30','Last 30 min'],['60','Last 60 min'],...(![0,15,30,60].includes(r.minutes)?[[String(r.minutes),`Last ${r.minutes} min`]]:[])],[String(r.minutes||0)])}</select></label></div><label class="hint">Weight <output>${r.weight.toFixed(1)}×</output><div class="row"><button data-field="minus" aria-label="Decrease weight">−</button><input data-field="weight" aria-label="Rule ${i+1} weight" type="range" min="0.2" max="3" step="0.2" value="${r.weight}"><button data-field="plus" aria-label="Increase weight">+</button></div></label></div>`).join(''):'<p class="hint">Base model only. Type a directive or add a rule.</p>';
+ const words=unknownWords();$('unknown').innerHTML=words.length?`Not understood: ${words.map(w=>`<mark>${esc(w)}</mark>`).join(' ')}<br>Try a catalog class, condition, sensor ID or “last 30 min”.`:'<span style="color:var(--good)">✓ Recognized terms only</span>';
+}
+function chipEdit(target,preview=false){
+ const root=target.closest('[data-rule]');if(!root)return;flush();const i=+root.dataset.rule,r=draft.rules[i],field=target.dataset.field;if(!r||!field)return;
+ if(field==='remove')draft.rules.splice(i,1);
+ else{r.edited=true;if(field==='flip')r.type=r.type==='boost'?'suppress':'boost';else if(field==='plus'||field==='minus')r.weight=+Math.max(.2,Math.min(3,r.weight+(field==='plus'?.2:-.2))).toFixed(1);else if(field==='classes'||field==='attrs')r[field]=[...target.selectedOptions].map(o=>o.value);else r[field]=field==='sensor'?target.value:+target.value;}
+ if(preview){root.querySelector('output').textContent=r.weight.toFixed(1)+'×';renderPreview();renderSuggestions();return}commit('Rule chip edited');
+}
+let candidates=[];
+function renderSuggestions(){
+ candidates=[];const current=evaluate(draft);
+ function offer(label,update){const candidate=clone(draft);update(candidate);candidate.text=candidate.rules.map(ruleText).join('; ');const next=evaluate(candidate);candidates.push({label,candidate,impact:effect(current,next)});}
+ draft.rules.forEach((r,i)=>{
+  if(r.classes.includes('small boat')&&/\bboats\b/i.test(draft.text)&&!r.attrs.length){
+   for(const [label,cl,attrs] of [['Small boats','small boat',[]],['Fast boats','small boat',['moving']],['Fishing vessels','fishing vessel',[]]])offer(`Specify boats → ${label}`,d=>{d.rules[i]={...d.rules[i],classes:[cl],attrs,edited:true};d.text=d.text.replace(/\bboats\b/i,label.toLowerCase())});
+  }
+  if(r.classes.length>=3&&r.classes.includes('helicopter'))for(const [label,classes] of [['Helicopters',['helicopter']],['Drones',['drone']],['Fixed-wing',['military aircraft','civil aircraft']]])offer(`Specify aircraft → ${label}`,d=>{d.rules[i].classes=classes;d.rules[i].edited=true});
+  if(!r.attrs.length)for(const attr of ['moving','dark'])offer(`Add condition → ${ATTR_LAB[attr]}`,d=>{d.rules[i].attrs=[attr];d.rules[i].edited=true;d.text+=`; ${r.type==='boost'?'prioritize':'suppress'} ${r.classes.join(' or ')||'objects'} ${ATTR_LAB[attr]}`});
+  if(!r.sensor)offer(`Scope rule ${i+1} → EO-P7`,d=>{d.rules[i].sensor='EO-P7';d.rules[i].edited=true;d.text+=` (rule ${i+1}: EO-P7)`});
+  if(!r.minutes)offer(`Time window → last 30 min (rule ${i+1})`,d=>{d.rules[i].minutes=30;d.rules[i].edited=true;d.text+=` (rule ${i+1}: last 30 min)`});
+  const matches=items.filter(it=>(!r.sensor||it.src.id===r.sensor)&&(!r.minutes||(NOW-it.ts)/60000<=r.minutes)&&it.dets.some(det=>ruleMatch(r,det))).length;
+  if(matches/items.length>.45)offer(`Broad match: ${Math.round(matches/items.length*100)}% of images → approaching only`,d=>{d.rules[i].attrs=['approaching'];d.rules[i].edited=true;d.text+='; refine to approaching contacts'});
+  if(draft.rules.some((other,j)=>j!==i&&other.type!==r.type&&r.classes.some(c=>other.classes.includes(c))))offer(`Conflicting boost / suppress → remove rule ${i+1}`,d=>{d.rules.splice(i,1);d.text+='; conflict removed in chips'});
+ });
+ $('suggestions').innerHTML=candidates.length?candidates.map((c,i)=>`<button class="suggestion" data-suggest="${i}">${esc(c.label)}<small>${c.impact}</small></button>`).join(''):'<p class="hint">Start with “prioritize boats” for guided refinements. No specificity warnings right now.</p>';
+}
+function why(id){
+ const it=items.find(i=>i.id===id);if(!it)return;selected=id;const current=evaluate(draft).find(i=>i.id===id),base=evaluate({text:'',rules:[],pins:{}}).find(i=>i.id===id);
+ const contributions=draft.rules.map((r,index)=>{const without=clone(draft);without.rules.splice(index,1);const other=evaluate(without).find(i=>i.id===id);const delta=current.central-other.central;return `<li>${esc(ruleLabel(r))} · ${r.sensor||'all sources'} · ${r.minutes?'last '+r.minutes+' min':'all times'}: <b>${delta>=0?'+':''}${(delta*100).toFixed(1)} score points</b>${Math.abs(delta)<.0001?' (no effect)':''}</li>`});
+ $('why').innerHTML=`<div class="row between"><h2>Why / Frame ${it.frame}</h2><span class="hint">${it.src.id} · ${Math.round((NOW-it.ts)/60000)} min old</span></div><div class="hint">${it.dets.map(d=>`${esc(CLS[d.cls].lab)} (${Math.round(d.conf*100)}%) ${Object.keys(d.attrs).filter(a=>d.attrs[a]).map(a=>ATTR_LAB[a]).join(', ')}`).join(' · ')}</div><ul><li>Base noisy-OR score: ${(base.central*100).toFixed(1)}</li>${contributions.join('')}<li>Final score: ${(current.central*100).toFixed(1)} → P${current.tier}${draft.pins[id]?' · explicit pinned exception (overrides tier)':''}</li></ul><div class="hint">Contributions are marginal: score with all rules minus score without that rule. Overlapping rules are non-additive; boost rules also downweight unmatched contacts.</div>`;
+ document.querySelectorAll('.tile').forEach(el=>el.classList.toggle('selected',el.dataset.id===id));
+}
+function renderPreview(){
+ const focused=document.activeElement.closest('.tile'),focusId=focused?.dataset.id;
+ const before=evaluate(comparison?.snapshot||baselineDraft),after=evaluate(draft),bmap=new Map(before.map((it,index)=>[it.id,{...it,rank:index+1}])),ac=counts(after),bc=counts(before);
+ $('compareLabel').textContent=`Before: ${comparison?'v'+comparison.n:'applied baseline'} → After: current · ${changed(before,after)} / 80 change tier`;
+ $('counts').innerHTML=ac.map((n,i)=>`<div class="count" style="--tier:${tierColors[i+1]}"><span>P${i+1}</span><br><b>${bc[i]} → ${n}</b><div class="hint">${n-bc[i]>=0?'+':''}${n-bc[i]} images</div><div class="track"><i style="width:${bc[i]/80*100}%;opacity:.4"></i></div><div class="track"><i style="width:${n/80*100}%"></i></div></div>`).join('');
+ const top=after.slice(0,16),rows=$('diff').checked?after.filter(it=>it.tier!==bmap.get(it.id).tier):top;
+ $('resultLabel').textContent=$('diff').checked?`After · ${rows.length} tier-changed images`:'After · Top 16';
+ $('grid').innerHTML=rows.map(it=>{const old=bmap.get(it.id),rank=after.indexOf(it)+1,delta=old.rank-rank,badge=old.rank>16&&rank<=16?'NEW in top':delta>0?'↑'+delta:delta<0?'↓'+Math.abs(delta):'— same rank';return `<article class="tile ${selected===it.id?'selected':''}" tabindex="0" data-id="${it.id}" aria-label="Rank ${rank}, frame ${it.frame}, P${it.tier}"><div class="photo"><img src="${it.img}" alt="Synthetic ${it.dets.map(d=>CLS[d.cls].lab).join(', ')}"><span class="badge">#${rank} · ${badge}</span></div><div class="tile-body"><div class="tile-title"><span>${it.src.id} · ${Math.round((NOW-it.ts)/60000)}m</span><b style="color:${tierColors[it.tier]}">P${old.tier} → P${it.tier}</b></div><div class="actions"><button data-correct="higher" title="Should be higher (↑)">↑ Higher</button><button data-correct="lower" title="Should be lower (↓)">↓ Lower</button><button data-correct="irrelevant" title="Not relevant (X)">× N/A</button></div><select class="pin" aria-label="Pin frame ${it.frame} to a tier"><option value="">${draft.pins[it.id]?'Remove pin':'Pin to tier…'}</option>${[1,2,3,4].map(t=>`<option value="${t}" ${draft.pins[it.id]===t?'selected':''}>Pin P${t} exception</option>`).join('')}</select></div></article>`}).join('')||'<div class="empty">No tier changes. Try refining a rule or turn off Diff only.</div>';
+ const dropped=before.slice(0,16).filter(it=>!top.some(x=>x.id===it.id));$('dropLabel').textContent=`Dropped out of top 16 · ${dropped.length}`;
+ $('dropped').innerHTML=dropped.length?dropped.map(it=>`<button data-why="${it.id}" title="Inspect dropped frame ${it.frame}"><img src="${it.img}" alt="Dropped synthetic frame ${it.frame}">Frame ${it.frame}</button>`).join(''):'<span class="hint">No images dropped out.</span>';
+ if(selected)why(selected);
+ if(focusId)document.querySelector(`.tile[data-id="${focusId}"]`)?.focus({preventScroll:true});
+}
+function renderHistory(){
+ $('history').innerHTML=versions.map((v,i)=>`<div class="version ${i===cursor?'active':''}"><strong>v${v.n} · ${esc(v.label)}</strong><div class="hint">${v.delta}</div><div class="row"><button data-compare="${i}">Compare vs now</button><button data-restore="${i}">Revert</button></div></div>`).reverse().join('');$('undo').disabled=cursor<=0;$('redo').disabled=cursor>=versions.length-1;
+}
+function render(){renderChips();renderPreview();renderSuggestions();renderHistory();renderProposal()}
+function propose(id,action){
+ flush();const it=items.find(i=>i.id===id);if(!it)return;const det=[...it.dets].sort((a,b)=>MODELS.maritime.w[b.cls]*b.conf-MODELS.maritime.w[a.cls]*a.conf)[0];if(!det)return;
+ const attr=['dark','approaching','moving','loitering','new'].find(a=>det.attrs[a]);const type=action==='higher'?'boost':'suppress';
+ const rule={type,classes:[det.cls],attrs:attr?[attr]:[],weight:action==='irrelevant'?2:1,sensor:it.src.id,minutes:0,edited:true};
+ const candidate=clone(draft);candidate.rules.push(rule);const clause=ruleText(rule);candidate.text=candidate.rules.map(ruleText).join('; ');
+ proposal={id,action,rule,candidate,clause,impact:effect(evaluate(draft),evaluate(candidate))};renderProposal();why(id);$('proposal').scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function renderProposal(){
+ $('proposal').innerHTML=proposal?`<div class="eyebrow">Proposed correction · not yet active</div><h2>${esc(proposal.clause)}</h2><p class="hint">Derived from this image's class, condition and sensor. Applies to matching images, not just this frame. Use a tier pin for an exact exception.</p><p style="color:var(--good)">${proposal.impact}</p><div class="row"><button id="acceptFix" class="primary">Accept fix</button><button id="rejectFix">Discard</button></div>`:'';
+ if(proposal){$('acceptFix').onclick=()=>{draft=proposal.candidate;$('directive').value=draft.text;commit('Correction accepted')};$('rejectFix').onclick=()=>{proposal=null;renderProposal()}};
+}
+while(items.length<80){const it=genItem(SOURCES[1+items.length%6],new Date(NOW-(items.length*67+120)*1000));if(!it.dropped)items.push(it)}
+baselineDraft=clone(draft);commit('Base model · starting point');
+$('directive').oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>{timer=null;draft.text=$('directive').value;draft.rules=parseDirective(draft.text);commit('Directive edited')},250)};
+$('chips').onclick=e=>{if(e.target.closest('button'))chipEdit(e.target.closest('button'))};
+$('chips').oninput=e=>{if(e.target.dataset.field==='weight')chipEdit(e.target,true)};
+$('chips').onchange=e=>chipEdit(e.target);
+$('add').onclick=()=>{flush();draft.rules.push({type:'boost',classes:['small boat'],attrs:[],weight:1,sensor:'',minutes:0,edited:true});commit('Manual rule added')};
+$('suggestions').onclick=e=>{const button=e.target.closest('[data-suggest]');if(!button)return;flush();const c=candidates[+button.dataset.suggest];if(!c)return;draft=c.candidate;$('directive').value=draft.text;commit('Suggestion: '+c.label)};
+$('history').onclick=e=>{if(e.target.dataset.compare!==undefined){flush();comparison=versions[+e.target.dataset.compare];renderPreview()}if(e.target.dataset.restore!==undefined)restore(+e.target.dataset.restore,'Version restored')};
+$('undo').onclick=()=>travel(-1);$('redo').onclick=()=>travel(1);$('baseline').onclick=()=>{comparison=null;renderPreview()};$('diff').onchange=renderPreview;
+$('grid').onmouseover=e=>{const tile=e.target.closest('.tile');if(tile&&selected!==tile.dataset.id)why(tile.dataset.id)};
+$('grid').onfocusin=e=>{const tile=e.target.closest('.tile');if(tile)why(tile.dataset.id)};
+$('grid').onclick=e=>{const tile=e.target.closest('.tile');if(!tile)return;why(tile.dataset.id);const b=e.target.closest('[data-correct]');if(b)propose(tile.dataset.id,b.dataset.correct)};
+$('grid').onchange=e=>{if(!e.target.classList.contains('pin'))return;flush();const id=e.target.closest('.tile').dataset.id;if(e.target.value)draft.pins[id]=+e.target.value;else delete draft.pins[id];commit('Tier exception updated')};
+$('dropped').onclick=e=>{const b=e.target.closest('[data-why]');if(b)why(b.dataset.why)};
+document.onkeydown=e=>{
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();travel(e.shiftKey?1:-1);return}
+ if(/TEXTAREA|INPUT|SELECT/.test(e.target.tagName))return;const tile=e.target.closest('.tile');if(!tile)return;
+ const key=e.key.toLowerCase();if(['arrowup','arrowdown','x'].includes(key)){e.preventDefault();propose(tile.dataset.id,key==='arrowup'?'higher':key==='arrowdown'?'lower':'irrelevant')}
+ if(['arrowleft','arrowright','j','k'].includes(key)){e.preventDefault();const tiles=[...document.querySelectorAll('.tile')],index=tiles.indexOf(tile),delta=key==='arrowleft'||key==='k'?-1:1;tiles[Math.max(0,Math.min(tiles.length-1,index+delta))]?.focus()}
+};
+$('reset').onclick=()=>{flush();draft={text:'',rules:[],pins:{}};$('directive').value='';comparison=null;commit('Reset to base model')};
+$('apply').onclick=()=>{flush();$('confirmText').textContent=`${changed(evaluate(baselineDraft),evaluate(draft))} of 80 images change tier. ${draft.rules.length} rules and ${Object.keys(draft.pins).length} pinned exceptions will become the applied baseline.`;$('confirm').showModal()};
+$('cancelApply').onclick=()=>$('confirm').close();$('confirmApply').onclick=()=>{baselineDraft=clone(draft);comparison=null;$('status').textContent=`Applied locally · ${draft.rules.length} rules · baseline updated`;$('confirm').close();renderPreview()};
+</script>
+</body>
+</html>
