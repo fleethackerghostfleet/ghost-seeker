@@ -286,6 +286,22 @@ func (s *Store) rescoreLocked() {
 	}
 }
 
+func (s *Store) RescoreTimeScoped(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, directive := range s.directives {
+		for _, rule := range directive.Rules {
+			if rule.WithinMin > 0 {
+				for i := range s.items {
+					command.RescoreAt(&s.items[i], s.model, s.directives, now)
+				}
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func cloneItem(item command.Item) command.Item {
 	item.Dets = append([]command.Detection(nil), item.Dets...)
 	item.Det = append([]command.DetectionScore(nil), item.Det...)
@@ -303,6 +319,7 @@ func cloneDirectives(directives []command.Directive) []command.Directive {
 		copyOf[i] = directive
 		copyOf[i].Rules = append([]command.Rule(nil), directive.Rules...)
 		for j := range copyOf[i].Rules {
+			copyOf[i].Rules[j].Sources = append([]string(nil), directive.Rules[j].Sources...)
 			classes := make([]string, len(directive.Rules[j].Classes))
 			copy(classes, directive.Rules[j].Classes)
 			copyOf[i].Rules[j].Classes = classes

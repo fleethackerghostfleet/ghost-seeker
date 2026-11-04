@@ -33,9 +33,18 @@ function flash(id){const element=$(id);if(!element)return;element.classList.add(
 function applySnapshot(data){
  const selection=state.sel;
  const elements=new Map(items.map(item=>[item.id,item.el]));
- items=data.items.map(item=>{item=normalizeItem(item);item.el=elements.get(item.id);return item});
+ if(state.paused){
+  const snapshot=new Map(data.items.map(item=>[item.id,item]));
+  items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
+  pendingItems=pendingItems.map(event=>({...event,item:snapshot.get(event.item.id)||event.item}));
+  const queued=new Set(pendingItems.map(event=>event.item.id));
+  for(const item of data.items)if(!elements.has(item.id)&&!queued.has(item.id)&&!evictedIDs.has(item.id))pendingItems.push({item});
+ }else{
+  items=data.items.map(item=>{item=normalizeItem(item);item.el=elements.get(item.id);return item});
+  pendingItems=[];evictedIDs.clear();
+ }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
- pendingItems=[];evictedIDs.clear();state.model=data.state.model;state.directives=data.state.directives;
+ state.model=data.state.model;state.directives=data.state.directives;
  stats=data.stats;cdr=data.cdr;weightData=data.weights||{};
  state.sel=items.some(item=>item.id===selection)?selection:null;
  if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML=''}
@@ -43,6 +52,12 @@ function applySnapshot(data){
  renderAll();
 }
 function applyItemUpdate(raw){
+ if(state.paused&&!findItem(raw.id)){
+  if(evictedIDs.has(raw.id))return;
+  const pending=pendingItems.find(event=>event.item.id===raw.id);
+  if(pending)pending.item=raw;else pendingItems.push({item:raw});
+  renderStats();return;
+ }
  const item=normalizeItem(raw);mergeItem(item,false);
  if(state.sel===item.id)renderDetail();
  renderFeed();renderStats();renderRp(true);if(state.page==='rv'&&!rv.busy)renderReview();
@@ -86,17 +101,16 @@ async function init(){
  $('srcSel').innerHTML=SOURCES.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
- $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;applyDirective()}};
+ $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
  $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
- $('nlGo').onclick=applyDirective;$('nlIn').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();applyDirective()}};
+ workbench.init();
  $('clearDir').onclick=async()=>{if(!state.directives.length)return;try{await request('/api/directives','DELETE');toast('Directives cleared — base model restored')}catch(error){toast(error.message)}};
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderFeed()};
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens};
  $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
  $('pauseBtn').onclick=()=>{state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'Resume':'Pause';$('live').classList.toggle('paused',state.paused);$('live').querySelector('span').textContent=state.paused?'PAUSED':'LIVE';if(!state.paused){for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
- $('topGrid').onclick=e=>{const c=e.target.closest('.card');if(c){location.hash='#feed';openDetail(c.dataset.id)}};
  document.addEventListener('keydown',e=>{const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
   if(k==='n'){toggleNight();return}
@@ -117,7 +131,7 @@ function route(){
  state.page=location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
  $('pgFeed').classList.toggle('on',state.page==='feed');$('pgRp').classList.toggle('on',state.page==='rp');$('pgRv').classList.toggle('on',state.page==='rv');$('navRv').classList.toggle('on',state.page==='rv');
  $('navFeed').classList.toggle('on',state.page==='feed');$('navRp').classList.toggle('on',state.page==='rp');
- if(state.page==='feed')renderFeed(true);else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{renderRp();setTimeout(()=>$('nlIn').focus(),50)}
+ if(state.page==='feed')renderFeed(true);else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
 function visible(){
@@ -224,10 +238,7 @@ function renderDetail(){
 
 /* ---- reprioritize page ---- */
 function renderRp(light){
- const vis=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.dismissed);
- const now=[0,0,0,0,0],base=[0,0,0,0,0];vis.forEach(i=>{now[i.centralTier]++;base[i.baseTier]++});
- $('impact').innerHTML=[1,2,3,4].map(t=>{const d=now[t]-base[t];return`<div class="imp"><span><span class="tchip" style="background:${tcol(t)}"></span>P${t}</span><b>${now[t]}</b>${d?`<small class="${d>0?'up':'dn'}">${d>0?'+':''}${d}</small>`:''}</div>`}).join('');
- $('topGrid').innerHTML=[...vis].sort((a,b)=>a.tier-b.tier||b.central-a.central).slice(0,8).map(it=>`<div class="card p${it.tier}" data-id="${it.id}">${cardHTML(it,true)}</div>`).join('');
+ workbench.live();
  if(light)return;
  renderWeights();renderDirectives();$('modelSel').value=state.model;$('modelDesc').textContent=MODELS[state.model].desc;
 }
@@ -240,11 +251,6 @@ function renderDirectives(){
  const d=state.directives;$('clearDir').style.display=d.length?'':'none';
  $('directives').innerHTML=d.length?d.map((x,i)=>`<div class="dir"><span class="n">${i+1}</span><div class="body"><q>${esc(x.text)}</q><div class="rules">${x.rules.map(r=>`<span class="rule ${r.type==='suppress'?'sup':''}">${ruleLabel(r)}</span>`).join('')}${x.rules.some(r=>r.only)?'<span class="rule focus">Focus: others ×0.3</span>':''}</div></div><button class="x" data-id="${x.id}" title="Remove directive">×</button></div>`).join(''):'<div class="nodir">No directives — feed is ranked by the base model only.</div>';
  $('directives').querySelectorAll('.x').forEach(b=>b.onclick=async()=>{try{await request(`/api/directives/${encodeURIComponent(b.dataset.id)}`,'DELETE');toast('Directive removed')}catch(error){toast(error.message)}});
-}
-async function applyDirective(){
- const text=$('nlIn').value.trim();if(!text)return;
- $('thinking').classList.add('on');$('nlGo').disabled=true;
- try{await request('/api/directives','POST',{text});$('nlIn').value='';toast('Directive applied')}catch(error){toast(error.message)}finally{$('thinking').classList.remove('on');$('nlGo').disabled=false}
 }
 async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} — logged as model feedback`)}catch(error){toast(error.message)}}
 function toggleNight(){document.body.classList.toggle('night');$('nightBtn').textContent=document.body.classList.contains('night')?'Day mode (N)':'Night mode (N)'}
