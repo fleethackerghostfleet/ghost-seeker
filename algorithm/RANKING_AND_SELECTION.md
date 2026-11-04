@@ -50,9 +50,9 @@ For priority ranking:
 final_score = base_score × (1 − duplicate_strength × max_similarity)
 ```
 
-The default duplicate strength is 0.85. Similarity uses the cached coarse color-layout fingerprint; the distance scale is controlled by `duplicate_distance`. Missing or incompatible fingerprints contribute zero similarity. The method is a heuristic with O(N²D) time and O(ND) memory for N observations and D fingerprint values.
+The default duplicate strength is 0.85. Similarity now uses **both cached color layout and pHash**: `min(color_similarity, phash_similarity)`. Their respective scales are `duplicate_distance=0.08` and `phash_distance_scale=8.0` bits. Both components must support a strong penalty. Missing pHash requires explicit cache migration or a color-only override; it never silently disables pHash. See [Similarity](SIMILARITY.md) for the formulas, audit fields, migration and pair evaluation. The full ranking remains O(N²D) time and O(ND) memory for N observations and D color values.
 
-This is soft suppression: repeated views move down the list rather than being deleted. The fingerprint can overlook a tiny new object or respond to lighting/camera changes. It is neither a track identity nor proof that two observations contain the same information.
+This is soft suppression: repeated views move down the list rather than being deleted. Both whole-image descriptors can overlook a small local change or respond to lighting/camera changes. It is neither a track identity nor proof that two observations contain the same information.
 
 Similarity is measured against **earlier ranked entries**, including entries that a later budget may skip. Ranking is stable for the same candidate set, evidence and policy. New or removed images, different providers or operator changes can legitimately change it. Bandwidth alone cannot.
 

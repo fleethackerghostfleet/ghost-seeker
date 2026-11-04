@@ -36,7 +36,8 @@ class BandwidthTests(unittest.TestCase):
         rows = [{'id': str(i), 'source': 's', 'payload_bytes': (i+1)*100,
                  'payload_path': 'unused.jpg', 'width': 10, 'height': 10,
                  'signals': {'novelty': .6, 'quality': 1}, 'detections': [],
-                 'fingerprint': [i / 10], 'usable': True} for i in range(count)]
+                 'fingerprint': [i / 10], 'usable': True,
+                 'phash': {'version': 'phash64-dct-v1', 'hex': '0000000000000000', 'analysis_size': 320}} for i in range(count)]
         path = root / 'records.jsonl'
         path.write_text(''.join(json.dumps(r) + '\n' for r in rows))
         return path

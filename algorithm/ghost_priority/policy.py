@@ -11,6 +11,7 @@ import json
 import math
 from collections import deque
 from pathlib import Path
+from .similarity import engine_from_policy, color_similarity as _similarity
 
 
 DEFAULT_POLICY = {
@@ -20,6 +21,8 @@ DEFAULT_POLICY = {
     "quality_weight": 0.10,
     "duplicate_strength": 0.85,
     "duplicate_distance": 0.08,
+    "similarity_method": "color-phash",
+    "phash_distance_scale": 8.0,
 }
 
 
@@ -56,8 +59,9 @@ def _policy(overrides=None):
             raise ValueError(f"unknown policy keys: {sorted(unknown)}")
         result.update(overrides)
     for key in result:
-        if key != "class_weights":
+        if key not in {"class_weights", "similarity_method", "phash_distance_scale"}:
             result[key] = _unit(result[key], key)
+    engine_from_policy(result)  # Validate method and metric-specific scales.
     if result["duplicate_distance"] == 0:
         raise ValueError("duplicate_distance must be greater than zero")
     if not isinstance(result["class_weights"], dict):
@@ -177,32 +181,13 @@ def _uniform_order(records):
         intervals.append((mid + 1, hi))
 
 
-def _fingerprint(record):
-    values = record.get("fingerprint")
-    if values is None:
-        return []
-    if not isinstance(values, list):
-        raise ValueError("fingerprint must be a flat list")
-    for value in values:
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise ValueError("fingerprint must contain finite numbers")
-    return values
-
-
-def _similarity(a, b, scale):
-    """Appearance similarity; different/absent fingerprint dimensions do not match."""
-    if not a or len(a) != len(b):
-        return 0.0
-    distance = sum(abs(x-y) / len(a) for x, y in zip(a, b))
-    scaled = distance / scale
-    return 0.0 if not math.isfinite(scaled) or scaled > 30 else math.exp(-(scaled ** 2))
-
-
 def _ranked_copy(record, details, rank, method, final_score, similarity=0.0, nearest=None):
     row = copy.deepcopy(record)
     # Re-ranking cached selections must not retain claims about an old subset.
     row.pop("selection_rank", None)
     row.pop("selection_lane", None)
+    row.pop("similarity_engine", None)
+    row.pop("similarity_match", None)
     row.update(copy.deepcopy(details))
     row.update(priority_rank=rank, rank=rank, base_score=details["score"],
                final_score=final_score, marginal_score=final_score,
@@ -235,9 +220,11 @@ def rank_records(records, policy=None, method="priority"):
         ordered = sorted(records, key=lambda r: (-scores[r["id"]]["score"], r["id"]))
         return [_ranked_copy(row, scores[row["id"]], i+1, method, scores[row["id"]]["score"]) for i, row in enumerate(ordered)]
 
-    fingerprints = {r["id"]: _fingerprint(r) for r in records}
+    engine = engine_from_policy(policy)
+    descriptors = {r["id"]: engine.prepare(r) for r in records}
     similarity = {r["id"]: 0.0 for r in records}
     nearest = {r["id"]: None for r in records}
+    matches = {r["id"]: None for r in records}
     pending, ranked = list(records), []
     while pending:
         def key(record):
@@ -249,12 +236,15 @@ def rank_records(records, policy=None, method="priority"):
         final = -key(best)[0]
         ranked.append(_ranked_copy(best, scores[name], len(ranked)+1, method,
                                    final, similarity[name], nearest[name]))
+        ranked[-1].update(similarity_engine=engine.name, similarity_match=matches[name])
         pending.remove(best)
         for other in pending:
             other_id = other["id"]
-            value = _similarity(fingerprints[name], fingerprints[other_id], policy["duplicate_distance"])
+            match = engine.compare(descriptors[name], descriptors[other_id])
+            value = match['score']
             if value > similarity[other_id]:
                 similarity[other_id], nearest[other_id] = value, name
+                matches[other_id] = match
     return ranked
 
 

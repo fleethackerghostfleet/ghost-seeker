@@ -1,7 +1,7 @@
 """Run interchangeable providers once and cache policy-independent evidence.
 
 Providers receive original uint8 BGR pixels. This layer validates their outputs,
-computes an absolute-color fingerprint, and records provider identities. It does
+computes color and pHash descriptors, and records provider identities. It does
 not interpret operator policies, compare image pairs, or consume annotations.
 """
 from __future__ import annotations
@@ -17,8 +17,8 @@ from .contracts import (
 )
 from .providers import (
     ClassicalVisualInterest, NanoDetObjects, NoObjects, SharpnessExposureQuality,
-    resized_bgr,
 )
+from .similarity_features import describe
 
 
 class Analyzer:
@@ -79,9 +79,9 @@ class Analyzer:
         before = time.perf_counter()
         quality = unit_score(self._call(self.quality_provider, readonly), self.provider_names['quality'] + '.quality')
         quality_ms = (time.perf_counter() - before) * 1000
-        values = resized_bgr(bgr, self.width).astype(np.float32) / 255.0
-        fp = cv2.resize(values, (8, 8), interpolation=cv2.INTER_AREA).reshape(-1)
-        fingerprint = [round(float(x), 5) for x in fp]
+        before = time.perf_counter()
+        fingerprint, phash = describe(bgr, self.width)
+        similarity_ms = (time.perf_counter() - before) * 1000
         analysis_ms = (time.perf_counter() - started) * 1000
         before = time.perf_counter()
         objects = validate_object_result(self._call(self.object_provider, readonly), original_w, original_h,
@@ -104,9 +104,11 @@ class Analyzer:
             },
             'regions': visual.regions,
             'fingerprint': fingerprint,
+            'phash': phash,
             'timing_ms': {
                 'analysis': round(analysis_ms, 4), 'detector': round(object_ms, 4),
                 'visual': round(visual_ms, 4), 'quality': round(quality_ms, 4),
                 'object': round(object_ms, 4),
+                'similarity_features': round(similarity_ms, 4),
             },
         }

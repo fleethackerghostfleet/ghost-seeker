@@ -9,7 +9,8 @@ from ghost_priority.selection import select_ranked
 def record(key, score, size=100, fingerprint=None):
     return {"id": key, "object_relevance": score, "payload_bytes": size,
             "signals": {"visual_interest": 0, "quality": 1},
-            "fingerprint": fingerprint or []}
+            "fingerprint": fingerprint or [],
+            "phash": {"version": "phash64-dct-v1", "hex": "0000000000000000", "analysis_size": 320}}
 
 
 class SelectionTests(unittest.TestCase):

@@ -148,7 +148,8 @@ class CliTests(unittest.TestCase):
             records = [{'id': str(i), 'source': 's', 'payload_bytes': 100,
                         'payload_path': 'unused.jpg', 'width': 10, 'height': 10,
                         'signals': {'visual_interest': .1+i*.1, 'quality': 1},
-                        'detections': [], 'fingerprint': [float(i)]} for i in range(4)]
+                        'detections': [], 'fingerprint': [float(i)],
+                        'phash': {'version': 'phash64-dct-v1', 'hex': '0000000000000000', 'analysis_size': 320}} for i in range(4)]
             path = root/'records.jsonl'
             path.write_text(''.join(json.dumps(r)+'\n' for r in records))
             with patch('ghost_priority.policy.rank_records', wraps=rank_records) as ranker:

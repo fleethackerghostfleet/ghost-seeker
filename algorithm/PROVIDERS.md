@@ -1,6 +1,6 @@
 # Provider handoff
 
-A teammate can replace object, visual-interest or quality scoring independently. The analyzer calls the providers once, validates and caches their outputs, and adds a similarity fingerprint. Ranking and selection operate on that cache. Neither provider receives labels, bandwidth or operator policy.
+A teammate can replace object, visual-interest or quality scoring independently. The analyzer calls the providers once, validates and caches their outputs, and adds color and pHash similarity descriptors. Ranking and selection operate on that cache. Neither provider receives labels, bandwidth or operator policy.
 
 ## Contract
 
@@ -149,6 +149,7 @@ The analyzer records:
 - `signals.visual_interest`, `signals.quality`, plus visual components. `signals.novelty` aliases visual interest for old consumers.
 - `regions`: explanatory visual regions in original coordinates.
 - `fingerprint`: the analyzer's coarse color layout, separate from provider scores.
+- `phash`: versioned 64-bit structural hash and preprocessing size; used alongside color by default. See [SIMILARITY.md](SIMILARITY.md).
 - `usable`, `unusable_reason`, `engine` and per-provider timings. Exactly constant images are marked unusable by the analyzer even if a custom provider returns a nonzero score.
 
 Before handoff, check a real frame and a small/blank input; verify color order and original-coordinate boxes; distinguish no evaluation from no hits; confirm finite bounded scores; ensure repeat calls do not reload the model; and record actual runtime/device dependencies. Compare runtime and missed examples on held-out data. Labels must remain outside all provider inference calls.

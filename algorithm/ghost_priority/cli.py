@@ -151,7 +151,7 @@ def analyze(args):
     write_jsonl(out / 'records.jsonl', records)
     timings = {name: {'p50': percentile([r['timing_ms'][name] for r in records], .5),
                        'p95': percentile([r['timing_ms'][name] for r in records], .95)}
-               for name in ('analysis', 'detector', 'read', 'encode', 'total')}
+               for name in ('analysis', 'detector', 'similarity_features', 'read', 'encode', 'total')}
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if resource is not None else None
     summary = {'images': len(records), 'eligible_images': sum(r.get('usable', True) for r in records),
                'sources': dict(Counter(r['source'] for r in records)), 'engine': records[0]['engine'],
@@ -199,6 +199,14 @@ def card(record, records_dir, report_dir):
     details = '' if base is None else f'<p>Base {base:.3f} · final {display} · similarity {record.get("max_similarity", 0):.3f}</p>'
     if record.get('object_relevance') is not None:
         description = f"Provider relevance {record['object_relevance']:.3f}; " + description
+    match = record.get('similarity_match')
+    if match:
+        components = []
+        if match.get('color_similarity') is not None:
+            components.append(f"color {match['color_similarity']:.3f}")
+        if match.get('phash_distance_bits') is not None:
+            components.append(f"pHash {match['phash_distance_bits']}/64 differing bits")
+        details += '<p>' + html.escape(' · '.join(components)) + '</p>'
     return f'''<article><div class="photo" style="aspect-ratio:{image_width}/{image_height}"><img src="{src}" loading="lazy"><svg viewBox="0 0 {image_width} {image_height}">{boxes}</svg></div><div class="body"><b>Priority #{priority}{selected}</b><span>{record['payload_bytes']/1000:.1f} KB</span>{details}<p>{esc(record['source'])}</p><p>{esc(description)}</p><small>{reasons}</small><details><summary>Observation ID</summary>{esc(record['id'])}</details></div></article>'''
 
 
@@ -415,6 +423,19 @@ def add_bandwidth_arguments(parser, allow_fractions=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
+    from .similarity_commands import cache_similarity, evaluate_similarity
+    c = sub.add_parser('cache-similarity', help='Add pHash to old evidence from original inputs without model inference')
+    c.add_argument('--records', required=True)
+    c.add_argument('--out', required=True, help='New output directory')
+    c.add_argument('--analysis-size', type=positive_int, default=320, help='Must match original fingerprint preprocessing')
+    c.set_defaults(func=cache_similarity)
+    e = sub.add_parser('evaluate-similarity', help='Review duplicate candidates and false suppression candidates separately')
+    e.add_argument('--records', required=True)
+    e.add_argument('--pairs', required=True, help='JSON list of a, b, label and optional group/note')
+    e.add_argument('--out', required=True, help='New output directory')
+    e.add_argument('--thresholds', type=float, nargs='+', default=[.25, .5, .75, .9])
+    e.add_argument('--policy', help='Optional metric scales; does not tune or write production policy')
+    e.set_defaults(func=evaluate_similarity)
     a = sub.add_parser('analyze', help='Extract evidence and encode a common JPEG representation')
     source = a.add_mutually_exclusive_group(required=True)
     source.add_argument('--manifest', help='JSONL with id, path, source and optional timestamp_s')

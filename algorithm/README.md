@@ -4,6 +4,7 @@ The implemented pipeline is **analyze once → rank the full pool → select wit
 
 - [Provider handoff](PROVIDERS.md): replace object, visual-interest and quality models independently.
 - [Ranking and selection](RANKING_AND_SELECTION.md): scoring, duplicate suppression, stable ranks and byte accounting.
+- [Similarity](SIMILARITY.md): default color + pHash, cache migration and changed-information evaluation.
 - [Data notes](DATA_NOTES.md): sample provenance, label caveats and historical measurements.
 
 ## Quick start
@@ -138,6 +139,8 @@ Analysis, ranking and selection are measured separately. These timings describe 
 Known limits: own-ship structures, waves, glare and overlays may dominate signals; fingerprints can miss small changes; resizing loses detail; full priority ranking has quadratic time cost and keeps the pool in memory. Use source-grouped held-out data and benchmark on the eventual edge CPU.
 
 ## Compatibility
+
+New analysis caches both color and pHash. Older evidence requires `cache-similarity` before default ranking, or an explicit `{"similarity_method":"color"}` policy override. Migration does not rerun detection. See [SIMILARITY.md](SIMILARITY.md) for commands and review labels.
 
 `policy.select_records()` remains a wrapper around full ranking followed by selection. `novelty_weight` aliases `visual_interest_weight`; conflicting values are rejected. Removed `coverage_fraction` and `byte_cost_exponent` keys raise migration errors: the full ranking has neither budget reserves nor byte-size preferences.
 

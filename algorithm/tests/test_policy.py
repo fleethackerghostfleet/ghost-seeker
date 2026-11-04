@@ -10,7 +10,8 @@ from ghost_priority.policy import DEFAULT_POLICY, load_policy, rank_records, sco
 def record(key, novelty=0.5, size=100, fingerprint=None, detections=None):
     return {"id": key, "source": "clip", "payload_bytes": size,
             "signals": {"novelty": novelty, "quality": 1.0},
-            "detections": detections, "fingerprint": fingerprint or [], "usable": True}
+            "detections": detections, "fingerprint": fingerprint or [], "usable": True,
+            "phash": {"version": "phash64-dct-v1", "hex": "0000000000000000", "analysis_size": 320}}
 
 
 class PolicyTests(unittest.TestCase):
