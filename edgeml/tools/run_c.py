@@ -137,9 +137,15 @@ def _run_meta() -> dict:
         cpu = next(l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name"))
     except Exception:
         pass
-    import boxmot, ultralytics
+    import importlib.metadata as md
+    vers = {}
+    for pkg in ("boxmot", "ultralytics", "trackeval"):
+        try:
+            vers[pkg] = md.version(pkg)
+        except md.PackageNotFoundError:
+            vers[pkg] = None
     return {"git_sha": sha, "host": platform.node(), "machine": platform.machine(), "cpu": cpu, "n_threads": os.cpu_count(),
-            "python": platform.python_version(), "boxmot": boxmot.__version__, "ultralytics": ultralytics.__version__, "gpu": None}
+            "python": platform.python_version(), **vers, "gpu": None}
 
 
 def cmd_matrix(a):
