@@ -34,6 +34,7 @@ type Box struct {
 }
 
 type Attributes struct {
+	Transient   bool `json:"transient,omitempty"`
 	Approaching bool `json:"approaching"`
 	New         bool `json:"new"`
 	Dark        bool `json:"dark"`

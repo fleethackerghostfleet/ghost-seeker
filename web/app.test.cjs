@@ -24,6 +24,23 @@ function setup(){
  return context;
 }
 
+test('unknown contact labels, distinct boxes and persistence explanations',()=>{
+ const context=setup();
+ vm.runInContext(`
+  CLS={unknown:{lab:'UNKNOWN — not classified',g:'unknown'}};
+  const W=480,H=300;
+  MODELS={maritime:{name:'Maritime'}};
+  const d={cls:'unknown',conf:.4,attrs:{},b:{x:200,y:180,w:30,h:20}};
+  const sd={s:.7,notes:[]};
+  const unknownItem={dets:[d],det:[sd],edge:.4,central:.7};
+ `,context);
+ assert.match(vm.runInContext('boxesHTML(unknownItem,true)',context),/unknown.*UNKNOWN — not classified/);
+ assert.match(vm.runInContext('buildWhy(unknownItem,[[d,sd]])[0].t',context),/persisted across frames — not noise/);
+ vm.runInContext('d.attrs.transient=true',context);
+ assert.match(vm.runInContext('buildWhy(unknownItem,[[d,sd]])[0].t',context),/Single-frame flicker, treated as noise/);
+ assert.equal(vm.runInContext('boxesHTML({dets:[],det:[]},true)',context),'');
+});
+
 test('paused snapshots refresh existing and queued scores without exposing captures; resume drains queue',()=>{
  const context=setup();
  vm.runInContext(`

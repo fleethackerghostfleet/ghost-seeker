@@ -58,6 +58,9 @@ type Rect struct {
 var Library map[string][]LibraryImage
 
 func init() {
+	for _, model := range Models {
+		model.W["unknown"] = .7
+	}
 	var images []LibraryImage
 	if err := json.Unmarshal(imageryJSON, &images); err != nil {
 		panic(err)
@@ -78,6 +81,7 @@ var Sources = []Source{
 }
 
 var Classes = map[string]Class{
+	"unknown":           {Group: "unknown", Length: .08, Aspect: .6, Label: "UNKNOWN — not classified"},
 	"warship":           {Group: "vessel", Length: .34, Aspect: .3, Label: "Warship"},
 	"cargo ship":        {Group: "vessel", Length: .4, Aspect: .3, Label: "Cargo ship"},
 	"tanker":            {Group: "vessel", Length: .42, Aspect: .22, Label: "Tanker"},
@@ -125,9 +129,9 @@ var Models = map[string]Model{
 	},
 }
 
-var EdgeW = map[string]float64{"vessel": .6, "aircraft": .65, "other": .45, "clutter": .12}
+var EdgeW = map[string]float64{"vessel": .6, "aircraft": .65, "other": .45, "clutter": .12, "unknown": .65}
 
-var AttrLabels = map[string]string{"approaching": "approaching", "new": "new / changed", "dark": "no AIS", "moving": "moving fast", "loitering": "loitering"}
+var AttrLabels = map[string]string{"approaching": "approaching", "new": "new / changed", "dark": "no AIS", "moving": "moving fast", "loitering": "loitering", "transient": "single-frame / noise-like"}
 
 var Examples = []string{
 	"Small boats approaching the pier at speed; ignore birds",
