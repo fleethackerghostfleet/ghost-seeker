@@ -759,7 +759,7 @@ function renderRp(light){
  const vis=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.dismissed);
  const now=[0,0,0,0,0],base=[0,0,0,0,0];vis.forEach(i=>{now[tierOf(i.central)]++;base[i.base>=.8?1:i.base>=.6?2:i.base>=.35?3:4]++});
  $('impact').innerHTML=[1,2,3,4].map(t=>{const d=now[t]-base[t];return`<div class="imp"><span><span class="tchip" style="background:${tcol(t)}"></span>P${t}</span><b>${now[t]}</b>${d?`<small class="${d>0?'up':'dn'}">${d>0?'+':''}${d}</small>`:''}</div>`}).join('');
- $('topGrid').innerHTML=[...vis].sort((a,b)=>b.central-a.central).slice(0,8).map(it=>`<div class="card p${it.tier}" data-id="${it.id}">${cardHTML(it,true)}</div>`).join('');
+ $('topGrid').innerHTML=[...vis].sort((a,b)=>a.tier-b.tier||b.central-a.central).slice(0,8).map(it=>`<div class="card p${it.tier}" data-id="${it.id}">${cardHTML(it,true)}</div>`).join('');
  if(light)return;
  renderWeights();renderDirectives();$('modelSel').value=state.model;$('modelDesc').textContent=MODELS[state.model].desc;
 }
