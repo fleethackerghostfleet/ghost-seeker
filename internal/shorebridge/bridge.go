@@ -295,15 +295,19 @@ func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[str
 				continue
 			}
 			fetched++
+			// Cache failures too (as 0) so an unreadable report is tried once
+			// and cannot starve later ones of their fetch budget.
 			n = b.fetchRecordFrames(ctx, it.GetId())
 			if n < 0 {
-				continue
+				n = 0
 			}
 			b.mu.Lock()
 			b.records[it.GetId()] = n
 			b.mu.Unlock()
 		}
-		out[it.GetId()] = n
+		if n > 0 {
+			out[it.GetId()] = n
+		}
 	}
 	return out
 }
