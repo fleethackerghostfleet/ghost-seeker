@@ -57,7 +57,8 @@ class YoloxOnnxDetector(BaseDetector):
     def __init__(self, weights: str = "yolox_tiny.onnx", name: str = "yolox-tiny", imgsz: int = 416,
                  device: Optional[str] = None, iou: float = 0.65, **kw):
         super().__init__(**kw)
-        self.sess = _session(fetch(weights) if not os.path.exists(weights) else weights, device)
+        self.onnx_path = fetch(weights) if not os.path.exists(weights) else weights
+        self.sess = _session(self.onnx_path, device)
         self.inp = self.sess.get_inputs()[0].name
         self.imgsz = imgsz
         self.iou = iou
@@ -96,7 +97,8 @@ class NanodetOnnxDetector(BaseDetector):
     def __init__(self, weights: str = "nanodet_plus_m15_416.onnx", name: str = "nanodet-plus-m1.5x", imgsz: int = 416,
                  device: Optional[str] = None, iou: float = 0.6, reg_max: int = 7, **kw):
         super().__init__(**kw)
-        self.sess = _session(fetch(weights) if not os.path.exists(weights) else weights, device)
+        self.onnx_path = fetch(weights) if not os.path.exists(weights) else weights
+        self.sess = _session(self.onnx_path, device)
         self.inp = self.sess.get_inputs()[0].name
         self.imgsz, self.iou, self.reg_max, self.name = imgsz, iou, reg_max, name
         self.params_m, self.gflops = 2.44, 2.97

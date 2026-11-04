@@ -25,6 +25,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+REPO = Path(__file__).resolve().parents[2]
 
 from edgeml.data.catalog import eval_set  # noqa: E402
 from edgeml.detectors import EXCLUDE, HorizonBandDetector, TiledDetector, build  # noqa: E402
@@ -138,6 +139,26 @@ def main():
     images_cache = {}
     for mname in config["models"]:
         print(f"== {mname}", flush=True)
+        try:
+            _run_model(mname, sets, args, run_dir, images_cache, metrics, metrics_path, fixed_taus)
+        except Exception as e:  # keep the sweep going; the failure is recorded for the report
+            import traceback
+
+            traceback.print_exc()
+            metrics.setdefault(mname, {})["error"] = f"{type(e).__name__}: {e}"
+            metrics_path.write_text(json.dumps(metrics, indent=1))
+        try:
+            import torch
+
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+    if args.gcs:
+        subprocess.run(["gcloud", "storage", "rsync", "-r", str(run_dir), f"{args.gcs.rstrip('/')}/{args.run_id}"], check=False)
+    print("done", run_dir)
+
+
+def _run_model(mname, sets, args, run_dir, images_cache, metrics, metrics_path, fixed_taus):
         det = None
         for ds, stride in sets:
             if ds in EXCLUDE.get(mname, set()):
@@ -182,16 +203,6 @@ def main():
                   f"P@tau={v['at_tau']['precision']:.3f} tau={tau} p50={stats.get('ms_p50', float('nan')):.1f}ms "
                   f"R_small={v['at_tau']['recall_by_bucket']['small']:.2f} R_med={v['at_tau']['recall_by_bucket']['medium']:.2f}", flush=True)
             metrics_path.write_text(json.dumps(metrics, indent=1))
-        det = None
-        try:
-            import torch
-
-            torch.cuda.empty_cache()
-        except Exception:
-            pass
-    if args.gcs:
-        subprocess.run(["gcloud", "storage", "rsync", "-r", str(run_dir), f"{args.gcs.rstrip('/')}/{args.run_id}"], check=False)
-    print("done", run_dir)
 
 
 if __name__ == "__main__":

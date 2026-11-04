@@ -23,6 +23,8 @@ class UltralyticsDetector(BaseDetector):
         self.half = half and self.device.startswith("cuda")
         cls = RTDETR if "rtdetr" in weights.lower() else YOLO
         self.model = cls(weights)
+        self.weights = weights
+        self.prompts = list(prompts) if prompts else None
         if prompts:
             self.model.set_classes(prompts)
         self.names = self.model.names

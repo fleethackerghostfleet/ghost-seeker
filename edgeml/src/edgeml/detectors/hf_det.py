@@ -30,6 +30,7 @@ class HFClosedSetDetector(BaseDetector):
         self.dtype = torch.float16 if (half and self.device.startswith("cuda")) else torch.float32
         self.processor = AutoImageProcessor.from_pretrained(model_id, size={"height": imgsz, "width": imgsz})
         self.model = AutoModelForObjectDetection.from_pretrained(model_id).to(self.device, self.dtype).eval()
+        self.model_id = model_id
         self.id2label = self.model.config.id2label
         self.imgsz = imgsz
         self.name = name or model_id.rsplit("/", 1)[-1]
@@ -41,7 +42,7 @@ class HFClosedSetDetector(BaseDetector):
             self.torch.cuda.synchronize()
 
     def _infer(self, image_bgr: np.ndarray) -> list[Detection]:
-        rgb = image_bgr[:, :, ::-1]
+        rgb = np.ascontiguousarray(image_bgr[:, :, ::-1])
         inputs = self.processor(images=rgb, return_tensors="pt")
         inputs = {k: (v.to(self.device, self.dtype) if v.is_floating_point() else v.to(self.device)) for k, v in inputs.items()}
         with self.torch.inference_mode():
@@ -74,6 +75,7 @@ class HFOpenVocabDetector(BaseDetector):
             pkw["size"] = {"shortest_edge": imgsz, "longest_edge": max(imgsz, int(imgsz * 16 / 9) + 1)}
         self.processor = AutoProcessor.from_pretrained(model_id, **pkw)
         self.model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id).to(self.device, self.dtype).eval()
+        self.model_id = model_id
         self.imgsz = imgsz or (960 if self.is_gdino else 960)
         self.text_thr = text_thr
         self.name = name or model_id.rsplit("/", 1)[-1]
@@ -104,7 +106,7 @@ class HFOpenVocabDetector(BaseDetector):
     def _infer(self, image_bgr: np.ndarray) -> list[Detection]:
         from PIL import Image
 
-        rgb = Image.fromarray(image_bgr[:, :, ::-1])
+        rgb = Image.fromarray(np.ascontiguousarray(image_bgr[:, :, ::-1]))
         h, w = image_bgr.shape[:2]
         inputs = self.processor(images=rgb, text=self._text, return_tensors="pt")
         inputs = {k: (v.to(self.device, self.dtype) if v.is_floating_point() else v.to(self.device)) for k, v in inputs.items()}
