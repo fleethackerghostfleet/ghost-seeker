@@ -49,6 +49,12 @@ func (s *Server) PublishStats(stats command.Stats) {
 	s.hub.publish("stats", map[string]any{"stats": stats})
 }
 
+func (s *Server) RescoreTimeScoped(now time.Time) {
+	if s.store.RescoreTimeScoped(now) {
+		s.publishSnapshot()
+	}
+}
+
 func (s *Server) PublishEvict(id string) {
 	if id != "" {
 		s.hub.publish("evict", map[string]string{"id": id})

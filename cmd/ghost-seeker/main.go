@@ -24,9 +24,18 @@ func main() {
 	fillBacklog(data, generator, *backfill)
 	app := server.New(data)
 	go runSimulation(data, generator, app)
+	go refreshTimeScopes(app)
 
 	log.Printf("Ghost Seeker listening on %s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, app))
+}
+
+func refreshTimeScopes(app *server.Server) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		app.RescoreTimeScoped(now)
+	}
 }
 
 func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
