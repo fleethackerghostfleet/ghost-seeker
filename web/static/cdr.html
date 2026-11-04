@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghost Seeker · Commander's Board</title>
+<link rel="stylesheet" href="/cdr.css">
+</head>
+<body>
+<div class="banner">UNCLASSIFIED // SYNTHETIC DEMO DATA · COMMANDER'S FINAL REVIEW</div>
+<header>
+  <div class="crest">★</div>
+  <div class="ttl"><b>COMMANDER'S BOARD</b><small>Ghost Seeker · final review of watch-floor escalations</small></div>
+  <div class="live off" id="live"><i></i><span>CONNECTING</span></div>
+  <div class="kpis">
+    <div><b id="kPend">0</b><span>Awaiting decision</span></div>
+    <div><b id="kP1" class="p1">0</b><span>P1 awaiting</span></div>
+    <div><b id="kOld">—</b><span>Oldest waiting</span></div>
+    <div><b id="kDone">0</b><span>Decided</span></div>
+  </div>
+  <div class="clock mono" id="clock">--:--:--Z</div>
+  <a class="wf" href="/" target="_blank" rel="noopener">Watch floor ↗</a>
+  <div class="who"><div class="av">CDR</div><div>Commander<br><small>CTF Maritime Ops</small></div></div>
+</header>
+<main>
+  <aside class="queue">
+    <div class="tabs" id="tabs"><button data-t="pending" class="on">Awaiting <span id="tPend"></span></button><button data-t="decided">Decided <span id="tDone"></span></button></div>
+    <div class="qlist" id="qlist"></div>
+    <div class="qfoot"><kbd>↑</kbd> <kbd>↓</kbd> select · <kbd>Tab</kbd> switch list · <kbd>/</kbd> note · <kbd>Z</kbd> undo</div>
+  </aside>
+  <section class="stage" id="stage"></section>
+  <aside class="brief" id="brief"></aside>
+</main>
+<div class="toast" id="toast"></div>
+<script src="/render.js" defer></script>
+<script src="/cdr.js" defer></script>
+</body>
+</html>
