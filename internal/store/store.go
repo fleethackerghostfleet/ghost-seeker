@@ -213,7 +213,7 @@ func (s *Store) Stats() Stats {
 func (s *Store) List(source string, limit int) []Item {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var out []Item
+	out := []Item{}
 	for i := len(s.items) - 1; i >= 0 && len(out) < limit; i-- {
 		if source == "" || s.items[i].Source == source {
 			out = append(out, *s.items[i])
@@ -226,7 +226,7 @@ func (s *Store) List(source string, limit int) []Item {
 func (s *Store) Queue(limit int) []Item {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var out []Item
+	out := []Item{}
 	for _, it := range s.items {
 		if !it.Reviewed && !it.Dismissed {
 			out = append(out, *it)
