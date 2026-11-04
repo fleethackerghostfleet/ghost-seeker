@@ -421,7 +421,7 @@ class SightingAggregator:
         now, last = self._snapshot(st), st.last_report
         if not last:
             return None
-        if now["unknown_real"] != last.get("unknown_real", False):
+        if self.p.gate_unknown_bonus_on_realness and now["unknown_real"] != last.get("unknown_real", False):
             return "unknown_real"
         if now["label"] != last["label"]:
             return "label_flip"

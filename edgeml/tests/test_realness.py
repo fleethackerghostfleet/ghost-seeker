@@ -56,6 +56,19 @@ def test_unknown_gate_emits_material_update_and_value_floor():
     assert not st.s.unknown_real
 
 
+def test_default_unknown_real_transition_does_not_emit_update():
+    a = SightingAggregator('unknown', AggregatorParams(min_update_interval_s=0))
+    events = []
+    for i, t, box, score in trajectory():
+        events += a.update([Track(1, box, score, 'object', i, t)], None, i, t)
+    assert [e['event'] for e in events] == ['open']
+    assert not events[0]['unknown_real']
+    closed = a.flush(10)
+    assert [e['event'] for e in closed] == ['close']
+    assert closed[0]['unknown_real']
+    assert closed[0]['realness'] == pytest.approx(1)
+
+
 def test_real_trajectory_below_unknown_threshold_has_no_unknown_bonus():
     a = SightingAggregator('known', AggregatorParams(gate_unknown_bonus_on_realness=True))
     for i, t, box, score in trajectory():
