@@ -68,9 +68,9 @@ def interp_keyframes(kf, start, end):
 def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     teacher = seq_dir / "teacher" / "gt_teacher.txt"
     gt = seq_dir / "gt" / "gt.txt"
-    labels_src = json.loads((seq_dir / "gt" / "labels.json").read_text()).get("label_source", "teacher")
-    if not teacher.exists() or (labels_src == "teacher" and gt.stat().st_mtime > teacher.stat().st_mtime):
-        shutil.copy(gt, teacher)  # gt/ is still raw teacher output (fresh rerun): refresh the snapshot
+    raw_teacher = "qa" not in json.loads((seq_dir / "gt" / "labels.json").read_text())  # qa_apply has not rewritten gt/ yet
+    if not teacher.exists() or (raw_teacher and gt.stat().st_mtime > teacher.stat().st_mtime):
+        shutil.copy(gt, teacher)  # gt/ is raw teacher output (fresh rerun): refresh the snapshot
     rows = read_rows(teacher)
     name_to_id = {v: int(k) for k, v in classes.items()}
     drop = set(corr.get("drop") or [])
