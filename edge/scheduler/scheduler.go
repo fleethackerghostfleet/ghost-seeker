@@ -199,9 +199,12 @@ func (s *Scheduler) Override(ctx context.Context, o *pb.LabelOverride) error {
 		row.Item.Features = &pb.Features{}
 	}
 	row.Item.Features.LabelOverride, row.Item.Features.OverrideBy = o.Label, o.By
-	// The FACT carries the override to shore: regenerate and re-send it.
+	// For images the FACT is generated from Features, so regenerate and
+	// re-send it to carry the override to shore. Records and digests store
+	// their own bytes as FACT; those stay untouched and the override rides
+	// the next manifest/downlink instead.
 	for i, f := range row.Item.Forms {
-		if f.Kind != pb.FormKind_FORM_KIND_FACT {
+		if f.Kind != pb.FormKind_FORM_KIND_FACT || !fact.Generated(row.Item.Type) {
 			continue
 		}
 		nf, err := s.st.ReplaceForm(ctx, row.Item.Id, f.Kind, fact.FromItem(row.Item).Marshal())

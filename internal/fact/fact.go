@@ -32,6 +32,12 @@ type Fact struct {
 	// later as part of a richer form if needed.
 }
 
+// Generated reports whether items of this type carry a synthesized FACT
+// (built from Features) rather than their own payload bytes.
+func Generated(t pb.ItemType) bool {
+	return t != pb.ItemType_ITEM_TYPE_RECORD && t != pb.ItemType_ITEM_TYPE_DIGEST
+}
+
 func FromItem(it *pb.Item) *Fact {
 	f := &Fact{ID: it.Id, Type: typeName(it.Type), CapturedAt: it.CapturedAtUnixMs, Source: it.Source}
 	if g := it.Geo; g != nil {
