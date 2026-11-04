@@ -71,7 +71,7 @@ class MOTSequence:
             im_height=int(s.get("imHeight")),
             im_ext=s.get("imExt", ".jpg"),
             im_dir=s.get("imDir", "img1"),
-            source=s.get("source", ""),
+            source=s.get("source_dataset", s.get("source", "")),
             license=s.get("license", ""),
             extra={k: v for k, v in s.items() if k.lower() not in known | {"source", "license"}},
         )
