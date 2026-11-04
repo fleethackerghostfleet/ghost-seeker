@@ -463,7 +463,16 @@ taskset -c 0   python -m edgeml.runtime.bench --model ~/models/export/yolo11n-41
 # accuracy, gate, zero-shot / E5, E1
 python edgeml/tools/d_eval_det.py --export ~/models/export --images ~/data/seaships/dev --ann ~/data/catalog/ann/seaships7000.jsonl --ids ~/data/seaships_dev_ids.txt --set seaships_dev --out results/det_acc.jsonl
 python edgeml/tools/d_eval_gate.py --clips ~/data/clips/* --smd-images ~/data/smd/all --smd-ann ~/data/catalog/ann/smd_vis_onboard_sample.jsonl --videos MVI_0790 MVI_0799 --out results/gate.json
-python edgeml/tools/d_eval_zeroshot.py --embedders mobileclip-s0 mobileclip-s1 siglip-b16 openclip-b32 --seaships --smd --e5 --e1 ... --out results/zeroshot
+# zero-shot subtype + E5 unknownness (torch fp32 towers; det-FP negatives mined with the yolo11n-416 fp32 IR on three dev clips)
+python edgeml/tools/d_eval_zeroshot.py --embedders mobileclip-s0 mobileclip-s1 siglip-b16 openclip-b32 --seaships --smd --e5 \
+  --seaships-ann ~/data/catalog/ann/seaships7000.jsonl --seaships-ids ~/data/seaships_dev_ids.txt --seaships-images ~/data/seaships/dev \
+  --smd-ann ~/data/catalog/ann/smd_vis_onboard_sample.jsonl --smd-images ~/data/smd/all --smd-videos MVI_0790 MVI_0799 \
+  --det ~/models/export/yolo11n-416/fp32/model.xml --clips ~/data/clips/Cargo_Ship_Uncut_View ~/data/clips/Sailing_POV_Corfu_Paxos ~/data/clips/30_Days_at_Sea_Timelapse \
+  --max-per-class 120 --context 1.5 --out results/zeroshot3
+# E5 ablation (SeaShips-only kNN bank): same command with --embedders mobileclip-s1 --e5-seaships-bank-only --out results/zeroshot3_ablation
+# E1 crop grid (60 SeaShips dev crops)
+python edgeml/tools/d_eval_zeroshot.py --embedders mobileclip-s0 mobileclip-s1 --seaships --e1 --e1-n 60 \
+  --seaships-ann ~/data/catalog/ann/seaships7000.jsonl --seaships-ids ~/data/seaships_dev_ids.txt --seaships-images ~/data/seaships/dev --out results/e1
 # end to end
 taskset -c 0-3 python -m edgeml.runtime.e2e --det ~/models/export/yolo11n-416/int8/model.xml --embed ~/models/clip/mobileclip-s1/int8 --clips ~/data/clips/Submarine_surfacing ~/data/clips/Sailing_POV_Corfu_Paxos ~/data/clips/Whale_Watching_in_Northern_Peru --detect-hz 1 --threads 4 --out e2e.json --events-out e2e.jsonl
 # tables for this report
