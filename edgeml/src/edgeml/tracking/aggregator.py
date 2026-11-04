@@ -155,7 +155,7 @@ class SightingAggregator:
         for tr in known + fresh:
             sid = self.track_to_sid.get(tr.track_id)
             if sid is None:
-                if self._masked(tr.box):
+                if self._masked(tr.box, t_s):
                     continue
                 sid = self._merge_target(tr, frame_idx)
                 if sid is None:
@@ -284,8 +284,15 @@ class SightingAggregator:
         return float(tr.score * size * sharp * border)
 
     # ------------------------------------------------------------------ internals
-    def _masked(self, box: Box) -> bool:
-        return any(box_iou(box, mb) > 0.5 for mb, _t in self._static)
+    def _masked(self, box: Box, t_s: float | None = None) -> bool:
+        if t_s is not None and self.p.static_mask_s:   # a mask region expires once nothing static has been seen there for 2x static_mask_s
+            self._static = [(mb, t) for mb, t in self._static if t_s - t <= 2 * self.p.static_mask_s]
+        for i, (mb, t) in enumerate(self._static):
+            if box_iou(box, mb) > 0.5:
+                if t_s is not None:
+                    self._static[i] = (mb, t_s)
+                return True
+        return False
 
     def _is_static(self, st: _State, t_s: float) -> bool:
         return (st.first_box is not None and t_s - st.s.first_t_s >= self.p.static_mask_s
