@@ -565,7 +565,16 @@ def main():
     if a.append and (out / "summary.json").exists():
         prev = json.loads((out / "summary.json").read_text())
         new_ids = {r[0] for r in rows}
-        rows = [(cid, m["fps"], m) for cid, m in prev.items() if cid not in new_ids] + rows
+        names = {budget_name(b) for b in a.budgets}
+        kept = []
+        for cid, m in prev.items():
+            if cid in new_ids:
+                continue
+            if not names <= set(m.get("selection", {})):
+                print(f"!! --append: dropping earlier row {cid} (budgets {sorted(m.get('selection', {}))} != {sorted(names)})")
+                continue
+            kept.append((cid, m["fps"], m))
+        rows = kept + rows
     write_summary(out, rows, config, a)
     print(f"wrote {out / 'summary.md'}")
 
