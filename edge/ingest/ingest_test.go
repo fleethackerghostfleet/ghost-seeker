@@ -298,3 +298,40 @@ func mustRead(t *testing.T, st *store.Store, id string, k pb.FormKind) []byte {
 	}
 	return b
 }
+
+// unknownOn makes the scripted analyzer report the n-th frame as unknown.
+type unknownOn struct {
+	*scripted
+	n int
+}
+
+func (u unknownOn) Analyze(ctx context.Context, fr inference.Frame, l []string, h map[string]string) (*pb.AnalyzeResponse, error) {
+	r, err := u.scripted.Analyze(ctx, fr, l, h)
+	if u.calls == u.n {
+		r.Unknownness = 0.9
+	}
+	return r, err
+}
+
+func TestReplacedKeyFrameRecutsExistingCrop(t *testing.T) {
+	ctx := context.Background()
+	an := unknownOn{&scripted{script: map[int][]*pb.Sighting{
+		1: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "")},
+		2: {sighting("s1", pb.Sighting_EVENT_UPDATE, true, "")},
+	}}, 2}
+	g, _, clk := newIngester(t, DedupSightings, an)
+	opened, err := g.Ingest(ctx, capture(clk, 1))
+	if err != nil || opened.Form(pb.FormKind_FORM_KIND_CROP) == nil {
+		t.Fatalf("open: %v %v", opened, err)
+	}
+	before := opened.Form(pb.FormKind_FORM_KIND_CROP).Hash
+	// The replacement frame is unknown, so imageForms alone would skip CROP.
+	rep, err := g.Ingest(ctx, capture(clk, 200))
+	if err != nil || rep.Item.Id != opened.Item.Id {
+		t.Fatalf("replace: %v %v", rep, err)
+	}
+	f := rep.Form(pb.FormKind_FORM_KIND_CROP)
+	if f == nil || f.Hash == before || f.Mime != "image/jpeg" {
+		t.Fatalf("CROP must be re-cut from the new key frame: %+v (old hash %s)", f, before)
+	}
+}

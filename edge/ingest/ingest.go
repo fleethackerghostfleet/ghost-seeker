@@ -296,6 +296,24 @@ func (g *Ingester) imageForms(data []byte, resp *pb.AnalyzeResponse, s *pb.Sight
 	return payloads, original
 }
 
+// replacementCrop cuts a CROP from a replacement key frame for an item that
+// already announced one. The form set is fixed once the manifest is out, and
+// a CROP from the previous frame would be wrong, so the usual gates (unknown,
+// smaller than FULL) don't apply; with no box at all the whole frame is used.
+func (g *Ingester) replacementCrop(data []byte, resp *pb.AnalyzeResponse, s *pb.Sighting) ([]byte, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if b := s.GetKeyDetection().GetBox(); b != nil {
+		return g.crop(img, b)
+	}
+	if cr, err := g.cropForm(img, resp.GetDetections()); err != nil || cr != nil {
+		return cr, err
+	}
+	return encodeJPEG(img, g.cfg.CropQual)
+}
+
 // crop cuts the normalized box with CropMargin context about its centre, at
 // least CropMinShort px per side; a window that would leave the frame slides
 // inside it rather than shrinking. No resampling.
