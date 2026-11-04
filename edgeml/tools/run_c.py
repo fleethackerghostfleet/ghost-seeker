@@ -144,7 +144,13 @@ def _run_meta() -> dict:
             vers[pkg] = md.version(pkg)
         except md.PackageNotFoundError:
             vers[pkg] = None
-    return {"git_sha": sha, "host": platform.node(), "machine": platform.machine(), "cpu": cpu, "n_threads": os.cpu_count(),
+    try:
+        import torch
+        torch_threads = torch.get_num_threads()
+    except Exception:
+        torch_threads = None
+    return {"git_sha": sha, "host": platform.node(), "machine": platform.machine(), "cpu": cpu, "host_cpus": os.cpu_count(),
+            "run_threads": {"torch": torch_threads, "cv2": cv2.getNumThreads(), "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS")},
             "python": platform.python_version(), **vers, "gpu": None}
 
 
