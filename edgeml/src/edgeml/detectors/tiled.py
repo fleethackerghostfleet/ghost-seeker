@@ -6,7 +6,7 @@ full-frame pass (3x downscale) loses them; crops recover them at the cost of ext
 """
 from __future__ import annotations
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import numpy as np
 
@@ -100,12 +100,12 @@ class HorizonBandDetector:
 
     def __init__(self, base, band_frac: float = 0.2, overlap: float = 0.2, include_full: bool = True,
                  merge_iou: float = 0.5, max_det: int = 300, n_tiles: int = 3,
-                 horizon_fn: Optional[Callable[[np.ndarray], float]] = None):
+                 horizon_fn: Callable[[np.ndarray], float] | None = None):
         self.base, self.band_frac, self.overlap, self.include_full = base, band_frac, overlap, include_full
         self.n_tiles = n_tiles
         self.merge_iou, self.max_det = merge_iou, max_det
         self.horizon_fn = horizon_fn or estimate_horizon_y
-        self.horizon_override: Optional[float] = None  # set per image to use GT horizon (SMD dev analysis)
+        self.horizon_override: float | None = None  # set per image to use GT horizon (SMD dev analysis)
         self.name = f"{base.name}+hband{int(band_frac*100)}x{n_tiles or 'sq'}"
         self.n_calls = 0
         self.last_ms = float("nan")

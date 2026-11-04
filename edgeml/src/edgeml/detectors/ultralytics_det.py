@@ -2,8 +2,6 @@
 YOLO-World (open-vocab, `prompts=`), and community .pt checkpoints (e.g. the Argus maritime models)."""
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 from ..types import Detection
@@ -11,12 +9,12 @@ from .base import BaseDetector, xyxy_to_xywh
 
 
 class UltralyticsDetector(BaseDetector):
-    def __init__(self, weights: str, name: Optional[str] = None, imgsz: int = 640, device: Optional[str] = None,
-                 half: bool = True, iou: float = 0.7, prompts: Optional[list[str]] = None,
+    def __init__(self, weights: str, name: str | None = None, imgsz: int = 640, device: str | None = None,
+                 half: bool = True, iou: float = 0.7, prompts: list[str] | None = None,
                  training_data: str = "COCO", **kw):
         super().__init__(**kw)
         import torch
-        from ultralytics import YOLO, RTDETR
+        from ultralytics import RTDETR, YOLO
 
         self.torch = torch
         self.device = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -33,7 +31,7 @@ class UltralyticsDetector(BaseDetector):
         self.name = name or weights.rsplit("/", 1)[-1].replace(".pt", "")
         self.training_data = training_data
         try:
-            from ultralytics.utils.torch_utils import get_num_params, get_flops
+            from ultralytics.utils.torch_utils import get_flops, get_num_params
 
             self.params_m = get_num_params(self.model.model) / 1e6
             self.gflops = get_flops(self.model.model, imgsz) or None

@@ -4,7 +4,7 @@ Every entry notes its training data so we never evaluate a model on its own trai
 (the Argus checkpoints include SeaShips -> excluded from the SeaShips leaderboard)."""
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from .labels import MARITIME_PROMPTS
 

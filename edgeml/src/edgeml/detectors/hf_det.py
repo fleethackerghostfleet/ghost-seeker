@@ -5,8 +5,6 @@ HFOpenVocabDetector: OWLv2 (google/owlv2-*) and Grounding DINO (IDEA-Research/gr
 """
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 from ..types import Detection
@@ -19,7 +17,7 @@ def _count_params(m) -> float:
 
 
 class HFClosedSetDetector(BaseDetector):
-    def __init__(self, model_id: str, name: Optional[str] = None, imgsz: int = 640, device: Optional[str] = None,
+    def __init__(self, model_id: str, name: str | None = None, imgsz: int = 640, device: str | None = None,
                  half: bool = True, **kw):
         super().__init__(**kw)
         import torch
@@ -58,8 +56,8 @@ class HFClosedSetDetector(BaseDetector):
 
 
 class HFOpenVocabDetector(BaseDetector):
-    def __init__(self, model_id: str, name: Optional[str] = None, prompts: Optional[list[str]] = None,
-                 imgsz: Optional[int] = None, device: Optional[str] = None, half: bool = True,
+    def __init__(self, model_id: str, name: str | None = None, prompts: list[str] | None = None,
+                 imgsz: int | None = None, device: str | None = None, half: bool = True,
                  text_thr: float = 0.1, **kw):
         super().__init__(**kw)
         import torch

@@ -3,7 +3,6 @@ boxes already in pixel [x, y, w, h] of the input image and `label` set to the mo
 from __future__ import annotations
 
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -14,9 +13,9 @@ from .labels import agnostic
 class BaseDetector:
     name: str = "base"
     #: static model facts filled by adapters when known
-    params_m: Optional[float] = None
-    gflops: Optional[float] = None
-    imgsz: Optional[int] = None
+    params_m: float | None = None
+    gflops: float | None = None
+    imgsz: int | None = None
     training_data: str = "COCO"
 
     def __init__(self, score_thr: float = 0.05, keep_non_maritime: bool = False, max_det: int = 300):

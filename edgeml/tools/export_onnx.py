@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from edgeml.detectors import build  # noqa: E402
+from edgeml.detectors import build
 
 OPSET = 17
 
@@ -48,6 +48,7 @@ def _freeze_sincos(model, x):
     Cos/Sin kernel. With a fixed input size the embedding is a constant, so cache it from one eager forward and
     return the cached tensor while tracing -> it becomes an initializer."""
     import importlib
+
     import torch
 
     for modname in ("transformers.models.d_fine.modeling_d_fine", "transformers.models.rt_detr_v2.modeling_rt_detr_v2",
@@ -69,10 +70,10 @@ def _freeze_sincos(model, x):
             return _cache[key]
 
         patched._frozen = True
-        setattr(mod, "build_2d_sincos_position_embedding", patched)
+        mod.build_2d_sincos_position_embedding = patched
         for cls in vars(mod).values():  # the encoder calls it as a staticmethod on the class
             if isinstance(cls, type) and "build_2d_sincos_position_embedding" in vars(cls):
-                setattr(cls, "build_2d_sincos_position_embedding", staticmethod(patched))
+                cls.build_2d_sincos_position_embedding = staticmethod(patched)
     # transformers>=5 wraps the same function in an nn.Module (`encoder.aifi.N.position_embedding`): cache its output too
     for name, sub in model.named_modules():
         if name.endswith("position_embedding") and "encoder" in name and not getattr(sub, "_frozen", False):
@@ -99,7 +100,7 @@ def _trig_to_f32_if_needed(path: Path):
     try:
         ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
         return
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         if "Cos" not in str(e) and "Sin" not in str(e):
             raise
     m = onnx.load(str(path))
@@ -178,8 +179,9 @@ def _head_scope(path: Path) -> str:
     """Name prefix of the detection-head nodes (what to keep FP32 when quantising). Ultralytics: last `/model.N/`
     module; HF RT-DETR/D-FINE: `/model/decoder/`; raw ONNX zoo graphs: no scope info (head = everything after the
     last Concat that produces the output)."""
-    import onnx
     import re
+
+    import onnx
 
     m = onnx.load(str(path), load_external_data=False)
     idx = [int(x) for n in m.graph.node for x in re.findall(r"^/model\.(\d+)/", n.name)]

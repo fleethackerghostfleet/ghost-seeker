@@ -4,8 +4,6 @@ agnostic(label) -> "vessel" | "buoy" | "object" | None   (None = not a maritime 
 """
 from __future__ import annotations
 
-from typing import Optional
-
 _VESSEL = {
     # COCO / generic
     "boat", "ship", "vessel", "watercraft", "yacht", "sailboat", "sail boat", "sailing boat", "sailing ship",
@@ -29,7 +27,7 @@ _OBJECT = {
 }
 
 
-def agnostic(label: str) -> Optional[str]:
+def agnostic(label: str) -> str | None:
     if label is None:
         return None
     if label in _VESSEL or label.lower() in _VESSEL:

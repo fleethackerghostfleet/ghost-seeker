@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import io
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 
@@ -22,7 +22,8 @@ AREA_BUCKETS = {"tiny": (0, 16 ** 2), "small": (16 ** 2, 32 ** 2), "medium": (32
 
 def _coco_api():
     try:
-        from faster_coco_eval import COCO, COCOeval_faster as COCOeval  # type: ignore
+        from faster_coco_eval import COCO  # type: ignore
+        from faster_coco_eval import COCOeval_faster as COCOeval
     except Exception:  # pragma: no cover
         from pycocotools.coco import COCO  # type: ignore
         from pycocotools.cocoeval import COCOeval  # type: ignore

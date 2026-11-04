@@ -27,10 +27,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 REPO = Path(__file__).resolve().parents[2]
 
-from edgeml.data.catalog import eval_set  # noqa: E402
-from edgeml.detectors import EXCLUDE, HorizonBandDetector, TiledDetector, build  # noqa: E402
-from edgeml.eval.detection import best_threshold, evaluate  # noqa: E402
-from edgeml.types import Detection  # noqa: E402
+from edgeml.data.catalog import eval_set
+from edgeml.detectors import EXCLUDE, HorizonBandDetector, TiledDetector, build
+from edgeml.eval.detection import best_threshold, evaluate
+from edgeml.types import Detection
 
 
 def git_sha() -> str:
@@ -70,14 +70,13 @@ def run_model_on_set(det, images, dets_path: Path, horizon_from_gt: bool = False
             ds = det.detect(img)
             lat.append(det.last_ms)
             dets_by_image[im.image_id] = ds
-            for d in ds:
-                f.write(json.dumps({"image_id": im.image_id, "box": [round(v, 1) for v in d.box],
-                                    "score": round(d.score, 4), "label": d.label, "label_id": d.label_id}) + "\n")
+            f.writelines(json.dumps({"image_id": im.image_id, "box": [round(v, 1) for v in d.box],
+                                    "score": round(d.score, 4), "label": d.label, "label_id": d.label_id}) + "\n" for d in ds)
             if n % 200 == 0:
                 print(f"  {n}/{len(images)}  {np.median(lat[-200:]):.1f} ms", flush=True)
     lat = np.array(lat[5:]) if len(lat) > 10 else np.array(lat)
     stats = {"ms_p50": float(np.percentile(lat, 50)), "ms_p95": float(np.percentile(lat, 95)),
-             "ms_mean": float(lat.mean()), "n": int(len(lat))}
+             "ms_mean": float(lat.mean()), "n": len(lat)}
     if hasattr(det, "n_calls"):
         stats["model_calls_per_frame"] = det.n_calls
     return dets_by_image, stats

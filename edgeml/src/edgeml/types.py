@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 
@@ -11,8 +11,8 @@ class Detection:
     box: Box
     score: float
     label: str
-    label_id: Optional[int] = None
-    embedding: Optional[np.ndarray] = None
+    label_id: int | None = None
+    embedding: np.ndarray | None = None
 
 
 @dataclass
@@ -24,5 +24,5 @@ class Track:
     frame_idx: int
     t_s: float
     state: Literal["tentative", "confirmed", "lost", "removed"] = "confirmed"
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
     extra: dict = field(default_factory=dict)

@@ -19,11 +19,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from bench_detectors import load_dets  # noqa: E402
-from edgeml.data.catalog import clip_frames, clip_split, eval_set  # noqa: E402
-from edgeml.detectors import build  # noqa: E402
-from edgeml.detectors.labels import agnostic  # noqa: E402
-from edgeml.eval.detection import match_at_threshold  # noqa: E402
+from bench_detectors import load_dets
+
+from edgeml.data.catalog import clip_frames, clip_split, eval_set
+from edgeml.detectors import build
+from edgeml.detectors.labels import agnostic
+from edgeml.eval.detection import match_at_threshold
 
 CAT = os.path.expanduser("~/data/catalog")
 ROOT = os.path.expanduser("~/data")

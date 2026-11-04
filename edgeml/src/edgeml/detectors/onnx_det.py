@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import urllib.request
-from typing import Optional
 
 import numpy as np
 
@@ -36,13 +35,11 @@ def fetch(fname: str, cache_dir: str = os.path.expanduser("~/models")) -> str:
     return p
 
 
-def _session(path: str, device: Optional[str]):
+def _session(path: str, device: str | None):
     import onnxruntime as ort
 
     avail = ort.get_available_providers()
-    if device and device.startswith("cuda") and "CUDAExecutionProvider" in avail:
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    elif device is None and "CUDAExecutionProvider" in avail:
+    if device and device.startswith("cuda") and "CUDAExecutionProvider" in avail or device is None and "CUDAExecutionProvider" in avail:
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     else:
         providers = ["CPUExecutionProvider"]
@@ -55,7 +52,7 @@ class YoloxOnnxDetector(BaseDetector):
     """Official YOLOX ONNX (raw head output [1, N, 85]); decode + NMS here. Input 416 for tiny."""
 
     def __init__(self, weights: str = "yolox_tiny.onnx", name: str = "yolox-tiny", imgsz: int = 416,
-                 device: Optional[str] = None, iou: float = 0.65, **kw):
+                 device: str | None = None, iou: float = 0.65, **kw):
         super().__init__(**kw)
         self.onnx_path = fetch(weights) if not os.path.exists(weights) else weights
         self.sess = _session(self.onnx_path, device)
@@ -95,7 +92,7 @@ class NanodetOnnxDetector(BaseDetector):
     """NanoDet-Plus-m-1.5x 416 from the OpenCV model zoo (GFL head: per-level cls [1,N,80] + dist [1,N,4*(reg_max+1)])."""
 
     def __init__(self, weights: str = "nanodet_plus_m15_416.onnx", name: str = "nanodet-plus-m1.5x", imgsz: int = 416,
-                 device: Optional[str] = None, iou: float = 0.6, reg_max: int = 7, **kw):
+                 device: str | None = None, iou: float = 0.6, reg_max: int = 7, **kw):
         super().__init__(**kw)
         self.onnx_path = fetch(weights) if not os.path.exists(weights) else weights
         self.sess = _session(self.onnx_path, device)
