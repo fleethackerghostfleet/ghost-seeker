@@ -111,6 +111,6 @@ function renderImage(item){
  }
 }
 function imageFor(item){
- if(!imageCache.has(item.id))imageCache.set(item.id,renderImage(item));
+ if(!imageCache.has(item.id))imageCache.set(item.id,item.img?`/${item.img}`:renderImage(item));
  return imageCache.get(item.id);
 }

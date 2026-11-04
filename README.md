@@ -116,6 +116,8 @@ The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.22+, stdlib only, syn
 go run ./cmd/ghost-seeker -addr :8090
 ```
 
+The app imagery is AI-generated synthetic imagery; see [tools/imagegen](tools/imagegen/README.md).
+
 Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention, and number of historical items generated at startup. Pages:
 
 - **Imagery Feed** — browse prioritized sensor imagery, open an item for detections and processing details, and set its priority.
