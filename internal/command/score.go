@@ -29,6 +29,8 @@ func RuleMatch(r Rule, d Detection) bool {
 			attrMatch = attrMatch || d.Attrs.Moving
 		case "loitering":
 			attrMatch = attrMatch || d.Attrs.Loitering
+		case "transient":
+			attrMatch = attrMatch || d.Attrs.Transient
 		}
 	}
 	return classMatch && attrMatch

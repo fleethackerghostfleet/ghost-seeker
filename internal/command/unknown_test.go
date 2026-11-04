@@ -17,3 +17,22 @@ func TestUnknownAliases(t *testing.T) {
 		t.Fatalf("empty directive: %+v", got)
 	}
 }
+
+func TestRuleMatchTransient(t *testing.T) {
+	rule := Rule{Type: "suppress", Classes: []string{"unknown"}, Attrs: []string{"transient"}}
+	for _, tc := range []struct {
+		name string
+		det  Detection
+		want bool
+	}{
+		{"transient unknown", Detection{Class: "unknown", Attrs: Attributes{Transient: true}}, true},
+		{"persistent unknown", Detection{Class: "unknown"}, false},
+		{"different class", Detection{Class: "bird", Attrs: Attributes{Transient: true}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RuleMatch(rule, tc.det); got != tc.want {
+				t.Fatalf("RuleMatch = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
