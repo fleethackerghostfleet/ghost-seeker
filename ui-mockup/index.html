@@ -609,7 +609,7 @@ function ruleLabel(r){
 state.dens='m';state.page='feed';
 const EXAMPLES=['Small boats approaching the pier at speed; ignore birds','Ships not broadcasting AIS','New aircraft entering the area','Any person in the water or debris','Loitering vessels near the harbor entrance','Only drones and helicopters'];
 const tcol=t=>['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'][t];
-const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 function init(){
  $('srcSel').innerHTML=SOURCES.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
