@@ -345,9 +345,9 @@ def contact_sheet(src: FrameSource, events: list[dict], sel_windows: list[dict],
             _put_lines(canvas, ["FACT ONLY", "(no image budget)"], x0 + tile // 2 - 60, y0 + tile // 2, 0.55, (120, 120, 255))
         cnt = Counter(f["kind"] if f["kind"] == "fact" else f"{f['kind']}@q{f.get('quality')}" for f in r["forms"])
         kinds = " ".join(f"{k}x{v}" if v > 1 else k for k, v in sorted(cnt.items(), key=lambda kv: order.get(kv[0].split("@")[0], 0)))
-        sub = f"{ev.get('subtype')} p={ev.get('subtype_prob', 0):.2f}" if ev.get("subtype") else "-"
-        lines = [f"{sid.split(':')[-1]}  {ev['label']}  conf {ev['best_score']:.2f}  value {ev.get('value', 0):.2f}",
-                 f"subtype {sub}  unk {ev.get('unknownness', 0):.2f}",
+        sub = f"{ev.get('subtype')} p={ev.get('subtype_prob', 0):.2f}" if ev.get("subtype") else ev["label"]
+        lines = [f"{sid.split(':')[-1]}  {sub}  unk {ev.get('unknownness', 0):.2f}",
+                 f"label {ev['label']}  det {ev.get('detector_label', '-')} {ev['best_score']:.2f}  value {ev.get('value', 0):.2f}",
                  f"brg {ev.get('bearing_deg') if ev.get('bearing_deg') is None else round(ev['bearing_deg'])} deg  {ev.get('size_class')}  {ev.get('aspect')}  {ev.get('closing')}",
                  f"t {ev['first_t_s']:.0f}-{ev['last_t_s']:.0f}s  frames {ev['n_frames']}  tracks {ev['track_ids']}",
                  f"sent {kinds}"[:60], f"{r['bytes']:,} B"]
@@ -447,6 +447,9 @@ def main():
     ap.add_argument("--asso", default="centroid", help="tracker association: iou | centroid (C: centroid wins on panning/onboard video)")
     ap.add_argument("--max-lost-s", type=float, default=6.0)
     ap.add_argument("--no-gate", action="store_true")
+    ap.add_argument("--gate-force-s", type=float, default=10.0, help="FrameGate.force_every_s: run the detector at least this often even if the scene is unchanged")
+    ap.add_argument("--tag", default=None, help="suffix appended to clip ids / output dirs (e.g. nogate) so variants can share one run dir")
+    ap.add_argument("--append", action="store_true", help="merge this run's rows into an existing <out>/summary.{md,json} instead of overwriting")
     ap.add_argument("--agg", default=None, help="JSON overrides for AggregatorParams")
     ap.add_argument("--selector", default=None, help="JSON kwargs for select.greedy (ladder_decay, max_bytes_per_object)")
     ap.add_argument("--max-frames", type=int, default=None)
@@ -488,13 +491,15 @@ def main():
     rows = []
     for clip_path in a.clip:
         src = FrameSource(clip_path, a.fps, a.max_frames)
+        if a.tag:
+            src.clip_id = f"{src.clip_id}__{a.tag}"
         cdir = out / src.clip_id
         cdir.mkdir(parents=True, exist_ok=True)
         print(f"== {src.clip_id}: {src.n_frames} frames @ {src.fps:g} fps, {src.width}x{src.height}, GT={'yes' if src.gt_tracks else 'no'}", flush=True)
         eff_fps = src.fps / a.detect_every
         tracker = make_tracker(a.tracker, fps=eff_fps, asso_func=a.asso, max_lost_s=a.max_lost_s, det_thresh=a.score_thr, low_thresh=a.det_low_thr)
         agg = DemoAggregator(src.clip_id, agg_params, embedder=embedder, frame_size=(src.width, src.height), classifier=classifier)
-        gate = None if a.no_gate else FrameGate()
+        gate = None if a.no_gate else FrameGate(force_every_s=a.gate_force_s)
         for _ in range(2):  # warm-up so p50/p95 reflect steady state
             detector.detect(src.read(1))
         if embedder is not None:
@@ -551,12 +556,16 @@ def main():
             metrics["selection"][budget_name(b)] = {k: v for k, v in sel.items() if k != "windows"}
         timeline_png(src, per_frame_dets, events, stats, cdir / "timeline.png", gt)
         (cdir / "metrics.json").write_text(json.dumps(metrics, indent=1, default=_json))
-        rows.append((src, metrics))
+        rows.append((src.clip_id, src.fps, metrics))
         s = metrics.get("sighting", {})
         print(f"   {stats['n_detections']} dets / {stats['n_tracks']} tracks / {stats['n_open']} sightings (+{stats['n_update']} upd); "
               f"recall {fmt(s.get('object_recall'))}, rep/obj {fmt(s.get('reports_per_object'), 1)}, false/min {fmt(s.get('false_per_min'), 1)}; "
               f"{fmt(stats['frame_ms_p50'], 0)}/{fmt(stats['frame_ms_p95'], 0)} ms/frame p50/p95", flush=True)
 
+    if a.append and (out / "summary.json").exists():
+        prev = json.loads((out / "summary.json").read_text())
+        new_ids = {r[0] for r in rows}
+        rows = [(cid, m["fps"], m) for cid, m in prev.items() if cid not in new_ids] + rows
     write_summary(out, rows, config, a)
     print(f"wrote {out / 'summary.md'}")
 
@@ -569,9 +578,9 @@ def write_summary(out: Path, rows, config: dict, a):
          "## Per clip", "",
          "| clip | fps | frames (det / gated) | dets | tracks | sightings open / update / close | GT obj | reports / obj | object recall | dup / obj | false / min | TTFR s | ms/frame p50 / p95 | det ms p50 | embeds |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    for src, m in rows:
+    for cid, fps, m in rows:
         s, st = m.get("sighting", {}), m["stats"]
-        L.append(f"| {src.clip_id} | {src.fps:g} | {st['n_frames']} ({st['n_detector_frames']} / {st['n_gated_out']}) | {st['n_detections']} | {st['n_tracks']} | "
+        L.append(f"| {cid} | {fps:g} | {st['n_frames']} ({st['n_detector_frames']} / {st['n_gated_out']}) | {st['n_detections']} | {st['n_tracks']} | "
                  f"{st['n_open']} / {st['n_update']} / {st['n_close']} | {s.get('n_gt_objects', '-')} | {fmt(s.get('reports_per_object'), 1)} | {fmt(s.get('object_recall'))} | "
                  f"{fmt(s.get('duplicates_per_object'))} | {fmt(s.get('false_per_min'), 1)} | {fmt(s.get('ttfr_median_s'), 1)} | "
                  f"{fmt(st['frame_ms_p50'], 0)} / {fmt(st['frame_ms_p95'], 0)} | {fmt(st['det_ms_p50'], 0)} | {st['embed_calls']} |")
@@ -587,13 +596,15 @@ def write_summary(out: Path, rows, config: dict, a):
     L.append("|---|---|---|" + "---|" * len(names))
     tot = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0]))
     n_gt_tot = 0
-    for src, m in rows:
+    for cid, fps, m in rows:
         if "delivery" not in m:
-            L.append(f"| {src.clip_id} | (no GT) | sightings {m['stats']['n_open'] + m['stats']['n_update']}, naive {m['baseline_reports']['naive']}, dedup {m['baseline_reports']['image_dedup']} | " + " | ".join(
+            L.append(f"| {cid} | (no GT) | sightings {m['stats']['n_open'] + m['stats']['n_update']}, naive {m['baseline_reports']['naive']}, dedup {m['baseline_reports']['image_dedup']} | " + " | ".join(
                 f"{m['selection'][n]['n_sightings_touched']} sightings, {m['selection'][n]['bytes_used']/1024:.0f} KB" for n in names) + " |")
             continue
         n_gt = m["delivery"]["sightings"]["n_gt_objects"]
-        n_gt_tot += n_gt
+        variant = "__" in cid
+        if not variant:
+            n_gt_tot += n_gt
         for k, label in (("sightings", "**sightings**"), ("image_dedup", "image_dedup"), ("naive", "naive")):
             d = m["delivery"][k]
             nrep = m["sighting"]["n_reports"] if k == "sightings" else d["n_reports"]
@@ -601,9 +612,11 @@ def write_summary(out: Path, rows, config: dict, a):
             for n in names:
                 b = d["budgets"][n]
                 cells.append(f"{b['objects_delivered_image']}/{n_gt} / {b['objects_delivered_fact']}/{n_gt} / {fmt((b['bytes_per_delivered_object'] or 0)/1024, 0) if b['objects_delivered_image'] else '-'}")
+                if variant:
+                    continue
                 t = tot[k][n]
                 t[0] += b["objects_delivered_image"]; t[1] += b["objects_delivered_fact"]; t[2] += b["bytes_used"]; t[3] += nrep
-            L.append(f"| {src.clip_id} | {label} | {nrep} | " + " | ".join(cells) + " |")
+            L.append(f"| {cid} | {label} | {nrep} | " + " | ".join(cells) + " |")
     if n_gt_tot:
         for k, label in (("sightings", "**sightings**"), ("image_dedup", "image_dedup"), ("naive", "naive")):
             cells = [f"{tot[k][n][0]}/{n_gt_tot} / {tot[k][n][1]}/{n_gt_tot} / {fmt(tot[k][n][2]/1024/tot[k][n][0], 0) if tot[k][n][0] else '-'}" for n in names]
@@ -612,7 +625,7 @@ def write_summary(out: Path, rows, config: dict, a):
           "`sightings.jsonl` (events with `value` + `forms`), `dets.jsonl`, `tracks.txt` (MOT), `selection_<budget>.json`, "
           "`contact_sheet_<budget>.jpg`, `timeline.png`, `metrics.json`.", ""]
     (out / "summary.md").write_text("\n".join(L))
-    (out / "summary.json").write_text(json.dumps({src.clip_id: m for src, m in rows}, indent=1, default=_json))
+    (out / "summary.json").write_text(json.dumps({cid: {"fps": fps, **m} for cid, fps, m in rows}, indent=1, default=_json))
 
 
 if __name__ == "__main__":
