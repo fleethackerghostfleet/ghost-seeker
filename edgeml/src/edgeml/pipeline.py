@@ -8,7 +8,7 @@ lost-track timers are in *tracker updates*; `make_tracker(..., fps=fps/detect_ev
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -48,7 +48,7 @@ def _iter_frames(frames, fps: Optional[float]):
         yield int(frame_idx), float(t_s), img
 
 
-def run_clip(frames: Iterable, detector, tracker, aggregator, embedder=None, detect_every: int | AdaptiveRate = 1,
+def run_clip(frames: Iterable, detector, tracker, aggregator, embedder=None, detect_every: int | AdaptiveRate = 1, stabilizer=None,
              fps: Optional[float] = None, record_dets: bool = True) -> dict:
     """Returns {"events", "dets": [(frame_idx,t_s,[Detection])], "tracks": [(frame_idx,t_s,[Track])],
     "sighting_tracks": [(sighting_id, frame_idx, box, score)], "timing": {...}, "n_frames", "n_detect_frames"}."""
@@ -79,7 +79,14 @@ def run_clip(frames: Iterable, detector, tracker, aggregator, embedder=None, det
             embs = embedder.embed_crops([crop(img, d.box, 0.1) for d in dets])
             for d, e in zip(dets, embs):
                 d.embedding = e
-        tracks = tracker.update(dets, img, frame_idx, t_s)
+        if stabilizer is not None:
+            M = stabilizer.estimate(img)
+            Minv = stabilizer.inverse(M)
+            dets_in = [replace(d, box=stabilizer.warp_box(d.box, M)) for d in dets]
+            img_in = cv2.warpAffine(img, M, (img.shape[1], img.shape[0])) if getattr(tracker, "uses_image", False) else img
+            tracks = [replace(t, box=stabilizer.warp_box(t.box, Minv)) for t in tracker.update(dets_in, img_in, frame_idx, t_s)]
+        else:
+            tracks = tracker.update(dets, img, frame_idx, t_s)
         t2 = time.perf_counter()
         if hasattr(aggregator, "set_frame"):
             aggregator.set_frame(img)

@@ -40,6 +40,7 @@ class TrackerParams:
 
 class BoxmotTracker:
     def __init__(self, params: TrackerParams):
+        self.uses_image = params.variant in ('botsort_cmc', 'botsort_reid')
         import boxmot
 
         p = params

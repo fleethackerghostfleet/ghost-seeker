@@ -69,3 +69,20 @@ def test_naive_and_dedup_baselines_count_reports():
     assert len(ev) == 10 and all(e["event"] == "open" for e in ev) and all(e["forms"][0]["kind"] == "fact" for e in ev)
     ev2, _ = image_dedup_events("c", per)
     assert 1 <= len(ev2) < len(ev)   # identical frames collapse
+
+
+def test_stabilizer_affine_roundtrip_and_horizon():
+    import cv2
+    from edgeml.stabilize import HorizonStabilizer
+    st = HorizonStabilizer()
+    img = np.full((360, 640, 3), 200, np.uint8)
+    img[200:, :] = 60                                    # sharp sea/sky edge at row 200
+    M0 = st.estimate(img)
+    assert st.ref is not None and abs(st.ref[1] - 200) < 6 and np.allclose(M0, np.array([[1, 0, 0], [0, 1, 0]]), atol=1e-6)
+    tilted = cv2.warpAffine(img, cv2.getRotationMatrix2D((320, 200), 5.0, 1.0), (640, 360), borderMode=cv2.BORDER_REPLICATE)
+    tilted = np.roll(tilted, 20, axis=0)
+    M = st.estimate(tilted)
+    assert not np.allclose(M, M0)
+    box = [100.0, 150.0, 40.0, 20.0]
+    back = st.warp_box(st.warp_box(box, M), st.inverse(M))
+    assert np.allclose(back[:2], box[:2], atol=1.5) and back[2] >= 40 and back[3] >= 20

@@ -31,6 +31,7 @@ from edgeml.detectors.cached import CachedDetector, dets_to_jsonl  # noqa: E402
 from edgeml.eval.baselines import image_dedup_events, naive_events  # noqa: E402
 from edgeml.eval.delivery import delivered_vs_budget, pool_delivery  # noqa: E402
 from edgeml.eval.sightings import aggregate_metrics, match_sightings, sighting_metrics  # noqa: E402
+from edgeml.stabilize import HorizonStabilizer  # noqa: E402
 from edgeml.pipeline import AdaptiveRate, run_clip, write_mot  # noqa: E402
 from edgeml.tracking import AggregatorParams, SightingAggregator, make_tracker  # noqa: E402
 
@@ -157,7 +158,10 @@ def cmd_matrix(a):
                     trk = make_tracker(trk_name, fps=eff_fps, **trk_over)
                     agg = SightingAggregator(seq.seq_id, AggregatorParams(**agg_over), frame_size=(seq.width, seq.height))
                     t0 = time.time()
-                    res = run_clip(seq.frames(), det, trk, agg, detect_every=every, fps=seq.fps, record_dets=False)
+                    stab = HorizonStabilizer() if a.stabilize else None
+                    res = run_clip(seq.frames(), det, trk, agg, detect_every=every, fps=seq.fps, record_dets=False, stabilizer=stab)
+                    if stab is not None:
+                        res["timing"]["stabilizer"] = stab.stats()
                     rows = [(fi, t.track_id, t.box, t.score) for fi, _t, trs in res["tracks"] for t in trs]
                     write_mot(tdir / f"{seq.seq_id}.txt", rows)
                     track_files.setdefault(cfg, {})[seq.seq_id] = tdir / f"{seq.seq_id}.txt"
@@ -226,6 +230,7 @@ def main():
     m.add_argument("--trk", default=None, help="JSON overrides for TrackerParams (e.g. {\"asso_func\":\"centroid\"})")
     m.add_argument("--selector", default=None, help="JSON kwargs for select.greedy (ladder_decay, max_bytes_per_object)")
     m.add_argument("--no-baselines", action="store_true")
+    m.add_argument("--stabilize", action="store_true", help="horizon-pinned stabilisation pre-step (E2 ablation)")
     m.add_argument("--no-trackeval", action="store_true")
     m.add_argument("--out", required=True)
     a = ap.parse_args()
