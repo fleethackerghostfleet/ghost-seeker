@@ -108,6 +108,13 @@ func (s *Server) previewDirectives(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	items, _, _, state := s.store.Snapshot()
+	visible := items[:0]
+	for _, item := range items {
+		if !item.Dismissed {
+			visible = append(visible, item)
+		}
+	}
+	items = visible
 	now := time.Now()
 	score := func(item command.Item, draft []command.Rule) command.Item {
 		directives := append([]command.Directive(nil), state.Directives...)

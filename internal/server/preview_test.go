@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -77,5 +78,61 @@ func TestExplicitDirectiveRulesOverrideText(t *testing.T) {
 	response = request(app, "POST", "/api/directives", map[string]any{"rules": []command.Rule{{Type: "broken"}}})
 	if response.Code != 400 {
 		t.Fatalf("invalid explicit rule: %d", response.Code)
+	}
+}
+
+func TestPreviewExcludesDismissedItems(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		dismissed []bool
+		visible   int
+	}{
+		{"mixed", []bool{true, false, true, false}, 2},
+		{"all dismissed", []bool{true, true}, 0},
+		{"empty", nil, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := store.New(10)
+			for i, dismissed := range tc.dismissed {
+				item := command.Item{
+					ID: strconv.Itoa(i), Dismissed: dismissed,
+					Dets: []command.Detection{{Class: "small boat", Conf: .9}},
+				}
+				data.Add(&item, 0)
+			}
+			before := data.Items()
+			response := request(New(data), "POST", "/api/directives/preview", map[string]any{
+				"text": "prioritize boats",
+				"candidates": []any{map[string]any{
+					"key": "suppress", "rules": []command.Rule{{Type: "suppress", Classes: []string{"small boat"}}},
+				}},
+			})
+			if response.Code != 200 {
+				t.Fatalf("preview: %d %s", response.Code, response.Body)
+			}
+			var result struct {
+				Items      []previewItem
+				Counts     [4]int
+				Candidates []candidateResult
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Items) != tc.visible || result.Counts != [4]int{tc.visible, 0, 0, 0} {
+				t.Fatalf("items/counts include dismissed images: %+v", result)
+			}
+			for _, item := range result.Items {
+				stored, ok := data.GetItem(item.ID)
+				if !ok || stored.Dismissed {
+					t.Fatalf("dismissed or unknown preview item: %q", item.ID)
+				}
+			}
+			if len(result.Candidates) != 1 || result.Candidates[0].Counts != [4]int{0, 0, 0, tc.visible} || result.Candidates[0].Changed != tc.visible {
+				t.Fatalf("candidate counts/changes include dismissed images: %+v", result.Candidates)
+			}
+			if !reflect.DeepEqual(before, data.Items()) {
+				t.Fatal("preview filtering mutated stored items")
+			}
+		})
 	}
 }
