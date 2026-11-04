@@ -1,120 +1,127 @@
 # Ranking and selection
 
-**Ranking answers “Which images add the most useful information?” Selection answers “Which of those images fit the available transmission allowance?”** Duplicate suppression belongs in ranking. Absolute bandwidth belongs in selection.
-
-This document records the agreed design. The current prototype still combines duplicate-aware ordering and budget selection inside `select_records()`. The implementation status below distinguishes the existing APIs from the planned separation; this documentation update does not change runtime behavior.
-
-## The agreed pipeline
+Ranking answers which observations should come first. Selection answers which whole image payloads fit the available allowance. The separation is implemented: **bandwidth and payload size cannot change the full priority ranking** for a fixed pool, evidence and policy.
 
 ```mermaid
 flowchart LR
-    A[Sensor images] --> B[Analyze once]
-    B --> C[Cached image evidence]
-    C --> D[Rank with duplicate suppression]
-    P[Operator interest policy] --> D
-    D --> E[Complete ordered list]
-    E --> F[Select images that fit]
-    G[Available bandwidth and time window] --> F
-    F --> H[Selected payloads]
-    H --> I[Platform sender]
+    A[Image pixels] --> B[Object / visual / quality providers]
+    B --> C[Cached evidence]
+    C --> D[Full ranking with soft duplicate suppression]
+    P[Operator policy] --> D
+    D --> E[Saved ordered list]
+    E --> F[Byte-budget selection]
+    G[Payload bandwidth and window] --> F
+    F --> H[Platform sender]
 ```
 
-| Stage | Inputs | Result | What causes it to change? |
-|---|---|---|---|
-| Image analysis | Image pixels and chosen engine | Detections, novelty, quality, similarity fingerprint | New images or a different engine/configuration |
-| Ranking | Cached evidence and operator policy | Complete ordered list with base scores, adjusted scores and reasons | New/removed images, changed evidence, or changed interest policy |
-| Selection | The ordered list, actual payload sizes, bandwidth and time window | A subset preserving the list's relative order | Available bandwidth, time window, or encoded payload sizes |
-| Transmission | Selected payloads and live connection | Send attempts, acknowledgements and pending payloads | Link availability and delivery results |
+The sender is a future integration. This prototype produces local files and reports; it does not transmit them.
 
-The ranking is stable **for the same candidate set, evidence and policy**. Increasing bandwidth alone does not change its scores, duplicate penalties or order. New frames and operator changes can legitimately produce a new ranking. The platform sender is a separate integration responsibility; the current prototype does not transmit files.
+## Base score
 
-## Ranking includes soft duplicate suppression
+`policy.score_record(record, policy)` uses only cached evidence and policy. Object relevance has two modes:
 
-First compute each image's base relevance from the existing evidence: supported object detections, spatial novelty and a small quality adjustment. Then build the full ordered list:
+1. If `object_relevance` is a number, use it directly. Zero is a valid supplied score. Any accompanying detections remain display metadata and do not affect relevance through class weights.
+2. Otherwise, take the maximum `confidence × class_weight` over detections. Unlisted labels use `default_object_weight`. `detections=[]` means evaluated with no hits; `detections=null` means object evidence was not evaluated.
 
-1. Put the image with the highest current adjusted score next in the list.
-2. Compare remaining images with images already placed earlier in that list.
-3. Reduce the adjusted scores of similar images, so a useful different view can move ahead of a repeated view.
-4. Continue until all eligible images have a position. Break ties deterministically by observation ID.
-
-This is **soft suppression**, not deletion. Similar images remain available farther down the list. A coarse fingerprint can miss a small meaningful change, so it must not be treated as proof that two observations contain identical information.
-
-The similarity penalty is computed against **earlier ranked images**, regardless of which images a later bandwidth setting selects. In the agreed design, byte size does not boost or reduce an image's importance, and ranking does not reserve a percentage of the transmission budget for coverage. Uniform sampling remains a separate evaluation baseline.
-
-A possible adjustment using the existing similarity heuristic is:
+The priority base score is:
 
 ```text
-adjusted_score = base_score × (1 − duplicate_strength × maximum_similarity_to_earlier_ranked_images)
+visual_contribution = visual_interest × visual_interest_weight
+base_score = max(object_relevance_or_zero, visual_contribution)
+             × (1 − quality_weight × (1 − quality))
 ```
 
-The base score stays fixed; the adjusted score evolves as the full list is constructed. Once that list is built, selection uses it without recomputing similarity or scores. These are heuristic scores, not probabilities or validated object identities.
+This keeps visual interest eligible without a recognized object. Quality is a soft modifier rather than a separate source of importance. Default object and visual weights are both 0.65; quality weight is 0.10. The policy is configurable. `visual_interest` is the canonical signal; `novelty` remains a compatibility alias, not a claim of reliable unknown-object detection.
 
-## Selection uses an absolute allowance
+Direct object relevance is already interpreted by its provider. If the UI must change priorities by category without rerunning inference, use detections with `relevance=None`. Changing policy cannot create a recognition capability absent from the cached evidence.
 
-The main setting is `available_bandwidth_bps`: effective outbound payload bits per second allocated to this image service. Supply the allocation after other traffic and transport costs have been accounted for. Use decimal units: 1 kbps = 1,000 bps, 1 Mbps = 1,000,000 bps; KB and MB below also use decimal units.
+## Full ranking and similarity
+
+`policy.rank_records(records, policy=None, method="priority")` returns every eligible observation in a complete deterministic order. It does not read payload bytes or take a bandwidth argument.
+
+For priority ranking:
+
+1. Compute each observation's base score.
+2. Pick the highest currently adjusted score; break ties by observation ID.
+3. Update remaining observations' maximum similarity to entries already ranked.
+4. Repeat until all eligible observations have a position.
+
+```text
+final_score = base_score × (1 − duplicate_strength × max_similarity)
+```
+
+The default duplicate strength is 0.85. Similarity uses the cached coarse color-layout fingerprint; the distance scale is controlled by `duplicate_distance`. Missing or incompatible fingerprints contribute zero similarity. The method is a heuristic with O(N²D) time and O(ND) memory for N observations and D fingerprint values.
+
+This is soft suppression: repeated views move down the list rather than being deleted. The fingerprint can overlook a tiny new object or respond to lighting/camera changes. It is neither a track identity nor proof that two observations contain the same information.
+
+Similarity is measured against **earlier ranked entries**, including entries that a later budget may skip. Ranking is stable for the same candidate set, evidence and policy. New or removed images, different providers or operator changes can legitimately change it. Bandwidth alone cannot.
+
+### Ranking fields
+
+| Field | Meaning |
+|---|---|
+| `priority_rank` | One-based position in the full ranking |
+| `rank` | Compatibility alias of `priority_rank` |
+| `base_score`, `score` | Individual score before similarity suppression |
+| `final_score`, `marginal_score` | Score when the observation entered the ranking |
+| `max_similarity`, `nearest_prior_id` | Largest measured similarity to an earlier ranked entry and its ID |
+| `ranking_method`, `reasons` | Method and explanations, including any redundancy penalty |
+
+The `uniform` baseline uses deterministic representative spacing over source/time/ID order and has null scores. `detector` sorts object relevance; `novelty` sorts weighted visual interest. Those two comparison baselines do not apply priority ranking's quality or similarity adjustment. None uses payload size to establish its full order.
+
+## Selection from the saved ranking
+
+`selection.select_ranked(ranked_records, budget_bytes)` walks consecutive full ranks in order. It selects each whole JPEG that fits the remaining budget, skips one that does not, then tries the next. It never rescales scores or recomputes similarity.
+
+The main bandwidth setting is the effective outbound payload allocation to this image service:
 
 ```text
 budget_bytes = floor(available_bandwidth_bps × window_seconds / 8)
 ```
 
-| Demo condition | Available bandwidth | Payload allowance over 60 seconds |
-|---|---:|---:|
-| Normal | 2 Mbps | 15 MB |
-| Degraded | 256 kbps | 1.92 MB |
-| DDIL | 64 kbps | 480 KB |
-| Severe DDIL | 9.6 kbps | 72 KB |
-| Disconnected | 0 bps | 0 bytes |
+For example, 64,000 bps over 60 seconds allows 480,000 payload bytes. Decimal units apply. The default is 2 Mbps over 60 seconds. These are adjustable application scenarios, not measured Navy link capacities; the [setup guide](README.md#absolute-bandwidth) lists the presets.
 
-These are adjustable application-level test presets, not measured or specified destroyer capacities. The [setup guide](README.md#absolute-bandwidth-control) gives the public context and working CLI options. A constant-rate allowance does not simulate latency, interruptions, retries or packet pacing.
+Selection preserves `priority_rank` and `rank`, and adds `selection_rank` for the position within the subset. It returns copies and leaves the full ranking available to the caller. For equal-size payloads it takes the top N that fit. With unequal JPEG sizes the selected ranks can have gaps.
 
-Selection walks the ranked list from top to bottom. If an image fits the remaining byte allowance, select it and subtract its encoded size. Otherwise skip it for this pass and try the next image. Skipped images remain pending; selection does not reorder the list or recompute duplicate penalties. Zero bandwidth selects nothing.
+### Example
 
-For equal-size payloads, this reduces to taking the first `floor(budget_bytes / image_size_bytes)` entries, capped by the number available. A single sensor usually fixes pixel dimensions; JPEG file sizes can still vary with scene detail and compression.
-
-### Worked example
-
-Suppose the ranking has already placed a different view C ahead of image B, which resembles A. These example sizes are illustrative, not measurements from the dataset:
-
-| Fixed rank | Image | Why it has this position | JPEG size |
+| Fixed rank | Image | Reason | JPEG size |
 |---|---|---|---:|
 | 1 | A | Highest base relevance | 300 KB |
-| 2 | C | Useful different view | 200 KB |
-| 3 | B | Similar to A, so its adjusted score is lower | 100 KB |
+| 2 | C | Different useful view | 200 KB |
+| 3 | B | Similar to A; lower adjusted score | 100 KB |
 
-| Bandwidth, over 60 seconds | Selection | Actual payload bytes |
-|---|---|---:|
-| 9.6 kbps: 72 KB allowance | None fits | 0 |
-| 64 kbps: 480 KB allowance | A, then B; C does not fit after A | 400 KB |
-| 256 kbps: 1.92 MB allowance | A, C, B | 600 KB |
+A 480 KB allowance selects A and B because C cannot fit after A. A 1.92 MB allowance selects A, C and B. **The full order stays A, C, B.** If A itself is skipped, B retains the similarity penalty it received during ranking. Adapting diversity to only the transmitted subset would be a different, budget-dependent design.
 
-**The ranking stays A, C, B in every case.** Selection can have gaps because whole JPEG sizes vary. The sender may choose a lower-ranked repeated view when a higher-ranked different view cannot fit. That is a consequence of this simple packing rule, not a change in ranking.
+Zero allowance selects nothing. Oversized items remain in the caller's full ranking. The prototype does not implement fragmentation, accumulated credit, a persistent queue, pacing, acknowledgements or previously transmitted history. A platform sender must manage those responsibilities explicitly.
 
-If an earlier-ranked image is skipped, similar lower-ranked images keep the penalty computed during ranking. Selection does not try to correct that penalty for each budget. Adapting diversity to the actually transmitted set would be a different design and would reintroduce the coupling this separation is intended to avoid.
+## APIs and CLI
 
-## Interface and implementation status
+```python
+from ghost_priority.bandwidth import bandwidth_budget_bytes
+from ghost_priority.policy import rank_records
+from ghost_priority.selection import select_ranked
 
-The desired handoff is a complete ranking that can be reused across several bandwidth settings. Keep an image's **priority rank** distinct from its **position among selected images**. The following describes the design contract; separate ranking and selection functions are not yet available.
+ranked = rank_records(records, policy=policy)
+selected = select_ranked(ranked, bandwidth_budget_bytes(64_000, 60))
+selected_when_link_improves = select_ranked(ranked, bandwidth_budget_bytes(256_000, 60))
+```
 
-| Concern | Current prototype | Agreed separation |
-|---|---|---|
-| Base scoring | `score_record()` reads evidence and policy, without bandwidth or deduplication | Remains part of ranking |
-| Full ranking | No standalone complete ranking is saved | Save the ordered eligible candidate set once per evidence/policy revision |
-| Duplicate suppression | `select_records()` penalizes similarity to images already selected in that call | Ranking penalizes similarity to earlier entries in the full ranking |
-| Image size | Current selection uses adjusted score divided by `payload_bytes ** byte_cost_exponent` | Size affects selection feasibility only |
-| Representative coverage | Current selector reserves `budget_bytes * coverage_fraction` | No budget-dependent reserve in the priority ranking |
-| Absolute budget | `bandwidth_budget_bytes()` already converts application bps and seconds to whole bytes | Use the same conversion in the separate selection step |
-| Rank output | Current `rank` field is a position within the selected subset | Preserve priority rank and record selection position separately |
-| CLI | `rank` currently runs combined prioritization and selection from cached evidence | A bandwidth-only change should reuse an existing full ranking |
-| Timing | Current `selection_ms` includes scoring, duplicate updates and packing | Measure ranking time and selection time separately |
+`policy.select_records(records, budget_bytes, policy)` remains a compatibility convenience that calls these two stages. Call them separately when reusing a ranking.
 
-Setting `byte_cost_exponent` to zero in the current implementation removes its explicit preference for small files. It does **not** create the agreed separation: the coverage reserve, affordability filtering and selected-set duplicate suppression still depend on the budget.
+```bash
+python -m ghost_priority rank --records runs/evidence/records.jsonl --ranking-only --out runs/ranking
+python -m ghost_priority select --ranked runs/ranking/ranked-priority.jsonl --bandwidth-bps 64000 --window-seconds 60 --out runs/selection
+```
 
-The future live sender will also need acknowledgement handling, a pending queue and a defined policy for frames too large to fit one window. Fragmentation, accumulated transmission credit and previously transmitted duplicate history are not implemented. An acknowledgement changes the pending candidate set, which can trigger a new ranking; merely changing bandwidth must not.
+Ranking-only saves `ranked-{method}.jsonl`, `ranking_summary.json` and a full-list gallery. It rejects bandwidth settings and labels. `select` reads a saved ranking and saves `selected.jsonl`, `selection_summary.json`, `comparison.json` and a selection report. Its optional labels are used only after selection. Saved payload paths are absolute and must remain accessible.
 
-## Evaluate the two stages separately
+Without `--ranking-only`, `rank` computes each baseline's full order once, saves it, and reuses it for the requested budget(s). Ranking and selection times are recorded separately. Standalone selection does not repeat either image analysis or ranking.
 
-For ranking, inspect useful images near the top, redundant views, and missed small changes under a fixed candidate set and policy. With suitable reviewed labels, precision/recall at fixed list positions can measure order quality without a bandwidth choice. Such ranking metrics and a stable full-ranking output are not implemented yet.
+## Evaluate and migrate
 
-For selection, report **Mbps/kbps, window duration, allowed bytes, selected bytes, unused bytes, selected image count and labelled-image coverage**. Compare all methods using identical encoded JPEGs and the same absolute allowance. More delivered images or higher delivered recall under a larger allowance does not mean that the detector became more accurate.
+Inspect ranking quality using useful images near the top, redundancy, and small changes that were missed. Selection reports should include rate, window, allowed bytes, selected bytes, unused bytes, image count and labelled-image coverage. Compare identical JPEG representations and absolute allowances. More delivered images under a larger allowance does not mean the image model became more accurate.
 
-The existing labels support annotated-object image coverage, not operator interest, unique-event recall or detector localization accuracy. Current reports evaluate the existing combined selector; they are not results from the proposed separated pipeline. Dataset-percentage budgets remain a historical reproduction option in the [setup guide](README.md), rather than the main description of connectivity.
+Existing SMD labels support annotated-object image coverage, not operator interest, unique-event recall or localization accuracy. Historical measurements in `DATA_NOTES.md` used the earlier combined selector; they are not evidence for this separated implementation.
+
+`novelty_weight` is accepted as an alias for `visual_interest_weight`; conflicting values fail validation. `coverage_fraction` and `byte_cost_exponent` are removed and rejected with a migration message. Remove those keys: full ranking no longer reserves a budget fraction or favors smaller files. The legacy fraction-budget CLI remains only for historical comparison; use absolute bandwidth for the platform contract.

@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 
 from ghost_priority.analysis import Analyzer
+from ghost_priority.providers import NanoDetObjects
 
 
 class AnalyzerTests(unittest.TestCase):
@@ -88,14 +89,16 @@ class AnalyzerTests(unittest.TestCase):
             self.analyzer.analyze(np.zeros((10, 10, 3), np.uint8), annotations={'boat': True})
 
     def test_letterbox_coordinates_and_empty_vs_unevaluated(self):
-        self.analyzer.detector = Mock()
+        provider = NanoDetObjects.__new__(NanoDetObjects)
+        provider.detector = Mock()
+        self.analyzer = Analyzer(width=160, threads=1, object_provider=provider)
         # A 400x200 image is centered at y=104 in the 416x416 letterbox.
-        self.analyzer.detector.infer.return_value = np.array([[104, 156, 312, 260, 0.9, 8]])
+        provider.detector.infer.return_value = np.array([[104, 156, 312, 260, 0.9, 8]])
         result = self.analyzer.analyze(np.zeros((200, 400, 3), np.uint8))
         detection = result['detections'][0]
         self.assertEqual(detection['label'], 'boat')
         self.assertEqual(detection['bbox_xywh'], [100.0, 50.0, 200.0, 100.0])
-        self.analyzer.detector.infer.return_value = np.empty((0, 6))
+        provider.detector.infer.return_value = np.empty((0, 6))
         self.assertEqual(self.analyzer.analyze(np.zeros((2, 2, 3), np.uint8))['detections'], [])
 
     def test_nanodet_pairs_outputs_independently_of_engine_order(self):

@@ -1,9 +1,8 @@
-"""Deterministic offline JPEG selection; heuristic scores are not probabilities.
+"""Stable full-pool prioritization, independent of payload sizes and bandwidth.
 
-This is a batch comparison, not a causal network scheduler. Defaults are provisional.
-Coverage is reserved in encoded JPEG bytes; unspendable reserve returns to the main
-selection. Byte costs exclude transport and metadata overhead. Fingerprint similarity
-is only a visual redundancy heuristic, not object identity.
+Scores are uncalibrated heuristics, not probabilities. Similarity penalizes visual
+redundancy against earlier ranked entries; it does not establish object identity.
+The simple full-ranking algorithm uses O(N²D) time and O(ND) memory.
 """
 from __future__ import annotations
 
@@ -17,12 +16,10 @@ from pathlib import Path
 DEFAULT_POLICY = {
     "default_object_weight": 0.65,
     "class_weights": {},
-    "novelty_weight": 0.65,
+    "visual_interest_weight": 0.65,
     "quality_weight": 0.10,
     "duplicate_strength": 0.85,
     "duplicate_distance": 0.08,
-    "coverage_fraction": 0.05,
-    "byte_cost_exponent": 0.5,
 }
 
 
@@ -39,10 +36,25 @@ def _policy(overrides=None):
     if overrides is not None:
         if not isinstance(overrides, dict):
             raise ValueError("policy must be a JSON object")
+        overrides = copy.deepcopy(overrides)
+        removed = set(overrides) & {"byte_cost_exponent", "coverage_fraction"}
+        if removed:
+            raise ValueError(
+                f"removed policy keys: {sorted(removed)}; remove these settings. "
+                "Ranking is now independent of bytes and budget; use select_ranked "
+                "to apply a byte allowance after ranking."
+            )
+        if "novelty_weight" in overrides:
+            legacy = _unit(overrides.pop("novelty_weight"), "novelty_weight")
+            if "visual_interest_weight" in overrides:
+                canonical = _unit(overrides["visual_interest_weight"], "visual_interest_weight")
+                if legacy != canonical:
+                    raise ValueError("conflicting novelty_weight and visual_interest_weight")
+            overrides["visual_interest_weight"] = legacy
         unknown = set(overrides) - set(result)
         if unknown:
             raise ValueError(f"unknown policy keys: {sorted(unknown)}")
-        result.update(copy.deepcopy(overrides))
+        result.update(overrides)
     for key in result:
         if key != "class_weights":
             result[key] = _unit(result[key], key)
@@ -53,89 +65,104 @@ def _policy(overrides=None):
     for label, weight in result["class_weights"].items():
         if not isinstance(label, str) or not label.strip():
             raise ValueError("class weight names must be nonempty strings")
-        _unit(weight, f"class_weights.{label}")
+        result["class_weights"][label] = _unit(weight, f"class_weights.{label}")
     return result
 
 
 def load_policy(path=None):
-    """Load a JSON override file merged over a fresh copy of the defaults."""
-    if path is None:
-        return _policy()
-    return _policy(json.loads(Path(path).read_text()))
+    """Merge a JSON override file over defaults, accepting the legacy weight alias."""
+    return _policy() if path is None else _policy(json.loads(Path(path).read_text()))
 
 
-def validate_records(records):
-    """Validate identities and payload accounting, including excluded records."""
+def _validate_ids(records):
     records = list(records)
     seen = set()
     for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("each record must be an object")
         key = record.get("id")
         if not isinstance(key, str) or not key:
             raise ValueError("each record must have a nonempty string id")
         if key in seen:
             raise ValueError(f"duplicate record id: {key}")
         seen.add(key)
+    return records
+
+
+def validate_records(records):
+    """Validate identities and payload accounting for selection/evaluation."""
+    records = _validate_ids(records)
+    for record in records:
         size = record.get("payload_bytes")
         if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
-            raise ValueError(f"{key}: payload_bytes must be a positive integer")
+            raise ValueError(f"{record['id']}: payload_bytes must be a positive integer")
     return records
 
 
 def _score(record, policy, method="priority"):
     signals = record.get("signals", {})
-    novelty = _unit(signals.get("novelty", 0), "novelty")
+    if not isinstance(signals, dict):
+        raise ValueError("signals must be an object")
+    visual_interest = _unit(signals.get("visual_interest", signals.get("novelty", 0)), "visual_interest")
     quality = _unit(signals.get("quality", 0.5), "quality")
-    detections = record.get("detections")
-    relevance = None if detections is None else 0.0
     reasons = []
-    if detections is not None:
-        if not isinstance(detections, list):
-            raise ValueError("detections must be a list or null")
-        best_label = None
-        for detection in detections:
-            label = detection.get("label")
-            if not isinstance(label, str) or not label:
-                raise ValueError("detection label must be a nonempty string")
-            confidence = _unit(detection.get("confidence"), "detection confidence")
-            weight = policy["class_weights"].get(label, policy["default_object_weight"])
-            value = confidence * weight
-            if value > relevance:
-                relevance, best_label = value, label
-        if best_label is not None:
-            reasons.append("object_detected:" + best_label)
-    novelty_contribution = novelty * policy["novelty_weight"]
+    direct = record.get("object_relevance")
+    if direct is not None:
+        # Provider relevance is already weighted; detections are display metadata.
+        relevance = _unit(direct, "object_relevance")
+        if relevance > 0:
+            reasons.append("object_relevance")
+    else:
+        detections = record.get("detections")
+        relevance = None if detections is None else 0.0
+        if detections is not None:
+            if not isinstance(detections, list):
+                raise ValueError("detections must be a list or null")
+            best_label = None
+            for detection in detections:
+                if not isinstance(detection, dict):
+                    raise ValueError("each detection must be an object")
+                label = detection.get("label")
+                if not isinstance(label, str) or not label:
+                    raise ValueError("detection label must be a nonempty string")
+                confidence = _unit(detection.get("confidence"), "detection confidence")
+                weight = policy["class_weights"].get(label, policy["default_object_weight"])
+                value = confidence * weight
+                if value > relevance:
+                    relevance, best_label = value, label
+            if best_label is not None:
+                reasons.append("object_detected:" + best_label)
+    visual_contribution = visual_interest * policy["visual_interest_weight"]
     if method == "detector":
         if relevance is None:
-            raise ValueError("detector baseline requires evaluated detections for every eligible record")
-        base = relevance
-        # Strict detector baseline: quality and novelty do not influence selection.
-        result = base
+            raise ValueError("detector baseline requires evaluated object evidence for every eligible record")
+        result = relevance
     elif method == "novelty":
-        base = novelty_contribution
-        result = base
-        reasons = ["unusual_region"] if novelty > 0 else []
+        result = visual_contribution
+        reasons = ["visual_interest"] if visual_interest > 0 else []
     else:
-        base = max(relevance or 0, novelty_contribution)
+        base = max(relevance or 0, visual_contribution)
         result = base * (1 - policy["quality_weight"] * (1 - quality))
-        if novelty_contribution > 0:
-            reasons.append("unusual_region")
+        if visual_contribution > 0:
+            reasons.append("visual_interest")
         if base > 0 and quality > 0.5:
             reasons.append("image_quality")
     if not reasons:
-        reasons = ["representative_sample"]
-    return {"score": result, "relevance": relevance, "novelty": novelty, "reasons": reasons}
+        reasons = ["no_positive_signal"]
+    return {"score": result, "relevance": relevance, "visual_interest": visual_interest,
+            "novelty": visual_interest, "reasons": reasons}
 
 
 def score_record(record, policy=None):
-    """Score evidence only. Annotation/ground-truth fields are never consulted."""
+    """Compute a base score before similarity. Ground-truth fields are ignored."""
     return _score(record, _policy(policy))
 
 
 def _uniform_order(records):
-    """Dyadic index spacing over stable source/time/id order, independent of scores."""
+    """Dyadic spacing over stable source/time/id order, independent of scores."""
     def key(record):
         timestamp = record.get("timestamp_s")
-        if timestamp is not None and (not isinstance(timestamp, (int, float)) or not math.isfinite(timestamp)):
+        if timestamp is not None and (isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)) or not math.isfinite(timestamp)):
             raise ValueError("timestamp_s must be finite or null")
         return (str(record.get("source", "")), timestamp if timestamp is not None else 0, record["id"])
     ordered = sorted(records, key=key)
@@ -151,7 +178,9 @@ def _uniform_order(records):
 
 
 def _fingerprint(record):
-    values = record.get("fingerprint") or []
+    values = record.get("fingerprint")
+    if values is None:
+        return []
     if not isinstance(values, list):
         raise ValueError("fingerprint must be a flat list")
     for value in values:
@@ -161,77 +190,79 @@ def _fingerprint(record):
 
 
 def _similarity(a, b, scale):
+    """Appearance similarity; different/absent fingerprint dimensions do not match."""
     if not a or len(a) != len(b):
         return 0.0
-    distance = sum(abs(x-y) for x, y in zip(a, b)) / len(a)
-    return math.exp(-((distance / scale) ** 2))
+    distance = sum(abs(x-y) / len(a) for x, y in zip(a, b))
+    scaled = distance / scale
+    return 0.0 if not math.isfinite(scaled) or scaled > 30 else math.exp(-(scaled ** 2))
+
+
+def _ranked_copy(record, details, rank, method, final_score, similarity=0.0, nearest=None):
+    row = copy.deepcopy(record)
+    # Re-ranking cached selections must not retain claims about an old subset.
+    row.pop("selection_rank", None)
+    row.pop("selection_lane", None)
+    row.update(copy.deepcopy(details))
+    row.update(priority_rank=rank, rank=rank, base_score=details["score"],
+               final_score=final_score, marginal_score=final_score,
+               max_similarity=similarity, nearest_prior_id=nearest,
+               ranking_method=method)
+    if final_score is not None and final_score < details["score"]:
+        row["reasons"].append("redundancy_penalty")
+    return row
+
+
+def rank_records(records, policy=None, method="priority"):
+    """Rank every eligible observation without inspecting payload size or bandwidth.
+
+    Priority ranking repeatedly chooses the highest base_score *
+    (1 - duplicate_strength * max_similarity_to_earlier_ranked), tie-breaking by ID.
+    Similar entries remain in the full order. Detector/novelty comparison methods
+    sort their own score without quality or similarity adjustments; uniform uses
+    dyadic source/time/id order. The returned rank field aliases priority_rank.
+    """
+    if method not in {"priority", "uniform", "detector", "novelty"}:
+        raise ValueError("unknown ranking method")
+    policy = _policy(policy)
+    records = sorted((r for r in _validate_ids(records) if r.get("usable") is not False), key=lambda r: r["id"])
+    if method == "uniform":
+        details = {"score": None, "relevance": None, "visual_interest": None,
+                   "novelty": None, "reasons": ["representative_sample"]}
+        return [_ranked_copy(row, details, i+1, method, None) for i, row in enumerate(_uniform_order(records))]
+    scores = {r["id"]: _score(r, policy, method) for r in records}
+    if method != "priority":
+        ordered = sorted(records, key=lambda r: (-scores[r["id"]]["score"], r["id"]))
+        return [_ranked_copy(row, scores[row["id"]], i+1, method, scores[row["id"]]["score"]) for i, row in enumerate(ordered)]
+
+    fingerprints = {r["id"]: _fingerprint(r) for r in records}
+    similarity = {r["id"]: 0.0 for r in records}
+    nearest = {r["id"]: None for r in records}
+    pending, ranked = list(records), []
+    while pending:
+        def key(record):
+            name = record["id"]
+            final = scores[name]["score"] * (1 - policy["duplicate_strength"] * similarity[name])
+            return (-final, name)
+        best = min(pending, key=key)
+        name = best["id"]
+        final = -key(best)[0]
+        ranked.append(_ranked_copy(best, scores[name], len(ranked)+1, method,
+                                   final, similarity[name], nearest[name]))
+        pending.remove(best)
+        for other in pending:
+            other_id = other["id"]
+            value = _similarity(fingerprints[name], fingerprints[other_id], policy["duplicate_distance"])
+            if value > similarity[other_id]:
+                similarity[other_id], nearest[other_id] = value, name
+    return ranked
 
 
 def select_records(records, budget_bytes, policy=None, method="priority"):
-    """Return copies in selection order without exceeding an indivisible byte budget.
+    """Compatibility convenience: full ranking followed by separate byte selection.
 
-    Uniform selection uses dyadically spaced source/time/id order. Priority selection
-    maximizes heuristic marginal utility / bytes**byte_cost_exponent; it is a greedy
-    approximation, not an optimal knapsack solution. Similarity is updated against
-    the selected set with O(N*K*D) work and O(N*D) memory, not an NxN matrix.
+    Call rank_records followed by selection.select_ranked directly to reuse the
+    exact same complete ranking across several bandwidth budgets.
     """
-    if isinstance(budget_bytes, bool) or not isinstance(budget_bytes, int) or budget_bytes < 0:
-        raise ValueError("budget_bytes must be a nonnegative integer")
-    if method not in {"priority", "uniform", "detector", "novelty"}:
-        raise ValueError("unknown selection method")
-    policy = _policy(policy)
-    records = [r for r in validate_records(records) if r.get("usable") is not False]
-    records.sort(key=lambda r: r["id"])
-    uniform = list(_uniform_order(records))
-    selected, selected_ids, spent = [], set(), 0
-    scores = {} if method == "uniform" else {r["id"]: _score(r, policy, method) for r in records}
-    fingerprints = {} if method == "uniform" else {r["id"]: _fingerprint(r) for r in records}
-    similarity = {r["id"]: 0.0 for r in records}
-
-    def add(record, lane, marginal=None):
-        nonlocal spent
-        row = copy.deepcopy(record)
-        details = scores.get(record["id"], {"score": None, "relevance": None, "novelty": None, "reasons": []})
-        row.update(copy.deepcopy(details))
-        if lane in {"coverage", "uniform"}:
-            row["reasons"].append("representative_sample")
-        elif similarity[record["id"]] > 0.5:
-            row["reasons"].append("redundancy_penalty")
-        row.update(rank=len(selected)+1, marginal_score=marginal, selection_lane=lane)
-        selected.append(row)
-        selected_ids.add(record["id"])
-        spent += record["payload_bytes"]
-        if method == "priority":
-            fp = fingerprints[record["id"]]
-            for other in records:
-                other_id = other["id"]
-                similarity[other_id] = max(similarity[other_id], _similarity(fp, fingerprints[other_id], policy["duplicate_distance"]))
-
-    if method == "uniform":
-        for record in uniform:
-            if spent + record["payload_bytes"] <= budget_bytes:
-                add(record, "uniform")
-        return selected
-
-    reserve = int(budget_bytes * policy["coverage_fraction"]) if method == "priority" else 0
-    for record in uniform:
-        if spent + record["payload_bytes"] <= reserve:
-            add(record, "coverage", scores[record["id"]]["score"])
-    while True:
-        best, best_key, marginal = None, None, None
-        for record in records:
-            key = record["id"]
-            if key in selected_ids or spent + record["payload_bytes"] > budget_bytes:
-                continue
-            value = scores[key]["score"]
-            if method == "priority":
-                value *= 1 - policy["duplicate_strength"] * similarity[key]
-            utility = value / (record["payload_bytes"] ** policy["byte_cost_exponent"])
-            candidate_key = (utility, value, -record["payload_bytes"])
-            # Sorted IDs plus strict comparison make ties reproducible.
-            if best_key is None or candidate_key > best_key:
-                best, best_key, marginal = record, candidate_key, value
-        if best is None:
-            break
-        add(best, method, marginal)
-    return selected
+    from .selection import select_ranked
+    return select_ranked(rank_records(records, policy=policy, method=method), budget_bytes)

@@ -2,9 +2,12 @@
 
 ## Algorithm baseline
 
-[`algorithm/README.md`](algorithm/README.md) describes the CPU-only image/video scoring, configurable default prioritization, and offline byte-budget evaluation. Image evidence is cached separately from policy, so operator overrides can rerank observations without repeating inference. Detection annotations enter evaluation only.
+[`algorithm/README.md`](algorithm/README.md) describes the implemented pipeline: interchangeable image providers produce cached evidence, ranking orders the full pool with soft duplicate suppression, and a separate selector applies an absolute payload allowance. Changing bandwidth reuses the same ranking; changing operator policy can rerank evidence without repeating inference. Detection annotations enter evaluation only.
 
-[`Ranking and selection`](algorithm/RANKING_AND_SELECTION.md) explains the agreed separation: rank images with duplicate suppression, then select from that list using an absolute bandwidth allowance such as **64 kbps over 60 seconds = 480 KB**. It also identifies where the current combined selector still needs to be separated.
+- [`Provider handoff`](algorithm/PROVIDERS.md): object, visual-interest and quality contracts, Python adapters and CLI factories.
+- [`Ranking and selection`](algorithm/RANKING_AND_SELECTION.md): base/final scores, stable priority ranks and budget accounting, such as **64 kbps over 60 seconds = 480 KB**.
+
+The built-in providers run on CPU. Custom providers control their own runtime. The current benchmark is offline; live queue management and transmission belong to the platform.
 
 ## UI mockup
 

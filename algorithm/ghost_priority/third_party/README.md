@@ -8,7 +8,7 @@ The Apache 2.0 license supplied with that directory is reproduced in
 `LICENSE-NANODET`. Local modifications pair output tensors by feature-map
 shape to support OpenCV 5's changed output ordering, validate the expected
 model output dimensions, and subtract the row maximum for stable softmax.
-The wrapper uses class-agnostic NMS. `analysis.py` adds aspect-preserving letterboxing,
+The wrapper uses class-agnostic NMS. `providers.py` adds aspect-preserving letterboxing,
 coordinate conversion and explicit CPU execution around it.
 
 The supported model is OpenCV Zoo's FP32
