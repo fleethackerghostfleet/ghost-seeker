@@ -140,3 +140,27 @@ func request(handler http.Handler, method, target string, body any) *httptest.Re
 	handler.ServeHTTP(response, request)
 	return response
 }
+
+func TestFullResOverrideRequiresOperator(t *testing.T) {
+	data := store.New(10)
+	app := New(data)
+	data.Add(&command.Item{ID: "img-1", TS: time.Now(), Dets: []command.Detection{{Class: "bird", Conf: .8}}}, 0)
+
+	if r := request(app, http.MethodPost, "/api/items/missing/full-res", map[string]string{"by": "op1"}); r.Code != http.StatusNotFound {
+		t.Fatalf("missing item status = %d, want 404", r.Code)
+	}
+	if r := request(app, http.MethodPost, "/api/items/img-1/full-res", map[string]string{"by": "  "}); r.Code != http.StatusBadRequest {
+		t.Fatalf("blank operator status = %d, want 400", r.Code)
+	}
+	r := request(app, http.MethodPost, "/api/items/img-1/full-res", map[string]string{"by": "op1"})
+	if r.Code != http.StatusOK {
+		t.Fatalf("full-res status = %d: %s", r.Code, r.Body.String())
+	}
+	var body struct{ Item command.Item }
+	if err := json.Unmarshal(r.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.Item.FullRes || body.Item.FullResBy != "op1" || body.Item.FullResAt == nil {
+		t.Fatalf("item = %+v, want fullRes by op1", body.Item)
+	}
+}

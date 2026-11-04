@@ -129,6 +129,24 @@ budget stay in uncompressed protobuf bytes, so compression shows up as a
 higher estimated rate. The in-process simulator (`link.Sim`) charges
 uncompressed bytes.
 
+### Operator override: full size, no compression
+
+An operator can force an image to go at full size with no compression: a
+`RequestPull` whose `pull` has `"original": true` (shore or edge console).
+`requestedBy` is required, because this is a human decision that costs link
+bandwidth. The edge then sends the capture's original bytes as FULL, undoing
+any JPEG re-encode (it keeps the original whenever FULL was re-encoded), and
+skips THUMB/CROP for that item. The pull boost puts it at the head of the
+queue, and the edge event log records `pull-original` with the operator.
+
+    curl -s -H content-type:application/json localhost:8080/ghostseeker.v1.ConsoleService/RequestPull \
+      -d '{"pull":{"itemId":"<id>","original":true,"requestedBy":"op1"}}'
+
+In the operator web app this is the **Send full size** button in the image
+drawer. It asks for the operator's name and records the override on the item
+(`POST /api/items/{id}/full-res`). The web app is not wired to shore yet, so
+for now this only updates its own simulation.
+
 ## Simulator results (satcom_contested, 60 min, mock analyzer)
 
 | strategy | first unknown fact at shore | first unknown full | manifests at shore | unknowns at FACT | FULL images |
