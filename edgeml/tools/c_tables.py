@@ -42,11 +42,11 @@ def load(run, status=None):
     for r in rows:
         by[r["cfg"]].append(r)
     te = {}
-    tp = RUNS / run / "trackeval.json"
-    if tp.exists():
-        for k, v in json.loads(tp.read_text()).items():
-            if isinstance(v, dict) and "COMBINED_SEQ" in v:
-                te[k] = v["COMBINED_SEQ"]
+    sp = RUNS / run / "summary.json"
+    if sp.exists():
+        for k, v in json.loads(sp.read_text()).items():
+            if isinstance(v, dict) and v.get("trackeval"):
+                te[k] = v["trackeval"]
     return by, te
 
 
