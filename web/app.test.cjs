@@ -10,7 +10,7 @@ function setup(){
  const context=vm.createContext({
   setTimeout:()=>{},imageCache:new Map(),
   document:{body:{classList:{remove(){}}}},
-  $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({})});return elements.get(id)},
+  $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
  });
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
@@ -36,9 +36,7 @@ test('paused snapshots refresh existing and queued scores without exposing captu
  `,context);
  assert.equal(vm.runInContext("items.length===1&&items[0].id==='visible'&&items[0].tier===1&&items[0].el===card&&state.sel==='visible'",context),true);
  assert.equal(vm.runInContext("pendingItems.length===3&&pendingItems[0].item.tier===1&&pendingItems[1].item.id==='not-in-snapshot'&&pendingItems[2].item.id==='snapshot-only'&&evictedIDs.has('evicted')",context),true);
- const pauseHandler=source.split('\n').find(line=>line.includes("$('pauseBtn').onclick="));
- vm.runInContext(pauseHandler,context);
- vm.runInContext("$('pauseBtn').onclick()",context);
+ vm.runInContext("toggleHold()",context);
  assert.equal(vm.runInContext("!state.paused&&pendingItems.length===0&&items.length===3&&findItem('queued').tier===1&&!findItem('evicted')&&!findItem('not-in-snapshot')&&!!findItem('snapshot-only')",context),true);
 });
 
@@ -46,6 +44,14 @@ test('empty paused snapshot preserves visible items and queue',()=>{
  const context=setup();
  vm.runInContext("state.paused=true;items=[normalizeItem(raw('visible'))];pendingItems=[{item:raw('queued')}];applySnapshot(snapshot([]))",context);
  assert.equal(vm.runInContext("items.length===1&&pendingItems.length===1",context),true);
+});
+
+test('toggle hold pauses and resume drains pending items',()=>{
+ const context=setup();
+ vm.runInContext("pendingItems=[{item:raw('queued')}];toggleHold()",context);
+ assert.equal(vm.runInContext("state.paused&&pendingItems.length===1&&items.length===0",context),true);
+ vm.runInContext("toggleHold()",context);
+ assert.equal(vm.runInContext("!state.paused&&pendingItems.length===0&&items.length===1&&!!findItem('queued')",context),true);
 });
 
 test('resume after a held reconnect drops items the server no longer has but keeps later arrivals',()=>{
@@ -57,8 +63,7 @@ test('resume after a held reconnect drops items the server no longer has but kee
   streamHandlers.item({data:JSON.stringify({item:raw('later'),stats:{}})});
  `,context);
  assert.equal(vm.runInContext("items.length===2",context),true);
- vm.runInContext(source.split('\n').find(line=>line.includes("$('pauseBtn').onclick=")),context);
- vm.runInContext("$('pauseBtn').onclick()",context);
+ vm.runInContext("toggleHold()",context);
  assert.equal(vm.runInContext("items.length===2&&!!findItem('kept')&&!!findItem('later')&&!findItem('stale')",context),true);
 });
 
@@ -78,8 +83,7 @@ test('paused update events queue unknown IDs, refresh pending records, and revea
   update('captured',1);update('unknown',3);update('unknown',1);
  `,context);
  assert.equal(vm.runInContext("items.length===1&&pendingItems.length===2&&pendingItems.every(e=>e.item.tier===1&&e.item.reviewed&&e.item.sent)&&cdr===2",context),true);
- vm.runInContext(source.split('\n').find(line=>line.includes("$('pauseBtn').onclick=")),context);
- vm.runInContext("$('pauseBtn').onclick()",context);
+ vm.runInContext("toggleHold()",context);
  assert.equal(vm.runInContext("!state.paused&&items.length===3&&pendingItems.length===0&&findItem('captured').tier===1&&findItem('unknown').sent",context),true);
 });
 
