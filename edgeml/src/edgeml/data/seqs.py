@@ -1,4 +1,4 @@
-"""Local MOT-layout sequence loader + converters used by run_c.py (A's canonical loader is edgeml.data.mot, PR #16).
+"""Local MOT-layout sequence loader + converters used by run_c.py (A's canonical loader is edgeml.data.mot, PR #16)."""
 
 import configparser
 import json
