@@ -136,7 +136,9 @@ An operator can force an image to go at full size with no compression: a
 `requestedBy` is required, because this is a human decision that costs link
 bandwidth. The edge then sends the capture's original bytes as FULL, undoing
 any JPEG re-encode (it keeps the original whenever FULL was re-encoded), and
-skips THUMB/CROP for that item. The pull boost puts it at the head of the
+holds back that item's THUMB/CROP until FULL is complete. "No compression"
+means the image bytes are not re-encoded; link gzip is lossless and leaves
+them byte-identical. The pull boost puts it at the head of the
 queue, and the edge event log records `pull-original` with the operator.
 
     curl -s -H content-type:application/json localhost:8080/ghostseeker.v1.ConsoleService/RequestPull \

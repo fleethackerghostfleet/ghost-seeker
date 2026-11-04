@@ -334,10 +334,18 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 	return nil
 }
 
-// skipForm: an operator's original pull sends FULL as-is, without the
-// THUMB/CROP rungs.
+// skipForm: an operator's original pull sends FULL first; THUMB/CROP wait
+// until it is complete so the item still finishes.
 func skipForm(r *store.Row, f *store.FormState) bool {
-	return r.PullOriginal && (f.Kind == pb.FormKind_FORM_KIND_THUMB || f.Kind == pb.FormKind_FORM_KIND_CROP)
+	if !r.PullOriginal || (f.Kind != pb.FormKind_FORM_KIND_THUMB && f.Kind != pb.FormKind_FORM_KIND_CROP) {
+		return false
+	}
+	for _, o := range r.Forms {
+		if o.Kind == pb.FormKind_FORM_KIND_FULL {
+			return !o.Complete
+		}
+	}
+	return false
 }
 
 // nextFormAfter returns the ladder rung following kind, if sendable.

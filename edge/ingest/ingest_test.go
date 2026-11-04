@@ -312,6 +312,21 @@ func TestOriginalPullSendsCaptureBytes(t *testing.T) {
 			t.Fatalf("original pull should skip THUMB/CROP, plan has %v", forms)
 		}
 	}
+	// Once FULL is delivered, THUMB/CROP follow so the item completes.
+	if err := st.SetAcked(ctx, row.Item.Id, pb.FormKind_FORM_KIND_FULL, int64(len(src)), true); err != nil {
+		t.Fatal(err)
+	}
+	done, err := st.Get(ctx, row.Item.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	thumb := false
+	for _, c := range g.sch.BuildPlan([]*store.Row{done}, 1e9, time.Now()).Chunks {
+		thumb = thumb || c.Form == pb.FormKind_FORM_KIND_THUMB
+	}
+	if !thumb {
+		t.Fatal("THUMB should be sent after the original FULL completes")
+	}
 	// Repeating it is a no-op: FULL already is the original.
 	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Original: true, RequestedBy: "op1"}); err != nil {
 		t.Fatal(err)
