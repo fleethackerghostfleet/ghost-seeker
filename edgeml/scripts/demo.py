@@ -90,7 +90,6 @@ class FrameSource:
             self.n_src = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
             self.width, self.height = int(self.video.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.video.get(cv2.CAP_PROP_FRAME_HEIGHT))
             self.paths = None
-            self._cache: dict[int, np.ndarray] = {}
         else:
             raise SystemExit(f"not a sequence dir, frames dir or video: {path}")
         self.max_frames = max_frames
@@ -124,15 +123,17 @@ class FrameSource:
     def read(self, frame_idx: int) -> np.ndarray:
         if self.paths is not None:
             return cv2.imread(str(self.paths[frame_idx - 1]))
-        if frame_idx not in self._cache:
-            self.video.set(cv2.CAP_PROP_POS_FRAMES, (frame_idx - 1) * self.step)
-            ok, im = self.video.read()
-            self._cache[frame_idx] = im if ok else None
-        return self._cache[frame_idx]
+        self.video.set(cv2.CAP_PROP_POS_FRAMES, (frame_idx - 1) * self.step)
+        ok, im = self.video.read()
+        return im if ok else None
 
     @property
     def gt_tracks(self):
-        return self.seq.gt_tracks() if self.seq is not None and self.seq.gt else None
+        if self.seq is None or not self.seq.gt:
+            return None
+        n = self.n_frames
+        gt = {oid: [(fr, b) for fr, b in rows if fr <= n] for oid, rows in self.seq.gt_tracks().items()}
+        return {oid: rows for oid, rows in gt.items() if rows}
 
 
 # ----------------------------------------------------------------------------- embedding glue
@@ -164,26 +165,64 @@ class DemoAggregator(SightingAggregator):
     """C's SightingAggregator + D's zero-shot subtype / unknownness, filled in from the key-frame embedding that the
     aggregator already computes, right before each open/update report (so a better key frame can change the subtype)."""
 
+    COARSE = {"aircraft": "aircraft", "buoy": "buoy", "marine mammal": "marine_mammal"}  # every other subtype is a vessel
+
     def __init__(self, *a, classifier=None, **kw):
         super().__init__(*a, **kw)
         self.classifier = classifier
         self.subtype_calls = 0
+        self.zs: dict[str, dict] = {}  # sighting_id -> {"key", "subtype", "prob", "unknownness"}
+
+    def _classify(self, st):
+        """Zero-shot on the current key-frame embedding; re-run only when the key frame (hence st.emb) changed."""
+        if self.classifier is None or st.emb is None:
+            return None
+        z = self.zs.get(st.s.sighting_id)
+        if z is None or z["key"] is not st.emb:
+            r = self.classifier.classify(np.asarray(st.emb, np.float32)[None])[0]
+            z = self.zs[st.s.sighting_id] = {"key": st.emb, "subtype": r["subtype"], "prob": float(r["prob"]), "unknownness": float(r["unknownness"])}
+            self.subtype_calls += 1
+        return z
+
+    def _apply(self, st):
+        """`label` = coarse class of the zero-shot subtype (D's prompt set), `subtype`/`unknownness` from zero-shot;
+        C's COCO vote survives as `detector_label` / `label_scores`."""
+        z = self._classify(st)
+        st.detector_label = max(st.label_votes, key=st.label_votes.get) if st.label_votes else st.s.label
+        if z is not None:
+            st.s.subtype, st.s.unknownness = z["subtype"], z["unknownness"]
+            st.s.label = self.COARSE.get(z["subtype"], "boat")
+        return z
+
+    def _snapshot(self, st):
+        self._apply(st)
+        return super()._snapshot(st) | {"subtype": st.s.subtype}
+
+    def _material_change(self, st, t_s):
+        r = super()._material_change(st, t_s)
+        if r:
+            return r
+        if t_s - st.last_report_t < self.p.min_update_interval_s or st.n_updates >= self.p.max_updates or not st.last_report:
+            return None
+        return "subtype_flip" if st.s.subtype != st.last_report.get("subtype") else None
 
     def _report(self, st, kind, frame_idx, t_s, reason=None):
-        if self.classifier is not None and st.emb is not None and kind in ("open", "update"):
-            r = self.classifier.classify(np.asarray(st.emb, np.float32)[None])[0]
-            st.s.subtype = r["subtype"]
-            st.s.unknownness = float(r["unknownness"])
-            st.subtype_prob = float(r["prob"])
-            self.subtype_calls += 1
+        z = self._apply(st)
         ev = super()._report(st, kind, frame_idx, t_s, reason)
-        if getattr(st, "subtype_prob", None) is not None:
-            ev["subtype_prob"] = st.subtype_prob
+        ev["detector_label"] = st.detector_label
+        if z is not None:
+            ev["subtype_prob"] = z["prob"]
+        return ev
+
+    def _close(self, st, frame_idx, t_s):
+        self._apply(st)
+        ev = super()._close(st, frame_idx, t_s)
+        ev["detector_label"] = st.detector_label
         return ev
 
 
 # ----------------------------------------------------------------------------- the loop
-def run_pipeline(src: FrameSource, detector, gate, tracker, agg, detect_every: int, out_dir: Path):
+def run_pipeline(src: FrameSource, detector, gate, tracker, agg, detect_every: int, out_dir: Path, score_thr: float = 0.25):
     dets_f = open(out_dir / "dets.jsonl", "w")
     per_frame_dets: dict[int, list] = {}
     events: list[dict] = []
@@ -214,7 +253,8 @@ def run_pipeline(src: FrameSource, detector, gate, tracker, agg, detect_every: i
         dets = detector.detect(img)
         det_ms.append((time.perf_counter() - td) * 1e3)
         n_det_frames += 1
-        tracks = tracker.update(dets, img, fi, t_s)
+        tracks = tracker.update(dets, img, fi, t_s)  # all boxes incl. low-score ones for ByteTrack's 2nd stage
+        dets = [d for d in dets if d.score >= score_thr]
         agg.set_frame(img)
         events.extend(agg.update(tracks, img, fi, t_s))
         frame_ms.append((time.perf_counter() - t0) * 1e3)
@@ -401,7 +441,8 @@ def main():
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--fps", type=float, default=None, help="frame rate for plain frames dirs / target rate for videos")
     ap.add_argument("--detect-every", type=int, default=1)
-    ap.add_argument("--score-thr", type=float, default=0.25)
+    ap.add_argument("--score-thr", type=float, default=0.25, help="detection threshold for tracker init / recorded dets / baselines")
+    ap.add_argument("--det-low-thr", type=float, default=0.05, help="detector output floor; boxes in [low, score_thr) only feed ByteTrack's recovery stage")
     ap.add_argument("--tracker", default="bytetrack", help="bytetrack | ocsort | botsort | botsort_cmc")
     ap.add_argument("--asso", default="centroid", help="tracker association: iou | centroid (C: centroid wins on panning/onboard video)")
     ap.add_argument("--max-lost-s", type=float, default=6.0)
@@ -418,7 +459,7 @@ def main():
     det_path = a.det or next((c for c in DEFAULT_DET_CANDIDATES if Path(c).expanduser().exists()), None)
     if det_path is None:
         raise SystemExit("no detector found; pass --det (gs://.../edgeml/models/yolo11n/model.onnx or D's yolo11n-640/int8/model.xml)")
-    detector = load_detector(Path(det_path).expanduser(), engine=a.engine, threads=a.threads, score_thr=a.score_thr)
+    detector = load_detector(Path(det_path).expanduser(), engine=a.engine, threads=a.threads, score_thr=min(a.score_thr, a.det_low_thr))
 
     embedder = classifier = None
     if a.embed and a.embed.lower() != "none":
@@ -439,7 +480,7 @@ def main():
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=Path(__file__).parent).stdout.strip()
     config = {"command": " ".join(sys.argv), "detector": detector.name, "detector_path": str(det_path), "detector_bytes": detector.model_bytes,
               "embedder": getattr(getattr(embedder, "clip", None), "name", None), "tracker": a.tracker, "asso": a.asso, "max_lost_s": a.max_lost_s,
-              "detect_every": a.detect_every, "gate": not a.no_gate, "threads": a.threads, "cpus": sorted(os.sched_getaffinity(0)),
+              "detect_every": a.detect_every, "score_thr": a.score_thr, "det_low_thr": a.det_low_thr, "gate": not a.no_gate, "gate_force_every_s": a.gate_force_s, "threads": a.threads, "cpus": sorted(os.sched_getaffinity(0)),
               "aggregator": asdict(agg_params), "selector": selector_kw, "budgets": a.budgets, "window_s": a.window_s,
               "hardware": platform.processor() or platform.machine(), "python": platform.python_version(), "git_sha": sha}
     (out / "config.json").write_text(json.dumps(config, indent=1, default=_json))
@@ -451,7 +492,7 @@ def main():
         cdir.mkdir(parents=True, exist_ok=True)
         print(f"== {src.clip_id}: {src.n_frames} frames @ {src.fps:g} fps, {src.width}x{src.height}, GT={'yes' if src.gt_tracks else 'no'}", flush=True)
         eff_fps = src.fps / a.detect_every
-        tracker = make_tracker(a.tracker, fps=eff_fps, asso_func=a.asso, max_lost_s=a.max_lost_s, det_thresh=a.score_thr)
+        tracker = make_tracker(a.tracker, fps=eff_fps, asso_func=a.asso, max_lost_s=a.max_lost_s, det_thresh=a.score_thr, low_thresh=a.det_low_thr)
         agg = DemoAggregator(src.clip_id, agg_params, embedder=embedder, frame_size=(src.width, src.height), classifier=classifier)
         gate = None if a.no_gate else FrameGate()
         for _ in range(2):  # warm-up so p50/p95 reflect steady state
@@ -459,7 +500,7 @@ def main():
         if embedder is not None:
             embedder.embed_crops([src.read(1)[:256, :256]])
             embedder.calls, embedder.ms = 0, 0.0
-        events, per_frame_dets, _rows, stats = run_pipeline(src, detector, gate, tracker, agg, a.detect_every, cdir)
+        events, per_frame_dets, _rows, stats = run_pipeline(src, detector, gate, tracker, agg, a.detect_every, cdir, a.score_thr)
         stats.update({"n_open": sum(e["event"] == "open" for e in events), "n_update": sum(e["event"] == "update" for e in events),
                       "n_close": sum(e["event"] == "close" for e in events), "embed_calls": embedder.calls if embedder else 0,
                       "embed_ms_total": embedder.ms if embedder else 0.0, "n_relinks": sum(1 for e in events if e.get("reason") == "relink")})
