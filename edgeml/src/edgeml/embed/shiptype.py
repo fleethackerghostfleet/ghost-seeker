@@ -143,8 +143,11 @@ class ShipTypeClassifier:
         out = []
         for pi, ai in zip(p, a):
             k = int(pi.argmax())
-            t = TYPES[k] if pi[k] >= self.unknown_floor else UNKNOWN
-            out.append(record(t, pi[k] if t != UNKNOWN else max(pi[k], pi[-1]),
+            unknown = k == len(TYPES) - 1
+            rejected = not unknown and pi[k] < self.unknown_floor
+            t = UNKNOWN if unknown or rejected else TYPES[k]
+            conf = pi[k] if unknown or not rejected else 1 - pi[k]
+            out.append(record(t, conf,
                               aspect=list(ASPECTS)[int(ai.argmax())] if t != UNKNOWN else None,
                               size=size_from_type(t), model=f"{self.name} zero-shot"))
         return out
