@@ -121,6 +121,7 @@ The app imagery is AI-generated synthetic imagery; see [tools/imagegen](tools/im
 Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention, and number of historical items generated at startup. Pages:
 
 - **Imagery Feed** — browse prioritized sensor imagery, open an item for detections and processing details, and set its priority.
+- **J2 briefing** — in an image's detail drawer, add individual vessel detections to the briefing selection (other object types are excluded). Choose **Create J2 brief** in the feed toolbar to freeze evidence, including locally available imagery with the selected detection highlighted. The integrated `#briefing` workspace provides editable title, analyst assessment and intelligence gaps; combined slides paginate at four observations, or use one slide per observation. Export editable 16:9 PowerPoint or **Print / Save PDF** (opens a printable page; choose Save as PDF in the browser). Export is local and needs no external service. Drafts live only in the current tab and are lost on reload. A new snapshot explicitly replaces evidence without changing review/commander state. Different observations may depict the same vessel: remove duplicates manually; there is no verified track identity, affiliation or geospatial data. Missing images get explicit placeholders. All slides retain the training marking.
 - **Review** — `1`–`4` set priority, `Space` accept the model suggestion, `X` dismiss, `C` send to the commander queue, `→`/`S` skip, `Z` undo, `N` night mode.
   Repeated overrides can prompt a one-key directive suggestion; when contacts are close, Review can ask which object caused the override.
   Suggestions stay client-side until accepted, and accepted rules appear on the Commander's Board under “Learned from operator”.
@@ -130,6 +131,24 @@ Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention
 Preview adds draft rules on top of active directives without mutating server state. Apply adds a new active directive; Reset clears only the local draft. Time-scoped directives are refreshed every 30 seconds so expired boosts disappear. The feed continues streaming during iteration. Keyword/regex parsing does not use an LLM; operator app state is in memory and resets on restart.
 
 The [standalone design reference](ui-mockup/reprioritize.html) retains 80 seeded synthetic images and simulated apply; open it directly without a server.
+
+Briefing export vendors PptxGenJS 3.12.0 (MIT, `web/static/pptxgen.LICENSE`) with its bundled JSZip dependency. `pptxgen.bundle.js` is the unmodified npm distribution with its source-map reference removed. No CDN or runtime npm install is required. Run web regression checks with `node --test web/*.test.cjs` (Node 18+); `node --check web/static/briefing*.js` checks syntax. Preview, print and PowerPoint share slide geometry; PowerPoint uses editable text and embedded raster images. PowerPoint font rendering may vary by viewer.
+
+## Prioritization benchmark
+
+`go run ./cmd/bench` scores edge triage and each command model against a written mission oracle (`internal/bench/oracle.go`) on deterministic synthetic frames: generated-library contacts with drawn confidence and track attributes, plus a spurious detection in 30% of frames. The oracle ignores confidence and false positives; each model is judged against its own mission (maritime security, air picture, search and rescue). Tune on seeds 1–3; report the held-out default seeds 101–103 (6,000 frames each).
+
+| Metric (held-out) | Maritime before → after | Air before → after | SAR before → after |
+|---|---|---|---|
+| Tier exact | 38.6% → 77.8% | 43.8% → 91.2% | 41.9% → 79.8% |
+| P1 recall | 54.0% → 89.7% | 65.2% → 91.5% | 76.4% → 99.3% |
+| P1 precision | 29.6% → 75.4% | 51.0% → 92.6% | 9.7% → 73.3% |
+| Critical miss (oracle P1 scored P3/P4) | 8.8% → 0.0% | 5.2% → 0.0% | 0.0% → 0.0% |
+| False flash (oracle P3/P4 scored P1) | 10.8% → 1.1% | 4.9% → 0.5% | 20.1% → 0.2% |
+| NDCG@20 per 200-frame window | 0.663 → 0.979 | 0.816 → 0.979 | 0.559 → 0.977 |
+| Review burden (share of window to reach every P1) | 80.8% → 52.2% | 45.2% → 21.4% | 46.3% → 5.7% |
+
+Edge triage drops 6.5% of frames and 0.1% of oracle P1 frames. Model changes: frame score is the top contact plus a damped (`CrowdShare` 0.1) noisy-or of the rest, so crowds of minor contacts no longer stack into P1; confidence saturates at `ConfSat` 0.7; per-model attribute lifts (approaching, dark, loitering) replace fixed multipliers and skip clutter. `TestModelsMeetFloor` fails if a change pushes any model below 0.95 NDCG, 85% P1 recall or above 1% critical miss. The oracle encodes one plausible commander intent and the confidences are simulated, so these numbers measure fit to that spec, not field accuracy.
 
 ### Live shore mode (`-shore`)
 

@@ -1,0 +1,7 @@
+reviewed: true
+gt_status: complete
+notes: >-
+  Fixed shore camera, one passenger ferry crossing left -> right (track 3, frames 68-134, 67 boxes, class ship).
+  Frames 1-67 and 135-209 contain no vessels (verified on 1/3 s sample frames + full-frame checks of f1/f40/f150/f200);
+  the ferry is cut by the frame edge on entry (f68-f75) and exit (f130-f134), boxes there are partial by construction.
+  Two tiny white specks on the water (buoys or gulls, <10 px) and a distant aircraft in the sky are deliberately not labelled.

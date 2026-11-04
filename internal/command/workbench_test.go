@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
 func TestWorkbenchDefaultsAndWeights(t *testing.T) {
@@ -16,13 +18,13 @@ func TestWorkbenchDefaultsAndWeights(t *testing.T) {
 		if got := ScoreDet(d, []Rule{rule}, "maritime").Score; math.Float64bits(got) != math.Float64bits(legacy) {
 			t.Fatalf("default differs: %v != %v", got, legacy)
 		}
-		expected := .55
+		expected := catalog.Models["maritime"].W["small boat"]
 		if kind == "boost" {
 			expected = 1 - (1-expected)*.22
 		} else {
 			expected *= .12
 		}
-		if legacy != expected*d.Conf {
+		if legacy != min(.99, expected*ConfFactor(d.Conf)) {
 			t.Fatalf("%s legacy score changed: %v", kind, legacy)
 		}
 		rule.Weight = 2

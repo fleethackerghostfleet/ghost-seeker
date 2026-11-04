@@ -2,6 +2,7 @@ package command
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
@@ -34,16 +35,7 @@ func RuleMatch(r Rule, d Detection) bool {
 }
 
 func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
-	cls := catalog.Classes[d.Class]
-	w := catalog.Models[model].W[d.Class]
-	if cls.Group == "vessel" || cls.Group == "aircraft" {
-		if d.Attrs.Approaching {
-			w = min(1, w*1.15)
-		}
-		if d.Attrs.Dark {
-			w = min(1, w*1.2)
-		}
-	}
+	w := ContactWeight(d, model)
 	boosts, only, matched, suppressed := 0, false, false, false
 	notes := make([]Rule, 0)
 	for _, r := range rules {
@@ -85,7 +77,40 @@ func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
 			w *= .6
 		}
 	}
-	return DetectionScore{Score: min(.99, w*d.Conf), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes}
+	return DetectionScore{Score: min(.99, w*ConfFactor(d.Conf)), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes}
+}
+
+// ConfSat is the detector confidence treated as certain; lower confidences scale the score down linearly.
+var ConfSat = .7
+
+// CrowdShare is how much of the noisy-or of a frame's secondary contacts adds to its top contact.
+var CrowdShare = .1
+
+func ConfFactor(conf float64) float64 { return min(1, conf/ConfSat) }
+
+// ContactWeight is the model's class weight raised by the model's attribute lifts.
+func ContactWeight(d Detection, model string) float64 {
+	m := catalog.Models[model]
+	w := m.W[d.Class]
+	if !slices.Contains(m.LiftGroups, catalog.Classes[d.Class].Group) {
+		return w
+	}
+	for attr, on := range map[string]bool{"approaching": d.Attrs.Approaching, "dark": d.Attrs.Dark, "loitering": d.Attrs.Loitering} {
+		if on {
+			w = 1 - (1-w)*(1-m.Lift[attr])
+		}
+	}
+	return w
+}
+
+// FrameScore is the top contact's score plus a damped noisy-or of the rest, so crowds of minor contacts do not stack into P1.
+func FrameScore(scores []float64) float64 {
+	if len(scores) == 0 {
+		return 0
+	}
+	sorted := slices.Sorted(slices.Values(scores))
+	top := sorted[len(sorted)-1]
+	return top + (1-top)*CrowdShare*NoisyOr(sorted[:len(sorted)-1])
 }
 
 func NoisyOr(scores []float64) float64 {
@@ -133,11 +158,11 @@ func RescoreAt(item *Item, model string, directives []Directive, now time.Time) 
 		scores = append(scores, item.Det[i].Score)
 		baseScores = append(baseScores, ScoreDet(detection, nil, model).Score)
 	}
-	item.Central = NoisyOr(scores)
+	item.Central = FrameScore(scores)
 	if len(rules) == 0 {
 		item.Base = item.Central
 	} else {
-		item.Base = NoisyOr(baseScores)
+		item.Base = FrameScore(baseScores)
 	}
 	item.BaseTier = TierFor(item.Base)
 	item.CentralTier = TierFor(item.Central)
