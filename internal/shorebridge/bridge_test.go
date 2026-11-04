@@ -70,3 +70,25 @@ func TestGroupUsesContactReportFrames(t *testing.T) {
 		t.Fatalf("record must not win best: %+v", objs[0].Best)
 	}
 }
+
+func TestGroupSceneTiles(t *testing.T) {
+	scene := view("sc", 3000, map[string]string{"event": "scene"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_THUMB: true})
+	obj := view("a", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_CROP: true})
+	objs, cnt := Group([]*pb.ItemView{scene, obj}, nil, nil)
+	if cnt.Scenes != 1 || cnt.Objects != 1 || cnt.Sightings != 1 || cnt.ObjectsWithImage != 1 {
+		t.Fatalf("cnt = %+v", cnt)
+	}
+	if !objs[0].Scene || objs[0].Priority != "P4" || objs[1].Priority != "P1" {
+		t.Fatalf("scene tile must not be ranked: %+v %+v", objs[0], objs[1])
+	}
+}
+
+func TestGroupTwoFrameSightingFramesKnown(t *testing.T) {
+	img := view("a", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_CROP: true})
+	rec := view("r", 2000, map[string]string{"sighting_id": "s1", "event": "close"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	rec.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
+	objs, _ := Group([]*pb.ItemView{img, rec}, nil, map[string]int{"r": 2})
+	if objs[0].Frames != 2 || !objs[0].FramesKnown {
+		t.Fatalf("n_frames equal to the report count must still count as known: %+v", objs[0])
+	}
+}

@@ -29,6 +29,11 @@ import (
 
 const consolePath = "/ghostseeker.v1.ConsoleService/"
 
+// maxRecordFetchesPerRefresh bounds the extra /blob/{id}/fact reads one poll
+// may do for closed sightings' contact reports, so a burst of closes cannot
+// stall the snapshot.
+const maxRecordFetchesPerRefresh = 25
+
 // LinkControl is what the UI needs from a link: the current rate and a way
 // to change it. *shaper.Shaper satisfies it; nil means "read-only".
 type LinkControl interface {
@@ -104,6 +109,7 @@ type Object struct {
 	HasImage    bool    `json:"hasImage"`
 	Unknown     bool    `json:"unknown"`
 	Suppressed  bool    `json:"suppressed"`
+	Scene       bool    `json:"scene"` // object-free context frame (tags.event == "scene"), not an object
 }
 
 type NodeStatus struct {
@@ -146,6 +152,7 @@ type Counts struct {
 	Objects            int `json:"objects"`
 	ObjectsWithImage   int `json:"objectsWithImage"`
 	Grouped            int `json:"grouped"`   // items carrying a sighting_id
+	Scenes             int `json:"scenes"`    // object-free "scene" context tiles
 	Sightings          int `json:"sightings"` // objects with a sighting_id
 	SightingsWithImage int `json:"sightingsWithImage"`
 }
@@ -265,6 +272,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 // once per item.
 func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[string]int {
 	out := map[string]int{}
+	fetched := 0
 	for _, v := range items {
 		it := v.GetItem()
 		if it.GetType() != pb.ItemType_ITEM_TYPE_RECORD {
@@ -283,6 +291,10 @@ func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[str
 		n, ok := b.records[it.GetId()]
 		b.mu.Unlock()
 		if !ok {
+			if fetched >= maxRecordFetchesPerRefresh { // the rest are picked up by later polls
+				continue
+			}
+			fetched++
 			n = b.fetchRecordFrames(ctx, it.GetId())
 			if n < 0 {
 				continue
@@ -371,7 +383,7 @@ var formNames = map[pb.FormKind]string{
 func assignTiers(objs []*Object) {
 	ranked := make([]*Object, 0, len(objs))
 	for _, o := range objs {
-		if o.Best != nil && !o.Suppressed {
+		if o.Best != nil && !o.Suppressed && !o.Scene {
 			ranked = append(ranked, o)
 		} else {
 			o.Priority = "P4"
@@ -515,12 +527,13 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 			order = append(order, o)
 		}
 		o.Items = append(o.Items, c)
+		o.Scene = o.Scene || c.Tags["event"] == "scene"
 		o.Reports++
 		if !o.FramesKnown {
 			o.Frames = o.Reports
 		}
 		if c.Type == "record" && c.Forms["fact"].State == "received" && reports != nil {
-			if n, ok := reports[c.ID]; ok && n > o.Frames {
+			if n, ok := reports[c.ID]; ok && n >= o.Frames {
 				o.Frames, o.FramesKnown = n, true
 			}
 		}
@@ -557,6 +570,10 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 			o.HasImage = o.Best.Image != ""
 		}
 		sort.Slice(o.Items, func(i, j int) bool { return o.Items[i].CapturedMs > o.Items[j].CapturedMs })
+		if o.Scene {
+			cnt.Scenes++
+			continue
+		}
 		cnt.Objects++
 		if o.HasImage {
 			cnt.ObjectsWithImage++
