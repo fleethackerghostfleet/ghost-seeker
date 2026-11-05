@@ -217,11 +217,14 @@ test('human review filters separate people from automatic escalation and list ne
  vm.runInContext("state.src='EO-P7'",context);
  assert.equal(vm.runInContext('ids()',context),'sent-new,full,sent-old');
  vm.runInContext("filters.review='reviewed'",context);
- assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,sent-new,dismissed');
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,full,sent-new,dismissed');
  vm.runInContext("filters.review='unreviewed'",context);
- assert.equal(vm.runInContext('ids()',context),'auto,pending,full');
+ assert.equal(vm.runInContext('ids()',context),'auto,pending');
  assert.equal(vm.runInContext("humanSent(items[4])",context),false);
  assert.equal(vm.runInContext("humanSent(items[5])",context),true);
+ vm.runInContext("items[4].humanReviewed=true;items[4].manual=2;filters.review='reviewed'",context);
+ assert.ok(vm.runInContext('ids().split(",").includes("auto")',context));
+ assert.equal(vm.runInContext('humanSent(items[4])',context),false);
 });
 test('cards mark human sends purple and automatic sends green',()=>{
  assert.match(source,/<span class="cdrtag">✓ Auto-sent to Commander<\/span><span class="hsenttag">➤ Sent by operator<\/span>/);

@@ -321,7 +321,7 @@ function route(){
  if(state.page==='feed')renderFeed(true);else if(state.page==='details'){closeDetail();renderDetails()}else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
-function humanReviewed(it){return !it.autoSent&&!!(it.reviewed||it.manual||it.dismissed)}
+function humanReviewed(it){return !!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed)||humanSent(it))}
 function humanSent(it){return !!(it.sent&&!it.autoSent||it.fullRes)}
 function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
 const FILTERED_NAME={duplicate:'Repeat of an earlier image','low-value':'Low value'};

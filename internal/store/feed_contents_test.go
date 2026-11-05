@@ -49,6 +49,20 @@ func TestAutoEscalationIsMarkedUntilAPersonChangesTheSend(t *testing.T) {
 	}
 }
 
+func TestHumanReviewPreservesAutomaticSendOrigin(t *testing.T) {
+	data := New(5)
+	data.Add(&command.Item{ID: "hot", Manual: 1}, 0)
+	item, _, _ := data.AutoEscalate()
+	if item.HumanReviewed {
+		t.Fatal("automatic escalation counted as human review")
+	}
+	tier := 2
+	item, _, _ = data.PatchItem("hot", &tier, nil, nil, nil)
+	if !item.HumanReviewed || !item.AutoSent || !item.Sent || item.Tier != 2 {
+		t.Fatalf("operator re-rank lost review or send origin: %+v", item)
+	}
+}
+
 func TestEmptyFrameKeepsEmptyDetectionLists(t *testing.T) {
 	data := New(10)
 	kept, _ := data.Add(&command.Item{ID: "empty", Filtered: command.FilteredLowValue, Dets: []command.Detection{}}, 0)

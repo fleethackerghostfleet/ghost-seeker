@@ -272,6 +272,9 @@ func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *boo
 		if manual != nil {
 			item.Manual = *manual
 		}
+		if manual != nil && *manual != 0 || reviewed != nil && *reviewed || dismissed != nil && *dismissed || sent != nil && *sent {
+			item.HumanReviewed = true
+		}
 		if reviewed != nil {
 			item.Reviewed = *reviewed
 		}

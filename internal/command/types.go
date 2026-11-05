@@ -129,7 +129,8 @@ type Item struct {
 	Filtered string `json:"filtered,omitempty"`
 	DupOf    string `json:"dupOf,omitempty"`
 	// AutoSent marks a commander send chosen by automatic escalation.
-	AutoSent bool `json:"autoSent,omitempty"`
+	AutoSent      bool `json:"autoSent,omitempty"`
+	HumanReviewed bool `json:"humanReviewed,omitempty"`
 }
 
 type Upload struct {
