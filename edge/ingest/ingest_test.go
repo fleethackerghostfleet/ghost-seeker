@@ -794,6 +794,7 @@ func TestLateOpenUsesBufferedFrame(t *testing.T) {
 	var caps []*Capture
 	for shade := uint8(10); shade <= 30; shade += 10 {
 		c := capture(clk, shade)
+		c.Geo = &pb.Geo{Lat: float64(shade)}
 		caps = append(caps, c)
 		if _, err := g.Ingest(ctx, c); err != nil {
 			t.Fatal(err)
@@ -818,6 +819,9 @@ func TestLateOpenUsesBufferedFrame(t *testing.T) {
 	}
 	if g.LateKeyFrames != 1 {
 		t.Fatalf("LateKeyFrames = %d", g.LateKeyFrames)
+	}
+	if got := rows[0].Item.GetGeo().GetLat(); got != seen.Geo.Lat {
+		t.Fatalf("item geo lat = %v, want the buffered frame's %v", got, seen.Geo.Lat)
 	}
 	if full := mustRead(t, st, rows[0].Item.Id, pb.FormKind_FORM_KIND_FULL); len(full) == 0 {
 		t.Fatal("no FULL form")
@@ -879,5 +883,12 @@ func TestRememberBounds(t *testing.T) {
 	g.remember(capture(clk, 99), "h2")
 	if n := len(g.recent["cam-a"]); n != 1 {
 		t.Fatalf("ring after 5 s gap = %d, want 1 (age bound)", n)
+	}
+	clk.Advance(5 * time.Second)
+	other := capture(clk, 1)
+	other.Source = "cam-b"
+	g.remember(other, "h3")
+	if _, kept := g.recent["cam-a"]; kept {
+		t.Fatal("a source that went quiet still holds frames")
 	}
 }

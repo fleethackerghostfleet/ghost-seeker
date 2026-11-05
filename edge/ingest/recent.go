@@ -12,6 +12,8 @@ type recentFrame struct {
 	at   time.Time
 	data []byte
 	hash string
+	geo  *pb.Geo
+	tags map[string]string
 }
 
 // remember keeps the frame in the source's ring so a sighting the engine
@@ -25,7 +27,13 @@ func (g *Ingester) remember(c *Capture, hash string) {
 	if g.recent == nil {
 		g.recent = map[string][]recentFrame{}
 	}
-	ring := append(g.recent[c.Source], recentFrame{at: c.CapturedAt, data: append([]byte(nil), c.Data...), hash: hash})
+	for src, ring := range g.recent { // a source that went quiet does not keep its frames
+		if src != c.Source && len(ring) > 0 && c.CapturedAt.Sub(ring[len(ring)-1].at) > g.cfg.FrameBufferAge {
+			delete(g.recent, src)
+		}
+	}
+	ring := append(g.recent[c.Source], recentFrame{at: c.CapturedAt, data: append([]byte(nil), c.Data...), hash: hash,
+		geo: c.Geo, tags: c.Tags})
 	size := 0
 	for _, f := range ring {
 		size += len(f.data)
@@ -67,7 +75,7 @@ func (g *Ingester) keyCapture(c *Capture, hash string, s *pb.Sighting) (*Capture
 		return c, hash
 	}
 	kc := *c
-	kc.Data, kc.CapturedAt = f.data, f.at
+	kc.Data, kc.CapturedAt, kc.Geo, kc.Tags = f.data, f.at, f.geo, f.tags
 	g.LateKeyFrames++
 	return &kc, f.hash
 }
