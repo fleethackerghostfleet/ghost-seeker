@@ -665,16 +665,17 @@ func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
 		}
 	}
 	ls := s.lk.State()
-	if s.Policy().GetEmcon() == pb.EmconMode_EMCON_MODE_SILENT {
-		return s.cfg.Tick, nil
-	}
+	// In EMCON SILENT the plan is empty (BuildPlan), but the exchange still
+	// runs with no manifest, chunks or overrides so the edge keeps receiving
+	// downlink (the policy that lifts SILENT arrives that way).
+	silent := s.Policy().GetEmcon() == pb.EmconMode_EMCON_MODE_SILENT
 	plan := s.BuildPlan(rows, ls.EstimateBps, now)
 	req := &pb.ExchangeRequest{EdgeId: s.cfg.EdgeID, Manifest: plan.Manifest}
 	cursor, _ := s.st.GetCursor(ctx)
 	req.DownlinkCursor = cursor
 	// Only uplink overrides for items shore knows (manifest acked, or in
 	// this request's manifest); the rest stay queued until it does.
-	if pend, _ := s.st.PendingOverrides(ctx); len(pend) > 0 {
+	if pend, _ := s.st.PendingOverrides(ctx); len(pend) > 0 && !silent {
 		known := map[string]bool{}
 		for _, r := range rows {
 			if r.ManifestAcked {
