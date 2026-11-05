@@ -131,7 +131,7 @@ func catalogClip(name, dir, annotations string) (clip, error) {
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].ImageID < rows[j].ImageID })
 	for _, r := range rows {
-		if r.File == "" || r.ImageID == "" || filepath.Base(r.File) != r.File {
+		if r.File == "" || r.ImageID == "" || filepath.Base(r.File) != r.File || !imageFile(r.File) {
 			return c, fmt.Errorf("bad index row %q", r.ImageID)
 		}
 		fileName := r.File
@@ -139,7 +139,7 @@ func catalogClip(name, dir, annotations string) (clip, error) {
 		if boxes == nil {
 			boxes = []GTBox{}
 		}
-		c.frames = append(c.frames, frame{path: r.ImageID, gt: boxes, read: func() ([]byte, error) { return os.ReadFile(filepath.Join(dir, fileName)) }})
+		c.frames = append(c.frames, frame{path: r.ImageID, ext: filepath.Ext(fileName), gt: boxes, read: func() ([]byte, error) { return os.ReadFile(filepath.Join(dir, fileName)) }})
 	}
 	if len(c.frames) == 0 {
 		return c, fmt.Errorf("empty catalog %s", dir)

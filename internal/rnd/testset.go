@@ -63,6 +63,7 @@ type frame struct {
 	path string
 	read func() ([]byte, error)
 	gt   []GTBox
+	ext  string // stored-file extension when path has none (catalog image IDs)
 }
 type clip struct {
 	name   string
@@ -363,7 +364,11 @@ func build(ctx context.Context, clips []clip, counts []int, out string, an infer
 				return fmt.Errorf("%s: %w", f.path, err)
 			}
 			id := fmt.Sprintf("rnd-%04d", len(manifest)+1)
-			file := id + strings.ToLower(filepath.Ext(f.path))
+			ext := f.ext
+			if ext == "" {
+				ext = filepath.Ext(f.path)
+			}
+			file := id + strings.ToLower(ext)
 			if err = os.WriteFile(filepath.Join(out, "images", file), data, 0600); err != nil {
 				return err
 			}

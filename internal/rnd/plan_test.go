@@ -57,7 +57,7 @@ func TestCatalogClipGroundTruthAndCounts(t *testing.T) {
 		t.Fatal(clips, counts, err)
 	}
 	c := clips[0]
-	if c.tags["viewpoint"] != "surface" || c.frames[0].path != "ds/train/a" || c.frames[1].path != "ds/train/b" {
+	if c.tags["viewpoint"] != "surface" || c.frames[0].path != "ds/train/a" || c.frames[1].path != "ds/train/b" || c.frames[0].ext != ".jpg" {
 		t.Fatalf("%+v", c)
 	}
 	if len(c.frames[0].gt) != 1 || c.frames[0].gt[0].Label != "ferry" || c.frames[0].gt[0].Box.W != 3 || len(c.frames[1].gt) != 0 || c.frames[1].gt == nil {
