@@ -63,7 +63,8 @@ document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>navigate(Number
 $('accept').onclick=()=>grade(state.entries[index].model_tier);
 $('undo').onclick=()=>mutate('/api/undo',{});
 document.addEventListener('keydown',e=>{
- if(!state||busy||e.ctrlKey||e.metaKey||e.altKey||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+ if(!state||busy||e.ctrlKey||e.metaKey||e.altKey)return;
+ if(e.target.closest('button,a,input,textarea,select,summary,[contenteditable]:not([contenteditable="false"]),[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="textbox"],[role="combobox"],[role="slider"],[role="spinbutton"],[tabindex]'))return;
  if(/^[1-4]$/.test(e.key)){e.preventDefault();grade(Number(e.key));}
  else if(e.key==='Enter'||e.key===' '){e.preventDefault();grade(state.entries[index].model_tier);}
  else if(e.key.toLowerCase()==='z'){e.preventDefault();mutate('/api/undo',{});}
