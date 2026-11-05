@@ -12,7 +12,7 @@ import (
 
 var ErrFull = errors.New("edge storage cap reached: protected backlog must drain")
 
-// Limits bound retained payload bytes and item rows, not SQLite's high-water
+// Limits bound retained payload bytes (forms plus kept originals) and item rows, not SQLite's high-water
 // size or the audit log. Zero means unlimited; no age-based deletion is done.
 type Limits struct{ MaxBytes, MaxItems int64 }
 
@@ -66,7 +66,7 @@ func (s *Store) makeRoom(ctx context.Context, extraBytes, extraItems int64, prot
 		return nil
 	}
 	var bytes, items int64
-	if err := s.db.QueryRowContext(ctx, `SELECT (SELECT COALESCE(SUM(bytes),0) FROM forms), COUNT(*) FROM items`).Scan(&bytes, &items); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT (SELECT COALESCE(SUM(bytes),0) FROM forms) + (SELECT COALESCE(SUM(original_bytes),0) FROM items), COUNT(*) FROM items`).Scan(&bytes, &items); err != nil {
 		return err
 	}
 	over := func() bool {
@@ -85,7 +85,7 @@ func (s *Store) makeRoom(ctx context.Context, extraBytes, extraItems int64, prot
 	}
 	// Both the manifest and every form must be fully acknowledged. A completed
 	// FACT alone is not delivery; not-ready forms also protect the item.
-	q, err := s.db.QueryContext(ctx, `SELECT i.id, (SELECT COALESCE(SUM(bytes),0) FROM forms WHERE item_id=i.id), i.priority
+	q, err := s.db.QueryContext(ctx, `SELECT i.id, (SELECT COALESCE(SUM(bytes),0) FROM forms WHERE item_id=i.id) + i.original_bytes, i.priority
 FROM items i WHERE i.manifest_acked=1 AND i.pull_boost=0 AND i.pull_form=0 AND i.pull_by=''
 AND i.id<>? AND NOT EXISTS(SELECT 1 FROM pins WHERE item_id=i.id)
 AND EXISTS(SELECT 1 FROM forms WHERE item_id=i.id)

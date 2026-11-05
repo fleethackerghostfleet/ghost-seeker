@@ -51,6 +51,7 @@ func New(data *store.Store, options ...Option) *Server {
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
 	s.mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
 	s.mux.HandleFunc("POST /api/items/{id}/decision", s.decide)
+	s.mux.HandleFunc("POST /api/items/{id}/full-res", s.fullRes)
 	s.mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
 	s.mux.Handle("GET /", web.Handler())
 	return s
@@ -342,6 +343,32 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	s.PublishUpdate(item, cdr)
 	audit(r, "item.decide", "id", item.ID, "decision", body.Decision, "note", body.Note)
+	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
+}
+
+// fullRes is the operator override to send an image's original bytes at
+// full size. It requires the operator's name.
+func (s *Server) fullRes(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		By string `json:"by"`
+	}
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	item, cdr, err := s.store.RequestFullRes(r.PathValue("id"), body.By)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.Is(err, store.ErrOperatorRequired):
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.PublishUpdate(item, cdr)
 	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 

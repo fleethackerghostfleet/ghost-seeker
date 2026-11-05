@@ -12,9 +12,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +45,7 @@ type Row struct {
 	PullBoost      float64
 	PullForm       pb.FormKind
 	PullBy         string
+	PullOriginal   bool // operator override: FULL is the original capture, THUMB/CROP skipped
 	ManifestSentAt time.Time
 }
 
@@ -85,7 +88,9 @@ CREATE TABLE IF NOT EXISTS items (
   manifest_acked INTEGER NOT NULL DEFAULT 0,
   pull_boost REAL NOT NULL DEFAULT 0,
   pull_form INTEGER NOT NULL DEFAULT 0,
-  pull_by TEXT NOT NULL DEFAULT ''
+  pull_by TEXT NOT NULL DEFAULT '',
+  pull_original INTEGER NOT NULL DEFAULT 0,
+  original_bytes INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS items_seq ON items(ingest_seq);
 CREATE INDEX IF NOT EXISTS items_hash ON items(content_hash);
@@ -135,7 +140,23 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
+	// Databases created before pull_original / original_bytes existed.
+	added := map[string]bool{}
+	for _, col := range []string{"pull_original", "original_bytes"} {
+		_, err := db.Exec(`ALTER TABLE items ADD COLUMN ` + col + ` INTEGER NOT NULL DEFAULT 0`)
+		if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			db.Close()
+			return nil, fmt.Errorf("schema: %w", err)
+		}
+		added[col] = err == nil
+	}
 	s := &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}
+	if added["original_bytes"] {
+		if err := s.backfillOriginalBytes(context.Background()); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("schema: %w", err)
+		}
+	}
 	if err := s.cleanupEvictions(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -201,7 +222,7 @@ func (s *Store) Put(ctx context.Context, it *pb.Item, payloads map[pb.FormKind][
 		if err := os.WriteFile(path, data, 0o644); err != nil {
 			return 0, err
 		}
-		mime := mimeFor(k, it.Type)
+		mime := mimeFor(k, it.Type, data)
 		it.Forms = append(it.Forms, &pb.Form{Kind: k, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true})
 		if _, err := tx.ExecContext(ctx, `INSERT INTO forms(item_id,kind,bytes,hash,mime,path) VALUES(?,?,?,?,?,?)`,
 			it.Id, int(k), len(data), h, mime, path); err != nil {
@@ -229,15 +250,16 @@ func (s *Store) Put(ctx context.Context, it *pb.Item, payloads map[pb.FormKind][
 	return seq, nil
 }
 
-func mimeFor(k pb.FormKind, t pb.ItemType) string {
-	switch k {
-	case pb.FormKind_FORM_KIND_FACT:
+// mimeFor labels a form for shore. Image rungs are sniffed from their bytes
+// so the Mime stays accurate whatever encoder (or passthrough) produced them.
+func mimeFor(k pb.FormKind, t pb.ItemType, data []byte) string {
+	if k == pb.FormKind_FORM_KIND_FACT {
 		return "application/json"
-	case pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIND_CROP:
-		return "image/jpeg"
 	}
-	if t == pb.ItemType_ITEM_TYPE_IMAGE {
-		return "image/jpeg"
+	if t == pb.ItemType_ITEM_TYPE_IMAGE || k == pb.FormKind_FORM_KIND_THUMB || k == pb.FormKind_FORM_KIND_CROP {
+		if m := http.DetectContentType(data); strings.HasPrefix(m, "image/") {
+			return m
+		}
 	}
 	return "application/octet-stream"
 }
@@ -271,7 +293,7 @@ func (s *Store) HasHash(ctx context.Context, h string) (string, bool, error) {
 	return id, err == nil, err
 }
 
-const rowCols = `id, item, score, manifest_sent, manifest_sent_at, manifest_acked, pull_boost, pull_form, pull_by`
+const rowCols = `id, item, score, manifest_sent, manifest_sent_at, manifest_acked, pull_boost, pull_form, pull_by, pull_original`
 
 func scanRow(sc interface{ Scan(...any) error }) (*Row, error) {
 	var (
@@ -282,12 +304,13 @@ func scanRow(sc interface{ Scan(...any) error }) (*Row, error) {
 		pullBoost         float64
 		pullForm          int
 		pullBy            string
+		pullOrig          int
 	)
-	if err := sc.Scan(&id, &itemRaw, &scoreRaw, &ms, &msAt, &ma, &pullBoost, &pullForm, &pullBy); err != nil {
+	if err := sc.Scan(&id, &itemRaw, &scoreRaw, &ms, &msAt, &ma, &pullBoost, &pullForm, &pullBy, &pullOrig); err != nil {
 		return nil, err
 	}
 	r := &Row{Item: &pb.Item{}, Score: &pb.Score{}, ManifestSent: ms == 1, ManifestAcked: ma == 1,
-		PullBoost: pullBoost, PullForm: pb.FormKind(pullForm), PullBy: pullBy}
+		PullBoost: pullBoost, PullForm: pb.FormKind(pullForm), PullBy: pullBy, PullOriginal: pullOrig == 1}
 	if msAt > 0 {
 		r.ManifestSentAt = time.UnixMilli(msAt)
 	}
@@ -458,26 +481,55 @@ func (s *Store) execEach(ctx context.Context, q string, ids []string, lead ...an
 func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var path, mime string
+	return s.replaceForm(ctx, itemID, kind, data, 0)
+}
+
+// replaceForm admits data as the new form, less credit bytes the caller
+// frees once it succeeds.
+func (s *Store) replaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte, credit int64) (*pb.Form, error) {
+	var path string
+	var typ int
 	var oldBytes int64
-	if err := s.db.QueryRowContext(ctx, `SELECT path, mime, bytes FROM forms WHERE item_id=? AND kind=?`, itemID, int(kind)).Scan(&path, &mime, &oldBytes); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT f.path, i.type, f.bytes FROM forms f JOIN items i ON i.id=f.item_id WHERE f.item_id=? AND f.kind=?`, itemID, int(kind)).Scan(&path, &typ, &oldBytes); err != nil {
 		return nil, err
 	}
-	if growth := int64(len(data)) - oldBytes; growth > 0 {
+	if growth := int64(len(data)) - oldBytes - credit; growth > 0 {
 		if err := s.makeRoom(ctx, growth, 0, itemID); err != nil {
 			return nil, err
 		}
 	}
+	mime := mimeFor(kind, pb.ItemType(typ), data)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return nil, err
 	}
 	sum := sha256.Sum256(data)
 	h := hex.EncodeToString(sum[:])
-	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET bytes=?, hash=?, acked_through=0, complete=0 WHERE item_id=? AND kind=?`,
-		len(data), h, itemID, int(kind)); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET bytes=?, hash=?, mime=?, acked_through=0, complete=0 WHERE item_id=? AND kind=?`,
+		len(data), h, mime, itemID, int(kind)); err != nil {
 		return nil, err
 	}
-	return &pb.Form{Kind: kind, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true}, nil
+	f := &pb.Form{Kind: kind, Bytes: int64(len(data)), ContentHash: h, Mime: mime, Ready: true}
+	return f, s.syncItemForm(ctx, itemID, f)
+}
+
+// syncItemForm keeps the item blob's copy of a form in step with the forms
+// table, so item APIs advertise the bytes, hash and Mime actually sent.
+func (s *Store) syncItemForm(ctx context.Context, itemID string, f *pb.Form) error {
+	var raw []byte
+	if err := s.db.QueryRowContext(ctx, `SELECT item FROM items WHERE id=?`, itemID).Scan(&raw); err != nil {
+		return err
+	}
+	it := &pb.Item{}
+	if err := proto.Unmarshal(raw, it); err != nil {
+		return err
+	}
+	for i, o := range it.Forms {
+		if o.Kind == f.Kind {
+			it.Forms[i] = f
+			return s.UpdateItem(ctx, it)
+		}
+	}
+	return nil
 }
 
 // SetAcked records shore's contiguous receipt of a form.
@@ -499,11 +551,100 @@ func (s *Store) SetAcked(ctx context.Context, itemID string, kind pb.FormKind, t
 	return err
 }
 
-func (s *Store) SetPull(ctx context.Context, itemID string, kind pb.FormKind, boost float64, by string) error {
+func (s *Store) SetPull(ctx context.Context, itemID string, kind pb.FormKind, boost float64, by string, original bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.ExecContext(ctx, `UPDATE items SET pull_boost=?, pull_form=?, pull_by=? WHERE id=?`, boost, int(kind), by, itemID)
+	_, err := s.db.ExecContext(ctx, `UPDATE items SET pull_boost=?, pull_form=?, pull_by=?, pull_original=? WHERE id=?`,
+		boost, int(kind), by, original, itemID)
 	return err
+}
+
+func (s *Store) originalPath(itemID string) string {
+	return filepath.Join(s.blobDir, itemID, "original")
+}
+
+// PutOriginal keeps the capture's original bytes when FULL was re-encoded,
+// so an operator can still have the original sent (RestoreOriginal). nil
+// means FULL is the original (e.g. after a key-frame replacement). The
+// bytes count against Limits.MaxBytes; ErrFull means no original is kept.
+func (s *Store) PutOriginal(ctx context.Context, itemID string, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.dropOriginal(ctx, itemID); err != nil || data == nil {
+		return err
+	}
+	if err := s.makeRoom(ctx, int64(len(data)), 0, itemID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=? WHERE id=?`, len(data), itemID); err != nil {
+		return err
+	}
+	if err := os.WriteFile(s.originalPath(itemID), data, 0o644); err != nil {
+		return errors.Join(err, s.dropOriginal(ctx, itemID))
+	}
+	return nil
+}
+
+// backfillOriginalBytes counts originals kept before original_bytes existed.
+func (s *Store) backfillOriginalBytes(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM items`)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		fi, err := os.Stat(s.originalPath(id))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=? WHERE id=?`, fi.Size(), id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) dropOriginal(ctx context.Context, itemID string) error {
+	if err := os.Remove(s.originalPath(itemID)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=0 WHERE id=?`, itemID)
+	return err
+}
+
+// RestoreOriginal makes FULL the original capture bytes again, resetting its
+// send state if it changes. It reports whether FULL changed.
+func (s *Store) RestoreOriginal(ctx context.Context, itemID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := os.ReadFile(s.originalPath(itemID))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil // FULL already is the original
+	}
+	if err != nil {
+		return false, err
+	}
+	// The kept copy becomes FULL, so admission credits it rather than
+	// counting it twice; it stays counted until dropOriginal removes it.
+	if _, err := s.replaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data, int64(len(data))); err != nil {
+		return false, err
+	}
+	return true, s.dropOriginal(ctx, itemID)
 }
 
 // ReadForm returns up to n bytes of a form starting at offset.
