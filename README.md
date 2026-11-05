@@ -145,7 +145,8 @@ rechecked after ACKs and downlink pulls are applied. A capture larger than the
 byte cap cannot fit: raise the cap or change intake, rather than dropping it.
 Growing an existing form is also checked before writing it.
 Sighting form updates wait/retry just like new-item intake. A downlinked
-correction blocked by the cap leaves the downlink cursor unchanged for retry.
+correction blocked by the cap stops the downlink cursor before that correction
+for retry, while preserving progress through already-applied messages.
 
 `GetStatusResponse.items_evicted` reports cumulative evictions. The live-shore
 operator app displays it alongside the existing edge queue status.
