@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,8 +45,16 @@ type Record struct {
 }
 type Log struct {
 	mu     sync.Mutex
-	f      *os.File
+	f      logFile
 	events []Record
+}
+
+type logFile interface {
+	Write([]byte) (int, error)
+	Sync() error
+	Stat() (os.FileInfo, error)
+	Truncate(int64) error
+	Close() error
 }
 
 func Open(path string) (*Log, error) {
@@ -57,19 +66,35 @@ func Open(path string) (*Log, error) {
 		return nil, err
 	}
 	l := &Log{f: f}
-	s := bufio.NewScanner(f)
-	s.Buffer(make([]byte, 4096), 4<<20)
-	for s.Scan() {
+	reader := bufio.NewReader(f)
+	var offset int64
+	for {
+		line, readErr := reader.ReadBytes('\n')
+		if errors.Is(readErr, io.EOF) {
+			if len(line) > 0 {
+				log.Printf("review log %s: skipping truncated final line at byte %d", path, offset)
+				if err = errors.Join(f.Truncate(offset), f.Sync()); err != nil {
+					f.Close()
+					return nil, err
+				}
+			}
+			break
+		}
+		if readErr != nil {
+			f.Close()
+			return nil, readErr
+		}
+		if len(line) > 4<<20 {
+			f.Close()
+			return nil, errors.New("review log line too large")
+		}
 		var r Record
-		if err = json.Unmarshal(s.Bytes(), &r); err != nil {
+		if err = json.Unmarshal(line, &r); err != nil {
 			f.Close()
 			return nil, fmt.Errorf("review log: %w", err)
 		}
 		l.events = append(l.events, r)
-	}
-	if err = s.Err(); err != nil {
-		f.Close()
-		return nil, err
+		offset += int64(len(line))
 	}
 	return l, nil
 }
@@ -90,6 +115,10 @@ func (l *Log) append(r Record) (Record, error) {
 		return r, err
 	}
 	b = append(b, '\n')
+	info, err := l.f.Stat()
+	if err != nil {
+		return r, err
+	}
 	n, err := l.f.Write(b)
 	if err == nil && n != len(b) {
 		err = io.ErrShortWrite
@@ -98,7 +127,7 @@ func (l *Log) append(r Record) (Record, error) {
 		err = l.f.Sync()
 	}
 	if err != nil {
-		return r, err
+		return r, errors.Join(err, l.f.Truncate(info.Size()), l.f.Sync())
 	}
 	l.events = append(l.events, r)
 	return r, nil

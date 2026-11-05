@@ -3,9 +3,89 @@ package reviews
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
+
+type failingFile struct {
+	*os.File
+	writeFail, syncFail bool
+}
+
+func (f *failingFile) Write(b []byte) (int, error) {
+	if f.writeFail {
+		f.writeFail = false
+		n, _ := f.File.Write(b[:len(b)/2])
+		return n, errors.New("write failed")
+	}
+	return f.File.Write(b)
+}
+func (f *failingFile) Sync() error {
+	if f.syncFail {
+		f.syncFail = false
+		return errors.New("sync failed")
+	}
+	return f.File.Sync()
+}
+
+func TestAppendRollback(t *testing.T) {
+	for _, failure := range []string{"write", "sync"} {
+		t.Run(failure, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "log")
+			l, err := Open(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer l.Close()
+			l.Append(Record{ItemID: "original"})
+			before, _ := os.ReadFile(p)
+			l.f = &failingFile{File: l.f.(*os.File), writeFail: failure == "write", syncFail: failure == "sync"}
+			if _, err = l.Append(Record{ItemID: "failed"}); err == nil {
+				t.Fatal("expected failure")
+			}
+			after, _ := os.ReadFile(p)
+			if !bytes.Equal(before, after) || len(l.Effective()) != 1 {
+				t.Fatal("failed append changed log")
+			}
+			if _, err = l.Append(Record{ItemID: "next"}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestOpenTruncatedTail(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "log")
+	l, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Append(Record{ItemID: "original"})
+	l.Close()
+	before, _ := os.ReadFile(p)
+	os.WriteFile(p, append(before, []byte(`{"id":"partial`)...), 0600)
+	l, err = Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Effective()) != 1 {
+		t.Fatal("lost valid prefix")
+	}
+	if _, err = l.Append(Record{ItemID: "next"}); err != nil {
+		t.Fatal(err)
+	}
+	l.Close()
+	l, err = Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	if len(l.Effective()) != 2 {
+		t.Fatal("append after recovery failed")
+	}
+}
 
 func TestCSVNeutralizesFormulas(t *testing.T) {
 	l, err := Open(filepath.Join(t.TempDir(), "log"))
