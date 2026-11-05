@@ -297,3 +297,23 @@ func TestShaperThroughputMatchesSimulatedBandwidth(t *testing.T) {
 		})
 	}
 }
+
+func TestFixedPausesAutomaticRate(t *testing.T) {
+	s := NewNormal("127.0.0.1:1")
+	s.SetFixed(32000)
+	if !s.Fixed() || s.Bps() != 32000 {
+		t.Fatalf("fixed=%v bps=%d", s.Fixed(), s.Bps())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.normal.IntervalMS = 1
+	go s.varyRate(ctx, func() float64 { return 3 })
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	if s.Bps() != 32000 {
+		t.Fatalf("automatic rate overrode the pin: %d", s.Bps())
+	}
+	s.SetAuto()
+	if s.Fixed() {
+		t.Fatal("still fixed after SetAuto")
+	}
+}
