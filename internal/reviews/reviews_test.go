@@ -87,6 +87,49 @@ func TestOpenTruncatedTail(t *testing.T) {
 	}
 }
 
+func TestOpenPreservesValidUnterminatedTail(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "log")
+	l, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := l.Append(Record{ItemID: "valid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Close()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(p, bytes.TrimSuffix(b, []byte{'\n'}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	l, err = Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := l.Effective(); len(got) != 1 || got[0].ID != r.ID {
+		t.Fatal("valid final record lost")
+	}
+	repaired, _ := os.ReadFile(p)
+	if !bytes.Equal(repaired, b) {
+		t.Fatal("missing newline not repaired")
+	}
+	if _, err = l.Append(Record{ItemID: "next"}); err != nil {
+		t.Fatal(err)
+	}
+	l.Close()
+	l, err = Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	if len(l.Effective()) != 2 {
+		t.Fatal("append after repair failed")
+	}
+}
+
 func TestCSVNeutralizesFormulas(t *testing.T) {
 	l, err := Open(filepath.Join(t.TempDir(), "log"))
 	if err != nil {

@@ -72,6 +72,23 @@ func Open(path string) (*Log, error) {
 		line, readErr := reader.ReadBytes('\n')
 		if errors.Is(readErr, io.EOF) {
 			if len(line) > 0 {
+				var r Record
+				if json.Unmarshal(line, &r) == nil {
+					n, writeErr := f.Write([]byte{'\n'})
+					if writeErr == nil && n != 1 {
+						writeErr = io.ErrShortWrite
+					}
+					if writeErr == nil {
+						writeErr = f.Sync()
+					}
+					if writeErr != nil {
+						writeErr = errors.Join(writeErr, f.Truncate(offset+int64(len(line))), f.Sync())
+						f.Close()
+						return nil, writeErr
+					}
+					l.events = append(l.events, r)
+					break
+				}
 				log.Printf("review log %s: skipping truncated final line at byte %d", path, offset)
 				if err = errors.Join(f.Truncate(offset), f.Sync()); err != nil {
 					f.Close()
