@@ -35,10 +35,22 @@ class OceanTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "empty ocean manifest"):
                 ocean.crops(manifest, archive)
 
+    def test_cached_crops(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = [b"clear", b"dusk"]
+            manifest = {"frames": [{"output_sha256": hashlib.sha256(d).hexdigest()} for d in data]}
+            self.assertIsNone(ocean.cached(manifest, tmp))
+            for i, d in enumerate(data):
+                (Path(tmp) / f"{i:02d}.jpg").write_bytes(d)
+            self.assertEqual(ocean.cached(manifest, tmp), data)
+            (Path(tmp) / "01.jpg").write_bytes(b"tampered")
+            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                ocean.cached(manifest, tmp)
+
     def test_replay_names_and_repeatability(self):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = {"source_zip": "unused", "replay_frames": 420, "name_stride": 3}
-            with patch.object(ocean, "crops", return_value=[b"clear", b"overcast", b"glare", b"dusk"]), patch.object(Path, "read_text", return_value=json.dumps(manifest)):
+            with patch.object(ocean, "cached", return_value=None), patch.object(ocean, "crops", return_value=[b"clear", b"overcast", b"glare", b"dusk"]), patch.object(Path, "read_text", return_value=json.dumps(manifest)):
                 ocean.extract(tmp)
                 first = {p.name: p.read_bytes() for p in (Path(tmp) / "Open_ocean_watch/img1").glob("*.jpg")}
                 ocean.extract(tmp)
