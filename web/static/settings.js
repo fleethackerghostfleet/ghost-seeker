@@ -5,23 +5,36 @@ window.gsSettings=(()=>{
  const BARS=[['top','Top'],['left','Left'],['right','Right'],['bottom','Bottom']];
  const THEMES=[['cic','Dark'],['day','Day'],['red','Night mode (N)']];
  const PARTS=[['hstats','Header counts'],['live','Feed status'],['clock','Clock'],['user','Watch station'],['strip','Pipeline strip'],['dirbar','Active directives'],['ov','Thumbnail source & score'],['cl','Thumbnail captions'],['tbox','Thumbnail detection boxes']];
- const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[]});
+ const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{}});
+ const WIDTHS={controls:[240,480],drawer:[340,780],review:[260,600],priorities:[260,540],briefing:[240,480],commanderQueue:[240,480],commanderBrief:[280,540]};
+ function cleanWidths(value){
+  const result={};
+  for(const [key,[min,max]] of Object.entries(WIDTHS)){
+   if(Number.isFinite(value?.[key]))result[key]=Math.round(Math.max(min,Math.min(max,value[key])));
+  }
+  return result;
+ }
  let s=load();
  function load(){
   try{
    const v=JSON.parse(localStorage.getItem(KEY))||{};const d=defaults();
-   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[]};
+   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths)};
   }catch{return defaults()}
  }
  function save(){try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}}
  function apply(){
   const b=document.body;
+  for(const key of Object.keys(WIDTHS)){
+   if(s.widths[key])b.style.setProperty('--width-'+key,s.widths[key]+'px');
+   else b.style.removeProperty('--width-'+key);
+  }
   [...b.classList].forEach(c=>{if(/^(bar|theme|hide)-/.test(c))b.classList.remove(c)});
   b.classList.add('bar-'+s.bar,'theme-'+s.theme);
   s.hide.forEach(h=>b.classList.add('hide-'+h));
   b.classList.toggle('night',s.theme==='red');
   const nb=document.getElementById('nightBtn');if(nb)nb.textContent=s.theme==='red'?'Exit night mode (N)':'Night mode (N)';
   const dlg=document.getElementById('settings');
+  if(!dlg)return;
   dlg.querySelectorAll('.seg[data-k] button').forEach(x=>x.classList.toggle('on',s[x.parentElement.dataset.k]===x.dataset.v));
   dlg.querySelectorAll('input[data-p]').forEach(x=>x.checked=!s.hide.includes(x.dataset.p));
  }
@@ -29,6 +42,7 @@ window.gsSettings=(()=>{
  function toggleRed(){set('theme',s.theme==='red'?s.prev:'red')}
  function build(){
   const dlg=document.getElementById('settings');
+  if(!dlg)return;
   const seg=(k,opts)=>`<div class="seg" data-k="${k}">${opts.map(([v,l])=>`<button type="button" data-v="${v}">${l}</button>`).join('')}</div>`;
   dlg.innerHTML=`<h3>Display settings</h3>
   <div class="setsec"><div class="lbl">Feed controls position</div>${seg('bar',BARS)}</div>
@@ -46,5 +60,11 @@ window.gsSettings=(()=>{
   document.getElementById('setBtn').onclick=()=>dlg.showModal();
  }
  build();apply();
- return {toggleRed,get:()=>({...s,hide:[...s.hide]})};
+ function resize(key,width){
+  if(!WIDTHS[key])return;
+  if(width===null)delete s.widths[key];
+  else Object.assign(s.widths,cleanWidths({[key]:width}));
+  save();apply();
+ }
+ return {toggleRed,resize,get:()=>({...s,hide:[...s.hide],widths:{...s.widths}})};
 })();

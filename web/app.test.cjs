@@ -7,6 +7,28 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
+function settingsContext(saved){
+ const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
+ vm.runInContext(settingsSource,context);
+ return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved)};
+}
+test('sidebar widths default empty, load valid settings, and clamp persisted values',()=>{
+ for(const saved of [null,'broken','{}','{"widths":{"drawer":"bad","review":null}}']){
+  assert.equal(JSON.stringify(settingsContext(saved).settings.get().widths),'{}');
+ }
+ const {settings}=settingsContext('{"bar":"right","widths":{"controls":-2,"drawer":9999,"review":360,"unknown":400}}');
+ assert.equal(settings.get().bar,'right');
+ assert.equal(JSON.stringify(settings.get().widths),'{"controls":240,"drawer":780,"review":360}');
+});
+test('sidebar resize persists, rejects invalid sizes, supports reset and defensive reads',()=>{
+ const {settings,saved}=settingsContext('{}');
+ settings.resize('controls',321.8);assert.equal(saved().widths.controls,322);
+ settings.resize('controls',NaN);assert.equal(saved().widths.controls,322);
+ settings.resize('noSuchPanel',400);assert.equal(saved().widths.noSuchPanel,undefined);
+ settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
+ settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);
