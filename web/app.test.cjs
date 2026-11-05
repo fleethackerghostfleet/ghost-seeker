@@ -66,6 +66,11 @@ test('operator send provenance does not remove an image from the review queue',(
  vm.runInContext("items=[frame('sent',{sent:true,autoSent:false,sentAt:'2026-11-05T10:00:00Z',reviewed:false}),frame('reviewed',{reviewed:true})]",context);
  assert.equal(vm.runInContext('rvQueue().map(i=>i.id).join() ',context),'sent');
  assert.equal(vm.runInContext('humanSent(items[0])',context),true);
+ assert.equal(vm.runInContext('humanReviewed(items[0])',context),false);
+ vm.runInContext("filters.review='unreviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'sent');
+ vm.runInContext("filters.review='reviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'reviewed');
  vm.runInContext("filters.review='sent'",context);
  assert.equal(vm.runInContext('ids()',context),'sent');
 });
@@ -351,9 +356,9 @@ test('human review filters separate people from automatic escalation and list ne
  vm.runInContext("state.src='EO-P7'",context);
  assert.equal(vm.runInContext('ids()',context),'sent-new,full,sent-old');
  vm.runInContext("filters.review='reviewed'",context);
- assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,full,dismissed,sent-new');
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,dismissed,sent-new');
  vm.runInContext("filters.review='unreviewed'",context);
- assert.equal(vm.runInContext('ids()',context),'auto,pending');
+ assert.equal(vm.runInContext('ids()',context),'auto,pending,full');
  assert.equal(vm.runInContext("humanSent(items[4])",context),false);
  assert.equal(vm.runInContext("humanSent(items[5])",context),true);
  vm.runInContext("items[4].humanReviewed=true;items[4].manual=2;filters.review='reviewed'",context);

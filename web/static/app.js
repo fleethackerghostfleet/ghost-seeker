@@ -335,7 +335,7 @@ function syncFeedFilters(){
  closeDetail();renderFeed(true);renderStats();renderRp();
 }
 function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:true});syncFeedFilters()}
-function humanReviewed(it){return !!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed)||humanSent(it))}
+function humanReviewed(it){return !!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed))}
 function humanSent(it){return !!(it.sent&&!it.autoSent||it.fullRes)}
 function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
 const FILTERED_NAME={duplicate:'Repeat of an earlier image','low-value':'Low value'};
