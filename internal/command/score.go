@@ -57,6 +57,7 @@ func ScoreDet(d Detection, rules []Rule, model string, opticalNight ...bool) Det
 			notes = append(notes, r)
 			continue
 		}
+		targetTier = 0
 		if r.Type == "boost" {
 			matched = true
 			factor := .22
