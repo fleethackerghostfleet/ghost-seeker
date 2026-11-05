@@ -235,3 +235,22 @@ func TestSeedUploadedMarksOnlyTopP1(t *testing.T) {
 		t.Fatalf("done=%d, lowest seeded central %.3f, highest queued P1 %.3f", done, minDone, maxQueuedP1)
 	}
 }
+
+func TestSeedUploadedPrefersCommanderSendsAndCountsBytes(t *testing.T) {
+	s := New(10)
+	s.Add(&command.Item{ID: "p1", KB: 10, Manual: 1, Dets: []command.Detection{{Conf: 0.9}}}, 0)
+	s.Add(&command.Item{ID: "p2", KB: 10, Manual: 2, Dets: []command.Detection{{Conf: 0.9}}}, 0)
+	if _, _, ok := s.AutoEscalate(); !ok {
+		t.Fatal("nothing escalated")
+	}
+	s.SeedUploaded(1)
+	items, stats, _, _ := s.Snapshot()
+	for _, it := range items {
+		if it.Upload.Done != it.Sent {
+			t.Fatalf("%s: sent=%v but upload done=%v", it.ID, it.Sent, it.Upload.Done)
+		}
+		if it.Upload.Done && int64(stats.Bytes) != it.Upload.Bytes {
+			t.Fatalf("stats.Bytes %d, want %d", stats.Bytes, it.Upload.Bytes)
+		}
+	}
+}

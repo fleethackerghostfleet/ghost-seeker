@@ -130,7 +130,6 @@ func main() {
 	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
-	data.SeedUploaded(startSent)
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
@@ -150,12 +149,15 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
-	go runSimulation(data, generator, app, uplink)
-	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
 		for i := 0; i < startSent; i++ {
 			data.AutoEscalate()
 		}
+	}
+	data.SeedUploaded(startSent)
+	go runSimulation(data, generator, app, uplink)
+	go refreshTimeScopes(app)
+	if *autoCDR > 0 {
 		go runWatchOfficer(data, app, *autoCDR)
 	}
 
