@@ -102,6 +102,20 @@ b0d4c376d0fa888ca615c2d2af7f4d3fddffc0b6033cdc397471391ef171e1d7  internal/catal
 /home/ubuntu/nightlights-venv/bin/python -m pytest edgeml/tests/test_nightlights.py -q
 ```
 
+## v5 freeze and locked test4
+
+The v5 detector is frozen at commit
+`3bfa51bde7b0eb8602cd31b29fe59ff1d42d9719`, with pattern-confidence threshold
+**0.85**. Dev-only results and the precision/recall trade-off are recorded in
+`V5_DEV.md`. Strict complete-multiset equality and zero white allowance remain
+unchanged. No detector or threshold tuning is permitted after opening test4.
+
+Hard/test4 uses fresh seed base **4200000**, with 112 night contacts, 8 day
+records and 16 twilight records. It is to be generated only after this freeze
+record is committed, then detected exactly once as v5. Boost and dark-contact
+summaries must consume that saved observation dump without image redetection.
+Easy/test may subsequently be evaluated as a regression set, without retuning.
+
 ## API and meaning
 
 `analyze(image_or_frame_list, [x,y,w,h], modality="EO", timestamp=None,
