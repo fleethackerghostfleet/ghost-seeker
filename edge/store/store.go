@@ -475,17 +475,19 @@ func (s *Store) execEach(ctx context.Context, q string, ids []string, lead ...an
 func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.replaceForm(ctx, itemID, kind, data)
+	return s.replaceForm(ctx, itemID, kind, data, 0)
 }
 
-func (s *Store) replaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
+// replaceForm admits data as the new form, less credit bytes the caller
+// frees once it succeeds.
+func (s *Store) replaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte, credit int64) (*pb.Form, error) {
 	var path string
 	var typ int
 	var oldBytes int64
 	if err := s.db.QueryRowContext(ctx, `SELECT f.path, i.type, f.bytes FROM forms f JOIN items i ON i.id=f.item_id WHERE f.item_id=? AND f.kind=?`, itemID, int(kind)).Scan(&path, &typ, &oldBytes); err != nil {
 		return nil, err
 	}
-	if growth := int64(len(data)) - oldBytes; growth > 0 {
+	if growth := int64(len(data)) - oldBytes - credit; growth > 0 {
 		if err := s.makeRoom(ctx, growth, 0, itemID); err != nil {
 			return nil, err
 		}
@@ -631,13 +633,10 @@ func (s *Store) RestoreOriginal(ctx context.Context, itemID string) (bool, error
 	if err != nil {
 		return false, err
 	}
-	// The kept copy becomes FULL, so admission must not count it twice.
-	if _, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=0 WHERE id=?`, itemID); err != nil {
+	// The kept copy becomes FULL, so admission credits it rather than
+	// counting it twice; it stays counted until dropOriginal removes it.
+	if _, err := s.replaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data, int64(len(data))); err != nil {
 		return false, err
-	}
-	if _, err := s.replaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data); err != nil {
-		_, uerr := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=? WHERE id=?`, len(data), itemID)
-		return false, errors.Join(err, uerr)
 	}
 	return true, s.dropOriginal(ctx, itemID)
 }
