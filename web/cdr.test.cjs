@@ -170,4 +170,7 @@ test('manual operator escalation is explained instead of claiming a high model s
  context.row={...context.row,id:'model',manual:0,central:.9,edge:.9};
  vm.runInContext('renderBrief(row)',context);
  assert.match(elements.get('brief').innerHTML,/High command-model score/);
+ context.row={...context.row,id:'auto',manual:1,autoSent:true};
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ assert.doesNotMatch(elements.get('brief').innerHTML,/set priority P1/);
 });

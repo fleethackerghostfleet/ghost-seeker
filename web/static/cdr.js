@@ -47,7 +47,7 @@ function flags(it){
   if(d.attrs.loitering)f.push(['',`${l}: loitering`]);
   if(d.attrs.new)f.push(['',`${l}: not present in previous pass`])});
  if(it.edge<it.central-.15)f.push(['up',datasetMode?`Priority model raised detector score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`:`Shore model raised the ship score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`]);
- if(it.manual)f.push(['up',`${datasetMode?'Operator':'Watch officer'} set priority P${it.manual} ${TN[it.manual]}`]);
+ if(it.manual&&!it.autoSent)f.push(['up',`${datasetMode?'Operator':'Watch officer'} set priority P${it.manual} ${TN[it.manual]}`]);
  return[...new Map(f.map(x=>[x[1],x])).values()];
 }
 function boxes(it){
