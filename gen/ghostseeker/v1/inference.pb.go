@@ -332,7 +332,7 @@ type ImagePriority struct {
 	Score           float32                `protobuf:"fixed32,2,opt,name=score,proto3" json:"score,omitempty"`                                         // final priority in [0,1]
 	BaseScore       float32                `protobuf:"fixed32,3,opt,name=base_score,json=baseScore,proto3" json:"base_score,omitempty"`                // before duplicate suppression
 	MaxSimilarity   float32                `protobuf:"fixed32,4,opt,name=max_similarity,json=maxSimilarity,proto3" json:"max_similarity,omitempty"`    // combined color+pHash similarity to nearest prior kept frame
-	NearestPriorId  string                 `protobuf:"bytes,5,opt,name=nearest_prior_id,json=nearestPriorId,proto3" json:"nearest_prior_id,omitempty"` // item id of that frame ("" if none)
+	NearestPriorId  string                 `protobuf:"bytes,5,opt,name=nearest_prior_id,json=nearestPriorId,proto3" json:"nearest_prior_id,omitempty"` // frame_id of that prior frame as this sidecar named it ("" if none); edge/ingest maps it to an item id (tag tomer_near)
 	NearDuplicate   bool                   `protobuf:"varint,6,opt,name=near_duplicate,json=nearDuplicate,proto3" json:"near_duplicate,omitempty"`     // max_similarity >= sidecar --tomer-dup-threshold
 	VisualInterest  float32                `protobuf:"fixed32,7,opt,name=visual_interest,json=visualInterest,proto3" json:"visual_interest,omitempty"`
 	Quality         float32                `protobuf:"fixed32,8,opt,name=quality,proto3" json:"quality,omitempty"`
@@ -826,6 +826,7 @@ type CapabilitiesResponse struct {
 	OpenVocabulary bool                   `protobuf:"varint,2,opt,name=open_vocabulary,json=openVocabulary,proto3" json:"open_vocabulary,omitempty"`
 	FixedLabels    []string               `protobuf:"bytes,3,rep,name=fixed_labels,json=fixedLabels,proto3" json:"fixed_labels,omitempty"`
 	EmbeddingDim   int32                  `protobuf:"varint,4,opt,name=embedding_dim,json=embeddingDim,proto3" json:"embedding_dim,omitempty"`
+	Prioritizer    string                 `protobuf:"bytes,5,opt,name=prioritizer,proto3" json:"prioritizer,omitempty"` // "edgeml" | "tomer" | "both": whether AnalyzeResponse.image_priority is populated
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -886,6 +887,13 @@ func (x *CapabilitiesResponse) GetEmbeddingDim() int32 {
 		return x.EmbeddingDim
 	}
 	return 0
+}
+
+func (x *CapabilitiesResponse) GetPrioritizer() string {
+	if x != nil {
+		return x.Prioritizer
+	}
+	return ""
 }
 
 var File_ghostseeker_v1_inference_proto protoreflect.FileDescriptor
@@ -967,12 +975,13 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\bmodel_id\x18\x02 \x01(\tR\amodelId\"#\n" +
 	"\tEmbedding\x12\x16\n" +
 	"\x06values\x18\x01 \x03(\x02R\x06values\"\x15\n" +
-	"\x13CapabilitiesRequest\"\xa2\x01\n" +
+	"\x13CapabilitiesRequest\"\xc4\x01\n" +
 	"\x14CapabilitiesResponse\x12\x19\n" +
 	"\bmodel_id\x18\x01 \x01(\tR\amodelId\x12'\n" +
 	"\x0fopen_vocabulary\x18\x02 \x01(\bR\x0eopenVocabulary\x12!\n" +
 	"\ffixed_labels\x18\x03 \x03(\tR\vfixedLabels\x12#\n" +
-	"\rembedding_dim\x18\x04 \x01(\x05R\fembeddingDim2\x8b\x02\n" +
+	"\rembedding_dim\x18\x04 \x01(\x05R\fembeddingDim\x12 \n" +
+	"\vprioritizer\x18\x05 \x01(\tR\vprioritizer2\x8b\x02\n" +
 	"\x10InferenceService\x12J\n" +
 	"\aAnalyze\x12\x1e.ghostseeker.v1.AnalyzeRequest\x1a\x1f.ghostseeker.v1.AnalyzeResponse\x12P\n" +
 	"\tEmbedText\x12 .ghostseeker.v1.EmbedTextRequest\x1a!.ghostseeker.v1.EmbedTextResponse\x12Y\n" +

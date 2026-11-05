@@ -61,7 +61,7 @@ message ImagePriority {
   float score = 2;              // final priority in [0,1]
   float base_score = 3;         // before duplicate suppression
   float max_similarity = 4;     // combined color+pHash similarity to nearest prior kept frame
-  string nearest_prior_id = 5;  // item id of that frame ("" if none)
+  string nearest_prior_id = 5;  // frame_id of that prior frame as this sidecar named it ("" if none); edge/ingest maps it to an item id (tag tomer_near)
   bool near_duplicate = 6;      // max_similarity >= sidecar --tomer-dup-threshold
   float visual_interest = 7;
   float quality = 8;
@@ -120,4 +120,5 @@ message CapabilitiesResponse {
   bool open_vocabulary = 2;
   repeated string fixed_labels = 3;
   int32 embedding_dim = 4;
+  string prioritizer = 5;  // "edgeml" | "tomer" | "both": whether AnalyzeResponse.image_priority is populated
 }
