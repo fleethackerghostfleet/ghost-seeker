@@ -34,6 +34,7 @@ type Event struct {
 	Reviewer   string    `json:"reviewer"`
 	Testset    string    `json:"testset"`
 	ImageID    string    `json:"image_id,omitempty"`
+	ImageSHA   string    `json:"image_sha256,omitempty"`
 	Source     string    `json:"source,omitempty"`
 	ModelTier  int       `json:"model_tier,omitempty"`
 	ModelScore float64   `json:"model_score,omitempty"`
@@ -302,7 +303,7 @@ func (s *Session) replay() error {
 		switch e.Kind {
 		case "grade":
 			item, ok := s.byID[e.ImageID]
-			if !ok || e.ModelTier != item.ModelTier || e.ModelScore != item.ModelScore || e.Source != item.Image.Source || e.HumanTier < 1 || e.HumanTier > 4 || e.Delta != e.HumanTier-e.ModelTier || e.Changed != (e.Delta != 0) {
+			if !ok || !strings.EqualFold(e.ImageSHA, item.Image.SHA256) || e.ModelTier != item.ModelTier || e.ModelScore != item.ModelScore || e.Source != item.Image.Source || e.HumanTier < 1 || e.HumanTier > 4 || e.Delta != e.HumanTier-e.ModelTier || e.Changed != (e.Delta != 0) {
 				return fmt.Errorf("invalid grade in journal")
 			}
 		case "undo":
@@ -344,7 +345,7 @@ func (s *Session) Grade(id string, tier int) (State, error) {
 	if !ok || tier < 1 || tier > 4 {
 		return State{}, fmt.Errorf("unknown image or tier outside 1-4")
 	}
-	e := Event{Kind: "grade", ImageID: id, Source: item.Image.Source, ModelTier: item.ModelTier, ModelScore: item.ModelScore, HumanTier: tier, Delta: tier - item.ModelTier, Changed: tier != item.ModelTier}
+	e := Event{Kind: "grade", ImageID: id, ImageSHA: item.Image.SHA256, Source: item.Image.Source, ModelTier: item.ModelTier, ModelScore: item.ModelScore, HumanTier: tier, Delta: tier - item.ModelTier, Changed: tier != item.ModelTier}
 	return s.append(e)
 }
 
