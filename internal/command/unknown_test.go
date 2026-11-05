@@ -36,3 +36,18 @@ func TestRuleMatchTransient(t *testing.T) {
 		})
 	}
 }
+
+func TestUnknownNightLightScoring(t *testing.T) {
+	lights := []Light{{Colour: "red", X: 100, Y: 30}, {Colour: "red", X: 100, Y: 60}}
+	box := Box{W: 200, H: 150}
+	det := Detection{Class: "unknown", Box: box, Conf: .2, Lights: lights, Signal: InterpretLights(lights, box, "")}
+	plain := ScoreDet(det, nil, "maritime")
+	boosted := ScoreDet(det, nil, "maritime", true)
+	if plain.Score != ContactWeight(det, "maritime") || plain.Light {
+		t.Fatalf("unknown confidence handling changed: %+v", plain)
+	}
+	want := min(.99, 1-(1-plain.Score)*(1-det.Signal.Boost))
+	if !boosted.Light || boosted.Score != want || boosted.Score <= plain.Score {
+		t.Fatalf("night-light boost lost: got %+v, want %v", boosted, want)
+	}
+}

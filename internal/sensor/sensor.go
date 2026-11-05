@@ -40,7 +40,13 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	var imageFile string
 	var detections []command.Detection
-	if images := catalog.Library[source.ID]; len(images) > 0 {
+	var night *catalog.NightImage
+	if images := catalog.NightLibrary[source.ID]; source.Mode == "eo" && len(images) > 0 && rng.Float64() < .2 {
+		image := images[rng.Intn(len(images))]
+		night = &image
+		imageFile = image.File
+		detections = command.NightDetections(image)
+	} else if images := catalog.Library[source.ID]; len(images) > 0 {
 		image := images[rng.Intn(len(images))]
 		imageFile = image.File
 		detections = make([]command.Detection, 0, len(image.Dets))
@@ -104,6 +110,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		up = int(math.Round(randBetween(rng, 40, 160)))
 	}
 	item := &command.Item{
+		Bands:    append([]string(nil), source.Bands...),
 		ID:       fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
 		Img:      imageFile,
 		Frame:    frame,
@@ -119,6 +126,12 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 			Cen:  int(math.Round(randBetween(rng, 70, 210))),
 		},
 		Dets: detections,
+	}
+	if night != nil {
+		value := night.Night != nil && *night.Night
+		item.Night = &value
+		item.Basis = night.Basis
+		item.Lum = night.Lum
 	}
 	command.Rescore(item, model, directives)
 	return item, extra

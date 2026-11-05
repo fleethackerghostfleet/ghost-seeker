@@ -109,6 +109,15 @@ body.drawer-open .drawer{transform:none}
 .zoom[hidden]{display:none}
 .zoom .zframe{position:relative;width:min(100%,calc((100vh - 130px)*1.6));aspect-ratio:16/10;background:#000;border:1px solid var(--line)}
 .zoom .zframe img{width:100%;height:100%;display:block}
+.spectrum-ir{filter:grayscale(1) invert(1) contrast(1.7) brightness(1.1)}
+.band-controls{position:absolute;left:8px;top:20px;z-index:3;display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:2px;cursor:default}
+.band-controls button{font:inherit;font-size:12px;color:var(--text);background:transparent;border:0;padding:7px 10px;cursor:pointer}
+.band-controls button[aria-pressed=true]{background:var(--accent);color:var(--panel)}
+.band-controls button:focus-visible{outline:2px solid var(--text);outline-offset:-3px}
+.band-controls span{font-size:11px;color:var(--muted);padding:0 8px}
+.band-label,.band-badge{position:absolute;right:8px;top:20px;background:var(--panel);color:var(--text);border:1px solid var(--line);padding:3px 6px;font-size:11px;pointer-events:none;z-index:2}
+.dimg .band-label{top:auto;bottom:32px}
+.band-badge{top:8px}
 .zoom .box{border-width:2.5px}.zoom .box em{font-size:13px;padding:1px 6px}
 .zoom .zbar{width:min(100%,calc((100vh - 130px)*1.6));display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px}
 .zoom .zbar b{color:var(--text)}.zoom .zbar .tier{position:static}.zoom .zbar .zk{margin-left:auto}

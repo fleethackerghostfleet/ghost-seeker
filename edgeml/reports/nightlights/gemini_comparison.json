@@ -1,0 +1,805 @@
+{
+  "summary": {
+    "hard_dev": {
+      "ours": {
+        "contacts": 112,
+        "light_precision": 0.26735218508997427,
+        "light_recall": 0.6380368098159509,
+        "light_counts": {
+          "correct": 104,
+          "predicted": 389,
+          "actual": 163
+        },
+        "rule_accuracy": 0.08035714285714286,
+        "rule_correct": 9,
+        "per_rule": {
+          "ram": {
+            "correct": 0,
+            "total": 7
+          },
+          "constrained_draught": {
+            "correct": 1,
+            "total": 7
+          },
+          "nuc": {
+            "correct": 2,
+            "total": 7
+          },
+          "trawling": {
+            "correct": 1,
+            "total": 7
+          },
+          "fishing": {
+            "correct": 1,
+            "total": 7
+          },
+          "pilot": {
+            "correct": 2,
+            "total": 7
+          },
+          "tow_long": {
+            "correct": 1,
+            "total": 7
+          },
+          "two_mastheads": {
+            "correct": 0,
+            "total": 7
+          },
+          "head_on": {
+            "correct": 0,
+            "total": 7
+          },
+          "port": {
+            "correct": 1,
+            "total": 7
+          },
+          "starboard": {
+            "correct": 0,
+            "total": 7
+          },
+          "white_ambiguous": {
+            "correct": 0,
+            "total": 7
+          },
+          "air_cushion": {
+            "correct": 0,
+            "total": 7
+          },
+          "law_enforcement": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_flare": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_sos": {
+            "correct": 0,
+            "total": 7
+          }
+        },
+        "per_color": {
+          "blue": {
+            "correct": 3,
+            "predicted": 3,
+            "actual": 6,
+            "precision": 1.0,
+            "recall": 0.5
+          },
+          "green": {
+            "correct": 4,
+            "predicted": 4,
+            "actual": 16,
+            "precision": 1.0,
+            "recall": 0.25
+          },
+          "red": {
+            "correct": 35,
+            "predicted": 82,
+            "actual": 69,
+            "precision": 0.4268292682926829,
+            "recall": 0.5072463768115942
+          },
+          "white": {
+            "correct": 59,
+            "predicted": 284,
+            "actual": 68,
+            "precision": 0.20774647887323944,
+            "recall": 0.8676470588235294
+          },
+          "yellow": {
+            "correct": 3,
+            "predicted": 16,
+            "actual": 4,
+            "precision": 0.1875,
+            "recall": 0.75
+          }
+        },
+        "observability": {
+          "resolvable": {
+            "correct": 6,
+            "total": 76,
+            "accuracy": 0.07894736842105263
+          },
+          "unresolvable": {
+            "correct": 3,
+            "total": 36,
+            "accuracy": 0.08333333333333333
+          }
+        }
+      },
+      "gemini": {
+        "contacts": 112,
+        "light_precision": 0.4662576687116564,
+        "light_recall": 0.4662576687116564,
+        "light_counts": {
+          "correct": 76,
+          "predicted": 163,
+          "actual": 163
+        },
+        "rule_accuracy": 0.17857142857142858,
+        "rule_correct": 20,
+        "per_rule": {
+          "ram": {
+            "correct": 2,
+            "total": 7
+          },
+          "constrained_draught": {
+            "correct": 0,
+            "total": 7
+          },
+          "nuc": {
+            "correct": 1,
+            "total": 7
+          },
+          "trawling": {
+            "correct": 2,
+            "total": 7
+          },
+          "fishing": {
+            "correct": 2,
+            "total": 7
+          },
+          "pilot": {
+            "correct": 0,
+            "total": 7
+          },
+          "tow_long": {
+            "correct": 3,
+            "total": 7
+          },
+          "two_mastheads": {
+            "correct": 1,
+            "total": 7
+          },
+          "head_on": {
+            "correct": 1,
+            "total": 7
+          },
+          "port": {
+            "correct": 0,
+            "total": 7
+          },
+          "starboard": {
+            "correct": 2,
+            "total": 7
+          },
+          "white_ambiguous": {
+            "correct": 2,
+            "total": 7
+          },
+          "air_cushion": {
+            "correct": 1,
+            "total": 7
+          },
+          "law_enforcement": {
+            "correct": 3,
+            "total": 7
+          },
+          "distress_flare": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_sos": {
+            "correct": 0,
+            "total": 7
+          }
+        },
+        "per_color": {
+          "blue": {
+            "correct": 4,
+            "predicted": 4,
+            "actual": 6,
+            "precision": 1.0,
+            "recall": 0.6666666666666666
+          },
+          "green": {
+            "correct": 13,
+            "predicted": 14,
+            "actual": 16,
+            "precision": 0.9285714285714286,
+            "recall": 0.8125
+          },
+          "red": {
+            "correct": 22,
+            "predicted": 22,
+            "actual": 69,
+            "precision": 1.0,
+            "recall": 0.3188405797101449
+          },
+          "white": {
+            "correct": 35,
+            "predicted": 109,
+            "actual": 68,
+            "precision": 0.3211009174311927,
+            "recall": 0.5147058823529411
+          },
+          "yellow": {
+            "correct": 2,
+            "predicted": 14,
+            "actual": 4,
+            "precision": 0.14285714285714285,
+            "recall": 0.5
+          }
+        },
+        "observability": {
+          "resolvable": {
+            "correct": 18,
+            "total": 76,
+            "accuracy": 0.23684210526315788
+          },
+          "unresolvable": {
+            "correct": 2,
+            "total": 36,
+            "accuracy": 0.05555555555555555
+          }
+        }
+      },
+      "failures": 0,
+      "invalid_json": 7,
+      "latency_seconds": {
+        "mean": 1.4426800901964225,
+        "median": 1.2367349210001066,
+        "p95": 3.515311811750086
+      }
+    },
+    "hard_test2": {
+      "ours": {
+        "contacts": 112,
+        "light_precision": 0.2599009900990099,
+        "light_recall": 0.6325301204819277,
+        "light_counts": {
+          "correct": 105,
+          "predicted": 404,
+          "actual": 166
+        },
+        "rule_accuracy": 0.07142857142857142,
+        "rule_correct": 8,
+        "per_rule": {
+          "ram": {
+            "correct": 0,
+            "total": 7
+          },
+          "constrained_draught": {
+            "correct": 0,
+            "total": 7
+          },
+          "nuc": {
+            "correct": 0,
+            "total": 7
+          },
+          "trawling": {
+            "correct": 1,
+            "total": 7
+          },
+          "fishing": {
+            "correct": 1,
+            "total": 7
+          },
+          "pilot": {
+            "correct": 0,
+            "total": 7
+          },
+          "tow_long": {
+            "correct": 1,
+            "total": 7
+          },
+          "two_mastheads": {
+            "correct": 1,
+            "total": 7
+          },
+          "head_on": {
+            "correct": 0,
+            "total": 7
+          },
+          "port": {
+            "correct": 0,
+            "total": 7
+          },
+          "starboard": {
+            "correct": 3,
+            "total": 7
+          },
+          "white_ambiguous": {
+            "correct": 1,
+            "total": 7
+          },
+          "air_cushion": {
+            "correct": 0,
+            "total": 7
+          },
+          "law_enforcement": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_flare": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_sos": {
+            "correct": 0,
+            "total": 7
+          }
+        },
+        "per_color": {
+          "blue": {
+            "correct": 4,
+            "predicted": 5,
+            "actual": 5,
+            "precision": 0.8,
+            "recall": 0.8
+          },
+          "green": {
+            "correct": 13,
+            "predicted": 13,
+            "actual": 20,
+            "precision": 1.0,
+            "recall": 0.65
+          },
+          "red": {
+            "correct": 30,
+            "predicted": 68,
+            "actual": 73,
+            "precision": 0.4411764705882353,
+            "recall": 0.410958904109589
+          },
+          "white": {
+            "correct": 56,
+            "predicted": 288,
+            "actual": 64,
+            "precision": 0.19444444444444445,
+            "recall": 0.875
+          },
+          "yellow": {
+            "correct": 2,
+            "predicted": 30,
+            "actual": 4,
+            "precision": 0.06666666666666667,
+            "recall": 0.5
+          }
+        },
+        "observability": {
+          "resolvable": {
+            "correct": 8,
+            "total": 78,
+            "accuracy": 0.10256410256410256
+          },
+          "unresolvable": {
+            "correct": 0,
+            "total": 34,
+            "accuracy": 0.0
+          }
+        }
+      },
+      "gemini": {
+        "contacts": 112,
+        "light_precision": 0.5080645161290323,
+        "light_recall": 0.3795180722891566,
+        "light_counts": {
+          "correct": 63,
+          "predicted": 124,
+          "actual": 166
+        },
+        "rule_accuracy": 0.1875,
+        "rule_correct": 21,
+        "per_rule": {
+          "ram": {
+            "correct": 0,
+            "total": 7
+          },
+          "constrained_draught": {
+            "correct": 0,
+            "total": 7
+          },
+          "nuc": {
+            "correct": 1,
+            "total": 7
+          },
+          "trawling": {
+            "correct": 3,
+            "total": 7
+          },
+          "fishing": {
+            "correct": 0,
+            "total": 7
+          },
+          "pilot": {
+            "correct": 0,
+            "total": 7
+          },
+          "tow_long": {
+            "correct": 1,
+            "total": 7
+          },
+          "two_mastheads": {
+            "correct": 0,
+            "total": 7
+          },
+          "head_on": {
+            "correct": 4,
+            "total": 7
+          },
+          "port": {
+            "correct": 1,
+            "total": 7
+          },
+          "starboard": {
+            "correct": 4,
+            "total": 7
+          },
+          "white_ambiguous": {
+            "correct": 3,
+            "total": 7
+          },
+          "air_cushion": {
+            "correct": 2,
+            "total": 7
+          },
+          "law_enforcement": {
+            "correct": 2,
+            "total": 7
+          },
+          "distress_flare": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_sos": {
+            "correct": 0,
+            "total": 7
+          }
+        },
+        "per_color": {
+          "blue": {
+            "correct": 5,
+            "predicted": 5,
+            "actual": 5,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "green": {
+            "correct": 16,
+            "predicted": 18,
+            "actual": 20,
+            "precision": 0.8888888888888888,
+            "recall": 0.8
+          },
+          "red": {
+            "correct": 11,
+            "predicted": 14,
+            "actual": 73,
+            "precision": 0.7857142857142857,
+            "recall": 0.1506849315068493
+          },
+          "white": {
+            "correct": 28,
+            "predicted": 72,
+            "actual": 64,
+            "precision": 0.3888888888888889,
+            "recall": 0.4375
+          },
+          "yellow": {
+            "correct": 3,
+            "predicted": 15,
+            "actual": 4,
+            "precision": 0.2,
+            "recall": 0.75
+          }
+        },
+        "observability": {
+          "resolvable": {
+            "correct": 18,
+            "total": 78,
+            "accuracy": 0.23076923076923078
+          },
+          "unresolvable": {
+            "correct": 3,
+            "total": 34,
+            "accuracy": 0.08823529411764706
+          }
+        }
+      },
+      "failures": 0,
+      "invalid_json": 3,
+      "latency_seconds": {
+        "mean": 1.787181889285711,
+        "median": 1.2769912774999739,
+        "p95": 1.7942682327001078
+      }
+    },
+    "easy_test": {
+      "ours": {
+        "contacts": 112,
+        "light_precision": 1.0,
+        "light_recall": 1.0,
+        "light_counts": {
+          "correct": 196,
+          "predicted": 196,
+          "actual": 196
+        },
+        "rule_accuracy": 0.875,
+        "rule_correct": 98,
+        "per_rule": {
+          "ram": {
+            "correct": 7,
+            "total": 7
+          },
+          "constrained_draught": {
+            "correct": 7,
+            "total": 7
+          },
+          "nuc": {
+            "correct": 7,
+            "total": 7
+          },
+          "trawling": {
+            "correct": 7,
+            "total": 7
+          },
+          "fishing": {
+            "correct": 7,
+            "total": 7
+          },
+          "pilot": {
+            "correct": 7,
+            "total": 7
+          },
+          "tow_long": {
+            "correct": 7,
+            "total": 7
+          },
+          "two_mastheads": {
+            "correct": 7,
+            "total": 7
+          },
+          "head_on": {
+            "correct": 7,
+            "total": 7
+          },
+          "port": {
+            "correct": 7,
+            "total": 7
+          },
+          "starboard": {
+            "correct": 7,
+            "total": 7
+          },
+          "white_ambiguous": {
+            "correct": 7,
+            "total": 7
+          },
+          "air_cushion": {
+            "correct": 7,
+            "total": 7
+          },
+          "law_enforcement": {
+            "correct": 7,
+            "total": 7
+          },
+          "distress_flare": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_sos": {
+            "correct": 0,
+            "total": 7
+          }
+        },
+        "per_color": {
+          "blue": {
+            "correct": 7,
+            "predicted": 7,
+            "actual": 7,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "green": {
+            "correct": 21,
+            "predicted": 21,
+            "actual": 21,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "red": {
+            "correct": 84,
+            "predicted": 84,
+            "actual": 84,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "white": {
+            "correct": 77,
+            "predicted": 77,
+            "actual": 77,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "yellow": {
+            "correct": 7,
+            "predicted": 7,
+            "actual": 7,
+            "precision": 1.0,
+            "recall": 1.0
+          }
+        },
+        "observability": {
+          "resolvable": {
+            "correct": 98,
+            "total": 112,
+            "accuracy": 0.875
+          },
+          "unresolvable": {
+            "correct": 0,
+            "total": 0,
+            "accuracy": 0.0
+          }
+        }
+      },
+      "gemini": {
+        "contacts": 112,
+        "light_precision": 1.0,
+        "light_recall": 1.0,
+        "light_counts": {
+          "correct": 196,
+          "predicted": 196,
+          "actual": 196
+        },
+        "rule_accuracy": 0.8125,
+        "rule_correct": 91,
+        "per_rule": {
+          "ram": {
+            "correct": 7,
+            "total": 7
+          },
+          "constrained_draught": {
+            "correct": 7,
+            "total": 7
+          },
+          "nuc": {
+            "correct": 7,
+            "total": 7
+          },
+          "trawling": {
+            "correct": 7,
+            "total": 7
+          },
+          "fishing": {
+            "correct": 6,
+            "total": 7
+          },
+          "pilot": {
+            "correct": 3,
+            "total": 7
+          },
+          "tow_long": {
+            "correct": 7,
+            "total": 7
+          },
+          "two_mastheads": {
+            "correct": 7,
+            "total": 7
+          },
+          "head_on": {
+            "correct": 7,
+            "total": 7
+          },
+          "port": {
+            "correct": 5,
+            "total": 7
+          },
+          "starboard": {
+            "correct": 7,
+            "total": 7
+          },
+          "white_ambiguous": {
+            "correct": 7,
+            "total": 7
+          },
+          "air_cushion": {
+            "correct": 7,
+            "total": 7
+          },
+          "law_enforcement": {
+            "correct": 7,
+            "total": 7
+          },
+          "distress_flare": {
+            "correct": 0,
+            "total": 7
+          },
+          "distress_sos": {
+            "correct": 0,
+            "total": 7
+          }
+        },
+        "per_color": {
+          "blue": {
+            "correct": 7,
+            "predicted": 7,
+            "actual": 7,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "green": {
+            "correct": 21,
+            "predicted": 21,
+            "actual": 21,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "red": {
+            "correct": 84,
+            "predicted": 84,
+            "actual": 84,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "white": {
+            "correct": 77,
+            "predicted": 77,
+            "actual": 77,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "yellow": {
+            "correct": 7,
+            "predicted": 7,
+            "actual": 7,
+            "precision": 1.0,
+            "recall": 1.0
+          }
+        },
+        "observability": {
+          "resolvable": {
+            "correct": 91,
+            "total": 112,
+            "accuracy": 0.8125
+          },
+          "unresolvable": {
+            "correct": 0,
+            "total": 0,
+            "accuracy": 0.0
+          }
+        }
+      },
+      "failures": 0,
+      "invalid_json": 0,
+      "latency_seconds": {
+        "mean": 1.3930906885892784,
+        "median": 1.3277509705000057,
+        "p95": 1.9087338506500366
+      }
+    }
+  },
+  "total_contacts": 336,
+  "new_calls": 336,
+  "cached_calls": 0,
+  "endpoint": "https://aiplatform.googleapis.com/v1/projects/qwiklabs-gcp-02-34a870014566/locations/global/publishers/google/models/gemini-2.5-flash:generateContent",
+  "config": {
+    "workers": 4,
+    "max_calls": 400,
+    "temperature": 0,
+    "thinking_budget": 0,
+    "max_output_tokens": 1024
+  },
+  "protocol": "Both methods see identical four-frame padded JPEG crops. No external signals. Colour P/R are per-contact colour-multiset overlap, NOT spatial matching; not comparable to full-frame evaluator P/R. Rule accuracy uses all latent labels including unresolvable cases. API/JSON failures count as empty light predictions and incorrect rules. No retries; errors cached too."
+}

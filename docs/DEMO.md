@@ -12,9 +12,12 @@ shore gets an image of 10/10 dev objects vs 2/10 naive.
 ## 0. One-time setup
 
 ```sh
-# toolchain: Go 1.23 (GOTOOLCHAIN=local), gcloud signed in as a lab student account
+# toolchain: Go 1.23 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
 make build
 make demo-clips        # -> scenarios/ghostfleet_demo/frames/<clip>/{img1,gt,seqinfo.ini}  (gitignored)
+make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB)
+python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
+pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
 ```
 
 Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/ghost_fleet_5fps/`):
@@ -46,48 +49,52 @@ on shore at each sample time, time until all objects have an image, bytes on air
 per delivered object. Items carry `features.tags.gt_tracks` so the metric is computed on the
 shore store regardless of mode.
 
-## 2. Live stack (three terminals + browser)
+## 2. Live stack (four terminals + browser)
 
 ```sh
+make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080
 make demo-ui           # bin/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
-make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer mock
+make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings
 open http://localhost:8090
 ```
 
-Once F1 has merged, start the sidecar and change only the edge line:
-`bin/edge ... -infer http://localhost:9090 -dedup sightings` (F1's flags). Items then arrive
-with `tags.sighting_id/subtype/event` and a CROP form; the UI groups them per object
-automatically (one card, "n frames seen", subtype).
+Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
+models (log line `sidecar listening on :9090`). Without the sidecar: `make demo-edge INFER=mock
+DEDUP=hash` (one item per distinct frame, no sightings).
 
-**Link control.** The web app hosts the ship→shore link itself: `internal/shaper` is a TCP
-proxy with a token bucket on `:18080`; the edge's `-shore` points at it, so the 0 / 9.6 kbps
-/ 64 kbps / 256 kbps / 2 Mbps buttons change the real bytes-on-wire rate (0 drops the
-connection). `edge/link` has no console hook for its simulator, and this needs no Docker.
-The compose stack keeps Toxiproxy: `deploy/compose/degrade.sh 9k6|64k|256k|2m` applies the
-same ladder; in that setup run the UI with `-link-listen ""` and the strip shows the edge's
-own link estimate instead.
+With the sidecar, items arrive with `tags.sighting_id` (`<clip>:<track>`), `subtype` (zero-shot
+MobileCLIP: cargo ship / submarine / marine mammal …), `event` (open / update) and a CROP form;
+the UI shows one card per sighting with the crop, and the strip's "N duplicate frames folded on
+the edge" is `GetStatus.items_deduped`. When a sighting closes, the edge sends a ~200 B contact
+report (RECORD item); the card then shows "n frames seen" from it.
 
-**Status strip.** current kbps (shaper setting + edge's estimate), items on shore / on edge
-(+ queued items and bytes on the edge), unique objects with an image on shore (by
-`sighting_id`; items without one count as one object each), bytes through the link.
-
-**Actions.** The directive box calls shore `SetPolicy` (free text is parsed:
-"ignore cargo ships; prioritize submarines" → suppress `cargo ship`, boost `submarine`;
-the edge picks the policy up on its next exchange). "Pull full image" calls shore
-`RequestPull` for FORM_KIND_FULL. "Relabel…" calls `OverrideLabel`. Confirm/Dismiss/Escalate
-are local to the browser (localStorage).
+**Object-free frames.** In `-dedup sightings` mode the edge folds frames with no tracked object
+into one FACT+THUMB **scene** item per source per `-scene-every` (default 60 s; `tags.event:
+"scene"`, no FULL). The feed shows them as dim "Scene / context" tiles with a "Pull full frame"
+button; they are not objects, so they are excluded from the unique-object count, the review queue
+and the commander view (the strip says "N scene tiles not counted"). Any per-frame leftovers
+(`-scene-every 0`) are hidden by the "sightings only" toggle.
 
 ## 3. Three-minute presenter script
 
 | t | do | say |
 |---|---|---|
 | 0:00 | Stack already running, link preset **2 Mbps**, feed tab. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." Point at the strip: items on edge vs shore are equal, every card has a crop/thumb. |
-| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." The edge's estimator needs ~30–60 s to re-learn the link (watch "edge estimates" in the strip fall from Mbps to ~10 kbps); then the edge queue grows while *new objects still appear* as cards: fact first (text card), then the crop. Form chips go pending → received. |
-| 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card, 'n frames seen', the subtype, and we know exactly which forms have landed. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
-| 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed), submarines keep arriving. Policy text shows in the strip. |
-| 2:15 | On a submarine card click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. |
-| 2:45 | Click **2 Mbps**; switch to **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
+| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." The edge's estimator needs ~100 s to re-learn the link (strip: "edge estimates … · re-learning: n failed exchanges", 4 failures from 2 Mbps); then the edge queue keeps growing (object-free frames, see caveat) while *new sightings still land* as cards. A sighting is ~5–10 KB (fact + thumb + crop + full of the key crop), so one arrives per ~5–10 s of link time. |
+| 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card with its crop, the zero-shot subtype, and we know exactly which forms have landed; 'duplicate frames folded on the edge' in the strip is what we did *not* send. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
+| 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed; matched on the sidecar subtype, the detector class or an operator override), submarines keep arriving. Policy text shows in the strip. Cards the edge flagged *unknown* are never suppressed (same rule as `edge/scoring`), so a low-confidence "Cargo Ship (Unknown)" stays — say so, it is the point of the unknown gate. |
+| 2:15 | On a card whose FULL chip is still pending click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. With the current edge a sighting ships thumb + crop + full of the key crop together, so at 9.6 kbps the button is usually already "full received" by the time the card appears; the pull path is live for anything still pending (e.g. an object-free frame with "sightings only" unticked). |
+| 2:45 | Click **2 Mbps**; switch to **Review queue** / **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
+
+Dry run (2026-11-04, real sidecar, 8-core laptop-class VM): the three clips replay **interleaved** (same
+frame names, so `edge/ingest` sorts them together) and the sidecar tracks them as three sources; the
+whole replay is 1270 frames = 254 s, so start the script within a minute of `make demo-edge`. Over
+the run the sidecar reported 20+ sightings (subtypes: submarine, marine mammal, cargo ship, tanker,
+buoy, coast guard) and folded ~650 duplicate frames; every sighting had a crop on shore within one
+exchange at 9.6 kbps once the estimator had settled. Right after a drop the estimator oscillates once
+(a successful small exchange bumps it back toward half the last good rate, the next exchange fails,
+it quarters again) — expect one more "re-learning: 1 failed exchange" ~30 s after the first recovery.
 
 Reset between runs: `rm -rf data/ && ` restart the three processes (the browser's
 confirm/dismiss state is in localStorage: DevTools → Application → Clear).

@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
@@ -40,7 +41,9 @@ func TestUnknownInjectionPreservesOriginalDraws(t *testing.T) {
 	for i, f := range injected {
 		original := base[i]
 		n := len(original.Dets)
-		if f.Src != original.Src || !slices.Equal(f.Dets[:n], original.Dets) || !slices.Equal(f.FP[:n], original.FP) {
+		if f.Src != original.Src || !slices.EqualFunc(f.Dets[:n], original.Dets, func(a, b command.Detection) bool {
+			return reflect.DeepEqual(a, b)
+		}) || !slices.Equal(f.FP[:n], original.FP) {
 			t.Fatalf("original draws changed at %d", i)
 		}
 		if len(f.Dets) == n {
