@@ -1,3 +1,4 @@
+import json
 import logging
 import runpy
 from pathlib import Path
@@ -104,6 +105,27 @@ def test_dark_contact_uses_unclassified_candidates_without_association():
     result = dark_contact(image, box, 'boat', gate_decision={'night': True})
     assert not result['flagged'] and result['basis'] == 'lights_present'
     assert result['n_lights'] > 0
+
+
+def test_distress_demo_track_is_not_dark():
+    root = Path(__file__).resolve().parents[2]
+    catalog = json.loads((root/'internal/catalog/nightlights.json').read_text())
+    for entry in catalog['nightLibrary']:
+        for detection in entry['dets']:
+            if 'track_observation' not in detection:
+                continue
+            frames = [cv2.imread(str(root/'web/static'/name))
+                      for name in detection['sequence_files']]
+            assert len(frames) == 4 and all(frame is not None for frame in frames)
+            box = [2*detection['b'][key] for key in ('x', 'y', 'w', 'h')]
+            result = analyze(frames, box, signal=detection['signal'], label=detection['cls'])
+            assert [light['colour'] for light in result['lights']] == ['red']
+            assert result['lights'][0]['flashing']
+            assert result['interpretation']['boost'] == 1
+            dark = result['dark_contact']
+            assert not dark['flagged'] and dark['basis'] == 'lights_present'
+            assert dark['n_lights'] == 2
+            assert detection['track_observation']['dark_contact'] == dark
 
 
 def test_permissive_candidates_empty_and_invalid_boxes():

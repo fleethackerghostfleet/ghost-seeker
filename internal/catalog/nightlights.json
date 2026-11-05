@@ -3941,10 +3941,10 @@
               "duration_s": 3.0
             },
             "dark_contact": {
-              "flagged": true,
-              "confidence": 0.98,
-              "n_lights": 0,
-              "basis": "no_lights"
+              "flagged": false,
+              "confidence": 0.0,
+              "n_lights": 2,
+              "basis": "lights_present"
             }
           },
           "sequence_files": [
@@ -4053,10 +4053,10 @@
               "duration_s": 3.0
             },
             "dark_contact": {
-              "flagged": true,
-              "confidence": 0.98,
-              "n_lights": 0,
-              "basis": "no_lights"
+              "flagged": false,
+              "confidence": 0.0,
+              "n_lights": 2,
+              "basis": "lights_present"
             }
           },
           "sequence_files": [
@@ -4183,10 +4183,10 @@
               "duration_s": 3.0
             },
             "dark_contact": {
-              "flagged": true,
-              "confidence": 0.98,
-              "n_lights": 0,
-              "basis": "no_lights"
+              "flagged": false,
+              "confidence": 0.0,
+              "n_lights": 2,
+              "basis": "lights_present"
             }
           },
           "sequence_files": [
@@ -4295,10 +4295,10 @@
               "duration_s": 3.0
             },
             "dark_contact": {
-              "flagged": true,
-              "confidence": 0.98,
-              "n_lights": 0,
-              "basis": "no_lights"
+              "flagged": false,
+              "confidence": 0.0,
+              "n_lights": 2,
+              "basis": "lights_present"
             }
           },
           "sequence_files": [
