@@ -392,6 +392,13 @@ test('hide uploaded keeps queued, uploading, held and kept-on-ship images and dr
  vm.runInContext("state.tier='4'",context);
  assert.equal(vm.runInContext('uploadedCount()',context),0);
 });
+test('repeat badge skips uploaded repeats while uploaded images are hidden',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('repeatDone',{tier:4,filtered:'duplicate',upload:{bytes:100,sent:100,done:true}}),frame('repeatQueued',{tier:4,filtered:'duplicate',upload:{bytes:100,sent:0}})]`,context);
+ assert.equal(vm.runInContext('repeatCount()',context),2);
+ vm.runInContext('filters.hideUploaded=true',context);
+ assert.equal(vm.runInContext('repeatCount()',context),1);
+});
 function feedContext(){
  const context=setup();
  vm.runInContext(`

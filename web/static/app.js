@@ -360,7 +360,7 @@ function visible(){
 }
 function hideableRepeat(it){return !isScene(it)&&it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
 function uploadedCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&uploadState(i).done).length}
-function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)).length}
+function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)&&!(f.hideUploaded&&uploadState(i).done)).length}
 /* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
 function pairRepeats(l){
  const ids=new Set(l.map(i=>i.id)),after=new Map();
