@@ -74,6 +74,7 @@ func main() {
 		options = append(options, server.WithPolicyBackend(backend))
 	}
 	app := server.New(data, options...)
+	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
 	go runSimulation(data, generator, app)
 	go refreshTimeScopes(app)
@@ -155,6 +156,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link)
+	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
 	go bridge.Run(ctx, poll)
 

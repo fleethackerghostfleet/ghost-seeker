@@ -54,6 +54,7 @@ func TestAdminPolicyApplyFailureRestoresHigherLayers(t *testing.T) {
 func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	data := store.New(10)
 	app := New(data, WithAdmin(true))
+	app.SetCompiler(&command.Compiler{Locks: app.PolicyLocks()})
 
 	state := store.State{Directives: data.Directives()}
 	lockedSeed := false
@@ -114,6 +115,9 @@ func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	if response.Code != http.StatusConflict {
 		t.Fatalf("fully blocked directive status = %d, want %d: %s", response.Code, http.StatusConflict, response.Body.String())
 	}
+	if !strings.Contains(response.Body.String(), "Locked by CTF-72") {
+		t.Fatalf("fully blocked response omitted lock reason: %s", response.Body.String())
+	}
 
 	response = request(app, http.MethodGet, "/api/policy/audit", nil)
 	if response.Code != http.StatusOK {
@@ -133,6 +137,37 @@ func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	}
 	if !foundRejected {
 		t.Fatalf("audit entries %#v do not include rejected directive", audit.Entries)
+	}
+}
+
+func TestCompileDirectiveReportsActivePolicyLocks(t *testing.T) {
+	app := New(store.New(10), WithAdmin(true))
+	app.SetCompiler(&command.Compiler{Locks: app.PolicyLocks()})
+
+	response := request(app, http.MethodPost, "/api/directives/compile", map[string]string{"text": "ignore submarines"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("locked compile status = %d: %s", response.Code, response.Body.String())
+	}
+	var compiled command.Compiled
+	if err := json.Unmarshal(response.Body.Bytes(), &compiled); err != nil {
+		t.Fatal(err)
+	}
+	if !compiled.Blocked || !strings.Contains(strings.Join(compiled.Warnings, "\n"), "Locked by CTF-72") {
+		t.Fatalf("locked compile = %+v, want CTF-72 blocked warning", compiled)
+	}
+	if !strings.Contains(compiled.Readback, "Suppress: submarine") {
+		t.Fatalf("locked compile lost readback: %+v", compiled)
+	}
+
+	response = request(app, http.MethodPost, "/api/directives/compile", map[string]string{"text": "prioritize tankers"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("delegated compile status = %d: %s", response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &compiled); err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Blocked || strings.Contains(strings.Join(compiled.Warnings, "\n"), "Locked by") {
+		t.Fatalf("delegated tanker compile = %+v, want unblocked without lock warning", compiled)
 	}
 }
 

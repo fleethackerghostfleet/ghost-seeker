@@ -179,6 +179,8 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
+	s.policy.mu.Lock()
+	defer s.policy.mu.Unlock()
 	compiler := s.directiveCompiler()
 	var compiled command.Compiled
 	var rules []command.Rule
@@ -194,10 +196,22 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 			durationMin = compiled.DurationMin
 		}
 	}
-	if compiled.Blocked {
+	lockWarnings := []string{}
+	lockBlocked := false
+	if compiler.Locks != nil {
+		lockWarnings, lockBlocked = compiler.Locks.CheckLocks(rules)
+	}
+	otherBlock := false
+	for _, warning := range compiled.Warnings {
+		if strings.HasPrefix(warning, "Blocked:") {
+			otherBlock = true
+			break
+		}
+	}
+	if compiled.Blocked && (!lockBlocked || otherBlock) {
 		message := ""
 		for _, warning := range compiled.Warnings {
-			if strings.HasPrefix(warning, "Blocked") {
+			if strings.HasPrefix(warning, "Blocked:") {
 				message = warning
 				break
 			}
@@ -223,8 +237,6 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
-	s.policy.mu.Lock()
-	defer s.policy.mu.Unlock()
 	candidate := &pb.Policy{Layers: append([]*pb.PolicyLayer(nil), s.policy.higherLayers...)}
 	operator := s.policy.operatorLayer()
 	for i, rule := range rules {
@@ -256,7 +268,9 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(kept) == 0 {
 		reason := "Policy rule blocked by higher-echelon lock"
-		if len(conflicts) > 0 && conflicts[0] != nil {
+		if lockBlocked && len(lockWarnings) > 0 {
+			reason = lockWarnings[0]
+		} else if len(conflicts) > 0 && conflicts[0] != nil {
 			reason = conflicts[0].Reason
 		}
 		candidate.Id, candidate.IssuedBy, candidate.Text = fmt.Sprintf("sim-%d", time.Now().UnixMilli()), "TAO", strings.TrimSpace(body.Text)

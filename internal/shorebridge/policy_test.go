@@ -255,3 +255,36 @@ func TestSetPolicyWithoutCompilerUsesInterpret(t *testing.T) {
 		t.Fatalf("interpret not used: %v", got.Interest)
 	}
 }
+
+func TestPolicyLocksUsesShoreCommandLayer(t *testing.T) {
+	active := &pb.Policy{Layers: []*pb.PolicyLayer{{
+		Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+		Rules: []*pb.InterestRule{{
+			Id: "submarine-lock", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3,
+		}},
+	}}}
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != consolePath+"GetPolicy" {
+			http.NotFound(w, r)
+			return
+		}
+		raw, err := protojson.Marshal(&pb.GetPolicyResponse{Policy: active})
+		if err != nil {
+			t.Errorf("marshal policy: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(raw)
+	}))
+	defer shore.Close()
+
+	bridge := New(shore.URL, "", nil)
+	warnings, blocked := bridge.PolicyLocks().CheckLocks([]command.Rule{{
+		Type: "suppress", Classes: []string{"submarine"},
+	}})
+	if !blocked || !reflect.DeepEqual(warnings, []string{
+		"Locked by CTF-72 — submarine can't be overridden at ship level",
+	}) {
+		t.Fatalf("shore lock result = %v, blocked=%t", warnings, blocked)
+	}
+}
