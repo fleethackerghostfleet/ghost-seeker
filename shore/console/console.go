@@ -60,9 +60,12 @@ func view(it *store.Item) *pb.ItemView {
 }
 
 func (s *Service) ListItems(ctx context.Context, req *connect.Request[pb.ListItemsRequest]) (*connect.Response[pb.ListItemsResponse], error) {
-	off, _ := strconv.Atoi(req.Msg.PageToken)
+	off, lim, err := console.Page(req.Msg.PageToken, req.Msg.Limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	items, total, err := s.St.List(ctx, store.ListFilter{Type: req.Msg.Type, UnknownOnly: req.Msg.UnknownOnly, Label: req.Msg.Label,
-		Limit: int(req.Msg.Limit), Offset: off})
+		Limit: lim, Offset: off})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -188,6 +191,9 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	}
 	if p.Interest == nil {
 		p.Interest = &pb.Interest{}
+	}
+	if err := console.ValidateInterest(p.Interest); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	if s.Embedder != nil {
 		if err := s.compileInterest(ctx, p.Interest); err != nil {
@@ -365,9 +371,6 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", httpx.SafeBlobMime(f.Mime))
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Disposition", "inline")
-		_, _ = w.Write(data)
+		httpx.ServeBlob(w, f.Mime, data)
 	})
 }

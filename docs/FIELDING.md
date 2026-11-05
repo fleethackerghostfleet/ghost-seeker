@@ -288,17 +288,27 @@ images; shore only verifies tokens and never mints them.
 
 ### Enable in Kubernetes/Zarf
 
-Create `shore-auth` in the cluster running shore and `edge-auth` in the cluster
-running edge. If shore and edge are in separate clusters, each cluster needs
-its own Secret in the `ghost-seeker` namespace. These credentials are passed
-through Secret references, never ConfigMaps. The optional shore key reference
-lets auth remain off by default; enabling `SHORE_REQUIRE_AUTH` without the
-`shore-auth` Secret makes shore fail closed at startup.
+Unit auth is **on by default** in the Zarf package (`SHORE_REQUIRE_AUTH=true`), and every
+workload also needs the shared operator token (see `docs/SECURITY.md`): the manifests reference
+these Secrets as *required*, so the pods stay Pending until they exist. Create them in the
+`ghost-seeker` namespace before `zarf package deploy` (each cluster needs its own copy if shore and
+edge are deployed separately). Credentials are passed through Secret references, never ConfigMaps.
+
+| Secret | Keys | Used by |
+| --- | --- | --- |
+| `shore-auth` | `signing-key`, `operator-token` | shore |
+| `edge-auth` | `unit-token`, `operator-token` | edge |
+| `operator-auth` | `operator-token` | operator web app |
 
 ```sh
+# One operator token shared by shore, edge and the operator web app (>= 16 bytes); owner-only file
+(umask 077; openssl rand -hex 32 > operator.token)
+
 # In the shore cluster
 kubectl -n ghost-seeker create secret generic shore-auth \
-  --from-file=signing-key=./signing.key
+  --from-file=signing-key=./signing.key --from-file=operator-token=./operator.token
+kubectl -n ghost-seeker create secret generic operator-auth \
+  --from-file=operator-token=./operator.token
 
 # On a trusted workstation with the same signing key
 GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
@@ -306,12 +316,15 @@ GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
 
 # In the edge cluster; remove the plaintext token after storing it
 kubectl -n ghost-seeker create secret generic edge-auth \
-  --from-file=unit-token=./unit.jwt && rm unit.jwt
+  --from-file=unit-token=./unit.jwt --from-file=operator-token=./operator.token && rm unit.jwt operator.token
 
 zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
   --confirm \
-  --set-variables=SHORE_REQUIRE_AUTH=true,EDGE_MAX_BYTES=10737418240,EDGE_MAX_ITEMS=50000
+  --set-variables=EDGE_MAX_BYTES=10737418240,EDGE_MAX_ITEMS=50000
 ```
+
+Setting `SHORE_REQUIRE_AUTH=false` is for lab clusters only; shore then logs a WARN at startup and
+accepts any edge. The operator token is always required outside `make demo-*`.
 
 To rotate before expiry, mint a new token, replace the `edge-auth` Secret, and
 restart the edge StatefulSet:

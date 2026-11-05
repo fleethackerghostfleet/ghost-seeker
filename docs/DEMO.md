@@ -15,7 +15,7 @@ shore gets an image of 10/10 dev objects vs 2/10 naive.
 # toolchain: Go 1.23 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
 make build
 make demo-clips        # -> scenarios/ghostfleet_demo/frames/<clip>/{img1,gt,seqinfo.ini}  (gitignored)
-make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB)
+make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB) + mobileclip-s1/unknown_calib.npz (H: dev-fitted unknownness calibration + kNN bank, auto-loaded by the sidecar)
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
 pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
 ```
@@ -59,6 +59,13 @@ make demo-ui           # bin/ghost-seeker -addr :8090 -shore http://localhost:80
 make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings
 open http://localhost:8090
 ```
+
+**Auth (no extra steps):** the three Go processes share one operator token. With no
+`GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
+(0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
+SameSite=Strict session cookie). From another machine the UI asks for the token at `/login`
+(`cat data/operator.token`). For `curl` against the shore/edge API use
+`-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
 models (log line `sidecar listening on :9090`). Without the sidecar: `make demo-edge INFER=mock
