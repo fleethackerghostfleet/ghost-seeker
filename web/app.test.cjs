@@ -579,7 +579,7 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
 test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
  const context=setup();
  assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
- assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 32 KB\/s/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 0.03 MB\/s/);
  assert.match(vm.runInContext('uploadHTML({upload:{bytes:40,sent:40,done:true}})',context),/✓ Uploaded/);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
@@ -784,7 +784,9 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  assert.equal(vm.runInContext('fmtRate(4000000)',c),'0.50 MB/s');
  assert.equal(vm.runInContext('fmtRate(16000000)',c),'2.00 MB/s');
  assert.equal(vm.runInContext('fmtRate(0)',c),'0.00 MB/s');
- assert.equal(vm.runInContext('fmtRate(256000)',c),'32 KB/s');
+ assert.equal(vm.runInContext('fmtRate(256000)',c),'0.03 MB/s');
+ assert.equal(vm.runInContext('fmtRate(73600)',c),'0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(-1)',c),'0.00 MB/s');
  const el={innerHTML:'',classList:{on:new Set(),toggle(k,v){v?this.on.add(k):this.on.delete(k)}}};
  const ctx=vm.createContext({$:id=>id==='stLink'?el:null,esc:s=>String(s),stats:{linkBps:4000000}});
  vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),ctx);
