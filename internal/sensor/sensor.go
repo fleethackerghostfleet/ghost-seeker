@@ -96,9 +96,6 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	frame := int(g.frame.Add(int64(rng.Intn(37) + 3)))
 	seed := rng.Uint32()
-	if edge < EdgeKeep {
-		return nil, extra
-	}
 	up := 0
 	switch {
 	case contains(source.Link, "Iridium"):
@@ -134,11 +131,28 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		item.Basis = night.Basis
 		item.Lum = night.Lum
 	}
+	if edge < EdgeKeep {
+		item.Filtered = command.FilteredLowValue
+	}
 	command.Rescore(item, model, directives)
 	return item, extra
 }
 
-// EdgeKeep is the on-sensor triage threshold; frames scoring below it are dropped before uplink.
+// Repeat returns a near-duplicate view of item from the same capture burst.
+func (g *Generator) Repeat(item *command.Item, model string, directives []command.Directive) *command.Item {
+	repeat := *item
+	repeat.ID = fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1))
+	repeat.Frame++
+	repeat.TS = item.TS.Add(250 * time.Millisecond)
+	repeat.Bands = append([]string(nil), item.Bands...)
+	repeat.Dets = append([]command.Detection(nil), item.Dets...)
+	repeat.Det = nil
+	repeat.Filtered, repeat.DupOf = command.FilteredDuplicate, item.ID
+	command.Rescore(&repeat, model, directives)
+	return &repeat
+}
+
+// EdgeKeep is the on-sensor triage threshold; frames scoring below it are kept on the ship as P4 low-value images.
 const EdgeKeep = .2
 
 // Attributes draws simulated track attributes for a detection of the given class.

@@ -234,8 +234,9 @@ async function init(){
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
  $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
- const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showFiltered').checked=f.showFiltered;$('reviewFilter').value=f.review;closeDetail();renderFeed(true)};
- $('showFiltered').onchange=e=>{gsSettings.setFeed({showFiltered:e.target.checked});syncFeedFilters()};
+ const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showDuplicates').checked=f.showDuplicates;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';closeDetail();renderFeed(true)};
+ $('showDuplicates').onchange=e=>{gsSettings.setFeed({showDuplicates:e.target.checked});syncFeedFilters()};
+ $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent'});state.tier='all';syncFeedFilters()};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
  window.addEventListener('gs:feed-filters',syncFeedFilters);syncFeedFilters();
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
@@ -274,32 +275,29 @@ async function init(){
  route();renderFeed(true);renderStats();renderRp();openStream();
 }
 function route(){
- state.page=location.hash==='#briefing'?'brief':location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
+ state.page=location.hash==='#details'?'details':location.hash==='#briefing'?'brief':location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
  $('pgBrief').classList.toggle('on',state.page==='brief');
  $('pgFeed').classList.toggle('on',state.page==='feed');$('pgRp').classList.toggle('on',state.page==='rp');$('pgRv').classList.toggle('on',state.page==='rv');$('navRv').classList.toggle('on',state.page==='rv');
+ $('pgDetails').classList.toggle('on',state.page==='details');
  $('navFeed').classList.toggle('on',state.page==='feed');$('navRp').classList.toggle('on',state.page==='rp');
  if(state.page!=='rv'&&rv.ask){rv.ask=null;rv.askBusy=false;renderAsk()}
- if(state.page==='feed')renderFeed(true);else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
+ if(state.page==='feed')renderFeed(true);else if(state.page==='details'){closeDetail();renderDetails()}else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
-function humanReviewed(it){return !!(it.reviewed||it.manual||it.dismissed)}
-function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup)?'Filtered by directive':''}
+function humanReviewed(it){return !it.autoSent&&!!(it.reviewed||it.manual||it.dismissed)}
+function humanSent(it){return !!(it.sent&&!it.autoSent||it.fullRes)}
+function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
+const FILTERED_NAME={duplicate:'Repeat of an earlier image','low-value':'Low value'};
+function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':FILTERED_NAME[it.filtered]||(it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup)?'Lowered by directive':'')}
 function feedTier(it){return feedReasons.has(it.id)?4:it.tier}
+function reviewMatch(it,review){return review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
- const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showFiltered:false,review:'all'};
- let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(f.review==='all'||humanReviewed(i)===(f.review==='reviewed')));
- feedReasons=new Map();const originals=new Map();
- for(const it of [...l].sort((a,b)=>a.tier-b.tier||b.central-a.central||b.ts-a.ts||String(a.id).localeCompare(String(b.id)))){
-  const reason=filteredReason(it);if(reason){feedReasons.set(it.id,reason);continue}
-  // Match only actual image paths, never placeholder URLs, seeds or sighting reports.
-  if(!it.img||it.live)continue;
-  const key=JSON.stringify([it.src.id,it.img]);
-  if(originals.has(key)){if(!it.manual&&!it.sent)feedReasons.set(it.id,'Duplicate image')}else originals.set(key,it.id);
- }
- l=l.filter(i=>f.showFiltered||!feedReasons.has(i.id));
+ const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};
+ let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||i.filtered!=='duplicate'||i.manual||i.sent));
+ feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
- l.sort(state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
+ l.sort(f.review==='sent'?(a,b)=>sendTime(b)-sendTime(a)||b.ts-a.ts:state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
  return{l,counts};
 }
 function renderTierSeg(counts){
@@ -318,13 +316,13 @@ function topLine(it){
  return`<span class="${sd.matched?'m':tag&&sd.s>.4?'a':''}">${esc(clsOf(d.cls).lab)}${tag}</span>${r.length>1?` <span style="opacity:.6">+${r.length-1}</span>`:''}`;
 }
 function cardHTML(it,mini){
- return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+ return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
 function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
- const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent?' sent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
+ const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent&&it.autoSent?' sent':''}${humanSent(it)?' hsent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
  const reviewMark=el.querySelector('.rvk');reviewMark.title=humanReviewed(it)?'Human reviewed':'Not reviewed';reviewMark.setAttribute('aria-label',reviewMark.title);
- const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low in this feed only; stored model score and transfer priority are unchanged`:'';
+ const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low`:'';
  el.querySelector('.night-badge')?.remove();el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
  const t=el.querySelector('.tier');t.className='tier t'+tier;t.textContent=`P${tier} ${TNAME[tier]}`;t.title=reason?status.title:it.tier===1?'Notify Commander':'Image priority';
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
@@ -351,14 +349,36 @@ function renderDirBar(){
 }
 function renderStats(){
  const vis=items.filter(i=>state.src==='ALL'||i.src.id===state.src);
- $('hsImgs').textContent=vis.length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
+ $('hsImgs').textContent=vis.length;$('rvSentN').textContent=vis.filter(humanSent).length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
  const unrevLive=vis.filter(i=>!i.reviewed&&!i.dismissed).length;
  if(LIVE){renderLiveStrip();$('rvCount').textContent=unrevLive||'';if(state.page==='rv')rvProgress();return}
  $('cCap').textContent=stats.cap.toLocaleString();$('cKeep').textContent=stats.keep;$('cDrop').textContent=stats.drop.toLocaleString();
  $('cKB').textContent=(stats.bytes/1024).toFixed(1);$('cDb').textContent=(stats.db+180000).toLocaleString();$('cP1').textContent=items.filter(i=>i.tier===1).length;
  $('cModel').textContent=(MODELS[state.model]?.name||'').replace(' (default)','')+(state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:'');
  const unrev=vis.filter(i=>!i.reviewed&&!i.dismissed).length;$('rvCount').textContent=unrev||'';if(state.page==='rv')rvProgress();
- $('cSaved').textContent=Math.round(stats.drop/Math.max(1,stats.cap)*100)+'%';
+ if(state.page==='details')renderDetails();
+}
+
+/* ---- details screen: low-level counts and automatically filtered photos ---- */
+const DETAIL_KINDS=[['duplicate','Repeats of earlier images'],['low-value','Low value'],['directive','Lowered by directive']];
+state.detKind='duplicate';
+function filteredKind(it){return it.dismissed||it.manual||it.sent?'':it.filtered||(filteredReason(it)?'directive':'')}
+function renderDetails(){
+ const el=$('detailsBody');if(!el)return;
+ const vis=items.filter(i=>state.src==='ALL'||i.src.id===state.src),groups={duplicate:[],'low-value':[],directive:[]};
+ vis.forEach(i=>groups[filteredKind(i)]?.push(i));
+ const n=v=>Number(v).toLocaleString();
+ const counts=LIVE?`<div class="strip det-strip">${$('liveStrip').innerHTML}</div>`:`<table class="det-counts">${[
+  ['Frames captured by sensors',n(stats.cap)],['Useful images sent to shore',n(stats.keep)],['Low-value and repeat frames kept on the ship (P4 Low)',n(stats.drop)],
+  ['Share of frames kept on the ship to save bandwidth',Math.round(stats.drop/Math.max(1,stats.cap)*100)+'%'],['Image data sent to shore',(stats.bytes/1024).toFixed(1)+' MB'],['Records in imagery database',n(stats.db+180000)],
+  ['Images in this feed',n(vis.length)],['Sent to Commander by a person',n(vis.filter(i=>i.sent&&!i.autoSent).length)],['Sent to Commander automatically',n(vis.filter(i=>i.sent&&i.autoSent).length)]
+ ].map(([k,v])=>`<tr><td>${k}</td><td class="n">${v}</td></tr>`).join('')}</table>`;
+ const list=groups[state.detKind].sort((a,b)=>b.ts-a.ts).slice(0,60);
+ el.innerHTML=`<section class="panel"><h3>Pipeline counts</h3>${counts}</section>
+ <section class="panel"><h3>Photos filtered automatically</h3><p class="hint">Nothing is removed. These images stay in the feed at P4 Low. Select a photo to open it.</p>
+ <div class="seg" id="detKind">${DETAIL_KINDS.map(([k,l])=>`<button data-k="${k}" class="${state.detKind===k?'on':''}">${l} (${groups[k].length})</button>`).join('')}</div>
+ <div class="det-grid">${list.map(it=>{const orig=it.dupOf&&findItem(it.dupOf);return`<button class="det-item" data-id="${esc(it.id)}">${orig?`<span class="det-pair"><img src="${imageFor(orig)}" alt=""><small>Original · P${orig.tier} ${TNAME[orig.tier]}</small></span>`:''}<span class="det-pair"><img src="${imageFor(it)}" alt=""><small>${esc(filteredReason(it))} · P4 Low</small></span><span class="det-meta">${esc(it.src.id)} · ${zulu(it.ts).slice(0,5)}Z</span></button>`}).join('')||'<p class="hint">None right now.</p>'}</div></section>`;
+ el.onclick=e=>{const k=e.target.closest('[data-k]');if(k){state.detKind=k.dataset.k;renderDetails();return}const b=e.target.closest('.det-item');if(b){const id=b.dataset.id;location.hash='#feed';setTimeout(()=>openDetail(id),60)}};
 }
 
 /* ---- live shore strip + cameras ---- */
@@ -377,12 +397,12 @@ function renderLiveStrip(){
  const dropPct=edge.ok&&(edge.itemsTotal+edge.itemsDeduped)>0?Math.round(100*edge.itemsDeduped/(edge.itemsTotal+edge.itemsDeduped)):0;
  el.innerHTML=`
   <div class="st link" title="${esc(linkTitle)}">Ship-to-shore connection <b>${fmtRate(rate)}</b>${distribution}${link.controllable&&est?`<span class="hint">ship estimates ${fmtRate(est)}${relearn}</span>`:''}</div><span class="ar">›</span>
-  <div class="st" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
-  <div class="st" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
+  <div class="st lowlevel" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
+  <div class="st lowlevel" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
   <div class="st" title="Image and summary data sent over the connection${link.controllable?` (shore itself counted ${fmtBytes(shore.bytes||0)})`:''}. Compare with what ${edge.itemsDeduped||0} repeated views would have cost to send.">Data transferred <b>${fmtBytes(link.controllable?link.bytes:shore.bytes||0)}</b></div><span class="ar">›</span>
   <div class="st" title="${esc(policy.text?`Operator wrote: “${policy.text}”. The shore read it back as: ${policy.readback}`:policy.readback||'')}">Directive <b class="rb">${esc(policy.text?policy.readback:'none')}</b>${policy.emcon&&policy.emcon.mode&&policy.emcon.mode!=='NORMAL'?` · Transmission mode <b>${esc(policy.emcon.mode)}</b>`:''}</div><span class="ar">›</span>
   <div class="st" id="prioMode" title="Scoring model used on the ship. P1 Critical, P2 High, P3 Routine and P4 Low divide the current shore feed into priority groups (top 10%, next 25%, next 35%, then the rest). Deprioritized objects are P4 Low.">Scoring model <b>${esc(prioritization?.label||'Ship score')}</b>${prioritization?.source==='edge'?'':' <span class="hint">(built-in)</span>'}</div>
-  <span class="sv" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span>`;
+  <span class="sv lowlevel" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span><a class="btn sm details-link" href="#details">Details: counts &amp; filtered photos ›</a>`;
 }
 const pulling=new Set();
 function renderCameras(){
@@ -453,12 +473,12 @@ function renderDetailContent(){
   <div class="dsec" id="briefDetections"></div>
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   ${it.live?liveLadderHTML(it):`<div class="dsec"><h4>Processing chain</h4><ul class="tl">
-   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
+   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
    <li><i></i><div>Sent to shore<br><small>${it.src.link} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
    <li><i></i><div>Stored in imagery database<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
    <li><i></i><div>Shore priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
   </ul></div>`}
-  <div class="actions"><button class="btn cdr ${it.sent?'done':''}" id="aCdr">${it.sent?'✓ Sent to Commander':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
+  <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
@@ -661,7 +681,7 @@ function rvAct(a){
  if('1234'.includes(a)){changes.manual=+a;msg=`P${a} ${TNAME[+a]}`;col=tcol(+a);p.agreed=+a===sug}
  else if(a==='accept'){changes.manual=sug;msg=`✓ P${sug} ${TNAME[sug]}`;col=tcol(sug);p.agreed=true}
  else if(a==='dismiss'){changes.manual=4;changes.dismissed=true;msg='✕ Not relevant';col='#9aa7b3'}
- else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--good)'}
+ else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--human)'}
  else return;
  rv.busy=true;
  submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});

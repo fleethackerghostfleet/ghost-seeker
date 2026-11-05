@@ -78,6 +78,12 @@ type Latency struct {
 	Cen  int `json:"cen"`
 }
 
+// Ship-side filter reasons for Item.Filtered.
+const (
+	FilteredLowValue  = "low-value"
+	FilteredDuplicate = "duplicate"
+)
+
 type Item struct {
 	Night       *bool      `json:"night,omitempty"`
 	Basis       string     `json:"basis,omitempty"`
@@ -117,6 +123,12 @@ type Item struct {
 	// Live is set only when the item comes from a shore node (ghost-seeker
 	// -shore); the simulation leaves it nil.
 	Live *LiveMeta `json:"live,omitempty"`
+	// Filtered marks a ship-side low-value or repeat image. It stays in the
+	// feed at P4 Low instead of being dropped; DupOf names the original.
+	Filtered string `json:"filtered,omitempty"`
+	DupOf    string `json:"dupOf,omitempty"`
+	// AutoSent marks a commander send chosen by automatic escalation.
+	AutoSent bool `json:"autoSent,omitempty"`
 }
 
 // LiveForm is the shore-side state of one form of an item's fidelity ladder.
