@@ -282,7 +282,7 @@ function route(){
 }
 
 function humanReviewed(it){return !!(it.reviewed||it.manual||it.dismissed)}
-function filteredReason(it){return it.dismissed?'Not relevant':it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup)?'Filtered by directive':''}
+function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup)?'Filtered by directive':''}
 function feedTier(it){return feedReasons.has(it.id)?4:it.tier}
 function visible(){
  const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showFiltered:false,review:'all'};
@@ -293,7 +293,7 @@ function visible(){
   // Match only actual image paths, never placeholder URLs, seeds or sighting reports.
   if(!it.img||it.live)continue;
   const key=JSON.stringify([it.src.id,it.img]);
-  if(originals.has(key))feedReasons.set(it.id,'Duplicate image');else originals.set(key,it.id);
+  if(originals.has(key)){if(!it.manual&&!it.sent)feedReasons.set(it.id,'Duplicate image')}else originals.set(key,it.id);
  }
  l=l.filter(i=>f.showFiltered||!feedReasons.has(i.id));
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);

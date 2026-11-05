@@ -98,6 +98,18 @@ test('reviewed-only can show a reviewed representative even when a higher-ranked
  vm.runInContext("filters.review='all';filters.showFiltered=true;state.sort='new';items[1].ts=200",context);
  assert.equal(vm.runInContext('ids()',context),'accepted,pending');
 });
+test('manual priorities and escalations stay visible despite directive suppression or duplicate paths',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('original',{tier:1,img:'/same.jpg'}),
+  frame('manual',{tier:1,manual:1,det:[{sup:true}]}),frame('escalated',{sent:true,live:{suppressed:true}}),
+  frame('manual-copy',{manual:2,img:'/same.jpg'}),frame('sent-copy',{sent:true,img:'/same.jpg'})]`,context);
+ assert.equal(vm.runInContext('visible().l.length',context),5);
+ vm.runInContext('filters.showFiltered=true;visible()',context);
+ assert.equal(vm.runInContext('feedTier(items[1])',context),1);
+ assert.equal(vm.runInContext('feedTier(items[3])',context),2);
+ vm.runInContext("items.find(i=>i.id==='manual').dismissed=true;filters.showFiltered=false",context);
+ assert.equal(vm.runInContext("visible().l.some(i=>i.id==='manual')",context),false);
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);
