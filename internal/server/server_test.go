@@ -155,6 +155,32 @@ func TestDirectiveBodySizeLimit(t *testing.T) {
 	}
 }
 
+func TestStreamQueueAbsorbsBurstsAndDropsOnlyAtCapacity(t *testing.T) {
+	h := newHub()
+	c, ok := h.add()
+	if !ok {
+		t.Fatal("could not subscribe")
+	}
+	for i := 0; i < 1024; i++ {
+		h.publish("update", i)
+	}
+	if len(h.clients) != 1 || len(c.events) != 1024 {
+		t.Fatalf("burst dropped client: clients=%d queued=%d", len(h.clients), len(c.events))
+	}
+	h.publish("update", "overflow")
+	if len(h.clients) != 0 {
+		t.Fatal("overflowing client was not dropped")
+	}
+	for i := 0; i < 1024; i++ {
+		if e, open := <-c.events; !open || e.data != i {
+			t.Fatalf("queued event %d lost or reordered: %+v", i, e)
+		}
+	}
+	if _, open := <-c.events; open {
+		t.Fatal("overflowing channel was not closed")
+	}
+}
+
 func TestStreamClientLimit(t *testing.T) {
 	app := New(store.New(10))
 	cancels := make([]context.CancelFunc, 0, maxStreamClients)

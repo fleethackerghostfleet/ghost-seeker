@@ -611,7 +611,7 @@ func newHub() *hub {
 }
 
 func (h *hub) add() (*client, bool) {
-	c := &client{events: make(chan event, 32)}
+	c := &client{events: make(chan event, 1024)}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.clients) >= maxStreamClients {
