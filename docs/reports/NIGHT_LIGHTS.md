@@ -309,7 +309,7 @@ go run ./cmd/bench
 go run ./cmd/ghost-seeker -addr :8090 -auto-cdr 0
 ```
 
-Build/vet/all Go tests pass; parity covers all 15 demo contacts including rule ID, gated boost and low-confidence state. Node: 27 tests pass; Python: 91 tests pass. Ordinary-library regression floors pass.
+Build/vet/all Go tests pass; parity covers all 15 demo contacts including rule ID, gated boost and low-confidence state. Node: 29 tests pass; Python: 150 tests pass, 2 skipped. Ordinary-library regression floors pass.
 
 Bench seeds 101,102,103 × 6000 frames; results unchanged from origin/main (3699324), using ordinary Library only. **Bench oracle ≠ field truth**.
 
