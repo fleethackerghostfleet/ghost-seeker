@@ -32,7 +32,7 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .sendmark{display:none;position:absolute;top:5px;right:5px;z-index:3;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;font-size:15px;font-weight:900;line-height:1;box-shadow:0 0 0 2px #0a0f14b0}
 .sendmark.done{display:flex;background:var(--good);color:#04160e}
 .sendmark.sending{display:flex;background:var(--accent);color:#04121c;animation:sendpulse 1s ease-in-out infinite}
-@keyframes sendpulse{50%{transform:translateY(-2px);opacity:.75}}
+@keyframes sendpulse{50%{transform:translateY(-2px)}}
 .card.sending,.card.uploaded{--mark-gap:32px}
 .card.sending .newtag,.card.uploaded .newtag,.card.sending .band-badge,.card.uploaded .band-badge{right:var(--mark-gap)}
 .card.sending .night-badge,.card.uploaded .night-badge{top:33px}

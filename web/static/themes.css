@@ -1,15 +1,36 @@
-body{--night-filter:grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5) brightness(.62) contrast(1.1)}
-body.night,body.night dialog{filter:var(--night-filter)}
-body.commander.theme-day{--bg:#e9eef2;--panel:#fff;--panel2:#f2f5f8;--line:#c3ced7;--text:#0f1c26;--muted:#4c5f6d;--gold:#806018;--good:#178a52}
+body{--night-filter:url('/red-light.svg#red')}
+body.night,body.night dialog{filter:none}
+body.night :is(img,canvas,svg){filter:var(--night-filter)!important}
+.rvcard a{color:var(--accent)}
+.seg button .c,.tabs span,.btn.primary kbd,.cl span{opacity:1!important}
+.card.sup{opacity:1}
+.commander{--p4:#90a4b8}
+.commander textarea::placeholder{color:var(--muted);opacity:1}
+body.theme-day{--good:#116c40;--p1:#b92336;--p2:#984500;--p3:#756000;--p4:#51616f;--human:#62359b}
+.theme-day :is(.tier,.tg,.cdrtag,.hsenttag,.newtag,.sendmark,.box.hi em,.box.md em,.box.match em){color:#fff}
+.theme-day .card.sup .cl,.theme-day .cl .s{color:#33475a}
+.theme-day .rvnext kbd{background:#eef2f5}
+body.commander.theme-day{--bg:#e9eef2;--panel:#fff;--panel2:#f2f5f8;--line:#c3ced7;--text:#0f1c26;--muted:#4c5f6d;--gold:#705216}
 .commander.theme-day header{background:var(--panel2);border-color:var(--line)}
 .commander.theme-day .row.on{background:#e2e8ee}
 .commander.theme-day :is(kbd,.bar,.toast){background:#e2e8ee;border-color:var(--line)}
 .commander.theme-day #learned{background:#e2f3f7;color:#0b5566}
 .commander.theme-day .live{background:#e3f5ec;border-color:#9fd6b8}
 .commander.theme-day .av{background:#f5edd9}
-.commander.theme-red,.theme-red #settings{--bg:#090000;--panel:#160000;--panel2:#210000;--panel3:#300000;--line:#650000;--text:#e00000;--muted:#b00000;--accent:#d00000;--accent2:#680000;--gold:#cc0000;--good:#c00000;--p1:#e00000;--p2:#c00000;--p3:#a00000;--p4:#800000;color-scheme:dark;accent-color:var(--accent)}
-.commander.night,.theme-red #settings{filter:none}
-.commander.night img{filter:var(--night-filter)}
+.commander.theme-day .pri .big{color:#fff}
+.commander.theme-day .decided b{color:var(--text)}
+body.theme-red,.theme-red #settings{--bg:#000000;--panel:#030000;--panel2:#080000;--panel3:#100000;--line:#660000;--text:#ff0000;--muted:#ff0000;--accent:#ff0000;--accent2:#110000;--gold:#ff0000;--good:#ff0000;--p1:#ff0000;--p2:#ff0000;--p3:#ff0000;--p4:#ff0000;--human:#ff0000;color-scheme:dark;accent-color:var(--accent)}
+.theme-red *{color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important}
+.theme-red :is(header,.banner,.badge,.avatar,.av,.live,.row.on,#learned,kbd,.bar,.toast,.btn,button,input,textarea,select,.tier,.tg,.cdrtag,.hsenttag,.newtag,.pri .big,.dir,.pill,.rule,.st,.sv,.kb,.emcon,.formtag,.band-badge,.night-badge,.upload-info,.feed-check .c){background:var(--panel2)!important}
+.theme-red :is(.seg .c,.feed-check .c,.tabs span){opacity:1}
+.theme-red :is(.box em,.sendmark){color:#000!important}
+.theme-red .box em{background:var(--text)!important}
+.theme-red :is(button.on,.btn.on){text-decoration:underline;text-underline-offset:.2em}
+.theme-red .kb.sugg::after{background:var(--accent);color:#000}
+.theme-red ::-webkit-scrollbar-thumb{background:var(--line)}
+.theme-red :is(.row.fresh,.live i){animation:none}
+.theme-red .toast{transition-property:opacity,transform}
+.theme-red input::placeholder,.theme-red textarea::placeholder{color:var(--text);opacity:1}
 .theme-red #settings .btn.primary{color:var(--text)}
 .theme-red #settings .btn:hover{border-color:var(--accent)}
 .theme-red #settings .btn.primary:hover{background:var(--panel3)}
@@ -20,7 +41,6 @@ body.commander.theme-day{--bg:#e9eef2;--panel:#fff;--panel2:#f2f5f8;--line:#c3ce
 .commander.theme-red #learned{color:var(--text)}
 .commander.theme-red .read-only-badge{color:var(--text);border-color:var(--line)}
 .commander.theme-red .bar i{background:var(--p4)}
-.commander.theme-red :is(.banner,.tg,.box em,.pri .big){background:var(--accent);color:var(--bg)}
 .commander.theme-red :is(.box.lo,.why li,.chain,.dets td,.tabs button.on,.wf:hover){border-color:var(--line)}
 .commander.theme-red [style*="--c:"]{--c:var(--accent)!important}
 .commander.theme-red :is(.live i,.row.fresh){animation:none;box-shadow:none}
