@@ -60,6 +60,7 @@ type Bridge struct {
 	snap       []byte
 	subs       map[chan []byte]struct{}
 	records    map[string]int // RECORD item id -> n_frames
+	operator   string
 	edgeNodeID string
 }
 
