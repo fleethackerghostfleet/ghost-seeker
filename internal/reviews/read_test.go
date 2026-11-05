@@ -6,6 +6,32 @@ import (
 	"testing"
 )
 
+func TestMergeRawAndCorrectedExport(t *testing.T) {
+	dir := t.TempDir()
+	raw, export := filepath.Join(dir, "raw"), filepath.Join(dir, "export")
+	l, err := Open(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := l.Append(Record{ItemID: "a", Reviewer: "A"})
+	l.Correct(a.ID, "A", "reason", "debris", "corrected")
+	f, err := os.Create(export)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = l.Export(f, "jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	l.Close()
+	for _, paths := range [][]string{{raw, export}, {export, raw}} {
+		rs, n, err := ReadEffective(paths)
+		if err != nil || n != 2 || len(rs) != 1 || rs[0].Reason != "debris" || rs[0].Note != "corrected" {
+			t.Fatalf("%+v %d %v", rs, n, err)
+		}
+	}
+}
+
 func TestReadEffective(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "log")
 	l, err := Open(p)
