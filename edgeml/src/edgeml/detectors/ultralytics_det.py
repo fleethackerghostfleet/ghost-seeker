@@ -34,8 +34,11 @@ class UltralyticsDetector:
         self.name = w.rsplit("/", 1)[-1].rsplit(".", 1)[0] + f"@{imgsz}"
         self.imgsz, self.conf, self.iou, self.device, self.half, self.max_det = imgsz, conf, iou, device, half, max_det
         self.names = self.model.names
-        # single-class fine-tunes (workstream G: {0: "boat"}) have no COCO ids to filter on; keep everything
+        # single-class fine-tunes (workstream G: {0: "boat"}) have no COCO ids to filter on; keep everything.
+        # Any other checkpoint whose ids miss `keep` entirely is a mismatch, not a reason to pass every class.
         if keep is not None and not set(keep) & set(self.names):
+            if len(self.names) != 1:
+                raise ValueError(f"{w}: none of keep={sorted(keep)} in model classes {self.names}")
             keep = None
         self.keep = set(keep) if keep is not None else None
 
