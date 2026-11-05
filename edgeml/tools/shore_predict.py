@@ -12,9 +12,19 @@ import numpy as np
 from shore_eval import evaluate, fit_threshold
 from shore_train import verify_split
 
+COCO_WEIGHTS_SHA256 = "d81979a9213a2109345158ce9232668df4c1ae52e9b8db3f2ec0a8cbad959b33"
+
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def resolve_checkpoint(weights):
+    path = weights if weights is not None else Path("rf-detr-small.pth")
+    sha = digest(path)
+    if weights is None and sha != COCO_WEIGHTS_SHA256:
+        raise ValueError("Reference COCO checkpoint hash changed")
+    return path, sha, sha == COCO_WEIGHTS_SHA256
 
 
 def authorize(selection, role, threshold_sha256, weights_sha256):
@@ -46,7 +56,7 @@ def main():
     coco_path = args.data / "_annotations.coco.json"
     coco = json.loads(coco_path.read_text())
     split = coco["info"]["split"]
-    weights_sha = digest(args.weights) if args.weights else "d81979a9213a2109345158ce9232668df4c1ae52e9b8db3f2ec0a8cbad959b33"
+    weights_path, weights_sha, is_reference = resolve_checkpoint(args.weights)
     if args.fit_valid and split != "valid":
         ap.error("Threshold fitting is valid-only")
     if split != "valid":
@@ -71,7 +81,7 @@ def main():
     from edgeml.types import Detection
 
     torch.set_num_threads(4)
-    if args.weights:
+    if not is_reference:
         from rfdetr import RFDETRSmall
 
         class FineDetector(BaseDetector):
@@ -79,7 +89,7 @@ def main():
 
             def __init__(self):
                 super().__init__(score_thr=.001)
-                self.model = RFDETRSmall(device="cuda", pretrain_weights=str(args.weights), resolution=args.resolution)
+                self.model = RFDETRSmall(device="cuda", pretrain_weights=str(weights_path), resolution=args.resolution)
                 if self.model.model.model.class_embed.bias.shape[0] != 1:
                     raise ValueError("Expected the trained one-logit vessel head")
 
@@ -100,9 +110,8 @@ def main():
     else:
         if args.resolution != 512:
             ap.error("Reference must be the frozen native 512 baseline")
-        if digest(Path("rf-detr-small.pth")) != weights_sha:
-            raise ValueError("Reference COCO checkpoint hash changed")
-        detector = RFDetector("RFDETRSmall", "rfdetr-small", device="cuda", score_thr=.001)
+        detector = RFDetector("RFDETRSmall", "rfdetr-small", device="cuda", score_thr=.001,
+                              pretrain_weights=str(weights_path))
         configuration = {"model": "RFDETRSmall", "rfdetr": "1.3.0", "weights": "COCO pretrained", "resolution": 512,
                          "mode": "native", "candidate_score_floor": .001, "tile": None, "overlap": None,
                          "include_full": True, "merge_nms_iou": None, "max_det": 300}

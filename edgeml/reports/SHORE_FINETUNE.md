@@ -43,6 +43,12 @@ gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/shore/runs/finetune-202611
   reference-coco.pth
 ```
 
+For reproduction in a new authorized experiment, pass the downloaded reference
+as `--weights /any/path/reference-coco.pth`. Its frozen COCO SHA-256 selects the
+reference loader, retaining the original native-512 configuration and threshold
+authorization. Omitting `--weights` still uses `rf-detr-small.pth` in the current
+directory and verifies the same hash. Do not rerun the consumed locked evaluation.
+
 Small committed results: [`shore-finetune-v1`](../configs/shore-finetune-v1/).
 No weights, full-frame datasets, or large prediction dumps are in git.
 
