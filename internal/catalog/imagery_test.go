@@ -1,8 +1,10 @@
 package catalog
 
 import (
+	"archive/zip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -24,7 +26,21 @@ func TestLibraryImages(t *testing.T) {
 			continue
 		}
 		for _, image := range images {
-			if _, err := os.Stat(filepath.Join("..", "..", "web", "static", filepath.FromSlash(image.File))); err != nil {
+			if image.Background {
+				archive, err := zip.OpenReader(filepath.Join("..", "..", "web", "static", "imagery", "empty-ocean.zip"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				f, err := archive.Open(strings.TrimPrefix(image.File, "imagery/empty-ocean/"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.Close()
+				archive.Close()
+				if len(image.Dets) != 0 {
+					t.Errorf("background %q has invented detections", image.File)
+				}
+			} else if _, err := os.Stat(filepath.Join("..", "..", "web", "static", filepath.FromSlash(image.File))); err != nil {
 				t.Errorf("image %q: %v", image.File, err)
 			}
 			for _, detection := range image.Dets {

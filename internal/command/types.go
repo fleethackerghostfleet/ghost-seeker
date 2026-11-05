@@ -79,6 +79,7 @@ type Latency struct {
 }
 
 type Item struct {
+	Background  bool       `json:"background,omitempty"`
 	Upload      Upload     `json:"upload"`
 	Night       *bool      `json:"night,omitempty"`
 	Basis       string     `json:"basis,omitempty"`

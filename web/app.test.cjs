@@ -628,3 +628,31 @@ test('shipLine formats classified ships and omits absent details',()=>{
  assert.equal(vm.runInContext("shipLine({ship:{type:'cargo',label:'Cargo',conf:0.7}})",context),'Type: Cargo (70%)');
  assert.equal(vm.runInContext("shipVisibleLine({ship:{features:['radar mast','cranes'],markings:'not visible'}})",context),'Visible: radar mast, cranes · markings not visible');
 });
+
+test('empty water has an obvious kept-on-ship label and explicit upload override',()=>{
+ const context=setup();
+ context.ocean={id:'ocean',src:'BY-12',ts:new Date(),background:true,dets:null,det:null,upload:{bytes:1000,sent:0,done:false,bps:64000}};
+ vm.runInContext('normalizeItem(ocean)',context);
+ assert.equal(vm.runInContext('topLine(ocean)',context),'No contacts · empty water');
+ assert.match(vm.runInContext('uploadHTML(ocean)',context),/Empty water · kept on ship/);
+ vm.runInContext("ocean.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(ocean)',context),/Upload next \(operator\)/);
+ assert.doesNotMatch(vm.runInContext('uploadHTML(ocean)',context),/kept on ship/);
+});
+
+test('empty water processing chain explains local retention without claiming shore delivery',()=>{
+ const context=setup();
+ context.$('drawer').querySelectorAll=()=>[];
+ context.briefing={renderDetections(){}};
+ context.zulu=()=> '12:00Z';
+ vm.runInContext(`
+  MODELS={maritime:{name:'Maritime'}};largeImage=()=>'';visible=()=>({l:items});
+  items=[normalizeItem({id:'ocean',src:'BY-12',ts:new Date(),tier:4,central:0,base:0,edge:.02,lat:{edge:15,cen:80},background:true,dets:null,det:null,upload:{bytes:1000,sent:0,done:false}})];
+  state.sel='ocean';renderDetailContent();
+ `,context);
+ const html=context.$('drawer').innerHTML;
+ assert.match(html,/empty water retained locally for demo · no automatic upload/);
+ assert.match(html,/Shore transfer: Empty water · kept on ship/);
+ assert.match(html,/Priority scoring \(simulated\)/);
+ assert.doesNotMatch(html,/0\.02 ≥ 0\.20|Sent to shore:/);
+});

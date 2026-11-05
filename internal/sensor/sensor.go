@@ -39,6 +39,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		hz = .9
 	}
 	var imageFile string
+	var background bool
 	var detections []command.Detection
 	var night *catalog.NightImage
 	if images := catalog.NightLibrary[source.ID]; source.Mode == "eo" && len(images) > 0 && rng.Float64() < .2 {
@@ -50,6 +51,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		image := images[rng.Intn(len(images))]
 		imageFile = image.File
 		detections = make([]command.Detection, 0, len(image.Dets))
+		background = image.Background && len(image.Dets) == 0
 		for _, detection := range image.Dets {
 			detections = append(detections, command.Detection{
 				Class: detection.Cls,
@@ -80,7 +82,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 			})
 		}
 	}
-	if rng.Float64() < .12 {
+	if !background && rng.Float64() < .12 {
 		boxes := make([]command.Box, 0, len(detections))
 		for _, d := range detections {
 			boxes = append(boxes, d.Box)
@@ -96,7 +98,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	frame := int(g.frame.Add(int64(rng.Intn(37) + 3)))
 	seed := rng.Uint32()
-	if edge < EdgeKeep {
+	if edge < EdgeKeep && !background {
 		return nil, extra
 	}
 	up := 0
@@ -111,16 +113,17 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		up = int(math.Round(randBetween(rng, 40, 160)))
 	}
 	item := &command.Item{
-		Bands:    append([]string(nil), source.Bands...),
-		ID:       fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
-		Img:      imageFile,
-		Frame:    frame,
-		SourceID: source.ID,
-		TS:       ts.Truncate(time.Millisecond),
-		Seed:     seed,
-		HZ:       hz,
-		KB:       rng.Intn(28) + 18,
-		Edge:     edge,
+		Background: background,
+		Bands:      append([]string(nil), source.Bands...),
+		ID:         fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
+		Img:        imageFile,
+		Frame:      frame,
+		SourceID:   source.ID,
+		TS:         ts.Truncate(time.Millisecond),
+		Seed:       seed,
+		HZ:         hz,
+		KB:         rng.Intn(28) + 18,
+		Edge:       edge,
 		Lat: command.Latency{
 			Edge: int(math.Round(randBetween(rng, 14, 60))),
 			Up:   up,

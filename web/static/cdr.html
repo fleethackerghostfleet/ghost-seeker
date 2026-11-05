@@ -12,9 +12,10 @@
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA · COMMANDER'S FINAL REVIEW</div>
 <header>
   <div class="crest">★</div>
-  <div class="ttl"><b>Commander View</b><small>Ghost Seeker · final review of watch-floor escalations</small></div>
+  <div class="ttl"><b>Commander View</b><small>Received on shore · watch-floor reports · command decisions</small></div>
   <div class="live off" id="live"><i></i><span>CONNECTING</span></div>
   <div class="kpis">
+    <div><b id="kReceived">0</b><span>Received on shore</span></div>
     <div><b id="kPend">0</b><span>Awaiting decision</span></div>
     <div><b id="kP1" class="p1">0</b><span>P1 Critical awaiting</span></div>
     <div><b id="kOld">—</b><span>Oldest waiting</span></div>
@@ -29,9 +30,10 @@
 <main>
   <aside class="queue">
     <div id="learned" hidden></div>
-    <div class="tabs" id="tabs"><button data-t="pending" class="on">Awaiting <span id="tPend"></span></button><button data-t="decided">Decided <span id="tDone"></span></button></div>
+    <div class="tabs" id="tabs"><button data-t="received" class="on">Received <span id="tReceived"></span></button><button data-t="pending">Awaiting decision <span id="tPend"></span></button><button data-t="decided">Decided <span id="tDone"></span></button></div>
+    <div class="receipt-help">Only data received on shore appears here. Ship backlog stays on the watch floor.</div>
     <div class="qlist" id="qlist"></div>
-    <div class="qfoot">Up/Down arrows: select · Tab: switch list · /: note · Z: undo</div>
+    <div class="qfoot">Up/Down: select · /: note · Z: undo</div>
   </aside>
   <section class="stage" id="stage"></section>
   <aside class="brief" id="brief"></aside>

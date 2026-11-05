@@ -73,7 +73,11 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 	}
 	queue := make([]int, 0, len(s.items))
 	for i := range s.items {
-		if !s.items[i].Upload.Done && s.items[i].Upload.Override != "hold" {
+		item := s.items[i]
+		if item.Background && item.Manual == 0 && !item.Sent && !item.FullRes && item.Upload.Override != "next" {
+			continue
+		}
+		if !item.Upload.Done && item.Upload.Override != "hold" {
 			queue = append(queue, i)
 		}
 	}

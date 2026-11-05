@@ -426,8 +426,8 @@ func (s *Store) RescoreTimeScoped(now time.Time) bool {
 }
 
 func cloneItem(item command.Item) command.Item {
-	item.Dets = append([]command.Detection(nil), item.Dets...)
-	item.Det = append([]command.DetectionScore(nil), item.Det...)
+	item.Dets = append([]command.Detection{}, item.Dets...)
+	item.Det = append([]command.DetectionScore{}, item.Det...)
 	for i := range item.Det {
 		notes := make([]command.Rule, len(item.Det[i].Notes))
 		copy(notes, item.Det[i].Notes)

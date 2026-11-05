@@ -130,6 +130,41 @@ then calls `/api/items/{id}/full-res`. In live mode the bridge calls shore
 `RequestPull` with `original: true`, so the edge sends the capture's original
 bytes as FULL with no re-encoding.
 
+## Demo talking points
+
+- **Open integration:** It's an open system with an API, so any third-party system can pull the data (with authorized access).
+- **Adaptability during war:** Present the boss's mid-demo requests as proof of "adaptability during war": change collection priorities, review a contact, then show the updated report at command without rebuilding the system.
+- **Future work:** Granular audit logging of operator actions is a placeholder for later work; do not claim a complete operator-action audit trail exists today.
+
+### Empty water and shore receipts
+
+The standalone operator demo (`go run ./cmd/ghost-seeker -addr :8090`) includes
+two native-resolution, manually inspected empty-water frames from the team's
+`frames/Cruise_Ship_POV_frames/` GCS dataset. They show water, shoreline and the
+camera ship's wake, with no external contacts. No detections are invented for
+these frames. They appear under **BY-12** as **P4 Low / No contacts · empty water**
+and remain on ship, even when bandwidth is available. Interesting contacts use
+the link instead. An explicit **Upload next**, manual priority override,
+**Send to Commander**, or **Send full size** can release one for demonstration.
+The LFS archive `web/static/imagery/empty-ocean.zip` contains the original bytes
+and `provenance.json` with source, internal-use license restriction, GCS object
+generations and SHA-256 checksums. Run `git lfs pull` before building.
+
+Open **Commander View → Received** beside the ship feed: only completed demo
+uploads appear, independently of whether the operator has sent a command report.
+**Awaiting decision** contains received, escalated reports; **Decided** preserves
+the command outcome and note. Walk through sensor capture → ship scoring → shore
+receipt → operator report → command decision in the right-hand chain of custody.
+The Received count is the current retained picture, not a lifetime delivery total.
+
+In the live stack, Received reflects actual shore form states: a received summary
+can appear before an image, and Summary / Preview / Object close-up / Full image
+are listed separately. Pending or partial-only items do not count as received.
+The live object-free camera heartbeat behavior described above is unchanged;
+the empty-water backlog example is the standalone simulation, not a change to
+the sidecar or live edge scheduler. Commander View is a UI projection of the
+console feed, not a separate authorization boundary or a new audit log.
+
 ## 3. Three-minute presenter script
 
 | t | do | say |
