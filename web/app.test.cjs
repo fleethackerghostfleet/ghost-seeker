@@ -49,6 +49,18 @@ test('peer review summary updates through the stream and beats an older in-fligh
  await vm.runInContext('refreshReviewData()',context);
  assert.equal(context.$('reviewData').textContent,'offline');
 });
+test('Details distinguishes cumulative filtered frames from photos in the current feed',()=>{
+ const context=feedContext();
+ vm.runInContext(`stats={cap:5000,keep:581,drop:4419,db:1000,bytes:0};
+  items=[frame('repeat',{filtered:'duplicate'}),frame('low',{filtered:'low-value'}),frame('sent',{filtered:'duplicate',sent:true})];
+  imageFor=()=>'/image.jpg';zulu=()=> '12:00:00';renderDetails()`,context);
+ const output=context.$('detailsBody').innerHTML;
+ assert.match(output,/Frames filtered on ship \(cumulative, including unretained frames\)<\/td><td class="n">4,419/);
+ assert.match(output,/Repeats of earlier images \(1\)/);
+ assert.match(output,/Low value \(1\)/);
+ assert.match(output,/Current feed only/);
+ assert.match(output,/Up to 60 photos shown per category/);
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
@@ -338,7 +350,7 @@ test('Details screen lists automatically filtered photos by kind with their orig
  assert.match(page(),/Repeats of earlier images \(1\)/);
  assert.match(page(),/Low value \(1\)/);
  assert.match(page(),/Lowered by directive \(1\)/);
- assert.match(page(),/Low-value and repeat frames kept on the ship \(P4 Low\)<\/td><td class="n">80/);
+ assert.match(page(),/Frames filtered on ship \(cumulative, including unretained frames\)<\/td><td class="n">80/);
  assert.match(page(),/Useful images kept<\/td><td class="n">20/);
  assert.doesNotMatch(page(),/Useful images sent to shore/);
  assert.match(page(),/src="\/img\/original"[^]*Original · P2 High[^]*src="\/img\/repeat"/);

@@ -467,13 +467,13 @@ function renderDetails(){
  vis.forEach(i=>groups[filteredKind(i)]?.push(i));
  const n=v=>Number(v).toLocaleString();
  const counts=LIVE?`<div class="strip det-strip">${$('liveStrip').innerHTML}</div>`:`<table class="det-counts">${[
-  ['Frames captured by sensors',n(stats.cap)],['Useful images kept',n(stats.keep)],['Low-value and repeat frames kept on the ship (P4 Low)',n(stats.drop)],
-  ['Share of frames kept on the ship to save bandwidth',Math.round(stats.drop/Math.max(1,stats.cap)*100)+'%'],['Image data sent to shore',(stats.bytes/1048576).toFixed(1)+' MB'],['Records in imagery database',n(stats.db+180000)],
+  ['Frames captured by sensors',n(stats.cap)],['Useful images kept',n(stats.keep)],['Frames filtered on ship (cumulative, including unretained frames)',n(stats.drop)],
+  ['Share of captured frames filtered on ship (cumulative)',Math.round(stats.drop/Math.max(1,stats.cap)*100)+'%'],['Image data sent to shore',(stats.bytes/1048576).toFixed(1)+' MB'],['Records in imagery database',n(stats.db+180000)],
   ['Images in this feed',n(vis.length)],['Sent to Commander by a person',n(vis.filter(i=>i.sent&&!i.autoSent).length)],['Sent to Commander automatically',n(vis.filter(i=>i.sent&&i.autoSent).length)]
  ].map(([k,v])=>`<tr><td>${k}</td><td class="n">${v}</td></tr>`).join('')}</table>`;
  const list=groups[state.detKind].sort((a,b)=>b.ts-a.ts).slice(0,60);
  el.innerHTML=`<section class="panel"><h3>Pipeline counts</h3>${counts}</section>
- <section class="panel"><h3>Photos filtered automatically</h3><p class="hint">Nothing is removed. These images stay in the feed at P4 Low. Select a photo to open it.</p>
+ <section class="panel"><h3>Photos filtered automatically</h3><p class="hint">Current feed only. Cumulative counts include frames without retained images and images no longer in this feed. Up to 60 photos shown per category. Select a photo to open it.</p>
  <div class="seg" id="detKind">${DETAIL_KINDS.map(([k,l])=>`<button data-k="${k}" class="${state.detKind===k?'on':''}">${l} (${groups[k].length})</button>`).join('')}</div>
  <div class="det-grid">${list.map(it=>{const orig=it.dupOf&&findItem(it.dupOf);return`<button class="det-item" data-id="${esc(it.id)}">${orig?`<span class="det-pair"><img src="${imageFor(orig)}" alt=""><small>Original · P${orig.tier} ${TNAME[orig.tier]}</small></span>`:''}<span class="det-pair"><img src="${imageFor(it)}" alt=""><small>${esc(filteredReason(it))} · P4 Low</small></span><span class="det-meta">${esc(it.src.id)} · ${zulu(it.ts).slice(0,5)}Z</span></button>`}).join('')||'<p class="hint">None right now.</p>'}</div></section>`;
  el.onclick=e=>{const k=e.target.closest('[data-k]');if(k){state.detKind=k.dataset.k;renderDetails();return}const b=e.target.closest('.det-item');if(b){const id=b.dataset.id;location.hash='#feed';setTimeout(()=>openDetail(id),60)}};
