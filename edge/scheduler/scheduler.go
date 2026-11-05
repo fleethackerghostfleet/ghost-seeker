@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
+	"google.golang.org/protobuf/proto"
 	"log/slog"
 	"math"
 	"sort"
@@ -307,7 +308,7 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 	}
 	for i := range r.Forms {
 		f := &r.Forms[i]
-		if !f.Ready || f.Complete {
+		if !f.Ready || f.Complete || PullOnly(r, f) {
 			continue
 		}
 		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
@@ -318,11 +319,21 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 	return nil
 }
 
+// PullOnly reports whether a form is held on the edge for shore to pull
+// rather than offered on the ladder: the FULL of an object-free "scene"
+// item, until shore asks for that form specifically. Such a form is not
+// backlog: it never counts as queued.
+func PullOnly(r *store.Row, f *store.FormState) bool {
+	return f.Kind == pb.FormKind_FORM_KIND_FULL &&
+		r.Item.GetFeatures().GetTags()["event"] == "scene" &&
+		!(r.PullBoost > 0 && r.PullForm == pb.FormKind_FORM_KIND_FULL)
+}
+
 // nextFormAfter returns the ladder rung following kind, if sendable.
 func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.EmconMode) *store.FormState {
 	for i := range r.Forms {
 		f := &r.Forms[i]
-		if f.Kind <= kind || !f.Ready || f.Complete {
+		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) {
 			continue
 		}
 		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
@@ -569,8 +580,14 @@ func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
 	if err := s.st.MarkManifestSent(ctx, mids, now); err != nil {
 		return s.cfg.Tick, err
 	}
-	// Generous timeout: three times the expected airtime, at least 10 s.
-	est := time.Duration(float64(payload+4096)*8/math.Max(ls.EstimateBps, 300)*float64(time.Second)) * 3
+	// Generous timeout: three times the expected airtime of the whole request
+	// (manifest included: with a deep backlog it outweighs the chunks), at
+	// least 10 s.
+	wire := int64(proto.Size(req))
+	if wire < payload {
+		wire = payload
+	}
+	est := time.Duration(float64(wire+4096)*8/math.Max(ls.EstimateBps, 300)*float64(time.Second)) * 3
 	if est < 10*time.Second {
 		est = 10 * time.Second
 	}

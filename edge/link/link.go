@@ -80,9 +80,11 @@ func (e *Estimator) Failure() {
 		// Keep decaying while the link stays dead so the planner's exchange
 		// (and its timeout, both sized from bps) eventually fits a link that
 		// shrank by orders of magnitude; otherwise a 2 Mbps -> 9.6 kbps drop
-		// pins the estimate at lastGood/4 and every exchange times out.
+		// pins the estimate at lastGood/4 and every exchange times out. Each
+		// failed exchange costs its timeout plus a probe interval, so quarter
+		// rather than halve: 2 Mbps reaches 9.6 kbps in 4 failures, not 8.
 		e.up = false
-		e.bps = math.Max(e.floorBps, math.Min(e.bps/2, e.lastGood/4))
+		e.bps = math.Max(e.floorBps, math.Min(e.bps/4, e.lastGood/4))
 	}
 }
 

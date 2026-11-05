@@ -179,5 +179,6 @@ Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for 
   this repo consumes the compiled `Policy` (labels, vectors, thresholds).
 - No auth/TLS on either service. Zarf package is a skeleton.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
-- No sailboat dataset in `frames/` yet; `scenarios/sailboats_example.json`
-  shows where it plugs in.
+- Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
+  the boat is not visible in every frame). `scenarios/sailboats_example.json`
+  still uses a placeholder path for the sailboat set.

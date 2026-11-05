@@ -39,7 +39,9 @@
 
 <main>
   <section id="view-feed" class="view active">
+    <div class="cameras" id="cameras" title="One entry per edge camera: the edge sends one tiny object-free context frame per camera per minute as a heartbeat. Not contacts."></div>
     <div class="toolbar">
+      <label title="Hide per-frame items that carry no sighting_id (object-free frames the edge still forwards)"><input type="checkbox" id="only-sightings" checked> sightings only</label>
       <label><input type="checkbox" id="hide-suppressed"> hide suppressed</label>
       <label><input type="checkbox" id="only-image"> only with image</label>
       <span class="muted" id="feed-note"></span>
