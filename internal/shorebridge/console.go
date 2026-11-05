@@ -235,10 +235,10 @@ func scoreObjects(objs []*Object) map[*Object]objectScore {
 	out := make(map[*Object]objectScore, len(objs))
 	maxScore := 0.0
 	for _, o := range objs {
-		maxScore = math.Max(maxScore, o.Best.Score)
+		maxScore = math.Max(maxScore, o.Score)
 	}
 	byScore := append([]*Object(nil), objs...)
-	sort.SliceStable(byScore, func(i, j int) bool { return byScore[i].Best.Score > byScore[j].Best.Score })
+	sort.SliceStable(byScore, func(i, j int) bool { return byScore[i].Score > byScore[j].Score })
 	ranked := make([]*Object, 0, len(objs))
 	for _, o := range byScore {
 		if !o.Suppressed {
@@ -248,7 +248,7 @@ func scoreObjects(objs []*Object) map[*Object]objectScore {
 	for i, o := range byScore {
 		s := out[o]
 		if maxScore > 0 {
-			s.edge = o.Best.Score / maxScore
+			s.edge = o.Score / maxScore
 		}
 		s.base = rankScore(i, len(byScore))
 		s.baseTier = rankTier(i, len(byScore))
@@ -345,7 +345,7 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 	}
 	live := &command.LiveMeta{
 		ItemID: b.ID, SightingID: o.SightingID, Subtype: o.Subtype, Label: o.Label, Override: b.Override, Event: o.Event,
-		Unknownness: b.Unknownness, Unknown: o.Unknown, Score: b.Score, Priority: o.Priority,
+		Unknownness: b.Unknownness, Unknown: o.Unknown, Score: o.Score, Priority: o.Priority,
 		Suppressed: o.Suppressed, Frames: o.Frames, FramesKnown: o.FramesKnown, Reports: o.Reports,
 		FirstMs: o.FirstMs, LastMs: o.LastMs, Forms: forms, ImageForm: b.ImageForm, FactURL: b.FactURL,
 		Pull: pullState(b.Forms["full"], false),

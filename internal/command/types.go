@@ -13,6 +13,7 @@ type Rule struct {
 	Only        bool     `json:"only"`
 	DirectiveID string   `json:"directiveId,omitempty"`
 	Weight      float64  `json:"weight,omitempty"`
+	Tier        int      `json:"tier,omitempty"`
 	Sources     []string `json:"sources,omitempty"`
 	WithinMin   int      `json:"withinMin,omitempty"`
 	Edited      bool     `json:"edited,omitempty"`

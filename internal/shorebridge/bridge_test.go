@@ -64,6 +64,24 @@ func view(id string, ms int64, tags map[string]string, forms map[pb.FormKind]boo
 	return v
 }
 
+func TestGroupRanksByNewestReportWithoutLosingReceipt(t *testing.T) {
+	old := view("old", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	newer := view("new", 2000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})
+	other := view("other", 1500, nil, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	old.Score.Priority, newer.Score.Priority, other.Score.Priority = .1, .9, .5
+	for _, views := range [][]*pb.ItemView{{old, newer, other}, {newer, other, old}} {
+		objects, _ := Group(views, nil, nil)
+		sighting := objects[0]
+		if sighting.Best.ID != "old" || !cardReceived(sighting.Best) || sighting.Score != .9 || sighting.Priority != "P1" {
+			t.Fatalf("latest score or earlier receipt lost: %+v", sighting)
+		}
+		score := scoreObjects(objects)[sighting]
+		if score.centralTier != 1 || score.edge != 1 {
+			t.Fatalf("console used stale score: %+v", score)
+		}
+	}
+}
+
 func TestGroupKeepsReceivedSummaryWhileNewerSummaryIsPending(t *testing.T) {
 	old := view("old", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
 	newer := view("new", 2000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})

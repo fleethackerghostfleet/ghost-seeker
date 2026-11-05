@@ -34,6 +34,9 @@ func validateRules(rules []command.Rule) error {
 		return fmt.Errorf("at most 64 rules are supported")
 	}
 	for _, rule := range rules {
+		if rule.Tier < 0 || rule.Tier > 4 {
+			return fmt.Errorf("target tier must be between 1 and 4")
+		}
 		if rule.Type != "boost" && rule.Type != "suppress" {
 			return fmt.Errorf("unknown rule type")
 		}

@@ -17,6 +17,8 @@ function setup(){
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
   SRC={sensor:{id:'sensor',name:'Sensor'}};
+  feedFilters={sensor:'ALL',tier:'all',review:'all',showDuplicates:true};
+  gsSettings={get:()=>({feed:feedFilters}),setFeed:value=>Object.assign(feedFilters,value)};
   state.page='rv';reviewerName='Reviewer';reviewDataReady=true;
   renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};renderPolicySummary=()=>{};renderAsk=()=>{};renderLive=()=>{};
   buildWhy=()=>[];zulu=()=> '12:00:00Z';largeImage=it=>'<img data-review-id="'+it.id+'" src="'+it.img+'">';
