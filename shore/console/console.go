@@ -126,7 +126,7 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 			log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
 			return nil, err
 		}
-		preserveExpiry := prev == nil
+		preserveExpiry := false
 		if prev != nil {
 			for _, layer := range prev.Layers {
 				if layer != nil && layer.Echelon > op.Echelon {

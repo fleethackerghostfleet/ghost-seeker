@@ -206,6 +206,28 @@ func TestShipOperatorCannotShortenPolicyExpiry(t *testing.T) {
 	}
 }
 
+func TestShipOperatorKeepsRequestedExpiryOnFirstPolicy(t *testing.T) {
+	svc, st := makeOperatorService(t, nil)
+	requestedExpiry := time.Now().Add(time.Hour).UnixMilli()
+	request := operatorRequest(t, &pb.Policy{
+		ExpiresAtUnixMs: requestedExpiry,
+		Layers: []*pb.PolicyLayer{{
+			Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "spoof",
+			Rules: []*pb.InterestRule{{Id: "ship", BoostLabels: []string{"tanker"}}},
+		}},
+	}, "operator", "TAO-DDG51", pb.Echelon_ECHELON_SHIP)
+	if _, err := svc.SetPolicy(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.GetPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stored.GetExpiresAtUnixMs(); got != requestedExpiry {
+		t.Fatalf("stored expiry=%d, want requested expiry %d", got, requestedExpiry)
+	}
+}
+
 func TestOperatorAttributionAndEMCONUseCallerEchelon(t *testing.T) {
 	commandLayer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
 		Rules: []*pb.InterestRule{{Id: "command", Locked: true, BoostLabels: []string{"submarine"}}}}
