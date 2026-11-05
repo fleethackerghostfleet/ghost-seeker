@@ -18,6 +18,5 @@ scenarios/ghostfleet_demo/out/
 
 # algorithm/ (Tomer) run artifacts
 *.py[cod]
-.venv/
 algorithm/runs/
 algorithm/models/

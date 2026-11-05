@@ -15,6 +15,18 @@ variables:
     description: Edge identifier (edge component).
     default: edge-1
     prompt: false
+  - name: SHORE_REQUIRE_AUTH
+    description: Require HS256 unit authentication on shore SyncService.
+    default: "false"
+    prompt: false
+  - name: EDGE_MAX_BYTES
+    description: Maximum retained edge form payload bytes; 0 is unlimited.
+    default: "0"
+    prompt: false
+  - name: EDGE_MAX_ITEMS
+    description: Maximum retained edge items; 0 is unlimited.
+    default: "0"
+    prompt: false
   - name: INFER_URL
     description: Inference URL, or mock; use http://edgeml-sidecar:9090 when edge-inference is enabled.
     default: mock

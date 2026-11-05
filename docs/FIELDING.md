@@ -1,10 +1,10 @@
 # Ghost Seeker fielding
 
-This is a **demo package, not an accredited operational system**. Packaging
-does not add storage eviction, authentication, TLS, or a deployment-specific
-security review. Use only in an isolated, approved environment until those
-controls are provided. The operator application is in-memory; shore and edge
-data are SQLite databases.
+This is a **demo package, not an accredited operational system**. Unit
+SyncService authentication and edge storage caps are opt-in; there is no TLS
+or deployment-specific security review. Use only in an isolated, approved
+environment. The operator application is in-memory; shore and edge data are
+SQLite databases.
 
 ## Stage a release
 
@@ -15,7 +15,7 @@ do not need Node or Python at runtime.
 ```sh
 make test
 node --test web/*.test.cjs
-make build                       # CGO-free static bin/edge, bin/shore, bin/sim, ...
+make build                       # CGO-free static binaries, including bin/mint-unit-token
 make images                      # four versioned images
 make images-save                 # dist/ghost-seeker-images.tar
 make package-check
@@ -83,6 +83,10 @@ shown below. Operator configuration is flags only.
 | `-listen` | `LISTEN` | `:8081` | Console and sync HTTP listener |
 | `-shore` | `SHORE_URL` | `http://localhost:8080` | Shore base URL |
 | `-infer` | `INFER_URL` | `mock` | Inference URL or `mock` |
+| `-unit-token` | `GS_UNIT_TOKEN` | unset | HS256 unit token for shore sync |
+| `-unit-token-file` | `GS_UNIT_TOKEN_FILE` | unset | Read unit token from a file; takes precedence over `GS_UNIT_TOKEN` |
+| `-max-bytes` | `GS_EDGE_MAX_BYTES` | `0` (unlimited) | Maximum total retained form payload bytes |
+| `-max-items` | `GS_EDGE_MAX_ITEMS` | `0` (unlimited) | Maximum retained item rows |
 | `-scene-every` | — | `60s` | Scene interval for sightings mode; `0` disables interval |
 | `-dedup` | `DEDUP` | `hash` | `naive`, `hash`, or `sightings` |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
@@ -99,6 +103,9 @@ shown below. Operator configuration is flags only.
 | `-data` | `DATA_DIR` | `data/shore` | SQLite store |
 | `-listen` | `LISTEN` | `:8080` | Shore HTTP listener |
 | `-infer` | `INFER_URL` | `mock` | Inference URL for text embedding, or `mock` |
+| `-require-auth` | `GS_REQUIRE_AUTH` | `false` | Require unit JWTs on SyncService |
+| `-signing-key` | `GS_SIGNING_KEY` | unset | HS256 signing key; also accepted by mint tool |
+| `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset | Signing-key file; takes precedence over literal key |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
 | `-edge` | `EDGE_ID` | empty | Edge ID to address downlink to; empty means all |
 
@@ -123,7 +130,7 @@ Shore and edge keep SQLite databases, WAL and shared-memory files under their
 `/data`. Shore's PVC defaults to 5 GiB and edge's to 10 GiB. The operator app
 does not persist state: its simulated data and live UI state are in memory.
 Back up SQLite only after stopping the service, and preserve WAL files with the
-database. Storage cap/eviction is not implemented.
+database. Edge storage caps are opt-in; see [Edge storage caps](#edge-storage-caps).
 
 | Service | Port | Notes |
 |---|---:|---|
@@ -134,8 +141,9 @@ database. Storage cap/eviction is not implemented.
 | edgeml sidecar | 9090 | `GET /healthz`, Connect JSON RPC |
 | Toxiproxy admin API | 8474 | Compose demo only |
 
-The demo endpoints do not provide JWT sync authentication or TLS. Do not expose
-them to an untrusted network.
+SyncService unit JWT authentication is opt-in; ConsoleService remains
+unauthenticated, and neither service provides TLS. Do not expose them to an
+untrusted network.
 
 ## Compose demonstration
 
@@ -247,7 +255,72 @@ inference, model compatibility, and tracking behavior are **unverified**.
 The Kubernetes manifests have not been deployed to a cluster. Real-model
 inference and a field installation remain unverified.
 
-## TODO (pending another PR)
+## Sync authentication
 
-- Add storage caps, retention, and safe eviction behavior.
-- Add JWT-based sync authentication and key rotation.
+SyncService unit authentication is off by default. When enabled, shore accepts
+HS256 tokens with `sub` (edge ID), `role: "unit"`, and `exp` claims. The signing
+key must be non-default and at least 32 bytes. Missing, invalid, or expired
+tokens return `Unauthenticated`; an `ExchangeRequest.edge_id` that differs
+from `sub` returns `PermissionDenied`. Authentication protects SyncService
+only: ConsoleService has no auth, and neither service has TLS.
+
+`*_FILE` credentials take precedence over literal environment values. A
+nonempty file path is read at startup and a missing file is an error; do not
+set `GS_SIGNING_KEY_FILE` or `GS_UNIT_TOKEN_FILE` by default. Shore reads the
+key and edge reads its token at startup, so mint and install a replacement
+token, then restart edge before expiry.
+
+`make build` creates `bin/mint-unit-token` for use on a trusted, key-holding
+workstation. The token minting tool is deliberately absent from all container
+images; shore only verifies tokens and never mints them.
+
+### Enable in Kubernetes/Zarf
+
+Create `shore-auth` in the cluster running shore and `edge-auth` in the cluster
+running edge. If shore and edge are in separate clusters, each cluster needs
+its own Secret in the `ghost-seeker` namespace. These credentials are passed
+through Secret references, never ConfigMaps. The optional shore key reference
+lets auth remain off by default; enabling `SHORE_REQUIRE_AUTH` without the
+`shore-auth` Secret makes shore fail closed at startup.
+
+```sh
+# In the shore cluster
+kubectl -n ghost-seeker create secret generic shore-auth \
+  --from-file=signing-key=./signing.key
+
+# On a trusted workstation with the same signing key
+GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
+  -id edge-1 -ttl 720h > unit.jwt
+
+# In the edge cluster; remove the plaintext token after storing it
+kubectl -n ghost-seeker create secret generic edge-auth \
+  --from-file=unit-token=./unit.jwt && rm unit.jwt
+
+zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
+  --confirm \
+  --set-variables=SHORE_REQUIRE_AUTH=true,EDGE_MAX_BYTES=10737418240,EDGE_MAX_ITEMS=50000
+```
+
+To rotate before expiry, mint a new token, replace the `edge-auth` Secret, and
+restart the edge StatefulSet:
+
+```sh
+kubectl -n ghost-seeker rollout restart statefulset/edge
+```
+
+## Edge storage caps
+
+Both caps default to `0` (unlimited) and can be set independently. They count
+retained item rows and the sum of their form payload bytes, not SQLite/WAL
+overhead or audit history. To make room, edge evicts only fully delivered
+items: the manifest is ACKed and every stored form is ready, complete, and
+ACKed through its full byte length. It evicts lowest scheduler priority first,
+then oldest capture time (ingest sequence breaks ties). Pins, pending
+corrections, and active pull state protect items.
+
+When only protected items remain, admission returns `store.ErrFull`; the replay
+ingester retains that capture and retries after five seconds, while other store
+callers must retain and retry their input. Each eviction is recorded in the
+`edge.db` `eviction_log` (`item_id`, `bytes`, `score`, `reason`, `ts`, with
+`ts` in Unix milliseconds). `GetStatusResponse.items_evicted` reports the
+cumulative eviction count.

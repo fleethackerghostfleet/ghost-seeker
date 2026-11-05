@@ -18,6 +18,9 @@ if command -v kubeconform >/dev/null 2>&1; then
     sed \
       -e 's,###ZARF_VAR_SHORE_URL###,http://shore.ghost-seeker.svc.cluster.local:8080,g' \
       -e 's,###ZARF_VAR_EDGE_ID###,edge-1,g' \
+      -e 's,###ZARF_VAR_SHORE_REQUIRE_AUTH###,false,g' \
+      -e 's,###ZARF_VAR_EDGE_MAX_BYTES###,0,g' \
+      -e 's,###ZARF_VAR_EDGE_MAX_ITEMS###,0,g' \
       -e 's,###ZARF_VAR_INFER_URL###,mock,g' \
       -e 's,###ZARF_VAR_SHORE_STORAGE###,5Gi,g' \
       -e 's,###ZARF_VAR_EDGE_STORAGE###,10Gi,g' \

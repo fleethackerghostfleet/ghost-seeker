@@ -13,6 +13,8 @@ data:
   UI_DIR: /ui
   SCENARIO: "###ZARF_VAR_SCENARIO###"
   FRAMES_DIR: "###ZARF_VAR_FRAMES_DIR###"
+  GS_EDGE_MAX_BYTES: "###ZARF_VAR_EDGE_MAX_BYTES###"
+  GS_EDGE_MAX_ITEMS: "###ZARF_VAR_EDGE_MAX_ITEMS###"
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -47,6 +49,13 @@ spec:
           envFrom:
             - configMapRef:
                 name: edge-config
+          env:
+            - name: GS_UNIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: edge-auth
+                  key: unit-token
+                  optional: true
           readinessProbe:
             httpGet:
               path: /healthz

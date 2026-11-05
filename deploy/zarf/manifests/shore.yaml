@@ -8,6 +8,7 @@ data:
   LISTEN: :8080
   UI_DIR: /ui
   INFER_URL: "###ZARF_VAR_INFER_URL###"
+  GS_REQUIRE_AUTH: "###ZARF_VAR_SHORE_REQUIRE_AUTH###"
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -42,6 +43,13 @@ spec:
           envFrom:
             - configMapRef:
                 name: shore-config
+          env:
+            - name: GS_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: shore-auth
+                  key: signing-key
+                  optional: true
           readinessProbe:
             httpGet:
               path: /healthz
