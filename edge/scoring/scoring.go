@@ -236,13 +236,23 @@ func (Interest) Score(it *pb.Item, ctx *Context) Result {
 			return Result{Multiplier: sup, Suppressed: true, Note: "suppressed: " + l}
 		}
 	}
+	// Strongest matching boost label wins; BoostWeights is keyed by the
+	// lower-cased, trimmed label exactly as Merge stored it.
+	matched, weight := "", 0.0
 	for _, l := range in.BoostLabels {
-		if hasLabel(labels, l) {
-			if w := in.BoostWeights[norm(l)]; w > 0 {
-				return Result{Value: 1, Multiplier: w, Note: "boosted: " + l}
-			}
-			return Result{Value: 1, Multiplier: boost, Note: "boosted: " + l}
+		if !hasLabel(labels, l) {
+			continue
 		}
+		w := in.BoostWeights[strings.ToLower(strings.TrimSpace(l))]
+		if w <= 0 {
+			w = boost
+		}
+		if matched == "" || w > weight {
+			matched, weight = l, w
+		}
+	}
+	if matched != "" {
+		return Result{Value: 1, Multiplier: weight, Note: "boosted: " + matched}
 	}
 	emb := it.GetFeatures().GetEmbedding()
 	if len(emb) == 0 || (len(in.PositiveEmbedding) == 0 && len(in.NegativeEmbedding) == 0) {
