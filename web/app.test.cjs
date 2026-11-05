@@ -785,7 +785,10 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  assert.equal(vm.runInContext('fmtRate(16000000)',c),'2.00 MB/s');
  assert.equal(vm.runInContext('fmtRate(0)',c),'0.00 MB/s');
  assert.equal(vm.runInContext('fmtRate(256000)',c),'0.03 MB/s');
- assert.equal(vm.runInContext('fmtRate(73600)',c),'0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(73600)',c),'<0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(8000)',c),'<0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(1)',c),'<0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(80000)',c),'0.01 MB/s');
  assert.equal(vm.runInContext('fmtRate(-1)',c),'0.00 MB/s');
  const el={innerHTML:'',classList:{on:new Set(),toggle(k,v){v?this.on.add(k):this.on.delete(k)}}};
  const ctx=vm.createContext({$:id=>id==='stLink'?el:null,esc:s=>String(s),stats:{linkBps:4000000}});
