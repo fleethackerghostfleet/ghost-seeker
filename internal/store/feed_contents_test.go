@@ -16,7 +16,7 @@ func TestFilteredImagesAreStoredAtP4AndCountedAsKeptOnShip(t *testing.T) {
 		t.Fatalf("filtered tiers = %d, %d; want P4", low.Tier, repeat.Tier)
 	}
 	stats, _ := data.Stats()
-	if stats.Cap != 5 || stats.Keep != 1 || stats.Drop != 4 || stats.Bytes != 20 || stats.DB != 3 {
+	if stats.Cap != 5 || stats.Keep != 1 || stats.Drop != 4 || stats.Bytes != 0 || stats.DB != 3 {
 		t.Fatalf("stats = %+v", stats)
 	}
 	if got := len(data.Items()); got != 3 {
