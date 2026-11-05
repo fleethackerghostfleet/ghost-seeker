@@ -31,6 +31,9 @@ func (d NormalDistribution) rate(z float64) int64 {
 	return int64(math.Round(math.Max(float64(d.MinBps), math.Min(float64(d.MaxBps), d.MeanBps+z*d.StdDevBps))))
 }
 
+// Rate converts a standard normal sample to the available link rate.
+func (d NormalDistribution) Rate(z float64) int64 { return d.rate(z) }
+
 type Shaper struct {
 	target string
 	bps    atomic.Int64

@@ -47,6 +47,7 @@ func main() {
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–50 Mbps ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
+	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -126,6 +127,7 @@ func main() {
 	}
 
 	data := store.New(*retain)
+	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
@@ -147,7 +149,7 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
-	go runSimulation(data, generator, app)
+	go runSimulation(data, generator, app, uplink)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
 		for i := 0; i < 4; i++ {
@@ -280,10 +282,18 @@ func shaperTarget(shoreURL string) (string, error) {
 	return host, nil
 }
 
-func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server) {
+func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server, uplink *simulationUplink) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	last := time.Now()
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
+		now := time.Now()
+		updates := uplink.advance(now.Sub(last))
+		last = now
+		_, cdr := data.Stats()
+		for _, updated := range updates {
+			app.PublishUpdate(updated, cdr)
+		}
 		_, _, _, state := data.Snapshot()
 		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
 		stored, evicted := data.Add(item, extra)

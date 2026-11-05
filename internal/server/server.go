@@ -66,6 +66,7 @@ func New(data *store.Store, options ...Option) *Server {
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
 	s.mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
+	s.mux.HandleFunc("POST /api/items/{id}/upload-override", s.uploadOverride)
 	s.mux.HandleFunc("POST /api/items/{id}/review", s.reviewItem)
 	s.mux.HandleFunc("POST /api/reviews/{id}/reason", s.correctReview)
 	s.mux.HandleFunc("POST /api/reviews/{id}/undo", s.correctReview)
@@ -413,6 +414,29 @@ func (s *Server) setModel(w http.ResponseWriter, r *http.Request) {
 	s.publishSnapshot()
 	audit(r, "model.set", "id", body.ID)
 	writeJSON(w, http.StatusOK, map[string]string{"id": body.ID})
+}
+
+func (s *Server) uploadOverride(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Override string `json:"override"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeRequestBodyError(w, err)
+		return
+	}
+	item, cdr, err := s.store.SetUploadOverride(r.PathValue("id"), body.Override, opauth.Actor(r.Context(), "TAO"))
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.PublishUpdate(item, cdr)
+	audit(r, "item.upload-override", "id", item.ID, "override", body.Override)
+	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 
 func (s *Server) patchItem(w http.ResponseWriter, r *http.Request) {
