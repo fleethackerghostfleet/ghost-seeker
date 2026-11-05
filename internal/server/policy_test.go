@@ -180,6 +180,42 @@ func TestRestoreOperatorLayerSkipsScopedRules(t *testing.T) {
 	}
 }
 
+func TestPartialHigherPolicyConflictKeepsUnblockedRuleEffective(t *testing.T) {
+	data := store.New(10)
+	data.RestoreDirectives([]command.Directive{{
+		ID: "operator", Rules: []command.Rule{
+			{Type: "suppress", Classes: []string{"submarine"}},
+			{Type: "boost", Classes: []string{"tanker"}, Weight: 2},
+		},
+	}})
+	rt := &policyRuntime{store: data, nodeID: "DDG-51"}
+	rt.syncStore(&pb.Policy{Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
+			{Id: "locked-submarine", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
+		}},
+		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO", Rules: []*pb.InterestRule{
+			{Id: "operator:0", SuppressLabels: []string{"submarine"}},
+			{Id: "operator:1", BoostLabels: []string{"tanker"}, Weight: 2},
+		}},
+	}}, time.Now())
+	directives := data.Directives()
+	var operator *command.Directive
+	for i := range directives {
+		if directives[i].ID == "operator" {
+			operator = &directives[i]
+			break
+		}
+	}
+	if operator == nil || operator.Blocked != "" ||
+		operator.Rules[0].Blocked == "" || operator.Rules[1].Blocked != "" {
+		t.Fatalf("partial conflict state=%+v", directives)
+	}
+	weights := command.EffectiveWeights("maritime", directives)
+	if weights["tanker"].Effective <= weights["tanker"].Base {
+		t.Fatalf("unblocked tanker rule did not affect weights: %+v", weights["tanker"])
+	}
+}
+
 func TestSimulationDelegatedTankerRuleCanBeOverridden(t *testing.T) {
 	data := store.New(10)
 	app := New(data, WithAdmin(true))

@@ -257,14 +257,17 @@ func (rt *policyRuntime) syncStore(p *pb.Policy, now time.Time) {
 			source = append(source, command.Directive{ID: id, Text: text, Rules: []command.Rule{rule}, Source: issuer, Locked: item.Rule.Locked, LockedBy: issuer})
 		}
 	}
-	blocked := make(map[string]string)
+	blocked := make(map[string]map[int]string)
 	for _, conflict := range conflicts {
 		if conflict == nil || conflict.RuleId == "emcon" {
 			continue
 		}
-		id, _, ok := strings.Cut(conflict.RuleId, ":")
+		id, index, _, ok := parsePolicyRuleID(conflict.RuleId)
 		if ok {
-			blocked[id] = conflict.Reason
+			if blocked[id] == nil {
+				blocked[id] = make(map[int]string)
+			}
+			blocked[id][index] = conflict.Reason
 		}
 	}
 	rt.store.SetPolicyDirectives(source, blocked)

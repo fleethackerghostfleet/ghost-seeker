@@ -80,6 +80,26 @@ func TestDirectiveIDIsPresentOnRulesAndRescoredNotes(t *testing.T) {
 	t.Fatalf("rescored notes %#v do not contain directive id %q", stored.Det[0].Notes, directive.ID)
 }
 
+func TestPartialPolicyConflictBlocksOnlyOneRule(t *testing.T) {
+	data := New(2)
+	data.RestoreDirectives([]command.Directive{{
+		ID: "operator", Rules: []command.Rule{
+			{Type: "suppress", Classes: []string{"submarine"}},
+			{Type: "boost", Classes: []string{"tanker"}},
+		},
+	}})
+	data.SetPolicyDirectives(nil, map[string]map[int]string{"operator": {0: "Locked by CTF-72"}})
+	directives := data.Directives()
+	if len(directives) != 1 || directives[0].Blocked != "" ||
+		directives[0].Rules[0].Blocked == "" || directives[0].Rules[1].Blocked != "" {
+		t.Fatalf("partial blocked directive=%+v", directives)
+	}
+	weights := command.EffectiveWeights("maritime", directives)
+	if weights["tanker"].Effective <= weights["tanker"].Base {
+		t.Fatalf("unblocked tanker rule did not affect weights: %+v", weights["tanker"])
+	}
+}
+
 func TestSourceDirectivesAreProtectedAndBlockedRulesAreNotScored(t *testing.T) {
 	data := New(2)
 	item := command.Item{
@@ -99,7 +119,7 @@ func TestSourceDirectivesAreProtectedAndBlockedRulesAreNotScored(t *testing.T) {
 
 	data.SetPolicyDirectives([]command.Directive{{
 		ID: "command-rule", Text: "command rule", Source: "CTF-72", Locked: true, LockedBy: "CTF-72",
-	}}, map[string]string{directive.ID: "Locked by CTF-72"})
+	}}, map[string]map[int]string{directive.ID: {0: "Locked by CTF-72"}})
 	if data.DeleteDirective("command-rule") {
 		t.Fatal("DeleteDirective removed a source directive")
 	}
