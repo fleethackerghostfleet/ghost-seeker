@@ -20,6 +20,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -31,6 +32,7 @@ import (
 // the shore does not keep (manual tier, reviewed, dismissed, sent to the
 // commander, the commander's decision) is an in-memory overlay keyed by object.
 type Console struct {
+	reviews *reviews.Log
 	pol     *pb.Policy        // flattened shore policy the current view was built from
 	ruleFor map[string]string // lowercased label -> id of the directive that boosts/suppresses it
 	b       *Bridge
@@ -761,6 +763,11 @@ func (c *Console) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", c.config)
 	mux.HandleFunc("GET /api/stream", c.stream)
 	mux.HandleFunc("PATCH /api/items/{id}", c.patchItem)
+	mux.HandleFunc("POST /api/items/{id}/review", c.reviewItem)
+	mux.HandleFunc("POST /api/reviews/{id}/reason", c.correctReview)
+	mux.HandleFunc("POST /api/reviews/{id}/undo", c.correctReview)
+	mux.HandleFunc("GET /api/reviews/summary", c.reviewSummary)
+	mux.HandleFunc("GET /api/reviews/export", c.reviewExport)
 	mux.HandleFunc("POST /api/items/{id}/decision", c.decide)
 	mux.HandleFunc("POST /api/items/{id}/full-res", c.fullRes)
 	mux.HandleFunc("POST /api/items/{id}/pull", c.pull)
