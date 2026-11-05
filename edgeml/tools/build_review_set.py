@@ -231,6 +231,7 @@ def build_manifest(
         records.append({
             "image_id": row["image_id"],
             "dataset_id": row["dataset_id"],
+            "eval_split": row["eval_split"],
             "source_video": row["source_video"],
             "sha256": row["sha256"],
             "file": _relative_file(row).as_posix(),

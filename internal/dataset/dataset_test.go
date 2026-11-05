@@ -16,7 +16,7 @@ import (
 
 func testImage(id, datasetID string) Image {
 	return Image{
-		ImageID: id, DatasetID: datasetID, SourceVideo: "clip-1",
+		ImageID: id, DatasetID: datasetID, EvalSplit: "dev", SourceVideo: "clip-1",
 		SHA256: strings.Repeat("a", 64), File: id + ".jpg", Width: 1920, Height: 1080,
 		Detections: []Detection{{Class: "person", Box: command.Box{X: 10, Y: 20, W: 30, H: 40}, Conf: .8}},
 	}
@@ -35,6 +35,43 @@ func TestLoadManifest(t *testing.T) {
 	loaded, err := LoadManifest(path)
 	if err != nil || len(loaded) != 1 || loaded[0].ImageID != "one" {
 		t.Fatalf("LoadManifest: images=%+v err=%v", loaded, err)
+	}
+}
+
+func TestLoadManifestRequiresEvalSplit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "manifest.json")
+	data, err := json.Marshal([]map[string]any{{
+		"image_id": "one", "dataset_id": "video_one", "source_video": "clip-1",
+		"sha256": strings.Repeat("a", 64), "file": "one.jpg", "width": 1920, "height": 1080,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadManifest(path); err == nil || !strings.Contains(err.Error(), "rebuild") {
+		t.Fatalf("LoadManifest error = %v, want rebuild guidance for missing eval_split", err)
+	}
+}
+
+func TestValidateImageRejectsNonDevAndSingapore(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Image)
+	}{
+		{name: "test split", mutate: func(image *Image) { image.EvalSplit = "test" }},
+		{name: "quarantine split", mutate: func(image *Image) { image.EvalSplit = "quarantine" }},
+		{name: "singapore maritime", mutate: func(image *Image) { image.DatasetID = "singapore_maritime" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			image := testImage("one", "video_one")
+			test.mutate(&image)
+			if err := validateImage(image); err == nil {
+				t.Fatal("validateImage accepted a locked review row")
+			}
+		})
 	}
 }
 

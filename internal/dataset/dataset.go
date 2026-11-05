@@ -28,6 +28,7 @@ const Seed int64 = 101
 type Image struct {
 	ImageID     string      `json:"image_id"`
 	DatasetID   string      `json:"dataset_id"`
+	EvalSplit   string      `json:"eval_split"`
 	SourceVideo string      `json:"source_video"`
 	SHA256      string      `json:"sha256"`
 	File        string      `json:"file"`
@@ -81,6 +82,15 @@ func LoadManifest(path string) ([]Image, error) {
 }
 
 func validateImage(image Image) error {
+	if image.EvalSplit == "" {
+		return errors.New("eval_split is required; rebuild the manifest from the dev-only selection")
+	}
+	if image.EvalSplit != "dev" {
+		return fmt.Errorf("eval_split %q is not 'dev' and cannot be reviewed", image.EvalSplit)
+	}
+	if image.DatasetID == "singapore_maritime" {
+		return errors.New("singapore_maritime is excluded from review")
+	}
 	if image.ImageID == "" || image.DatasetID == "" || image.SourceVideo == "" {
 		return errors.New("image_id, dataset_id and source_video are required")
 	}
