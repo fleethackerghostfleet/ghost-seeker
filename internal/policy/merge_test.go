@@ -180,13 +180,33 @@ func TestFlattenEmbeddingsAndExpiredBoost(t *testing.T) {
 		t.Fatal("normalized-equivalent labels cleared embeddings")
 	}
 
+	boostOnly := &pb.Policy{Interest: &pb.Interest{
+		BoostLabels: []string{"old"}, SuppressLabels: []string{"avoid"},
+		PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
+	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
+		rule("boost-only", []string{"new"}, []string{"avoid"}, 2))}}
+	got = Flatten(boostOnly, "USV-1", mergeNow)
+	if got.Interest.PositiveEmbedding != nil || got.Interest.NegativeEmbedding == nil {
+		t.Fatalf("boost-only change embeddings = %+v", got.Interest)
+	}
+
+	suppressOnly := &pb.Policy{Interest: &pb.Interest{
+		BoostLabels: []string{"submarine"}, SuppressLabels: []string{"old"},
+		PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
+	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
+		rule("suppress-only", []string{"submarine"}, []string{"avoid"}, 2))}}
+	got = Flatten(suppressOnly, "USV-1", mergeNow)
+	if got.Interest.PositiveEmbedding == nil || got.Interest.NegativeEmbedding != nil {
+		t.Fatalf("suppress-only change embeddings = %+v", got.Interest)
+	}
+
 	expired := &pb.Policy{Interest: &pb.Interest{
 		BoostLabels: []string{"submarine"}, PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
 	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
 		&pb.InterestRule{Id: "short", BoostLabels: []string{"submarine"}, Weight: 7, ExpiresAtUnixMs: mergeNow.UnixMilli()})}}
 	got = Flatten(expired, "USV-1", mergeNow)
 	if len(got.Interest.BoostLabels) != 0 || got.Interest.BoostFactor != 0 ||
-		got.Interest.PositiveEmbedding != nil || got.Interest.NegativeEmbedding != nil {
+		got.Interest.PositiveEmbedding != nil || got.Interest.NegativeEmbedding == nil {
 		t.Fatalf("expired rule retained stale interest: %+v", got.Interest)
 	}
 

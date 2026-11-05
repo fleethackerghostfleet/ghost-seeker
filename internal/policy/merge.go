@@ -126,8 +126,10 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	out.Interest.BoostLabels = interest.BoostLabels
 	out.Interest.SuppressLabels = interest.SuppressLabels
 	out.Interest.BoostFactor = interest.BoostFactor
-	if !sameLabelSet(inputBoost, interest.BoostLabels) || !sameLabelSet(inputSuppress, interest.SuppressLabels) {
+	if !sameLabelSet(inputBoost, interest.BoostLabels) {
 		out.Interest.PositiveEmbedding = nil
+	}
+	if !sameLabelSet(inputSuppress, interest.SuppressLabels) {
 		out.Interest.NegativeEmbedding = nil
 	}
 	if emcon != nil {
