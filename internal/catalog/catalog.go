@@ -9,15 +9,16 @@ import (
 var imageryJSON []byte
 
 type Source struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Scene string `json:"scene"`
-	Mode  string `json:"mode"`
-	Loc   string `json:"loc"`
-	HW    string `json:"hw"`
-	EM    string `json:"em"`
-	Link  string `json:"link"`
-	Rate  string `json:"rate"`
+	Bands []string `json:"bands,omitempty"`
+	ID    string   `json:"id"`
+	Name  string   `json:"name"`
+	Scene string   `json:"scene"`
+	Mode  string   `json:"mode"`
+	Loc   string   `json:"loc"`
+	HW    string   `json:"hw"`
+	EM    string   `json:"em"`
+	Link  string   `json:"link"`
+	Rate  string   `json:"rate"`
 }
 
 type Class struct {
@@ -82,7 +83,7 @@ func init() {
 }
 
 var Sources = []Source{
-	{ID: "EO-P7", Name: "EO Mast Cam · Pier 7", Scene: "harbor", Mode: "eo", Loc: "Harbor, Pier 7", HW: "Jetson Orin Nano", EM: "YOLOv8-n int8 · 3 coarse classes", Link: "Private 5G · 40 Mbps", Rate: "2 fps"},
+	{ID: "EO-P7", Name: "EO Mast Cam · Pier 7", Scene: "harbor", Mode: "eo", Bands: []string{"EO", "IR"}, Loc: "Harbor, Pier 7", HW: "Jetson Orin Nano", EM: "YOLOv8-n int8 · 3 coarse classes", Link: "Private 5G · 40 Mbps", Rate: "2 fps"},
 	{ID: "IR-HE", Name: "IR Thermal · Harbor Entrance", Scene: "harbor", Mode: "ir", Loc: "Harbor entrance channel", HW: "Jetson Orin Nano", EM: "YOLOv8-n int8 · 3 coarse classes", Link: "Private 5G · 40 Mbps", Rate: "2 fps"},
 	{ID: "BY-12", Name: "Buoy Sensor B-12 · Offshore", Scene: "open", Mode: "eo", Loc: "Offshore, 30 nm E", HW: "Coral Edge TPU", EM: "MobileNet-SSD · 3 coarse classes", Link: "Iridium · 64 kbps", Rate: "1 frame / 5 s"},
 	{ID: "UAV-3", Name: "UAV-3 Gimbal · Patrol Orbit", Scene: "aerial", Mode: "eo", Loc: "Patrol orbit, Sector 4", HW: "Qualcomm RB5", EM: "YOLOv8-n int8 · 3 coarse classes", Link: "MANET · 2 Mbps", Rate: "1 fps"},

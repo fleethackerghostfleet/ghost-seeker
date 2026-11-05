@@ -8,7 +8,7 @@ import logging
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="edgeml.sidecar", description=__doc__)
-    ap.add_argument("--listen", default=":9090", help="host:port (default :9090)")
+    ap.add_argument("--listen", default=":9090", help="host:port; a bare ':9090' binds 127.0.0.1 only, use 0.0.0.0:9090 to expose (default :9090)")
     ap.add_argument("--mock", action="store_true", help="scripted engine, no models (Go tests / CI)")
     ap.add_argument("--detector", "--det", help="YOLO ONNX (ORT CPU) or OpenVINO IR, e.g. ~/models/D/yolo11n-640/model.onnx")
     ap.add_argument("--engine", default="auto", help="ort | openvino | auto")

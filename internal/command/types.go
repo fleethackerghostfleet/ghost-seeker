@@ -68,6 +68,7 @@ type Latency struct {
 }
 
 type Item struct {
+	Bands       []string   `json:"bands,omitempty"`
 	ID          string     `json:"id"`
 	Img         string     `json:"img,omitempty"`
 	DBID        int        `json:"dbId"`

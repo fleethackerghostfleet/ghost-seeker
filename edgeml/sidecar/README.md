@@ -24,6 +24,9 @@ gcloud storage cp $B/clip/mobileclip-s1/{meta.json,model.onnx,text_cache.json} ~
 Dependencies: `pip install -e edgeml onnxruntime boxmot` (boxmot pulls torch, but the sidecar never imports it on
 the hot path: detector and CLIP image tower run on ONNX Runtime, `pin_threads` fixes 4 CPU threads).
 
+`--listen :9090` binds **127.0.0.1** (the service is unauthenticated); use `--listen 0.0.0.0:9090` to expose it. Request
+bodies are capped at 32 MiB.
+
 ## RPCs
 
 | RPC | What it does |
@@ -65,7 +68,11 @@ Edge-side semantics (`edge/ingest/sightings.go`): OPEN → item with `tags{sight
 (key box × 1.5 margin, short side ≥ 96 px, JPEG q75); DUPLICATE → counted in `GetStatus.items_deduped`, no item;
 UPDATE with a better key frame → thumb/crop/full + features replaced in place while nothing of the item has shipped,
 otherwise a new item with the same `sighting_id`; non-key UPDATE → tags + FACT refreshed; CLOSE → ~200 B RECORD
-contact report (sighting id, item id, label, subtype, first/last seen, n frames).
+contact report (sighting id, item id, label, subtype, first/last seen, n frames). Frames with **no sighting and no
+detection** (open ocean) become at most one `event=scene` item (FACT+THUMB only, no FULL/CROP) per source per
+`-scene-every` (default 60 s); the rest fold into `items_deduped`, as do frames with detections but no sighting yet
+(tracker warming up — the OPEN follows with the key frame; this only applies once the engine has reported a sighting
+for that source, so a stateless engine such as `-infer mock` keeps per-frame items for detected frames). `-scene-every 0` restores one item per object-free frame.
 
 Tests: `pytest -q edgeml/tests/test_sidecar.py` (mock engine over real HTTP), `go test ./edge/ingest/` (scripted
 sightings through the state machine).

@@ -264,6 +264,11 @@ func isUnknown(it *pb.Item, ctx *Context) bool {
 	return f.Unknownness >= unknownMin
 }
 
+// allLabels is what a policy's boost/suppress labels are matched against:
+// the operator's override (authoritative, so it stands alone), the detector
+// labels above the policy threshold, and the engine's zero-shot subtype
+// (tags["subtype"], set by the sighting pipeline), so a directive like
+// "ignore cargo ships" reaches items the detector only calls "boat".
 func allLabels(it *pb.Item, minConf float32) []string {
 	f := it.GetFeatures()
 	if f == nil {
@@ -277,6 +282,9 @@ func allLabels(it *pb.Item, minConf float32) []string {
 		if d.Confidence >= minConf {
 			out = append(out, d.Label)
 		}
+	}
+	if sub := f.GetTags()["subtype"]; sub != "" {
+		out = append(out, sub)
 	}
 	return out
 }

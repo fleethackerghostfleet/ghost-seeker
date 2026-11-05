@@ -83,6 +83,25 @@ def test_snake_case_request_and_errors(base):
     assert st == 415
 
 
+def test_body_limit_and_loopback_default(base):
+    from edgeml.sidecar.server import MAX_BODY_BYTES, parse_listen
+
+    assert parse_listen(":9090") == ("127.0.0.1", 9090) and parse_listen("0.0.0.0:1") == ("0.0.0.0", 1)
+    req = urllib.request.Request(f"{base}/ghostseeker.v1.InferenceService/Analyze", data=b"{}",
+                                 headers={"Content-Type": "application/json", "Content-Length": str(MAX_BODY_BYTES + 1)}, method="POST")
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        urllib.request.urlopen(req, timeout=10)
+    assert ei.value.code == 413 and json.loads(ei.value.read())["code"] == "resource_exhausted"
+
+
+def test_open_carries_embedding(base):
+    img = base64.b64encode(_jpeg(2)).decode()
+    _call(base, "Analyze", {"image": img, "source": "cam-e"})
+    st, resp = _call(base, "Analyze", {"image": img, "source": "cam-e", "wantEmbedding": True})
+    s = resp["sightings"][0]
+    assert s["event"] == "EVENT_OPEN" and len(s["embedding"]) == 64 and s["unknownness"] == 0.0
+
+
 def test_service_dispatch_without_http():
     svc = InferenceService(MockEngine())
     with pytest.raises(RpcError) as ei:

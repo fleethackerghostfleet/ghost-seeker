@@ -1,12 +1,49 @@
 package sensor
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
+
+func TestSourceBandsReachFeed(t *testing.T) {
+	for _, source := range catalog.Sources {
+		t.Run(source.ID, func(t *testing.T) {
+			if source.ID == "EO-P7" {
+				if !reflect.DeepEqual(source.Bands, []string{"EO", "IR"}) {
+					t.Fatalf("dual-band source bands = %v", source.Bands)
+				}
+			} else if len(source.Bands) > 1 {
+				t.Fatalf("unexpected multi-spectrum source: %v", source.Bands)
+			}
+			generator := NewGenerator()
+			for attempt := 0; attempt < 500; attempt++ {
+				item, _ := generator.Tick(&source, time.Now(), "maritime", nil)
+				if item == nil {
+					continue
+				}
+				data, err := json.Marshal(item)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var feed struct {
+					Bands []string `json:"bands"`
+				}
+				if err := json.Unmarshal(data, &feed); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(feed.Bands, source.Bands) {
+					t.Fatalf("feed bands = %v, want %v", feed.Bands, source.Bands)
+				}
+				return
+			}
+			t.Fatal("no retained frame after 500 ticks")
+		})
+	}
+}
 
 func TestTickUsesLibraryImageDetections(t *testing.T) {
 	var source *catalog.Source
