@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -103,6 +104,13 @@ type Replay struct {
 	period time.Duration
 	queue  []*Capture
 	i      int
+	mu     sync.Mutex
+	bursts map[string]replayBurst
+}
+
+type replayBurst struct {
+	period time.Duration
+	until  time.Time
 }
 
 func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay, error) {
@@ -154,17 +162,51 @@ func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay
 		q = append(q, lists[best][idx[best]])
 		idx[best]++
 	}
-	return &Replay{clk: clk, period: period, queue: q}, nil
+	return &Replay{clk: clk, period: period, queue: q, bursts: make(map[string]replayBurst)}, nil
 }
 
 func (r *Replay) Len() int { return len(r.queue) }
+
+func (r *Replay) Burst(source string, fps float64, d time.Duration) {
+	if fps <= 0 || d <= 0 {
+		return
+	}
+	period := time.Duration(float64(time.Second) / fps)
+	if period <= 0 || period >= r.period {
+		return
+	}
+	now := r.clk.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.bursts == nil {
+		r.bursts = make(map[string]replayBurst)
+	}
+	burst := r.bursts[source]
+	burst.period = period
+	if deadline := now.Add(d); deadline.After(burst.until) {
+		burst.until = deadline
+	}
+	r.bursts[source] = burst
+}
 
 func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
 	if r.i >= len(r.queue) {
 		return nil, true, nil
 	}
 	if r.i > 0 {
-		if err := r.clk.Sleep(ctx, r.period); err != nil {
+		now := r.clk.Now()
+		r.mu.Lock()
+		period := r.period
+		source := r.queue[r.i].Source
+		if burst, ok := r.bursts[source]; ok {
+			if now.Before(burst.until) && burst.period > 0 {
+				period = burst.period
+			} else {
+				delete(r.bursts, source)
+			}
+		}
+		r.mu.Unlock()
+		if err := r.clk.Sleep(ctx, period); err != nil {
 			return nil, false, err
 		}
 	}

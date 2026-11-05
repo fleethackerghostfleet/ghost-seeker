@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -192,4 +193,59 @@ func readBody(t *testing.T, r *http.Request) []byte {
 		t.Fatal(err)
 	}
 	return raw
+}
+
+func TestDirectiveEmconPhraseUpdatesShipLayer(t *testing.T) {
+	cmdLayer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+		Rules: []*pb.InterestRule{{Id: "sub", Locked: true, BoostLabels: []string{"submarine"}}},
+		Emcon: &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_NORMAL, SetBy: "CTF-72", Echelon: pb.Echelon_ECHELON_COMMAND}}
+	operator := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "operator-ui"}
+	current := &pb.Policy{Id: "current", Version: 5, Emcon: pb.EmconMode_EMCON_MODE_NORMAL,
+		EmconSetting: proto.Clone(cmdLayer.Emcon).(*pb.EmconSetting), Layers: []*pb.PolicyLayer{cmdLayer, operator}}
+
+	var setPolicy *pb.Policy
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch strings.TrimPrefix(r.URL.Path, consolePath) {
+		case "GetPolicy":
+			raw, _ := protojson.Marshal(&pb.GetPolicyResponse{Policy: current})
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(raw)
+		case "SetPolicy":
+			var req pb.SetPolicyRequest
+			if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(readBody(t, r), &req); err != nil {
+				t.Errorf("decode SetPolicy: %v", err)
+			}
+			setPolicy = req.Policy
+			raw, _ := protojson.Marshal(&pb.SetPolicyResponse{Policy: setPolicy})
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(raw)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	bridge := New(server.URL, "", nil)
+	bridge.Compiler = &command.Compiler{}
+
+	rec := httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy", strings.NewReader(`{"text":"go quiet"}`)))
+	if rec.Code != http.StatusOK || setPolicy == nil {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if setPolicy.Emcon != pb.EmconMode_EMCON_MODE_SILENT || setPolicy.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_SILENT ||
+		setPolicy.Layers[1].Emcon == nil || setPolicy.Layers[1].Emcon.Mode != pb.EmconMode_EMCON_MODE_SILENT || setPolicy.Layers[1].Emcon.SetBy != "operator-ui" {
+		t.Fatalf("directive EMCON phrase must set the ship layer EMCON: %+v", setPolicy)
+	}
+	if !strings.Contains(rec.Body.String(), "EMCON SILENT") {
+		t.Fatalf("readback missing EMCON: %s", rec.Body.String())
+	}
+
+	current.EmconSetting.Locked = true
+	current.Layers[0].Emcon.Locked = true
+	rec = httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy", strings.NewReader(`{"text":"go quiet"}`)))
+	if rec.Code != http.StatusOK || setPolicy.Emcon != pb.EmconMode_EMCON_MODE_NORMAL || setPolicy.Layers[1].Emcon != nil ||
+		!strings.Contains(rec.Body.String(), "EMCON locked by CTF-72") {
+		t.Fatalf("locked EMCON must be kept with a warning: status=%d body=%s policy=%+v", rec.Code, rec.Body.String(), setPolicy)
+	}
 }

@@ -2,7 +2,8 @@
 # toxiproxy API (see README). Mount frames to replay.
 services:
   shore:
-    build: { context: ../.., dockerfile: deploy/Dockerfile }
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: shore }
+    image: ghost-seeker/shore:0.1.0
     entrypoint: ["/usr/local/bin/shore"]
     command: ["-data", "/data/shore", "-listen", ":8080", "-ui", "/ui"]
     ports: ["8080:8080"]
@@ -16,7 +17,8 @@ services:
     depends_on: [shore]
 
   edge:
-    build: { context: ../.., dockerfile: deploy/Dockerfile }
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: edge }
+    image: ghost-seeker/edge:0.1.0
     command: ["-data", "/data/edge", "-listen", ":8081", "-shore", "http://link:18080", "-frames", "/frames", "-period", "2s", "-ui", "/ui"]
     ports: ["8081:8081"]
     volumes: ["edge-data:/data", "../../frames:/frames:ro"]

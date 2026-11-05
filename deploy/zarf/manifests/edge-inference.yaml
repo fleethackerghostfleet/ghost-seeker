@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edgeml-sidecar
+  namespace: ghost-seeker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edgeml-sidecar
+  template:
+    metadata:
+      labels:
+        app: edgeml-sidecar
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: edgeml-sidecar
+          image: ghost-seeker/edgeml-sidecar:0.1.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--listen"
+            - "0.0.0.0:9090"
+            - "--mock"
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # Replace this emptyDir with a PVC or approved read-only model mount for real inference.
+            - name: models
+              mountPath: /models
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: models
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: edgeml-sidecar
+  namespace: ghost-seeker
+spec:
+  type: ClusterIP
+  selector:
+    app: edgeml-sidecar
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http

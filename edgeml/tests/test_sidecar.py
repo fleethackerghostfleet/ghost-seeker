@@ -3,6 +3,7 @@ import base64
 import json
 import urllib.error
 import urllib.request
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -10,7 +11,7 @@ import pytest
 
 from edgeml.sidecar import MockEngine
 from edgeml.sidecar.server import start_in_thread
-from edgeml.sidecar.service import InferenceService, MockSchedule, RpcError
+from edgeml.sidecar.service import EdgemlEngine, InferenceService, MockSchedule, RpcError
 
 
 def _jpeg(seed=0, w=160, h=120):
@@ -108,3 +109,18 @@ def test_service_dispatch_without_http():
         svc.dispatch("dispatch", {})
     assert ei.value.code == "unimplemented"
     assert svc.dispatch("Capabilities", {})["embeddingDim"] == 64
+
+
+def test_duplicate_uses_current_track_box_and_best_metadata():
+    engine = object.__new__(EdgemlEngine)
+    state = SimpleNamespace(s=SimpleNamespace(
+        sighting_id="cam-a-1", label="tug", best_score=0.91, best_box=[10, 10, 30, 20],
+        subtype="cargo vessel", first_t_s=1.0, last_t_s=2.0, n_frames=4))
+
+    duplicate = engine._duplicate(state, 3, 200, 100, 1000, track_box=[90, 60, 30, 25])
+    assert duplicate["event"] == "EVENT_DUPLICATE"
+    assert duplicate["keyDetection"] == {
+        "label": "tug", "confidence": 0.91, "box": {"x": 0.45, "y": 0.6, "w": 0.15, "h": 0.25}}
+
+    fallback = engine._duplicate(state, 3, 200, 100, 1000)
+    assert fallback["keyDetection"]["box"] == {"x": 0.05, "y": 0.1, "w": 0.15, "h": 0.2}

@@ -1,10 +1,13 @@
 bin/
+dist/
 data/
 sim-results.json
 *.db
 *.db-wal
 *.db-shm
 __pycache__/
+.pytest_cache/
+.venv/
 
 # demo clips are downloaded, never committed
 scenarios/ghostfleet_demo/frames/
@@ -15,6 +18,5 @@ scenarios/ghostfleet_demo/out/
 
 # algorithm/ (Tomer) run artifacts
 *.py[cod]
-.venv/
 algorithm/runs/
 algorithm/models/

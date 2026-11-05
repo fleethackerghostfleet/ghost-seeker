@@ -1,4 +1,9 @@
 .git
+.gitignore
+frames/
+scenarios/*/frames/
+edgeml/
+ui-mockup/
 bin/
 data/
 sim-results.json

@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shore-config
+  namespace: ghost-seeker
+data:
+  DATA_DIR: /data
+  LISTEN: :8080
+  UI_DIR: /ui
+  INFER_URL: "###ZARF_VAR_INFER_URL###"
+  GS_REQUIRE_AUTH: "###ZARF_VAR_SHORE_REQUIRE_AUTH###"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shore
+  namespace: ghost-seeker
+spec:
+  serviceName: shore
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shore
+  template:
+    metadata:
+      labels:
+        app: shore
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: shore
+          image: ghost-seeker/shore:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: shore-config
+          env:
+            - name: GS_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: shore-auth
+                  key: signing-key
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: "###ZARF_VAR_SHORE_STORAGE###"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shore
+  namespace: ghost-seeker
+spec:
+  type: ClusterIP
+  selector:
+    app: shore
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

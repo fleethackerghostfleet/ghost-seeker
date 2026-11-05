@@ -273,6 +273,9 @@ nav a.on{background:var(--panel2);border-bottom:3px solid var(--accent)}
 .dirbar .pill,.dir{background:#0c2228;border-color:#1d5560;color:#a6e3ee}
 .kb.acc{background:#0d3038}
 .wb button,.wb textarea,.wb select,.wb .panel,.wb .examples>*,dialog#wbConfirm{border-radius:2px}
+.wb-readback{font-weight:600;margin:.8rem 0}
+.wb-warnings{color:var(--muted);padding-left:1.2rem}
+.wb-warnings .blocked{color:var(--p1);font-weight:700}
 /* Responsive: short and narrow windows */
 body{overflow:auto}
 .page{min-height:420px;overflow-x:clip}

@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,9 +9,16 @@ import numpy as np
 
 
 RULE_PATH = Path(__file__).resolve().parents[4] / "internal/catalog/colregs_lights.json"
+CONFIG_PATH = Path(__file__).resolve().parents[4] / "internal/catalog/colregs_night_config.json"
+_OPTICAL = {"EO", "RGB", "OPTICAL"}
+logger = logging.getLogger(__name__)
 
 
 def load_rules(path=RULE_PATH):
+    return json.loads(Path(path).read_text())
+
+
+def load_config(path=CONFIG_PATH):
     return json.loads(Path(path).read_text())
 
 
@@ -192,7 +200,8 @@ def interpret(lights, night, modality="EO", rules=None, signal=None):
     return result
 
 
-def analyze(frames, box, modality="EO", timestamp=None, lat=None, lon=None, rules=None, signal=None):
+def analyze(frames, box, modality="EO", timestamp=None, lat=None, lon=None, rules=None, signal=None, *,
+            label=None, conf=None, burst=None, t=None, config=None):
     if isinstance(frames, np.ndarray):
         frames = [frames]
     if not frames:
@@ -208,4 +217,79 @@ def analyze(frames, box, modality="EO", timestamp=None, lat=None, lon=None, rule
         present = [any(p["colour"] == light["colour"] and math.hypot(p["x"]-light["x"], p["y"]-light["y"]) < 6 for p in obs) for obs in observations]
         light["flashing"] = any(present) and not all(present)
     lights = sorted(lights, key=lambda light: -light["contrast"])[:8]
-    return dict(decision, lights=lights, interpretation=interpret(lights, decision["night"], modality, rules, signal))
+    result = dict(decision, lights=lights, interpretation=interpret(lights, decision["night"], modality, rules, signal))
+    cfg = config or load_config()
+    reasons = burst_reasons(lights, result["interpretation"], len(frames), decision["night"], modality, cfg)
+    granted = None
+    fps = cfg["burst"]["burst_fps"]
+    if burst is not None:
+        granted = burst.request(t or 0.0, "; ".join(reasons)) if reasons else False
+        fps = burst.fps(t or 0.0)
+    result["burst"] = {"requested": bool(reasons), "reasons": reasons, "granted": granted,
+                       "fps": fps, "duration_s": cfg["burst"]["duration_s"]}
+    result["dark_contact"] = dark_contact(frames, box, label=label, conf=conf, gate_decision=decision,
+                                           modality=modality, config=cfg)
+    return result
+
+
+def burst_reasons(lights, interpretation, n_frames, night, modality, config):
+    if not night or modality.upper() not in _OPTICAL:
+        return []
+    triggers = config["burst"]["triggers"]
+    reasons = []
+    if triggers.get("possible_flashing_yellow", False) and n_frames < 2 \
+            and any(light["colour"] == "yellow" for light in lights):
+        reasons.append("possible flashing yellow light")
+    if triggers.get("flashing_rate_unresolved", False) and any(light.get("flashing") is True for light in lights):
+        reasons.append("flashing light, rate unresolved at base frame rate")
+    if triggers.get("unresolved_light_stack", False) and len(lights) >= 2 and interpretation.get("rule_id") is None:
+        reasons.append("unresolved light stack")
+    if triggers.get("low_confidence_pattern", False) and interpretation.get("low_confidence", False):
+        reasons.append(f"low confidence {interpretation.get('rule_id')}")
+    return reasons
+
+
+def dark_contact(frames_or_image, box, label=None, conf=None, gate_decision=None, modality="EO", config=None):
+    cfg = (config or load_config())["dark_contact"]
+    if modality.upper() not in _OPTICAL:
+        return {"flagged": False, "confidence": 0.0, "n_lights": 0, "basis": "not_optical"}
+    decision = gate_decision
+    if decision is None:
+        first = frames_or_image[0] if isinstance(frames_or_image, (list, tuple)) else frames_or_image
+        decision = gate(first, modality=modality)
+    if not decision.get("night"):
+        return {"flagged": False, "confidence": 0.0, "n_lights": 0, "basis": "day"}
+    terms = cfg["vessel_terms"]
+    if label is not None and not any(term in label.casefold() for term in terms):
+        return {"flagged": False, "confidence": 0.0, "n_lights": 0, "basis": "not_vessel"}
+    frames = [frames_or_image] if isinstance(frames_or_image, np.ndarray) else list(frames_or_image)
+    x, y, w, h = map(float, box)
+    expanded = (x - cfg["side_pad"] * w,
+                y - cfg["above"] * max(h, 4.0),
+                w * (1 + 2 * cfg["side_pad"]),
+                h + cfg["above"] * max(h, 4.0) + cfg["below"] * h)
+    n_lights = sum(len(detect_lights(frame, expanded, pad=0)) for frame in frames)
+    if n_lights:
+        return {"flagged": False, "confidence": 0.0, "n_lights": n_lights, "basis": "lights_present"}
+    gate_confidence = float(decision.get("confidence", 0.0))
+    confidence = round(min(1.0, (1.0 if conf is None else float(conf)) * (0.6 + 0.4 * gate_confidence)), 3)
+    return {"flagged": True, "confidence": confidence, "n_lights": 0, "basis": "no_lights"}
+
+
+def frame_report(image, detections, burst=None, t=None, modality="EO", config=None):
+    cfg = config or load_config()
+    decision = gate(image, modality=modality)
+    dark = []
+    burst_result = None
+    for index, (label, conf, box) in enumerate(detections):
+        dark_result = dark_contact(image, box, label=label, conf=conf, gate_decision=decision,
+                                   modality=modality, config=cfg)
+        if dark_result["flagged"]:
+            dark.append((index, dark_result["confidence"]))
+        lights = detect_lights(image, box) if decision.get("night") and modality.upper() in _OPTICAL else []
+        interpretation = interpret(lights, decision.get("night"), modality)
+        reasons = burst_reasons(lights, interpretation, 1, decision.get("night"), modality, cfg)
+        if burst is not None and reasons and burst.request(t or 0.0, "; ".join(reasons)):
+            burst_result = {"fps": burst.fps(t or 0.0), "duration_s": cfg["burst"]["duration_s"],
+                            "reason": "; ".join(reasons)}
+    return {"night": decision["night"], "dark": dark, "burst": burst_result}

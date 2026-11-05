@@ -65,7 +65,7 @@
     $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
-    $('#policy').textContent = policy ? `“${policy}”` : 'none set';
+    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (!snap.policyInfo && snap.emcon ? ` · EMCON ${snap.emcon}` : '');
     const focusedMode = document.activeElement?.closest?.('#shore-emcon button')?.dataset.mode;
     const mode = String(policyInfo.emcon || 'NORMAL').toUpperCase();
     const lockTitle = policyInfo.emconLocked ? `EMCON locked by ${policyInfo.emconLockedBy || policyInfo.emconSetBy || 'higher echelon'}` : '';
@@ -249,8 +249,17 @@
     if (!text) return;
     try {
       const r = await post('/api/shore/policy', { text });
-      toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
-      if (r.conflicts?.length) toast(window.gsPolicy.conflictToast(r.conflicts), true);
+      const c = r.compiled;
+      // NL-compiler hook: readback + path ("llm"|"rules") + guardrail warnings.
+      if (c) {
+        $('#readback').textContent = `${c.readback} [${c.path}]${c.warnings.length ? ' — ' + c.warnings.join(' ') : ''}`;
+        toast(`policy set (${c.path}): ${c.readback}`);
+      } else {
+        $('#readback').textContent = '';
+        toast('policy set');
+      }
+      const conflicts = r.policy?.conflicts || r.conflicts;
+      if (conflicts?.length) toast(window.gsPolicy.conflictToast(conflicts), true);
       $('#directive').value = '';
     } catch (err) { toast(err.message, true); }
   });

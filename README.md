@@ -6,6 +6,8 @@ time a connection is available, *what to send, in what order, and in what
 form*, so the most important information reaches shore first and nothing is
 lost. Images are the first data type; the item model is type-agnostic.
 
+See [Fielding](docs/FIELDING.md) for offline builds, container staging, and Zarf deployment.
+
 Key behaviours (all covered by `go test ./...` and the simulator):
 
 - **Unknown-first.** Items the model can't classify score highest by default.
@@ -268,7 +270,25 @@ Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention
 - **Collection Priorities** — live iterative workbench: debounced previews, weighted/source/time-scoped editable chips, scored specificity suggestions, image corrections, tier pins, version comparison/revert, Ctrl+Z / Ctrl+Shift+Z. J/K or ←/→ move image focus; ↑/↓/X propose corrections. Apply publishes the draft and pins to all browser sessions. Active directives, the base-model selector, and effective object weights remain on the page.
 - **Commander's Board** (`/cdr`) — separate final-review view for images the watch floor escalated (`C`), ordered by tier, command score, then wait time; shows the frame, contacts, escalation reason and chain of custody. Keys: `1` take action, `2` track, `3` forward to intel, `4` no further action, `B` return to the watch floor, `/` note, `Z` reopen, `↑`/`↓` move, `Tab` Awaiting/Decided. Decisions go to `POST /api/items/{id}/decision` and fan out over SSE. A simulated watch officer escalates the top unreviewed P1/P2 image about every 15 s; `-auto-cdr 0` turns it off. Escalated images survive the `-retain` limit.
 
-Preview adds draft rules on top of active directives without mutating server state. Apply adds a new active directive; Reset clears only the local draft. Time-scoped directives are refreshed every 30 seconds so expired boosts disappear. The feed continues streaming during iteration. Keyword/regex parsing does not use an LLM; operator app state is in memory and resets on restart.
+Preview adds draft rules on top of active directives without mutating server state. Apply adds a new active directive; Reset clears only the local draft. Time-scoped directives are refreshed every 30 seconds so expired boosts disappear. The feed continues streaming during iteration. Live previews use the deterministic rules parser; operator app state is in memory and resets on restart.
+
+### Natural-language compiler
+
+Directives compile in `internal/command`. Set `GS_LLM_URL`, `GS_LLM_MODEL` and
+`GS_LLM_TIMEOUT` (or pass `-llm-url`, `-llm-model` and `-llm-timeout`) to use an
+optional local OpenAI-compatible LLM. The JSON-schema-constrained draft falls
+back to the deterministic regex parser; the workbench shows a readback and
+guardrails before applying.
+
+For Ollama:
+
+```sh
+GS_LLM_URL=http://localhost:11434 GS_LLM_MODEL=qwen2.5:3b-instruct go run ./cmd/ghost-seeker -addr :8090
+```
+
+`llama-server --port 8002` and vLLM `--port 8002` can also expose the
+OpenAI-compatible endpoint at `http://localhost:8002/v1`. Test an LLM-backed
+compiler with `GS_LLM_URL=... go test ./internal/command -run TestEvalLLMPath -v`.
 
 The [standalone design reference](ui-mockup/reprioritize.html) retains 80 seeded synthetic images and simulated apply; open it directly without a server.
 
@@ -319,9 +339,11 @@ Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for 
 - Inference: mock + Python stub only. Planned sidecar: ONNX Runtime with the
   OpenVINO execution provider, YOLO-class detector + MobileCLIP-class embedder
   (CPU). See `inference/README.md`.
-- Natural-language interest compilation lives in the `dynamic-interest` repo;
-  this repo consumes the compiled `Policy` (labels, vectors, thresholds).
-- No auth/TLS on either service. Zarf package is a skeleton.
+- NL directives compile in `internal/command`, optionally through a local
+  OpenAI-compatible LLM (`GS_LLM_URL`, `GS_LLM_MODEL`, `GS_LLM_TIMEOUT`) with
+  JSON-schema constraints, regex fallback, deterministic readback and
+  guardrails before apply.
+- No TLS on either service; SyncService unit auth is opt-in (see Configuration above) and ConsoleService has no auth.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
 - Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
   the boat is not visible in every frame). `scenarios/sailboats_example.json`
