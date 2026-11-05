@@ -728,11 +728,30 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
 	var compiled *command.Compiled
 	if len(in.Suppress) == 0 && len(in.Boost) == 0 && in.Text != "" {
+		droppedScopedRules := false
 		if b.Compiler != nil {
 			c := b.Compiler.Compile(r.Context(), in.Text)
 			if c.Blocked {
 				http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
 				return
+			}
+			kept := make([]command.Rule, 0, len(c.Rules))
+			for _, rule := range c.Rules {
+				if len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0 {
+					kept = append(kept, rule)
+				} else {
+					droppedScopedRules = true
+				}
+			}
+			if droppedScopedRules {
+				path := c.Path
+				c = b.Compiler.Review(in.Text, kept, c.DurationMin)
+				c.Path = path
+				c.Warnings = append(c.Warnings, "Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.")
+				if c.Blocked {
+					http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
+					return
+				}
 			}
 			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
 			if mode := command.ParseEmcon(in.Text); mode != "" {
@@ -746,7 +765,10 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			compiled = &c
 		}
 		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
-			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
+			if !droppedScopedRules {
+				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
+				compiled = nil
+			}
 		}
 	}
 	var out pb.SetPolicyResponse

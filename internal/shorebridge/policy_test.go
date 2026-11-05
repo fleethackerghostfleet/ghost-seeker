@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -78,6 +79,74 @@ func TestSetPolicyBlockedByGuardrails(t *testing.T) {
 	}
 	if got.Text != "" {
 		t.Fatalf("blocked directive reached shore")
+	}
+}
+
+func TestSetPolicyDropsScopedRulesBeforeEdgeFlattening(t *testing.T) {
+	parsed := command.ParseDirective("ignore cargo ships from EO-P7")
+	if len(parsed) != 1 || len(parsed[0].Sources) != 1 || parsed[0].Sources[0] != "EO-P7" {
+		t.Fatalf("source phrase parsed as %#v", parsed)
+	}
+	tests := []struct {
+		name         string
+		text         string
+		wantBoost    []string
+		wantSuppress []string
+	}{
+		{name: "scoped only", text: "ignore cargo ships from EO-P7"},
+		{name: "mixed", text: "ignore cargo ships from EO-P7; prioritize submarines", wantBoost: []string{"submarine"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got pb.Policy
+			shore := fakeShore(t, &got)
+			defer shore.Close()
+			b := New(shore.URL, "", nil)
+			b.Compiler = &command.Compiler{}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"`+test.text+`"}`))
+			b.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status %d: %s", rec.Code, rec.Body)
+			}
+			var resp struct {
+				Compiled *command.Compiled `json:"compiled"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil || resp.Compiled == nil {
+				t.Fatalf("no compiled block in %s (%v)", rec.Body, err)
+			}
+			if resp.Compiled.Path != "rules" {
+				t.Fatalf("path = %q", resp.Compiled.Path)
+			}
+			const warning = "Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer."
+			if !strings.Contains(strings.Join(resp.Compiled.Warnings, "\n"), warning) {
+				t.Fatalf("warnings = %v", resp.Compiled.Warnings)
+			}
+			if strings.Contains(strings.ToLower(resp.Compiled.Readback), "cargo ship") {
+				t.Fatalf("readback includes dropped rule: %q", resp.Compiled.Readback)
+			}
+			if !reflect.DeepEqual(got.Interest.SuppressLabels, test.wantSuppress) ||
+				!reflect.DeepEqual(got.Interest.BoostLabels, test.wantBoost) {
+				t.Fatalf("edge labels = suppress %v, boost %v", got.Interest.SuppressLabels, got.Interest.BoostLabels)
+			}
+		})
+	}
+}
+
+func TestSetPolicyInterpretFallbackOmitsCompiled(t *testing.T) {
+	var got pb.Policy
+	shore := fakeShore(t, &got)
+	defer shore.Close()
+	b := New(shore.URL, "", nil)
+	b.Compiler = &command.Compiler{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"ignore sailboats"}`))
+	b.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), `"compiled"`) {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	if !reflect.DeepEqual(got.Interest.SuppressLabels, []string{"sailboat"}) {
+		t.Fatalf("interpret suppression labels = %v", got.Interest.SuppressLabels)
 	}
 }
 
