@@ -20,11 +20,12 @@ import (
 // scripted returns the sightings scripted for the n-th Analyze call (1-based)
 // and records the frames it was handed.
 type scripted struct {
-	script map[int][]*pb.Sighting
-	empty  map[int]bool // calls that see no detections at all (open ocean)
-	burst  *pb.NightBurst
-	calls  int
-	frames []inference.Frame
+	script     map[int][]*pb.Sighting
+	empty      map[int]bool // calls that see no detections at all (open ocean)
+	detections map[int][]*pb.Detection
+	burst      *pb.NightBurst
+	calls      int
+	frames     []inference.Frame
 }
 
 func (f *scripted) Analyze(_ context.Context, fr inference.Frame, _ []string, _ map[string]string) (*pb.AnalyzeResponse, error) {
@@ -32,7 +33,9 @@ func (f *scripted) Analyze(_ context.Context, fr inference.Frame, _ []string, _ 
 	f.frames = append(f.frames, fr)
 	resp := &pb.AnalyzeResponse{ModelId: "scripted", Embedding: []float32{1, 0}, Unknownness: 0.2,
 		Sightings: f.script[f.calls], Burst: f.burst}
-	if !f.empty[f.calls] {
+	if detections, ok := f.detections[f.calls]; ok {
+		resp.Detections = detections
+	} else if !f.empty[f.calls] {
 		resp.Detections = []*pb.Detection{{Label: "boat", Confidence: 0.5, Box: &pb.Box{X: 0.1, Y: 0.1, W: 0.2, H: 0.2}}}
 	}
 	return resp, nil
@@ -82,6 +85,55 @@ func TestDarkContactSightingsFeatureAndTag(t *testing.T) {
 		KeyDetection: &pb.Detection{Label: "boat", Confidence: 0.8, Box: box}})
 	if len(item.Features.Detections) != 1 || item.Features.Tags["dark_contact"] != "" {
 		t.Fatalf("unmatched dark contact attached to sighting: %+v", item.Features)
+	}
+}
+
+func TestDuplicateDarkContactUpdatesKnownSighting(t *testing.T) {
+	ctx := context.Background()
+	box := &pb.Box{X: 0.45, Y: 0.45, W: 0.05, H: 0.05}
+	an := &scripted{
+		script: map[int][]*pb.Sighting{
+			1: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "tug")},
+			2: {sighting("s1", pb.Sighting_EVENT_DUPLICATE, false, "tug")},
+		},
+		detections: map[int][]*pb.Detection{
+			2: {{Label: "dark contact", Confidence: 0.9, Box: box}},
+		},
+	}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	opened, err := g.Ingest(ctx, capture(clk, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullHash := opened.Form(pb.FormKind_FORM_KIND_FULL).Hash
+
+	duplicate, err := g.Ingest(ctx, capture(clk, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate == nil || duplicate.Item.Id != opened.Item.Id || g.Deduped() != 1 {
+		t.Fatalf("duplicate row = %v, dups = %d", duplicate, g.Deduped())
+	}
+	stored, err := st.Get(ctx, opened.Item.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Form(pb.FormKind_FORM_KIND_FULL).Hash != fullHash || g.Replaced != 0 {
+		t.Fatalf("duplicate replaced key frame/form: form=%+v replaced=%d", duplicate.Form(pb.FormKind_FORM_KIND_FULL), g.Replaced)
+	}
+	if stored.Item.Features.Tags["dark_contact"] != "1" || len(stored.Item.Features.Detections) != 2 ||
+		stored.Item.Features.Detections[0].Label != "boat" || stored.Item.Features.Detections[1].Label != "dark contact" {
+		t.Fatalf("duplicate dark-contact features = %+v", stored.Item.Features)
+	}
+	foundDark := false
+	for _, reason := range stored.Score.GetReasons() {
+		if reason.GetScorer() == "dark" && reason.GetNote() == "dark contact: no navigation lights at night" {
+			foundDark = true
+			break
+		}
+	}
+	if !foundDark {
+		t.Fatalf("dark-contact reason missing after duplicate: %+v", stored.Score.GetReasons())
 	}
 }
 

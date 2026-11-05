@@ -365,7 +365,10 @@ The sidecar keeps one controller per source and appends a separate
 field 7 (`NightBurst`) carries granted requests. The edge invokes
 `Ingester.OnBurst`; replay connects it to `Replay.Burst`, which temporarily
 shortens the replay period and returns to the base period at the deadline.
-There is no new capture subsystem. The `dark` scorer uses the highest
+In sightings mode, a `DUPLICATE` with a key-detection box can attach an
+overlapping (IoU ≥ 0.5) dark-contact detection to the existing item, tag it,
+and rescore it without replacing its forms or key frame. There is no new
+capture subsystem. The `dark` scorer uses the highest
 above-threshold dark-contact confidence and has a policy weight override
 (`ScorerWeights["dark"]`, including zero). Interest boost/suppress matching
 normalizes “dark vessel(s),” “dark ship,” “running dark,” “vessel(s) running
