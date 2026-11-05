@@ -1634,6 +1634,19 @@ test('empty water has an obvious kept-on-ship label and explicit upload override
  assert.equal(vm.runInContext('uploadState(ocean).queued',context),true);
 });
 
+test('simulation empty water stays out of Operator Review and its unreviewed count',()=>{
+ const context=setup();
+ vm.runInContext(`
+  const upload={bytes:1000,sent:0,done:false};
+  items=[normalizeItem({...raw('ocean',4),src:'BY-12',background:true,dets:null,det:null,upload:{...upload}}),normalizeItem({...raw('ship',4),upload:{...upload}})];
+  state.src='ALL';rv.cur=items[0];fullRenderStats();
+ `,context);
+ assert.equal(vm.runInContext('rvQueue().map(i=>i.id).join()',context),'ship');
+ assert.equal(vm.runInContext('isEmptyWater(items[0])',context),true);
+ assert.equal(vm.runInContext('isEmptyWater(items[1])',context),false);
+ assert.equal(context.$('rvCount').textContent,1);
+});
+
 test('upload summary counts retained empty water separately from queued and active transfers',()=>{
  const context=setup();
  vm.runInContext(`
