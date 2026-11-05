@@ -186,13 +186,34 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 		ts = ts.Add(time.Duration(rng.Intn(14)+8) * time.Second)
 		source := catalog.Sources[rng.Intn(len(catalog.Sources))]
 		item, extra := generator.Tick(&source, ts, "maritime", nil)
-		if item != nil {
-			data.Add(item, extra)
+		addCapture(data, generator, rng, item, extra, "maritime", nil)
+		if item != nil && item.Filtered == "" {
 			kept++
-		} else {
-			data.Add(nil, extra)
 		}
 	}
+}
+
+// addCapture stores one capture and, for about half of the bursts with
+// repeated frames, one near-duplicate view so the feed can show it at P4.
+func addCapture(data *store.Store, generator *sensor.Generator, rng *rand.Rand, item *command.Item, extra int, model string, directives []command.Directive) (stored []command.Item, evicted []string) {
+	if item == nil {
+		data.Add(nil, extra)
+		return nil, nil
+	}
+	captures := []*command.Item{item}
+	if extra > 0 && item.Filtered == "" && rng.Intn(2) == 0 {
+		captures = append(captures, generator.Repeat(item, model, directives))
+		extra--
+	}
+	for _, capture := range captures {
+		kept, gone := data.Add(capture, extra)
+		extra = 0
+		stored = append(stored, kept)
+		if gone != "" {
+			evicted = append(evicted, gone)
+		}
+	}
+	return stored, evicted
 }
 
 func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration) {
@@ -288,14 +309,17 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 			app.PublishUpdate(updated, cdr)
 		}
 		_, _, _, state := data.Snapshot()
-		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
-		stored, evicted := data.Add(item, extra)
-		app.PublishEvict(evicted)
-		if item != nil {
-			stats, _ := data.Stats()
-			app.PublishItem(stored, stats)
-		} else {
-			stats, _ := data.Stats()
+		directives := data.Directives()
+		item, extra := generator.Tick(nil, time.Now(), state.Model, directives)
+		stored, evicted := addCapture(data, generator, rng, item, extra, state.Model, directives)
+		for _, id := range evicted {
+			app.PublishEvict(id)
+		}
+		stats, _ := data.Stats()
+		for _, capture := range stored {
+			app.PublishItem(capture, stats)
+		}
+		if len(stored) == 0 {
 			app.PublishStats(stats)
 		}
 	}

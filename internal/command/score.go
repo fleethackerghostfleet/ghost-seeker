@@ -213,6 +213,9 @@ func RescoreAt(item *Item, model string, directives []Directive, now time.Time) 
 	item.BaseTier = TierFor(item.Base)
 	item.CentralTier = TierFor(item.Central)
 	item.Tier = TierFor(item.Central)
+	if item.Filtered != "" {
+		item.Tier = 4
+	}
 	if item.Manual != 0 {
 		item.Tier = item.Manual
 	}

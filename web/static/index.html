@@ -38,9 +38,11 @@
   <div class="toolbar">
     <span class="lbl">Sensor</span>
     <select id="srcSel"></select>
+    <label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates</label>
+    <label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter"><option value="all">All images</option><option value="sent">Sent by a person</option><option value="reviewed">Reviewed by a person</option><option value="unreviewed">Not reviewed yet</option></select></label><span class="feed-note" id="sentOrder" hidden>Newest send first</span>
     <div class="seg" id="tierSeg"></div>
     <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
-    <span class="lbl">Size</span><div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button></div>
+    <span class="lbl">Size</span><div class="seg" id="densSeg"><button data-d="m" class="on">Small</button><button data-d="l">Large</button></div>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
     <button class="btn sm" id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing (0)</button>
@@ -56,7 +58,7 @@
     <div class="st" id="st3" title="Image data transmitted from ship to shore">Sent to shore <b id="cKB">0</b> MB</div><span class="ar">›</span>
     <div class="st" id="st4" title="Cumulative images saved on the ship since startup, including images later evicted from the retained feed">Saved on ship (total) <b id="cDb">0</b></div><span class="ar">›</span>
     <div class="st" id="st5" title="The scoring model ranks images using the base model and active directives">Scoring model: <b id="cModel"></b> · <b id="cP1">0</b> P1 Critical</div>
-    <span class="sv"><span id="cSaved">0%</span> of low-value frames filtered on the ship to save bandwidth</span>
+    <a class="btn sm details-link" href="#details">Details: counts &amp; filtered photos ›</a>
   </div>
   <div class="strip live-strip" id="liveStrip" hidden></div>
   <div class="cameras" id="cameras" hidden></div>
@@ -107,6 +109,7 @@
     <div class="rvprog"><span class="rvprog-lbl">Images left in feed to review:</span> <b id="rvLeft">0</b> · <b id="rvDone">0</b> reviewed <span id="rvSrc"></span></div>
     <div class="rvbar" role="progressbar" aria-label="Feed reviewed so far"><i id="rvBarI"></i></div><span class="rvbar-lbl">feed reviewed</span>
     <div class="spacer"></div>
+    <button class="btn sm human-btn" id="rvSent">➤ What I sent (<span id="rvSentN">0</span>)</button>
     <div class="seg" id="rvOrder"><button data-o="pri" class="on">Highest priority first</button><button data-o="new">Newest first</button></div>
     <button class="btn sm" id="nightBtn">Night mode (N)</button>
     <a class="btn sm" href="#feed">Exit (Esc)</a>
@@ -127,6 +130,10 @@
     <button class="kb" data-a="skip" style="flex:.7"><span class="kb-act">Skip for now</span><kbd>→</kbd></button>
     <button class="kb" data-a="undo" style="flex:.7"><span class="kb-act">Undo last</span><kbd>Z</kbd></button>
   </div>
+</section>
+<section class="page" id="pgDetails" aria-label="Pipeline details">
+  <div class="details-head"><a class="btn sm" href="#feed">‹ Back to feed</a><h2>Details</h2></div>
+  <div id="detailsBody"></div>
 </section>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <section class="page" id="pgBrief" aria-label="Briefing workspace">

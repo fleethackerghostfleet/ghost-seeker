@@ -5,6 +5,8 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
@@ -156,6 +158,124 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
  settings.resize('noSuchPanel',400);assert.equal(saved().widths.noSuchPanel,undefined);
  settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
  settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
+});
+test('feed filters default to showing duplicates, persist, validate, and return defensive copies',()=>{
+ for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all"}');
+ }
+ const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
+ settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
+ settings.setFeed({review:'sent'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent'});
+ assert.equal(saved().bar,'right');
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'sent');
+ settings.setFeed({showDuplicates:true,review:'bad'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all'});
+});
+function feedContext(){
+ const context=setup();
+ vm.runInContext(`
+  filters={showDuplicates:true,review:'all'};gsSettings={get:()=>({feed:filters})};
+  function frame(id,extra={}){return {id,src:{id:'EO-P7'},tier:2,central:.7,ts:100,img:'/'+id+'.jpg',det:[],...extra}}
+  function ids(){return visible().l.map(i=>i.id).join(',')}
+ `,context);
+ return context;
+}
+test('feed shows every pipeline image by default with low-value, repeat and directive-lowered images at P4',()=>{
+ const context=feedContext();
+ vm.runInContext(`
+  items=[frame('original',{tier:1,central:.9}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),
+   frame('low',{tier:4,filtered:'low-value',central:.1}),frame('directive',{det:[{sup:true}]}),
+   frame('mixed',{tier:3,det:[{sup:true},{sup:false}]}),frame('dismissed',{dismissed:true})];
+  before=JSON.stringify(items);
+ `,context);
+ assert.equal(vm.runInContext('ids()',context),'original,mixed,repeat,directive,low');
+ assert.equal(vm.runInContext('visible().counts[4]',context),3);
+ assert.equal(vm.runInContext("feedReasons.get('repeat')",context),'Repeat of an earlier image');
+ assert.equal(vm.runInContext("feedReasons.get('low')",context),'Low value');
+ assert.equal(vm.runInContext("feedReasons.get('directive')",context),'Lowered by directive');
+ vm.runInContext('filters.showDuplicates=false',context);
+ assert.equal(vm.runInContext('ids()',context),'original,mixed,directive,low');
+ vm.runInContext("filters.showDuplicates=true;state.tier='4'",context);
+ assert.equal(vm.runInContext('ids()',context),'repeat,directive,low');
+ assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
+});
+test('operator-chosen repeats stay visible at their own priority even with duplicates hidden',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('kept',{tier:2,manual:2,filtered:'duplicate'}),frame('sent',{tier:1,sent:true,filtered:'duplicate'}),frame('repeat',{tier:4,filtered:'duplicate'})];filters.showDuplicates=false`,context);
+ assert.equal(vm.runInContext('ids()',context),'sent,kept');
+ assert.equal(vm.runInContext("feedTier(items[0])",context),2);
+});
+test('human review filters separate people from automatic escalation and list newest human sends first',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('accepted',{reviewed:true}),frame('manual',{manual:2}),frame('dismissed',{dismissed:true}),frame('pending'),
+  frame('auto',{tier:1,manual:1,reviewed:true,sent:true,autoSent:true,sentAt:'2026-11-05T10:00:00Z'}),
+  frame('sent-old',{reviewed:true,sent:true,sentAt:'2026-11-05T10:01:00Z'}),frame('sent-new',{tier:4,reviewed:true,sent:true,sentAt:'2026-11-05T10:05:00Z'}),
+  frame('full',{fullRes:true,fullResAt:'2026-11-05T10:03:00Z'}),frame('other',{src:{id:'IR-U1'},reviewed:true,sent:true,sentAt:'2026-11-05T10:09:00Z'})]`,context);
+ vm.runInContext("filters.review='sent'",context);
+ assert.equal(vm.runInContext('ids()',context),'other,sent-new,full,sent-old');
+ vm.runInContext("state.src='EO-P7'",context);
+ assert.equal(vm.runInContext('ids()',context),'sent-new,full,sent-old');
+ vm.runInContext("filters.review='reviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,sent-new,dismissed');
+ vm.runInContext("filters.review='unreviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'auto,pending,full');
+ assert.equal(vm.runInContext("humanSent(items[4])",context),false);
+ assert.equal(vm.runInContext("humanSent(items[5])",context),true);
+});
+test('cards mark human sends purple and automatic sends green',()=>{
+ assert.match(source,/<span class="cdrtag">✓ Auto-sent to Commander<\/span><span class="hsenttag">➤ Sent by operator<\/span>/);
+ assert.match(source,/\$\{it\.sent&&it\.autoSent\?' sent':''\}\$\{humanSent\(it\)\?' hsent':''\}/);
+ assert.match(css,/\.card\.hsent \.hsenttag\{display:block\}/);
+ assert.match(css,/--human:#a58bff/);
+ assert.match(html,/id="rvSent">➤ What I sent/);
+});
+test('main strip moves low-level counts to the Details screen',()=>{
+ assert.match(css,/#simStrip :is\(#st2,#st4\),#simStrip :is\(#st2,#st4\)\+\.ar,#liveStrip \.lowlevel,#liveStrip \.lowlevel\+\.ar\{display:none\}/);
+ assert.match(html,/href="#details">Details: counts &amp; filtered photos ›<\/a>/);
+ assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates<\/label>/);
+ assert.match(html,/<div class="seg" id="densSeg"><button data-d="m" class="on">Small<\/button><button data-d="l">Large<\/button><\/div>/);
+});
+test('Details screen lists automatically filtered photos by kind with their originals',()=>{
+ const context=feedContext();
+ vm.runInContext(`body={innerHTML:''};els={detailsBody:body,liveStrip:{innerHTML:''}};$=id=>els[id];imageFor=it=>'/img/'+it.id;zulu=()=>'12:00:00';
+  stats={cap:100,keep:20,drop:80,bytes:2048,db:5};
+  items=[frame('original',{tier:2}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),frame('low',{tier:4,filtered:'low-value'}),
+   frame('directive',{det:[{sup:true}]}),frame('chosen',{filtered:'duplicate',manual:2}),frame('gone',{dismissed:true,filtered:'low-value'})];
+  renderDetails();`,context);
+ const page=()=>vm.runInContext('body.innerHTML',context);
+ assert.match(page(),/Repeats of earlier images \(1\)/);
+ assert.match(page(),/Low value \(1\)/);
+ assert.match(page(),/Lowered by directive \(1\)/);
+ assert.match(page(),/Low-value and repeat frames kept on the ship \(P4 Low\)<\/td><td class="n">80/);
+ assert.match(page(),/src="\/img\/original"[^]*Original · P2 High[^]*src="\/img\/repeat"/);
+ assert.doesNotMatch(page(),/data-id="chosen"/);
+ vm.runInContext("state.detKind='low-value';renderDetails()",context);
+ assert.match(page(),/data-id="low"/);
+ assert.doesNotMatch(page(),/data-id="gone"/);
+});
+test('shore rank uses all shore records by ship score regardless of review, sensor, tier or sort filters',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('highest',{live:{score:30},tier:1}),
+  frame('selected',{live:{score:20},reviewed:true}),frame('lowest',{live:{score:10}}),
+  frame('suppressed',{live:{score:40,suppressed:true}})];
+  filters.review='reviewed';state.sort='new';state.tier='2';state.src='IR-U1';
+ `,context);
+ assert.match(vm.runInContext("liveWhy(items[1])[0].t",context),/Rank 2 of 3 on shore by ship score \(20\.00\)/);
+});
+test('feed density offers only Small and Large, persists them and maps the old XL to Large',()=>{
+ for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}','{"density":"s"}']){
+  assert.equal(settingsContext(saved).settings.get().density,'m');
+ }
+ assert.equal(settingsContext('{"density":"xl"}').settings.get().density,'l');
+ const {settings,saved}=settingsContext('{}');
+ for(const density of ['m','l']){
+  settings.density(density);
+  assert.equal(saved().density,density);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().density,density);
+ }
+ settings.density('xl');settings.density('s');settings.density(null);
+ assert.equal(settings.get().density,'l');
 });
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
@@ -404,7 +524,7 @@ test('live card updates preserve canonical priority labels',()=>{
  const context=setup();
  vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
  vm.runInContext(`
-  badge={};other={};
+  badge={};other={setAttribute(){}};
   card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
   gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
   testItem={id:'test',el:card,tier:1,central:.9,base:.8};updateCard(testItem);
