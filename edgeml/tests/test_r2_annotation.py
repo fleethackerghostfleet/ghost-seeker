@@ -224,6 +224,16 @@ def test_qa_apply_rebuilds_attrs_from_pristine_teacher_copy(tmp_path):
     assert (
         seq_dir / "teacher" / "attrs_teacher.jsonl"
     ).read_bytes() == original_attrs
+    (seq_dir / "gt" / "gt.txt").write_text(
+        "".join(
+            f"{f},{i},{x:.1f},{y:.1f},{w:.1f},{h:.1f},{c},{k},{v:.2f}\n"
+            for f, i, x, y, w, h, c, k, v in rows
+        )
+    )
+    labels_path = seq_dir / "gt" / "labels.json"
+    labels = json.loads(labels_path.read_text())
+    labels["qa"] = {}
+    labels_path.write_text(json.dumps(labels))
 
     rows, classes = apply(seq_dir, {}, {"1": "ship", "2": "buoy"})
     rewrite_attrs(seq_dir, {}, rows, classes)
