@@ -11,7 +11,7 @@ const KEYDEC=Object.fromEntries(Object.entries(DEC).map(([d,v])=>[v.k,d]));
 const TN=['','Critical','High','Routine','Low'];
 const tcol=t=>['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'][t]||'var(--p4)';
 const tierFor=s=>s>=.8?1:s>=.6?2:s>=.35?3:4;
-const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const ago=d=>{const s=Math.max(0,(Date.now()-d)/1000);return s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'m':(s/3600).toFixed(1)+'h'};
 const lab=c=>CLS[c]?.lab||c;
 
@@ -62,7 +62,7 @@ function renderLearned(directives){
 function renderQueue(){
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here as the watch floor sends them up.':'No decisions yet.'}</div>`;return}
- $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${it.id}">
+ $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
   <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
   <span class="mono">${it.decision?`<i class="dc" style="color:${DEC[it.decision].c}">${DEC[it.decision].lab}</i> · ${ago(it.decidedAt)} ago`:`sent ${ago(it.sentAt)} ago · ${it.central.toFixed(2)}`}</span></div></div>`).join('');
@@ -91,7 +91,7 @@ function renderBrief(it){
  <h4>Why it reached you</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||'<li>High command-model score</li>'}</ul>
  <h4 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
  <h4>Decision</h4>${d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
- `<textarea id="note" data-id="${it.id}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
+ `<textarea id="note" data-id="${esc(it.id)}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
  <div class="decs">${Object.entries(DEC).map(([k,v])=>`<button class="dec" title="${k==='close'?'Record a final decision to take no further action. The image remains stored in Decided.':v.sub}" data-d="${k}" style="--c:${v.c}"><kbd>${v.k.toUpperCase()}</kbd><b>${v.lab}</b><span>${v.sub}</span></button>`).join('')}</div>`}`;
 }
 function render(){ensureSel();renderKpis();renderQueue();renderStage()}

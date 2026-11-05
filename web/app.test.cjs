@@ -30,6 +30,83 @@ test('spectral controls are metadata-driven and preserve the frame and boxes',()
  }
  assert.equal(vm.runInContext("bandControls({id:'other',src:{id:'EO-P7'}})",context),'');
 });
+test('card source identifiers are rendered as escaped text',()=>{
+ const context=setup();
+ vm.runInContext(`
+  imageFor=()=>'/frame.jpg';boxesHTML=()=>'';zulu=()=> '12:00';
+  card=cardHTML({id:'item',src:{id:'<style>.card{display:none}</style>'},ts:new Date(),tier:1,central:.9});
+ `,context);
+ const html=vm.runInContext('card',context);
+ assert.ok(html.includes('<span class="sid">&lt;style&gt;.card{display:none}&lt;/style&gt;</span>'));
+ assert.doesNotMatch(html,/<style/);
+});
+test('init source options escape source ids and names',()=>{
+ const context=setup();
+ const select={innerHTML:''};
+ context.$=id=>id==='srcSel'?select:{};
+ vm.runInContext(`SOURCES=[{id:'a"><b>x</b>',name:'<b>y</b>'}]`,context);
+ const start=source.indexOf(" $('srcSel').innerHTML=SOURCES.map");
+ const end=source.indexOf(';',start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end+1),context);
+ assert.doesNotMatch(select.innerHTML,/<b>/);
+ assert.ok(select.innerHTML.includes('a&quot;&gt;&lt;b&gt;x&lt;/b&gt;'));
+ assert.ok(select.innerHTML.includes('&lt;b&gt;y&lt;/b&gt;'));
+});
+test('workbench templates escape item ids and sources and CSS-escape restored focus',async()=>{
+ const context=setup();
+ const timers=[],elements=new Map(),selectors=[],escaped=[];
+ const element=()=>({
+  innerHTML:'',textContent:'',value:'',checked:false,hidden:false,disabled:false,dataset:{},
+  classList:{toggle(){},add(){},remove(){}},
+  querySelector(){return null},querySelectorAll(){return []},
+  addEventListener(){},focus(){},setAttribute(){},replaceChildren(){},
+ });
+ context.$=id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id)};
+ context.document.addEventListener=()=>{};
+ context.setTimeout=callback=>{timers.push(callback);return timers.length};
+ context.clearTimeout=()=>{};
+ const id='sighting:"><b>x</b>',droppedID='drop:"><b>d</b>',sourceID='<b>y</b>';
+ const data=[
+  {id,src:{id:sourceID},ts:Date.now(),tier:1,central:.9,dets:[],det:[],frame:1},
+  {id:droppedID,src:{id:sourceID},ts:Date.now(),tier:2,central:.7,dets:[],det:[],frame:2},
+  ...Array.from({length:16},(_,i)=>({id:`safe-${i}`,src:{id:sourceID},ts:Date.now(),tier:3,central:.5-i/100,dets:[],det:[],frame:i+3})),
+ ];
+ context.testItems=data;
+ context.CSS={escape:value=>{escaped.push(value);return`ESC(${value})`}};
+ context.request=async(_path,_method,body)=>({
+  items:data.filter(item=>item.id!==droppedID).map(({id,tier,central})=>({id,tier,central,contrib:[]})),
+  counts:[1,0,16,0],
+  candidates:[],
+ });
+ vm.runInContext('items=testItems;imageFor=()=>"/frame.jpg"',context);
+ const activeTile={
+  dataset:{id},
+  closest(selector){return selector==='.wb-tile'?this:null},
+  querySelectorAll(){return[]},
+  focus(){},
+ };
+ context.document.activeElement=activeTile;
+ const grid=context.$('wbGrid');
+ grid.querySelector=selector=>{selectors.push(selector);return null};
+ vm.runInContext(workbenchSource,context);
+ vm.runInContext('workbench.init();state.page="rp";workbench.activate()',context);
+ assert.equal(timers.length,1);
+ timers.shift()();
+ await new Promise(resolve=>setImmediate(resolve));
+ const hoverTarget={closest:()=>({dataset:{id}})};
+ grid.onmouseover({target:hoverTarget});
+ for(const name of ['wbGrid','wbDropped','wbWhy']){
+  const html=context.$(name).innerHTML;
+  assert.doesNotMatch(html,/<b>/,`${name} contains unescaped source markup`);
+ }
+ assert.ok(grid.innerHTML.includes('data-id="sighting:&quot;&gt;&lt;b&gt;x&lt;/b&gt;"'));
+ assert.ok(grid.innerHTML.includes('&lt;b&gt;y&lt;/b&gt;'));
+ assert.ok(context.$('wbDropped').innerHTML.includes('data-why="drop:&quot;&gt;&lt;b&gt;d&lt;/b&gt;"'));
+ assert.ok(context.$('wbWhy').innerHTML.includes('&lt;b&gt;y&lt;/b&gt;'));
+ assert.deepEqual(escaped,[id]);
+ assert.ok(selectors.includes(`[data-id="ESC(${id})"]`));
+});
 test('global keyboard shortcuts ignore input while a dialog is open',()=>{
  const context=setup();
  vm.runInContext(`

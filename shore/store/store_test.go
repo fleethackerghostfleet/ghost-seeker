@@ -13,6 +13,28 @@ import (
 
 func hashOf(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
 
+func TestUpsertManifestValidatesSource(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx, now := context.Background(), time.Now()
+
+	for i, source := range []string{`<style>.card{display:none}</style>`, `x"y`} {
+		err := st.UpsertManifest(ctx, "edge", &pb.ManifestEntry{ItemId: "reject" + string(rune('a'+i)), Source: source}, now)
+		if err == nil {
+			t.Errorf("UpsertManifest accepted source %q", source)
+		}
+	}
+	for i, source := range []string{"Submarine_surfacing", ""} {
+		err := st.UpsertManifest(ctx, "edge", &pb.ManifestEntry{ItemId: "accept" + string(rune('a'+i)), Source: source}, now)
+		if err != nil {
+			t.Errorf("UpsertManifest rejected source %q: %v", source, err)
+		}
+	}
+}
+
 // A form regenerated mid-transfer (FULL after an original pull) restarts
 // from zero instead of mixing old and new bytes.
 func TestWriteChunkRestartsOnNewHashMidTransfer(t *testing.T) {

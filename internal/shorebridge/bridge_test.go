@@ -76,6 +76,62 @@ func TestGroupBySighting(t *testing.T) {
 	}
 }
 
+func TestGroupIgnoresInvalidSightingID(t *testing.T) {
+	invalid := `x"><style>.row{display:none}</style>`
+	views := []*pb.ItemView{
+		view("a", 1000, map[string]string{"sighting_id": invalid}, nil),
+		view("b", 2000, map[string]string{"sighting_id": invalid}, nil),
+	}
+	objs, _ := Group(views, nil, nil)
+	if len(objs) != 2 {
+		t.Fatalf("invalid sighting ID grouped into %d objects", len(objs))
+	}
+	for _, obj := range objs {
+		if obj.SightingID != "" || strings.Contains(obj.Key, "sighting:") || strings.Contains(obj.Key, "<") {
+			t.Fatalf("invalid sighting ID escaped validation: %+v", obj)
+		}
+	}
+
+	objs, _ = Group([]*pb.ItemView{
+		view("a", 1000, map[string]string{"sighting_id": "clip:0001"}, nil),
+		view("b", 2000, map[string]string{"sighting_id": "clip:0001"}, nil),
+	}, nil, nil)
+	if len(objs) != 1 || objs[0].SightingID != "clip:0001" {
+		t.Fatalf("valid sighting IDs did not group: %+v", objs)
+	}
+}
+
+func TestToCardClearsInvalidSource(t *testing.T) {
+	v := view("a", 1000, nil, nil)
+	v.Item.Source = `<b>y</b>`
+	if got := ToCard(v).Source; got != "" {
+		t.Fatalf("ToCard source = %q, want empty", got)
+	}
+}
+
+func TestEnsureSourceFallsBackToCamera(t *testing.T) {
+	c := NewConsole(New("", "", nil))
+	if got := c.ensureSource(`<b>y</b>`); got != "camera" {
+		t.Fatalf("ensureSource returned %q, want camera", got)
+	}
+	for key := range c.sources {
+		if strings.Contains(key, "<") {
+			t.Fatalf("unsafe source key %q", key)
+		}
+	}
+}
+
+func TestGroupDoesNotFoldInvalidContactReportSightingID(t *testing.T) {
+	rec := view("record", 1000, nil, nil)
+	rec.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
+	objs, _ := Group([]*pb.ItemView{rec}, nil, map[string]contactReport{
+		"record": {SightingID: `x"><style>.row{display:none}</style>`},
+	})
+	if len(objs) != 1 || objs[0].Key != "item:record" || objs[0].SightingID != "" {
+		t.Fatalf("invalid contact report was folded: %+v", objs)
+	}
+}
+
 func TestGroupUsesContactReportFrames(t *testing.T) {
 	img := view("a", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_CROP: true})
 	rec := view("r", 2000, map[string]string{"sighting_id": "s1", "event": "close"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})

@@ -18,6 +18,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -308,13 +309,13 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 	if o.Label != "" {
 		c.ensureClass(strings.ToLower(o.Label))
 	}
-	c.ensureSource(b.Source)
+	src := c.ensureSource(b.Source)
 
 	item := &command.Item{
 		ID:          o.Key,
 		DBID:        c.dbID(o.Key),
 		Frame:       o.Frames,
-		SourceID:    b.Source,
+		SourceID:    src,
 		TS:          time.UnixMilli(o.LastMs).UTC(),
 		HZ:          .5,
 		Edge:        round2(s.edge),
@@ -477,18 +478,19 @@ func titleCase(s string) string {
 	return strings.Join(words, " ")
 }
 
-func (c *Console) ensureSource(id string) {
-	if id == "" {
+func (c *Console) ensureSource(id string) string {
+	if !ids.ValidName(id) {
 		id = "camera"
 	}
 	if _, ok := c.sources[id]; ok {
-		return
+		return id
 	}
 	c.sources[id] = catalog.Source{
 		ID: id, Name: strings.ReplaceAll(id, "_", " "), Scene: "open", Mode: "eo",
 		Loc: "Ship camera · " + id, HW: "Edge node + inference sidecar", EM: "YOLO11n detector · MobileCLIP zero-shot subtype · sighting tracker",
 		Link: "Ship→shore link (shaped)", Rate: "5 fps replay, one item per sighting",
 	}
+	return id
 }
 
 func (c *Console) sourceList() []catalog.Source {
@@ -512,11 +514,7 @@ func (c *Console) cameras(objs []*Object) []Camera {
 		if o.Best == nil {
 			continue
 		}
-		src := o.Best.Source
-		if src == "" {
-			src = "camera"
-		}
-		c.ensureSource(src)
+		src := c.ensureSource(o.Best.Source)
 		a := cams[src]
 		if a == nil {
 			a = &agg{cam: Camera{Source: src, Name: c.sources[src].Name}}

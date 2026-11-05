@@ -126,6 +126,9 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 	if !ids.Valid(me.ItemId) {
 		return fmt.Errorf("invalid item id %q", me.ItemId)
 	}
+	if me.Source != "" && !ids.ValidName(me.Source) {
+		return fmt.Errorf("invalid source %q", me.Source)
+	}
 	raw, err := proto.Marshal(me)
 	if err != nil {
 		return err
