@@ -1,0 +1,4280 @@
+{
+  "imagery/by-12-01.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 160.40382291666666,
+    "dark_fraction": 0.03591493055555556,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          335.0,
+          231.0,
+          229.4,
+          54.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/by-12-02.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 152.84430729166667,
+    "dark_fraction": 0.006296875,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "fishing vessel",
+        "box": [
+          441.6,
+          315.0,
+          210.2,
+          90.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "tanker",
+        "box": [
+          489.6,
+          201.0,
+          250.6,
+          46.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/by-12-03.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 161.7271579861111,
+    "dark_fraction": 0.004149305555555555,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "warship",
+        "box": [
+          396.4,
+          255.0,
+          172.8,
+          49.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/by-12-04.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 182.72472222222223,
+    "dark_fraction": 0.00047743055555555554,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "submarine",
+        "box": [
+          314.8,
+          231.0,
+          240.0,
+          174.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/by-12-05.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 134.25253125,
+    "dark_fraction": 0.012230902777777778,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "debris",
+        "box": [
+          330.0,
+          426.0,
+          170.0,
+          84.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "debris",
+        "box": [
+          524.0,
+          440.0,
+          102.0,
+          44.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/by-12-06.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 142.91442534722222,
+    "dark_fraction": 0.016260416666666666,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "military aircraft",
+        "box": [
+          416.6,
+          260.4,
+          162.2,
+          42.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/by-12-07.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 161.0848107638889,
+    "dark_fraction": 0.010184027777777778,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "bird",
+        "box": [
+          543.4,
+          232.2,
+          31.6,
+          15.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          368.6,
+          274.8,
+          20.2,
+          12.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          517.4,
+          307.2,
+          11.6,
+          12.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          440.0,
+          364.0,
+          100.0,
+          32.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/by-12-08.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 157.93486458333334,
+    "dark_fraction": 0.004862847222222222,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": []
+  },
+  "imagery/eo-p7-01.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 132.2868767361111,
+    "dark_fraction": 0.02375,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "warship",
+        "box": [
+          346.6,
+          205.2,
+          234.2,
+          58.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          213.2,
+          384.6,
+          190.0,
+          97.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          906.2,
+          217.2,
+          53.8,
+          27.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          110.4,
+          196.8,
+          164.2,
+          33.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          0.0,
+          196.8,
+          96.0,
+          40.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/eo-p7-02.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 115.86006423611111,
+    "dark_fraction": 0.18641493055555555,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          333.2,
+          350.4,
+          337.0,
+          69.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          324.4,
+          196.8,
+          116.2,
+          50.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          554.8,
+          181.2,
+          101.8,
+          31.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          796.8,
+          397.2,
+          59.6,
+          28.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          0.0,
+          430.8,
+          54.8,
+          40.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          0.0,
+          400.8,
+          40.4,
+          24.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/eo-p7-03.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 117.55236631944445,
+    "dark_fraction": 0.15965625,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          316.8,
+          141.6,
+          63.4,
+          42.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          559.6,
+          172.8,
+          25.0,
+          18.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          437.8,
+          324.0,
+          32.6,
+          40.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          632.6,
+          312.0,
+          34.6,
+          63.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          911.0,
+          222.0,
+          47.0,
+          30.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          829.4,
+          199.2,
+          38.4,
+          24.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/eo-p7-04.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 132.45038541666668,
+    "dark_fraction": 0.053001736111111114,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "tanker",
+        "box": [
+          258.2,
+          163.2,
+          379.2,
+          88.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "fishing vessel",
+        "box": [
+          638.4,
+          258.6,
+          266.0,
+          132.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          748.8,
+          195.0,
+          87.4,
+          24.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          853.4,
+          199.2,
+          77.8,
+          31.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          111.4,
+          227.4,
+          16.4,
+          10.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          258.2,
+          192.0,
+          92.2,
+          30.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/eo-p7-05.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 139.77344444444444,
+    "dark_fraction": 0.08102951388888889,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "helicopter",
+        "box": [
+          432.0,
+          248.0,
+          120.0,
+          56.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          320.0,
+          296.0,
+          110.0,
+          54.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          456.0,
+          396.0,
+          36.0,
+          24.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          596.0,
+          424.0,
+          50.0,
+          28.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          186.0,
+          448.0,
+          96.0,
+          32.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/eo-p7-06.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 129.11987326388888,
+    "dark_fraction": 0.045543402777777776,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "fishing vessel",
+        "box": [
+          560.0,
+          240.0,
+          296.0,
+          216.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          100.0,
+          380.0,
+          150.0,
+          90.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/eo-p7-07.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 117.25361631944445,
+    "dark_fraction": 0.109609375,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "drone",
+        "box": [
+          400.4,
+          240.0,
+          175.6,
+          96.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          671.0,
+          304.8,
+          69.2,
+          113.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          788.2,
+          150.0,
+          94.0,
+          58.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "fishing vessel",
+        "box": [
+          89.2,
+          176.4,
+          73.0,
+          53.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "fishing vessel",
+        "box": [
+          0.0,
+          158.4,
+          96.0,
+          88.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          633.6,
+          172.8,
+          57.6,
+          25.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/eo-p7-08.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 131.54930729166668,
+    "dark_fraction": 0.04533854166666667,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": []
+  },
+  "imagery/ir-he-01.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 114.46264409722222,
+    "dark_fraction": 0.17895659722222224,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "small boat",
+        "box": [
+          609.6,
+          292.8,
+          15.4,
+          14.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          566.4,
+          357.0,
+          19.2,
+          9.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          444.0,
+          370.0,
+          40.0,
+          34.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/ir-he-02.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 71.36444097222223,
+    "dark_fraction": 0.37264756944444444,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "tanker",
+        "box": [
+          336.0,
+          276.0,
+          120.0,
+          100.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/ir-he-03.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 81.45488541666667,
+    "dark_fraction": 0.204125,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "warship",
+        "box": [
+          415.6,
+          255.0,
+          267.8,
+          75.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "warship",
+        "box": [
+          314.0,
+          289.8,
+          65.2,
+          34.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          830.4,
+          293.4,
+          14.4,
+          9.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          616.0,
+          496.0,
+          32.0,
+          28.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/ir-he-04.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 74.00546527777777,
+    "dark_fraction": 0.0827013888888889,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "buoy",
+        "box": [
+          483.8,
+          350.4,
+          74.0,
+          20.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "person",
+        "box": [
+          599.0,
+          277.8,
+          33.6,
+          45.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/ir-he-05.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 102.49210416666666,
+    "dark_fraction": 2.4305555555555554e-05,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "fishing vessel",
+        "box": [
+          416.6,
+          267.6,
+          89.2,
+          92.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          429.2,
+          174.0,
+          31.6,
+          15.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          484.8,
+          185.4,
+          37.4,
+          10.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/ir-he-06.jpg": {
+    "night": false,
+    "confidence": 0.5,
+    "basis": "image_ambiguous",
+    "lum": 60.53051388888889,
+    "dark_fraction": 0.4944513888888889,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "tanker",
+        "box": [
+          348.4,
+          212.4,
+          222.8,
+          200.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          591.4,
+          60.0,
+          22.0,
+          21.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          881.2,
+          407.4,
+          29.8,
+          39.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          13.4,
+          402.0,
+          26.8,
+          34.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          180.4,
+          337.2,
+          16.4,
+          21.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          825.6,
+          343.8,
+          18.2,
+          21.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/ir-he-07.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 71.68569270833333,
+    "dark_fraction": 0.3217847222222222,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          152.6,
+          196.8,
+          157.4,
+          142.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "helicopter",
+        "box": [
+          393.6,
+          300.0,
+          188.2,
+          64.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          689.2,
+          333.6,
+          92.2,
+          50.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/ir-he-08.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 73.40934027777777,
+    "dark_fraction": 0.3470711805555556,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "IR",
+    "dets": [
+      {
+        "cls": "small boat",
+        "box": [
+          462.8,
+          291.0,
+          57.6,
+          67.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "drone",
+        "box": [
+          324.4,
+          355.8,
+          55.6,
+          27.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          654.8,
+          334.8,
+          10.6,
+          21.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          624.0,
+          333.6,
+          9.6,
+          21.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          591.4,
+          331.8,
+          8.6,
+          18.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "buoy",
+        "box": [
+          797.8,
+          419.4,
+          8.6,
+          13.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-01.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 43.770125,
+    "dark_fraction": 0.9606996527777778,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          626.8,
+          257.4,
+          64.4,
+          16.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          317.8,
+          165.0,
+          21.2,
+          55.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "cargo ship",
+        "box": [
+          561.6,
+          400.2,
+          21.2,
+          67.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-02.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 42.40134895833334,
+    "dark_fraction": 0.9824149305555555,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          434.0,
+          276.0,
+          126.0,
+          34.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          478.0,
+          426.0,
+          38.0,
+          16.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          652.0,
+          414.0,
+          32.0,
+          14.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          802.0,
+          136.0,
+          16.0,
+          40.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-03.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 55.54869791666667,
+    "dark_fraction": 0.5026180555555556,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": [
+      {
+        "cls": "warship",
+        "box": [
+          374.4,
+          238.8,
+          105.6,
+          97.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          498.2,
+          121.2,
+          23.0,
+          9.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          474.2,
+          460.8,
+          23.0,
+          9.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          840.0,
+          102.0,
+          18.2,
+          9.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-04.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 37.66565625,
+    "dark_fraction": 0.9829392361111111,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": [
+      {
+        "cls": "small boat",
+        "box": [
+          420.4,
+          256.8,
+          21.2,
+          37.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          338.0,
+          382.8,
+          20.2,
+          37.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-05.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 49.83698611111111,
+    "dark_fraction": 0.7754479166666667,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          191.0,
+          129.6,
+          144.0,
+          45.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          600.0,
+          307.2,
+          43.2,
+          25.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          208.4,
+          401.4,
+          29.8,
+          9.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-06.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 55.5450625,
+    "dark_fraction": 0.5673697916666667,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": [
+      {
+        "cls": "tanker",
+        "box": [
+          214.0,
+          214.8,
+          38.4,
+          170.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "tanker",
+        "box": [
+          691.2,
+          223.8,
+          39.4,
+          170.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-07.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 41.092609375,
+    "dark_fraction": 0.9313541666666667,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": [
+      {
+        "cls": "small boat",
+        "box": [
+          402.2,
+          265.8,
+          41.2,
+          19.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Colour not observable in IR/SAR imagery; colour rules skipped",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sar-7-08.jpg": {
+    "night": null,
+    "confidence": 0.0,
+    "basis": "not_applicable_radar",
+    "lum": 56.06143055555555,
+    "dark_fraction": 0.5161041666666667,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "SAR",
+    "dets": []
+  },
+  "imagery/sky-1-01.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 183.19119097222222,
+    "dark_fraction": 0.02853125,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "civil aircraft",
+        "box": [
+          271.6,
+          223.2,
+          344.6,
+          88.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sky-1-02.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 194.95608333333334,
+    "dark_fraction": 0.0691423611111111,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "military aircraft",
+        "box": [
+          398.4,
+          237.0,
+          175.6,
+          49.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sky-1-03.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 187.28870833333335,
+    "dark_fraction": 0.011762152777777778,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "helicopter",
+        "box": [
+          316.8,
+          208.2,
+          316.8,
+          114.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "helicopter",
+        "box": [
+          657.6,
+          390.0,
+          144.0,
+          45.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sky-1-04.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 198.36344444444444,
+    "dark_fraction": 0.001888888888888889,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "drone",
+        "box": [
+          434.0,
+          160.0,
+          96.0,
+          36.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sky-1-05.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 193.67878298611112,
+    "dark_fraction": 0.017026041666666665,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "bird",
+        "box": [
+          458.8,
+          258.0,
+          18.2,
+          15.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          514.6,
+          269.4,
+          15.4,
+          14.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          599.0,
+          290.4,
+          15.4,
+          15.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          580.8,
+          311.4,
+          16.4,
+          14.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          707.6,
+          318.0,
+          15.4,
+          12.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          545.2,
+          324.6,
+          17.2,
+          11.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sky-1-06.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 187.09696875,
+    "dark_fraction": 0.02762847222222222,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "military aircraft",
+        "box": [
+          378.2,
+          148.8,
+          222.8,
+          50.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "bird",
+        "box": [
+          355.2,
+          327.6,
+          31.6,
+          13.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sky-1-07.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 200.31139583333334,
+    "dark_fraction": 0.002206597222222222,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "civil aircraft",
+        "box": [
+          387.8,
+          217.2,
+          261.2,
+          74.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "helicopter",
+        "box": [
+          126.8,
+          324.6,
+          81.6,
+          34.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/sky-1-08.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 192.50774305555555,
+    "dark_fraction": 0.010524305555555556,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": []
+  },
+  "imagery/uav-3-01.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 62.330154513888886,
+    "dark_fraction": 0.6776475694444445,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "small boat",
+        "box": [
+          477.2,
+          310.2,
+          22.0,
+          39.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/uav-3-02.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 47.92703819444444,
+    "dark_fraction": 0.9123923611111111,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "cargo ship",
+        "box": [
+          270.0,
+          270.0,
+          390.0,
+          74.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/uav-3-03.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 69.00342013888888,
+    "dark_fraction": 0.4696927083333333,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "fishing vessel",
+        "box": [
+          444.0,
+          220.0,
+          72.0,
+          236.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          332.0,
+          270.0,
+          44.0,
+          50.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/uav-3-04.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 63.27208680555555,
+    "dark_fraction": 0.19374479166666667,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "debris",
+        "box": [
+          524.2,
+          267.6,
+          153.6,
+          104.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "person",
+        "box": [
+          445.4,
+          297.6,
+          43.2,
+          39.6
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/uav-3-05.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 57.477352430555555,
+    "dark_fraction": 0.5894097222222222,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "warship",
+        "box": [
+          275.6,
+          222.0,
+          420.4,
+          114.0
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/uav-3-06.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 58.72237673611111,
+    "dark_fraction": 0.648921875,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "tanker",
+        "box": [
+          408.0,
+          57.6,
+          123.8,
+          484.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/uav-3-07.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 69.70925173611111,
+    "dark_fraction": 0.41331944444444446,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "submarine",
+        "box": [
+          301.4,
+          264.0,
+          367.6,
+          49.8
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "imagery/uav-3-08.jpg": {
+    "night": false,
+    "confidence": 0.95,
+    "basis": "image",
+    "lum": 62.578067708333336,
+    "dark_fraction": 0.6846996527777778,
+    "solar_elevation": null,
+    "size": [
+      960,
+      600
+    ],
+    "modality": "EO",
+    "dets": [
+      {
+        "cls": "small boat",
+        "box": [
+          553.0,
+          237.6,
+          38.4,
+          107.4
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      },
+      {
+        "cls": "small boat",
+        "box": [
+          382.0,
+          233.4,
+          32.6,
+          106.2
+        ],
+        "lights": [],
+        "interpretation": {
+          "rule_id": null,
+          "aspect": "unknown",
+          "line": "Day: navigation-light rules not applied",
+          "boost": 0.0
+        }
+      }
+    ]
+  },
+  "nightLibrary": [
+    {
+      "file": "imagery/night/night-01.jpg",
+      "src": "EO-P7",
+      "scene": "harbor",
+      "night": true,
+      "lum": 11.212234375,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "cargo ship",
+          "b": {
+            "x": 32.5,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "red",
+              "x": 115.0,
+              "y": 253.0,
+              "relative": [
+                0.23255813953488372,
+                -0.16296296296296298
+              ],
+              "flashing": false,
+              "sodium_ambiguous": true,
+              "contrast": 238.0
+            },
+            {
+              "colour": "white",
+              "x": 271.0,
+              "y": 278.0,
+              "relative": [
+                0.958139534883721,
+                0.022222222222222223
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 238.0
+            },
+            {
+              "colour": "green",
+              "x": 218.0952380952381,
+              "y": 316.07142857142856,
+              "relative": [
+                0.7120708748615726,
+                0.30423280423280413
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 236.0
+            },
+            {
+              "colour": "red",
+              "x": 127.0,
+              "y": 316.2439024390244,
+              "relative": [
+                0.28837209302325584,
+                0.30551038843721773
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 233.0
+            },
+            {
+              "colour": "red",
+              "x": 282.0,
+              "y": 287.0,
+              "relative": [
+                1.0093023255813953,
+                0.08888888888888889
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 183.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "nuc",
+            "aspect": "starboard_side_crossing_left_to_right",
+            "line": "Vessel showing red-over-red: not under command \u2014 keep clear",
+            "boost": 0.0,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 27(a)",
+            "severity": "urgent",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+          },
+          "truth_rule_id": "head_on",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 127.35,
+              "y": 315.5,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "green",
+              "x": 217.65,
+              "y": 315.5,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        },
+        {
+          "cls": "small boat",
+          "b": {
+            "x": 180.0,
+            "y": 146.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 461.2,
+              "y": 345.0,
+              "relative": [
+                0.4706976744186046,
+                0.3851851851851852
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            },
+            {
+              "colour": "white",
+              "x": 402.0,
+              "y": 306.2,
+              "relative": [
+                0.19534883720930232,
+                0.0977777777777777
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 238.0
+            },
+            {
+              "colour": "red",
+              "x": 467.87179487179486,
+              "y": 334.12820512820514,
+              "relative": [
+                0.5017292784734645,
+                0.30465337132003806
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 238.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "fishing",
+            "aspect": "starboard_side_crossing_left_to_right",
+            "line": "Vessel showing red-over-white: fishing other than trawling",
+            "boost": 0.0,
+            "masthead_horizontal_offset": 59.19999999999999,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 26(c)",
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+          },
+          "truth_rule_id": "port",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 333.5,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        },
+        {
+          "cls": "small boat",
+          "b": {
+            "x": 327.5,
+            "y": 155.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 657.0909090909091,
+              "y": 334.0909090909091,
+              "relative": [
+                0.00972515856236801,
+                0.17104377104377128
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            },
+            {
+              "colour": "white",
+              "x": 654.125,
+              "y": 361.8333333333333,
+              "relative": [
+                -0.004069767441860465,
+                0.37654320987654305
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 239.0
+            },
+            {
+              "colour": "green",
+              "x": 762.0,
+              "y": 351.90697674418607,
+              "relative": [
+                0.49767441860465117,
+                0.3030146425495264
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 238.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "two_mastheads",
+            "aspect": "starboard_side_crossing_left_to_right",
+            "line": "Vessel showing white + white: ambiguous: towing (vertical whites) or power-driven vessel 50 m or longer (forward/aft mastheads); geometry alone is insufficient",
+            "boost": 0.0,
+            "masthead_horizontal_offset": -2.965909090909122,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rules 23(a), 24(a)",
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+          },
+          "truth_rule_id": "starboard",
+          "truth_lights": [
+            {
+              "colour": "green",
+              "x": 762.5,
+              "y": 351.5,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        }
+      ],
+      "synthetic": true,
+      "seed": 73000,
+      "nuisance_lights": [
+        {
+          "x": 115,
+          "y": 253,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 168,
+          "y": 259,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 220,
+          "y": 255,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 273,
+          "y": 257,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 326,
+          "y": 255,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 379,
+          "y": 259,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 432,
+          "y": 256,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 484,
+          "y": 257,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 537,
+          "y": 252,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 590,
+          "y": 264,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 643,
+          "y": 254,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 696,
+          "y": 255,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 748,
+          "y": 262,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 801,
+          "y": 265,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 282.1685315001788,
+          "y": 286.5631837050997,
+          "colour": "yellow",
+          "source": "shore"
+        },
+        {
+          "x": 266.84676363122946,
+          "y": 265.20004948684755,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 270.69123368168493,
+          "y": 277.7741019857943,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 532.2579395576821,
+          "y": 284.82806145096544,
+          "colour": "yellow",
+          "source": "shore"
+        },
+        {
+          "x": 460.50660037046947,
+          "y": 345.4646250958336,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 402.4558005580874,
+          "y": 306.02121928573064,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 841.6568816282086,
+          "y": 300.510329874907,
+          "colour": "yellow",
+          "source": "shore"
+        },
+        {
+          "x": 654.0512208148222,
+          "y": 362.08586167894646,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 656.972873199434,
+          "y": 334.1051818438761,
+          "colour": "white",
+          "source": "shore"
+        }
+      ]
+    },
+    {
+      "file": "imagery/night/night-02.jpg",
+      "src": "BY-12",
+      "scene": "offshore",
+      "night": true,
+      "lum": 11.482086805555555,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "cargo ship",
+          "b": {
+            "x": 32.5,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 172.0,
+              "y": 332.0,
+              "relative": [
+                0.49767441860465117,
+                0.4222222222222222
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 243.0
+            },
+            {
+              "colour": "yellow",
+              "x": 172.11428571428573,
+              "y": 299.1142857142857,
+              "relative": [
+                0.49820598006644523,
+                0.17862433862433852
+              ],
+              "flashing": false,
+              "sodium_ambiguous": true,
+              "contrast": 241.0
+            },
+            {
+              "colour": "yellow",
+              "x": 172.12121212121212,
+              "y": 365.1212121212121,
+              "relative": [
+                0.49823819591261453,
+                0.6675645342312009
+              ],
+              "flashing": false,
+              "sodium_ambiguous": true,
+              "contrast": 239.5
+            }
+          ],
+          "interpretation": {
+            "rule_id": null,
+            "aspect": "unknown",
+            "line": "No recognized light pattern",
+            "boost": 0.0,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights"
+          },
+          "truth_rule_id": "ram",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 172.5,
+              "y": 299.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "white",
+              "x": 172.5,
+              "y": 332.04566604379806,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "red",
+              "x": 172.5,
+              "y": 364.7913320875962,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        },
+        {
+          "cls": "cargo ship",
+          "b": {
+            "x": 180.0,
+            "y": 146.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "red",
+              "x": 468.125,
+              "y": 316.84375,
+              "relative": [
+                0.502906976744186,
+                0.17662037037037037
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 226.0
+            },
+            {
+              "colour": "red",
+              "x": 468.0,
+              "y": 346.0,
+              "relative": [
+                0.5023255813953489,
+                0.3925925925925926
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 191.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "nuc",
+            "aspect": "unknown",
+            "line": "Vessel showing red-over-red: not under command \u2014 keep clear",
+            "boost": 0.9,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 27(a)",
+            "severity": "urgent",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "nuc",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 317.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 345.81436461132944,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        },
+        {
+          "cls": "cargo ship",
+          "b": {
+            "x": 327.5,
+            "y": 155.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "red",
+              "x": 762.1212121212121,
+              "y": 335.06060606060606,
+              "relative": [
+                0.49823819591261453,
+                0.1782267115600449
+              ],
+              "flashing": false,
+              "sodium_ambiguous": true,
+              "contrast": 238.0
+            },
+            {
+              "colour": "red",
+              "x": 762.21875,
+              "y": 350.09375,
+              "relative": [
+                0.49869186046511627,
+                0.28958333333333336
+              ],
+              "flashing": false,
+              "sodium_ambiguous": true,
+              "contrast": 238.0
+            },
+            {
+              "colour": "red",
+              "x": 761.9117647058823,
+              "y": 364.79411764705884,
+              "relative": [
+                0.49726402188782476,
+                0.39847494553376916
+              ],
+              "flashing": false,
+              "sodium_ambiguous": true,
+              "contrast": 237.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "constrained_draught",
+            "aspect": "unknown",
+            "line": "Vessel showing red-over-red-over-red: constrained by draught \u2014 avoid impeding safe passage",
+            "boost": 0.7,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 28",
+            "severity": "urgent",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "constrained_draught",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 762.5,
+              "y": 335.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "red",
+              "x": 762.5,
+              "y": 350.13372214589646,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "red",
+              "x": 762.5,
+              "y": 364.9674442917929,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        }
+      ],
+      "synthetic": true,
+      "seed": 73001,
+      "nuisance_lights": []
+    },
+    {
+      "file": "imagery/night/night-03.jpg",
+      "src": "EO-P7",
+      "scene": "harbor",
+      "night": true,
+      "lum": 11.524322916666666,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "fishing vessel",
+          "b": {
+            "x": 32.5,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 71.8,
+              "y": 313.0,
+              "relative": [
+                0.031627906976744176,
+                0.2814814814814815
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 242.0
+            },
+            {
+              "colour": "white",
+              "x": 249.0909090909091,
+              "y": 318.0909090909091,
+              "relative": [
+                0.8562367864693446,
+                0.3191919191919194
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            },
+            {
+              "colour": "green",
+              "x": 171.95454545454547,
+              "y": 298.9318181818182,
+              "relative": [
+                0.49746300211416494,
+                0.1772727272727273
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 239.0
+            },
+            {
+              "colour": "white",
+              "x": 172.0681818181818,
+              "y": 327.04545454545456,
+              "relative": [
+                0.49799154334038054,
+                0.38552188552188565
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 237.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "trawling",
+            "aspect": "unknown",
+            "line": "Vessel showing green-over-white: engaged in trawling",
+            "boost": 0.0,
+            "masthead_horizontal_offset": 100.26818181818182,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 26(b)",
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+          },
+          "truth_rule_id": "trawling",
+          "truth_lights": [
+            {
+              "colour": "green",
+              "x": 172.5,
+              "y": 299.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "white",
+              "x": 172.5,
+              "y": 327.39218566862365,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        },
+        {
+          "cls": "fishing vessel",
+          "b": {
+            "x": 180.0,
+            "y": 146.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 379.2083333333333,
+              "y": 318.9583333333333,
+              "relative": [
+                0.08934108527131775,
+                0.19228395061728382
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            },
+            {
+              "colour": "white",
+              "x": 446.08333333333337,
+              "y": 319.0833333333333,
+              "relative": [
+                0.400387596899225,
+                0.19320987654320973
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            },
+            {
+              "colour": "white",
+              "x": 468.0,
+              "y": 351.0,
+              "relative": [
+                0.5023255813953489,
+                0.42962962962962964
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 239.0
+            },
+            {
+              "colour": "red",
+              "x": 468.0,
+              "y": 317.1025641025641,
+              "relative": [
+                0.5023255813953489,
+                0.1785375118708451
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 238.0
+            },
+            {
+              "colour": "white",
+              "x": 326.0,
+              "y": 266.25,
+              "relative": [
+                -0.15813953488372093,
+                -0.19814814814814816
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 203.0
+            },
+            {
+              "colour": "white",
+              "x": 537.0,
+              "y": 266.25,
+              "relative": [
+                0.8232558139534883,
+                -0.19814814814814816
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 199.0
+            },
+            {
+              "colour": "red",
+              "x": 436.0,
+              "y": 309.0,
+              "relative": [
+                0.35348837209302325,
+                0.11851851851851852
+              ],
+              "flashing": false,
+              "sodium_ambiguous": true,
+              "contrast": 192.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "fishing",
+            "aspect": "unknown",
+            "line": "Vessel showing red-over-white: fishing other than trawling",
+            "boost": 0.0,
+            "masthead_horizontal_offset": 142.0,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 26(c)",
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": true,
+            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+          },
+          "truth_rule_id": "fishing",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 317.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "white",
+              "x": 467.5,
+              "y": 350.6713070903669,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        },
+        {
+          "cls": "small boat",
+          "b": {
+            "x": 327.5,
+            "y": 155.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 762.1304347826087,
+              "y": 314.1304347826087,
+              "relative": [
+                0.4982810920121337,
+                0.023188405797101394
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 241.0
+            },
+            {
+              "colour": "white",
+              "x": 776.0,
+              "y": 338.8333333333333,
+              "relative": [
+                0.5627906976744186,
+                0.2061728395061727
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            },
+            {
+              "colour": "white",
+              "x": 762.0952380952381,
+              "y": 334.92857142857144,
+              "relative": [
+                0.4981173864894794,
+                0.17724867724867738
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 238.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "tow_long",
+            "aspect": "unknown",
+            "line": "Vessel showing white-over-white-over-white: possible towing vessel, tow exceeds 200 m; verify towing lights and aspect",
+            "boost": 0.1,
+            "masthead_horizontal_offset": 13.869565217391255,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 24(a)",
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "pilot",
+          "truth_lights": [
+            {
+              "colour": "white",
+              "x": 762.5,
+              "y": 335.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "red",
+              "x": 762.5,
+              "y": 346.34258734844656,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        }
+      ],
+      "synthetic": true,
+      "seed": 73002,
+      "nuisance_lights": [
+        {
+          "x": 115,
+          "y": 262,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 168,
+          "y": 256,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 220,
+          "y": 254,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 273,
+          "y": 265,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 326,
+          "y": 265,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 379,
+          "y": 253,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 432,
+          "y": 262,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 484,
+          "y": 257,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 537,
+          "y": 265,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 590,
+          "y": 265,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 643,
+          "y": 258,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 696,
+          "y": 253,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 748,
+          "y": 263,
+          "colour": "yellow",
+          "source": "pier"
+        },
+        {
+          "x": 801,
+          "y": 252,
+          "colour": "white",
+          "source": "pier"
+        },
+        {
+          "x": 175.17482016745697,
+          "y": 317.89051472353844,
+          "colour": "yellow",
+          "source": "shore"
+        },
+        {
+          "x": 248.70475848390683,
+          "y": 318.1186258056907,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 71.95645128493716,
+          "y": 312.91698775582773,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 435.5602090062478,
+          "y": 309.07594720141117,
+          "colour": "yellow",
+          "source": "shore"
+        },
+        {
+          "x": 379.00750081425724,
+          "y": 319.1812210949639,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 445.8347354731506,
+          "y": 318.6829228052831,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 815.24699842223,
+          "y": 326.25543758392797,
+          "colour": "yellow",
+          "source": "shore"
+        },
+        {
+          "x": 762.3322691390582,
+          "y": 314.24393287579153,
+          "colour": "white",
+          "source": "shore"
+        },
+        {
+          "x": 775.5359524099844,
+          "y": 338.98174295718064,
+          "colour": "white",
+          "source": "shore"
+        }
+      ]
+    },
+    {
+      "file": "imagery/night/night-04.jpg",
+      "src": "BY-12",
+      "scene": "offshore",
+      "night": true,
+      "lum": 11.300831597222222,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "cargo ship",
+          "b": {
+            "x": 32.5,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 171.95454545454547,
+              "y": 322.0681818181818,
+              "relative": [
+                0.49746300211416494,
+                0.3486531986531986
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 242.0
+            },
+            {
+              "colour": "white",
+              "x": 172.0,
+              "y": 299.0,
+              "relative": [
+                0.49767441860465117,
+                0.17777777777777778
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 241.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "two_mastheads",
+            "aspect": "unknown",
+            "line": "Vessel showing white + white: ambiguous: towing (vertical whites) or power-driven vessel 50 m or longer (forward/aft mastheads); geometry alone is insufficient",
+            "boost": 0,
+            "masthead_horizontal_offset": -0.045454545454532536,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rules 23(a), 24(a)",
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "two_mastheads",
+          "truth_lights": [
+            {
+              "colour": "white",
+              "x": 172.5,
+              "y": 299.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "white",
+              "x": 172.5,
+              "y": 322.00438449102637,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        },
+        {
+          "cls": "cargo ship",
+          "b": {
+            "x": 180.0,
+            "y": 146.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "white",
+              "x": 468.0,
+              "y": 342.0,
+              "relative": [
+                0.5023255813953489,
+                0.362962962962963
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 241.0
+            },
+            {
+              "colour": "white",
+              "x": 467.9318181818182,
+              "y": 316.95454545454544,
+              "relative": [
+                0.5020084566596195,
+                0.17744107744107732
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            },
+            {
+              "colour": "white",
+              "x": 468.0,
+              "y": 368.0,
+              "relative": [
+                0.5023255813953489,
+                0.5555555555555556
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 240.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "tow_long",
+            "aspect": "unknown",
+            "line": "Vessel showing white-over-white-over-white: possible towing vessel, tow exceeds 200 m; verify towing lights and aspect",
+            "boost": 0.1,
+            "masthead_horizontal_offset": 0.06818181818181301,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Rule 24(a)",
+            "severity": "advisory",
+            "assisted": false,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "tow_long",
+          "truth_lights": [
+            {
+              "colour": "white",
+              "x": 467.5,
+              "y": 317.3,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "white",
+              "x": 467.5,
+              "y": 342.435228994205,
+              "flashing": false,
+              "occluded": false
+            },
+            {
+              "colour": "white",
+              "x": 467.5,
+              "y": 367.57045798840994,
+              "flashing": false,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": false
+        }
+      ],
+      "synthetic": true,
+      "seed": 73003,
+      "nuisance_lights": []
+    },
+    {
+      "file": "imagery/night/night-05.jpg",
+      "src": "BY-12",
+      "scene": "offshore",
+      "night": true,
+      "lum": 10.549855902777777,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "small boat",
+          "b": {
+            "x": 180.0,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "red",
+              "x": 467.97222222222223,
+              "y": 316.0833333333333,
+              "relative": [
+                0.5021963824289406,
+                0.30432098765432086
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 239.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "distress_sos",
+            "aspect": "unknown",
+            "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+            "boost": 1,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Annex IV 1(d)",
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "distress_sos",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 315.5,
+              "flashing": true,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": true,
+          "track_observation": {
+            "night": true,
+            "confidence": 0.95,
+            "basis": "image",
+            "lum": 10.549855902777777,
+            "dark_fraction": 0.9973628472222222,
+            "solar_elevation": null,
+            "lights": [
+              {
+                "colour": "red",
+                "x": 467.97222222222223,
+                "y": 316.0833333333333,
+                "relative": [
+                  0.5021963824289406,
+                  0.30432098765432086
+                ],
+                "flashing": true,
+                "sodium_ambiguous": false,
+                "contrast": 239.0
+              }
+            ],
+            "interpretation": {
+              "rule_id": "distress_sos",
+              "aspect": "unknown",
+              "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+              "boost": 1,
+              "masthead_horizontal_offset": null,
+              "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+              "ref": "Annex IV 1(d)",
+              "severity": "urgent"
+            }
+          },
+          "sequence_files": [
+            "imagery/night/night-05.jpg",
+            "imagery/night/night-06.jpg",
+            "imagery/night/night-07.jpg",
+            "imagery/night/night-08.jpg"
+          ],
+          "signal": "sos",
+          "signal_note": "Red on/off distress proxy with externally reported SOS; not automatic flare or Morse recognition"
+        }
+      ],
+      "synthetic": true,
+      "seed": 73004,
+      "nuisance_lights": []
+    },
+    {
+      "file": "imagery/night/night-06.jpg",
+      "src": "BY-12",
+      "scene": "offshore",
+      "night": true,
+      "lum": 11.294960069444445,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "small boat",
+          "b": {
+            "x": 180.0,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [],
+          "interpretation": {
+            "rule_id": "distress_sos",
+            "aspect": "unknown",
+            "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+            "boost": 1,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Annex IV 1(d)",
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "distress_sos",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 315.5,
+              "flashing": true,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": true,
+          "track_observation": {
+            "night": true,
+            "confidence": 0.95,
+            "basis": "image",
+            "lum": 10.549855902777777,
+            "dark_fraction": 0.9973628472222222,
+            "solar_elevation": null,
+            "lights": [
+              {
+                "colour": "red",
+                "x": 467.97222222222223,
+                "y": 316.0833333333333,
+                "relative": [
+                  0.5021963824289406,
+                  0.30432098765432086
+                ],
+                "flashing": true,
+                "sodium_ambiguous": false,
+                "contrast": 239.0
+              }
+            ],
+            "interpretation": {
+              "rule_id": "distress_sos",
+              "aspect": "unknown",
+              "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+              "boost": 1,
+              "masthead_horizontal_offset": null,
+              "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+              "ref": "Annex IV 1(d)",
+              "severity": "urgent"
+            }
+          },
+          "sequence_files": [
+            "imagery/night/night-05.jpg",
+            "imagery/night/night-06.jpg",
+            "imagery/night/night-07.jpg",
+            "imagery/night/night-08.jpg"
+          ],
+          "signal": "sos",
+          "signal_note": "Red on/off distress proxy with externally reported SOS; not automatic flare or Morse recognition"
+        }
+      ],
+      "synthetic": true,
+      "seed": 73004,
+      "nuisance_lights": []
+    },
+    {
+      "file": "imagery/night/night-07.jpg",
+      "src": "BY-12",
+      "scene": "offshore",
+      "night": true,
+      "lum": 10.549855902777777,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "small boat",
+          "b": {
+            "x": 180.0,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [
+            {
+              "colour": "red",
+              "x": 467.97222222222223,
+              "y": 316.0833333333333,
+              "relative": [
+                0.5021963824289406,
+                0.30432098765432086
+              ],
+              "flashing": false,
+              "sodium_ambiguous": false,
+              "contrast": 239.0
+            }
+          ],
+          "interpretation": {
+            "rule_id": "distress_sos",
+            "aspect": "unknown",
+            "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+            "boost": 1,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Annex IV 1(d)",
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "distress_sos",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 315.5,
+              "flashing": true,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": true,
+          "track_observation": {
+            "night": true,
+            "confidence": 0.95,
+            "basis": "image",
+            "lum": 10.549855902777777,
+            "dark_fraction": 0.9973628472222222,
+            "solar_elevation": null,
+            "lights": [
+              {
+                "colour": "red",
+                "x": 467.97222222222223,
+                "y": 316.0833333333333,
+                "relative": [
+                  0.5021963824289406,
+                  0.30432098765432086
+                ],
+                "flashing": true,
+                "sodium_ambiguous": false,
+                "contrast": 239.0
+              }
+            ],
+            "interpretation": {
+              "rule_id": "distress_sos",
+              "aspect": "unknown",
+              "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+              "boost": 1,
+              "masthead_horizontal_offset": null,
+              "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+              "ref": "Annex IV 1(d)",
+              "severity": "urgent"
+            }
+          },
+          "sequence_files": [
+            "imagery/night/night-05.jpg",
+            "imagery/night/night-06.jpg",
+            "imagery/night/night-07.jpg",
+            "imagery/night/night-08.jpg"
+          ],
+          "signal": "sos",
+          "signal_note": "Red on/off distress proxy with externally reported SOS; not automatic flare or Morse recognition"
+        }
+      ],
+      "synthetic": true,
+      "seed": 73004,
+      "nuisance_lights": []
+    },
+    {
+      "file": "imagery/night/night-08.jpg",
+      "src": "BY-12",
+      "scene": "offshore",
+      "night": true,
+      "lum": 11.294960069444445,
+      "basis": "image",
+      "dets": [
+        {
+          "cls": "small boat",
+          "b": {
+            "x": 180.0,
+            "y": 137.5,
+            "w": 107.5,
+            "h": 67.5
+          },
+          "lights": [],
+          "interpretation": {
+            "rule_id": "distress_sos",
+            "aspect": "unknown",
+            "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+            "boost": 1,
+            "masthead_horizontal_offset": null,
+            "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+            "ref": "Annex IV 1(d)",
+            "severity": "urgent",
+            "assisted": true,
+            "low_confidence": false,
+            "confidence_note": ""
+          },
+          "truth_rule_id": "distress_sos",
+          "truth_lights": [
+            {
+              "colour": "red",
+              "x": 467.5,
+              "y": 315.5,
+              "flashing": true,
+              "occluded": false
+            }
+          ],
+          "signal_assisted": true,
+          "track_observation": {
+            "night": true,
+            "confidence": 0.95,
+            "basis": "image",
+            "lum": 10.549855902777777,
+            "dark_fraction": 0.9973628472222222,
+            "solar_elevation": null,
+            "lights": [
+              {
+                "colour": "red",
+                "x": 467.97222222222223,
+                "y": 316.0833333333333,
+                "relative": [
+                  0.5021963824289406,
+                  0.30432098765432086
+                ],
+                "flashing": true,
+                "sodium_ambiguous": false,
+                "contrast": 239.0
+              }
+            ],
+            "interpretation": {
+              "rule_id": "distress_sos",
+              "aspect": "unknown",
+              "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
+              "boost": 1,
+              "masthead_horizontal_offset": null,
+              "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
+              "ref": "Annex IV 1(d)",
+              "severity": "urgent"
+            }
+          },
+          "sequence_files": [
+            "imagery/night/night-05.jpg",
+            "imagery/night/night-06.jpg",
+            "imagery/night/night-07.jpg",
+            "imagery/night/night-08.jpg"
+          ],
+          "signal": "sos",
+          "signal_note": "Red on/off distress proxy with externally reported SOS; not automatic flare or Morse recognition"
+        }
+      ],
+      "synthetic": true,
+      "seed": 73004,
+      "nuisance_lights": []
+    }
+  ]
+}
