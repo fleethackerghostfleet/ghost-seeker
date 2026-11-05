@@ -323,9 +323,13 @@ type DarkContact struct{}
 
 func (DarkContact) Name() string { return "dark" }
 func (DarkContact) Score(it *pb.Item, ctx *Context) Result {
+	f := it.GetFeatures()
+	if f == nil || (f.LabelOverride != "" && norm(f.LabelOverride) != "dark contact") {
+		return Result{}
+	}
 	_, detMin := thresholds(ctx.Policy)
 	var confidence float32
-	for _, detection := range it.GetFeatures().GetDetections() {
+	for _, detection := range f.GetDetections() {
 		if strings.EqualFold(detection.GetLabel(), catalog.NightConfig.DarkContact.Label) &&
 			detection.Confidence >= detMin && detection.Confidence > confidence {
 			confidence = detection.Confidence

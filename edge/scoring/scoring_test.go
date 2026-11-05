@@ -133,3 +133,23 @@ func TestDarkContactScoringAndPolicyLabels(t *testing.T) {
 		}
 	}
 }
+
+func TestDarkContactHonorsLabelOverride(t *testing.T) {
+	item := img("dark contact", 0.9, 0)
+	item.Features.LabelOverride = "boat"
+	result := (DarkContact{}).Score(item, &Context{Now: time.Now()})
+	if result.Value != 0 || result.Note != "" {
+		t.Fatalf("non-dark override received dark score: %+v", result)
+	}
+	for _, reason := range Default().Score(item, &Context{Now: time.Now()}, 0).Reasons {
+		if reason.Scorer == "dark" {
+			t.Fatalf("non-dark override received dark reason: %+v", reason)
+		}
+	}
+
+	item.Features.LabelOverride = "dark vessel"
+	result = (DarkContact{}).Score(item, &Context{Now: time.Now()})
+	if result.Value != float64(float32(0.9)) || result.Note != "dark contact: no navigation lights at night" {
+		t.Fatalf("normalized dark override lost dark score: %+v", result)
+	}
+}
