@@ -21,7 +21,8 @@ test('live ocean scenes are P4 feed imagery, not contact review or actions',asyn
  assert.equal(vm.runInContext('visible().l.length',c),2);
  assert.equal(vm.runInContext('rvQueue().length',c),1);
  assert.equal(vm.runInContext('rvQueue()[0].id',c),'ship');
- assert.equal(vm.runInContext('topLine(scene)',c),'Open ocean · no contacts');
+ assert.equal(vm.runInContext('topLine(scene)',c),'Empty water · no contacts');
+ assert.equal(vm.runInContext("topLine({...scene,src:{id:'Submarine_surfacing'}})",c),'Empty water · no contacts');
  assert.equal(vm.runInContext('boxesHTML(scene,true)',c),'');
  assert.equal(vm.runInContext('humanSent({...scene,sent:true,fullRes:true})',c),false);
  for(const filter of ['reviewed','unreviewed','sent'])assert.equal(vm.runInContext(`reviewMatch(scene,'${filter}')`,c),false);
@@ -29,7 +30,7 @@ test('live ocean scenes are P4 feed imagery, not contact review or actions',asyn
  assert.equal(vm.runInContext('calls.length',c),0);
  vm.runInContext('renderDetailContent()',c);
  const html=c.$('drawer').innerHTML;
- assert.match(html,/Open ocean · no contacts/);
+ assert.match(html,/Empty water · no contacts/);
  assert.doesNotMatch(html,/id="aCdr"|id="aFull"|data-t=|Detections<|Ship score/);
  vm.runInContext('items=[]',c);
  assert.equal(vm.runInContext('rvQueue().length',c),0);

@@ -166,7 +166,7 @@ handling for that source (ordinary hash/new-item behavior), negative intervals a
 FACT+THUMB ship only after contact traffic; FULL stays on the edge, pull-only. Scenes
 automatically score below contacts, including suppressed contacts, and directives do not
 boost them. An explicit operator pull overrides that background priority using the normal
-pull boost, so requested scene FULLs can precede pending contact forms. The Imagery Feed includes **P4 Low / Open ocean · no contacts**
+pull boost, so requested scene FULLs can precede pending contact forms. The Imagery Feed includes **P4 Low / Empty water · no contacts**
 scene cards, interleaved with other cameras within the same tier. They carry empty
 detection arrays and do not change contact scoring, normalization, object counts, review,
 Commander, escalation or alerts. No contact actions appear on their drawer. The **Cameras**

@@ -381,7 +381,7 @@ function boxesHTML(it,labels){
 }
 function isScene(it){return it?.live?.event==='scene'}
 function topLine(it){
-	if(isScene(it))return 'Open ocean · no contacts';
+	if(isScene(it))return 'Empty water · no contacts';
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return it.background?'No contacts · empty water':'—';
  if(it.live){const l=it.live,[d,sd]=r[0];const det=l.label&&l.label.toLowerCase()!==d.cls?` <span style="opacity:.6">· computer label: ${esc(l.label)}</span>`:'';const frames=l.sightingId?(l.framesKnown?` · ${l.frames} frames`:` · ${l.reports} report${l.reports===1?'':'s'}`):'';
   return`<span class="${l.suppressed?'s':sd.matched?'m':l.unknown?'a':''}">${esc(clsOf(d.cls).lab)}${l.unknown?' (unknown)':''}</span>${det}<span style="opacity:.6">${frames}</span>`}
@@ -568,7 +568,7 @@ function renderDetailContent(){
  const it=items.find(i=>i.id===state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Open ocean · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
