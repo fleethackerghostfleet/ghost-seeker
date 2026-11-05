@@ -41,11 +41,12 @@ run-edge: build demo-key ## replay the frame zips through the mock analyzer, 1 f
 	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:8080 -frames frames -period 2s -unit-token-file $(DEV_UNIT_TOKEN)
 
 DEMO := scenarios/ghostfleet_demo
+DEMO_SCENARIO = $(or $(wildcard $(DEMO)/scenario.generated.json),$(DEMO)/scenario.json)
 
 demo: demo-clips demo-compare ## download the 5 fps clips, run naive vs hash vs sightings vs tomer over the link presets (headless, virtual time)
 	@echo; echo "Live demo: 'make demo-sidecar', 'make demo-shore', 'make demo-ui', 'make demo-edge' in four terminals, open http://localhost:8090 (see docs/DEMO.md)"
 
-demo-clips:      ## fetch the demo clips from GCS into $(DEMO)/frames (gitignored; needs gcloud auth)
+demo-clips:      ## sync eval clips and all GCS frames/*_frames sets; generate the live scenario (needs gcloud auth + python3)
 	$(DEMO)/download.sh
 
 demo-compare: build
@@ -88,7 +89,7 @@ demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tr
 
 demo-edge: build demo-key ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
 	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
-	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
+	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO_SCENARIO) -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
 
 compose:
 	docker compose -f deploy/compose/docker-compose.yml up --build
@@ -98,10 +99,10 @@ compose:
 # docs/DEMO.md. Clips and models are fetched once on the host (gcloud) and
 # mounted read-only; credentials are generated inside the stack.
 DEMO_COMPOSE := deploy/compose/demo.compose.yml
-DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) docker compose -f $(DEMO_COMPOSE)
+DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) GS_DEMO_SCENARIO=$(notdir $(DEMO_SCENARIO)) docker compose -f $(DEMO_COMPOSE)
 
 compose-demo:    ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
-	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO)/scenario.json); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (needs gcloud signed in as a lab account, see docs/DEMO.md)"; exit 1; }; done
+	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO_SCENARIO)); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (needs gcloud signed in as a lab account, see docs/DEMO.md)"; exit 1; }; done
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (needs gcloud; or MODELS=/path/to/D)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d
 	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"

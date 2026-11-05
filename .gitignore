@@ -12,6 +12,7 @@ __pycache__/
 # demo clips are downloaded, never committed
 scenarios/ghostfleet_demo/frames/
 scenarios/ghostfleet_demo/out/
+scenarios/ghostfleet_demo/scenario.generated.json*
 
 # python build metadata
 *.egg-info/
