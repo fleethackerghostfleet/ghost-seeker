@@ -191,6 +191,7 @@ func TestSessionsProductionFlow(t *testing.T) {
 	if w := do(h, http.MethodGet, "/api/shore/snapshot", "10.0.0.9:5", map[string]string{"Authorization": "Bearer secret-token-12345"}); w.Code != http.StatusOK {
 		t.Fatalf("bearer: %d", w.Code)
 	}
+	form["form"] = url.Values{"token": {"secret-token-12345"}}.Encode()
 	form["X-Forwarded-Proto"] = "https"
 	if cs := do(h, http.MethodPost, "/login", "10.0.0.9:5", form).Result().Cookies(); len(cs) != 1 || !cs[0].Secure {
 		t.Fatalf("https cookie not Secure: %+v", cs)
