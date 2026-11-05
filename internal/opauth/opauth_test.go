@@ -248,7 +248,7 @@ func TestSessionsDevLoopbackAutoLogin(t *testing.T) {
 }
 
 func TestSafeNext(t *testing.T) {
-	for in, want := range map[string]string{"": "/", "/cdr": "/cdr", "//evil": "/", "/\\evil": "/", "http://evil": "/", "/login?next=/": "/"} {
+	for in, want := range map[string]string{"": "/", "/cdr": "/cdr", "//evil": "/", "/\\evil": "/", "http://evil": "/", "/login?next=/": "/", "/cdr\t": "/", "/x\ny": "/", "/a b": "/"} {
 		if got := safeNext(in); got != want {
 			t.Errorf("safeNext(%q) = %q want %q", in, got, want)
 		}

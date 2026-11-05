@@ -51,6 +51,9 @@ def test_image_dims_from_headers():
     if ok:
         assert image_dims(webp.tobytes()) == (11, 9)
     assert image_dims(b"not an image") is None
+    jpg = _jpeg(64, 48)
+    sof = jpg.index(b"\xff\xc0")
+    assert image_dims(jpg[:sof] + b"\xff" * 7 + jpg[sof:]) == (64, 48)  # fill bytes before SOF
 
 
 def test_check_image_dims_rejects_bombs_and_unknown_formats():

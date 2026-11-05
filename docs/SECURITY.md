@@ -119,4 +119,19 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 | Scan | Commit | High | Medium | Low |
 |---|---|---|---|---|
 | Baseline ([scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@548487e` | 4 | 4 | 10 |
-| After this change | _see PR_ | _pending_ | _pending_ | _pending_ |
+| After PR #60 ([scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | branch `655e371` | 1 | 3 | 6 |
+
+Remaining open findings after the re-scan (7 further findings were auto-dismissed as duplicates):
+
+* **High** — SyncService accepts unauthenticated edges by default (`-require-auth` is opt-in since
+  PR #53). Decision for the owners: flip the default on, or keep it opt-in for the demo and require
+  it via compose/Zarf. Shore logs a warning when it is off.
+* **Medium** — shore items carry no owning edge, so one enrolled unit can overwrite another's
+  contacts (sync-layer data model; out of scope here). DNS-rebinding variants of the dev-mode
+  loopback auto-login and of the same-host CORS rule (the Host must be a loopback name and dev
+  mode is loopback-only; production disables it entirely).
+* **Low** — one-byte chunks make the shore re-hash a large file per chunk; chunk uploads have no
+  per-edge item-count/disk cap; the `original` full-size pull handler body is bounded only by the
+  Connect read cap. (Fixed in the same PR after the scan: tab/newline in `/login?next`, the
+  key-frame crop re-decode now goes through `imglimit`, JPEG fill bytes in the sidecar header
+  parser.)

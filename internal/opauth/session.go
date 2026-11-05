@@ -170,6 +170,11 @@ func safeNext(next string) string {
 	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") || strings.HasPrefix(next, "/login") {
 		return "/"
 	}
+	for _, c := range next {
+		if c <= ' ' || c == 0x7f {
+			return "/"
+		}
+	}
 	return next
 }
 

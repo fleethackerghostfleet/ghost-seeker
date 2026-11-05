@@ -441,7 +441,7 @@ func (g *Ingester) imageForms(data []byte, resp *pb.AnalyzeResponse, s *pb.Sight
 // a CROP from the previous frame would be wrong, so the usual gates (unknown,
 // smaller than FULL) don't apply; with no box at all the whole frame is used.
 func (g *Ingester) replacementCrop(data []byte, resp *pb.AnalyzeResponse, s *pb.Sighting) ([]byte, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := imglimit.Decode(data, 0)
 	if err != nil {
 		return nil, err
 	}
