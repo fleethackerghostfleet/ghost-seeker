@@ -102,3 +102,21 @@ def test_transient_api_status_is_retried_without_changing_request(tmp_path, monk
     calls = det.session.post.call_args_list
     assert calls[0] == calls[1]
     assert json.loads(next(tmp_path.glob("*.json")).read_text())["attempts"] == 2
+
+
+def test_expired_access_token_is_refreshed_without_changing_request(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    expired = Response({"error": "expired"})
+    expired.status_code = 401
+    det = hosted("cloud-vision", {}, tmp_path)
+    det.session.headers = {"Authorization": "Bearer expired"}
+    det.session.post = Mock(side_effect=[expired, Response({"responses": [{}]})])
+    token = Mock(return_value="renewed\n")
+    monkeypatch.setattr("subprocess.check_output", token)
+    assert det.detect(np.zeros((100, 200, 3), np.uint8)) == []
+    assert det.session.headers["Authorization"] == "Bearer renewed"
+    token.assert_called_once_with(["gcloud", "auth", "print-access-token"], text=True)
+    calls = det.session.post.call_args_list
+    assert len(calls) == 2 and calls[0] == calls[1]
+    assert "renewed" not in next(tmp_path.glob("*.json")).read_text()

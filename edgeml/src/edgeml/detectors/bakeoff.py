@@ -79,7 +79,6 @@ class HostedDetector(BaseDetector):
     def __init__(self, name, device=None, **kw):
         super().__init__(**kw)
         import os
-        import subprocess
         from pathlib import Path
 
         import requests
@@ -87,12 +86,18 @@ class HostedDetector(BaseDetector):
         self.name = name
         self.project = os.environ.get("GOOGLE_CLOUD_PROJECT", "qwiklabs-gcp-02-34a870014566")
         self.session = requests.Session()
-        token = subprocess.check_output(["gcloud", "auth", "print-access-token"], text=True).strip()
-        self.session.headers.update({"Authorization": f"Bearer {token}", "x-goog-user-project": self.project})
+        self._refresh_auth()
+        self.session.headers["x-goog-user-project"] = self.project
         self.raw_dir = Path(os.environ["BAKEOFF_API_RAW"]) / name
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.training_data = "hosted service; training overlap and parameter count undisclosed"
         self.imgsz = None
+
+    def _refresh_auth(self):
+        import subprocess
+
+        token = subprocess.check_output(["gcloud", "auth", "print-access-token"], text=True).strip()
+        self.session.headers["Authorization"] = f"Bearer {token}"
 
     def _infer(self, image_bgr):
         import base64
@@ -124,8 +129,13 @@ class HostedDetector(BaseDetector):
                                                     "score": {"type": "NUMBER"}}}},
                                             "thinkingConfig": {"thinkingBudget": 1024}}}
         start = time.perf_counter()
+        auth_refreshed = False
         for attempt in range(6):
             response = self.session.post(url, json=payload, timeout=240)
+            if response.status_code == 401 and not auth_refreshed and attempt < 5:
+                self._refresh_auth()
+                auth_refreshed = True
+                continue
             if response.status_code not in (429, 500, 502, 503, 504) or attempt == 5:
                 break
             time.sleep(2 ** (attempt + 1))
