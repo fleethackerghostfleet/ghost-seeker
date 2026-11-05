@@ -162,7 +162,7 @@ class EdgemlEngine:
                 st = src.agg.states.get(sid) if sid else None
                 if st is not None and st.status == "open" and sid not in reported:
                     reported.add(sid)
-                    sightings.append(self._duplicate(st, fi, W, H, base_ms))
+                    sightings.append(self._duplicate(st, fi, W, H, base_ms, getattr(tr, "box", None)))
             emb = next((src.agg.states[ev["sighting_id"]].emb for ev in events
                         if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
                         and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
@@ -208,10 +208,11 @@ class EdgemlEngine:
             out["embedding"] = [round(float(v), 5) for v in np.asarray(st.emb).ravel()]
         return out
 
-    def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int) -> dict:
+    def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int, track_box=None) -> dict:
         s = st.s
+        box = track_box if track_box is not None else s.best_box
         return {"id": s.sighting_id, "event": "EVENT_DUPLICATE",
-                "keyDetection": {"label": s.label or "", "confidence": _f(s.best_score), "box": _norm_box(s.best_box, W, H)},
+                "keyDetection": {"label": s.label or "", "confidence": _f(s.best_score), "box": _norm_box(box, W, H)},
                 "isKeyFrame": False, "subtype": s.subtype or "", "value": 0.0, "forms": [],
                 "firstSeenUnixMs": str(base_ms + int(s.first_t_s * 1000)), "lastSeenUnixMs": str(base_ms + int(s.last_t_s * 1000)),
                 "nFrames": int(s.n_frames)}
