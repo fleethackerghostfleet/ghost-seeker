@@ -338,6 +338,84 @@ func TestShipOperatorKeepsRequestedExpiryOnFirstPolicy(t *testing.T) {
 	}
 }
 
+func TestSetPolicyPreservesLayerEMCONExpiryWithoutOperatorAuth(t *testing.T) {
+	svc, st := makeOperatorService(t, nil)
+	svc.Operators = nil
+	now := time.Now()
+	policyExpiry := now.Add(2 * time.Hour).UnixMilli()
+	emconExpiry := now.Add(30 * time.Minute).UnixMilli()
+	request := connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+		ExpiresAtUnixMs: policyExpiry,
+		Layers: []*pb.PolicyLayer{{
+			Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO-DDG51",
+			Emcon: &pb.EmconSetting{
+				Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO-DDG51",
+				Echelon: pb.Echelon_ECHELON_SHIP, ExpiresAtUnixMs: emconExpiry,
+			},
+		}},
+	}})
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.GetPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, policy := range []*pb.Policy{response.Msg.Policy, stored} {
+		if len(policy.Layers) != 1 || policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() != emconExpiry {
+			t.Fatalf("layer EMCON expiry changed: %+v", policy.Layers)
+		}
+		if policy.GetExpiresAtUnixMs() != policyExpiry {
+			t.Fatalf("policy expiry=%d, want requested %d", policy.GetExpiresAtUnixMs(), policyExpiry)
+		}
+	}
+}
+
+func TestSetPolicyPreservesLayerEMCONExpiryAndHigherPolicyDeadlineWithOperatorAuth(t *testing.T) {
+	now := time.Now()
+	commandLayer := &pb.PolicyLayer{
+		Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+		Rules: []*pb.InterestRule{{Id: "command", BoostLabels: []string{"submarine"}}},
+	}
+	higherPolicyExpiry := now.Add(2 * time.Hour).UnixMilli()
+	requestedPolicyExpiry := now.Add(4 * time.Hour).UnixMilli()
+	emconExpiry := now.Add(30 * time.Minute).UnixMilli()
+	svc, st := makeOperatorService(t, &pb.Policy{
+		IssuedAtUnixMs: now.UnixMilli(), ExpiresAtUnixMs: higherPolicyExpiry,
+		Layers: []*pb.PolicyLayer{commandLayer},
+	})
+	request := operatorRequest(t, &pb.Policy{
+		ExpiresAtUnixMs: requestedPolicyExpiry,
+		Layers: []*pb.PolicyLayer{
+			proto.Clone(commandLayer).(*pb.PolicyLayer),
+			{
+				Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "spoof",
+				Emcon: &pb.EmconSetting{
+					Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "spoof",
+					Echelon: pb.Echelon_ECHELON_SHIP, ExpiresAtUnixMs: emconExpiry,
+				},
+			},
+		},
+	}, "operator", "TAO-DDG51", pb.Echelon_ECHELON_SHIP)
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.GetPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, policy := range []*pb.Policy{response.Msg.Policy, stored} {
+		if policy.GetExpiresAtUnixMs() != higherPolicyExpiry {
+			t.Fatalf("policy expiry=%d, want higher-echelon deadline %d", policy.GetExpiresAtUnixMs(), higherPolicyExpiry)
+		}
+		if len(policy.Layers) != 2 || policy.Layers[1].GetEmcon().GetExpiresAtUnixMs() != emconExpiry {
+			t.Fatalf("layer EMCON expiry changed: %+v", policy.Layers)
+		}
+	}
+}
+
 func TestOperatorAttributionAndEMCONUseCallerEchelon(t *testing.T) {
 	commandLayer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
 		Rules: []*pb.InterestRule{{Id: "command", Locked: true, BoostLabels: []string{"submarine"}}}}
