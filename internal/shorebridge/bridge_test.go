@@ -588,7 +588,7 @@ func TestTimedFlatNonJWTUsesPerDirectiveExpiry(t *testing.T) {
 	}
 }
 
-func TestEMCONWithConfiguredIssuerReusesSameEchelonLayer(t *testing.T) {
+func TestEMCONWithConfiguredIssuerPreservesOtherConsoleLayer(t *testing.T) {
 	otherLayer := &pb.PolicyLayer{
 		Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ops-2",
 		Rules: []*pb.InterestRule{{Id: "ops-2-rule", Author: "ops-2", BoostLabels: []string{"tanker"}}},
@@ -607,12 +607,12 @@ func TestEMCONWithConfiguredIssuerReusesSameEchelonLayer(t *testing.T) {
 	if rec.Code != http.StatusOK || submitted == nil {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if len(submitted.Layers) != 1 {
-		t.Fatalf("layers=%+v, want the existing ship layer to be reused", submitted.Layers)
+	if len(submitted.Layers) != 2 || !proto.Equal(submitted.Layers[0], otherLayer) {
+		t.Fatalf("layers=%+v, want the other console's layer preserved", submitted.Layers)
 	}
-	reused := submitted.Layers[0]
-	if reused.Echelon != pb.Echelon_ECHELON_SHIP || reused.IssuedBy != "ops-2" ||
-		len(reused.Rules) != 1 || !proto.Equal(reused.Rules[0], otherLayer.Rules[0]) ||
+	reused := submitted.Layers[1]
+	if reused.Echelon != pb.Echelon_ECHELON_SHIP || reused.IssuedBy != "ops-1" ||
+		len(reused.Rules) != 0 ||
 		reused.GetEmcon().GetSetBy() != "ops-1" ||
 		reused.GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT || reused.GetEmcon().GetLocked() {
 		t.Fatalf("reused ship layer=%+v", reused)

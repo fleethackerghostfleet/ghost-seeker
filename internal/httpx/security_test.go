@@ -21,7 +21,7 @@ func TestSecureHeaders(t *testing.T) {
 	} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tc.path, nil))
-		if got := response.Header().Get("Content-Security-Policy"); got != "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" {
+		if got := response.Header().Get("Content-Security-Policy"); got != "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" {
 			t.Errorf("CSP = %q", got)
 		}
 		if got := response.Header().Get("X-Content-Type-Options"); got != "nosniff" {

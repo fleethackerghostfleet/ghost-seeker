@@ -19,6 +19,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -981,7 +982,7 @@ func (c *Console) fullRes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	by := strings.TrimSpace(body.By)
+	by := opauth.Actor(r.Context(), strings.TrimSpace(body.By))
 	if by == "" {
 		writeError(w, http.StatusBadRequest, store.ErrOperatorRequired.Error())
 		return
@@ -1039,7 +1040,7 @@ func (c *Console) pull(w http.ResponseWriter, r *http.Request) {
 			kind = k
 		}
 	}
-	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: base.Live.ItemID, Form: kind, RequestedBy: "operator-ui"}}
+	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: base.Live.ItemID, Form: kind, RequestedBy: opauth.Actor(r.Context(), "operator-ui")}}
 	var out pb.RequestPullResponse
 	if err := c.b.call(r.Context(), c.b.shore, "RequestPull", req, &out); err != nil {
 		log.Printf("console: pull upstream: %v", err)
@@ -1212,7 +1213,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects — try \"ignore cargo ships\" or \"prioritize submarines\".")
 		return
 	}
-	pol := &pb.Policy{IssuedBy: c.b.issuer(), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost}, Emcon: cd.Emcon}
+	pol := &pb.Policy{IssuedBy: opauth.Actor(r.Context(), c.b.issuer()), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost}, Emcon: cd.Emcon}
 	if cd.DurationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(cd.DurationMin) * time.Minute).UnixMilli()
 	}

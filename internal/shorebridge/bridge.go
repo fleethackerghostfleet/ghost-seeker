@@ -28,6 +28,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 )
@@ -942,7 +943,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "text exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
-	issuedBy := b.issuer()
+	issuedBy := opauth.Actor(r.Context(), b.issuer())
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: issuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
 	durationMin := command.ExtractDurationMin(in.Text)
@@ -1115,12 +1116,12 @@ func blockedMessage(c command.Compiled) string {
 // applyPolicy replaces the standing shore policy with the given interest and
 // asks the poller to refresh so the console sees the change at once.
 func (b *Bridge) applyPolicy(ctx context.Context, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
-	return b.applyPolicyAs(ctx, b.issuer(), text, suppress, boost)
+	return b.applyPolicyAs(ctx, opauth.Actor(ctx, b.issuer()), text, suppress, boost)
 }
 
 func (b *Bridge) applyPolicyAs(ctx context.Context, issuedBy, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
 	if issuedBy == "" {
-		issuedBy = b.issuer()
+		issuedBy = opauth.Actor(ctx, b.issuer())
 	}
 	if suppress == nil {
 		suppress = []string{}
@@ -1183,7 +1184,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mode must be NORMAL, BURST, or SILENT", http.StatusBadRequest)
 		return
 	}
-	issuedBy := b.issuer()
+	issuedBy := opauth.Actor(r.Context(), b.issuer())
 	current, err := b.getPolicy(r.Context())
 	if err != nil {
 		if writeShoreAuthError(w, err) {
@@ -1207,18 +1208,10 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	pol.IssuedBy = issuedBy
 	if len(pol.Layers) > 0 {
 		pol.Layers = cloneLayers(pol.Layers)
-		operatorLayer := findOperatorLayer(pol.Layers, issuedBy, b.echelon())
+		operatorLayer := findOperatorLayer(pol.Layers, b.issuer(), b.echelon())
 		if operatorLayer < 0 {
-			for i, layer := range pol.Layers {
-				if layer != nil && layer.Echelon == b.echelon() {
-					operatorLayer = i
-					break
-				}
-			}
-			if operatorLayer < 0 {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: issuedBy})
-				operatorLayer = len(pol.Layers) - 1
-			}
+			pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: b.issuer()})
+			operatorLayer = len(pol.Layers) - 1
 		}
 		pol.Layers[operatorLayer].Rules = withoutEmconOnlyRules(pol.Layers[operatorLayer].Rules)
 		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
@@ -1237,7 +1230,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 				SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...)})
 		}
 		pol.Layers = []*pb.PolicyLayer{{
-			Echelon: b.echelon(), IssuedBy: issuedBy, Rules: rules,
+			Echelon: b.echelon(), IssuedBy: b.issuer(), Rules: rules,
 			Emcon: &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()},
 		}}
 	}
@@ -1360,9 +1353,9 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid item id", http.StatusBadRequest)
 		return
 	}
-	by := "operator-ui"
+	by := opauth.Actor(r.Context(), "operator-ui")
 	if in.Original {
-		if by = strings.TrimSpace(in.By); by == "" {
+		if by = opauth.Actor(r.Context(), strings.TrimSpace(in.By)); by == "" {
 			http.Error(w, "operator name (by) required for a full-size override", http.StatusBadRequest)
 			return
 		}
@@ -1408,7 +1401,7 @@ func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var out pb.OverrideLabelResponse
-	req := &pb.OverrideLabelRequest{Override: &pb.LabelOverride{ItemId: in.ItemID, Label: in.Label, By: "operator-ui"}}
+	req := &pb.OverrideLabelRequest{Override: &pb.LabelOverride{ItemId: in.ItemID, Label: in.Label, By: opauth.Actor(r.Context(), "operator-ui")}}
 	if err := b.call(r.Context(), b.shore, "OverrideLabel", req, &out); err != nil {
 		log.Printf("shorebridge: override upstream: %v", err)
 		http.Error(w, "upstream shore error", http.StatusBadGateway)

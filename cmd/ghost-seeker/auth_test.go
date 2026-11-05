@@ -1,0 +1,29 @@
+package main
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestValidateAuthMode(t *testing.T) {
+	fields := []string{"tls-cert", "tls-key", "piv-ca-bundle", "piv-crl-dir", "piv-users"}
+	for i, name := range fields {
+		t.Run(name, func(t *testing.T) {
+			values := []string{"cert", "key", "ca", "crls", "users"}
+			values[i] = ""
+			err := validateAuthMode("piv", values[0], values[1], values[2], values[3], values[4])
+			if err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("missing %s: %v", name, err)
+			}
+		})
+	}
+	if err := validateAuthMode("token", "", "", "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateAuthMode("piv", "cert", "key", "ca", "crls", "users"); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateAuthMode("invalid", "", "", "", "", ""); err == nil {
+		t.Fatal("invalid mode accepted")
+	}
+}

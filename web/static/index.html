@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/briefing.css">
 <link rel="stylesheet" href="/lights.css">
+<link rel="stylesheet" href="/auth.css">
 </head>
 <body>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
@@ -28,6 +29,8 @@
   </div>
   <div class="clock mono" id="clock">--:--:--Z</div>
   <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:11px">Watch officer</span></div></div>
+  <span id="readOnlyBadge" class="read-only-badge" hidden>Read-only</span>
+  <form id="authLogout" class="auth-logout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
 </header>
 
 <section class="page on" id="pgFeed">
@@ -150,6 +153,7 @@
 <script src="/learn.js" defer></script>
 <script src="/policy.js" defer></script>
 <script src="/lights.js" defer></script>
+<script src="/auth.js"></script>
 <script src="/app.js" defer></script>
 </body>
 </html>
