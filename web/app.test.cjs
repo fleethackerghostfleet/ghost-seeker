@@ -233,6 +233,51 @@ function feedContext(){
  `,context);
  return context;
 }
+test('human reviewed filter has native options with clear labels and themed popup colors',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ assert.match(html,/<label class="feed-review" for="reviewFilter">Human reviewed <select id="reviewFilter">/);
+ const select=html.match(/<select id="reviewFilter">(.*?)<\/select>/)[1];
+ assert.deepEqual([...select.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map(m=>[m[1],m[2]]),[
+  ['all','All images'],['reviewed','Yes — reviewed'],['unreviewed','No — not reviewed'],
+ ]);
+ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
+ assert.match(css,/\.feed-review option\{background:var\(--panel2\);color:var\(--text\)\}/);
+});
+test('feed review select changes filter results and persists every value including all',()=>{
+ const context=feedContext(),{settings,saved}=settingsContext('{}');
+ context.gsSettings=settings;
+ context.addEventListener=()=>{};
+ vm.runInContext(`
+  closeDetail=()=>{};resetFeedWindow=()=>{};
+  items=[frame('yes',{reviewed:true}),frame('no')];
+ `,context);
+ const start=source.indexOf(' const syncFeedFilters=');
+ const end=source.indexOf(" $('modelSel').onchange",start);
+ vm.runInContext(source.slice(start,end),context);
+ assert.equal(context.$('reviewFilter').value,'all');
+ assert.equal(vm.runInContext('ids()',context),'yes,no');
+ for(const [value,ids] of [['reviewed','yes'],['unreviewed','no'],['all','yes,no']]){
+  context.$('reviewFilter').onchange({target:{value}});
+  assert.equal(vm.runInContext('ids()',context),ids);
+  assert.equal(context.$('reviewFilter').value,value);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,value);
+ }
+ vm.runInContext('items=[]',context);
+ context.$('reviewFilter').onchange({target:{value:'reviewed'}});
+ assert.equal(vm.runInContext('ids()',context),'');
+});
+test('global shortcuts leave native select keyboard events untouched',()=>{
+ const context=feedContext();
+ context.document.addEventListener=(type,handler)=>{context.keyHandler=handler};
+ const start=source.indexOf(" document.addEventListener('keydown',e=>");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ vm.runInContext(source.slice(start,end),context);
+ for(const key of ['ArrowDown','ArrowUp','Home','End','Enter',' ','r','n','Escape']){
+  let prevented=false;
+  context.keyHandler({key,target:{tagName:'SELECT'},preventDefault(){prevented=true}});
+  assert.equal(prevented,false,key);
+ }
+});
 test('feed checkbox reveals retained filtered and exact duplicate images at P4 without mutating scores',()=>{
  const context=feedContext();
  vm.runInContext(`
