@@ -329,6 +329,60 @@ func TestTimedOperatorDirectiveExpiresItsRule(t *testing.T) {
 	}
 }
 
+func TestOperatorEMCONWrapPreservesFlatBoostFactor(t *testing.T) {
+	var mu sync.Mutex
+	var submitted *pb.Policy
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetPolicy":
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: &pb.Policy{
+				Interest: &pb.Interest{BoostFactor: 3, BoostLabels: []string{"tanker"}},
+			}})
+		case consolePath + "SetPolicy":
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var request pb.SetPolicyRequest
+			if err := protojson.Unmarshal(raw, &request); err != nil {
+				t.Errorf("decode SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			mu.Lock()
+			submitted = proto.Clone(request.Policy).(*pb.Policy)
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.SetPolicyResponse{Policy: request.Policy})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer shore.Close()
+
+	bridge := New(shore.URL, "", nil)
+	if err := bridge.SetOperatorToken(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/shore/emcon",
+		strings.NewReader(`{"mode":"SILENT","issuedBy":"spoof"}`))
+	bridge.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	mu.Lock()
+	policy := proto.Clone(submitted).(*pb.Policy)
+	mu.Unlock()
+	if len(policy.Layers) != 1 || len(policy.Layers[0].Rules) != 1 {
+		t.Fatalf("submitted layers=%+v", policy.Layers)
+	}
+	if got := policy.Layers[0].Rules[0].Weight; got != 3 {
+		t.Fatalf("boost rule weight=%v, want 3", got)
+	}
+}
+
 func TestShoreAuthorizationFailureIsReturnedAsJSON(t *testing.T) {
 	for _, tc := range []struct {
 		name, path, body string

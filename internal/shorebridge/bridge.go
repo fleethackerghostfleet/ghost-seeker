@@ -1080,8 +1080,12 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	} else if b.hasOperatorToken() {
 		rules := make([]*pb.InterestRule, 0, 2)
 		if pol.Interest != nil && len(pol.Interest.BoostLabels) > 0 {
+			var weight float64
+			if pol.Interest.BoostFactor > 0 {
+				weight = pol.Interest.BoostFactor
+			}
 			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-boost", time.Now().UnixMilli()), Author: in.IssuedBy,
-				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...)})
+				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), Weight: weight})
 		}
 		if pol.Interest != nil && len(pol.Interest.SuppressLabels) > 0 {
 			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-suppress", time.Now().UnixMilli()), Author: in.IssuedBy,
