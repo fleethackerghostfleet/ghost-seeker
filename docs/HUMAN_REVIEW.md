@@ -43,10 +43,10 @@ undone reviews removed. Keep the original append-only logs for provenance.
 Use a copied, stable log or exported JSONL, not a file currently being appended:
 
 ```sh
-go run ./cmd/retune -min-records 10 -out review-report.md \
+go run ./research/cmd/retune -min-records 10 -out review-report.md \
   -weights-out proposed-weights.json data/reviews.jsonl other-reviews.jsonl
 # Standalone 300-record example (demo path must not already exist):
-go run ./cmd/retune -demo demo-reviews.jsonl
+go run ./research/cmd/retune -demo demo-reviews.jsonl
 ```
 
 The tool reads logs without opening them for writes. It deduplicates record IDs,
@@ -77,7 +77,7 @@ and obtain mission-owner approval. Apply accepted class weights **by hand** to
 the matching key in `internal/catalog/catalog.go` (`catalog.Models[key].W`), then:
 
 ```sh
-go run ./cmd/bench
+go run ./research/cmd/bench
 go test ./...
 ```
 

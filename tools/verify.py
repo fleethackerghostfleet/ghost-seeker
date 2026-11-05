@@ -30,14 +30,18 @@ def check_generated():
 def checks():
     return [
         ("verifier-tests", [sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_verify.py"]),
+        ("repository-layout", [sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_layout.py"]),
         ("go-vet", ["go", "vet", "./..."]),
         ("go-tests", ["go", "test", "./..."]),
         ("go-race", ["go", "test", "-race", "./..."]),
-        ("go-build", ["make", "build"]),
+        ("go-build", ["make", "build-all"]),
         ("go-modules", ["go", "mod", "verify"]),
         ("go-vulnerabilities", ["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.9.0", "./..."]),
         ("web", ["node", "--test", *[str(p.relative_to(ROOT)) for p in sorted((ROOT / "web").glob("*.test.cjs"))]]),
         ("edgeml", [sys.executable, "-m", "pytest", "-q", "edgeml/tests"]),
+        ("research-syntax", [sys.executable, "-m", "compileall", "-q", "research"]),
+        ("research", [sys.executable, "-m", "pytest", "-q", "research/edgeml/tests"]),
+        ("algorithm", [sys.executable, "-m", "unittest", "discover", "-s", "algorithm/tests"]),
         ("proto-lint", ["buf", "lint"]),
         ("proto-generate", ["buf", "generate"]),
         ("proto-current", [sys.executable, "tools/verify.py", "--check-generated"]),
@@ -53,7 +57,8 @@ def run_check(name, command, output, timeout=3600):
     with log.open("w") as stream:
         try:
             process = subprocess.Popen(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
-                                       env={**os.environ, "STRICT_CHECKS": "1", "PYTHON": sys.executable},
+                                       env={**os.environ, "STRICT_CHECKS": "1", "PYTHON": sys.executable,
+                                            "PYTHONPATH": str(ROOT / "algorithm") + os.pathsep + os.environ.get("PYTHONPATH", "")},
                                        start_new_session=True)
             try:
                 code = process.wait(timeout=timeout)

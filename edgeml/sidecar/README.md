@@ -17,7 +17,7 @@ The detector above uses ONNX Runtime CPU; an OpenVINO `int8/model.xml` export
 can be passed instead. The embed directory contains `meta.json`, `model.onnx`,
 and `text_cache.json`.
 
-Models (D's exports, see `edgeml/reports/E.md`):
+Models (D's exports, see `research/edgeml/reports/E.md`):
 
 ```
 B=gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D
@@ -42,7 +42,7 @@ The live `EdgemlEngine` sets `gate_unknown_bonus_on_realness=True`, overriding
 the aggregator library's `False` default. Pass
 `--agg '{"gate_unknown_bonus_on_realness":false}'` to use the library behavior.
 These defaults differ from the frozen operating point in the
-[unknown-object evaluation](../../docs/reports/UNKNOWN_OBJECTS.md); those
+[unknown-object evaluation](../../research/reports/UNKNOWN_OBJECTS.md); those
 measurements do not establish the live configuration's accuracy.
 
 ## RPCs

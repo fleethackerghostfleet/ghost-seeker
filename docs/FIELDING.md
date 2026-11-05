@@ -268,7 +268,7 @@ increases build time and image size. To include it, build with
 PyTorch CPU wheel index. The default image does not include tracking.
 Real-model inference and tracking in the packaged container remain
 **unverified**; the source-based experiments are documented separately in
-[the edgeml reports](../edgeml/reports/E.md).
+[the edgeml reports](../research/edgeml/reports/E.md).
 
 ## Verification and troubleshooting
 

@@ -1,6 +1,5 @@
 import json
 import logging
-import runpy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -195,15 +194,3 @@ def test_sidecar_engine_emits_dark_detection_and_burst(monkeypatch):
     assert any(d["label"] == "dark contact" and d["box"] == response["detections"][0]["box"]
                for d in response["detections"])
     assert response["burst"]["fps"] == 8 and response["burst"]["durationS"] == 3
-
-
-def test_benchmark_smoke():
-    module = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/nightlights_dark_eval.py"))
-    result = module["evaluate"](split="dev", tier="easy", n=1)
-    assert result["dark_contact"]["total"] == 4
-    assert len(result["burst"]["scenarios"]) == 5
-    assert all(scenario["samples"] == 1 and scenario["requested"] in (0, 1)
-               for scenario in result["burst"]["scenarios"].values())
-    continuous = result["burst"]["continuous_triggers_120s_at_1fps"]
-    assert continuous["accepted"] == continuous["new_intervals"] + continuous["extensions"]
-    assert continuous["accepted"] + continuous["denied"] == 120

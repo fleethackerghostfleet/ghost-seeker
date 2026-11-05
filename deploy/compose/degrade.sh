@@ -8,7 +8,7 @@ bw()    { curl -s -X POST "$API/proxies/$P/toxics" -d "{\"name\":\"bw\",\"type\"
 lat()   { curl -s -X POST "$API/proxies/$P/toxics" -d "{\"name\":\"lat\",\"type\":\"latency\",\"attributes\":{\"latency\":$1,\"jitter\":$2}}" >/dev/null; }
 case "$1" in
   # Operator-UI presets (bits/s -> toxiproxy KB/s). Same ladder as the
-  # in-process shaper in cmd/ghost-seeker -shore and cmd/sim -bps.
+  # in-process shaper in cmd/ghost-seeker -shore and research/cmd/sim -bps.
   9k6)      reset; bw 1;    lat 1500 500 ;;   # ~9.6 kbps (toxiproxy's floor is 1 KB/s)
   64k)      reset; bw 8;    lat 600 200 ;;
   256k)     reset; bw 32;   lat 300 100 ;;

@@ -1,14 +1,8 @@
-.git
-.gitignore
-reports/
-eval_qa/
-scripts/
-tools/
-tests/
-*.pt
-*.jpg
-*.jpeg
-*.png
-*.jsonl
+# Only the runtime package is installed in the sidecar image.
+**
+!pyproject.toml
+!src/
+!src/**
 **/__pycache__/
 **/*.pyc
+**/*.egg-info/

@@ -1,5 +1,7 @@
 # CPU prioritization baseline
 
+**Product dependency:** the live demo imports `ghost_priority` through the sidecar's `both` prioritizer. This shared library stays here; its standalone CLI is an offline research workflow. See [repository boundaries](../docs/REPOSITORY.md).
+
 The implemented pipeline is **analyze once → rank the full pool → select within an absolute bandwidth allowance**. It accepts independent RGB images, JSONL manifests and sampled video. Built-in providers run on CPU; custom providers control their own runtime and dependencies. Labels enter evaluation only.
 
 - [Provider handoff](PROVIDERS.md): replace object, visual-interest and quality models independently.

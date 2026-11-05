@@ -61,7 +61,7 @@ services:
       GS_UNIT_TOKEN: ${GS_UNIT_TOKEN:?set GS_UNIT_TOKEN (edge JWT from cmd/mint-unit-token)}
       GS_PUBLIC_HOSTS: "edge,localhost"
     ports: ["8081:8081"]
-    volumes: ["edge-data:/data", "../../frames:/frames:ro"]
+    volumes: ["edge-data:/data", "../../research/frames:/frames:ro"]
     depends_on: [link]
 
 volumes:
