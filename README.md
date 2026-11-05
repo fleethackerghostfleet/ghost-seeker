@@ -7,6 +7,7 @@ form*, so the most important information reaches shore first and nothing is
 lost. Images are the first data type; the item model is type-agnostic.
 
 See [Fielding](docs/FIELDING.md) for offline builds, container staging, and Zarf deployment.
+See [Human review](docs/HUMAN_REVIEW.md) for durable review capture, exports, and offline weight proposals.
 
 Key behaviours (all covered by `go test ./...` and the simulator):
 

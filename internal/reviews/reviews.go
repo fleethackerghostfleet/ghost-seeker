@@ -28,6 +28,7 @@ type Record struct {
 	ReviewedAt time.Time                `json:"reviewed_at"`
 	Reviewer   string                   `json:"reviewer"`
 	Model      string                   `json:"model"`
+	ModelKey   string                   `json:"model_key"`
 	ModelTier  int                      `json:"model_tier"`
 	ModelScore float64                  `json:"model_score"`
 	Edge       float64                  `json:"edge_score"`

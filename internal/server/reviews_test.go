@@ -39,7 +39,7 @@ func TestReviews(t *testing.T) {
 		Record reviews.Record `json:"record"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &v)
-	if v.Record.ModelScore != stored.Central || v.Record.ModelTier != stored.CentralTier || v.Record.Reviewer != "A" {
+	if v.Record.ModelKey != "maritime" || v.Record.ModelScore != stored.Central || v.Record.ModelTier != stored.CentralTier || v.Record.Reviewer != "A" {
 		t.Fatalf("%+v", v)
 	}
 	if w = post("/api/items/i/review", `{"reviewer":"A","action":"accept","model_score":0}`); w.Code != 400 {
