@@ -3,7 +3,9 @@ package ingest
 import (
 	"archive/zip"
 	"context"
+	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,12 +22,13 @@ import (
 type FrameSet struct {
 	Path        string // .zip or directory
 	Source      string
-	Label       string  // detector label, "" = nothing detected
-	Conf        float64 // detector confidence
-	Unknownness float64 // 0..1
-	Truth       string  // what it really is (for unknowns), e.g. "dolphin"
-	Every       int     // use every Nth frame (default 1)
-	Limit       int     // max frames (0 = all)
+	Label       string   // detector label, "" = nothing detected
+	Conf        float64  // detector confidence
+	Unknownness float64  // 0..1
+	Truth       string   // what it really is (for unknowns), e.g. "dolphin"
+	Every       int      // use every Nth frame (default 1)
+	Limit       int      // max frames (0 = all)
+	SceneEveryS *float64 `json:"scene_every_s,omitempty"`
 }
 
 type frame struct {
@@ -116,6 +119,15 @@ type replayBurst struct {
 func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay, error) {
 	var lists [][]*Capture
 	for _, s := range sets {
+		var sceneEvery *time.Duration
+		if s.SceneEveryS != nil {
+			seconds := *s.SceneEveryS
+			if seconds < 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds >= float64(math.MaxInt64)/float64(time.Second) {
+				return nil, fmt.Errorf("%s: scene_every_s must be a nonnegative duration", s.Source)
+			}
+			d := time.Duration(seconds * float64(time.Second))
+			sceneEvery = &d
+		}
 		frs, err := s.frames()
 		if err != nil {
 			return nil, err
@@ -134,7 +146,7 @@ func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay
 			if s.Unknownness > 0 {
 				hints["unknownness"] = ftoa(s.Unknownness)
 			}
-			l = append(l, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, Source: s.Source, Hints: hints,
+			l = append(l, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, Source: s.Source, Hints: hints, SceneEvery: sceneEvery,
 				Tags: map[string]string{"frame": f.name}})
 		}
 		if len(l) > 0 {
