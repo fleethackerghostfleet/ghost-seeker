@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
