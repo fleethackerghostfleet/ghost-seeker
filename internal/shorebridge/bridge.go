@@ -577,28 +577,48 @@ var formNames = map[pb.FormKind]string{
 	pb.FormKind_FORM_KIND_FULL:  "full",
 }
 
+func objectTierPin(o *Object, tiers map[string]int32) (string, int32) {
+	policy := &pb.Policy{Interest: &pb.Interest{TierLabels: tiers}, Thresholds: &pb.Thresholds{DetectionMinConf: o.detectionMin}}
+	var label string
+	var tier int32
+	match := func(item *pb.Item) {
+		candidate, target := scoring.TierPin(item, policy)
+		if target > 0 && (tier == 0 || target < tier || target == tier && candidate < label) {
+			label, tier = candidate, target
+		}
+	}
+	displayed := &pb.Features{Tags: map[string]string{"subtype": o.Subtype}}
+	if o.Label != "" {
+		displayed.Detections = []*pb.Detection{{Label: o.Label, Confidence: 1}}
+	}
+	if o.Best != nil {
+		displayed.LabelOverride = o.Best.Override
+	}
+	match(&pb.Item{Features: displayed})
+	matchCard := func(card *Card) {
+		if card == nil {
+			return
+		}
+		if card.item != nil {
+			match(card.item)
+			return
+		}
+		features := &pb.Features{LabelOverride: card.Override, Tags: card.Tags}
+		if card.Label != "" {
+			features.Detections = []*pb.Detection{{Label: card.Label, Confidence: 1}}
+		}
+		match(&pb.Item{Features: features})
+	}
+	matchCard(o.Best)
+	for _, card := range o.Items {
+		matchCard(card)
+	}
+	return label, tier
+}
+
 // assignTiers maps the edge's unbounded priority score onto the P1..P4
 // tiers the operator UI uses by rank within the current shore picture:
 // top 10% P1, next 25% P2, next 35% P3, rest P4. Suppressed objects are P4.
-func objectTierPin(o *Object, tiers map[string]int32) (string, int32) {
-	card := o.Best
-	if len(o.Items) > 0 {
-		card = o.Items[0]
-	}
-	if card == nil {
-		return "", 0
-	}
-	item := card.item
-	if item == nil {
-		label := card.Label
-		if label == "" {
-			label = o.Label
-		}
-		item = &pb.Item{Features: &pb.Features{LabelOverride: card.Override, Detections: []*pb.Detection{{Label: label, Confidence: 1}}, Tags: map[string]string{"subtype": o.Subtype}}}
-	}
-	return scoring.TierPin(item, &pb.Policy{Interest: &pb.Interest{TierLabels: tiers}, Thresholds: &pb.Thresholds{DetectionMinConf: o.detectionMin}})
-}
-
 func assignTiers(objs []*Object, pins ...map[string]int32) {
 	tiers := map[string]int32{}
 	if len(pins) > 0 {

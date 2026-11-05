@@ -132,6 +132,9 @@ func TestShoreTierPinsMatchEdgeLabels(t *testing.T) {
 			v := &pb.ItemView{Item: &pb.Item{Id: "contact", Features: &pb.Features{LabelOverride: tc.override, Detections: []*pb.Detection{{Label: "boat", Confidence: 1}, {Label: "tanker", Confidence: tc.conf}}, Tags: map[string]string{"subtype": tc.subtype}}}}
 			card := ToCard(v)
 			o := &Object{Key: "contact", Label: "boat", Subtype: tc.subtype, Best: card, Items: []*Card{card}, Score: 100, detectionMin: tc.min}
+			if card.Override != "" {
+				o.Label = card.Override
+			}
 			pol := &pb.Policy{Interest: &pb.Interest{TierLabels: tc.pins}, Thresholds: &pb.Thresholds{DetectionMinConf: tc.min}}
 			_, edgeTier := scoring.TierPin(v.Item, pol)
 			if int(edgeTier) != tc.want {
@@ -213,5 +216,40 @@ func TestLivePreviewHonorsTierPins(t *testing.T) {
 	empty.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/directives/preview", strings.NewReader(`{"rules":[]}`)))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"items":[]`) {
 		t.Fatalf("empty preview: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestClosedSightingRetainsUnionOfTierPinLabels(t *testing.T) {
+	image := view("image", 100, map[string]string{"sighting_id": "sighting"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_THUMB: true})
+	image.Item.Features.Detections = []*pb.Detection{{Label: "boat", Confidence: 1}}
+	older := view("older", 90, map[string]string{"sighting_id": "sighting"}, nil)
+	older.Item.Features.Detections = []*pb.Detection{{Label: "tanker", Confidence: 1}}
+	close := view("close", 200, map[string]string{"sighting_id": "sighting", "event": "close"}, nil)
+	close.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
+	close.Item.Features.Detections = nil
+	for _, views := range [][]*pb.ItemView{{image, older, close}, {close, older, image}} {
+		objects, _ := Group(views, nil, nil)
+		if len(objects) != 1 || objects[0].Items[0].ID != "close" {
+			t.Fatalf("fixture did not close sighting: %v", objects)
+		}
+		for _, pins := range []map[string]int32{{"boat": 2}, {"boat": 4, "tanker": 2}, {"unmatched": 1}} {
+			want := 1
+			if pins["boat"] != 0 {
+				want = 2
+			}
+			assignTiers(objects, pins)
+			c := NewConsole(New("", "", nil))
+			c.onSnapshot(&Snapshot{Objects: objects, TierLabels: pins}, nil)
+			if objects[0].Priority != fmt.Sprintf("P%d", want) || c.base[objects[0].Key].Tier != want {
+				t.Fatalf("closed sighting lost pin: %v %v", objects[0], c.base)
+			}
+			_, counts, _ := c.predictLocked(nil, nil, pins)
+			if counts[want-1] != 1 {
+				t.Fatalf("closed preview lost pin: %v", counts)
+			}
+		}
+	}
+	if _, tier := objectTierPin(&Object{}, map[string]int32{"boat": 2}); tier != 0 {
+		t.Fatal("empty object matched a pin")
 	}
 }
