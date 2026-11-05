@@ -176,7 +176,9 @@ go run ./cmd/edge -require-signed-policy -policy-keys keys/keyring.json
 ```
 
 Unsigned or badly signed policies are rejected and audited; the edge keeps its
-last-good policy. In EMCON `SILENT` the edge still exchanges an empty heartbeat so
+last-good policy. A signed higher-echelon policy must carry a `version` above the
+one `GetPolicy` currently shows (ship edits continue that sequence), which keeps a
+revoked command policy from being replayed. In EMCON `SILENT` the edge still exchanges an empty heartbeat so
 the policy that lifts SILENT arrives.
 
 ## How ranking works

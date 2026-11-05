@@ -76,7 +76,8 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "drop"}})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("dropping the command layer accepted: %v", err)
 	}
-	// Command revokes its layer with a newer signed policy...
+	// Command revokes its layer with a newer signed policy (one above what
+	// GetPolicy shows after the ship edit)...
 	revoke := &pb.Policy{Id: "revoke", IssuedBy: "CTF-72", Version: next.Msg.Policy.Version + 1,
 		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO"}}}
 	if err := policy.Sign(revoke, "ctf72", cmdPriv); err != nil {
@@ -90,8 +91,8 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: proto.Clone(signedCommand).(*pb.Policy)})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("replayed signed command policy accepted: %v", err)
 	}
-	if next.Msg.Policy.Version <= firstVersion {
-		t.Fatalf("next version=%d, want > %d", next.Msg.Policy.Version, firstVersion)
+	if next.Msg.Policy.Version != firstVersion+1 {
+		t.Fatalf("next version=%d, want %d (ship edits continue from the signed command version)", next.Msg.Policy.Version, firstVersion+1)
 	}
 	if err := policy.Verify(next.Msg.Policy, policy.Keyring{"shore": pub}); err != nil {
 		t.Fatalf("second signature failed verification: %v", err)
