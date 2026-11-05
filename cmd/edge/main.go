@@ -74,6 +74,9 @@ func main() {
 	slog.SetDefault(log)
 	token, err := unitauth.Credential(*tokenFlag, *tokenFile)
 	fatal(err)
+	if token == "" {
+		log.Warn("no unit token; shore rejects unauthenticated edges unless it runs with -require-auth=false (make demo-edge mints one from data/unit.key)")
+	}
 	operator, devMode, err := opauth.Load(*opToken, *opTokenFile, *devTokenFile)
 	fatal(err)
 	if devMode {

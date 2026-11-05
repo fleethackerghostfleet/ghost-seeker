@@ -53,8 +53,9 @@ live shore mode. Standalone edge and shore binaries use the checked-out `ui/`
 directory by default:
 
 ```sh
-./bin/shore -data data/shore -listen :8080
-./bin/edge -data data/edge -listen :8081 -shore http://localhost:8080
+GS_SIGNING_KEY_FILE=data/unit.key ./bin/shore -data data/shore -listen :8080
+GS_UNIT_TOKEN_FILE=data/edge.jwt   ./bin/edge  -data data/edge  -listen :8081 -shore http://localhost:8080
+# `make run-shore` / `make run-edge` create data/unit.key and mint data/edge.jwt for you.
 ```
 
 The Go packages use pure-Go SQLite. Cross-compile the binaries for a Linux
@@ -104,7 +105,7 @@ the environment variables shown in the table.
 | `-data` | `DATA_DIR` | `data/shore` | SQLite store |
 | `-listen` | `LISTEN` | `:8080` | Shore HTTP listener |
 | `-infer` | `INFER_URL` | `mock` | Inference URL for text embedding, or `mock` |
-| `-require-auth` | `GS_REQUIRE_AUTH` | `false` | Require unit JWTs on SyncService |
+| `-require-auth` | `GS_REQUIRE_AUTH` | `true` | Require unit JWTs on SyncService; `false` is for isolated lab links only |
 | `-require-operator-auth` | `GS_REQUIRE_OPERATOR_AUTH` | `false` | Require operator JWTs on SetPolicy |
 | `-signing-key` | `GS_SIGNING_KEY` | unset | HS256 signing key; also accepted by mint tool |
 | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset | Signing-key file; takes precedence over literal key |

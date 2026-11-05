@@ -54,13 +54,15 @@ shore store regardless of mode.
 
 ```sh
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
-make demo-shore        # bin/shore   -data data/shore -listen :8080
+make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
 make demo-ui           # bin/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
-make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings
+make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
 open http://localhost:8090
 ```
 
-**Auth (no extra steps):** the three Go processes share one operator token. With no
+**Auth (no extra steps):** the three Go processes share one operator token, and the edge↔shore
+link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/unit.key`;
+`make demo-edge` mints a 24 h edge token from it into `data/edge.jwt` on every start). With no
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
 (0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
 SameSite=Strict session cookie). From another machine the UI asks for the token at `/login`
