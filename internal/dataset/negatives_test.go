@@ -37,7 +37,7 @@ func TestSamplingDoesNotChangeReplay(t *testing.T) {
 	root := t.TempDir()
 	images := []Image{testImage("one", "video_one"), testImage("two", "video_one")}
 	for _, im := range images {
-		if err := os.WriteFile(filepath.Join(root, im.File), nil, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(root, im.File), []byte("image"), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
