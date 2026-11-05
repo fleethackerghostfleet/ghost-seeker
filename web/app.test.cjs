@@ -1224,6 +1224,47 @@ test('live active and pending forms take precedence over a received preview',()=
  assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
  assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
 });
+test('directive rules and priority explanations escape stored labels and attributes',()=>{
+ const c=setup();
+ c.payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>&';
+ vm.runInContext(`
+  CLS={vessel:{lab:payload}};ATTR_LAB={moving:payload};MODELS={maritime:{name:payload}};
+  rule={type:'boost',classes:['vessel'],attrs:['moving']};
+  state.directives=[{id:'d1',text:payload,rules:[rule]}];
+  $('directives').querySelectorAll=()=>[];
+  renderDirectives();
+  why=buildWhy({edge:.5,central:.5},[[{cls:'vessel',conf:.9,attrs:{}},{s:.5,notes:[{...rule,directiveId:'d1'}]}]]);
+ `,c);
+ for(const html of [c.$('directives').innerHTML,vm.runInContext('why.map(w=>w.t).join("")',c)]){
+  assert.match(html,/&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(html,/<img|<svg/);
+  assert.doesNotMatch(html,/&amp;lt;/);
+ }
+ assert.equal(vm.runInContext("ruleLabel({type:'boost',classes:[],attrs:[]})",c),'▲ Any object');
+ vm.runInContext('state.directives=[];renderDirectives()',c);
+ assert.match(c.$('directives').innerHTML,/No directives/);
+});
+
+test('image URLs and processing metadata are escaped at HTML sinks',()=>{
+ const c=setup();
+ c.payload='"><img src=x onerror=alert(1)>';
+ vm.runInContext(`
+  MODELS={maritime:{name:payload}};
+  imageFor=()=>payload;
+  zulu=()=> '12:00:00Z';
+  item={src:{id:'camera',hw:payload,em:payload,link:payload},dets:[],lat:{edge:1,up:2,cen:3},edge:.5,central:.5,tier:2,ts:new Date()};
+  imageHTML=cardHTML(item,false);
+  timeline=processingHTML(item);
+  chips=formChipsHTML({live:{forms:{fact:{state:payload}}}});
+  ladder=liveLadderHTML({live:{forms:{fact:{state:payload}},pull:{}}});
+ `,c);
+ for(const name of ['imageHTML','timeline','chips','ladder']){
+  const html=vm.runInContext(name,c);
+  assert.match(html,/&quot;&gt;&lt;img/);
+  assert.doesNotMatch(html,/<img src=x/);
+ }
+});
+
 function setup(){
  const elements=new Map();
  const context=vm.createContext({

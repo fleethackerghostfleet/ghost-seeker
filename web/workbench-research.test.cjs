@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
+const appSource=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const rule=(cls='fishing vessel')=>({type:'boost',classes:[cls],attrs:[],sources:[],withinMin:0,weight:2});
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function setup(interpret){
@@ -19,9 +20,21 @@ function setup(interpret){
   return{items:items.map(i=>({id:i.id,tier:body.rules.length?1:3,central:body.rules.length?.9:.4,contrib:[]})),counts:[0,0,1,0],candidates:[]};
  };
  ctx.isScene=i=>i?.live?.event==='scene';
+ vm.runInContext(appSource.match(/^const esc=.*$/m)[0]+'\n'+appSource.match(/^const clsOf=.*$/m)[0]+'\n'+appSource.match(/function ruleLabel\(r\)\{[\s\S]*?\n\}/)[0],ctx);
  vm.runInContext(source+'\nworkbench.init();',ctx);
  return{$,calls,ctx,timers,async type(text){$('nlIn').value=text;$('nlIn').oninput();},async preview(){const [id,cb]=timers.entries().next().value;timers.delete(id);cb();await tick()}};
 }
+test('draft chips escape rule labels, attributes and rule types',async()=>{
+ const payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>';
+ const h=setup(()=>({rules:[{...rule(payload),attrs:['moving'],type:payload}],readback:payload,warnings:[]}));
+ h.ctx.ATTR_LAB.moving=payload;
+ await h.type(payload);await h.preview();
+ const html=h.$('wbChips').innerHTML;
+ assert.match(html,/&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt;/);
+ assert.match(html,/class="wb-chip &quot;&gt;&lt;img/);
+ assert.doesNotMatch(html,/<img|<svg/);
+ assert.equal(h.$('wbInterpretationReadback').textContent,payload);
+});
 test('research interpretation is shown and changes require explicit confirmation',async()=>{
  const h=setup(()=>({rules:[rule()],path:'research/rules+granite-concepts',readback:'Prioritize fishing vessel',warnings:[],unknown:[]}));
  await h.type('look for fishing vessels');assert.equal(h.$('wbApply').disabled,true);

@@ -22,7 +22,7 @@ const FORM_HELP={fact:'FACT: a small summary of the object and capture time (abo
 function formChipsHTML(it){
  const f=it.live?.forms;if(!f)return'';
  return FORMS.map(k=>{const st=f[k]||{state:'none'};const title=st.state==='received'?`${FORM_NAME[k]}: received (${fmtBytes(st.bytes)})`:st.state==='partial'?`${FORM_NAME[k]}: ${fmtBytes(st.received)} of ${fmtBytes(st.bytes)} — streaming over the link`:st.state==='pending'?`${FORM_NAME[k]}: waiting on the ship (${fmtBytes(st.bytes)})`:st.state==='offered'?`${FORM_NAME[k]}: available on the ship — request it to send it`:`${FORM_NAME[k]}: not available`;
-  return`<span class="fchip ${st.state}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
+  return`<span class="fchip ${esc(st.state)}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
 }
 function uploadState(it){
  let u=it.upload,form='';
@@ -74,7 +74,7 @@ function liveSuppressReason(it){const l=it.live;if(!l?.suppressed)return'';retur
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>clsOf(k).lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>clsOf(k).lab).join(' / ')):'Any object';
  const at=r.attrs.length?' · '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):'';
- return(r.type==='boost'?'▲ ':'▼ ')+cl+at+(r.tier?` → P${r.tier} ${TNAME[r.tier]}`:'');
+ return esc((r.type==='boost'?'▲ ':'▼ ')+cl+at+(r.tier?` → P${r.tier} ${TNAME[r.tier]}`:''));
 }
 
 /* ---------------- UI ---------------- */
@@ -101,7 +101,7 @@ function bandControls(it){
  const band=bandFor(it);
  return `<div class="band-controls" role="group" title="Spectral band: choose visible light or infrared (heat) imagery" aria-label="Spectral band">${bands.map(b=>`<button type="button" data-band="${esc(b)}" data-band-item="${esc(it.id)}" aria-pressed="${b===band}" title="${b==='IR'?'Simulated long-wave infrared (LWIR): warm objects appear white':b==='EO'?'Electro-optical (EO): visible-light camera':esc(b)}">${esc(b)}</button>`).join('')}<span>B: change image band</span></div><span class="band-label">${esc(band)}${band==='IR'?' · white-hot · simulated LWIR':''}</span>`;
 }
-function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${imageFor(it)}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
+function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${esc(imageFor(it))}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
 function preserveBandFocus(render){
  const button=document.activeElement?.closest?.('.band-controls button');
  const surface=button?.closest('#rvMain, #drawer, #zoom');
@@ -343,8 +343,8 @@ async function init(){
  if(DATASET_MODE){$('classificationBanner').textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY · REAL IMAGERY · clean v2 dev';$('simStrip').hidden=true;$('datasetStrip').hidden=false;$('sourceLabel').textContent='Source';}
  if(config.live&&!MODELS[state.model])state.model=Object.keys(MODELS)[0]||state.model;
  $('srcSel').innerHTML=SOURCES.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
- $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
- $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
+ $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${esc(k)}">${esc(m.name)}</option>`).join('');
+ $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${esc(e)}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
  $('srcSel').onchange=e=>{gsSettings.setFeed({sensor:e.target.value});syncFeedFilters()};
  $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
@@ -482,7 +482,7 @@ function detectorNegativeHTML(it){const label=detectorNegativeLabel(it);return l
 function reviewAcceptLabel(it){return it.detectorNegative?'Nothing here & next':`Agree (P${it.centralTier} ${TNAME[it.centralTier]}) & next`}
 function reviewKeyAction(key){return RVKEYS[key]}
 function cardHTML(it,mini){
- return`${detectorNegativeHTML(it)}<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+ return`${detectorNegativeHTML(it)}<div class="thumb"><img src="${esc(imageFor(it))}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
 function sendNowBlocked(it){const u=uploadState(it);return it.live||LIVE?'Not available on the live shore connection':typeof gsAuth!=='undefined'&&gsAuth.viewer()?'Viewer role is read-only':u.done?'Already uploaded to shore':u.next?'Already at the top of the send queue':''}
 function openCardMenu(e){
@@ -611,7 +611,7 @@ function renderDetails(){
  el.innerHTML=`<section class="panel"><h3>Pipeline counts</h3>${counts}</section>
  <section class="panel"><h3>Photos filtered automatically</h3><p class="hint">Current feed only. Cumulative counts include frames without retained images and images no longer in this feed. Up to 60 photos shown per category. Select a photo to open it.</p>
  <div class="seg" id="detKind">${DETAIL_KINDS.map(([k,l])=>`<button data-k="${k}" class="${state.detKind===k?'on':''}">${l} (${groups[k].length})</button>`).join('')}</div>
- <div class="det-grid">${list.map(it=>{const orig=it.dupOf&&findItem(it.dupOf);return`<button class="det-item" data-id="${esc(it.id)}">${orig?`<span class="det-pair"><img src="${imageFor(orig)}" alt=""><small>Original · P${orig.tier} ${TNAME[orig.tier]}</small></span>`:''}<span class="det-pair"><img src="${imageFor(it)}" alt=""><small>${esc(filteredReason(it))} · P4 Low</small></span><span class="det-meta">${esc(it.src.id)} · ${zulu(it.ts).slice(0,5)}Z</span></button>`}).join('')||'<p class="hint">None right now.</p>'}</div></section>`;
+ <div class="det-grid">${list.map(it=>{const orig=it.dupOf&&findItem(it.dupOf);return`<button class="det-item" data-id="${esc(it.id)}">${orig?`<span class="det-pair"><img src="${esc(imageFor(orig))}" alt=""><small>Original · P${orig.tier} ${TNAME[orig.tier]}</small></span>`:''}<span class="det-pair"><img src="${esc(imageFor(it))}" alt=""><small>${esc(filteredReason(it))} · P4 Low</small></span><span class="det-meta">${esc(it.src.id)} · ${zulu(it.ts).slice(0,5)}Z</span></button>`}).join('')||'<p class="hint">None right now.</p>'}</div></section>`;
  el.onclick=e=>{const k=e.target.closest('[data-k]');if(k){state.detKind=k.dataset.k;renderDetails();return}const b=e.target.closest('.det-item');if(b){const id=b.dataset.id;location.hash='#feed';setTimeout(()=>openDetail(id),60)}};
 }
 
@@ -656,7 +656,7 @@ function renderCameras(){
 function liveLadderHTML(it){
  const l=it.live;if(!l)return'';const p=l.pull||{};
  const rows=FORMS.map(k=>{const f=l.forms[k]||{state:'none'};const st=f.state==='received'?`received · ${fmtBytes(f.bytes)}`:f.state==='partial'?`${fmtBytes(f.received)} of ${fmtBytes(f.bytes)} streaming`:f.state==='pending'?`waiting on the ship · ${fmtBytes(f.bytes)}`:f.state==='offered'?`on the ship, not sent · ${fmtBytes(f.bytes)}`:'not available';
-  return`<tr class="${f.state}${l.imageForm===k?' shown':''}"><td>${FORM_NAME[k]}${l.imageForm===k?' <small>· shown</small>':''}</td><td>${esc(st)}</td></tr>`}).join('');
+  return`<tr class="${esc(f.state)}${l.imageForm===k?' shown':''}"><td>${FORM_NAME[k]}${l.imageForm===k?' <small>· shown</small>':''}</td><td>${esc(st)}</td></tr>`}).join('');
  return`<div class="dsec live-ladder"><h4>Image versions · shore record ${esc(l.itemID||l.itemId||'')}</h4>
   <div class="hint" style="margin-bottom:6px">Image shown: <b>${l.imageForm?FORM_NAME[l.imageForm]:'none — summary only'}</b>${l.sightingId?` · Tracked object <span class="mono">${esc(l.sightingId)}</span>`:' · object not yet tracked'}${l.framesKnown?` · ${l.frames} frames seen on the ship, ${l.reports} report${l.reports===1?'':'s'} sent`:` · ${l.reports} report${l.reports===1?'':'s'} so far`}${l.event?` · ${esc(l.event)}`:''}</div>
   <table class="ladder">${rows}</table>
@@ -693,7 +693,7 @@ function step(dir){const l=feedOrdered;const i=l.findIndex(x=>x.id===state.sel);
 function buildWhy(it,rows){
  const why=[...liveWhy(it),...gsLights.why(it)];const top=rows[0];
  rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
- if(top)why.push({c:top[1].s>.6?'al':'',t:`Main object: <b>${esc(clsOf(top[0].cls).lab)}</b> (confidence ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${MODELS[state.model].name}`});
+ if(top)why.push({c:top[1].s>.6?'al':'',t:`Main object: <b>${esc(clsOf(top[0].cls).lab)}</b> (confidence ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${esc(MODELS[state.model].name)}`});
  rows.forEach(([d])=>{if(d.attrs.dark&&!['other','clutter'].includes(clsOf(d.cls).g))why.push({c:'al',t:`${esc(clsOf(d.cls).lab)} has no AIS / transponder correlation`});if(d.attrs.approaching)why.push({c:'al',t:`${esc(clsOf(d.cls).lab)} track is inbound toward the sensor`});if(d.attrs.new)why.push({c:'',t:`Change detection: ${esc(clsOf(d.cls).lab)} not present in previous pass`})});
  const seen=new Set();rows.forEach(([d,sd])=>sd.notes.forEach(r=>{const k=ruleLabel(r);if(seen.has(k))return;seen.add(k);const dir=state.directives.find(x=>x.id===r.directiveId);why.push({c:r.type==='boost'?'up':'dn',t:`${r.type==='boost'?'Boosted':'Suppressed'} by directive “${dir?esc(dir.text):''}” (${k.slice(2)})`})}));
  if(rows.some(([,sd])=>sd.focus))why.push({c:'dn',t:'Objects outside your active directives receive lower scores (focus mode)'});
@@ -705,13 +705,13 @@ function processingHTML(it){
  if(DATASET_MODE)return `${detectorNegativeHTML(it)}<div class="dsec"><h4>Processing</h4><ul class="tl">
   <li class="edge"><i></i><div>Clean v2 dev image<br><small>Real detector output · score ${it.edge.toFixed(2)} ${it.detectorNegative?'<':'≥'} 0.20</small></div></li>
   <li><i></i><div>Loaded for Operator Review<br><small>${esc(it.dataset_id)} · ${esc(it.image_id)}</small></div></li>
-  <li><i></i><div>Priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div></li>
+  <li><i></i><div>Priority scoring<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div></li>
  </ul></div>`;
  return `<div class="dsec"><h4>Processing chain</h4><ul class="tl">
-  <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
-  <li><i></i><div>Sent to shore<br><small>${it.src.link} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
+  <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${esc(it.src.hw)} · ${esc(it.src.em)} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
+  <li><i></i><div>Sent to shore<br><small>${esc(it.src.link)} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
   <li><i></i><div>Stored in imagery database<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
-  <li><i></i><div>Shore priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
+  <li><i></i><div>Shore priority scoring<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
  </ul></div>`;
 }
 function renderDetail(){preserveBandFocus(renderDetailContent)}
@@ -732,15 +732,15 @@ function renderDetailContent(){
  <div class="dbody">
   <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">P${t} ${TNAME[t]}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
   <div class="scores"><div class="sc" title="${DATASET_MODE?'Detector triage score from real detections':it.live?'Ship score: importance relative to the highest score on shore':'Edge score: the ship’s initial estimate of importance'}"><span>${DATASET_MODE?'Detector score':'Ship score'}</span><b>${it.edge.toFixed(2)}</b></div><div class="sc" title="${DATASET_MODE?'Command-model score after active directives':it.live?'Shore score: relative importance after applying your directive':'Command score: importance after shore scoring and directives'}"><span>${DATASET_MODE?'Model score':'Shore score'}</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span title="How much active directives changed the base score">Change from directives</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
-  <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>ATTR_LAB[a]).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
+  <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>esc(ATTR_LAB[a])).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
   ${gsLights.section(it,CLS)}
   <div class="dsec" id="briefDetections"></div>
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   ${it.live?liveLadderHTML(it):DATASET_MODE?processingHTML(it):`<div class="dsec"><h4>Processing chain</h4><ul class="tl">
-   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · ${it.background?'empty water retained locally for demo · no automatic upload':`score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}`}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
+   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${esc(it.src.hw)} · ${esc(it.src.em)} · ${it.background?'empty water retained locally for demo · no automatic upload':`score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}`}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
    <li><i></i><div>Shore transfer: ${esc(uploadState(it).label)}<br><small>${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div></li>
    <li><i></i><div>Stored on ship<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
-   <li><i></i><div>Priority scoring (simulated)<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
+   <li><i></i><div>Priority scoring (simulated)<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
   </ul></div>`}
   ${DATASET_MODE?'':uploadControlsHTML(it)}
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
