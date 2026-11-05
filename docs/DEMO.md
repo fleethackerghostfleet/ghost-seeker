@@ -70,10 +70,12 @@ the edge" is `GetStatus.items_deduped`. When a sighting closes, the edge sends a
 report (RECORD item); the card then shows "n frames seen" from it.
 
 **Object-free frames.** In `-dedup sightings` mode the edge folds frames with no tracked object
-into one FACT+THUMB **scene** item per source per `-scene-every` (default 60 s; `tags.event:
-"scene"`, no FULL). The feed shows them as dim "Scene / context" tiles with a "Pull full frame"
-button; they are not objects, so they are excluded from the unique-object count, the review queue
-and the commander view (the strip says "N scene tiles not counted"). Any per-frame leftovers
+into one **scene** item per source per `-scene-every` (default 60 s; `tags.event: "scene"`).
+Only FACT+THUMB ship; the FULL frame stays on the edge and is pull-only. The UI does not show
+them in the feed: they feed the **Cameras** strip above it (one entry per camera: latest view,
+last seen, contact count, "Pull full frame" for the current view). They are not objects, so they
+are excluded from the unique-object count, the review queue and the commander view (the strip
+says "N camera heartbeats not counted"). Any per-frame leftovers
 (`-scene-every 0`) are hidden by the "sightings only" toggle.
 
 ## 3. Three-minute presenter script
@@ -84,7 +86,7 @@ and the commander view (the strip says "N scene tiles not counted"). Any per-fra
 | 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." The edge's estimator needs ~100 s to re-learn the link (strip: "edge estimates … · re-learning: n failed exchanges", 4 failures from 2 Mbps); then the edge queue keeps growing (object-free frames, see caveat) while *new sightings still land* as cards. A sighting is ~5–10 KB (fact + thumb + crop + full of the key crop), so one arrives per ~5–10 s of link time. |
 | 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card with its crop, the zero-shot subtype, and we know exactly which forms have landed; 'duplicate frames folded on the edge' in the strip is what we did *not* send. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
 | 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed; matched on the sidecar subtype, the detector class or an operator override), submarines keep arriving. Policy text shows in the strip. Cards the edge flagged *unknown* are never suppressed (same rule as `edge/scoring`), so a low-confidence "Cargo Ship (Unknown)" stays — say so, it is the point of the unknown gate. |
-| 2:15 | On a card whose FULL chip is still pending click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. With the current edge a sighting ships thumb + crop + full of the key crop together, so at 9.6 kbps the button is usually already "full received" by the time the card appears; the pull path is live for anything still pending (e.g. an object-free frame with "sightings only" unticked). |
+| 2:15 | On a card whose FULL chip is still pending click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. With the current edge a sighting ships thumb + crop + full of the key crop together, so at 9.6 kbps the button is usually already "full received" by the time the card appears; the pull path is live for anything still pending; the reliable demo of it is **Pull full frame** in the Cameras strip, whose FULL is never sent unless asked for. |
 | 2:45 | Click **2 Mbps**; switch to **Review queue** / **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
 
 Dry run (2026-11-04, real sidecar, 8-core laptop-class VM): the three clips replay **interleaved** (same

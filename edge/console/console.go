@@ -159,8 +159,9 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 			resp.ItemsUnknown++
 		}
 		done := true
-		for _, f := range r.Forms {
-			if !f.Complete {
+		for i := range r.Forms {
+			f := &r.Forms[i]
+			if !f.Complete && !scheduler.PullOnly(r, f) {
 				done = false
 				queued++
 				qb += f.Bytes - f.AckedThrough
