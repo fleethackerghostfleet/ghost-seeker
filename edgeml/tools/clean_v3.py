@@ -152,7 +152,8 @@ def main():
     out = a.output
     if out.exists():
         ap.error("output exists; clean versions are never rebuilt in place")
-    raw_ds = {r["dataset_id"]: r for c in (a.ir_catalog, a.sds_catalog) for r in read_jsonl(c / "datasets.jsonl")}
+    raw_ds = {r["dataset_id"]: r for c in (a.ir_catalog, a.sds_catalog) if (c / "datasets.jsonl").exists()
+              for r in read_jsonl(c / "datasets.jsonl")}
     missing = {"ir_maritime_vessels", "seadronessee"} - raw_ds.keys()
     if missing:
         ap.error(f"datasets.jsonl rows missing for {sorted(missing)} in --ir-catalog/--sds-catalog")
