@@ -247,6 +247,20 @@ test('shore rank uses all shore records by ship score regardless of review, sens
  `,context);
  assert.match(vm.runInContext("liveWhy(items[1])[0].t",context),/Rank 2 of 3 on shore by ship score \(20\.00\)/);
 });
+test('feed density defaults, validates, persists and reloads all sizes',()=>{
+ for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}']){
+  assert.equal(settingsContext(saved).settings.get().density,'m');
+ }
+ const {settings,saved}=settingsContext('{}');
+ for(const density of ['s','m','l','xl']){
+  settings.density(density);
+  assert.equal(saved().density,density);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().density,density);
+ }
+ settings.density('invalid');settings.density(null);
+ assert.equal(settings.get().density,'xl');
+ assert.equal(saved().density,'xl');
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);
