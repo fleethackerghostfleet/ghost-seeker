@@ -171,29 +171,58 @@ func Locks(layers []*pb.PolicyLayer) []Lock {
 			if rule == nil || !rule.Locked {
 				continue
 			}
-			lockedBy := layer.IssuedBy
-			if lockedBy == "" {
-				lockedBy = rule.Author
-			}
-			if lockedBy == "" {
-				lockedBy = "higher echelon"
-			}
-			locks = append(locks, Lock{RuleID: rule.Id, LockedBy: lockedBy, Echelon: layer.Echelon,
-				BoostLabels: append([]string(nil), rule.BoostLabels...), Weight: effectiveWeight(rule.Weight),
-				Targets: append([]string(nil), rule.Targets...)})
+			locks = append(locks, ruleLock(layer, rule))
 		}
-		if setting := layer.Emcon; setting != nil && setting.Locked {
-			lockedBy := setting.SetBy
-			if lockedBy == "" {
-				lockedBy = layer.IssuedBy
-			}
-			if lockedBy == "" {
-				lockedBy = "higher echelon"
-			}
-			locks = append(locks, Lock{RuleID: "emcon", LockedBy: lockedBy, Echelon: layer.Echelon, Emcon: true, Mode: setting.Mode})
+		if layer.Emcon != nil && layer.Emcon.Locked {
+			locks = append(locks, emconLock(layer, layer.Emcon))
 		}
 	}
 	return locks
+}
+
+func ActiveLocks(layers []*pb.PolicyLayer, nodeID string, now time.Time) []Lock {
+	ordered := sortedLayers(layers)
+	var locks []Lock
+	for _, layer := range ordered {
+		if layer == nil {
+			continue
+		}
+		for _, rule := range layer.Rules {
+			if rule == nil || !rule.Locked || expiredRule(rule, now) ||
+				(nodeID == "" && len(rule.Targets) > 0) || !targetsNode(rule.Targets, nodeID) {
+				continue
+			}
+			locks = append(locks, ruleLock(layer, rule))
+		}
+		if layer.Emcon != nil && layer.Emcon.Locked {
+			locks = append(locks, emconLock(layer, layer.Emcon))
+		}
+	}
+	return locks
+}
+
+func ruleLock(layer *pb.PolicyLayer, rule *pb.InterestRule) Lock {
+	lockedBy := layer.IssuedBy
+	if lockedBy == "" {
+		lockedBy = rule.Author
+	}
+	if lockedBy == "" {
+		lockedBy = "higher echelon"
+	}
+	return Lock{RuleID: rule.Id, LockedBy: lockedBy, Echelon: layer.Echelon,
+		BoostLabels: append([]string(nil), rule.BoostLabels...), Weight: effectiveWeight(rule.Weight),
+		Targets: append([]string(nil), rule.Targets...)}
+}
+
+func emconLock(layer *pb.PolicyLayer, setting *pb.EmconSetting) Lock {
+	lockedBy := setting.SetBy
+	if lockedBy == "" {
+		lockedBy = layer.IssuedBy
+	}
+	if lockedBy == "" {
+		lockedBy = "higher echelon"
+	}
+	return Lock{RuleID: "emcon", LockedBy: lockedBy, Echelon: layer.Echelon, Emcon: true, Mode: setting.Mode}
 }
 
 func CheckRule(locks []Lock, echelon pb.Echelon, r *pb.InterestRule) *pb.MergeConflict {

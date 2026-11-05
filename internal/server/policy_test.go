@@ -171,6 +171,45 @@ func TestCompileDirectiveReportsActivePolicyLocks(t *testing.T) {
 	}
 }
 
+func TestCompileDirectiveIgnoresExpiredPolicyLocks(t *testing.T) {
+	app := New(store.New(10))
+	now := time.Now()
+	app.policy.higherLayers = []*pb.PolicyLayer{{
+		Echelon:  pb.Echelon_ECHELON_COMMAND,
+		IssuedBy: "CTF-72",
+		Rules: []*pb.InterestRule{{
+			Id: "expired-submarine", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3,
+			ExpiresAtUnixMs: now.Add(-time.Minute).UnixMilli(),
+		}},
+	}}
+	if _, err := app.policy.apply("test", "CTF-72", "Expired lock", now); err != nil {
+		t.Fatalf("apply expired policy: %v", err)
+	}
+	active, _ := app.policy.guard.Active(now)
+	if active == nil {
+		t.Fatal("expected active policy with expired rule")
+	}
+	_, wouldBlock := policy.CheckCommandRules(policy.Locks(active.Layers), pb.Echelon_ECHELON_SHIP, []policy.RuleLabels{{
+		Type: "suppress", Classes: []string{"submarine"},
+	}})
+	if !wouldBlock {
+		t.Fatal("expired lock fixture would not block while included")
+	}
+
+	app.SetCompiler(&command.Compiler{Locks: app.PolicyLocks()})
+	response := request(app, http.MethodPost, "/api/directives/compile", map[string]string{"text": "ignore submarines"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("compile status=%d: %s", response.Code, response.Body.String())
+	}
+	var compiled command.Compiled
+	if err := json.Unmarshal(response.Body.Bytes(), &compiled); err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Blocked || strings.Contains(strings.Join(compiled.Warnings, "\n"), "Locked by") {
+		t.Fatalf("expired lock blocked directive: %+v", compiled)
+	}
+}
+
 func TestSimulationPolicyExpiryClearsLocksAndSourceDirectives(t *testing.T) {
 	data := store.New(10)
 	app := New(data, WithAdmin(true))

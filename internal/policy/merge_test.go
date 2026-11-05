@@ -125,6 +125,62 @@ func TestScopedLocks(t *testing.T) {
 	}
 }
 
+func TestActiveLocksFilterExpiredAndOffTargetRules(t *testing.T) {
+	tests := []struct {
+		name   string
+		rule   *pb.InterestRule
+		nodeID string
+		want   bool
+	}{
+		{
+			name: "expired",
+			rule: &pb.InterestRule{Id: "expired", Locked: true, BoostLabels: []string{"submarine"},
+				ExpiresAtUnixMs: mergeNow.Add(-time.Minute).UnixMilli()},
+			nodeID: "USV-1",
+		},
+		{
+			name:   "targeted to another node",
+			rule:   &pb.InterestRule{Id: "other-node", Locked: true, Targets: []string{"USV-2"}},
+			nodeID: "USV-1",
+		},
+		{
+			name:   "active lock",
+			rule:   &pb.InterestRule{Id: "active", Locked: true, Targets: []string{"USV-1"}},
+			nodeID: "USV-1",
+			want:   true,
+		},
+		{
+			name: "unknown node ignores target-scoped lock",
+			rule: &pb.InterestRule{Id: "unknown-node", Locked: true, Targets: []string{"USV-2"}},
+			want: false,
+		},
+		{
+			name: "unknown node keeps unscoped lock",
+			rule: &pb.InterestRule{Id: "unscoped", Locked: true},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			locks := ActiveLocks([]*pb.PolicyLayer{layer(pb.Echelon_ECHELON_COMMAND, "CTF-72", tt.rule)}, tt.nodeID, mergeNow)
+			if (len(locks) == 1) != tt.want {
+				t.Fatalf("active locks=%+v, want lock=%t", locks, tt.want)
+			}
+			if tt.want && locks[0].RuleID != tt.rule.Id {
+				t.Fatalf("active lock=%+v, want rule %q", locks[0], tt.rule.Id)
+			}
+		})
+	}
+
+	command := layer(pb.Echelon_ECHELON_COMMAND, "CTF-72",
+		&pb.InterestRule{Id: "expired-rule", Locked: true, ExpiresAtUnixMs: mergeNow.Add(-time.Minute).UnixMilli()})
+	command.Emcon = &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_SILENT, Locked: true}
+	locks := ActiveLocks([]*pb.PolicyLayer{command}, "", mergeNow)
+	if len(locks) != 1 || !locks[0].Emcon || locks[0].Mode != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("active EMCON locks=%+v, want locked SILENT setting", locks)
+	}
+}
+
 func TestMergeWeightExpiryTargetsLocksAndFlatten(t *testing.T) {
 	layers := []*pb.PolicyLayer{
 		layer(pb.Echelon_ECHELON_COMMAND, "CTF-72", &pb.InterestRule{Id: "locked", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3}),

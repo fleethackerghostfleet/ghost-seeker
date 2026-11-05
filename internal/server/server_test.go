@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -210,6 +213,63 @@ func TestBlockedDirectiveAndDurationExpiry(t *testing.T) {
 	if len(state.Directives) != 0 {
 		t.Fatalf("active directives after expiry = %d", len(state.Directives))
 	}
+}
+
+func TestTimedDirectiveExpiryPersistsPolicyRemoval(t *testing.T) {
+	backend, err := policy.NewFileBackend(filepath.Join(t.TempDir(), "policy.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	newServer := func() *Server {
+		return New(store.New(10), WithAdmin(true), WithNodeID("DDG-51"), WithPolicyBackend(backend))
+	}
+	app := newServer()
+	var expire func()
+	app.after = func(_ time.Duration, callback func()) { expire = callback }
+
+	response := request(app, http.MethodPost, "/api/directives", map[string]string{"text": "small boats for 1 hour"})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed add status=%d: %s", response.Code, response.Body.String())
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" {
+		t.Fatalf("timed add omitted directive ID: %s", response.Body.String())
+	}
+	if expire == nil || len(app.policy.operatorLayer().Rules) == 0 {
+		t.Fatalf("timed directive was not persisted before expiry: callback=%t layer=%+v", expire != nil, app.policy.operatorLayer())
+	}
+
+	expire()
+	for _, directive := range app.store.Directives() {
+		if directive.ID == created.ID {
+			t.Fatalf("expired directive remains in store: %+v", directive)
+		}
+	}
+
+	restarted := newServer()
+	for _, directive := range restarted.store.Directives() {
+		if directive.ID == created.ID {
+			t.Fatalf("expired directive restored after restart: %+v", directive)
+		}
+	}
+	active, expired := restarted.policy.guard.Active(time.Now())
+	if active == nil || expired {
+		t.Fatalf("restarted active policy = %v, expired=%t", active, expired)
+	}
+	for _, layer := range active.Layers {
+		if layer.Echelon == pb.Echelon_ECHELON_SHIP && layer.IssuedBy == "TAO" {
+			if len(layer.Rules) != 0 {
+				t.Fatalf("operator policy restored expired rule: %+v", layer.Rules)
+			}
+			return
+		}
+	}
+	t.Fatal("restarted policy has no operator layer")
 }
 
 func TestExplicitDurationForTextDirective(t *testing.T) {

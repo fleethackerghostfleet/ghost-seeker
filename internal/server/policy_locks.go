@@ -20,7 +20,8 @@ func (c runtimeLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 	if c.rt == nil || c.rt.guard == nil {
 		return nil, false
 	}
-	active, _ := c.rt.guard.Active(time.Now())
+	now := time.Now()
+	active, _ := c.rt.guard.Active(now)
 	if active == nil {
 		return nil, false
 	}
@@ -31,5 +32,5 @@ func (c runtimeLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 			Classes: rule.Classes, Attrs: rule.Attrs,
 		}
 	}
-	return policy.CheckCommandRules(policy.Locks(active.Layers), pb.Echelon_ECHELON_SHIP, converted)
+	return policy.CheckCommandRules(policy.ActiveLocks(active.Layers, c.rt.nodeID, now), pb.Echelon_ECHELON_SHIP, converted)
 }

@@ -757,6 +757,9 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	if mode != "" {
+		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
+	}
 	var compiled *command.Compiled
 	if len(in.Suppress) == 0 && len(in.Boost) == 0 && in.Text != "" {
 		droppedScopedRules := false
@@ -789,7 +792,6 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
 			if mode != "" {
-				pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 				c.Readback = strings.TrimSuffix(c.Readback, "No rules recognized.") + " EMCON " + mode + "."
 				c.Readback = strings.TrimSpace(c.Readback)
 			}

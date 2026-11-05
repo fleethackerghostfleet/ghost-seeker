@@ -2,6 +2,7 @@ package shorebridge
 
 import (
 	"context"
+	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
@@ -24,6 +25,7 @@ func (c shoreLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 	if err != nil || active == nil {
 		return nil, false
 	}
+	now := time.Now()
 	converted := make([]policy.RuleLabels, len(rules))
 	for i, rule := range rules {
 		converted[i] = policy.RuleLabels{
@@ -31,5 +33,5 @@ func (c shoreLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 			Classes: rule.Classes, Attrs: rule.Attrs,
 		}
 	}
-	return policy.CheckCommandRules(policy.Locks(active.Layers), pb.Echelon_ECHELON_SHIP, converted)
+	return policy.CheckCommandRules(policy.ActiveLocks(active.Layers, "", now), pb.Echelon_ECHELON_SHIP, converted)
 }
