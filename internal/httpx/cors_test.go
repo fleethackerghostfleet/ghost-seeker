@@ -56,3 +56,35 @@ func TestCORSAllowlist(t *testing.T) {
 		t.Fatalf("SplitList: %v", got)
 	}
 }
+
+func TestSameOriginNullOriginFormPost(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	h := SameOrigin(ok)
+	post := func(origin, site string) int {
+		r := httptest.NewRequest(http.MethodPost, "http://app.local:8090/login", nil)
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		if site != "" {
+			r.Header.Set("Sec-Fetch-Site", site)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	if got := post("null", "same-origin"); got != http.StatusNoContent {
+		t.Fatalf("null origin + same-origin fetch site: %d", got)
+	}
+	if got := post("null", "cross-site"); got != http.StatusForbidden {
+		t.Fatalf("null origin cross-site: %d", got)
+	}
+	if got := post("null", ""); got != http.StatusForbidden {
+		t.Fatalf("null origin without Sec-Fetch-Site: %d", got)
+	}
+	if got := post("http://app.local:8090", "same-origin"); got != http.StatusNoContent {
+		t.Fatalf("same origin: %d", got)
+	}
+	if got := post("https://evil.example", "same-origin"); got != http.StatusForbidden {
+		t.Fatalf("wrong origin: %d", got)
+	}
+}

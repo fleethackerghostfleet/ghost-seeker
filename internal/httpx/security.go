@@ -33,16 +33,23 @@ func SameOrigin(next http.Handler) http.Handler {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 		default:
+			site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+			if site != "" && site != "same-origin" && site != "none" {
+				http.Error(w, "cross-origin request rejected", http.StatusForbidden)
+				return
+			}
 			if origin := r.Header.Get("Origin"); origin != "" {
+				// Browsers serialize Origin as "null" on same-origin form posts
+				// under Referrer-Policy: no-referrer; Sec-Fetch-Site still vouches.
+				if origin == "null" && site == "same-origin" {
+					next.ServeHTTP(w, r)
+					return
+				}
 				u, err := url.Parse(origin)
 				if err != nil || u.Host == "" || !strings.EqualFold(u.Host, r.Host) {
 					http.Error(w, "cross-origin request rejected", http.StatusForbidden)
 					return
 				}
-			}
-			if site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site"))); site != "" && site != "same-origin" && site != "none" {
-				http.Error(w, "cross-origin request rejected", http.StatusForbidden)
-				return
 			}
 		}
 		next.ServeHTTP(w, r)
