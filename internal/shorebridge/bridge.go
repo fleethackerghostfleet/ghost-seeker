@@ -1417,7 +1417,6 @@ func policyInfo(p *pb.Policy, operatorEchelon ...pb.Echelon) *PolicyInfo {
 	if len(operatorEchelon) > 0 {
 		echelon = operatorEchelon[0]
 	}
-	p = policy.Flatten(p, "", time.Now())
 	info := &PolicyInfo{Version: p.Version, Emcon: emconName(p.Emcon), Locks: []PolicyLock{}, Conflicts: []PolicyConflict{}}
 	if p.EmconSetting != nil {
 		info.EmconSetBy = p.EmconSetting.SetBy
