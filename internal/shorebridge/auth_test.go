@@ -10,9 +10,9 @@ import (
 )
 
 func TestBridgePresentsOperatorTokenAndStripsCookies(t *testing.T) {
-	var gotAuth, gotCookie string
+	var gotAuth, gotCookie, gotHost string
 	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuth, gotCookie = r.Header.Get("Authorization"), r.Header.Get("Cookie")
+		gotAuth, gotCookie, gotHost = r.Header.Get("Authorization"), r.Header.Get("Cookie"), r.Host
 		if r.URL.Path == "/blob/01ITEM/full" {
 			w.Header().Set("Content-Type", "image/jpeg")
 			_, _ = w.Write([]byte{0xff, 0xd8})
@@ -32,12 +32,15 @@ func TestBridgePresentsOperatorTokenAndStripsCookies(t *testing.T) {
 	}
 
 	r := httptest.NewRequest(http.MethodGet, "/blob/01ITEM/full", nil)
+	r.Host = "ops.example:8090"
 	r.Header.Set("Authorization", "Bearer browser-should-not-reach-shore")
 	r.AddCookie(&http.Cookie{Name: "gs_session", Value: "secret"})
 	w := httptest.NewRecorder()
 	b.Handler().ServeHTTP(w, r)
-	if w.Code != http.StatusOK || gotAuth != "Bearer operator-token-123" || gotCookie != "" {
-		t.Fatalf("blob proxy: %d auth=%q cookie=%q", w.Code, gotAuth, gotCookie)
+	if w.Code != http.StatusOK || gotAuth != "Bearer operator-token-123" || gotCookie != "" ||
+		gotHost != shore.Listener.Addr().String() {
+		t.Fatalf("blob proxy: %d auth=%q cookie=%q host=%q want host=%q",
+			w.Code, gotAuth, gotCookie, gotHost, shore.Listener.Addr().String())
 	}
 	w = httptest.NewRecorder()
 	b.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/blob/01ITEM/full", nil))

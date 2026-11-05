@@ -850,6 +850,7 @@ func (b *Bridge) Handler() http.Handler {
 		// the operator bearer token instead.
 		rp.Director = func(r *http.Request) {
 			director(r)
+			r.Host = u.Host
 			r.Header.Del("Cookie")
 			r.Header.Del("Authorization")
 			b.authorize(r)
