@@ -18,6 +18,7 @@ body.commander.theme-day{--bg:#e9eef2;--panel:#fff;--panel2:#f2f5f8;--line:#c3ce
 .theme-red #settings :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .commander.theme-red :is(header,.live,.row.on,#learned,kbd,.bar,.toast,.av){background:var(--panel2);border-color:var(--line);box-shadow:none}
 .commander.theme-red #learned{color:var(--text)}
+.commander.theme-red .read-only-badge{color:var(--text);border-color:var(--line)}
 .commander.theme-red .bar i{background:var(--p4)}
 .commander.theme-red :is(.banner,.tg,.box em,.pri .big){background:var(--accent);color:var(--bg)}
 .commander.theme-red :is(.box.lo,.why li,.chain,.dets td,.tabs button.on,.wf:hover){border-color:var(--line)}
