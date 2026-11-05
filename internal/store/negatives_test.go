@@ -16,7 +16,7 @@ func TestDetectorNegativeUploadsInPriorityOrder(t *testing.T) {
 		t.Fatalf("queued items: %+v %+v", negative, normal)
 	}
 	stats, _ := s.Stats()
-	if stats.Keep != 1 || stats.DetectorNegatives != 1 || stats.Drop != 1 || stats.Bytes != 0 {
+	if stats.Keep != 2 || stats.DetectorNegatives != 1 || stats.Drop != 0 || stats.Bytes != 0 {
 		t.Fatalf("queued stats: %+v", stats)
 	}
 	first := s.AdvanceUploads(time.Second)

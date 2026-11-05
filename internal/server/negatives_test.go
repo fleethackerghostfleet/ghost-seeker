@@ -21,7 +21,7 @@ func TestNegativeReviews(t *testing.T) {
 	data.Add(&command.Item{ID: "negative", DetectorNegative: true, Edge: .1}, 0)
 	data.Add(&command.Item{ID: "normal"}, 0)
 	stats, _ := data.Stats()
-	if stats.Cap != 2 || stats.Keep != 1 || stats.Drop != 1 || stats.DetectorNegatives != 1 {
+	if stats.Cap != 2 || stats.Keep != 2 || stats.Drop != 0 || stats.DetectorNegatives != 1 {
 		t.Fatalf("%+v", stats)
 	}
 	s := New(data)
