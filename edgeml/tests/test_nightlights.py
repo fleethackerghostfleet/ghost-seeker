@@ -12,7 +12,7 @@ from edgeml.nightlights.core import colour
 
 
 def point(c, x=100, y=50, flashing=False):
-    return dict(colour=c, x=x, y=y, relative=[x/200, y/150], flashing=flashing)
+    return dict(colour=c, x=x, y=y, relative=[x/200, y/150], flashing=flashing, conf=1.)
 
 
 @pytest.mark.parametrize("rule", load_rules(), ids=lambda r: r["id"])
@@ -99,6 +99,22 @@ def test_demo_observations_are_shared_python_go_interpretation_fixtures():
             expected = det['interpretation']
             assert result['rule_id'] == expected['rule_id']
             assert result['boost'] == expected['boost']
+
+
+def test_shared_light_confidence_cases():
+    fixture = Path(__file__).resolve().parents[2]/'internal/catalog/light_confidence_cases.json'
+    for case in json.loads(fixture.read_text()):
+        result = interpret(case['lights'], True, signal=case['signal'] or None)
+        assert result['rule_id'] == case['rule_id'], case['name']
+        assert result['boost'] == case['boost'], case['name']
+
+
+@pytest.mark.parametrize('value', [None, '0.95', True, -1, 1.1, float('nan'), float('inf')])
+def test_invalid_light_confidence_is_conservative(value):
+    lights = [dict(point('red', y=30), conf=value), point('red', y=60)]
+    result = interpret(lights, True)
+    assert result['rule_id'] == 'nuc' and result['pattern_conf'] == 0 and result['boost'] == 0
+    assert interpret(lights, True, signal='sos')['boost'] == 1
 
 
 def test_boost_metric_denominators():

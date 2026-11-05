@@ -27,7 +27,8 @@ generated or evaluated during v3/v4 tuning. After freeze, hard/test3 (seed base
 4100000, 112 night + 8 day + 16 twilight, four registered frames per contact)
 was generated and evaluated exactly once, then boost-evaluated. Historical
 hard/test2 (2700000) and hard/test (900000) were evaluated for comparison only.
-No Python detector or threshold changes followed. Summary commit: `68dc0b94`.
+Summary commit: `68dc0b94`. Subsequent API/dark-contact fixes below do not change
+normal detector-produced light observations or navigation boost metrics.
 
 The method combines local Gaussian peaks/compact PSFs, chromatic halos around
 saturated cores, contrast, aligned columns, resolved-pair confidence and
@@ -49,16 +50,24 @@ all/automatic false boosts, night/day-gate table, exact generation/evaluation
 commands and limitations. All v4 summaries are committed; detailed observations
 remain gitignored. Do not repeat test3 and count it as an independent trial.
 
-Go now reads the same threshold and carries `conf` through demo observations,
-scoring and rescoring. Missing confidence is conservatively zero in Go.
-Frozen Python's legacy direct `interpret()` defaults a missing `conf` to 1.0;
-this deliberate Go safety difference is **not** missing-field parity. All
-detector-produced observations carry explicit confidence. Python and Go both
-test the refreshed `internal/catalog/nightlights.json` as a shared fixture.
-JPEG bytes and frozen detector/config stay unchanged. Phase-4 dark/burst
-evaluation was rerun because it depends on detection; false dark contacts rose
-on hard/dev (12->21) and hard/test2 (12->17) and burst recognition regressed.
-These results are reported without retuning the frozen detector.
+Go reads the same threshold and carries `conf` through demo observations,
+scoring and rescoring. The API follow-up makes missing/invalid confidence zero
+in Python as well as Go, while preserving assisted distress. Both suites read
+`internal/catalog/light_confidence_cases.json`, including missing confidence,
+and the refreshed demo catalog. Saved hard/dev and test3 v4 boost metrics were
+replayed and are identical; **no test3 image redetection/evaluation occurred**.
+The hard/dev summary JSON is byte-identical after redetection; all 136 contacts'
+lights and interpretations also match byte-for-byte under canonical JSON.
+
+Dark-contact presence now uses permissive compact bright-point candidates
+(peak >=100, local Gaussian-background contrast >=65), before colour,
+waterline and vessel-association rejection; these are not confirmed navigation
+lights. Default interpretation detections and threshold remain unchanged.
+Main / Phase-4 v4 / now false dark: easy/dev 0/1/0, easy/test2 0/0/0,
+hard/dev 12/21/9, hard/test2 12/17/9. All four retain TP=28, FN=0 (100% recall).
+The four dark/burst evaluations were rerun; burst metrics remain unchanged from
+Phase 4, including their regressions. Background candidates can hide genuinely
+dark hulls; this is synthetic evidence, not real-world recall validation.
 
 ## Historical stage-1 frozen candidate before first test evaluation
 

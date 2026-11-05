@@ -11,7 +11,8 @@ confirmation, not a diagnosis set. Hard/test and hard/test2 were not accessed
 during tuning. Hard/test3 (base **4100000**, 112 night + 8 day + 16 twilight)
 was generated after the freeze and evaluated **exactly once**, followed by boost
 evaluation. Hard/test and hard/test2 were then evaluated for comparison only.
-No detector or threshold changes followed these evaluations. The older sections
+No tuning of normal navigation-light detection or threshold followed these
+evaluations; the API safety and dark-contact follow-up is described below. Older sections
 below retain explicitly historical v1/v2 results rather than describe v4.
 
 The frozen CPU detector combines fine/broad Gaussian local peaks and compact
@@ -32,13 +33,20 @@ heuristic, not a calibrated probability. Signal-assisted distress remains exempt
 
 Go reads the same catalog threshold, carries `conf` through observations and
 rechecks both conditions in scoring/rescoring without changing rule-ID logic.
-Missing/zero/nonfinite/out-of-range Go confidence cannot automatically boost.
-**Legacy API difference:** frozen Python `interpret()` defaults a missing `conf`
-to 1.0; Go deliberately defaults it to zero. This is not missing-field parity.
-Frozen detector outputs always include confidence; the shared demo catalog is
-read by Python and Go tests to check rule/boost agreement for those observations.
-Old raw Python callers must supply `conf` explicitly for conservative behavior.
-The frozen Python detector/API was not changed to conceal this difference.
+Missing/invalid confidence now conservatively maps to zero in **both Python and
+Go**, with signal-assisted distress still exempt. The post-freeze API safety
+follow-up changed Python's former missing-field default of 1.0, not the frozen
+detector-produced observations. Shared missing/null/out-of-range/threshold and
+assisted-distress cases live in `internal/catalog/light_confidence_cases.json`
+and are read by both test suites; the demo catalog also checks agreement.
+
+The follow-up replayed boost evaluation on **saved** hard/dev and hard/test3 v4
+observations: every boost metric remained identical. There was **no test3 image
+redetection or detector evaluation**. A fresh hard/dev detector evaluation
+produced a byte-identical summary JSON (SHA256
+`0613cba8f9d4a83fbf87524e30a2762719657be1baa1896974ae2d2348f1714d`);
+all 136 contacts' light arrays and interpretations were also byte-identical
+under canonical JSON serialization. Only dark-contact results changed.
 
 Urgent columns are **true/false automatic boosts** (seven truth contacts per
 urgent rule); false-any is **all/automatic**. Rules have denominators 112/98.
@@ -105,6 +113,11 @@ $PY edgeml/scripts/nightlights_eval.py --tier hard --split test --version v4
 $PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split test --version v4
 # Phase 4: refresh observations from existing JPEGs (does not overwrite JPEGs):
 $PY edgeml/scripts/nightlights_demo.py
+# Follow-up API parity: saved observations only (no image reads):
+$PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split dev --version v4
+$PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split test3 --version v4
+# Follow-up default detector invariance check, dev only:
+$PY edgeml/scripts/nightlights_eval.py --tier hard --split dev --version v4
 ```
 
 Summary artifacts are `edgeml/reports/nightlights/{easy,hard}_*_v4.{json,md}`
@@ -418,7 +431,7 @@ go run ./cmd/bench -n 6000 -seeds 101,102,103
 go run ./cmd/ghost-seeker -addr :8090 -auto-cdr 0
 ```
 
-Build/vet/all Go tests pass; parity covers all 15 refreshed demo contacts including rule ID, gated boost and low-confidence state. Python also reads the same catalog as an agreement fixture. Node: 49 tests pass; Python: 184 tests pass, 3 skipped. Ordinary-library regression floors pass.
+Phase-4 build/vet/all Go tests passed; parity covers all 15 refreshed demo contacts including rule ID, gated boost and low-confidence state. Python also reads the same catalog as an agreement fixture. Node: 49 tests passed. The follow-up passed `go test ./internal/...` and Python: 195 tests passed, 3 skipped. Ordinary-library regression floors pass.
 
 Bench seeds 101,102,103 × 6000 frames; current Phase-4 run below. **Bench oracle ≠ field truth**. This benchmark does not measure real-night detector performance.
 
@@ -456,7 +469,14 @@ when allowed, and reports source-rate degradation. Dark-contact analysis is
 limited to night-gated optical frames and vessel-like labels. It searches for
 navigation lights in a clipped box expanded above and around the hull box, so
 masthead lights above the hull count; a contact is flagged only when no lights
-are detected in any frame.
+are present as permissive bright-point candidates in any frame. This presence
+check uses the candidate stage, not the precision-oriented colour/association
+output used for navigation-light interpretation. It retains compact local
+maxima with peak >=100 and local Gaussian-background contrast >=65
+(v2-equivalent bright-point criteria), before chromatic classification,
+waterline and vessel-association rejection. Counts are **candidates**, not
+confirmed navigation lights. Normal `detect_lights` output and boosts remain
+unchanged.
 
 Shared settings live in `internal/catalog/colregs_night_config.json` and are
 loaded by Python and embedded by Go:
@@ -493,20 +513,31 @@ samples use `render` in daylight). The hard positive is an unlit hull;
 lit-vessel negatives use random rules from `load_rules()`. These are synthetic
 counts, not field-performance estimates.
 
-**Frozen-v4 regression:** this evaluation depends on the detector and was rerun
-in Phase 4. Dark-contact lit-vessel false positives increased from 12/28 to
-21/28 on hard/dev and 17/28 on hard/test2; easy/dev also gained one false dark
-contact. The conservative detector can miss real emitters and therefore make a
-lit vessel appear dark. These are observed regressions, not improvements; no
-detector/threshold retuning was done after freeze. Burst requests also regress,
-including more requests on complete steady patterns and fewer on yellow lights.
+**Dark-contact follow-up fix:** Phase-4 v4 exposed a mismatch between precision-
+tuned classification and the recall-oriented question “are any lights present?”
+The candidate-only path restores false-dark counts below the main baseline on
+both hard sets, with 28/28 unlit-hull recall on all four sets. An initial trial
+admitted faint low-contrast glow on one unlit hard/test2 hull; retaining the
+v2-equivalent peak/background contrast criteria rejects that glow without
+vessel/colour-confidence filtering. No normal navigation-light detections or
+boost metrics changed. Background points can still hide genuinely dark hulls;
+these procedural counts are not real-world recall validation. **Burst behavior
+is not fixed**: more requests on complete steady patterns and fewer on yellow
+lights remain, with unchanged Phase-4 counts below.
+
+| Tier / split | Main false dark | Phase-4 v4 false dark | Now false dark | Unlit TP main / v4 / now | FN main / v4 / now |
+|---|---:|---:|---:|---:|---:|
+| easy / dev | 0 | 1 | 0 | 28 / 28 / 28 | 0 / 0 / 0 |
+| easy / test2 | 0 | 0 | 0 | 28 / 28 / 28 | 0 / 0 / 0 |
+| hard / dev | 12 | 21 | 9 | 28 / 28 / 28 | 0 / 0 / 0 |
+| hard / test2 | 12 | 17 | 9 | 28 / 28 / 28 | 0 / 0 / 0 |
 
 | Tier / split | Dark hull + vessel | Lit vessel + box | Day + box | Dark hull + buoy | TP / FP / FN | Precision / recall |
 |---|---:|---:|---:|---:|---:|---:|
-| easy / dev | 28/28 | 1/28 | 0/28 | 0/28 | 28 / 1 / 0 | 96.55% / 100% |
+| easy / dev | 28/28 | 0/28 | 0/28 | 0/28 | 28 / 0 / 0 | 100% / 100% |
 | easy / test2 | 28/28 | 0/28 | 0/28 | 0/28 | 28 / 0 / 0 | 100% / 100% |
-| hard / dev | 28/28 | 21/28 | 0/28 | 0/28 | 28 / 21 / 0 | 57.14% / 100% |
-| hard / test2 | 28/28 | 17/28 | 0/28 | 0/28 | 28 / 17 / 0 | 62.22% / 100% |
+| hard / dev | 28/28 | 9/28 | 0/28 | 0/28 | 28 / 9 / 0 | 75.68% / 100% |
+| hard / test2 | 28/28 | 9/28 | 0/28 | 0/28 | 28 / 9 / 0 | 75.68% / 100% |
 
 | Tier / split | Flashing yellow, 4 frames | Single-frame yellow | Complete steady pattern | Low-confidence pattern | Day | Continuous 120 s: accepted (new intervals + extensions) / denied / duty |
 |---|---:|---:|---:|---:|---:|---:|

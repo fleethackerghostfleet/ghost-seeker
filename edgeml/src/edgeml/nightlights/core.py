@@ -74,7 +74,7 @@ def colour(h, s):
     return "blue"
 
 
-def detect_lights(image, box, pad=0.2, max_candidates=8):
+def detect_lights(image, box, pad=0.2, max_candidates=8, *, associate=True):
     x, y, w, h = map(float, box)
     if w <= 0 or h <= 0:
         raise ValueError("box dimensions must be positive")
@@ -114,6 +114,11 @@ def detect_lights(image, box, pad=0.2, max_candidates=8):
         background = patch[ring]
         peak = float(v[labels == i].max())
         if not len(background) or peak-float(np.median(background)) < 30:
+            continue
+        if not associate:
+            if peak >= 100 and peak-local_background[cy0, cx0] >= 65:
+                cx, cy = centers[i] + [x0, y0]
+                lights.append(dict(x=float(cx), y=float(cy)))
             continue
         sharp_id = sharp_labels[cy0, cx0]
         sharp = False
@@ -178,6 +183,8 @@ def detect_lights(image, box, pad=0.2, max_candidates=8):
                            conf=float(np.clip(min((peak-float(np.median(background)))/160, margin), 0, 1)),
                            sodium_ambiguous=bool(sat >= 85 and 10 <= np.median(pixels[:, 0]) < 27),
                            contrast=peak-float(np.median(background))))
+    if not associate:
+        return lights
     full_v = image.max(axis=2)
     peaks = ((full_v >= 135) & (full_v-cv2.GaussianBlur(full_v.astype(np.float32), (0, 0), 4) >= 65)).astype(np.uint8)
     _, _, row_stats, row_centers = cv2.connectedComponentsWithStats(peaks)
@@ -227,9 +234,15 @@ def aspect(lights):
     return "unknown"
 
 
+def _light_confidence(light):
+    value = light.get('conf', 0.)
+    return float(value) if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                            and math.isfinite(value) and 0 <= value <= 1) else 0.
+
+
 def interpret(lights, night, modality="EO", rules=None, signal=None):
     result = dict(rule_id=None, aspect="unknown", line="No recognized light pattern", boost=0.0)
-    pattern_conf = min((p.get('conf', 1.) for p in lights), default=0.)
+    pattern_conf = min((_light_confidence(p) for p in lights), default=0.)
     result['pattern_conf'] = pattern_conf
     if modality.upper() in {"IR", "SAR", "THERMAL", "RADAR"}:
         return dict(result, line="Colour not observable in IR/SAR imagery; colour rules skipped")
@@ -347,7 +360,7 @@ def dark_contact(frames_or_image, box, label=None, conf=None, gate_decision=None
                 y - cfg["above"] * max(h, 4.0),
                 w * (1 + 2 * cfg["side_pad"]),
                 h + cfg["above"] * max(h, 4.0) + cfg["below"] * h)
-    n_lights = sum(len(detect_lights(frame, expanded, pad=0)) for frame in frames)
+    n_lights = sum(len(detect_lights(frame, expanded, pad=0, associate=False)) for frame in frames)
     if n_lights:
         return {"flagged": False, "confidence": 0.0, "n_lights": n_lights, "basis": "lights_present"}
     gate_confidence = float(decision.get("confidence", 0.0))

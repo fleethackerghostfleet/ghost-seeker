@@ -3,6 +3,7 @@ package command
 import (
 	"encoding/json"
 	"math"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,31 @@ func TestNightLibraryPythonParity(t *testing.T) {
 	}
 	if count != 15 {
 		t.Fatalf("parity contacts = %d, want 15", count)
+	}
+}
+
+func TestSharedLightConfidenceCases(t *testing.T) {
+	data, err := os.ReadFile("../catalog/light_confidence_cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name   string  `json:"name"`
+		Lights []Light `json:"lights"`
+		Signal string  `json:"signal"`
+		RuleID string  `json:"rule_id"`
+		Boost  float64 `json:"boost"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			signal := InterpretLights(tc.Lights, Box{W: 200, H: 150}, tc.Signal)
+			if signal == nil || signal.RuleID != tc.RuleID || signal.Boost != tc.Boost {
+				t.Fatalf("shared Python/Go case: %+v", signal)
+			}
+		})
 	}
 }
 

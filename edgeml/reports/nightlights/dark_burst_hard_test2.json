@@ -11,7 +11,7 @@
         "positive": true
       },
       "lit vessel + box": {
-        "flagged": 17,
+        "flagged": 9,
         "samples": 28,
         "positive": false
       },
@@ -28,9 +28,9 @@
     },
     "total": 112,
     "tp": 28,
-    "fp": 17,
+    "fp": 9,
     "fn": 0,
-    "precision": 0.6222222222222222,
+    "precision": 0.7567567567567568,
     "recall": 1.0
   },
   "burst_n_per_scenario": 28,
