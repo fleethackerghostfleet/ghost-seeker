@@ -244,6 +244,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .rvframe{position:relative;width:min(100cqw,160cqh);height:min(100cqh,62.5cqw);border-radius:10px;overflow:hidden;border:3px solid var(--line);background:#000;animation:rvin .25s ease}
 @keyframes rvin{from{opacity:.2;transform:translateX(30px)}to{opacity:1;transform:none}}
 .rvframe img{width:100%;height:100%;display:block}
+img[src^="/dataset-images/"]{object-fit:fill!important}
 .rvframe.p1{border-color:var(--p1)}.rvframe.p2{border-color:var(--p2)}.rvframe.p3{border-color:var(--p3)}.rvframe.p4{border-color:var(--p4)}
 .rvframe .box{border-width:2.5px}.rvframe .box em{font-size:13px;padding:1px 6px}
 .rvside{display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0}
@@ -466,3 +467,6 @@ body.drawer-open .drawer{visibility:visible}
  .rvmain{grid-template-columns:minmax(0,1fr) var(--width-review,340px)}
  .wb-layout{grid-template-columns:var(--width-priorities,340px) minmax(0,1fr)}
 }
+
+.detector-negative{padding:10px;border:2px solid var(--warn,#efc35b);color:var(--text,#fff);background:#423819;font-weight:700;line-height:1.4}
+.rvside>.detector-negative{font-size:18px}

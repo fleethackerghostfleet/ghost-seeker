@@ -52,7 +52,7 @@ test('merge removes omitted server fields while retaining identity and client ca
  assert.equal(vm.runInContext("['reviewed','dismissed','escalated','sent','note','upload'].every(key=>!Object.hasOwn(original,key))",c),true);
  assert.equal(vm.runInContext("items.length===1&&items[0]===original&&findItem('one')===original&&itemByID.get('one')===original&&rv.cur===original",c),true);
  assert.equal(vm.runInContext('original.el===originalElement&&original.fresh===false&&original.central===.9',c),true);
- assert.equal(vm.runInContext("Object.keys(original).sort().join(',')===[...Object.keys(raw('one')),'el','fresh'].sort().join(',')",c),true);
+ assert.equal(vm.runInContext("Object.keys(original).sort().join(',')===[...Object.keys(normalizeItem(raw('one'))),'el','fresh'].sort().join(',')",c),true);
 });
 test('hidden-tab timeout flushes once and cancels the pending animation frame',()=>{
  const h=setup(),c=h.context;

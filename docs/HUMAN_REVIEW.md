@@ -1,5 +1,29 @@
 # Human review and offline retuning
 
+## Review the clean-v2 development set
+
+The committed `datasets/review/clean_v2_dev_review.jsonl` and `.sql` are the
+settled selection; do not recompute or expand them. Only `eval_split=dev` imagery
+is eligible. The locked `test` and `quarantine` sets must never be reviewed, so
+operator labels cannot leak into test scores. The builder refuses non-dev,
+Singapore Maritime, test, and quarantine rows before downloading anything.
+
+```sh
+export PATH="$HOME/google-cloud-sdk/bin:$PATH"
+python3 -m venv edgeml/.venv
+edgeml/.venv/bin/pip install -e 'edgeml[onnx,test]' open_clip_torch
+make demo-models
+edgeml/.venv/bin/python edgeml/tools/build_review_set.py
+go run ./cmd/ghost-seeker -dataset data/review_set/manifest.json \
+  -dataset-dir data/review_set/images
+```
+
+Images and the generated manifest stay under ignored `data/review_set/`.
+Detector class mapping: COCO `boat` uses MobileCLIP-S1 ship typing when mapped
+by `TYPE_TO_CATALOG`, otherwise `vessel`; `airplane` maps to `aircraft`;
+`bird` and `person` retain those classes; `surfboard`, `kite`, and other
+unmapped kept labels map to `unknown`. Ship type/aspect remains in ship info.
+
 Start the simulation console with durable capture:
 
 ```sh

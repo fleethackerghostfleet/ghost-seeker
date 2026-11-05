@@ -81,7 +81,11 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 	if b.Action == "dismiss" {
 		human = 0
 	}
-	rec, err := s.reviews.Append(reviews.Record{Action: b.Action, ItemID: old.ID, Img: old.Img, SourceID: old.SourceID, TS: old.TS, Reviewer: b.Reviewer, Model: catalog.Models[state.Model].Name, ModelKey: state.Model, ModelTier: old.CentralTier, ModelScore: old.Central, Edge: old.Edge, BaseTier: old.BaseTier, HumanTier: human, Agreed: human == old.CentralTier, Detections: old.Dets, Scores: old.Det, Directives: texts, Note: reviews.Trim(b.Note, 280), Before: old})
+	reason := ""
+	if old.DetectorNegative && human >= 1 && human <= 3 {
+		reason = "missed_detection"
+	}
+	rec, err := s.reviews.Append(reviews.Record{DetectorNegative: old.DetectorNegative, Reason: reason, Action: b.Action, ItemID: old.ID, Img: old.Img, SourceID: old.SourceID, DatasetID: old.DatasetID, ImageID: old.ImageID, SourceVideo: old.SourceVideo, SHA256: old.SHA256, TS: old.TS, Reviewer: b.Reviewer, Model: catalog.Models[state.Model].Name, ModelKey: state.Model, ModelTier: old.CentralTier, ModelScore: old.Central, Edge: old.Edge, BaseTier: old.BaseTier, HumanTier: human, Agreed: human == old.CentralTier, Detections: old.Dets, Scores: old.Det, Directives: texts, Note: reviews.Trim(b.Note, 280), Before: old})
 	if err != nil {
 		writeError(w, 500, "cannot persist review")
 		return
@@ -133,7 +137,7 @@ func (s *Server) correctReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if action == "reason" && b.Reason != "" && b.Reason != "wrong_detection" {
-		valid := false
+		valid := original.DetectorNegative && b.Reason == "missed_detection"
 		for _, d := range original.Detections {
 			if d.Class == b.Reason {
 				valid = true

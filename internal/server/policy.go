@@ -25,10 +25,12 @@ import (
 type Option func(*serverOptions)
 
 type serverOptions struct {
-	admin      bool
-	adminToken string
-	backend    policy.Backend
-	nodeID     string
+	admin          bool
+	adminToken     string
+	backend        policy.Backend
+	nodeID         string
+	datasetDir     string
+	datasetSources []catalog.Source
 }
 
 func WithAdmin(enabled bool) Option {
@@ -49,6 +51,13 @@ func WithPolicyBackend(backend policy.Backend) Option {
 
 func WithNodeID(nodeID string) Option {
 	return func(options *serverOptions) { options.nodeID = nodeID }
+}
+
+func WithDataset(imageDir string, sources []catalog.Source) Option {
+	return func(options *serverOptions) {
+		options.datasetDir = imageDir
+		options.datasetSources = append([]catalog.Source(nil), sources...)
+	}
 }
 
 type policyRuntime struct {

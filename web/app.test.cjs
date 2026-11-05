@@ -7,6 +7,60 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('clear priority preview preserves detector-negative P4 pinning',()=>{
+ const context=vm.createContext({});
+ vm.runInContext(`
+  const items=[{id:'negative',detectorNegative:true},{id:'positive'}];
+  const findItem=id=>items.find(it=>it.id===id);
+  const draft={pins:{negative:0,positive:0}};
+  const after=items.map(it=>({id:it.id,central:.9,tier:2}));
+  const sorted=rows=>rows;
+ `,context);
+ const rows=workbenchSource.split('\n').find(line=>line.includes('const rows=()=>'));
+ vm.runInContext(rows,context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),4);
+ assert.equal(vm.runInContext("rows()[1].tier",context),1);
+ vm.runInContext("draft.pins.negative=2",context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),2);
+});
+test('null detection arrays are normalized on snapshots, SSE and direct updates, including paused queues',()=>{
+ const context=setup();
+ vm.runInContext(`
+  function negative(id){return {...raw(id,4),detectorNegative:true,dets:null,det:null,centralTier:4,edge:0}}
+  applySnapshot(snapshot([negative('initial')]));
+  openStream();
+  streamHandlers.item({data:JSON.stringify({item:negative('item'),stats:{}})});
+  streamHandlers.update({data:JSON.stringify({item:negative('update'),cdr:0})});
+  applyItemUpdate(negative('direct'));
+  state.paused=true;
+  streamHandlers.item({data:JSON.stringify({item:negative('held-item'),stats:{}})});
+  applyItemUpdate(negative('held-update'));
+  applySnapshot(snapshot([...items,negative('held-snapshot')]));
+  for(const it of [...items,...pendingItems.map(e=>e.item)]){
+   if(!Array.isArray(it.dets)||!Array.isArray(it.det))throw Error('null detection arrays: '+it.id);
+   boxesHTML(it,true);topLine(it);
+  }
+  toggleHold();
+  reviewDataReady=true;reviewerName='devin-verify';DATASET_MODE=true;
+  imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';
+  $('rvKeys').children=[];$('rvKeys').querySelectorAll=()=>[];$('rvBarI').style={};
+  rv.cur=findItem('initial');rv.shown=null;
+  renderReviewContent();
+ `,context);
+ assert.match(context.$('rvMain').innerHTML,/Detector found nothing — check for missed objects/);
+ assert.equal(context.$('accLbl').textContent,'Nothing here');
+});
+test('detector negatives have clear labels and retain review keys',()=>{
+ const context=setup();
+ assert.equal(context.detectorNegativeLabel({detectorNegative:true}),'Detector found nothing — check for missed objects');
+ assert.equal(context.detectorNegativeLabel({}),'');
+ assert.equal(context.reviewAcceptLabel({detectorNegative:true,centralTier:4}),'Nothing here');
+ assert.match(context.reviewAcceptLabel({centralTier:2}),/P2/);
+ for(const key of ['1','2','3','4'])assert.equal(context.reviewKeyAction(key),key);
+ for(const key of [' ','enter'])assert.equal(context.reviewKeyAction(key),'accept');
+ assert.match(context.detectorNegativeHTML({detectorNegative:true}),/class="detector-negative"/);
+ assert.equal(context.detectorNegativeHTML({}),'');
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
@@ -604,6 +658,51 @@ function setup(){
  `,context);
  return context;
 }
+
+test('processing timeline formats latencies outside the detail renderer',()=>{
+ const context=setup();
+ vm.runInContext(`
+  MODELS={maritime:{name:'Maritime'}};
+  const html=processingHTML({
+   src:{hw:'EO-P7',em:'EO'},edge:.4,kb:12,fullRes:false,
+   lat:{edge:100,up:1500,cen:2000}
+  });
+ `,context);
+ const html=vm.runInContext('html',context);
+ assert.match(html,/>100 ms</);
+ assert.match(html,/>1\.5 s</);
+ assert.match(html,/>2\.0 s</);
+});
+
+test('dataset detail rendering tolerates omitted upload controls and wires navigation',()=>{
+ const context=setup(),buttons=new Map();
+ const drawer={innerHTML:'',querySelectorAll:()=>[],scrollTop:0};
+ const item={
+  id:'dataset-item',src:{id:'real-source',name:'Real source'},ts:'2026-11-04T12:00:00Z',
+  tier:2,centralTier:2,central:.7,base:.6,edge:.5,dbId:17,manual:0,
+  dets:[{cls:'vessel',conf:.8,attrs:{},b:{x:10,y:10,w:40,h:30}}],
+  det:[{s:.7,notes:[]}],directives:[],sent:false,fullRes:false,live:null,
+ };
+ context.$=id=>{
+  if(id==='drawer')return drawer;
+  if(['aUploadNext','aUploadHold','aPull'].includes(id))return null;
+  if(!buttons.has(id))buttons.set(id,{});
+  return buttons.get(id);
+ };
+ context.datasetItem=item;
+ vm.runInContext(`
+  DATASET_MODE=true;items=[datasetItem];state.sel=datasetItem.id;state.model='maritime';state.directives=[];
+  MODELS={maritime:{name:'Maritime'}};CLS={vessel:{lab:'Vessel',g:'vessel'}};ATTR_LAB={};
+  zulu=()=> '12:00';
+  feedOrdered=[datasetItem];visible=()=>{throw Error('detail must use cached feed order')};buildWhy=()=>[];largeImage=()=>'<img>';processingHTML=()=>'<div></div>';
+  briefing={renderDetections(){}};
+ `,context);
+ assert.doesNotThrow(()=>vm.runInContext('renderDetailContent()',context));
+ assert.match(drawer.innerHTML,/1 of 1/);
+ for(const id of ['dPrev','dNext','dClose'])assert.equal(typeof buttons.get(id)?.onclick,'function',`${id} handler`);
+ assert.equal(typeof buttons.get('aSim')?.onclick,'function');
+ assert.equal(typeof buttons.get('aDis')?.onclick,'function');
+});
 
 test('unknown contact labels, distinct boxes and persistence explanations',()=>{
  const context=setup();

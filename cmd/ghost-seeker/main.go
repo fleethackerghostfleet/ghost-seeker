@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	reviewdataset "github.com/fleethackerghostfleet/ghost-seeker/internal/dataset"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/pivauth"
@@ -40,6 +43,10 @@ func main() {
 	}
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
+	negativesRate := flag.Float64("negatives-rate", 0.15, "dataset mode: fraction of detector negatives to review")
+	datasetManifest := flag.String("dataset", "", "simulation mode: replay a clean-v2 review manifest")
+	datasetDir := flag.String("dataset-dir", "data/review_set/images", "simulation mode: dataset image directory")
+	splitsPath := flag.String("splits", "edgeml/configs/splits.yaml", "dataset mode: locked test and quarantine source policy")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
@@ -47,7 +54,7 @@ func main() {
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–50 Mbps ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
-	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
+	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic, mean 16 kbps with ~5% outages, 0 = outage)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -73,6 +80,18 @@ func main() {
 	flag.Parse()
 	if *demoAcceptAnyToken && *authMode != "token" {
 		log.Fatal("-demo-accept-any-token requires -auth-mode token; incompatible with PIV")
+	}
+	if math.IsNaN(*negativesRate) || *negativesRate < 0 || *negativesRate > 1 {
+		log.Fatal("-negatives-rate must be in [0,1]")
+	}
+	reviewLogSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "review-log" {
+			reviewLogSet = true
+		}
+	})
+	if !reviewLogSet && *datasetManifest != "" {
+		*reviewPath = "data/reviews-real.jsonl"
 	}
 	if err := validateAuthMode(*authMode, *tlsCert, *tlsKey, *ca, *crls, *users); err != nil {
 		log.Fatal(err)
@@ -122,15 +141,49 @@ func main() {
 	}
 
 	if *shoreURL != "" {
+		if *datasetManifest != "" {
+			log.Fatal("-dataset cannot be used with -shore")
+		}
 		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport)
 		return
 	}
 
 	data := store.New(*retain)
-	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
-	generator := sensor.NewGenerator()
-	fillBacklog(data, generator, *backfill)
+	var generator *sensor.Generator
+	var replay *reviewdataset.Replay
+	var uplink *simulationUplink
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
+	if *datasetManifest != "" {
+		images, err := reviewdataset.LoadManifest(*datasetManifest)
+		if err != nil {
+			log.Fatalf("load dataset manifest: %v", err)
+		}
+		rejected, err := reviewdataset.ValidateSplits(images, *splitsPath)
+		if err != nil {
+			log.Fatalf("validate dataset splits: %v", err)
+		}
+		log.Printf("dataset split guard: %d locked rows rejected", rejected)
+		replayStarted := time.Now()
+		replay, err = reviewdataset.NewReplay(images, *datasetDir, reviewdataset.Seed)
+		if err != nil {
+			log.Fatalf("load dataset images: %v", err)
+		}
+		log.Printf("dataset replay prepared and SHA-verified %d images in %s", len(images), time.Since(replayStarted))
+		sources := reviewdataset.Sources(images)
+		options = append(options, server.WithDataset(*datasetDir, sources))
+		summary := reviewdataset.Summarize(images)
+		distribution, _ := json.Marshal(summary.DetectionsByClass)
+		log.Printf("real clean-v2 dev dataset: %d images; detections=%s; images with person=%d; person-driven P1=%d",
+			len(images), distribution, summary.ImagesWithPerson, summary.PersonDrivenP1)
+		fillDatasetBacklog(data, replay, *backfill, *negativesRate)
+	} else {
+		generator = sensor.NewGenerator()
+		fillBacklog(data, generator, *backfill)
+		if *simLinkBps < 0 {
+			data.AdvanceUploads(24 * time.Hour)
+		}
+		uplink = newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
+	}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
 		if err != nil {
@@ -149,9 +202,13 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
-	go runSimulation(data, generator, app, uplink)
+	if replay != nil {
+		go runDatasetSimulation(data, replay, app, *negativesRate)
+	} else {
+		go runSimulation(data, generator, app, uplink)
+	}
 	go refreshTimeScopes(app)
-	if *autoCDR > 0 {
+	if replay == nil && *autoCDR > 0 {
 		for i := 0; i < 4; i++ {
 			data.AutoEscalate()
 		}
@@ -199,6 +256,40 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 		} else {
 			data.Add(nil, extra)
 		}
+	}
+}
+
+func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count int, negativesRate float64) {
+	start := time.Now().Add(-45 * time.Minute)
+	for index := 0; index < count; index++ {
+		item := replay.Next(start.Add(time.Duration(index) * 18 * time.Second))
+		item.DetectorNegative = item.Edge < sensor.EdgeKeep
+		if item.DetectorNegative && !reviewdataset.SampleNegative(item.ImageID, negativesRate) {
+			data.Add(nil, 0)
+			continue
+		}
+		data.Add(&item, 0)
+	}
+}
+
+func runDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app *server.Server, negativesRate float64) {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
+		_, _, _, state := data.Snapshot()
+		item := replay.Next(time.Now())
+		item.DetectorNegative = item.Edge < sensor.EdgeKeep
+		if item.DetectorNegative && !reviewdataset.SampleNegative(item.ImageID, negativesRate) {
+			data.Add(nil, 0)
+			stats, _ := data.Stats()
+			app.PublishStats(stats)
+			continue
+		}
+		command.Rescore(&item, state.Model, data.Directives())
+		stored, evicted := data.Add(&item, 0)
+		app.PublishEvict(evicted)
+		stats, _ := data.Stats()
+		app.PublishItem(stored, stats)
 	}
 }
 
@@ -294,7 +385,10 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 		for _, updated := range updates {
 			app.PublishUpdate(updated, cdr)
 		}
-		_, _, _, state := data.Snapshot()
+		items, _, _, state := data.Snapshot()
+		if !uplink.canGenerate(items) {
+			continue
+		}
 		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
 		stored, evicted := data.Add(item, extra)
 		app.PublishEvict(evicted)

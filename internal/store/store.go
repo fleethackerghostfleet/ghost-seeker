@@ -53,6 +53,10 @@ func New(retain int) *Store {
 	return &Store{retain: retain, model: "maritime", linkBPS: 256_000}
 }
 
+func (s *Store) RetainLimit() int {
+	return s.retain
+}
+
 func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -63,6 +67,9 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 		return command.Item{}, ""
 	}
 	s.stats.Keep++
+	if item.DetectorNegative {
+		s.stats.DetectorNegatives++
+	}
 	s.stats.DB++
 	item.DBID = s.stats.DB + 180000
 	command.Rescore(item, s.model, s.directives)
@@ -204,6 +211,11 @@ func (s *Store) SetPolicyDirectives(sourceDirectives []command.Directive, blocke
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := cloneDirectives(sourceDirectives)
+	for i := range next {
+		for j := range next[i].Rules {
+			next[i].Rules[j].DirectiveID = next[i].ID
+		}
+	}
 	for _, directive := range s.directives {
 		if directive.Source != "" {
 			continue

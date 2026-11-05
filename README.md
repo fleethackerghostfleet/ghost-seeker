@@ -327,6 +327,8 @@ go run ./cmd/ghost-seeker -addr :8090
 ```
 
 The app imagery is AI-generated synthetic imagery; see [tools/imagegen](tools/imagegen/README.md).
+For real Operator Review, build and replay the guarded clean-v2 development set with
+[`docs/HUMAN_REVIEW.md`](docs/HUMAN_REVIEW.md); test and quarantine imagery is never reviewed.
 
 Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention, and number of historical items generated at startup. Pages:
 
@@ -408,6 +410,23 @@ estimate; there are no manual speed buttons or rate-setting API. A zero sample d
 the link until the next nonzero sample. The former `-link-bps` flag is removed.
 Pass `-link-listen ""` when the link is shaped elsewhere (compose +
 Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for the demo.
+
+### Synthetic simulation uplink
+
+Without `-shore` or `-dataset`, the Imagery Feed uses a slower shared upload
+budget: a normal distribution centered on **16 kbps**, standard deviation about
+9.73 kbps, clipped to 0–100 kbps and resampled every five seconds. About 5% of
+intervals are outages. The synthetic 18–45 KiB images take roughly 10–24 seconds
+of uninterrupted airtime near the mean rate; queueing, priority and outages can
+extend elapsed time. Upload chips report the applied slow rate.
+
+Historical backfill starts uploaded. At six outstanding uploads (or `retain-1`,
+whichever is smaller) the automatic
+sim pauses new frame generation until an upload finishes, keeping a visible
+shared queue without unbounded growth (including during outages or holds).
+`-sim-link-bps N` still selects a fixed bits/second rate (`0` means outage),
+without this automatic admission limit. The live TCP shaper described above
+remains centered on 8 Mbps; dataset replay is unchanged.
 
 ## Status / not done
 

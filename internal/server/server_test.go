@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
@@ -44,6 +46,26 @@ func TestUploadOverrideAPI(t *testing.T) {
 	response := request(app, http.MethodPost, "/api/items/queued/upload-override", map[string]int{"override": 1})
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid body status = %d", response.Code)
+	}
+}
+
+func TestDatasetModeServesImagesAndAdvertisesSources(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "test.jpg"), []byte("jpeg"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source := catalog.Source{ID: "real-video-one", Name: "Ghost Fleet · clip", Scene: "open", Mode: "dataset"}
+	app := New(store.New(10), WithDataset(root, []catalog.Source{source}))
+
+	config := request(app, http.MethodGet, "/api/config", nil)
+	if config.Code != http.StatusOK || !strings.Contains(config.Body.String(), `"datasetMode":true`) ||
+		!strings.Contains(config.Body.String(), `"real-video-one"`) {
+		t.Fatalf("dataset config: %d %s", config.Code, config.Body.String())
+	}
+	image := httptest.NewRecorder()
+	app.ServeHTTP(image, httptest.NewRequest(http.MethodGet, "/dataset-images/test.jpg", nil))
+	if image.Code != http.StatusOK || image.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("dataset image: %d %q", image.Code, image.Header().Get("Content-Type"))
 	}
 }
 

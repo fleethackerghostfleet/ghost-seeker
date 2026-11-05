@@ -36,4 +36,9 @@ test('commander queue and note templates escape item ids',()=>{
  assert.ok(elements.get('brief').innerHTML.includes(expected));
  assert.doesNotMatch(elements.get('qlist').innerHTML,/<style/);
  assert.doesNotMatch(elements.get('brief').innerHTML,/<style/);
+ context.testItem={...context.testItem,id:'negative',detectorNegative:true,dets:null,det:null};
+ vm.runInContext('upsert(testItem);view.sel=testItem.id;renderQueue();renderStage()',context);
+ assert.match(elements.get('qlist').innerHTML,/No contacts/);
+ assert.ok(Array.isArray(context.testItem.dets));
+ assert.ok(Array.isArray(context.testItem.det));
 });
