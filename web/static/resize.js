@@ -9,8 +9,9 @@
   handle.setAttribute('aria-valuemin',min);handle.setAttribute('aria-valuemax',max);
   handle.title='Drag or use arrow keys to resize. Double-click or Home to reset.';
   document.body.append(handle);
-  let panel,right=false,drag=null,observed=null;
-  const sizes=new ResizeObserver(()=>update());
+  let panel,right=false,drag=null,observed=null,scheduled=false;
+  const schedule=()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;update()})};
+  const sizes=new ResizeObserver(schedule);
   const update=()=>{
    panel=document.querySelector(selector);
    if(panel!==observed){sizes.disconnect();if(panel)sizes.observe(panel);observed=panel}
@@ -40,10 +41,10 @@
    e.preventDefault();e.stopPropagation();
    window.gsSettings.resize(key,e.key==='Home'?null:panel.getBoundingClientRect().width+(e.key==='ArrowRight'?1:-1)*(right?-1:1)*(e.shiftKey?40:10));update();
   });
-  new MutationObserver(update).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
-  new ResizeObserver(update).observe(document.body);
-  window.addEventListener('resize',update);document.addEventListener('scroll',update,true);
-  document.addEventListener('transitionend',update,true);
+  new MutationObserver(schedule).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+  new ResizeObserver(schedule).observe(document.body);
+  window.addEventListener('resize',schedule);document.addEventListener('scroll',schedule,true);
+  document.addEventListener('transitionend',schedule,true);
   update();
  }
 })();

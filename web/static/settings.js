@@ -39,7 +39,7 @@ window.gsSettings=(()=>{
   dlg.querySelectorAll('.seg[data-k] button').forEach(x=>x.classList.toggle('on',s[x.parentElement.dataset.k]===x.dataset.v));
   dlg.querySelectorAll('input[data-p]').forEach(x=>x.checked=!s.hide.includes(x.dataset.p));
  }
- function set(k,v){if(k==='theme'&&v!=='red')s.prev=v;s[k]=v;save();apply()}
+ function set(k,v){if(k==='theme'&&v!=='red')s.prev=v;s[k]=v;save();apply();window.dispatchEvent(new Event('gs:display-settings'))}
  function toggleRed(){set('theme',s.theme==='red'?s.prev:'red')}
  function build(){
   const dlg=document.getElementById('settings');
