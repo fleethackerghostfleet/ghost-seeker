@@ -90,6 +90,10 @@ Stop the grader first and archive existing journals before changing tiers.
 
 Open through a localhost tunnel; this lightweight tool has no login. Bind only
 to loopback or a trusted development network. Keys: 1–4 grade, Enter/Space accept,
+All requests require a loopback Host (localhost, 127.0.0.1 or ::1), or a
+hostname explicitly permitted by repeatable `-allow-host <hostname>` flags.
+Rejected Hosts and accepted request Hosts are logged; forwarded-host headers
+do not grant access. For a trusted preview proxy, allow its exact hostname.
 Z undo, left/right navigate. A negative signed mean delta means the human
 assigns higher priority than the model (the model under-prioritizes).
 
