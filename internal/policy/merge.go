@@ -132,7 +132,9 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	inputSuppress := append([]string(nil), out.Interest.SuppressLabels...)
 	out.Interest.BoostLabels = interest.BoostLabels
 	out.Interest.SuppressLabels = interest.SuppressLabels
-	out.Interest.BoostFactor = interest.BoostFactor // Merge never sets it: per-label weights replace the old global maximum
+	// BoostFactor is left as configured on the policy: it still scales the
+	// embedding-similarity path and unweighted labels. Per-label weights come
+	// from the merged rules.
 	out.Interest.BoostWeights = interest.BoostWeights
 	if !sameLabelSet(inputBoost, interest.BoostLabels) {
 		out.Interest.PositiveEmbedding = nil

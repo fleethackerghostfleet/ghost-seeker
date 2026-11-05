@@ -257,11 +257,11 @@ func TestFlattenEmbeddingsAndExpiredBoost(t *testing.T) {
 	}
 
 	expired := &pb.Policy{Interest: &pb.Interest{
-		BoostLabels: []string{"submarine"}, PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
+		BoostLabels: []string{"submarine"}, BoostFactor: 2.5, PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
 	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
 		&pb.InterestRule{Id: "short", BoostLabels: []string{"submarine"}, Weight: 7, ExpiresAtUnixMs: mergeNow.UnixMilli()})}}
 	got = Flatten(expired, "USV-1", mergeNow)
-	if len(got.Interest.BoostLabels) != 0 || got.Interest.BoostFactor != 0 || len(got.Interest.BoostWeights) != 0 ||
+	if len(got.Interest.BoostLabels) != 0 || got.Interest.BoostFactor != 2.5 || len(got.Interest.BoostWeights) != 0 ||
 		got.Interest.PositiveEmbedding != nil || got.Interest.NegativeEmbedding == nil {
 		t.Fatalf("expired rule retained stale interest: %+v", got.Interest)
 	}
