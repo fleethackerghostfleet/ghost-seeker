@@ -2,10 +2,12 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -97,6 +99,71 @@ func TestDirectiveLengthLimit(t *testing.T) {
 	}
 	if body["error"] == "" {
 		t.Fatal("POST overlong directive response has no error")
+	}
+}
+
+func TestDirectiveBodySizeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body []byte
+		want int
+	}{
+		{name: "malformed 128 KiB body", body: bytes.Repeat([]byte("x"), 128<<10), want: http.StatusBadRequest},
+		{name: "valid oversized JSON", body: []byte(`{"text":"` + strings.Repeat("x", 128<<10) + `"}`), want: http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := New(store.New(10))
+			req := httptest.NewRequest(http.MethodPost, "/api/directives", bytes.NewReader(tc.body))
+			response := httptest.NewRecorder()
+			app.ServeHTTP(response, req)
+			if response.Code != tc.want {
+				t.Fatalf("POST oversized directive status = %d, want %d", response.Code, tc.want)
+			}
+		})
+	}
+}
+
+func TestStreamClientLimit(t *testing.T) {
+	app := New(store.New(10))
+	cancels := make([]context.CancelFunc, 0, maxStreamClients)
+	var wg sync.WaitGroup
+	defer func() {
+		for _, cancel := range cancels {
+			cancel()
+		}
+		wg.Wait()
+	}()
+
+	for i := 0; i < maxStreamClients; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/stream", nil)
+		ctx, cancel := context.WithCancel(req.Context())
+		req = req.WithContext(ctx)
+		cancels = append(cancels, cancel)
+		response := httptest.NewRecorder()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			app.ServeHTTP(response, req)
+		}()
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		app.hub.mu.Lock()
+		count := len(app.hub.clients)
+		app.hub.mu.Unlock()
+		if count == maxStreamClients {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("active stream clients = %d, want %d", count, maxStreamClients)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	response := request(app, http.MethodGet, "/api/stream", nil)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("65th stream client status = %d, want %d", response.Code, http.StatusServiceUnavailable)
 	}
 }
 

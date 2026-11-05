@@ -51,7 +51,7 @@
     for (const b of pr.children) b.classList.toggle('on', link.controllable && +b.dataset.bps === link.bps);
     $('#items-shore').textContent = shore.ok ? shore.itemsTotal : '—';
     $('#items-edge').textContent = edge.ok ? edge.itemsTotal : (edge.error ? 'n/a' : '—');
-    $('#edge-queue').textContent = edge.ok ? `${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)}${edge.itemsDeduped ? ` · ${edge.itemsDeduped} duplicate frames folded on the edge` : ''}` : '';
+    $('#edge-queue').textContent = edge.ok ? `${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)} · ${edge.itemsEvicted || 0} delivered items evicted${edge.itemsDeduped ? ` · ${edge.itemsDeduped} duplicate frames folded on the edge` : ''}` : '';
     const sightingMode = counts.grouped > 0;
     $('#obj-img').textContent = sightingMode ? counts.sightingsWithImage : counts.objectsWithImage;
     $('#obj-all').textContent = sightingMode ? counts.sightings : counts.objects;

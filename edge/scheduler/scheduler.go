@@ -678,10 +678,13 @@ func (s *Scheduler) applyResponse(ctx context.Context, resp *pb.ExchangeResponse
 	if err := s.st.MarkManifestAcked(ctx, mack); err != nil {
 		return err
 	}
-	var maxSeq int64
+	cursor, err := s.st.GetCursor(ctx)
+	if err != nil {
+		return err
+	}
 	for _, d := range resp.Downlink {
-		if d.Seq > maxSeq {
-			maxSeq = d.Seq
+		if d.Seq <= cursor {
+			continue
 		}
 		var err error
 		switch m := d.Msg.(type) {
@@ -694,12 +697,19 @@ func (s *Scheduler) applyResponse(ctx context.Context, resp *pb.ExchangeResponse
 		}
 		if err != nil {
 			s.log.Warn("apply downlink", "seq", d.Seq, "err", err)
+			if errors.Is(err, store.ErrFull) {
+				return err // Retry this correction, not the successfully applied prefix.
+			}
 		} else if s.OnDownlink != nil {
 			s.OnDownlink(d)
 		}
+		if err := s.st.SetCursor(ctx, d.Seq); err != nil {
+			return err
+		}
+		cursor = d.Seq
 	}
-	if maxSeq > 0 {
-		return s.st.SetCursor(ctx, maxSeq)
+	if err := s.st.EnforceLimits(ctx); err != nil && !errors.Is(err, store.ErrFull) {
+		return err
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ toolchain go1.23.4
 
 require (
 	connectrpc.com/connect v1.18.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/oklog/ulid/v2 v2.1.0
 	golang.org/x/image v0.25.0
 	golang.org/x/net v0.38.0

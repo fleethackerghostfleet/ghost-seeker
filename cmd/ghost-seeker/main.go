@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
@@ -49,7 +50,18 @@ func main() {
 	}
 
 	log.Printf("Ghost Seeker listening on %s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, app))
+	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(app))))
+}
+
+func serve(addr string, handler http.Handler) error {
+	return (&http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}).ListenAndServe()
 }
 
 func refreshTimeScopes(app *server.Server) {
@@ -121,7 +133,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		static.ServeHTTP(w, r)
 	})
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(mux))))
 }
 
 func shaperTarget(shoreURL string) (string, error) {

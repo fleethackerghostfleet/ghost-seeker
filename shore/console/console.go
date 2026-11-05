@@ -15,6 +15,8 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 )
 
@@ -193,6 +195,10 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		if !ids.Valid(parts[0]) {
+			http.NotFound(w, r)
+			return
+		}
 		kind := console.ParseForm(parts[1])
 		it, err := s.St.Get(r.Context(), parts[0])
 		if err != nil {
@@ -209,7 +215,9 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", f.Mime)
+		w.Header().Set("Content-Type", httpx.SafeBlobMime(f.Mime))
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Disposition", "inline")
 		_, _ = w.Write(data)
 	})
 }

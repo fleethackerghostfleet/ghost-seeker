@@ -10,8 +10,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
+
+	"connectrpc.com/connect"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -32,9 +36,18 @@ func main() {
 	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference URL for text embedding, or 'mock'")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	edgeID := flag.String("edge", env("EDGE_ID", ""), "edge id to address downlink to ('' = all)")
+	requireDefault, err := strconv.ParseBool(env("GS_REQUIRE_AUTH", "false"))
+	fatal(err)
+	requireAuth := flag.Bool("require-auth", requireDefault, "require per-unit JWTs on SyncService")
+	key := flag.String("signing-key", env("GS_SIGNING_KEY", ""), "HS256 signing key (prefer env or file)")
+	keyFile := flag.String("signing-key-file", env("GS_SIGNING_KEY_FILE", ""), "signing key file")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
+	secret, err := unitauth.Credential(*key, *keyFile)
+	fatal(err)
+	auth, err := unitauth.New(*requireAuth, secret)
+	fatal(err)
 
 	st, err := store.Open(*data)
 	fatal(err)
@@ -50,7 +63,7 @@ func main() {
 	con := &console.Service{NodeID: "shore", St: st, Clk: clk, Embedder: emb, EdgeID: *edgeID}
 
 	mux := http.NewServeMux()
-	p, h := ghostseekerv1connect.NewSyncServiceHandler(ssync.Handler{Service: syncSvc}, link.HandlerOptions()...)
+	p, h := ghostseekerv1connect.NewSyncServiceHandler(ssync.Handler{Service: syncSvc}, append(link.HandlerOptions(), connect.WithInterceptors(auth))...)
 	mux.Handle(p, h)
 	p, h = ghostseekerv1connect.NewConsoleServiceHandler(con)
 	mux.Handle(p, h)

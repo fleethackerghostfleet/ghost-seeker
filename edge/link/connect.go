@@ -18,6 +18,7 @@ import (
 type Connect struct {
 	client ghostseekerv1connect.SyncServiceClient
 	est    *Estimator
+	token  string
 }
 
 // CompressMinBytes is the smallest message worth gzipping. Below it the
@@ -27,15 +28,19 @@ const CompressMinBytes = 512
 // Requests are gzipped (manifest entries, FACT JSON and protobuf framing
 // compress well; image chunks are already JPEG and pass through at ~0.1%
 // overhead). Fast level: on a fat link the exchange is mostly image bytes.
-func NewConnect(shoreURL string, timeout time.Duration, est *Estimator) *Connect {
+func NewConnect(shoreURL string, timeout time.Duration, est *Estimator, token ...string) *Connect {
 	hc := &http.Client{Timeout: timeout}
-	return &Connect{
+	c := &Connect{
 		client: ghostseekerv1connect.NewSyncServiceClient(hc, shoreURL, connect.WithGRPC(),
 			connect.WithAcceptCompression(gzipName, newGzipDecompressor, newGzipCompressor),
 			connect.WithSendCompression(gzipName),
 			connect.WithCompressMinBytes(CompressMinBytes)),
 		est: est,
 	}
+	if len(token) > 0 {
+		c.token = token[0]
+	}
+	return c
 }
 
 // HandlerOptions configures the shore SyncService handler to match: accept
@@ -59,7 +64,11 @@ func newGzipCompressor() connect.Compressor {
 
 func (c *Connect) Exchange(ctx context.Context, req *pb.ExchangeRequest) (*pb.ExchangeResponse, error) {
 	start := time.Now()
-	resp, err := c.client.Exchange(ctx, connect.NewRequest(req))
+	request := connect.NewRequest(req)
+	if c.token != "" {
+		request.Header().Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.client.Exchange(ctx, request)
 	if err != nil {
 		c.est.Failure()
 		return nil, err

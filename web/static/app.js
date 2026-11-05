@@ -11,7 +11,7 @@ function ruleLabel(r){
 /* ---------------- UI ---------------- */
 state.dens='m';state.page='feed';
 const tcol=t=>['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'][t];
-const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const selectedBands=new Map();
 function bandsFor(it){return Array.isArray(it.bands)?[...new Set(it.bands.filter(b=>typeof b==='string'&&b.trim()))]:[]}
 function bandFor(it){const bands=bandsFor(it);return bands.includes(selectedBands.get(it.id))?selectedBands.get(it.id):bands[0]}
@@ -193,7 +193,7 @@ function renderTierSeg(counts){
 }
 function boxesHTML(it,labels){
  return it.dets.map((d,i)=>{const sd=it.det[i];const c=sd.sup?'sup':sd.matched?'match':sd.s>=.6?'hi':sd.s>=.3?'md':'lo';const b=d.b;
-  return`<div class="box ${c}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
+  return`<div class="box ${c}${d.cls==='unknown'?' unknown':''}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
 function topLine(it){
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return'—';
@@ -249,6 +249,7 @@ function closeDetail(){closeZoom();const prev=items.find(i=>i.id===state.sel);st
 function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function buildWhy(it,rows){
  const why=gsLights.why(it);const top=rows[0];
+ rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
  if(top)why.push({c:top[1].s>.6?'al':'',t:`Top contact: <b>${CLS[top[0].cls].lab}</b> (conf ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${MODELS[state.model].name}`});
  rows.forEach(([d])=>{if(d.attrs.dark&&!['other','clutter'].includes(CLS[d.cls].g))why.push({c:'al',t:`${CLS[d.cls].lab} has no AIS / transponder correlation`});if(d.attrs.approaching)why.push({c:'al',t:`${CLS[d.cls].lab} track is inbound toward the sensor`});if(d.attrs.new)why.push({c:'',t:`Change detection: ${CLS[d.cls].lab} not present in previous pass`})});
  const seen=new Set();rows.forEach(([d,sd])=>sd.notes.forEach(r=>{const k=ruleLabel(r);if(seen.has(k))return;seen.add(k);const dir=state.directives.find(x=>x.id===r.directiveId);why.push({c:r.type==='boost'?'up':'dn',t:`${r.type==='boost'?'Boosted':'Suppressed'} by directive “${dir?esc(dir.text):''}” (${k.slice(2)})`})}));

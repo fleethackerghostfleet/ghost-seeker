@@ -1,0 +1,117 @@
+{
+  "30_Days_at_Sea_Timelapse_w1": {
+    "source": "30_Days_at_Sea_Timelapse",
+    "window_start_sec": 1,
+    "frame_count": 60
+  },
+  "30_Days_at_Sea_Timelapse_w196": {
+    "source": "30_Days_at_Sea_Timelapse",
+    "window_start_sec": 196,
+    "frame_count": 60
+  },
+  "30_Days_at_Sea_Timelapse_w390": {
+    "source": "30_Days_at_Sea_Timelapse",
+    "window_start_sec": 390,
+    "frame_count": 60
+  },
+  "30_Days_at_Sea_Timelapse_w585": {
+    "source": "30_Days_at_Sea_Timelapse",
+    "window_start_sec": 585,
+    "frame_count": 60
+  },
+  "Argentina_to_Alaska_Cruise_Bridge_Timelapse": {
+    "source": "Argentina_to_Alaska_Cruise_Bridge_Timelapse",
+    "window_start_sec": 1,
+    "frame_count": 139
+  },
+  "Cargo_Ship_Storm_first_hour_w1": {
+    "source": "Cargo_Ship_Storm_first_hour",
+    "window_start_sec": 1,
+    "frame_count": 60
+  },
+  "Cargo_Ship_Storm_first_hour_w1181": {
+    "source": "Cargo_Ship_Storm_first_hour",
+    "window_start_sec": 1181,
+    "frame_count": 60
+  },
+  "Cargo_Ship_Storm_first_hour_w2361": {
+    "source": "Cargo_Ship_Storm_first_hour",
+    "window_start_sec": 2361,
+    "frame_count": 60
+  },
+  "Cargo_Ship_Storm_first_hour_w3541": {
+    "source": "Cargo_Ship_Storm_first_hour",
+    "window_start_sec": 3541,
+    "frame_count": 60
+  },
+  "Cargo_Ship_Uncut_View_w1": {
+    "source": "Cargo_Ship_Uncut_View",
+    "window_start_sec": 1,
+    "frame_count": 60
+  },
+  "Cargo_Ship_Uncut_View_w2981": {
+    "source": "Cargo_Ship_Uncut_View",
+    "window_start_sec": 2981,
+    "frame_count": 60
+  },
+  "Cargo_Ship_Uncut_View_w4515": {
+    "source": "Cargo_Ship_Uncut_View",
+    "window_start_sec": 4515,
+    "frame_count": 60
+  },
+  "Cargo_Ship_Uncut_View_w8941": {
+    "source": "Cargo_Ship_Uncut_View",
+    "window_start_sec": 8941,
+    "frame_count": 60
+  },
+  "Cruise_Ship_POV": {
+    "source": "Cruise_Ship_POV",
+    "window_start_sec": 1,
+    "frame_count": 14
+  },
+  "Dolphins_Pungo_Ferry_Bridge": {
+    "source": "Dolphins_Pungo_Ferry_Bridge",
+    "window_start_sec": 1,
+    "frame_count": 5
+  },
+  "NCL_Breakaway_Bomb_Cyclone": {
+    "source": "NCL_Breakaway_Bomb_Cyclone",
+    "window_start_sec": 50,
+    "frame_count": 37
+  },
+  "Pacific_Ocean_at_night_from_Cruise_Balcony": {
+    "source": "Pacific_Ocean_at_night_from_Cruise_Balcony",
+    "window_start_sec": 1,
+    "frame_count": 15
+  },
+  "Partially_Obstructed_Balcony": {
+    "source": "Partially_Obstructed_Balcony",
+    "window_start_sec": 1,
+    "frame_count": 17
+  },
+  "Sailing_drone_inside_a_hurricane": {
+    "source": "Sailing_drone_inside_a_hurricane",
+    "window_start_sec": 1,
+    "frame_count": 49
+  },
+  "Ship_crossing_Mariana_Trench": {
+    "source": "Ship_crossing_Mariana_Trench",
+    "window_start_sec": 1,
+    "frame_count": 13
+  },
+  "Sunrise_Somewhere_in_the_Ocean": {
+    "source": "Sunrise_Somewhere_in_the_Ocean",
+    "window_start_sec": 1,
+    "frame_count": 40
+  },
+  "Tarpon_Offshore": {
+    "source": "Tarpon_Offshore",
+    "window_start_sec": 1,
+    "frame_count": 40
+  },
+  "Whale_Watching_in_Northern_Peru": {
+    "source": "Whale_Watching_in_Northern_Peru",
+    "window_start_sec": 1,
+    "frame_count": 41
+  }
+}

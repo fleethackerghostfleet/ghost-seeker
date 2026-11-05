@@ -6,6 +6,12 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 )
 
+func TestNodeStatusEvictions(t *testing.T) {
+	if n := nodeStatus(&pb.GetStatusResponse{ItemsEvicted: 7}); n.Evicted != 7 {
+		t.Fatalf("evictions not forwarded: %+v", n)
+	}
+}
+
 func view(id string, ms int64, tags map[string]string, forms map[pb.FormKind]bool) *pb.ItemView {
 	v := &pb.ItemView{Item: &pb.Item{Id: id, CapturedAtUnixMs: ms, Features: &pb.Features{Tags: tags,
 		Detections: []*pb.Detection{{Label: "submarine", Confidence: 0.8}}}}, Score: &pb.Score{Priority: 0.9}}
