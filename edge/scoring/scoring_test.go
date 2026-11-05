@@ -94,3 +94,42 @@ func TestInterestMatchesSubtypeTag(t *testing.T) {
 		t.Fatalf("no subtype, detector label boat: neutral, got %+v", r)
 	}
 }
+
+func TestDarkContactScoringAndPolicyLabels(t *testing.T) {
+	e := Default()
+	ctx := &Context{Now: time.Now()}
+	dark := img("dark contact", 0.9, 0)
+	lit := img("boat", 0.9, 0)
+	darkPriority := e.Score(dark, ctx, 0)
+	litPriority := e.Score(lit, ctx, 0)
+	if darkPriority.Priority <= litPriority.Priority {
+		t.Fatalf("dark contact priority %v <= lit boat %v", darkPriority.Priority, litPriority.Priority)
+	}
+	foundDark := false
+	for _, reason := range darkPriority.Reasons {
+		if reason.Scorer == "dark" && reason.Note == "dark contact: no navigation lights at night" {
+			foundDark = true
+		}
+	}
+	if !foundDark {
+		t.Fatalf("dark-contact reason missing: %+v", darkPriority.Reasons)
+	}
+
+	policy := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"dark vessels"}}}
+	boosted := e.Score(dark, &Context{Policy: policy, Now: time.Now()}, 0)
+	if boosted.Priority <= darkPriority.Priority {
+		t.Fatalf("dark-vessel alias did not boost priority: %v <= %v", boosted.Priority, darkPriority.Priority)
+	}
+	policy = &pb.Policy{Interest: &pb.Interest{SuppressLabels: []string{"vessels running dark"}}}
+	suppressed := e.Score(dark, &Context{Policy: policy, Now: time.Now()}, 0)
+	if !suppressed.Suppressed {
+		t.Fatalf("dark-vessel alias did not suppress: %+v", suppressed)
+	}
+	policy = &pb.Policy{ScorerWeights: map[string]float64{"dark": 0}}
+	disabled := e.Score(dark, &Context{Policy: policy, Now: time.Now()}, 0)
+	for _, reason := range disabled.Reasons {
+		if reason.Scorer == "dark" {
+			t.Fatalf("disabled dark scorer still emitted a reason: %+v", disabled.Reasons)
+		}
+	}
+}

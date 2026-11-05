@@ -19,6 +19,7 @@ import (
 	"math"
 	"math/rand"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -42,6 +43,20 @@ type Capture struct {
 	Geo        *pb.Geo
 	Hints      map[string]string // ground truth for the mock analyzer; ignored by real ones
 	Tags       map[string]string
+}
+
+func boxIoU(a, b *pb.Box) float64 {
+	if a == nil || b == nil || a.W <= 0 || a.H <= 0 || b.W <= 0 || b.H <= 0 {
+		return 0
+	}
+	ix := math.Max(0, math.Min(float64(a.X+a.W), float64(b.X+b.W))-math.Max(float64(a.X), float64(b.X)))
+	iy := math.Max(0, math.Min(float64(a.Y+a.H), float64(b.Y+b.H))-math.Max(float64(a.Y), float64(b.Y)))
+	intersection := ix * iy
+	union := float64(a.W*a.H+b.W*b.H) - intersection
+	if union <= 0 {
+		return 0
+	}
+	return intersection / union
 }
 
 type Source interface {
@@ -82,9 +97,10 @@ type Ingester struct {
 	log *slog.Logger
 	ent *ulid.MonotonicEntropy
 	// OnItem is called after each item is stored and scored.
-	OnItem func(*store.Row)
-	Count  int64
-	Dups   int64 // captures folded into an existing item (exact hash or sighting DUPLICATE); read via Deduped
+	OnItem  func(*store.Row)
+	OnBurst func(source string, fps float64, d time.Duration, reason string)
+	Count   int64
+	Dups    int64 // captures folded into an existing item (exact hash or sighting DUPLICATE); read via Deduped
 	// Replaced counts in-place key-frame replacements (sightings mode).
 	Replaced int64
 	// sightings maps an open sighting id to the item currently carrying its
@@ -141,6 +157,12 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		resp, err = g.an.Analyze(ctx, inference.Frame{Image: c.Data, Source: c.Source, CapturedAt: c.CapturedAt}, g.cfg.KnownLabels, c.Hints)
 		if err != nil {
 			return nil, fmt.Errorf("analyze: %w", err)
+		}
+		if resp.Burst != nil && resp.Burst.Fps > 0 && resp.Burst.DurationS > 0 && g.OnBurst != nil {
+			d := time.Duration(resp.Burst.DurationS * float64(time.Second))
+			if d > 0 {
+				g.OnBurst(c.Source, resp.Burst.Fps, d, resp.Burst.Reason)
+			}
 		}
 		if g.cfg.Dedup == DedupSightings {
 			if len(resp.Sightings) > 0 {
@@ -225,19 +247,33 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Sighting) {
 	f := it.Features
 	f.Detections, f.Embedding, f.Unknownness, f.ModelId = resp.Detections, resp.Embedding, resp.Unknownness, resp.ModelId
-	if s == nil {
-		return
-	}
-	if s.KeyDetection != nil {
-		f.Detections = []*pb.Detection{s.KeyDetection}
-	}
-	if len(s.Embedding) > 0 {
-		f.Embedding, f.Unknownness = s.Embedding, s.Unknownness
-	} else if len(resp.Sightings) > 1 {
-		f.Embedding = nil // the frame embedding belongs to one of several objects; do not guess
-	}
 	if f.Tags == nil {
 		f.Tags = map[string]string{}
+	}
+	if s != nil {
+		if s.KeyDetection != nil {
+			f.Detections = []*pb.Detection{s.KeyDetection}
+			for _, detection := range resp.Detections {
+				if detection != s.KeyDetection && strings.EqualFold(detection.GetLabel(), "dark contact") &&
+					boxIoU(detection.GetBox(), s.KeyDetection.GetBox()) >= 0.5 {
+					f.Detections = append(f.Detections, detection)
+				}
+			}
+		}
+		if len(s.Embedding) > 0 {
+			f.Embedding, f.Unknownness = s.Embedding, s.Unknownness
+		} else if len(resp.Sightings) > 1 {
+			f.Embedding = nil // the frame embedding belongs to one of several objects; do not guess
+		}
+	}
+	for _, detection := range f.Detections {
+		if strings.EqualFold(detection.GetLabel(), "dark contact") {
+			f.Tags["dark_contact"] = "1"
+			break
+		}
+	}
+	if s == nil {
+		return
 	}
 	f.Tags["sighting_id"] = s.Id
 	f.Tags["event"] = eventTag(s.Event)

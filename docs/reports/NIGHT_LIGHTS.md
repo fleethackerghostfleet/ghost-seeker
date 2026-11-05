@@ -309,7 +309,7 @@ go run ./cmd/bench
 go run ./cmd/ghost-seeker -addr :8090 -auto-cdr 0
 ```
 
-Build/vet/all Go tests pass; parity covers all 15 demo contacts including rule ID, gated boost and low-confidence state. Node: 24 tests pass; Python: 74 tests pass. Ordinary-library regression floors pass.
+Build/vet/all Go tests pass; parity covers all 15 demo contacts including rule ID, gated boost and low-confidence state. Node: 27 tests pass; Python: 90 tests pass. Ordinary-library regression floors pass.
 
 Bench seeds 101,102,103 × 6000 frames; results unchanged from origin/main (3699324), using ordinary Library only. **Bench oracle ≠ field truth**.
 
@@ -336,3 +336,76 @@ Screenshots are local evidence under `~/shots/night-{feed,detail}-{1280,360}.png
 - Rule signatures cover selected COLREGS configurations, not the entire legal standard. White stern/anchor/tow/power-driven ambiguities and local-law blue lights remain explicit.
 - Hard-dev informed design; held-out splits reduce tuning leakage but cannot resolve the synthetic-to-real gap. The gate's zero automatic boosts on hard splits trades false alerts for missed urgent vessels.
 - All interpretations require visual/operator verification. No automatic manoeuvring or operational safety claim is supported.
+
+## Burst frame rate and dark contacts (ported from dynamic-interest)
+
+Night-lights analysis can request a temporary higher capture rate for a possible
+flashing yellow light, an unresolved flashing rate, an unresolved light stack,
+or a low-confidence pattern. A per-source Python `BurstController` grants or
+denies requests against a sliding-window duty cap, extends a current interval
+when allowed, and reports source-rate degradation. Dark-contact analysis is
+limited to night-gated optical frames and vessel-like labels. It searches for
+navigation lights in a clipped box expanded above and around the hull box, so
+masthead lights above the hull count; a contact is flagged only when no lights
+are detected in any frame.
+
+Shared settings live in `internal/catalog/colregs_night_config.json` and are
+loaded by Python and embedded by Go:
+
+| Setting | Default |
+|---|---:|
+| Base / burst rate | 1 / 8 fps |
+| Burst duration | 3 s |
+| Maximum burst duty / window | 0.2 / 60 s |
+| Dark-contact search: side / above / below | 0.15× width / 1.5× max(height, 4 px) / 0.1× height |
+| Dark-contact label / priority weight | `dark contact` / 1.0 |
+
+The sidecar keeps one controller per source and appends a separate
+`dark contact` detection using the hull's normalized box. `AnalyzeResponse`
+field 7 (`NightBurst`) carries granted requests. The edge invokes
+`Ingester.OnBurst`; replay connects it to `Replay.Burst`, which temporarily
+shortens the replay period and returns to the base period at the deadline.
+There is no new capture subsystem. The `dark` scorer uses the highest
+above-threshold dark-contact confidence and has a policy weight override
+(`ScorerWeights["dark"]`, including zero). Interest boost/suppress matching
+normalizes “dark vessel(s),” “dark ship,” “running dark,” “vessel(s) running
+dark,” and “dark contacts” to `dark contact`.
+
+The deterministic, in-memory evaluation uses 28 examples per dark-contact
+scenario, with separate seeds for each split/tier. Easy samples use the
+existing `render`; hard samples use `hard_scene`/`hard_contact` without harbor
+lights, retaining hard optical noise and rendering variability. The hard
+positive is an unlit hull; lit-vessel negatives use random rules from
+`load_rules()`. These are synthetic counts, not field-performance estimates.
+
+| Tier / split | Dark hull + vessel | Lit vessel + box | Day + box | Dark hull + buoy | TP / FP / FN | Precision / recall |
+|---|---:|---:|---:|---:|---:|---:|
+| easy / dev | 28/28 | 0/28 | 0/28 | 0/28 | 28 / 0 / 0 | 100% / 100% |
+| easy / test2 | 28/28 | 0/28 | 0/28 | 0/28 | 28 / 0 / 0 | 100% / 100% |
+| hard / dev | 28/28 | 12/28 | 0/28 | 0/28 | 28 / 12 / 0 | 70% / 100% |
+| hard / test2 | 28/28 | 12/28 | 0/28 | 0/28 | 28 / 12 / 0 | 70% / 100% |
+
+| Tier / split | Flashing yellow, 4 frames | Single-frame yellow | Complete steady pattern | Low-confidence pattern | Day | Continuous 120 s: granted / denied / duty |
+|---|---:|---:|---:|---:|---:|---:|
+| easy / dev | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
+| easy / test2 | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
+| hard / dev | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
+| hard / test2 | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
+
+The JSON reports retain per-scenario flagged/request counts and seeds:
+`edgeml/reports/nightlights/dark_burst_{easy,hard}_{dev,test2}.json`.
+Reproduce with:
+
+```sh
+cd edgeml
+~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split dev --tier easy
+~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split test2 --tier easy
+~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split dev --tier hard
+~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split test2 --tier hard
+```
+
+Limitations: evaluation is synthetic only. IR hot-blob dark contacts from
+`dynamic-interest` are not ported because ghost-seeker skips IR light rules.
+Replay burst only shortens the replay period; it does not add camera controls.
+The sliding duty cap is enforced by the per-source Python controller at the
+edge, not by Go replay.

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/vec"
 )
 
@@ -53,8 +54,9 @@ const (
 // operator interest, and detection confidence.
 func Default() *Engine {
 	return &Engine{
-		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}},
-		Weights: map[string]float64{"base": 1, "unknown": 3, "interest": 1, "confidence": 0.5},
+		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}},
+		Weights: map[string]float64{"base": 1, "unknown": 3, "interest": 1, "confidence": 0.5,
+			"dark": catalog.NightConfig.DarkContact.PriorityWeight},
 	}
 }
 
@@ -78,6 +80,9 @@ func (e *Engine) Score(it *pb.Item, ctx *Context, pullBoost float64) *pb.Score {
 	for _, s := range e.Scorers {
 		r := s.Score(it, ctx)
 		w := e.weight(s.Name(), ctx.Policy)
+		if s.Name() == "dark" && w == 0 {
+			continue
+		}
 		if r.Value != 0 {
 			sum += w * r.Value
 		}
@@ -303,7 +308,33 @@ func hasLabel(labels []string, want string) bool {
 func norm(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.TrimSuffix(s, "s")
-	return strings.ReplaceAll(s, "_", " ")
+	s = strings.ReplaceAll(s, "_", " ")
+	switch s {
+	case "dark vessel", "dark ship", "running dark", "vessel running dark", "dark contact":
+		return "dark contact"
+	case "vessels running dark":
+		return "dark contact"
+	default:
+		return s
+	}
+}
+
+type DarkContact struct{}
+
+func (DarkContact) Name() string { return "dark" }
+func (DarkContact) Score(it *pb.Item, ctx *Context) Result {
+	_, detMin := thresholds(ctx.Policy)
+	var confidence float32
+	for _, detection := range it.GetFeatures().GetDetections() {
+		if strings.EqualFold(detection.GetLabel(), catalog.NightConfig.DarkContact.Label) &&
+			detection.Confidence >= detMin && detection.Confidence > confidence {
+			confidence = detection.Confidence
+		}
+	}
+	if confidence == 0 {
+		return Result{}
+	}
+	return Result{Value: float64(confidence), Note: "dark contact: no navigation lights at night"}
 }
 
 // Confidence: a confident detection of anything is worth a little more than

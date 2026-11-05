@@ -22,6 +22,7 @@ import (
 type scripted struct {
 	script map[int][]*pb.Sighting
 	empty  map[int]bool // calls that see no detections at all (open ocean)
+	burst  *pb.NightBurst
 	calls  int
 	frames []inference.Frame
 }
@@ -29,11 +30,83 @@ type scripted struct {
 func (f *scripted) Analyze(_ context.Context, fr inference.Frame, _ []string, _ map[string]string) (*pb.AnalyzeResponse, error) {
 	f.calls++
 	f.frames = append(f.frames, fr)
-	resp := &pb.AnalyzeResponse{ModelId: "scripted", Embedding: []float32{1, 0}, Unknownness: 0.2, Sightings: f.script[f.calls]}
+	resp := &pb.AnalyzeResponse{ModelId: "scripted", Embedding: []float32{1, 0}, Unknownness: 0.2,
+		Sightings: f.script[f.calls], Burst: f.burst}
 	if !f.empty[f.calls] {
 		resp.Detections = []*pb.Detection{{Label: "boat", Confidence: 0.5, Box: &pb.Box{X: 0.1, Y: 0.1, W: 0.2, H: 0.2}}}
 	}
 	return resp, nil
+}
+
+func TestIngestCallsOnBurst(t *testing.T) {
+	an := &scripted{burst: &pb.NightBurst{Fps: 8, DurationS: 2.5, Reason: "flashing light"}}
+	g, _, clk := newIngester(t, DedupNaive, an)
+	var gotSource, gotReason string
+	var gotFPS float64
+	var gotDuration time.Duration
+	g.OnBurst = func(source string, fps float64, d time.Duration, reason string) {
+		gotSource, gotFPS, gotDuration, gotReason = source, fps, d, reason
+	}
+	if _, err := g.Ingest(context.Background(), capture(clk, 4)); err != nil {
+		t.Fatal(err)
+	}
+	if gotSource != "cam-a" || gotFPS != 8 || gotDuration != 2500*time.Millisecond || gotReason != "flashing light" {
+		t.Fatalf("OnBurst = %q, %g, %v, %q", gotSource, gotFPS, gotDuration, gotReason)
+	}
+}
+
+func TestDarkContactSightingsFeatureAndTag(t *testing.T) {
+	g, _, _ := newIngester(t, DedupSightings, &scripted{})
+	box := &pb.Box{X: 0.4, Y: 0.4, W: 0.1, H: 0.1}
+	resp := &pb.AnalyzeResponse{Detections: []*pb.Detection{
+		{Label: "boat", Confidence: 0.8, Box: box},
+		{Label: "dark contact", Confidence: 0.9, Box: &pb.Box{X: 0.41, Y: 0.41, W: 0.1, H: 0.1}},
+	}}
+	item := &pb.Item{Features: &pb.Features{}}
+	g.applyFeatures(item, resp, &pb.Sighting{Id: "s1", Event: pb.Sighting_EVENT_OPEN,
+		KeyDetection: &pb.Detection{Label: "boat", Confidence: 0.8, Box: box}})
+	if len(item.Features.Detections) != 2 || item.Features.Detections[1].Label != "dark contact" ||
+		item.Features.Tags["dark_contact"] != "1" {
+		t.Fatalf("sighting dark-contact features = %+v", item.Features)
+	}
+
+	item = &pb.Item{Features: &pb.Features{}}
+	g.applyFeatures(item, resp, nil)
+	if item.Features.Tags["dark_contact"] != "1" {
+		t.Fatalf("stateless dark-contact tag = %v", item.Features.Tags)
+	}
+
+	resp.Detections[1].Box = &pb.Box{X: 0.8, Y: 0.8, W: 0.1, H: 0.1}
+	item = &pb.Item{Features: &pb.Features{}}
+	g.applyFeatures(item, resp, &pb.Sighting{Id: "s2", Event: pb.Sighting_EVENT_OPEN,
+		KeyDetection: &pb.Detection{Label: "boat", Confidence: 0.8, Box: box}})
+	if len(item.Features.Detections) != 1 || item.Features.Tags["dark_contact"] != "" {
+		t.Fatalf("unmatched dark contact attached to sighting: %+v", item.Features)
+	}
+}
+
+func TestReplayBurstShortensAndDecays(t *testing.T) {
+	clk := clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	replay := &Replay{clk: clk, period: 10 * time.Second,
+		queue: []*Capture{{}, {}, {}, {}, {}}}
+	if _, _, err := replay.Next(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	replay.Burst(5, 500*time.Millisecond)
+	for i := 0; i < 3; i++ {
+		if _, _, err := replay.Next(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if elapsed := clk.Now().Sub(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); elapsed != 600*time.Millisecond {
+		t.Fatalf("burst elapsed = %v, want 600ms", elapsed)
+	}
+	if _, _, err := replay.Next(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := clk.Now().Sub(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); elapsed != 10*time.Second+600*time.Millisecond {
+		t.Fatalf("base-rate elapsed after burst = %v", elapsed)
+	}
 }
 
 func (f *scripted) EmbedText(context.Context, []string) ([][]float32, error) { return nil, nil }

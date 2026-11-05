@@ -43,3 +43,21 @@ func TestLibraryImages(t *testing.T) {
 		}
 	}
 }
+
+func TestNightConfig(t *testing.T) {
+	if NightConfig.Burst.BaseFPS != 1 || NightConfig.Burst.BurstFPS != 8 || NightConfig.Burst.DurationS != 3 ||
+		NightConfig.Burst.MaxDuty != 0.2 || NightConfig.Burst.WindowS != 60 {
+		t.Fatalf("unexpected burst configuration: %+v", NightConfig.Burst)
+	}
+	for _, trigger := range []string{"possible_flashing_yellow", "flashing_rate_unresolved",
+		"unresolved_light_stack", "low_confidence_pattern"} {
+		if !NightConfig.Burst.Triggers[trigger] {
+			t.Errorf("burst trigger %q is not enabled", trigger)
+		}
+	}
+	if NightConfig.DarkContact.Label != "dark contact" || NightConfig.DarkContact.SidePad != 0.15 ||
+		NightConfig.DarkContact.Above != 1.5 || NightConfig.DarkContact.Below != 0.1 ||
+		NightConfig.DarkContact.PriorityWeight != 1 || len(NightConfig.DarkContact.VesselTerms) != 19 {
+		t.Fatalf("unexpected dark-contact configuration: %+v", NightConfig.DarkContact)
+	}
+}

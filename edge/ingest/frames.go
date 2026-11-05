@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -99,10 +100,13 @@ func isImage(n string) bool {
 // rate in clock time. Sets are mixed proportionally so a short set (a few
 // dolphin frames) is spread across a long one (hours of cargo ship).
 type Replay struct {
-	clk    clock.Clock
-	period time.Duration
-	queue  []*Capture
-	i      int
+	clk         clock.Clock
+	period      time.Duration
+	queue       []*Capture
+	i           int
+	mu          sync.Mutex
+	burstPeriod time.Duration
+	burstUntil  time.Time
 }
 
 func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay, error) {
@@ -159,12 +163,36 @@ func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay
 
 func (r *Replay) Len() int { return len(r.queue) }
 
+func (r *Replay) Burst(fps float64, d time.Duration) {
+	if fps <= 0 || d <= 0 {
+		return
+	}
+	period := time.Duration(float64(time.Second) / fps)
+	if period <= 0 || period >= r.period {
+		return
+	}
+	now := r.clk.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.burstPeriod = period
+	if deadline := now.Add(d); deadline.After(r.burstUntil) {
+		r.burstUntil = deadline
+	}
+}
+
 func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
 	if r.i >= len(r.queue) {
 		return nil, true, nil
 	}
 	if r.i > 0 {
-		if err := r.clk.Sleep(ctx, r.period); err != nil {
+		now := r.clk.Now()
+		r.mu.Lock()
+		period := r.period
+		if now.Before(r.burstUntil) && r.burstPeriod > 0 {
+			period = r.burstPeriod
+		}
+		r.mu.Unlock()
+		if err := r.clk.Sleep(ctx, period); err != nil {
 			return nil, false, err
 		}
 	}

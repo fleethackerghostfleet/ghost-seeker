@@ -11,6 +11,32 @@ var lightRulesJSON []byte
 //go:embed nightlights.json
 var nightJSON []byte
 
+//go:embed colregs_night_config.json
+var nightConfigJSON []byte
+
+type BurstConfig struct {
+	BaseFPS   float64         `json:"base_fps"`
+	BurstFPS  float64         `json:"burst_fps"`
+	DurationS float64         `json:"duration_s"`
+	MaxDuty   float64         `json:"max_duty"`
+	WindowS   float64         `json:"window_s"`
+	Triggers  map[string]bool `json:"triggers"`
+}
+
+type DarkContactConfig struct {
+	Label          string   `json:"label"`
+	SidePad        float64  `json:"side_pad"`
+	Above          float64  `json:"above"`
+	Below          float64  `json:"below"`
+	VesselTerms    []string `json:"vessel_terms"`
+	PriorityWeight float64  `json:"priority_weight"`
+}
+
+type NightConfigSettings struct {
+	Burst       BurstConfig       `json:"burst"`
+	DarkContact DarkContactConfig `json:"dark_contact"`
+}
+
 type LightPattern struct {
 	Layout   string   `json:"layout"`
 	Colours  []string `json:"colours"`
@@ -64,9 +90,13 @@ type NightImage struct {
 
 var LightRules []LightRule
 var NightLibrary map[string][]NightImage
+var NightConfig NightConfigSettings
 
 func init() {
 	if err := json.Unmarshal(lightRulesJSON, &LightRules); err != nil {
+		panic(err)
+	}
+	if err := json.Unmarshal(nightConfigJSON, &NightConfig); err != nil {
 		panic(err)
 	}
 	var data struct {

@@ -38,6 +38,14 @@ message AnalyzeResponse {
   // Stateless engines leave this empty and the edge falls back to per-frame
   // behaviour.
   repeated Sighting sightings = 6;
+  // Temporary higher capture rate requested by the night-lights analysis; edge decays back to its base period.
+  NightBurst burst = 7;
+}
+
+message NightBurst {
+  double fps = 1;
+  double duration_s = 2;
+  string reason = 3;
 }
 
 // Sighting is a frame's contribution to one tracked object.
