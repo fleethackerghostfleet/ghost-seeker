@@ -505,7 +505,7 @@ function setup(){
  vm.runInContext(policySource,context);
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
-  renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};
+  fullRenderStats=renderStats;renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};
   streamHandlers={};
   EventSource=class{addEventListener(type,handler){streamHandlers[type]=handler}};
   SRC={'EO-P7':{id:'EO-P7'}};
@@ -635,9 +635,25 @@ test('empty water has an obvious kept-on-ship label and explicit upload override
  vm.runInContext('normalizeItem(ocean)',context);
  assert.equal(vm.runInContext('topLine(ocean)',context),'No contacts · empty water');
  assert.match(vm.runInContext('uploadHTML(ocean)',context),/Empty water · kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',context),false);
  vm.runInContext("ocean.upload.override='next'",context);
  assert.match(vm.runInContext('uploadHTML(ocean)',context),/Upload next \(operator\)/);
  assert.doesNotMatch(vm.runInContext('uploadHTML(ocean)',context),/kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',context),true);
+});
+
+test('upload summary counts retained empty water separately from queued and active transfers',()=>{
+ const context=setup();
+ vm.runInContext(`
+  const upload={bytes:1000,sent:0,done:false};
+  items=[{id:'ocean',background:true,upload:{...upload}},{id:'contact',upload:{...upload}},{id:'active',upload:{...upload,sent:20}}];
+  fullRenderStats();
+ `,context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 0 held · 0 uploaded · 1 kept on ship');
+ vm.runInContext("items[0].upload.override='hold';fullRenderStats()",context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 1 held · 0 uploaded');
+ vm.runInContext("items[0].upload.override='next';fullRenderStats()",context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 2 queued · 0 held · 0 uploaded');
 });
 
 test('empty water processing chain explains local retention without claiming shore delivery',()=>{
