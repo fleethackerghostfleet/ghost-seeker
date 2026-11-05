@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -124,6 +125,44 @@ func TestAutoSentReviewUndoRestoresHumanProvenance(t *testing.T) {
 	}
 }
 
+func TestAcceptRejectsChangedDisplayedPriority(t *testing.T) {
+	l, err := reviews.Open(filepath.Join(t.TempDir(), "log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	d := store.New(10)
+	d.Add(&command.Item{ID: "active"}, 0)
+	before, _ := d.GetItem("active")
+	s := New(d)
+	s.SetReviewLog(l)
+	post := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, httptest.NewRequest("POST", "/api/items/active/review", strings.NewReader(body)))
+		return w
+	}
+	stale := before.CentralTier%4 + 1
+	w := post(fmt.Sprintf(`{"reviewer":"A","action":"accept","tier":%d}`, stale))
+	if w.Code != 409 || !strings.Contains(w.Body.String(), "model priority changed") {
+		t.Fatalf("stale accept: %d %s", w.Code, w.Body.String())
+	}
+	after, _ := d.GetItem("active")
+	if after.Reviewed || after.Manual != before.Manual || l.Summary().Count != 0 {
+		t.Fatalf("stale accept changed item or review log: %+v", after)
+	}
+	w = post(fmt.Sprintf(`{"reviewer":"A","action":"accept","tier":%d}`, before.CentralTier))
+	if w.Code != 200 {
+		t.Fatalf("refreshed accept: %d %s", w.Code, w.Body.String())
+	}
+	after, _ = d.GetItem("active")
+	if !after.Reviewed || after.Manual != before.CentralTier || l.Summary().Count != 1 {
+		t.Fatalf("refreshed accept was not saved: %+v", after)
+	}
+	if w = post(`{"reviewer":"A","action":"accept"}`); w.Code != 200 {
+		t.Fatalf("legacy accept without tier: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestReviewPreservesEscalation(t *testing.T) {
 	for _, action := range []string{"tier", "accept", "dismiss"} {
 		t.Run(action, func(t *testing.T) {
@@ -139,7 +178,12 @@ func TestReviewPreservesEscalation(t *testing.T) {
 			s := New(d)
 			s.SetReviewLog(l)
 			w := httptest.NewRecorder()
-			s.ServeHTTP(w, httptest.NewRequest("POST", "/api/items/i/review", strings.NewReader(`{"reviewer":"A","action":"`+action+`","tier":2}`)))
+			tier := 2
+			if action == "accept" {
+				item, _ := d.GetItem("i")
+				tier = item.CentralTier
+			}
+			s.ServeHTTP(w, httptest.NewRequest("POST", "/api/items/i/review", strings.NewReader(fmt.Sprintf(`{"reviewer":"A","action":%q,"tier":%d}`, action, tier))))
 			if w.Code != 200 {
 				t.Fatal(w.Body.String())
 			}
