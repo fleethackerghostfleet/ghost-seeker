@@ -55,6 +55,15 @@ func operatorRequest(t *testing.T, policy *pb.Policy, role, id string, echelon p
 	return request
 }
 
+func attributedShipLayer(issuer, ruleID, label string) *pb.PolicyLayer {
+	return &pb.PolicyLayer{
+		Echelon:  pb.Echelon_ECHELON_SHIP,
+		IssuedBy: issuer,
+		Rules:    []*pb.InterestRule{{Id: ruleID, Author: issuer, BoostLabels: []string{label}}},
+		Emcon:    &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: issuer, Echelon: pb.Echelon_ECHELON_SHIP},
+	}
+}
+
 func TestSetPolicyOperatorAuthentication(t *testing.T) {
 	commandLayer := func() *pb.PolicyLayer {
 		return &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
@@ -364,5 +373,103 @@ func TestOperatorAttributionAndEMCONUseCallerEchelon(t *testing.T) {
 	}
 	if got.EmconSetting == nil || got.EmconSetting.Echelon != pb.Echelon_ECHELON_SHIP {
 		t.Fatalf("flattened EMCON attribution=%+v", got.EmconSetting)
+	}
+}
+
+func TestShipOperatorPreservesUntouchedPeerLayerAttribution(t *testing.T) {
+	aliceLayer := attributedShipLayer("alice", "alice-rule", "submarine")
+	aliceLayer.Emcon.Echelon = pb.Echelon_ECHELON_COMMAND
+	bobLayer := attributedShipLayer("bob", "bob-rule", "merchant")
+	svc, _ := makeOperatorService(t, &pb.Policy{
+		IssuedAtUnixMs: time.Now().UnixMilli(),
+		Layers:         []*pb.PolicyLayer{proto.Clone(aliceLayer).(*pb.PolicyLayer), proto.Clone(bobLayer).(*pb.PolicyLayer)},
+	})
+	editedBobLayer := proto.Clone(bobLayer).(*pb.PolicyLayer)
+	editedBobLayer.Rules[0].BoostLabels = []string{"tanker"}
+	request := operatorRequest(t, &pb.Policy{
+		IssuedBy: "spoof",
+		Layers: []*pb.PolicyLayer{
+			proto.Clone(aliceLayer).(*pb.PolicyLayer),
+			editedBobLayer,
+		},
+	}, "operator", "bob", pb.Echelon_ECHELON_SHIP)
+
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := response.Msg.Policy
+	if got.IssuedBy != "bob" || len(got.Layers) != 2 {
+		t.Fatalf("policy attribution/layers=%+v", got)
+	}
+	alice := got.Layers[0]
+	if alice.IssuedBy != "alice" || alice.Rules[0].Author != "alice" ||
+		alice.Emcon.SetBy != "alice" || alice.Emcon.Echelon != pb.Echelon_ECHELON_SHIP {
+		t.Fatalf("untouched alice layer attribution=%+v", alice)
+	}
+	bob := got.Layers[1]
+	if bob.IssuedBy != "bob" || bob.Rules[0].Author != "bob" || bob.Emcon.SetBy != "bob" {
+		t.Fatalf("edited bob layer attribution=%+v", bob)
+	}
+}
+
+func TestShipOperatorEditingPeerLayerTakesAttribution(t *testing.T) {
+	aliceLayer := attributedShipLayer("alice", "alice-rule", "submarine")
+	svc, _ := makeOperatorService(t, &pb.Policy{
+		IssuedAtUnixMs: time.Now().UnixMilli(),
+		Layers:         []*pb.PolicyLayer{proto.Clone(aliceLayer).(*pb.PolicyLayer)},
+	})
+	editedAliceLayer := proto.Clone(aliceLayer).(*pb.PolicyLayer)
+	editedAliceLayer.Rules = append(editedAliceLayer.Rules, &pb.InterestRule{
+		Id: "added-rule", Author: "alice", BoostLabels: []string{"tanker"},
+	})
+	request := operatorRequest(t, &pb.Policy{Layers: []*pb.PolicyLayer{editedAliceLayer}},
+		"operator", "bob", pb.Echelon_ECHELON_SHIP)
+
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := response.Msg.Policy
+	if len(got.Layers) != 1 {
+		t.Fatalf("layers=%+v", got.Layers)
+	}
+	layer := got.Layers[0]
+	if layer.IssuedBy != "bob" || layer.Emcon.SetBy != "bob" {
+		t.Fatalf("edited peer layer attribution=%+v", layer)
+	}
+	for _, rule := range layer.Rules {
+		if rule.Author != "bob" {
+			t.Fatalf("edited peer rule attribution=%+v", rule)
+		}
+	}
+}
+
+func TestShipOperatorMatchesUntouchedPeerLayerOnlyOnce(t *testing.T) {
+	aliceLayer := attributedShipLayer("alice", "alice-rule", "submarine")
+	svc, _ := makeOperatorService(t, &pb.Policy{
+		IssuedAtUnixMs: time.Now().UnixMilli(),
+		Layers:         []*pb.PolicyLayer{proto.Clone(aliceLayer).(*pb.PolicyLayer)},
+	})
+	request := operatorRequest(t, &pb.Policy{Layers: []*pb.PolicyLayer{
+		proto.Clone(aliceLayer).(*pb.PolicyLayer),
+		proto.Clone(aliceLayer).(*pb.PolicyLayer),
+	}}, "operator", "bob", pb.Echelon_ECHELON_SHIP)
+
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := response.Msg.Policy
+	if len(got.Layers) != 2 {
+		t.Fatalf("layers=%+v", got.Layers)
+	}
+	if layer := got.Layers[0]; layer.IssuedBy != "alice" ||
+		layer.Rules[0].Author != "alice" || layer.Emcon.SetBy != "alice" {
+		t.Fatalf("first peer layer attribution=%+v", layer)
+	}
+	if layer := got.Layers[1]; layer.IssuedBy != "bob" ||
+		layer.Rules[0].Author != "bob" || layer.Emcon.SetBy != "bob" {
+		t.Fatalf("second peer layer attribution=%+v", layer)
 	}
 }

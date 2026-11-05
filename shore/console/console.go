@@ -165,15 +165,16 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		}
 	}
 	if s.Operators != nil {
+		peerUntouched := untouchedPeerLayers(p, prev, op)
 		p.IssuedBy = op.ID
-		for _, layer := range p.Layers {
+		for index, layer := range p.Layers {
 			if layer == nil {
 				continue
 			}
 			if layer.Echelon <= op.Echelon && layer.Emcon != nil {
 				layer.Emcon.Echelon = layer.Echelon
 			}
-			if layer.Echelon == op.Echelon {
+			if layer.Echelon == op.Echelon && !peerUntouched[index] {
 				layer.IssuedBy = op.ID
 				for _, rule := range layer.Rules {
 					if rule != nil {
@@ -259,6 +260,30 @@ func authorizeOperatorLayers(request, stored *pb.Policy, operator unitauth.Opera
 		}
 	}
 	return nil
+}
+
+func untouchedPeerLayers(request, stored *pb.Policy, operator unitauth.Operator) map[int]bool {
+	untouched := make(map[int]bool)
+	if request == nil || stored == nil {
+		return untouched
+	}
+	matchedStored := make(map[int]bool)
+	for requestIndex, requestedLayer := range request.Layers {
+		if requestedLayer == nil || requestedLayer.Echelon != operator.Echelon {
+			continue
+		}
+		for storedIndex, storedLayer := range stored.Layers {
+			if storedLayer == nil || matchedStored[storedIndex] ||
+				storedLayer.Echelon != operator.Echelon || storedLayer.IssuedBy == operator.ID ||
+				!proto.Equal(requestedLayer, storedLayer) {
+				continue
+			}
+			matchedStored[storedIndex] = true
+			untouched[requestIndex] = true
+			break
+		}
+	}
+	return untouched
 }
 
 func matchingStoredLayer(requested *pb.PolicyLayer, stored []*pb.PolicyLayer, matched map[int]bool) int {
