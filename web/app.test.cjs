@@ -853,7 +853,8 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),ctx);
  vm.runInContext(src.slice(src.indexOf('function linkPanelHTML('),src.indexOf('const pulling=new Set();')),ctx);
  vm.runInContext('renderSimLink()',ctx);
- assert.match(el.innerHTML,/Ship-to-shore connection<\/span> <b>0.50 MB\/s<\/b><span class="hint">Changes every 5 s<\/span>/);
+ assert.match(el.innerHTML,/Ship-to-shore connection<\/span> <b>0.50 MB\/s<\/b>$/);
+ assert.doesNotMatch(el.innerHTML,/every|hint/i);
  assert.doesNotMatch(el.innerHTML,/simulated/i);
  assert.doesNotMatch(el.innerHTML,/estimat/i);
  assert.equal(el.classList.on.has('down'),false);
