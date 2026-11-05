@@ -354,3 +354,71 @@ func TestShoreViewHidesExpiredRulesAndWholePolicyExpiry(t *testing.T) {
 		t.Fatalf("next expiry=%v, want the submarine rule's deadline", next)
 	}
 }
+
+func TestNewerEmconDirectiveSupersedesOlderOne(t *testing.T) {
+	shore := newStatefulShore(t, &pb.Policy{Interest: &pb.Interest{}})
+	bridge := New(shore.server.URL, "", nil)
+	bridge.Compiler = &command.Compiler{}
+	handler := NewConsole(bridge).Handler()
+
+	older := postDirective(t, handler, `{"text":"go quiet for 30 minutes"}`)
+	newer := postDirective(t, handler, `{"text":"burst mode for 10 minutes"}`)
+	stored := shore.stored()
+	if len(stored.Layers[0].Rules) != 1 || stored.Layers[0].Rules[0].Id != newer["id"] {
+		t.Fatalf("rules=%+v, want only the newer EMCON directive", stored.Layers[0].Rules)
+	}
+	var directives []command.Directive
+	getJSON(t, handler, "/api/directives", &directives)
+	if len(directives) != 1 || directives[0].ID != newer["id"] {
+		t.Fatalf("directives=%+v", directives)
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/directives/"+older["id"].(string), nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("deleting the superseded directive: status=%d, want 404", rec.Code)
+	}
+	if _, _, e := effective(policy.Flatten(shore.stored(), "", time.Now())); e != pb.EmconMode_EMCON_MODE_BURST {
+		t.Fatalf("emcon=%v, want BURST kept", e)
+	}
+
+	// The EMCON control takes over: the directive no longer owns the setting,
+	// so it leaves the list and removing it cannot cancel the chosen mode.
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/policy/emcon", strings.NewReader(`{"mode":"SILENT"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("EMCON control status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	stored = shore.stored()
+	if len(stored.Layers[0].Rules) != 0 || stored.Layers[0].Emcon.Mode != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("after EMCON control rules=%+v emcon=%+v", stored.Layers[0].Rules, stored.Layers[0].Emcon)
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/directives", nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("clear status=%d", rec.Code)
+	}
+	if _, _, e := effective(policy.Flatten(shore.stored(), "", time.Now())); e != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("emcon=%v after clearing directives, want the control's SILENT kept", e)
+	}
+}
+
+func TestDirectiveOnTimedFlatEmconKeepsItsDeadline(t *testing.T) {
+	// A flat policy with Emcon but no EmconSetting (older writers) and a
+	// whole-policy deadline: the deadline moves onto the layer EMCON.
+	now := time.Now()
+	deadline := now.Add(10 * time.Minute).UnixMilli()
+	shore := newStatefulShore(t, &pb.Policy{Id: "flat", IssuedBy: "someone", Interest: &pb.Interest{},
+		Emcon: pb.EmconMode_EMCON_MODE_SILENT, ExpiresAtUnixMs: deadline})
+	handler := NewConsole(New(shore.server.URL, "", nil)).Handler()
+	postDirective(t, handler, `{"text":"ignore birds","rules":[{"type":"suppress","classes":["bird"]}]}`)
+	stored := shore.stored()
+	if stored.ExpiresAtUnixMs != 0 || len(stored.Layers) != 1 || stored.Layers[0].GetEmcon().GetExpiresAtUnixMs() != deadline {
+		t.Fatalf("stored=%+v, want the flat deadline on the layer EMCON", stored)
+	}
+	if _, _, e := effective(policy.Flatten(stored, "", now)); e != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("emcon now=%v", e)
+	}
+	if s, _, e := effective(policy.Flatten(stored, "", now.Add(11*time.Minute))); e != pb.EmconMode_EMCON_MODE_NORMAL || !sameLabels(s, "bird") {
+		t.Fatalf("+11m emcon=%v suppress=%v, want NORMAL with the new rule intact", e, s)
+	}
+}

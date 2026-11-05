@@ -1258,6 +1258,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 				operatorLayer = len(pol.Layers) - 1
 			}
 		}
+		pol.Layers[operatorLayer].Rules = withoutEmconOnlyRules(pol.Layers[operatorLayer].Rules)
 		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
 	} else {
 		rules := make([]*pb.InterestRule, 0, 2)

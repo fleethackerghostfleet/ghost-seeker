@@ -85,7 +85,7 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string, r
 	if replace {
 		layer.Rules = []*pb.InterestRule{rule}
 	} else {
-		layer.Rules = append(newestWins(layer.Rules, rule, now), rule)
+		layer.Rules = append(newestWins(layer.Rules, rule, now, mode != "" && !emconLocked), rule)
 	}
 	if mode != "" && !emconLocked {
 		layer.Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon, ExpiresAtUnixMs: ruleExpiryUnixMs}
@@ -121,10 +121,11 @@ func (b *Bridge) addDirective(ctx context.Context, pol *pb.Policy) (*pb.SetPolic
 }
 
 // removeDirectives drops the operator's own rules (all of them when ids is
-// empty) from the current shore policy. A removed directive that carried an
-// EMCON phrase takes the operator's EMCON back to NORMAL with it; other
-// operators' layers, higher-echelon layers and locks are untouched, as is an
-// EMCON chosen from the EMCON control (it has no directive).
+// empty) from the current shore policy. Removing the directive the current
+// EMCON setting came from (emconOwner) takes the operator's EMCON back to
+// NORMAL with it; other operators' layers, higher-echelon layers and locks
+// are untouched, as is an EMCON chosen from the EMCON control or a newer
+// EMCON directive.
 func (b *Bridge) removeDirectives(ctx context.Context, ids []string) (*pb.SetPolicyResponse, error) {
 	current, err := b.getPolicy(ctx)
 	if err != nil {
@@ -158,13 +159,14 @@ func (b *Bridge) removeDirectives(ctx context.Context, ids []string) (*pb.SetPol
 	}
 	kept := make([]*pb.InterestRule, 0, len(layer.Rules))
 	removed, resetEmcon := 0, false
+	owner := emconOwner(layer)
 	for _, rule := range layer.Rules {
 		if rule == nil {
 			continue
 		}
 		if len(ids) == 0 || want[rule.Id] {
 			removed++
-			if m, _ := command.SplitEmcon(rule.Text); m != "" {
+			if rule == owner {
 				resetEmcon = true
 			}
 			continue
@@ -267,11 +269,18 @@ func wrapFlatPolicy(current *pb.Policy, issuedBy string, echelon pb.Echelon) []*
 	}
 	if setting := current.GetEmconSetting(); setting != nil && setting.Mode != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		layer.Emcon = proto.Clone(setting).(*pb.EmconSetting)
+	} else if current.GetEmcon() != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+		layer.Emcon = &pb.EmconSetting{Mode: current.GetEmcon(), SetBy: current.GetIssuedBy()}
+	}
+	if layer.Emcon != nil {
 		if layer.Emcon.ExpiresAtUnixMs == 0 {
 			layer.Emcon.ExpiresAtUnixMs = current.GetExpiresAtUnixMs()
 		}
 		if layer.Emcon.Echelon == pb.Echelon_ECHELON_UNSPECIFIED {
 			layer.Emcon.Echelon = echelon
+		}
+		if layer.Emcon.SetBy == "" {
+			layer.Emcon.SetBy = issuedBy
 		}
 	}
 	return []*pb.PolicyLayer{layer}
@@ -326,8 +335,9 @@ func newRuleID(existing []*pb.InterestRule, now time.Time) string {
 // newestWins returns the operator's older rules with the labels the newest
 // directive names removed (whichever polarity they had) and with expired
 // rules pruned; a rule left without labels by the trim is dropped, a rule
-// that never had labels (an EMCON-only directive) is kept.
-func newestWins(rules []*pb.InterestRule, newest *pb.InterestRule, now time.Time) []*pb.InterestRule {
+// that never had labels (an EMCON-only directive) is kept unless the newest
+// directive sets EMCON itself (setsEmcon), which supersedes it.
+func newestWins(rules []*pb.InterestRule, newest *pb.InterestRule, now time.Time, setsEmcon bool) []*pb.InterestRule {
 	trim := map[string]bool{}
 	for _, l := range append(append([]string(nil), newest.BoostLabels...), newest.SuppressLabels...) {
 		trim[normLabel(l)] = true
@@ -337,6 +347,9 @@ func newestWins(rules []*pb.InterestRule, newest *pb.InterestRule, now time.Time
 		if old == nil || (old.ExpiresAtUnixMs > 0 && now.UnixMilli() >= old.ExpiresAtUnixMs) {
 			continue
 		}
+		if setsEmcon && emconOnlyRule(old) {
+			continue
+		}
 		had := len(old.BoostLabels) + len(old.SuppressLabels)
 		old.BoostLabels = withoutLabels(old.BoostLabels, trim)
 		old.SuppressLabels = withoutLabels(old.SuppressLabels, trim)
@@ -344,6 +357,52 @@ func newestWins(rules []*pb.InterestRule, newest *pb.InterestRule, now time.Time
 			continue
 		}
 		out = append(out, old)
+	}
+	return out
+}
+
+// emconOnlyRule is a directive that only set the transmit posture ("go quiet
+// for 1 minute"): no labels, an EMCON phrase in its words.
+func emconOnlyRule(rule *pb.InterestRule) bool {
+	if rule == nil || len(rule.BoostLabels)+len(rule.SuppressLabels) > 0 {
+		return false
+	}
+	mode, _ := command.SplitEmcon(rule.Text)
+	return mode != ""
+}
+
+// emconOwner is the layer rule whose EMCON phrase the layer's current EMCON
+// setting came from: the newest rule naming that mode with the same deadline.
+// A later EMCON directive or a choice on the EMCON control (no deadline, or
+// another mode) leaves older EMCON directives without ownership.
+func emconOwner(layer *pb.PolicyLayer) *pb.InterestRule {
+	setting := layer.GetEmcon()
+	if setting == nil || setting.Mode == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+		return nil
+	}
+	for i := len(layer.Rules) - 1; i >= 0; i-- {
+		rule := layer.Rules[i]
+		if rule == nil {
+			continue
+		}
+		if mode, _ := command.SplitEmcon(rule.Text); mode == "" {
+			continue
+		} else if mode == emconName(setting.Mode) && rule.ExpiresAtUnixMs == setting.ExpiresAtUnixMs {
+			return rule
+		}
+		return nil
+	}
+	return nil
+}
+
+// withoutEmconOnlyRules drops the EMCON-only directives from a layer's rules,
+// for when the EMCON control replaces the posture they asked for.
+func withoutEmconOnlyRules(rules []*pb.InterestRule) []*pb.InterestRule {
+	out := make([]*pb.InterestRule, 0, len(rules))
+	for _, rule := range rules {
+		if rule != nil && !emconOnlyRule(rule) {
+			out = append(out, rule)
+		}
 	}
 	return out
 }
@@ -407,8 +466,7 @@ func (b *Bridge) directives(pol *pb.Policy, now time.Time) []command.Directive {
 	entry := func(layer *pb.PolicyLayer, rule *pb.InterestRule) (command.Directive, bool) {
 		own := layer.Echelon == echelon && layer.IssuedBy == issuedBy
 		rules := policyRules(rule.Id, rule.SuppressLabels, rule.BoostLabels)
-		emcon, _ := command.SplitEmcon(rule.Text)
-		if len(rules) == 0 && !(own && emcon != "") {
+		if len(rules) == 0 && !(own && emconOwner(layer) != nil && emconOwner(layer).Id == rule.Id) {
 			return command.Directive{}, false
 		}
 		text := strings.TrimSpace(rule.Text)
