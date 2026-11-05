@@ -29,3 +29,27 @@ dev:
   seaships7000: "upstream train/valid splits"
   ghost_fleet_5fps: [A_ship_in_the_distance, Canadian_Coast_Guard_Helicopter_Landing, Chase_N_Fish_Sharky, Cruise_ship_Mediterranean_sunset_off_Italy, Far_away_but_did_you_see_that_splash, Sailing_POV_Corfu_Paxos, Ship_in_the_Distance_Utopia_of_the_Seas, Submarine_surfacing, Two_Dolphins_near_the_coast_of_Gibraltar]
   fvessel_clip10: [fvessel_clip01, fvessel_clip02, fvessel_clip03, fvessel_clip04, fvessel_clip06, fvessel_clip08, fvessel_clip10]
+  ghost_fleet_r2_1fps:
+    - Cruise_Ship_POV
+    - Dolphins_Pungo_Ferry_Bridge
+    - NCL_Breakaway_Bomb_Cyclone
+    - Pacific_Ocean_at_night_from_Cruise_Balcony
+    - Partially_Obstructed_Balcony
+    - Sailing_drone_inside_a_hurricane
+    - Ship_crossing_Mariana_Trench
+    - Sunrise_Somewhere_in_the_Ocean
+    - Tarpon_Offshore
+    - Whale_Watching_in_Northern_Peru
+    - Argentina_to_Alaska_Cruise_Bridge_Timelapse
+    - 30_Days_at_Sea_Timelapse_w1
+    - 30_Days_at_Sea_Timelapse_w196
+    - 30_Days_at_Sea_Timelapse_w390
+    - 30_Days_at_Sea_Timelapse_w585
+    - Cargo_Ship_Storm_first_hour_w1
+    - Cargo_Ship_Storm_first_hour_w1181
+    - Cargo_Ship_Storm_first_hour_w2361
+    - Cargo_Ship_Storm_first_hour_w3541
+    - Cargo_Ship_Uncut_View_w1
+    - Cargo_Ship_Uncut_View_w2981
+    - Cargo_Ship_Uncut_View_w4515
+    - Cargo_Ship_Uncut_View_w8941
