@@ -97,12 +97,16 @@ type Item struct {
 	Sent        bool       `json:"sent"`
 	SentAt      *time.Time `json:"sentAt,omitempty"`
 	// Commander's final decision on an image the watch floor escalated.
-	Decision     string           `json:"decision,omitempty"`
-	DecisionNote string           `json:"decisionNote,omitempty"`
-	DecidedAt    *time.Time       `json:"decidedAt,omitempty"`
-	Lat          Latency          `json:"lat"`
-	Dets         []Detection      `json:"dets"`
-	Det          []DetectionScore `json:"det"`
+	Decision     string     `json:"decision,omitempty"`
+	DecisionNote string     `json:"decisionNote,omitempty"`
+	DecidedAt    *time.Time `json:"decidedAt,omitempty"`
+	// Operator override: send the original image at full size, no compression.
+	FullRes   bool             `json:"fullRes,omitempty"`
+	FullResBy string           `json:"fullResBy,omitempty"`
+	FullResAt *time.Time       `json:"fullResAt,omitempty"`
+	Lat       Latency          `json:"lat"`
+	Dets      []Detection      `json:"dets"`
+	Det       []DetectionScore `json:"det"`
 }
 
 type Stats struct {

@@ -90,7 +90,7 @@ sync auth is off, and edge storage is unlimited (no age/staleness deletion).
 | shore / mint tool | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset |
 | edge | `-unit-token` | `GS_UNIT_TOKEN` | unset |
 | edge | `-unit-token-file` | `GS_UNIT_TOKEN_FILE` | unset |
-| edge | `-max-bytes` | `GS_EDGE_MAX_BYTES` | `0` (unlimited) |
+| edge | `-max-bytes` (form payloads plus originals kept for full-size overrides) | `GS_EDGE_MAX_BYTES` | `0` (unlimited) |
 | edge | `-max-items` | `GS_EDGE_MAX_ITEMS` | `0` (unlimited) |
 
 File credentials take precedence over literal/env credentials. Shore requires a
@@ -172,6 +172,61 @@ order, promoting an item's next rung when a form fits entirely; suppressed or
 below-threshold images sort in a lower tier and drain only when nothing
 better is waiting ("if we have bandwidth, use it").
 
+## Payload encoding
+
+Form generation (`edge/ingest/forms.go`) and the transport (`edge/link`) own
+compression; the scheduler only sees each form's byte count and `Mime`.
+
+| form | encoding | defaults (`ingest.DefaultConfig`, `bin/edge` flags) |
+|---|---|---|
+| `FACT` | compact JSON (`internal/fact`) | — |
+| `THUMB` | JPEG, fitted within W×H (aspect kept, never upscaled), CatmullRom downscale; grayscale (IR) stays single-channel | 160×160, q55 (`-thumb-width`, `-thumb-height`, `-thumb-quality`) |
+| `CROP` | JPEG at native resolution. Sighting items (`-dedup sightings`): the key detection box ×1.5 about its centre, at least 96 px per side. Other items: the union of the analyzer's detection boxes, padded per side by a fraction of the box size. Skipped when there are no boxes, the crop would exceed 60% of the frame, or it would not be smaller than FULL (FULL is the next useful rung). Also skipped for unknown items (unknownness ≥ the policy's `unknownMin`, default 0.5): their whole frame is kept for later training, so they go THUMB → FULL | pad 0.15, q80 (`-crop-pad`, `-crop-quality`; `-crop-unknowns` to crop unknowns too) |
+| `FULL` | JPEG/WebP captures are sent byte-for-byte (re-encoding only adds generation loss); PNG and other formats are re-encoded as JPEG when that is smaller, unless they have transparency (JPEG has no alpha) | q90; `-full-quality 0` always sends the original bytes |
+
+`Mime` is sniffed from each form's bytes when it is stored (`edge/store`), so
+it always matches what was produced; shore stores it per form and serves
+`/blob/...` with that `Content-Type`. JPEG rather than WebP because Go has no
+pure-Go lossy WebP encoder (`x/image/webp` only decodes) and the build is
+CGO-free; an encoder can be swapped in inside `forms.go` without touching
+the scheduler, link or shore.
+
+On the replay frames, THUMB averages ~2.1 KB (was ~2.5 KB with the previous
+bilinear 160 px-wide resize), CROP ~8 KB, FULL
+~68 KB.
+
+The Connect/gRPC link gzips `ExchangeRequest`s (BestSpeed, messages ≥ 512 B)
+and the shore `SyncService` handler gzips responses to edges that accept it
+(`link.HandlerOptions`). Manifest batches and FACT JSON shrink ~10× (a
+65-item manifest+FACT exchange: 16 KB → 1.4 KB); JPEG chunks are already
+compressed and pass through at negligible overhead. The link estimator and
+budget stay in uncompressed protobuf bytes, so compression shows up as a
+higher estimated rate. The in-process simulator (`link.Sim`) charges
+uncompressed bytes.
+
+### Operator override: full size, no compression
+
+An operator can force an image to go at full size with no compression: a
+`RequestPull` whose `pull` has `"original": true` (shore or edge console).
+`requestedBy` is required, because this is a human decision that costs link
+bandwidth. The edge then sends the capture's original bytes as FULL, undoing
+any JPEG re-encode (it keeps the original whenever FULL was re-encoded), and
+holds back that item's THUMB/CROP until FULL is complete. "No compression"
+means the image bytes are not re-encoded; link gzip is lossless and leaves
+them byte-identical. The pull boost puts it at the head of the
+queue, and the edge event log records `pull-original` with the operator.
+
+    curl -s -H content-type:application/json localhost:8080/ghostseeker.v1.ConsoleService/RequestPull \
+      -d '{"pull":{"itemId":"<id>","original":true,"requestedBy":"op1"}}'
+
+In the operator web app this is the **Send full size** button. In live shore
+mode (`-shore`, the `shore.html` UI) it sits next to "Pull full image" on each
+card, asks for the operator's name and calls shore `RequestPull` with
+`original: true` through the bridge (`POST /api/shore/pull` with
+`{"itemId","form":"full","original":true,"by"}`; a blank `by` is rejected). In
+the standalone simulation it is in the image drawer and only records the
+override on the simulated item (`POST /api/items/{id}/full-res`).
+
 ## Offline image prioritization baseline
 
 [`algorithm/`](algorithm/README.md) provides the standalone CPU workflow **analyze once → rank every eligible image → select whole JPEGs within an absolute byte allowance**. Object, visual-interest and quality providers are interchangeable. The default image-redundancy comparison combines color layout with pHash. Operator policy can rerank cached evidence; changing bandwidth reuses that order.
@@ -187,15 +242,15 @@ This package is an offline image-level baseline. It is independent of `edgeml/` 
 | strategy | first unknown fact at shore | first unknown full | manifests at shore | unknowns at FACT | FULL images |
 |---|---|---|---|---|---|
 | FIFO | never | 14 s | 265 / 360 | 0 / 5 | 265 |
-| prioritized | 4 s | 8 s | 360 / 360 | 5 / 5 | 208 |
+| prioritized | 3 s | 7 s | 360 / 360 | 5 / 5 | 208 |
 
-FIFO wins raw image count because it spends zero bytes on manifests, facts and
-thumbnails; prioritized gives shore a complete picture of the backlog and
+FIFO wins raw image count because it spends zero bytes on manifests, facts,
+thumbnails and crops; prioritized gives shore a complete picture of the backlog and
 every unknown, and puts the bytes it has into what the operator asked for.
 
 ## Operator web app
 
-The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.23+, stdlib only, synthetic imagery and its own in-memory simulation for now; wiring it to the edge/shore `ConsoleService` is the next step). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
+The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.23+, stdlib only, synthetic imagery and its own in-memory simulation by default; `-shore` runs it on a live shore instead, see [docs/DEMO.md](docs/DEMO.md)). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
 
 ```sh
 go run ./cmd/ghost-seeker -addr :8090
