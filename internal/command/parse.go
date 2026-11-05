@@ -2,6 +2,7 @@ package command
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -68,6 +69,9 @@ var windowPattern = regexp.MustCompile(`\b(last|past)\s+(?:(\d+)\s*(minutes?|min
 var grammarPattern = regexp.MustCompile(`\b(prioriti\w*|boost|show|focus|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
 var wordPattern = regexp.MustCompile(`[a-z][a-z0-9-]*`)
 
+// nearShorePattern scopes a clause to the harbor-scene cameras.
+var nearShorePattern = regexp.MustCompile(`\b(?:near(?:-|\s+the\s+|\s*)shore|inshore|close (?:in|to (?:the )?shore)|coastal|littoral|harbou?rs?)\b`)
+
 func ParseDirectiveDetailed(text string) ([]Rule, []string) {
 	text = strings.ToLower(text)
 	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
@@ -90,6 +94,14 @@ func ParseDirectiveDetailed(text string) ([]Rule, []string) {
 				sources = append(sources, source.ID)
 				clause = re.ReplaceAllString(clause, " ")
 			}
+		}
+		if nearShorePattern.MatchString(clause) {
+			for _, source := range catalog.Sources {
+				if source.Scene == "harbor" && !slices.Contains(sources, source.ID) {
+					sources = append(sources, source.ID)
+				}
+			}
+			clause = nearShorePattern.ReplaceAllString(clause, " ")
 		}
 		within := 0
 		if match := windowPattern.FindStringSubmatch(clause); match != nil {
