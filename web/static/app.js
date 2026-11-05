@@ -276,6 +276,7 @@ async function init(){
  $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
  $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent'});state.tier='all';syncFeedFilters();location.hash='#feed'};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
+ $('sentShowAll').onclick=()=>{gsSettings.setFeed({review:'all'});syncFeedFilters()};
  window.addEventListener('gs:feed-filters',syncFeedFilters);syncFeedFilters();
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
  workbench.init();
