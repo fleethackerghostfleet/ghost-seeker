@@ -35,6 +35,24 @@ by `TYPE_TO_CATALOG`, otherwise `vessel`; `airplane` maps to `aircraft`;
 `bird` and `person` retain those classes; `surfboard`, `kite`, and other
 unmapped kept labels map to `unknown`. Ship type/aspect remains in ship info.
 
+## Reviewer-only join link
+
+Reviewers can open a shared link without an operator token or login page. The
+server still needs its normal operator token, supplied through
+`GS_OPERATOR_TOKEN` or `-operator-token-file`:
+
+```sh
+go run ./cmd/ghost-seeker -dataset data/review_set/manifest.json \
+  -review-link-key-file data/review-link.key -dev-token-file none
+```
+
+If absent, the key file is generated with mode `0600`. Share a URL of the form
+`https://<host>/join/<key>` using the key from that file. The URL is a bearer
+secret: anyone who has it can review, so share it privately and protect the key
+file. Reviewers can record and undo reviews but cannot change directives,
+models, policy, uploads, or Commander decisions. This option is incompatible
+with PIV authentication.
+
 Start the simulation console with durable capture:
 
 ```sh

@@ -101,7 +101,7 @@ function renderBrief(it){
 function render(){ensureSel();renderKpis();renderQueue();renderStage()}
 
 async function api(path,method='GET',body){
- if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
+ if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method,path);
  const r=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.statusText);return j;
 }
@@ -150,6 +150,7 @@ async function init(){
  $('brief').onclick=e=>{const b=e.target.closest('.dec');if(b)decide(b.dataset.d);else if(e.target.id==='reopen')decide('')};
  document.addEventListener('keydown',e=>{
   if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;
+  if(typeof gsAuth!=='undefined'&&gsAuth.reviewer())return;
   if(e.target.tagName==='TEXTAREA'){if(e.key==='Escape')e.target.blur();return}
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();

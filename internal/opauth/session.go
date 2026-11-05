@@ -27,6 +27,7 @@ const CookieName = "gs_session"
 // redirect to /login.
 type Sessions struct {
 	token               string
+	reviewJoinKey       string
 	dev                 bool
 	anyPeer             bool
 	demoAcceptAnyToken  bool
@@ -43,11 +44,17 @@ type Sessions struct {
 
 // NewSessions builds the session layer for token; dev enables loopback auto-login.
 func NewSessions(token string, dev bool) *Sessions {
-	return &Sessions{token: token, dev: dev, ttl: 12 * time.Hour, now: time.Now, sessions: map[string]time.Time{}}
+	return &Sessions{token: token, dev: dev, ttl: 12 * time.Hour, now: time.Now, bindings: map[string]pivauth.Principal{}, sessions: map[string]time.Time{}}
 }
 
 // Dev reports whether loopback auto-login is on.
 func (s *Sessions) Dev() bool { return s.dev }
+
+// WithReviewJoinKey enables the reviewer-only bearer join path.
+func (s *Sessions) WithReviewJoinKey(key string) *Sessions {
+	s.reviewJoinKey = key
+	return s
+}
 
 // DemoAcceptAnyToken permits any non-empty login token for demos only.
 // Certificate authentication does not use token login.
@@ -85,6 +92,27 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			s.wrapCerts(next).ServeHTTP(w, r)
 			return
 		}
+		if s.reviewJoinKey != "" && strings.HasPrefix(r.URL.Path, "/join/") {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			key := strings.TrimPrefix(r.URL.Path, "/join/")
+			if r.Method != http.MethodGet || key == "" || strings.Contains(key, "/") || !Equal(s.reviewJoinKey, key) {
+				http.NotFound(w, r)
+				return
+			}
+			s.issue(w, r, pivauth.Principal{Role: "reviewer"})
+			// A same-origin refresh, not a 303: browsers drop SameSite=Strict
+			// cookies on redirects that continue a cross-site navigation
+			// (a link clicked in chat or email).
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(reviewJoinPage))
+			return
+		}
+		authed := s.authenticated(r)
+		if authed && s.sessionRole(r) == "reviewer" && !reviewerRequestAllowed(r) {
+			forbiddenReviewer(w)
+			return
+		}
 		switch {
 		case r.URL.Path == "/login":
 			s.login(w, r)
@@ -96,7 +124,6 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		authed := s.authenticated(r)
 		if !authed && s.local(r) {
 			s.issue(w, r)
 			authed = true
@@ -106,7 +133,7 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 			role := ""
 			if authed {
-				role = "operator"
+				role = s.sessionRole(r)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"authenticated": authed, "dev": s.dev, "mode": "token", "id": "", "name": "", "role": role})
 			return
@@ -119,9 +146,59 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 			return
 		}
-		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, Principal{Role: "operator", Mode: "token"}))
+		principal := Principal{Role: s.sessionRole(r), Mode: "token"}
+		if principal.Role == "reviewer" && !reviewerRequestAllowed(r) {
+			forbiddenReviewer(w)
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, principal))
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Sessions) sessionRole(r *http.Request) string {
+	if Equal(s.token, BearerToken(r)) {
+		return "operator"
+	}
+	cookie, err := r.Cookie(CookieName)
+	if err != nil {
+		return "operator"
+	}
+	s.mu.Lock()
+	binding, ok := s.bindings[cookie.Value]
+	s.mu.Unlock()
+	if ok && binding.Role != "" {
+		return binding.Role
+	}
+	return "operator"
+}
+
+func reviewerRequestAllowed(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || (r.Method == http.MethodPost && r.URL.Path == "/logout") {
+		return true
+	}
+	if r.Method != http.MethodPost {
+		return false
+	}
+	path := r.URL.EscapedPath()
+	return pathResourceAction(path, "/api/items/", "/review") ||
+		pathResourceAction(path, "/api/reviews/", "/reason") ||
+		pathResourceAction(path, "/api/reviews/", "/undo")
+}
+
+func pathResourceAction(path, prefix, suffix string) bool {
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	return id != "" && !strings.Contains(id, "/")
+}
+
+func forbiddenReviewer(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]string{"code": "forbidden", "message": "reviewer sessions are limited to review actions"})
 }
 
 func (s *Sessions) authenticated(r *http.Request) bool {
@@ -140,6 +217,7 @@ func (s *Sessions) authenticated(r *http.Request) bool {
 	}
 	if s.now().After(exp) {
 		delete(s.sessions, c.Value)
+		delete(s.bindings, c.Value)
 		return false
 	}
 	return true
@@ -211,6 +289,7 @@ func (s *Sessions) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(CookieName); err == nil {
 		s.mu.Lock()
 		delete(s.sessions, c.Value)
+		delete(s.bindings, c.Value)
 		s.mu.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: secure(r), MaxAge: -1})
@@ -256,3 +335,5 @@ func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 		`<button type="submit">Sign in</button></form></body></html>`)
 	_, _ = w.Write([]byte(b.String()))
 }
+
+const reviewJoinPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/#review"><title>Ghost Seeker review</title></head><body><p><a href="/#review">Start Operator Review</a></p></body></html>`

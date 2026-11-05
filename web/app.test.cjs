@@ -79,6 +79,28 @@ test('review suggestions alone use the overlay and retain busy buttons',()=>{
  assert.equal(box.innerHTML,'');
  assert.ok(!classes.has('rvask-suggestion'));
 });
+test('repeated reviewer overrides do not prompt to add a learning rule',async()=>{
+ const context=setup();
+ vm.runInContext(`
+  gsAuth={reviewer:()=>true};reviewerName='Alice';state.page='rv';
+  CLS={vessel:{lab:'Vessel'}};
+  overrideCount=0;suggestionChecks=0;
+  gsLearn={
+   record:()=>{overrideCount++;return{}},
+   suggestion:()=>{suggestionChecks++;return overrideCount>=5?{cls:'vessel',dir:'lower',n:5,of:5}:null}
+  };
+  submitReview=()=>Promise.resolve({});
+  rvPress=()=>{};rvFlash=()=>{};
+  items=Array.from({length:5},(_,i)=>({id:'override-'+i,src:{id:i%2?'EO-P7':'IR-S1'},centralTier:3,manual:0,reviewed:false,dismissed:false,sent:false,dets:[{cls:'vessel'}],det:[{s:.9}]}));
+  renderAsk();
+ `,context);
+ for(let i=0;i<5;i++)vm.runInContext(`rv.cur=items[${i}];rv.displayed={...items[${i}]};rv.busy=false;rvAct('1')`,context);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('overrideCount',context),5);
+ assert.equal(vm.runInContext('suggestionChecks',context),0);
+ assert.equal(vm.runInContext('rv.ask',context),null);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
 test('team proposals render escaped discussion, live own votes, busy buttons and isolated keys',()=>{
  const context=setup();
  vm.runInContext(`teamSync.available=true;teamSync.on=true;reviewerName='Bob';
@@ -188,6 +210,13 @@ test('enabling team sync promotes an open local suggestion only with a reviewer 
    assert.match(vm.runInContext('messages[0]',context),/Set your reviewer name/);
   }
  }
+});
+test('reviewer sessions keep team sync disabled',()=>{
+ const context=setup();
+ vm.runInContext(`gsAuth={reviewer:()=>true};reviewerName='Alice';setupTeamSync(true);$('reviewSync').checked=true;$('reviewSync').onchange()`,context);
+ assert.equal(vm.runInContext('teamSync.available',context),false);
+ assert.equal(vm.runInContext('teamSync.on',context),false);
+ assert.equal(context.$('reviewSyncLabel').hidden,true);
 });
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
@@ -486,6 +515,28 @@ test('global keyboard shortcuts ignore input while a dialog is open',()=>{
  assert.equal(vm.runInContext('nightToggles',context),0);
  vm.runInContext(`document.querySelector=()=>null;handlers.keydown({key:'n',target:{tagName:'BODY',closest:selector=>selector.includes('#policyAdmin')?{}:null}})`,context);
  assert.equal(vm.runInContext('nightToggles',context),0);
+});
+test('reviewers cannot use feed priority shortcuts but retain review hotkeys',()=>{
+ const context=setup();
+ vm.runInContext(`
+  handlers={};actions=[];
+  document.querySelector=()=>null;
+  document.addEventListener=(type,handler)=>{if(type==='keydown')handlers[type]=handler};
+  gsPolicy.isPolicyHotkeyTarget=()=>false;
+  gsAuth={viewer:()=>false,reviewer:()=>true};
+  setManual=(id,tier)=>actions.push('feed:'+tier);rvAct=action=>actions.push('review:'+action);
+  state.page='feed';state.sel='item';location={hash:''};
+ `,context);
+ const start=source.indexOf(" document.addEventListener('keydown'");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext(`handlers.keydown({key:'1',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false});
+  handlers.keydown({key:'r',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false})`,context);
+ assert.equal(vm.runInContext('actions.length',context),0);
+ assert.equal(vm.runInContext('location.hash',context),'#review');
+ vm.runInContext(`state.page='rv';handlers.keydown({key:'1',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false})`,context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(actions)',context)),['review:1']);
 });
 test('a blocked lock warning disables workbench confirmation',()=>{
  const context=setup();

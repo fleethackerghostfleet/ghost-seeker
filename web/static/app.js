@@ -239,7 +239,7 @@ function applyItemUpdate(raw){
  mergeItem(raw,false);scheduleFeedFlush();
 }
 async function request(path,method='GET',body){
- if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
+ if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method,path);
  const response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const data=response.status===204?null:await response.json();
  if(!response.ok){const error=new Error(data?.message||data?.error||`Request failed (${response.status})`);error.status=response.status;if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
@@ -333,7 +333,7 @@ async function init(){
   if(k==='r'){location.hash='#review';return}
   if(k==='escape'){if(state.zoom)closeZoom();else closeDetail();return}
   if(k==='f'&&state.sel){state.zoom?closeZoom():openZoom();return}
-  if(state.sel&&['1','2','3','4'].includes(k))setManual(state.sel,+k);
+  if(state.sel&&['1','2','3','4'].includes(k)&&!(typeof gsAuth!=='undefined'&&gsAuth.reviewer()))setManual(state.sel,+k);
   if(state.sel&&['arrowright','arrowdown','arrowleft','arrowup'].includes(k)){e.preventDefault();step(k==='arrowright'||k==='arrowdown'?1:-1)}});
  $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b&&(!rv.ask||b.dataset.a==='undo')){b.blur();rvAct(b.dataset.a)}};
  $('rvAsk').onclick=e=>{const b=e.target.closest('[data-ask]');if(!b)return;if(b.dataset.ask==='why')answerWhy(b.dataset.choice);else if(b.dataset.ask==='team')answerTeamProposal(b.dataset.answer);else answerSuggestion(b.dataset.answer)};
@@ -634,6 +634,7 @@ const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':
 let rv={cur:null,shown:null,displayed:null,navigation:0,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
 const teamSync={available:false,on:false,proposals:[],hidden:new Set(),resolved:new Set(),local:new Map(),accepting:new Map(),revision:0,posting:false};
 function setupTeamSync(available){
+ if(typeof gsAuth!=='undefined'&&gsAuth.reviewer())available=false;
  teamSync.available=available;
  try{teamSync.on=available&&localStorage.getItem('gs.reviewSync')==='true'}catch{teamSync.on=false}
  $('reviewSyncLabel').hidden=!available;$('reviewSync').checked=teamSync.on;
@@ -723,6 +724,7 @@ function renderAsk(){
  }
 }
 function checkLearningSuggestion(){
+ if(typeof gsAuth!=='undefined'&&gsAuth.reviewer())return;
  if(rv.ask||teamSync.posting||typeof gsLearn==='undefined')return;
  const s=gsLearn.suggestion();if(s){
   if(teamSync.on&&reviewerName){proposeTeamSuggestion(s);return}
