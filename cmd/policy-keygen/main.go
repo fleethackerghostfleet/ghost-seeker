@@ -25,24 +25,7 @@ func run(id, outDir string) error {
 	if id == "" || filepath.Base(id) != id || strings.ContainsAny(id, `/\\`) {
 		return fmt.Errorf("-id must be a non-empty filename-safe key id")
 	}
-	pub, priv, err := policy.GenerateKey(id)
-	if err != nil {
-		return err
-	}
 	if err := os.MkdirAll(outDir, 0o700); err != nil {
-		return err
-	}
-	privateJSON, err := json.MarshalIndent(map[string]string{
-		"key_id": id, "private_key": base64.StdEncoding.EncodeToString(priv.Seed()),
-	}, "", "  ")
-	if err != nil {
-		return err
-	}
-	privatePath := filepath.Join(outDir, id+".key.json")
-	if err := os.WriteFile(privatePath, append(privateJSON, '\n'), 0o600); err != nil {
-		return err
-	}
-	if err := os.Chmod(privatePath, 0o600); err != nil {
 		return err
 	}
 	keyringPath := filepath.Join(outDir, "keyring.json")
@@ -57,6 +40,20 @@ func run(id, outDir string) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
+	pub, priv, err := policy.GenerateKey(id)
+	if err != nil {
+		return err
+	}
+	privateJSON, err := json.MarshalIndent(map[string]string{
+		"key_id": id, "private_key": base64.StdEncoding.EncodeToString(priv.Seed()),
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	privatePath := filepath.Join(outDir, id+".key.json")
+	if err := writePrivateKeyAtomic(outDir, privatePath, append(privateJSON, '\n')); err != nil {
+		return err
+	}
 	keyring[id] = base64.StdEncoding.EncodeToString(pub)
 	keyringJSON, err := json.MarshalIndent(keyring, "", "  ")
 	if err != nil {
@@ -66,6 +63,30 @@ func run(id, outDir string) error {
 		return err
 	}
 	return nil
+}
+
+func writePrivateKeyAtomic(dir, path string, data []byte) error {
+	file, err := os.CreateTemp(dir, ".private-key-*.tmp")
+	if err != nil {
+		return err
+	}
+	tempPath := file.Name()
+	defer os.Remove(tempPath)
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tempPath, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tempPath, path)
 }
 
 func fatal(err error) {
