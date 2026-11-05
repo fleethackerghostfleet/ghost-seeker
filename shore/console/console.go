@@ -135,9 +135,24 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		if preserveExpiry {
 			p.ExpiresAtUnixMs = prev.GetExpiresAtUnixMs()
 		}
+		p.IssuedBy = op.ID
 		for _, layer := range p.Layers {
-			if layer != nil && layer.Echelon == op.Echelon {
+			if layer == nil {
+				continue
+			}
+			if layer.Echelon <= op.Echelon && layer.Emcon != nil {
+				layer.Emcon.Echelon = layer.Echelon
+			}
+			if layer.Echelon == op.Echelon {
 				layer.IssuedBy = op.ID
+				for _, rule := range layer.Rules {
+					if rule != nil {
+						rule.Author = op.ID
+					}
+				}
+				if layer.Emcon != nil {
+					layer.Emcon.SetBy = op.ID
+				}
 			}
 		}
 		log.Printf("console: SetPolicy operator=%s echelon=%s result=accepted reason=authorized", op.ID, op.Echelon.String())

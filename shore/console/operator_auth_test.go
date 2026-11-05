@@ -205,3 +205,41 @@ func TestShipOperatorCannotShortenPolicyExpiry(t *testing.T) {
 		t.Fatalf("stored expiry=%d, want prior expiry %d", got, previousExpiry)
 	}
 }
+
+func TestOperatorAttributionAndEMCONUseCallerEchelon(t *testing.T) {
+	commandLayer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+		Rules: []*pb.InterestRule{{Id: "command", Locked: true, BoostLabels: []string{"submarine"}}}}
+	shipLayer := &pb.PolicyLayer{
+		Echelon:  pb.Echelon_ECHELON_SHIP,
+		IssuedBy: "spoof",
+		Rules:    []*pb.InterestRule{{Id: "ship", Author: "spoof", BoostLabels: []string{"tanker"}}},
+		Emcon:    &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "spoof", Echelon: pb.Echelon_ECHELON_COMMAND},
+	}
+	svc, _ := makeOperatorService(t, &pb.Policy{Layers: []*pb.PolicyLayer{commandLayer}})
+	request := operatorRequest(t, &pb.Policy{
+		IssuedBy: "spoof",
+		Layers: []*pb.PolicyLayer{
+			proto.Clone(commandLayer).(*pb.PolicyLayer),
+			shipLayer,
+		},
+	}, "operator", "ops-1", pb.Echelon_ECHELON_SHIP)
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := response.Msg.Policy
+	if got.IssuedBy != "ops-1" {
+		t.Fatalf("policy IssuedBy=%q, want ops-1", got.IssuedBy)
+	}
+	if len(got.Layers) != 2 {
+		t.Fatalf("layers=%+v", got.Layers)
+	}
+	ship := got.Layers[1]
+	if ship.IssuedBy != "ops-1" || ship.Rules[0].Author != "ops-1" ||
+		ship.Emcon.SetBy != "ops-1" || ship.Emcon.Echelon != pb.Echelon_ECHELON_SHIP {
+		t.Fatalf("ship layer attribution=%+v", ship)
+	}
+	if got.EmconSetting == nil || got.EmconSetting.Echelon != pb.Echelon_ECHELON_SHIP {
+		t.Fatalf("flattened EMCON attribution=%+v", got.EmconSetting)
+	}
+}
