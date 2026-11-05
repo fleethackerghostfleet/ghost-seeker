@@ -72,7 +72,7 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	evicted := ""
 	if len(s.items) > s.retain {
 		oldest := oldestIndex(s.items[:len(s.items)-1], func(it command.Item) bool {
-			return it.Filtered != "" && !it.Sent && it.Decision == "" && it.Manual == 0
+			return it.Filtered != "" && !it.Sent && it.Decision == "" && it.Manual == 0 && !it.Reviewed && !it.Dismissed
 		})
 		if oldest < 0 {
 			oldest = oldestIndex(s.items[:len(s.items)-1], func(it command.Item) bool { return !it.Sent && it.Decision == "" })

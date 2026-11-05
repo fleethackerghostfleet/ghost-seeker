@@ -56,3 +56,16 @@ func TestEmptyFrameKeepsEmptyDetectionLists(t *testing.T) {
 		t.Fatal("empty frame lost its detection lists; the feed renders them as JSON arrays")
 	}
 }
+
+func TestEvictionKeepsFilteredImagesAPersonDismissed(t *testing.T) {
+	data := New(3)
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	data.Add(&command.Item{ID: "useful", TS: start}, 0)
+	data.Add(&command.Item{ID: "dismissed", TS: start.Add(time.Minute), Filtered: command.FilteredDuplicate}, 0)
+	data.Add(&command.Item{ID: "repeat", TS: start.Add(2 * time.Minute), Filtered: command.FilteredDuplicate}, 0)
+	yes := true
+	data.PatchItem("dismissed", nil, &yes, &yes, nil)
+	if _, evicted := data.Add(&command.Item{ID: "newest", TS: start.Add(3 * time.Minute)}, 0); evicted != "repeat" {
+		t.Fatalf("evicted %q, want the untouched repeat", evicted)
+	}
+}
