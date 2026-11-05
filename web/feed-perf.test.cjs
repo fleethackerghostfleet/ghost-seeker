@@ -111,6 +111,16 @@ test('selection uses cached order and updates only the old and new cards on the 
  h.frame();
  assert.equal(vm.runInContext("state.sel===null&&updated.join(',')==='1'&&details===1",c),true);
 });
+test('reset snapshots remove windowed cards even when the replacement feed is empty',()=>{
+ const h=setup(),c=h.context;
+ vm.runInContext(`populate(3000);renderFeed(true);growFeedWindow();
+  renderAll=()=>renderFeed(true);renderPolicySummary=()=>{};closeZoom=()=>{};closeCardMenu=()=>{};closeDetail=()=>{};
+  applySnapshot({reset:true,epoch:1,items:[],state:{model:'maritime',directives:[]},stats:{},cdr:0});`,c);
+ assert.equal(h.grid.children.length,0);
+ assert.equal(vm.runInContext('feedLimit===FEED_PAGE_SIZE&&feedOrdered.length===0&&dirtyItems.size===0',c),true);
+ vm.runInContext("mergeItem(raw('fresh'));renderFeed(true)",c);
+ assert.deepEqual(h.grid.children.map(el=>el.dataset.id),['fresh']);
+});
 test('selection-only batching still flushes concurrent server updates through the full render path',()=>{
  const h=setup(),c=h.context;
  vm.runInContext("populate(3100);renderFeed(true);state.sel='0';step(1);applyItemUpdate({...raw('2'),central:.6})",c);

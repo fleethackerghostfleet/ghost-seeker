@@ -241,7 +241,7 @@ function applySnapshot(data){
 }
 function clearDemoItems(){
  ++resetRevision;items=[];pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
- dirtyItems.clear();feedOrdered=[];renderedFeedIDs=[];renderedFeedReasons.clear();resetFeedWindow();
+ dirtyItems.clear();feedOrdered=[];renderedFeedReasons.clear();resetFeedWindow();
  imageCache.clear();selectedBands.clear();feedReasons.clear();pulling.clear();
  closeDetail();closeCardMenu();$('drawer').innerHTML='';
  rv={cur:null,shown:null,displayed:null,navigation:rv.navigation+1,order:rv.order,done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
