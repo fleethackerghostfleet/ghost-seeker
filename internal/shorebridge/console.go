@@ -553,9 +553,18 @@ func (c *Console) cameras(objs []*Object) []Camera {
 }
 
 func prioritizationMode(snap *Snapshot) Prioritization {
-	// The edge's selectable scorer reports its mode in GetStatus once that
-	// lands; until then the console shows the built-in scorer.
-	return Prioritization{Mode: "edge", Label: "Edge priority score", Source: "default"}
+	mode := strings.ToLower(strings.TrimSpace(snap.Edge.Prioritizer))
+	switch mode {
+	case "tomer":
+		return Prioritization{Mode: mode, Label: "Tomer prioritizer (algorithm/)", Source: "edge"}
+	case "both":
+		return Prioritization{Mode: mode, Label: "Edge priority score + Tomer prioritizer", Source: "edge"}
+	case "edgeml":
+		return Prioritization{Mode: mode, Label: "Edge priority score (edgeml)", Source: "edge"}
+	case "":
+		return Prioritization{Mode: "edge", Label: "Edge priority score", Source: "default"}
+	}
+	return Prioritization{Mode: mode, Label: "Edge prioritizer: " + mode, Source: "edge"}
 }
 
 func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
