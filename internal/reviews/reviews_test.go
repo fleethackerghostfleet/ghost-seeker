@@ -3,11 +3,24 @@ package reviews
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestRecordReadsLegacyAndDatasetJSON(t *testing.T) {
+	for _, input := range []string{
+		`{"item_id":"legacy","reviewer":"A"}`,
+		`{"item_id":"real","reviewer":"A","dataset_id":"seaships7000","image_id":"one","source_video":"clip","sha256":"abc"}`,
+	} {
+		var record Record
+		if err := json.Unmarshal([]byte(input), &record); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 type failingFile struct {
 	*os.File

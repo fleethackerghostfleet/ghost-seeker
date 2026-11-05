@@ -20,6 +20,15 @@ func validateAuthMode(mode, cert, key, ca, crls, users string) error {
 	}
 	return nil
 }
+func validateReviewLinkAuthMode(mode, keyFile, shoreURL string) error {
+	if keyFile != "" && shoreURL != "" {
+		return fmt.Errorf("-review-link-key-file is supported only in simulation/dataset mode, not with -shore")
+	}
+	if mode == "piv" && keyFile != "" {
+		return fmt.Errorf("-review-link-key-file is incompatible with -auth-mode piv")
+	}
+	return nil
+}
 func envDuration(key string, fallback time.Duration) time.Duration {
 	if value := os.Getenv(key); value != "" {
 		duration, err := time.ParseDuration(value)

@@ -13,6 +13,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: false
+      - name: Fetch embedded empty-ocean demo frames
+        run: git lfs pull --include="web/static/imagery/empty-ocean.zip" --exclude=""
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -124,6 +126,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: false
+      - name: Fetch embedded empty-ocean demo frames
+        if: matrix.image == 'operator'
+        run: git lfs pull --include="web/static/imagery/empty-ocean.zip" --exclude=""
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:

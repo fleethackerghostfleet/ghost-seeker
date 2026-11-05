@@ -293,7 +293,13 @@ func (g *Ingester) replaceForm(ctx context.Context, id string, kind pb.FormKind,
 // warming up and folds (the OPEN follows with the key frame). Until then the
 // engine may be stateless (inference.Mock, an older sidecar) and the frame
 // keeps hash behaviour, so detected images are never lost.
-//
+func (g *Ingester) sceneEvery(c *Capture) time.Duration {
+	if c.SceneEvery != nil {
+		return *c.SceneEvery
+	}
+	return g.cfg.SceneEvery
+}
+
 // Object-free frames become a "scene" item at most once per SceneEvery per
 // source; the rest fold (counted as deduped). A scene ships FACT+THUMB only;
 // its FULL stays on the edge and is pull-only (see scheduler.PullOnly).
@@ -321,7 +327,7 @@ func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp 
 	if ts.IsZero() {
 		ts = g.clk.Now()
 	}
-	if last, seen := g.lastScene[c.Source]; seen && ts.Sub(last) < g.cfg.SceneEvery {
+	if last, seen := g.lastScene[c.Source]; seen && ts.Sub(last) < g.sceneEvery(c) {
 		atomic.AddInt64(&g.Dups, 1)
 		return nil, nil
 	}

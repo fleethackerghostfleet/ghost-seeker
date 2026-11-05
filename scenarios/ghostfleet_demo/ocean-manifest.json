@@ -1,0 +1,191 @@
+{
+  "source_zip": "frames/30_Days_at_Sea_Timelapse_frames.zip",
+  "source_sha256": "018cb314c8740b0938f65fe2bfa3791ff65526a00a522cfd38cf148286b9bbb5",
+  "gcs_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/30_Days_at_Sea_Timelapse_frames.zip",
+  "gcs_generation": 1793816011906835,
+  "license": "licence unknown, internal hackathon demo use, same as other video_* clips",
+  "selection": "Manually inspected side-region sea and sky; no ships, land, deck/bridge structure, overlays or text. Clear, overcast, glare and dusk. Crops are derived images, not original full captures.",
+  "crop_xywh": [
+    0,
+    400,
+    688,
+    516
+  ],
+  "jpeg": {
+    "quality": 90,
+    "subsampling": 0,
+    "optimize": false
+  },
+  "pillow": "12.3.0",
+  "screening": {
+    "model": "yolo11n-fp32-640-ort+mobileclip-s1-ort-fp32",
+    "prioritizer": "both",
+    "detections": 0,
+    "sightings": 0
+  },
+  "replay_frames": 420,
+  "name_stride": 3,
+  "replay": "Cycle the listed crops in order; MOT names 000001..001258. Replay uses proportional interleaving, not filename timing.",
+  "frames": [
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0035.jpg",
+      "source_sha256": "999b65cd4e9b9328b6214e97cf30765927cb1a2573763b5473569d564a2e80d0",
+      "output_sha256": "3195e04916ba3edabaf91b6fcfec119e4f542bd667fc2d21518fd9e3b4f6b2d0"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0043.jpg",
+      "source_sha256": "8c9ed84a9b16c92b38b14208fb908be7af19fcb5e5ac8835bbfcdb07b370abc7",
+      "output_sha256": "a8ced534bb8e05ffaefa874da796b90baf90bf83dcf8d68fe16a1039add1d088"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0049.jpg",
+      "source_sha256": "d81486df135872fd669e692424d17ee2e64060a58e86226f2fb782891dd900cd",
+      "output_sha256": "9d7cb32f2a31aead3d686b07ba33821cf28d3e39b12e68eb0014b24aff798a43"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0055.jpg",
+      "source_sha256": "fd1532525cabd1b806a80061daaf6b609450609675b6523f5db50ad632ff68b6",
+      "output_sha256": "4cc7c176823488e9ddd912db160f7d09d97fb2da86f1ba001dca25177848f91b"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0061.jpg",
+      "source_sha256": "55e44ab613dfd1736e821ff6798a439e43e57aaaba5abaeae5f0ff512b70ad55",
+      "output_sha256": "0d07b794314efa3d5d2a845468286954a906643e618592948a88e681f289d091"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0070.jpg",
+      "source_sha256": "89ed2ba3c96647af09c7497826699109a2849a82c8467011f948c1b660fb4016",
+      "output_sha256": "1c7928250b4ec3f899227e18ec7159f8f9a1dd75b4e3288028c108dea8febb2f"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0079.jpg",
+      "source_sha256": "3b05211261c11b3dcf2bd64d869bbf476eb914535c340ddeccfd62e7bdee706c",
+      "output_sha256": "8358b3dc1c3a668555cf8f352f52998b071edaf86e40387c848e6218cb46c45a"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0081.jpg",
+      "source_sha256": "ae63b3e879e980d9a5b4ab28da1332ba0dfa6aeabd1d5124f1278ea95177afc9",
+      "output_sha256": "1929a908bced20f0f9ac55d5ec5966efa27b016379aa8e5f8d318d163a827f9b"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0230.jpg",
+      "source_sha256": "5403298b9de701139492bbc5d55010ae7dc3b7fd9251d8bb91ee4bf63722fcb8",
+      "output_sha256": "78380d5b6520805815b14861ca6cdfb5fbd95037f0a63d1994a9d9981f6996ec"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0232.jpg",
+      "source_sha256": "1c305a502df20e0ba99bafcc5967a75e22cd98c2271404a4e7f6d9887219f564",
+      "output_sha256": "28c549248bd8d812fad3e646fd750d0efdc1c62fd9b29adde64ae7346380bd61"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0235.jpg",
+      "source_sha256": "8ac4929a708eb0c179187ca014dfb4c4cbb82cf4e3b8b72197c985f7f5616bcf",
+      "output_sha256": "33845d33fd052a2bacff21f0f02ffecc2b66e0eab2854cad6bda568048800bab"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0237.jpg",
+      "source_sha256": "406256ddee6dcb78e2ed017a24925639ef0a4d09e8413a6b79667b37f7192a25",
+      "output_sha256": "4092183d4b534a115a3ca14dc0cf53130a6cf0bf5bb50aa0e40a1b918850da5a"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0242.jpg",
+      "source_sha256": "dbaf6af2ea02bc215141f9e403325502384008e0fcfb0ac7d48247ff2f55a8bf",
+      "output_sha256": "41116205553d1d35860c08524bf43e7e3f94e0d3637dce14b62afad5dd4d8748"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0245.jpg",
+      "source_sha256": "400bc55e20d1ccb6d535015b5579caad95d1f59bafc8bc6b01c16a9617770c59",
+      "output_sha256": "2c6378dc9b80f30d8d42ac98ace88c07263971b926c213d510a020e5bf360676"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0249.jpg",
+      "source_sha256": "c294141f3baeeed474ef2378bb7d78de6cc4b805ca2c7b399e6bc28b3d0b9d33",
+      "output_sha256": "83fb1a96a4c95b2229953db25db688ea116364af68c3553a401d7f58224516b5"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0337.jpg",
+      "source_sha256": "837e6156398be1a2c28adb5109ceac6b2362bf905a7a1fe9629f40dfe350d631",
+      "output_sha256": "21f6174c4f5308a71688be96933ac4ad161aa27b5bc77b1f043f59905695cdf8"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0341.jpg",
+      "source_sha256": "b16b7a4ca1b213c7679cfd9daee2f22027de99131cfa8805131273f7797acbb6",
+      "output_sha256": "d8fa233583041acaba0098202362edf8e7c78159464bd9752c1b9f181c31d344"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0349.jpg",
+      "source_sha256": "15b2ea7d0c2626e5d4994ca0edc070c980b502d00b23b7c470fdf34da673540a",
+      "output_sha256": "c8e2cefc6b4044e32bbc5f0a03581b503dab8ca23032ec4c8c8f1ba2e1966a52"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0351.jpg",
+      "source_sha256": "89eaf49b2823381e376e4f18f76751f59d34a78dab644fdabc5e12d447b0a28b",
+      "output_sha256": "94f258d9efe5fd4c34214709f63d9c8d803ddc1b015b1d0ac3fe68d48fc4abed"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0354.jpg",
+      "source_sha256": "088cb8c1f2cfa4ac9b818cf1449d48fb719b410576604fd5d32df6bc57f70a80",
+      "output_sha256": "088eda348f9bf605552bfa273edb0b13d9bcd41e10c22efdafda052d93506cba"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0359.jpg",
+      "source_sha256": "8b4ede7cc288319cc6b80c1dfe1f3664ac4f1a0ebf171733fcf6ef172434556d",
+      "output_sha256": "f944bf8238863f0582ead86bbd68a9e7661b28781d4de4d7fa8b009e6bb43028"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0362.jpg",
+      "source_sha256": "b567c79fc6dd4b2aa0cb8a9d33a4d5287ae873e9fdf039b0ad3f294a92e49ff9",
+      "output_sha256": "7b66a01aec34cdf8597c44e38cc48e4dad115fa0940a88449d84fa4aa269b393"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0494.jpg",
+      "source_sha256": "8e2f03218d138377b381b48ad7beac31100b7bb95dcd1d8a86cfe819aa318bc2",
+      "output_sha256": "4833e4ebddbe9d9d286e75bc17123a75f233695d8a4a955a65986c03f7d112f9"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0508.jpg",
+      "source_sha256": "c107fe2a210df0aeb1c86eb99cba786d1aa421680e325d6ec9c46f7e8a52787e",
+      "output_sha256": "c26eaa494e8f2b8027abb45813f24f13c973f5069bcadcad73e1d9a593c84cd0"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0514.jpg",
+      "source_sha256": "bf6de61f258eea4fad47a9136f8a95467664f06a7fea494cfa328653676e5a2f",
+      "output_sha256": "9f01f26e9f972831724e1f2244e5771c6e1f15b7ca7f256442060302dd1ba64e"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0518.jpg",
+      "source_sha256": "98f56336a5f7c66d74a203d8427e58b79c094fc9e1d9b228bb63f88b70fccb30",
+      "output_sha256": "617be15f879e1ce0a681b57693ff8df915f560087f35e68342278ad3eb3fa232"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0534.jpg",
+      "source_sha256": "af90e6abcc28072b518ac721805bacedd5962caaef9bc6bcc937a98d86f37850",
+      "output_sha256": "8146f822fafe3ff7586cadc978330cd796915ff7d0a3a9646416b5a98cc518df"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0586.jpg",
+      "source_sha256": "9a20f5416bd27eda6fdde1a5e4fe11ae2db9bc74abcdd7c7c8281943909cf454",
+      "output_sha256": "a01e723dd286ee1ac8df76cfe1e3f5bc0f2a9395eddc67ba58f7ebaf9b96a002"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0595.jpg",
+      "source_sha256": "71f7102ff1885ae31108c6843ba194c66384da4aa63a408503d7285abdfff505",
+      "output_sha256": "ec6f14964ae9dec9dbe73b3ce71d08d9e0cc67e584b6fac0b6de111cad23d8cb"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0602.jpg",
+      "source_sha256": "8473ac8f635e0ac9c4427e092c70718f3a8681c1df7f1c118d0641a950891c4d",
+      "output_sha256": "a1565db7bbe9247dca8b5081c9552b81ffed629e3f24ebbccded929fe11801e0"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0608.jpg",
+      "source_sha256": "fab6a56046ec1ecaa9730ce8e2bf2ca0c5344064c3436798f7b5de68f52d193a",
+      "output_sha256": "d22469ec99e2f169c6412537697e32c00b4c62a8d1002e47fc46a56fcab671f6"
+    },
+    {
+      "source": "30_Days_at_Sea_Timelapse_frames/sec_0624.jpg",
+      "source_sha256": "198082ef19c0df6e8aa788ca0f9eb7deefa0aa4e1f664961014fdc017d752db4",
+      "output_sha256": "ae84eae6093118bf4e017b37c2926db8aae797ed283237939330aadff4df0968"
+    }
+  ]
+}

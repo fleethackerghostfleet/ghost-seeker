@@ -259,7 +259,7 @@ func Predict(id string, r *pb.AnalyzeResponse) Prediction {
 func Rank(predictions []Prediction) {
 	objects := make([]*shorebridge.Object, len(predictions))
 	for i, p := range predictions {
-		objects[i] = &shorebridge.Object{Scene: len(p.Detections) == 0, Best: &shorebridge.Card{Score: p.EdgePriority}}
+		objects[i] = &shorebridge.Object{Scene: len(p.Detections) == 0, Score: p.EdgePriority, Best: &shorebridge.Card{Score: p.EdgePriority}}
 	}
 	shorebridge.AssignTiers(objects)
 	for i, o := range objects {

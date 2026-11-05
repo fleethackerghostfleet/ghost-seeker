@@ -1,0 +1,68 @@
+{
+  "status": "passed",
+  "historical_revision": "a9c2de09f24dc242d274b507c4eeb7110d14db79",
+  "current_revision": "1a6382ed554c63466c6fc34fafa1bbf0bb70b659",
+  "comparisons": [
+    {
+      "case": "rate64000-outagefalse",
+      "historical_wire_bytes": 165423,
+      "current_wire_bytes": 165423,
+      "wire_bytes_delta": 0,
+      "historical_virtual_s": 23.677875,
+      "current_virtual_s": 23.677875,
+      "virtual_seconds_delta": 0.0,
+      "historical_images_by_60s": 6,
+      "current_images_by_60s": 6
+    },
+    {
+      "case": "rate64000-outagetrue",
+      "historical_wire_bytes": 207077,
+      "current_wire_bytes": 207350,
+      "wire_bytes_delta": 273,
+      "historical_virtual_s": 52.384624999,
+      "current_virtual_s": 52.41875,
+      "virtual_seconds_delta": 0.0341250009999996,
+      "historical_images_by_60s": 6,
+      "current_images_by_60s": 6
+    },
+    {
+      "case": "rate9600-outagefalse",
+      "historical_wire_bytes": 180794,
+      "current_wire_bytes": 180794,
+      "wire_bytes_delta": 0,
+      "historical_virtual_s": 169.261666641,
+      "current_virtual_s": 169.261666641,
+      "virtual_seconds_delta": 0.0,
+      "historical_images_by_60s": 4,
+      "current_images_by_60s": 4
+    },
+    {
+      "case": "rate9600-outagetrue",
+      "historical_wire_bytes": 188187,
+      "current_wire_bytes": 188324,
+      "wire_bytes_delta": 137,
+      "historical_virtual_s": 198.922499968,
+      "current_virtual_s": 199.036666637,
+      "virtual_seconds_delta": 0.11416666899998518,
+      "historical_images_by_60s": 3,
+      "current_images_by_60s": 3
+    }
+  ],
+  "scene_pull": {
+    "observation_end_s": 61.23,
+    "full_sent_before_pull": false,
+    "pull_requested_s": 61.23,
+    "shore_received_s": 68.728125,
+    "edge_ack_s": 69.04325,
+    "full_payload_bytes": 51872,
+    "wire_before_pull": 8570,
+    "wire_total": 61476,
+    "synthetic_metadata": true
+  },
+  "current_source_files_unchanged": 140,
+  "historical_source_files_unchanged": 53,
+  "http_compression_exercised_by_replay": false,
+  "http_auth_middleware_exercised_by_replay": false,
+  "scene_harness_sha256": "8d4ca1c6ca3c34f7349e3561058820aedb1f5d1dfcebd2e23411e9af95053e94",
+  "auditor_sha256": "d836b0fca448be09fdff4fc4d8a9d62a6b5a0f9a92a5fec0e689a85e442d5b35"
+}

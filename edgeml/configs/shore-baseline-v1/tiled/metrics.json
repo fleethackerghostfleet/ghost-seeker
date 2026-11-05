@@ -1,0 +1,158 @@
+{
+  "tau": 0.8618552088737488,
+  "strata": {
+    "all": {
+      "vessels": 17633,
+      "detected": 2777,
+      "recall": 0.15748879941019678,
+      "recall_cp95_lower": 0.15299032294422724,
+      "precision": 0.900162074554295,
+      "false_positives": 308,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 7,
+      "AP50": 0.6089135966349208
+    },
+    "day": {
+      "vessels": 14098,
+      "detected": 2777,
+      "recall": 0.19697829479358775,
+      "recall_cp95_lower": 0.19147976476738943,
+      "precision": 0.902502437439064,
+      "false_positives": 300,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.6118799278138676
+    },
+    "low_light": {
+      "vessels": 3535,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": 0.0,
+      "false_positives": 8,
+      "empty_frames": 0,
+      "fp_per_empty_frame": null,
+      "sources": 1,
+      "AP50": 0.6358783798263231
+    },
+    "tiny": {
+      "vessels": 17,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.000373539811779448
+    },
+    "small": {
+      "vessels": 1989,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 5,
+      "AP50": 0.3425189249784706
+    },
+    "medium": {
+      "vessels": 7943,
+      "detected": 679,
+      "recall": 0.08548407402744555,
+      "recall_cp95_lower": 0.08037394302676812,
+      "precision": 0.8498122653316645,
+      "false_positives": 120,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 7,
+      "AP50": 0.48766358243227526
+    },
+    "large": {
+      "vessels": 7684,
+      "detected": 2098,
+      "recall": 0.2730348776678813,
+      "recall_cp95_lower": 0.26467455113350713,
+      "precision": 0.9177602799650044,
+      "false_positives": 188,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 7,
+      "AP50": 0.8232053876863495
+    },
+    "day_tiny": {
+      "vessels": 17,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.0004099598140338062
+    },
+    "day_small": {
+      "vessels": 1626,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 4,
+      "AP50": 0.3999455587820364
+    },
+    "day_medium": {
+      "vessels": 6791,
+      "detected": 679,
+      "recall": 0.09998527462818436,
+      "recall_cp95_lower": 0.09405187315233196,
+      "precision": 0.8498122653316645,
+      "false_positives": 120,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.46161237090001395
+    },
+    "day_large": {
+      "vessels": 5664,
+      "detected": 2098,
+      "recall": 0.370409604519774,
+      "recall_cp95_lower": 0.35981796351171774,
+      "precision": 0.9209833187006146,
+      "false_positives": 180,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.8620701227841199
+    },
+    "day_medium_large": {
+      "vessels": 12455,
+      "detected": 2777,
+      "recall": 0.22296266559614614,
+      "recall_cp95_lower": 0.21683610606574322,
+      "precision": 0.902502437439064,
+      "false_positives": 300,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.6524273257533164
+    }
+  },
+  "AP50": 0.6089135966349208,
+  "R4": {
+    "windows": 0,
+    "detected_windows": 0,
+    "eligible_tracks": 0,
+    "recall": null,
+    "window_seconds": 2,
+    "sliding": true
+  }
+}

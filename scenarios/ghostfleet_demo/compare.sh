@@ -14,7 +14,7 @@ DURATION=${DURATION:-6m}
 SAMPLE=${SAMPLE:-1m}
 mkdir -p "$OUT"
 [ -x "$ROOT/bin/sim" ] || (cd "$ROOT" && go build -o bin/ ./cmd/sim)
-"$HERE/download.sh" >/dev/null
+INCLUDE_BUCKET_FRAMES=0 "$HERE/download.sh" >/dev/null
 PY=${PY:-python}
 SIDECAR_PID=
 if [ "$DEDUP" = all ] && [ -z "${INFER_URL:-}" ]; then
