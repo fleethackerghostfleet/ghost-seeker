@@ -82,9 +82,16 @@ func TestPIVApplication(t *testing.T) {
 	defer upstream.Close()
 	bridge := shorebridge.New(upstream.URL, "", nil)
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/stream", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	})
 	mux.Handle("/api/shore/", bridge.Handler())
 	mux.Handle("/", app)
 	sessions := opauth.NewSessions("synthetic-admin-token", true).WithCerts(auth, slog.New(slog.NewJSONHandler(&audit, nil)))
+	sessions.WithCertRecheckInterval(10 * time.Millisecond)
 	s := httptest.NewUnstartedServer(sessions.Wrap(mux))
 	s.TLS = tlsConfig
 	s.StartTLS()
@@ -193,9 +200,17 @@ func TestPIVApplication(t *testing.T) {
 	if recorder.Code != 403 {
 		t.Fatalf("bearer without certificate accepted: %d", recorder.Code)
 	}
+	stream, err := caClient.Get(s.URL + "/api/stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Body.Close()
 	writeCRL([]*big.Int{a.Cert.SerialNumber})
 	if err := auth.Reload(); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := io.ReadAll(stream.Body); err != nil {
+		t.Fatalf("stream did not end after revocation: %v", err)
 	}
 	body, _ = request(caClient, "GET", "/api/config", "", cookie, 403)
 	if !strings.Contains(body, "revoked") {

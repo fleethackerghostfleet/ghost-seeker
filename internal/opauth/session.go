@@ -26,14 +26,15 @@ const CookieName = "gs_session"
 // zero-step. Everything else: /api/* and /blob/* answer 401 JSON, pages
 // redirect to /login.
 type Sessions struct {
-	token    string
-	dev      bool
-	anyPeer  bool
-	ttl      time.Duration
-	now      func() time.Time
-	certs    *pivauth.Authenticator
-	audit    *slog.Logger
-	bindings map[string]pivauth.Principal
+	token               string
+	dev                 bool
+	anyPeer             bool
+	ttl                 time.Duration
+	now                 func() time.Time
+	certs               *pivauth.Authenticator
+	certRecheckInterval time.Duration
+	audit               *slog.Logger
+	bindings            map[string]pivauth.Principal
 
 	mu       sync.Mutex
 	sessions map[string]time.Time

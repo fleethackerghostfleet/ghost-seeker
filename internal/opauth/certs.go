@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/pivauth"
 )
@@ -30,6 +31,7 @@ func Actor(ctx context.Context, fallback string) string {
 }
 func (s *Sessions) WithCerts(auth *pivauth.Authenticator, audit *slog.Logger) *Sessions {
 	s.certs = auth
+	s.certRecheckInterval = 15 * time.Second
 	s.dev = false
 	s.anyPeer = false
 	s.bindings = map[string]pivauth.Principal{}
@@ -37,6 +39,13 @@ func (s *Sessions) WithCerts(auth *pivauth.Authenticator, audit *slog.Logger) *S
 		audit = slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	}
 	s.audit = audit
+	return s
+}
+
+func (s *Sessions) WithCertRecheckInterval(interval time.Duration) *Sessions {
+	if interval > 0 {
+		s.certRecheckInterval = interval
+	}
 	return s
 }
 
@@ -173,6 +182,26 @@ func (s *Sessions) wrapCerts(next http.Handler) http.Handler {
 			_ = json.NewEncoder(w).Encode(map[string]any{"authenticated": true, "dev": false, "mode": "piv", "id": p.ID, "name": p.Name, "role": p.Role})
 			return
 		}
-		next.ServeHTTP(w, r)
+		ctx, cancel := context.WithCancel(r.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			ticker := time.NewTicker(s.certRecheckInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					current, err := s.certs.Authenticate(r.TLS)
+					if err != nil || current.Role != cp.Role {
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+		defer func() { cancel(); <-done }()
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
