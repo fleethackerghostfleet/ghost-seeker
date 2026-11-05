@@ -409,8 +409,8 @@ func TestSightingsStateMachine(t *testing.T) {
 
 	// 1: stateless response -> per-frame item, as in hash mode.
 	first, err := g.Ingest(ctx, capture(clk, 1))
-	if err != nil || first == nil || first.Form(pb.FormKind_FORM_KIND_CROP) != nil {
-		t.Fatalf("frame 1: row=%v err=%v (no crop expected)", first, err)
+	if err != nil || first == nil || first.Item.Features.Tags["sighting_id"] != "" {
+		t.Fatalf("frame 1: row=%v err=%v (no sighting expected)", first, err)
 	}
 	if fr := an.frames[0]; fr.Source != "cam-a" || fr.CapturedAt.IsZero() {
 		t.Fatalf("analyzer must see source + timestamp: %+v", fr)
@@ -682,7 +682,8 @@ func TestHashAndNaiveModes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if row.Form(pb.FormKind_FORM_KIND_CROP) != nil || row.Item.Features.Tags["sighting_id"] != "" {
+		// Per-frame detections, not the sighting's key detection (conf 0.9).
+		if d := row.Item.Features.Detections; len(d) != 1 || d[0].Confidence == 0.9 || row.Item.Features.Tags["sighting_id"] != "" {
 			t.Fatalf("%v: sightings must be ignored outside sightings mode", tc.mode)
 		}
 		clk.Advance(time.Second)
@@ -739,4 +740,41 @@ func mustRead(t *testing.T, st *store.Store, id string, k pb.FormKind) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// unknownOn makes the scripted analyzer report the n-th frame as unknown.
+type unknownOn struct {
+	*scripted
+	n int
+}
+
+func (u unknownOn) Analyze(ctx context.Context, fr inference.Frame, l []string, h map[string]string) (*pb.AnalyzeResponse, error) {
+	r, err := u.scripted.Analyze(ctx, fr, l, h)
+	if u.calls == u.n {
+		r.Unknownness = 0.9
+	}
+	return r, err
+}
+
+func TestReplacedKeyFrameRecutsExistingCrop(t *testing.T) {
+	ctx := context.Background()
+	an := unknownOn{&scripted{script: map[int][]*pb.Sighting{
+		1: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "")},
+		2: {sighting("s1", pb.Sighting_EVENT_UPDATE, true, "")},
+	}}, 2}
+	g, _, clk := newIngester(t, DedupSightings, an)
+	opened, err := g.Ingest(ctx, capture(clk, 1))
+	if err != nil || opened.Form(pb.FormKind_FORM_KIND_CROP) == nil {
+		t.Fatalf("open: %v %v", opened, err)
+	}
+	before := opened.Form(pb.FormKind_FORM_KIND_CROP).Hash
+	// The replacement frame is unknown, so imageForms alone would skip CROP.
+	rep, err := g.Ingest(ctx, capture(clk, 200))
+	if err != nil || rep.Item.Id != opened.Item.Id {
+		t.Fatalf("replace: %v %v", rep, err)
+	}
+	f := rep.Form(pb.FormKind_FORM_KIND_CROP)
+	if f == nil || f.Hash == before || f.Mime != "image/jpeg" {
+		t.Fatalf("CROP must be re-cut from the new key frame: %+v (old hash %s)", f, before)
+	}
 }

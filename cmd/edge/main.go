@@ -46,9 +46,17 @@ func main() {
 	period := flag.Duration("period", 5*time.Second, "capture period for replay")
 	tick := flag.Duration("tick", 3*time.Second, "scheduler tick")
 	initBps := flag.Float64("init-bps", 64000, "initial link estimate (bits/s)")
+	icfg := ingest.DefaultConfig()
+	flag.IntVar(&icfg.ThumbWidth, "thumb-width", icfg.ThumbWidth, "THUMB max width in px (0 = unbounded)")
+	flag.IntVar(&icfg.ThumbHeight, "thumb-height", icfg.ThumbHeight, "THUMB max height in px (0 = unbounded)")
+	flag.IntVar(&icfg.ThumbQual, "thumb-quality", icfg.ThumbQual, "THUMB JPEG quality 1-100")
+	flag.IntVar(&icfg.CropQual, "crop-quality", icfg.CropQual, "CROP JPEG quality 1-100")
+	flag.Float64Var(&icfg.CropPad, "crop-pad", icfg.CropPad, "CROP padding per side, as a fraction of the detection box size")
+	flag.BoolVar(&icfg.CropUnknowns, "crop-unknowns", icfg.CropUnknowns, "also send CROP for unknown items (default: unknowns skip CROP so the whole frame is kept for training)")
+	flag.IntVar(&icfg.FullQual, "full-quality", icfg.FullQual, "JPEG quality for re-encoding non-JPEG FULL captures (0 = send original bytes)")
 	tokenFlag := flag.String("unit-token", env("GS_UNIT_TOKEN", ""), "unit JWT (prefer env or file)")
 	tokenFile := flag.String("unit-token-file", env("GS_UNIT_TOKEN_FILE", ""), "unit JWT file")
-	maxBytes := flag.Int64("max-bytes", envInt64("GS_EDGE_MAX_BYTES"), "edge payload byte cap (0 = unlimited)")
+	maxBytes := flag.Int64("max-bytes", envInt64("GS_EDGE_MAX_BYTES"), "edge payload byte cap, incl. originals kept for full-size overrides (0 = unlimited)")
 	maxItems := flag.Int64("max-items", envInt64("GS_EDGE_MAX_ITEMS"), "edge item cap (0 = unlimited)")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -75,7 +83,6 @@ func main() {
 	} else {
 		an = inference.NewRemote(*inferURL)
 	}
-	icfg := ingest.DefaultConfig()
 	icfg.EdgeID = *id
 	icfg.WaitForSpace = true
 	icfg.Dedup, err = ingest.ParseDedup(*dedup)
