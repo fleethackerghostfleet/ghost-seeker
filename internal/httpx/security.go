@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -18,7 +17,9 @@ func Secure(next http.Handler) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			header.Set("Cache-Control", "no-store")
 		}
-		if header.Get("Content-Security-Policy") == "" {
+		// Blobs carry their own (stricter, sandboxed) policy from ServeBlob or the
+		// shore proxy, so the page policy is not stacked on top of it.
+		if header.Get("Content-Security-Policy") == "" && !strings.HasPrefix(r.URL.Path, "/blob/") {
 			header.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 		}
 		next.ServeHTTP(w, r)
@@ -31,22 +32,30 @@ func SameOrigin(next http.Handler) http.Handler {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 		default:
+			site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+			if site != "" && site != "same-origin" && site != "none" {
+				http.Error(w, "cross-origin request rejected", http.StatusForbidden)
+				return
+			}
 			if origin := r.Header.Get("Origin"); origin != "" {
-				u, err := url.Parse(origin)
-				if err != nil || u.Host == "" || !strings.EqualFold(u.Host, r.Host) {
+				// Browsers serialize Origin as "null" on same-origin form posts
+				// under Referrer-Policy: no-referrer; Sec-Fetch-Site still vouches.
+				if origin == "null" && site == "same-origin" {
+					next.ServeHTTP(w, r)
+					return
+				}
+				if !sameOrigin(origin, r) {
 					http.Error(w, "cross-origin request rejected", http.StatusForbidden)
 					return
 				}
-			}
-			if site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site"))); site != "" && site != "same-origin" && site != "none" {
-				http.Error(w, "cross-origin request rejected", http.StatusForbidden)
-				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
+// SafeBlobMime is the declared-MIME allowlist kept for FACT metadata views;
+// serving goes through BlobContentType, which sniffs the bytes.
 func SafeBlobMime(mime string) string {
 	switch mime {
 	case "image/jpeg", "image/png", "image/webp", "image/avif", "application/json", "text/plain; charset=utf-8":

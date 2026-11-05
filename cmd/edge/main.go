@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/scenario"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
@@ -63,11 +65,20 @@ func main() {
 	maxItems := flag.Int64("max-items", envInt64("GS_EDGE_MAX_ITEMS"), "edge item cap (0 = unlimited)")
 	requireSignedPolicy := flag.Bool("require-signed-policy", envBool("GS_REQUIRE_SIGNED_POLICY"), "require signed downlinked policies")
 	policyKeysPath := flag.String("policy-keys", env("GS_POLICY_KEYS", ""), "JSON public keyring for signed policies")
+	opToken := flag.String("operator-token", env("GS_OPERATOR_TOKEN", ""), "operator bearer token for the ship-side console and /blob/ (prefer env or file)")
+	opTokenFile := flag.String("operator-token-file", env("GS_OPERATOR_TOKEN_FILE", ""), "operator token file")
+	devTokenFile := flag.String("dev-token-file", env("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set ('none' = require an explicit token)")
+	corsOrigins := flag.String("cors-origins", env("GS_CORS_ORIGINS", ""), "comma-separated browser origins allowed to call the API cross-origin (default: same-origin only)")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
 	token, err := unitauth.Credential(*tokenFlag, *tokenFile)
 	fatal(err)
+	operator, devMode, err := opauth.Load(*opToken, *opTokenFile, *devTokenFile)
+	fatal(err)
+	if devMode {
+		log.Warn("operator token auto-generated for a local demo; set GS_OPERATOR_TOKEN in production", "file", *devTokenFile)
+	}
 
 	st, err := store.Open(*data)
 	fatal(err)
@@ -138,13 +149,13 @@ func main() {
 
 	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped, Prioritizer: *prioritizer}
 	mux := http.NewServeMux()
-	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc)
-	mux.Handle(path, h)
-	mux.Handle("/blob/", svc.BlobHandler())
-	mux.Handle("GET /policy/audit", svc.PolicyAuditHandler())
+	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc, connect.WithReadMaxBytes(1<<20))
+	mux.Handle(path, opauth.RequireBearer(operator, h))
+	mux.Handle("/blob/", opauth.RequireBearer(operator, svc.BlobHandler()))
+	mux.Handle("GET /policy/audit", opauth.RequireBearer(operator, svc.PolicyAuditHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	httpx.StaticUI(mux, *uiDir, "edge "+*id)
-	srv := &http.Server{Addr: *listen, Handler: h2c.NewHandler(httpx.CORS(mux), &http2.Server{})}
+	srv := httpx.Server(*listen, h2c.NewHandler(httpx.CORSAllow(httpx.SplitList(*corsOrigins), mux), &http2.Server{}))
 	go func() {
 		<-ctx.Done()
 		sctx, c := context.WithTimeout(context.Background(), 3*time.Second)

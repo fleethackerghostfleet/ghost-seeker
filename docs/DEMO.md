@@ -60,6 +60,13 @@ make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http:/
 open http://localhost:8090
 ```
 
+**Auth (no extra steps):** the three Go processes share one operator token. With no
+`GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
+(0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
+SameSite=Strict session cookie). From another machine the UI asks for the token at `/login`
+(`cat data/operator.token`). For `curl` against the shore/edge API use
+`-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
+
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
 models (log line `sidecar listening on :9090`). Without the sidecar: `make demo-edge INFER=mock
 DEDUP=hash` (one item per distinct frame, no sightings). `make demo-edge PRIORITIZER=tomer DEDUP=hash` (sidecar in `--prioritizer both`, the `make demo-sidecar` default) ranks the queue by Tomer's image-level score instead; the strip shows `prioritization: tomer`.

@@ -1,0 +1,2126 @@
+{
+  "local_detectors": {
+    "rfdetr-small": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 32.11117,
+        "native_input": 512,
+        "AP50": 0.7396030542967141,
+        "AP50_95": 0.45350981268969576,
+        "tau": 0.6,
+        "precision": 0.8046767537826685,
+        "recall": 0.6464088397790055,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.7361111111111112,
+          "large": 0.6382211538461539
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.20285714285714285,
+        "latency_ms": {
+          "ms_p50": 195.04215800043312,
+          "ms_p95": 205.29056970026426,
+          "ms_mean": 196.55981817263213,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 32.11117,
+        "native_input": 512,
+        "AP50": 0.7557921205654401,
+        "AP50_95": 0.38160327532089783,
+        "tau": 0.3,
+        "precision": 0.7333333333333333,
+        "recall": 0.8148148148148148,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.8333333333333334,
+          "large": 0.8095238095238095
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.2,
+        "latency_ms": {
+          "ms_p50": 194.80706499962253,
+          "ms_p95": 200.11381370004528,
+          "ms_mean": 195.5975120286374,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 32.11117,
+        "native_input": 512,
+        "AP50": 0.9126600286316582,
+        "AP50_95": 0.4912831272268242,
+        "tau": 0.3,
+        "precision": 0.8767123287671232,
+        "recall": 0.8888888888888888,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.7,
+          "large": 0.9615384615384616
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.225,
+        "latency_ms": {
+          "ms_p50": 196.16569099889603,
+          "ms_p95": 207.61217039998883,
+          "ms_mean": 197.99512020009777,
+          "n": 35
+        }
+      }
+    },
+    "rfdetr-nano": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 30.467298,
+        "native_input": 384,
+        "AP50": 0.7375440647929613,
+        "AP50_95": 0.43886661981159114,
+        "tau": 0.5,
+        "precision": 0.7539393939393939,
+        "recall": 0.687292817679558,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.75,
+          "large": 0.6814903846153846
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.29,
+        "latency_ms": {
+          "ms_p50": 121.62053899919556,
+          "ms_p95": 125.65347339914297,
+          "ms_mean": 122.42849614100751,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 30.467298,
+        "native_input": 384,
+        "AP50": 0.7292079207920793,
+        "AP50_95": 0.3523717255184165,
+        "tau": 0.4,
+        "precision": 0.9047619047619048,
+        "recall": 0.7037037037037037,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.9047619047619048
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.05,
+        "latency_ms": {
+          "ms_p50": 121.8398690016329,
+          "ms_p95": 128.45255699994593,
+          "ms_mean": 123.08339611429672,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 30.467298,
+        "native_input": 384,
+        "AP50": 0.8581890389503262,
+        "AP50_95": 0.4554903462588892,
+        "tau": 0.4,
+        "precision": 0.8970588235294118,
+        "recall": 0.8472222222222222,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.55,
+          "large": 0.9615384615384616
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.175,
+        "latency_ms": {
+          "ms_p50": 122.24475400034862,
+          "ms_p95": 125.90299250059613,
+          "ms_mean": 122.85835171434363,
+          "n": 35
+        }
+      }
+    },
+    "gdino-base": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 232.313216,
+        "native_input": 640,
+        "AP50": 0.6996050964605872,
+        "AP50_95": 0.42114059403069143,
+        "tau": 0.35,
+        "precision": 0.6138059701492538,
+        "recall": 0.7270718232044199,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.7777777777777778,
+          "large": 0.7223557692307693
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.5914285714285714,
+        "latency_ms": {
+          "ms_p50": 4626.5201669993985,
+          "ms_p95": 4733.652938100386,
+          "ms_mean": 4616.06885317123,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 232.313216,
+        "native_input": 640,
+        "AP50": 0.6933394324937064,
+        "AP50_95": 0.42846202492756225,
+        "tau": 0.4,
+        "precision": 0.7083333333333334,
+        "recall": 0.6296296296296297,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.8095238095238095
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.175,
+        "latency_ms": {
+          "ms_p50": 4658.8551990007545,
+          "ms_p95": 4720.764405500086,
+          "ms_mean": 4655.266598257107,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 232.313216,
+        "native_input": 640,
+        "AP50": 0.8244944527472939,
+        "AP50_95": 0.5013637999910251,
+        "tau": 0.4,
+        "precision": 0.8548387096774194,
+        "recall": 0.7361111111111112,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.15,
+          "large": 0.9615384615384616
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.225,
+        "latency_ms": {
+          "ms_p50": 5199.235244999727,
+          "ms_p95": 5266.508903700014,
+          "ms_mean": 5176.687333857054,
+          "n": 35
+        }
+      }
+    },
+    "rtdetrv2-r34": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 31.424388,
+        "native_input": 640,
+        "AP50": 0.6598772584305386,
+        "AP50_95": 0.35546619177321626,
+        "tau": 0.65,
+        "precision": 0.6971153846153846,
+        "recall": 0.6408839779005525,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.7361111111111112,
+          "large": 0.6322115384615384
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.36,
+        "latency_ms": {
+          "ms_p50": 305.8936590000485,
+          "ms_p95": 336.53911839992355,
+          "ms_mean": 308.94440034677285,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 31.424388,
+        "native_input": 640,
+        "AP50": 0.7132508022540853,
+        "AP50_95": 0.41175689187249004,
+        "tau": 0.75,
+        "precision": 0.9411764705882353,
+        "recall": 0.5925925925925926,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.7619047619047619
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.025,
+        "latency_ms": {
+          "ms_p50": 305.19703100026163,
+          "ms_p95": 325.6883183000809,
+          "ms_mean": 307.7670936286008,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 31.424388,
+        "native_input": 640,
+        "AP50": 0.9076420176172513,
+        "AP50_95": 0.5089609788842581,
+        "tau": 0.75,
+        "precision": 0.9607843137254902,
+        "recall": 0.6805555555555556,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.1,
+          "large": 0.9038461538461539
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.05,
+        "latency_ms": {
+          "ms_p50": 290.4246719990624,
+          "ms_p95": 302.69128719992295,
+          "ms_mean": 291.82369465701674,
+          "n": 35
+        }
+      }
+    },
+    "rfdetr-base": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 32.17453,
+        "native_input": 560,
+        "AP50": 0.6557139632337642,
+        "AP50_95": 0.3919170950572474,
+        "tau": 0.65,
+        "precision": 0.7792792792792793,
+        "recall": 0.5734806629834254,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.75,
+          "large": 0.5576923076923077
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.21,
+        "latency_ms": {
+          "ms_p50": 291.9595039984415,
+          "ms_p95": 304.2402166996908,
+          "ms_mean": 293.4244623985794,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 32.17453,
+        "native_input": 560,
+        "AP50": 0.7160845522700013,
+        "AP50_95": 0.41720622320813266,
+        "tau": 0.35,
+        "precision": 0.8636363636363636,
+        "recall": 0.7037037037037037,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.16666666666666666,
+          "large": 0.8571428571428571
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.075,
+        "latency_ms": {
+          "ms_p50": 292.0304279996344,
+          "ms_p95": 303.2108494997374,
+          "ms_mean": 293.4143117714744,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 32.17453,
+        "native_input": 560,
+        "AP50": 0.8933903565229583,
+        "AP50_95": 0.4855180627767438,
+        "tau": 0.35,
+        "precision": 0.8714285714285714,
+        "recall": 0.8472222222222222,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.55,
+          "large": 0.9615384615384616
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.225,
+        "latency_ms": {
+          "ms_p50": 291.0721600001125,
+          "ms_p95": 295.11787810024543,
+          "ms_mean": 291.65850820011525,
+          "n": 35
+        }
+      }
+    },
+    "owlvit-b32": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 153.231879,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.6570254712043789,
+        "AP50_95": 0.32311139984512877,
+        "tau": 0.1,
+        "precision": 0.8471223021582733,
+        "recall": 0.5204419889502763,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.20833333333333334,
+          "large": 0.5480769230769231
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.12142857142857143,
+        "latency_ms": {
+          "ms_p50": 384.9768249997396,
+          "ms_p95": 441.7752686998938,
+          "ms_mean": 396.08996134244313,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 153.231879,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.6920792079207921,
+        "AP50_95": 0.40107006854531607,
+        "tau": 0.05,
+        "precision": 0.8636363636363636,
+        "recall": 0.7037037037037037,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.9047619047619048
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.075,
+        "latency_ms": {
+          "ms_p50": 381.6670549999799,
+          "ms_p95": 964.7540918000186,
+          "ms_mean": 537.001024942817,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 153.231879,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.6396836743633316,
+        "AP50_95": 0.35748510093145397,
+        "tau": 0.05,
+        "precision": 0.7352941176470589,
+        "recall": 0.6944444444444444,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.2,
+          "large": 0.8846153846153846
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.45,
+        "latency_ms": {
+          "ms_p50": 374.8992670007283,
+          "ms_p95": 382.327397300287,
+          "ms_mean": 375.8222933145589,
+          "n": 35
+        }
+      }
+    },
+    "conditional-detr-r50": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 43.418401,
+        "native_input": 640,
+        "AP50": 0.5783730587646648,
+        "AP50_95": 0.28549295397215174,
+        "tau": 0.4,
+        "precision": 0.6295843520782396,
+        "recall": 0.569060773480663,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.75,
+          "large": 0.5540865384615384
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.4328571428571429,
+        "latency_ms": {
+          "ms_p50": 378.8488700001835,
+          "ms_p95": 432.6608132000501,
+          "ms_mean": 386.8288266258937,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 43.418401,
+        "native_input": 640,
+        "AP50": 0.6867893950520372,
+        "AP50_95": 0.3874966539425657,
+        "tau": 0.55,
+        "precision": 1.0,
+        "recall": 0.6296296296296297,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.8095238095238095
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.0,
+        "latency_ms": {
+          "ms_p50": 371.25517300000865,
+          "ms_p95": 404.0981594999947,
+          "ms_mean": 374.2357547714424,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 43.418401,
+        "native_input": 640,
+        "AP50": 0.7510583769585737,
+        "AP50_95": 0.3946739460614451,
+        "tau": 0.55,
+        "precision": 0.9333333333333333,
+        "recall": 0.5833333333333334,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.15,
+          "large": 0.75
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.075,
+        "latency_ms": {
+          "ms_p50": 313.08194499979436,
+          "ms_p95": 326.58981190106715,
+          "ms_mean": 314.69942714284116,
+          "n": 35
+        }
+      }
+    },
+    "deformable-detr": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 40.069665,
+        "native_input": 640,
+        "AP50": 0.6313979950396381,
+        "AP50_95": 0.32069419298150603,
+        "tau": 0.45,
+        "precision": 0.6434474616292798,
+        "recall": 0.6022099447513812,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.7083333333333334,
+          "large": 0.5925480769230769
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.43142857142857144,
+        "latency_ms": {
+          "ms_p50": 1264.4162749998031,
+          "ms_p95": 1331.4963985000986,
+          "ms_mean": 1273.5759695338145,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 40.069665,
+        "native_input": 640,
+        "AP50": 0.6249638511380537,
+        "AP50_95": 0.35706172357213195,
+        "tau": 0.6,
+        "precision": 0.9411764705882353,
+        "recall": 0.5925925925925926,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.7619047619047619
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.025,
+        "latency_ms": {
+          "ms_p50": 1249.4776300000012,
+          "ms_p95": 1651.3141880999674,
+          "ms_mean": 1299.7852530571436,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 40.069665,
+        "native_input": 640,
+        "AP50": 0.8533709067063177,
+        "AP50_95": 0.44277645584821307,
+        "tau": 0.6,
+        "precision": 0.9565217391304348,
+        "recall": 0.6111111111111112,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.8461538461538461
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.05,
+        "latency_ms": {
+          "ms_p50": 1160.3956449998805,
+          "ms_p95": 1180.2073300008487,
+          "ms_mean": 1160.6612787714507,
+          "n": 35
+        }
+      }
+    },
+    "yolov9s": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 7.318368,
+        "native_input": 640,
+        "AP50": 0.5560473232358861,
+        "AP50_95": 0.32094324138373437,
+        "tau": 0.35,
+        "precision": 0.7101910828025477,
+        "recall": 0.49281767955801103,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.4444444444444444,
+          "large": 0.49759615384615385
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.26,
+        "latency_ms": {
+          "ms_p50": 78.56123199997,
+          "ms_p95": 119.51098659997113,
+          "ms_mean": 85.87266372086128,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 7.318368,
+        "native_input": 640,
+        "AP50": 0.6633663366336634,
+        "AP50_95": 0.40677804731022554,
+        "tau": 0.25,
+        "precision": 1.0,
+        "recall": 0.6666666666666666,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.16666666666666666,
+          "large": 0.8095238095238095
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.0,
+        "latency_ms": {
+          "ms_p50": 75.2367669999785,
+          "ms_p95": 88.27824979991874,
+          "ms_mean": 77.89729328570891,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 7.318368,
+        "native_input": 640,
+        "AP50": 0.8388920465032702,
+        "AP50_95": 0.4610756663214783,
+        "tau": 0.25,
+        "precision": 0.821917808219178,
+        "recall": 0.8333333333333334,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.6,
+          "large": 0.9230769230769231
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.325,
+        "latency_ms": {
+          "ms_p50": 70.3723770002398,
+          "ms_p95": 73.10369549977622,
+          "ms_mean": 70.6757714285881,
+          "n": 35
+        }
+      }
+    },
+    "owlvit-b16": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 152.789511,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.5417314514874257,
+        "AP50_95": 0.2775170035819338,
+        "tau": 0.05,
+        "precision": 0.455531453362256,
+        "recall": 0.6961325966850829,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.375,
+          "large": 0.7247596153846154
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 1.0757142857142856,
+        "latency_ms": {
+          "ms_p50": 3099.1781620004986,
+          "ms_p95": 3201.9375554998987,
+          "ms_mean": 3108.273770850342,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 152.789511,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.6710486174667889,
+        "AP50_95": 0.38428775965831885,
+        "tau": 0.05,
+        "precision": 0.9047619047619048,
+        "recall": 0.7037037037037037,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.9047619047619048
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.05,
+        "latency_ms": {
+          "ms_p50": 3022.5164929997845,
+          "ms_p95": 3082.9426551001234,
+          "ms_mean": 3019.90537157144,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 152.789511,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.522975374460523,
+        "AP50_95": 0.2956521215643409,
+        "tau": 0.05,
+        "precision": 0.7916666666666666,
+        "recall": 0.5277777777777778,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.25,
+          "large": 0.6346153846153846
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.25,
+        "latency_ms": {
+          "ms_p50": 3036.316572000942,
+          "ms_p95": 3086.3389383999674,
+          "ms_mean": 3037.957644314052,
+          "n": 35
+        }
+      }
+    },
+    "yolo12s": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 9.285632,
+        "native_input": 640,
+        "AP50": 0.5348693687165252,
+        "AP50_95": 0.30253893750419436,
+        "tau": 0.35,
+        "precision": 0.65,
+        "recall": 0.5171270718232044,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.5555555555555556,
+          "large": 0.5144230769230769
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.36,
+        "latency_ms": {
+          "ms_p50": 65.43542499980504,
+          "ms_p95": 132.58942089992158,
+          "ms_mean": 75.33934695827529,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 9.285632,
+        "native_input": 640,
+        "AP50": 0.6733368073649472,
+        "AP50_95": 0.38368205595863236,
+        "tau": 0.25,
+        "precision": 0.9473684210526315,
+        "recall": 0.6666666666666666,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.16666666666666666,
+          "large": 0.8095238095238095
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.025,
+        "latency_ms": {
+          "ms_p50": 63.57108299994252,
+          "ms_p95": 87.93699970008214,
+          "ms_mean": 67.96565825711696,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 9.285632,
+        "native_input": 640,
+        "AP50": 0.7978230402070601,
+        "AP50_95": 0.4565185540134308,
+        "tau": 0.25,
+        "precision": 0.8235294117647058,
+        "recall": 0.7777777777777778,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.45,
+          "large": 0.9038461538461539
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.3,
+        "latency_ms": {
+          "ms_p50": 60.46080099986284,
+          "ms_p95": 63.156655500824854,
+          "ms_mean": 60.72518577155798,
+          "n": 35
+        }
+      }
+    },
+    "yolov10s": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 8.128272,
+        "native_input": 640,
+        "AP50": 0.4991265741986627,
+        "AP50_95": 0.2741438707684853,
+        "tau": 0.2,
+        "precision": 0.5251572327044025,
+        "recall": 0.5535911602209945,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.5833333333333334,
+          "large": 0.5516826923076923
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.6471428571428571,
+        "latency_ms": {
+          "ms_p50": 72.68315399983294,
+          "ms_p95": 110.7550672998741,
+          "ms_mean": 75.80208177266724,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 8.128272,
+        "native_input": 640,
+        "AP50": 0.6014101410141013,
+        "AP50_95": 0.357325050239014,
+        "tau": 0.2,
+        "precision": 0.7727272727272727,
+        "recall": 0.6296296296296297,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.16666666666666666,
+          "large": 0.7619047619047619
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.125,
+        "latency_ms": {
+          "ms_p50": 55.323151000038706,
+          "ms_p95": 64.18942480006535,
+          "ms_mean": 56.53563948570601,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 8.128272,
+        "native_input": 640,
+        "AP50": 0.7729101295978746,
+        "AP50_95": 0.43943994098278905,
+        "tau": 0.2,
+        "precision": 0.8305084745762712,
+        "recall": 0.6805555555555556,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.35,
+          "large": 0.8076923076923077
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.25,
+        "latency_ms": {
+          "ms_p50": 52.648446000603144,
+          "ms_p95": 54.59376249946217,
+          "ms_mean": 52.72550177131571,
+          "n": 35
+        }
+      }
+    },
+    "detr-r50": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 41.524768,
+        "native_input": 640,
+        "AP50": 0.5025082864441927,
+        "AP50_95": 0.24171367960819592,
+        "tau": 0.95,
+        "precision": 0.5980662983425414,
+        "recall": 0.47845303867403316,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.6944444444444444,
+          "large": 0.45913461538461536
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.4157142857142857,
+        "latency_ms": {
+          "ms_p50": 333.93996999984665,
+          "ms_p95": 400.1438913000584,
+          "ms_mean": 346.9958095266206,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 41.524768,
+        "native_input": 640,
+        "AP50": 0.5962957460211807,
+        "AP50_95": 0.34184897188121255,
+        "tau": 0.95,
+        "precision": 0.6296296296296297,
+        "recall": 0.6296296296296297,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.8095238095238095
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.17647058823529413,
+        "fp_per_image": 0.25,
+        "latency_ms": {
+          "ms_p50": 345.9393220000493,
+          "ms_p95": 384.28060390003793,
+          "ms_mean": 352.0220502856968,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 41.524768,
+        "native_input": 640,
+        "AP50": 0.7494025437876481,
+        "AP50_95": 0.4283582566882213,
+        "tau": 0.95,
+        "precision": 0.873015873015873,
+        "recall": 0.7638888888888888,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.3,
+          "large": 0.9423076923076923
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.2,
+        "latency_ms": {
+          "ms_p50": 286.2230760001694,
+          "ms_p95": 299.25448569938453,
+          "ms_mean": 287.4660545999047,
+          "n": 35
+        }
+      }
+    },
+    "yolo12n": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 2.603056,
+        "native_input": 640,
+        "AP50": 0.4347798195246987,
+        "AP50_95": 0.24078293496007355,
+        "tau": 0.25,
+        "precision": 0.5666199158485273,
+        "recall": 0.44640883977900553,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.5555555555555556,
+          "large": 0.4375
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.44142857142857145,
+        "latency_ms": {
+          "ms_p50": 33.07449900012216,
+          "ms_p95": 40.61473650003791,
+          "ms_mean": 34.34280556403013,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 2.603056,
+        "native_input": 640,
+        "AP50": 0.5850591127048564,
+        "AP50_95": 0.3239762782807666,
+        "tau": 0.15,
+        "precision": 0.8333333333333334,
+        "recall": 0.5555555555555556,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.7142857142857143
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.075,
+        "latency_ms": {
+          "ms_p50": 32.72275799986346,
+          "ms_p95": 43.29213269988939,
+          "ms_mean": 36.035501142844495,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 2.603056,
+        "native_input": 640,
+        "AP50": 0.7925337962716111,
+        "AP50_95": 0.4608669188928374,
+        "tau": 0.15,
+        "precision": 0.7733333333333333,
+        "recall": 0.8055555555555556,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.55,
+          "large": 0.9038461538461539
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.425,
+        "latency_ms": {
+          "ms_p50": 31.352575000710203,
+          "ms_p95": 35.250631700546364,
+          "ms_mean": 32.01483274252886,
+          "n": 35
+        }
+      }
+    },
+    "yolov9t": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 2.12872,
+        "native_input": 640,
+        "AP50": 0.4247469357263667,
+        "AP50_95": 0.23423228875537178,
+        "tau": 0.2,
+        "precision": 0.5481682496607869,
+        "recall": 0.44640883977900553,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.5833333333333334,
+          "large": 0.4338942307692308
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.4757142857142857,
+        "latency_ms": {
+          "ms_p50": 50.669324999944365,
+          "ms_p95": 74.94733000002043,
+          "ms_mean": 55.2597123151045,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 2.12872,
+        "native_input": 640,
+        "AP50": 0.5770884980844212,
+        "AP50_95": 0.3324822300535754,
+        "tau": 0.15,
+        "precision": 0.6521739130434783,
+        "recall": 0.5555555555555556,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.7142857142857143
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.2,
+        "latency_ms": {
+          "ms_p50": 44.68743099994299,
+          "ms_p95": 52.73116269997899,
+          "ms_mean": 45.80671034284478,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 2.12872,
+        "native_input": 640,
+        "AP50": 0.7310383495656854,
+        "AP50_95": 0.40953862520568524,
+        "tau": 0.15,
+        "precision": 0.6708860759493671,
+        "recall": 0.7361111111111112,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.45,
+          "large": 0.8461538461538461
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.65,
+        "latency_ms": {
+          "ms_p50": 38.0246349996014,
+          "ms_p95": 38.49727620017802,
+          "ms_mean": 38.081616285749725,
+          "n": 35
+        }
+      }
+    },
+    "yolov10n": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 2.77552,
+        "native_input": 640,
+        "AP50": 0.38704414294152895,
+        "AP50_95": 0.21916970435027777,
+        "tau": 0.15,
+        "precision": 0.48212083847102344,
+        "recall": 0.4320441988950276,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 1.0,
+          "medium": 0.4305555555555556,
+          "large": 0.43149038461538464
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.6,
+        "latency_ms": {
+          "ms_p50": 26.27140100003089,
+          "ms_p95": 32.79233599997724,
+          "ms_mean": 27.416187346757855,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 2.77552,
+        "native_input": 640,
+        "AP50": 0.47270924036376477,
+        "AP50_95": 0.29418727271708495,
+        "tau": 0.3,
+        "precision": 1.0,
+        "recall": 0.37037037037037035,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.47619047619047616
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.0,
+        "latency_ms": {
+          "ms_p50": 30.403090999925553,
+          "ms_p95": 38.517100000080966,
+          "ms_mean": 31.0586238857143,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 2.77552,
+        "native_input": 640,
+        "AP50": 0.7298273935356396,
+        "AP50_95": 0.43922522658747953,
+        "tau": 0.3,
+        "precision": 0.85,
+        "recall": 0.4722222222222222,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.6538461538461539
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.15,
+        "latency_ms": {
+          "ms_p50": 25.22559600038221,
+          "ms_p95": 25.816123699769378,
+          "ms_mean": 25.285126428363064,
+          "n": 35
+        }
+      }
+    },
+    "florence2-base-ft": {
+      "seaships_dev": {
+        "n_images": 700,
+        "params_m": 231.443968,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.48295219544021695,
+        "AP50_95": 0.2846961355659677,
+        "tau": 0.05,
+        "precision": 0.7922272047832586,
+        "recall": 0.585635359116022,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": 0.0,
+          "medium": 0.2361111111111111,
+          "large": 0.6165865384615384
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 1,
+          "medium": 72,
+          "large": 832
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.19857142857142857,
+        "latency_ms": {
+          "ms_p50": 1543.8378099988768,
+          "ms_p95": 1781.4240639010673,
+          "ms_mean": 1588.1959614561147,
+          "n": 695
+        }
+      },
+      "smd_dev": {
+        "n_images": 40,
+        "params_m": 231.443968,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.21640735502121644,
+        "AP50_95": 0.14102481676739104,
+        "tau": 0.05,
+        "precision": 0.6428571428571429,
+        "recall": 0.3333333333333333,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.16666666666666666,
+          "large": 0.38095238095238093
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.23529411764705882,
+        "fp_per_image": 0.125,
+        "latency_ms": {
+          "ms_p50": 1536.6668300011952,
+          "ms_p95": 1592.48212349994,
+          "ms_mean": 1544.0812164001857,
+          "n": 35
+        }
+      },
+      "smd_test": {
+        "n_images": 40,
+        "params_m": 231.443968,
+        "native_input": {
+          "height": 768,
+          "width": 768
+        },
+        "AP50": 0.8048574298423632,
+        "AP50_95": 0.41652035562049805,
+        "tau": 0.05,
+        "precision": 0.8985507246376812,
+        "recall": 0.8611111111111112,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.6,
+          "large": 0.9615384615384616
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.175,
+        "latency_ms": {
+          "ms_p50": 1579.6144409996487,
+          "ms_p95": 1642.8374358003566,
+          "ms_mean": 1572.1065107140541,
+          "n": 35
+        }
+      }
+    }
+  },
+  "dev_selected_seaships_test": {
+    "rfdetr-small": {
+      "n_images": 3500,
+      "params_m": 32.11117,
+      "native_input": 512,
+      "AP50": 0.7351982096301222,
+      "AP50_95": 0.45272353925405434,
+      "tau": 0.6,
+      "precision": 0.8106348345089528,
+      "recall": 0.6380525304292121,
+      "recall_by_bucket": {
+        "tiny": null,
+        "small": 0.8888888888888888,
+        "medium": 0.7981220657276995,
+        "large": 0.6214689265536724
+      },
+      "n_gt_by_bucket": {
+        "tiny": 0,
+        "small": 9,
+        "medium": 426,
+        "large": 4248
+      },
+      "n_sea_only": 0,
+      "fp_per_sea_only_frame": null,
+      "fp_per_image": 0.19942857142857143,
+      "latency_ms": {
+        "ms_p50": 193.97533600022143,
+        "ms_p95": 199.72617260063998,
+        "ms_mean": 194.8096352695529,
+        "n": 3495
+      }
+    }
+  },
+  "hosted": {
+    "cloud-vision": {
+      "dev": {
+        "n_images": 40,
+        "params_m": null,
+        "native_input": null,
+        "AP50": 0.43565649971590564,
+        "AP50_95": 0.1946954025072837,
+        "tau": 0.6,
+        "precision": 0.7222222222222222,
+        "recall": 0.48148148148148145,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.6190476190476191
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.125,
+        "latency_ms": {
+          "ms_p50": 231.42894400001524,
+          "ms_p95": 310.00444709997055,
+          "ms_mean": 237.22324031429025,
+          "n": 35
+        }
+      },
+      "test": {
+        "n_images": 40,
+        "params_m": null,
+        "native_input": null,
+        "AP50": 0.42282309469545276,
+        "AP50_95": 0.2965835112287927,
+        "tau": 0.6,
+        "precision": 0.7837837837837838,
+        "recall": 0.4027777777777778,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.5576923076923077
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.2,
+        "latency_ms": {
+          "ms_p50": 259.7380750000866,
+          "ms_p95": 391.27919700006254,
+          "ms_mean": 268.67175648568,
+          "n": 35
+        }
+      }
+    },
+    "gemini-2.5-flash": {
+      "dev": {
+        "n_images": 40,
+        "params_m": null,
+        "native_input": null,
+        "AP50": 0.10546054605460545,
+        "AP50_95": 0.03871672881573872,
+        "tau": 0.95,
+        "precision": 0.23809523809523808,
+        "recall": 0.18518518518518517,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.23809523809523808
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.0,
+        "fp_per_image": 0.4,
+        "latency_ms": {
+          "ms_p50": 4535.946549999949,
+          "ms_p95": 7855.5949264999745,
+          "ms_mean": 5110.498761228558,
+          "n": 35
+        }
+      },
+      "test": {
+        "n_images": 40,
+        "params_m": null,
+        "native_input": null,
+        "AP50": 0.06878198240136583,
+        "AP50_95": 0.02645313047123398,
+        "tau": 0.95,
+        "precision": 0.22641509433962265,
+        "recall": 0.16666666666666666,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.0,
+          "large": 0.23076923076923078
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 1.025,
+        "latency_ms": {
+          "ms_p50": 4504.301520000126,
+          "ms_p95": 6309.938457600083,
+          "ms_mean": 4319.610179685736,
+          "n": 35
+        }
+      }
+    },
+    "gemini-2.5-pro": {
+      "dev": {
+        "n_images": 40,
+        "params_m": null,
+        "native_input": null,
+        "AP50": 0.5667364813404417,
+        "AP50_95": 0.25014167649796654,
+        "tau": 0.9,
+        "precision": 0.6923076923076923,
+        "recall": 0.6666666666666666,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.16666666666666666,
+          "large": 0.8095238095238095
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 6,
+          "large": 21
+        },
+        "n_sea_only": 17,
+        "fp_per_sea_only_frame": 0.29411764705882354,
+        "fp_per_image": 0.2,
+        "latency_ms": {
+          "ms_p50": 9928.149262999796,
+          "ms_p95": 12639.92009070004,
+          "ms_mean": 10334.938429771422,
+          "n": 35
+        }
+      },
+      "test": {
+        "n_images": 40,
+        "params_m": null,
+        "native_input": null,
+        "AP50": 0.6743312526787426,
+        "AP50_95": 0.3878588700083229,
+        "tau": 0.9,
+        "precision": 0.8103448275862069,
+        "recall": 0.6527777777777778,
+        "recall_by_bucket": {
+          "tiny": null,
+          "small": null,
+          "medium": 0.1,
+          "large": 0.8653846153846154
+        },
+        "n_gt_by_bucket": {
+          "tiny": 0,
+          "small": 0,
+          "medium": 20,
+          "large": 52
+        },
+        "n_sea_only": 0,
+        "fp_per_sea_only_frame": null,
+        "fp_per_image": 0.275,
+        "latency_ms": {
+          "ms_p50": 9785.884857999918,
+          "ms_p95": 11423.955528099987,
+          "ms_mean": 9838.36461454288,
+          "n": 35
+        }
+      }
+    }
+  },
+  "classifiers": {
+    "clip-b16-openai": {
+      "params_m": 149.620737,
+      "visual_params_m": 86.19264,
+      "dev": {
+        "n": 720,
+        "acc_open13": 0.5666666666666667,
+        "acc_restricted4": 0.7055555555555556,
+        "ms_per_crop_torch": 92.73039383333273,
+        "native_acc": {
+          "bulk cargo carrier": 0.8166666666666667,
+          "container ship": 0.5,
+          "fishing boat": 0.39166666666666666,
+          "general cargo ship": 0.875,
+          "ore carrier": 0.675,
+          "passenger ship": 0.14166666666666666
+        }
+      },
+      "test": {
+        "n": 4683,
+        "acc_open13": 0.6459534486440316,
+        "acc_restricted4": 0.7804825966260944,
+        "ms_per_crop_torch": 95.59678705082194,
+        "native_acc": {
+          "bulk cargo carrier": 0.8653266331658291,
+          "container ship": 0.4897025171624714,
+          "fishing boat": 0.39730639730639733,
+          "general cargo ship": 0.8736559139784946,
+          "ore carrier": 0.7292250233426704,
+          "passenger ship": 0.18951612903225806
+        }
+      }
+    },
+    "clip-b32-openai": {
+      "params_m": 151.277313,
+      "visual_params_m": 87.849216,
+      "dev": {
+        "n": 720,
+        "acc_open13": 0.4013888888888889,
+        "acc_restricted4": 0.6708333333333333,
+        "ms_per_crop_torch": 23.55741969444504,
+        "native_acc": {
+          "bulk cargo carrier": 0.6,
+          "container ship": 0.375,
+          "fishing boat": 0.25,
+          "general cargo ship": 0.65,
+          "ore carrier": 0.2833333333333333,
+          "passenger ship": 0.25
+        }
+      },
+      "test": {
+        "n": 4683,
+        "acc_open13": 0.4168268204142644,
+        "acc_restricted4": 0.6831091180866966,
+        "ms_per_crop_torch": 23.663391524236808,
+        "native_acc": {
+          "bulk cargo carrier": 0.6542713567839196,
+          "container ship": 0.4668192219679634,
+          "fishing boat": 0.19696969696969696,
+          "general cargo ship": 0.6330645161290323,
+          "ore carrier": 0.30438842203548083,
+          "passenger ship": 0.2661290322580645
+        }
+      }
+    },
+    "mobileclip-s1": {
+      "params_m": 84.969729,
+      "visual_params_m": 21.541632,
+      "dev": {
+        "n": 720,
+        "acc_open13": 0.5958333333333333,
+        "acc_restricted4": 0.7263888888888889,
+        "ms_per_crop_torch": 60.20353106944438,
+        "native_acc": {
+          "bulk cargo carrier": 0.8916666666666667,
+          "container ship": 0.25,
+          "fishing boat": 0.36666666666666664,
+          "general cargo ship": 0.95,
+          "ore carrier": 0.8916666666666667,
+          "passenger ship": 0.225
+        }
+      },
+      "test": {
+        "n": 4683,
+        "acc_open13": 0.6777706598334401,
+        "acc_restricted4": 0.783472133247918,
+        "ms_per_crop_torch": 58.91609172667079,
+        "native_acc": {
+          "bulk cargo carrier": 0.9326633165829146,
+          "container ship": 0.2768878718535469,
+          "fishing boat": 0.3434343434343434,
+          "general cargo ship": 0.9206989247311828,
+          "ore carrier": 0.8935574229691877,
+          "passenger ship": 0.3024193548387097
+        }
+      }
+    },
+    "mobileclip-s2": {
+      "params_m": 99.243329,
+      "visual_params_m": 35.815232,
+      "dev": {
+        "n": 720,
+        "acc_open13": 0.6041666666666666,
+        "acc_restricted4": 0.6972222222222222,
+        "ms_per_crop_torch": 81.23716841944568,
+        "native_acc": {
+          "bulk cargo carrier": 0.9166666666666666,
+          "container ship": 0.2,
+          "fishing boat": 0.4666666666666667,
+          "general cargo ship": 0.925,
+          "ore carrier": 0.8416666666666667,
+          "passenger ship": 0.275
+        }
+      },
+      "test": {
+        "n": 4683,
+        "acc_open13": 0.6980568011958147,
+        "acc_restricted4": 0.7800555199658339,
+        "ms_per_crop_torch": 82.5591716201156,
+        "native_acc": {
+          "bulk cargo carrier": 0.9597989949748744,
+          "container ship": 0.2585812356979405,
+          "fishing boat": 0.4318181818181818,
+          "general cargo ship": 0.9341397849462365,
+          "ore carrier": 0.8599439775910365,
+          "passenger ship": 0.2903225806451613
+        }
+      }
+    },
+    "openclip-b16-laion": {
+      "params_m": 149.620737,
+      "visual_params_m": 86.19264,
+      "dev": {
+        "n": 720,
+        "acc_open13": 0.46944444444444444,
+        "acc_restricted4": 0.6625,
+        "ms_per_crop_torch": 91.04097126944453,
+        "native_acc": {
+          "bulk cargo carrier": 0.6,
+          "container ship": 0.7416666666666667,
+          "fishing boat": 0.5,
+          "general cargo ship": 0.6333333333333333,
+          "ore carrier": 0.14166666666666666,
+          "passenger ship": 0.2
+        }
+      },
+      "test": {
+        "n": 4683,
+        "acc_open13": 0.49797138586376255,
+        "acc_restricted4": 0.6660260516762759,
+        "ms_per_crop_torch": 86.58634134998934,
+        "native_acc": {
+          "bulk cargo carrier": 0.6592964824120603,
+          "container ship": 0.6773455377574371,
+          "fishing boat": 0.47474747474747475,
+          "general cargo ship": 0.6774193548387096,
+          "ore carrier": 0.23902894491129786,
+          "passenger ship": 0.22580645161290322
+        }
+      }
+    },
+    "openclip-b32-datacomp": {
+      "params_m": 151.277313,
+      "visual_params_m": 87.849216,
+      "dev": {
+        "n": 720,
+        "acc_open13": 0.5486111111111112,
+        "acc_restricted4": 0.6888888888888889,
+        "ms_per_crop_torch": 23.29382711666565,
+        "native_acc": {
+          "bulk cargo carrier": 0.8833333333333333,
+          "container ship": 0.3416666666666667,
+          "fishing boat": 0.2916666666666667,
+          "general cargo ship": 0.8583333333333333,
+          "ore carrier": 0.7,
+          "passenger ship": 0.21666666666666667
+        }
+      },
+      "test": {
+        "n": 4683,
+        "acc_open13": 0.597480247704463,
+        "acc_restricted4": 0.7563527653213752,
+        "ms_per_crop_torch": 23.343336517830224,
+        "native_acc": {
+          "bulk cargo carrier": 0.8763819095477386,
+          "container ship": 0.39588100686498856,
+          "fishing boat": 0.2878787878787879,
+          "general cargo ship": 0.8481182795698925,
+          "ore carrier": 0.6647992530345471,
+          "passenger ship": 0.27419354838709675
+        }
+      }
+    },
+    "siglip2-b16": {
+      "params_m": 375.18797,
+      "visual_params_m": 92.884224,
+      "dev": {
+        "n": 720,
+        "acc_open13": 0.5958333333333333,
+        "acc_restricted4": 0.7166666666666667,
+        "ms_per_crop_torch": 84.33237637083393,
+        "native_acc": {
+          "bulk cargo carrier": 0.8416666666666667,
+          "container ship": 0.24166666666666667,
+          "fishing boat": 0.44166666666666665,
+          "general cargo ship": 0.9,
+          "ore carrier": 0.8333333333333334,
+          "passenger ship": 0.31666666666666665
+        }
+      },
+      "test": {
+        "n": 4683,
+        "acc_open13": 0.6833226564168268,
+        "acc_restricted4": 0.7689515267990604,
+        "ms_per_crop_torch": 168.06600988960085,
+        "native_acc": {
+          "bulk cargo carrier": 0.9055276381909547,
+          "container ship": 0.2562929061784897,
+          "fishing boat": 0.45202020202020204,
+          "general cargo ship": 0.8413978494623656,
+          "ore carrier": 0.8720821661998133,
+          "passenger ship": 0.3629032258064516
+        }
+      }
+    }
+  },
+  "dinov2_feature_only": {
+    "facebook/dinov2-small": {
+      "params_m": 22.056576,
+      "dim": 384,
+      "n": 60,
+      "ms_p50": 58.4777159983787,
+      "ms_p95": 73.16995899964239,
+      "device": "cpu",
+      "threads": 4,
+      "split": "dev",
+      "accuracy": null,
+      "note": "Image-only encoder; no maritime/text head. Zero-shot subtype accuracy is undefined."
+    },
+    "facebook/dinov2-base": {
+      "params_m": 86.58048,
+      "dim": 768,
+      "n": 60,
+      "ms_p50": 139.93143399966357,
+      "ms_p95": 155.27019249984733,
+      "device": "cpu",
+      "threads": 4,
+      "split": "dev",
+      "accuracy": null,
+      "note": "Image-only encoder; no maritime/text head. Zero-shot subtype accuracy is undefined."
+    }
+  },
+  "support_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-0319-b-bakeoff-summary/"
+}
