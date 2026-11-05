@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -207,5 +208,30 @@ func TestUploadNextReturnsToPriorityOrder(t *testing.T) {
 	got := s.AdvanceUploads(time.Second)
 	if len(got) != 1 || got[0].ID != "critical" {
 		t.Fatalf("priority order not restored: %+v", got)
+	}
+}
+
+func TestSeedUploadedMarksOnlyTopP1(t *testing.T) {
+	s := New(10)
+	for i, manual := range []int{1, 1, 1, 2} {
+		s.Add(&command.Item{ID: fmt.Sprint(i), KB: 10, Manual: manual, Dets: []command.Detection{{Conf: 0.5 + 0.1*float64(i)}}}, 0)
+	}
+	s.SeedUploaded(2)
+	items, _, _, _ := s.Snapshot()
+	done, minDone, maxQueuedP1 := 0, 2.0, -1.0
+	for _, it := range items {
+		switch {
+		case it.Upload.Done:
+			done++
+			if it.Tier != 1 || it.Upload.Sent != it.Upload.Bytes {
+				t.Fatalf("seeded %+v", it)
+			}
+			minDone = min(minDone, it.Central)
+		case it.Tier == 1:
+			maxQueuedP1 = max(maxQueuedP1, it.Central)
+		}
+	}
+	if done != 2 || maxQueuedP1 > minDone {
+		t.Fatalf("done=%d, lowest seeded central %.3f, highest queued P1 %.3f", done, minDone, maxQueuedP1)
 	}
 }

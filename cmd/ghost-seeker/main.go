@@ -130,6 +130,7 @@ func main() {
 	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
+	data.SeedUploaded(startSent)
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
@@ -152,7 +153,7 @@ func main() {
 	go runSimulation(data, generator, app, uplink)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
-		for i := 0; i < 4; i++ {
+		for i := 0; i < startSent; i++ {
 			data.AutoEscalate()
 		}
 		go runWatchOfficer(data, app, *autoCDR)
@@ -185,6 +186,10 @@ func refreshTimeScopes(app *server.Server) {
 		app.RescoreTimeScoped(now)
 	}
 }
+
+// startSent is how many top P1 backlog images open already uploaded and
+// auto-sent to the Commander; everything else starts queued.
+const startSent = 2
 
 func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))

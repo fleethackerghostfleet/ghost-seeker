@@ -41,6 +41,24 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 	return command.Item{}, s.cdr, ErrNotFound
 }
 
+// SeedUploaded marks the n highest-priority P1 images as already on shore, so a
+// fresh simulation opens with a queue instead of a fully sent backlog.
+func (s *Store) SeedUploaded(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var top []int
+	for i, item := range s.items {
+		if item.Tier == 1 && item.Filtered == "" && !item.Background {
+			top = append(top, i)
+		}
+	}
+	sort.SliceStable(top, func(i, j int) bool { return s.items[top[i]].Central > s.items[top[j]].Central })
+	for _, i := range top[:min(n, len(top))] {
+		u := &s.items[i].Upload
+		u.Sent, u.Done, u.Received, u.Active = u.Bytes, true, true, false
+	}
+}
+
 // SetLinkFixed records that the simulated rate is pinned and never resampled.
 func (s *Store) SetLinkFixed(fixed bool) {
 	s.mu.Lock()
