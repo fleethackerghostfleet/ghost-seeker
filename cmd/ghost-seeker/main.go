@@ -17,6 +17,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
@@ -36,6 +37,7 @@ func main() {
 		}
 	}
 	addr := flag.String("addr", ":8080", "HTTP listen address")
+	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
@@ -94,6 +96,14 @@ func main() {
 		options = append(options, server.WithPolicyBackend(backend))
 	}
 	app := server.New(data, options...)
+	if *reviewPath != "" {
+		l, err := reviews.Open(*reviewPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer l.Close()
+		app.SetReviewLog(l)
+	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
 	go runSimulation(data, generator, app)

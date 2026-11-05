@@ -16,11 +16,14 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
 type Server struct {
+	reviews  *reviews.Log
+	reviewMu sync.Mutex
 	store    *store.Store
 	hub      *hub
 	mux      *http.ServeMux
@@ -56,6 +59,11 @@ func New(data *store.Store, options ...Option) *Server {
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
 	s.mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
+	s.mux.HandleFunc("POST /api/items/{id}/review", s.reviewItem)
+	s.mux.HandleFunc("POST /api/reviews/{id}/reason", s.correctReview)
+	s.mux.HandleFunc("POST /api/reviews/{id}/undo", s.correctReview)
+	s.mux.HandleFunc("GET /api/reviews/summary", s.reviewSummary)
+	s.mux.HandleFunc("GET /api/reviews/export", s.reviewExport)
 	s.mux.HandleFunc("POST /api/items/{id}/decision", s.decide)
 	s.mux.HandleFunc("POST /api/items/{id}/full-res", s.fullRes)
 	s.mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))

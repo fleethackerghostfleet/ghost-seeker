@@ -7,6 +7,30 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('durable reviews use server actions, identity, corrections and typing guard',()=>{
+ assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
+ assert.match(source,/reviewer:reviewerName/);
+ assert.match(source,/\/api\/reviews\/\$\{encodeURIComponent\(p.record\)\}\/undo/);
+ assert.match(source,/e.stopPropagation\(\)/);
+ assert.match(source,/wrong_detection/);
+});
+test('review submission captures record id and never sends model fields',async()=>{
+ const context=setup();
+ vm.runInContext(`reviewerName='Alice';calls=[];applyItemUpdate=()=>{};findItem=id=>({id});refreshReviewData=()=>{};request=async(...args)=>{calls.push(args);return {record:{id:'r1'},item:{id:'i'},cdr:0}};p={};`,context);
+ await vm.runInContext("submitReview('i','2',{manual:2},p)",context);
+ const calls=JSON.parse(vm.runInContext('JSON.stringify(calls)',context));
+ assert.deepEqual(calls,[['/api/items/i/review','POST',{reviewer:'Alice',action:'tier',tier:2}]]);
+ assert.equal(vm.runInContext('p.record',context),'r1');
+ await vm.runInContext("saveReviewReason('r1','wrong_detection','note')",context);
+ assert.equal(vm.runInContext('lastReview.reason',context),'wrong_detection');
+ vm.runInContext("request=async()=>{throw Error('disk full')}",context);
+ await assert.rejects(vm.runInContext("submitReview('i','accept',{manual:2},{})",context),/disk full/);
+});
+test('empty reviewer blocks actions before requests and empty note has no target',()=>{
+ const context=setup();
+ vm.runInContext("messages=[];toast=m=>messages.push(m);rvAct('accept');openReviewNote()",context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(messages)',context)),['Set your reviewer name first','Review an image first']);
+});
 test('spectral controls are metadata-driven and preserve the frame and boxes',()=>{
  const context=setup();
  vm.runInContext(`

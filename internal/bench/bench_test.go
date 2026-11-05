@@ -47,8 +47,8 @@ func TestModelsMeetFloor(t *testing.T) {
 	frames := Generate(101, 4000)
 	for model := range Missions {
 		r := Evaluate(model, frames)
-		if r.CriticalMiss > .01 || r.NDCG < .95 || r.P1Recall < .85 || r.EdgeMissP1 > .01 {
-			t.Errorf("%s below floor: critical miss %.3f, NDCG %.3f, P1 recall %.3f, edge miss P1 %.3f", model, r.CriticalMiss, r.NDCG, r.P1Recall, r.EdgeMissP1)
+		if err := CheckFloor(r); err != nil {
+			t.Error(err)
 		}
 	}
 }
