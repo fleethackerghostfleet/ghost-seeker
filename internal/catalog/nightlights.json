@@ -2670,78 +2670,53 @@
           },
           "lights": [
             {
-              "colour": "red",
-              "x": 115.0,
-              "y": 253.0,
-              "relative": [
-                0.23255813953488372,
-                -0.16296296296296298
-              ],
-              "flashing": false,
-              "sodium_ambiguous": true,
-              "contrast": 238.0
-            },
-            {
-              "colour": "white",
-              "x": 271.0,
-              "y": 278.0,
-              "relative": [
-                0.958139534883721,
-                0.022222222222222223
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 238.0
-            },
-            {
               "colour": "green",
-              "x": 218.0952380952381,
-              "y": 316.07142857142856,
+              "x": 218.0,
+              "y": 316.0,
               "relative": [
-                0.7120708748615726,
-                0.30423280423280413
+                0.7116279069767442,
+                0.3037037037037037
               ],
               "flashing": false,
+              "reflection": 49.2,
+              "sharp": false,
+              "colour_margin": 0.9,
+              "conf": 0.7416666666666667,
               "sodium_ambiguous": false,
-              "contrast": 236.0
+              "contrast": 229.5,
+              "persistence": 1
             },
             {
               "colour": "red",
               "x": 127.0,
-              "y": 316.2439024390244,
+              "y": 316.0,
               "relative": [
                 0.28837209302325584,
-                0.30551038843721773
+                0.3037037037037037
               ],
               "flashing": false,
+              "reflection": 29.700000000000003,
+              "sharp": false,
+              "colour_margin": 0.95,
+              "conf": 0.7155416666666667,
               "sodium_ambiguous": false,
-              "contrast": 233.0
-            },
-            {
-              "colour": "red",
-              "x": 282.0,
-              "y": 287.0,
-              "relative": [
-                1.0093023255813953,
-                0.08888888888888889
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 183.0
+              "contrast": 216.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
-            "rule_id": "nuc",
-            "aspect": "starboard_side_crossing_left_to_right",
-            "line": "Vessel showing red-over-red: not under command \u2014 keep clear",
+            "rule_id": "head_on",
+            "aspect": "head_on",
+            "line": "Vessel showing red + green: both sidelights visible: approximately head-on; confirm risk and vessel type",
             "boost": 0.0,
+            "pattern_conf": 0.7155416666666667,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
-            "ref": "Rule 27(a)",
-            "severity": "urgent",
+            "ref": "Rules 21, 23",
+            "severity": "advisory",
             "assisted": false,
             "low_confidence": true,
-            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+            "confidence_note": "uncertain light evidence \u2014 verify, no priority boost"
           },
           "truth_rule_id": "head_on",
           "truth_lights": [
@@ -2772,54 +2747,36 @@
           },
           "lights": [
             {
-              "colour": "white",
-              "x": 461.2,
-              "y": 345.0,
-              "relative": [
-                0.4706976744186046,
-                0.3851851851851852
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 240.0
-            },
-            {
-              "colour": "white",
-              "x": 402.0,
-              "y": 306.2,
-              "relative": [
-                0.19534883720930232,
-                0.0977777777777777
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 238.0
-            },
-            {
               "colour": "red",
-              "x": 467.87179487179486,
-              "y": 334.12820512820514,
+              "x": 468.0,
+              "y": 334.0,
               "relative": [
-                0.5017292784734645,
-                0.30465337132003806
+                0.5023255813953489,
+                0.3037037037037037
               ],
               "flashing": false,
+              "reflection": 29.299999999999997,
+              "sharp": false,
+              "colour_margin": 0.925,
+              "conf": 0.7077916666666667,
               "sodium_ambiguous": false,
-              "contrast": 238.0
+              "contrast": 236.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
-            "rule_id": "fishing",
-            "aspect": "starboard_side_crossing_left_to_right",
-            "line": "Vessel showing red-over-white: fishing other than trawling",
+            "rule_id": "port",
+            "aspect": "port_side_crossing_right_to_left",
+            "line": "Vessel showing red: her port side visible, likely crossing right to left; light alone does not establish right of way",
             "boost": 0.0,
-            "masthead_horizontal_offset": 59.19999999999999,
+            "pattern_conf": 0.7077916666666667,
+            "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
-            "ref": "Rule 26(c)",
+            "ref": "Rule 21(b)",
             "severity": "advisory",
             "assisted": false,
             "low_confidence": true,
-            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+            "confidence_note": "uncertain light evidence \u2014 verify, no priority boost"
           },
           "truth_rule_id": "port",
           "truth_lights": [
@@ -2843,54 +2800,36 @@
           },
           "lights": [
             {
-              "colour": "white",
-              "x": 657.0909090909091,
-              "y": 334.0909090909091,
-              "relative": [
-                0.00972515856236801,
-                0.17104377104377128
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 240.0
-            },
-            {
-              "colour": "white",
-              "x": 654.125,
-              "y": 361.8333333333333,
-              "relative": [
-                -0.004069767441860465,
-                0.37654320987654305
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 239.0
-            },
-            {
               "colour": "green",
               "x": 762.0,
-              "y": 351.90697674418607,
+              "y": 352.0,
               "relative": [
                 0.49767441860465117,
-                0.3030146425495264
+                0.3037037037037037
               ],
               "flashing": false,
+              "reflection": 56.2,
+              "sharp": false,
+              "colour_margin": 0.9,
+              "conf": 0.7416666666666667,
               "sodium_ambiguous": false,
-              "contrast": 238.0
+              "contrast": 228.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
-            "rule_id": "two_mastheads",
+            "rule_id": "starboard",
             "aspect": "starboard_side_crossing_left_to_right",
-            "line": "Vessel showing white + white: ambiguous: towing (vertical whites) or power-driven vessel 50 m or longer (forward/aft mastheads); geometry alone is insufficient",
+            "line": "Vessel showing green: her starboard side visible, likely crossing left to right; light alone does not establish right of way",
             "boost": 0.0,
-            "masthead_horizontal_offset": -2.965909090909122,
+            "pattern_conf": 0.7416666666666667,
+            "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
-            "ref": "Rules 23(a), 24(a)",
+            "ref": "Rule 21(b)",
             "severity": "advisory",
             "assisted": false,
             "low_confidence": true,
-            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+            "confidence_note": "uncertain light evidence \u2014 verify, no priority boost"
           },
           "truth_rule_id": "starboard",
           "truth_lights": [
@@ -3066,6 +3005,40 @@
           },
           "lights": [
             {
+              "colour": "red",
+              "x": 172.0,
+              "y": 365.0,
+              "relative": [
+                0.49767441860465117,
+                0.6666666666666666
+              ],
+              "flashing": false,
+              "reflection": 82.2,
+              "sharp": false,
+              "colour_margin": 0.42500000000000004,
+              "conf": 0.85625,
+              "sodium_ambiguous": true,
+              "contrast": 234.0,
+              "persistence": 1
+            },
+            {
+              "colour": "ambiguous_orange",
+              "x": 172.0,
+              "y": 299.0,
+              "relative": [
+                0.49767441860465117,
+                0.17777777777777778
+              ],
+              "flashing": false,
+              "reflection": 82.2,
+              "sharp": false,
+              "colour_margin": 0.1,
+              "conf": 0.775,
+              "sodium_ambiguous": true,
+              "contrast": 226.0,
+              "persistence": 1
+            },
+            {
               "colour": "white",
               "x": 172.0,
               "y": 332.0,
@@ -3074,32 +3047,13 @@
                 0.4222222222222222
               ],
               "flashing": false,
+              "reflection": 82.2,
+              "sharp": false,
+              "colour_margin": 1.0,
+              "conf": 1.0,
               "sodium_ambiguous": false,
-              "contrast": 243.0
-            },
-            {
-              "colour": "yellow",
-              "x": 172.11428571428573,
-              "y": 299.1142857142857,
-              "relative": [
-                0.49820598006644523,
-                0.17862433862433852
-              ],
-              "flashing": false,
-              "sodium_ambiguous": true,
-              "contrast": 241.0
-            },
-            {
-              "colour": "yellow",
-              "x": 172.12121212121212,
-              "y": 365.1212121212121,
-              "relative": [
-                0.49823819591261453,
-                0.6675645342312009
-              ],
-              "flashing": false,
-              "sodium_ambiguous": true,
-              "contrast": 239.5
+              "contrast": 224.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
@@ -3107,6 +3061,7 @@
             "aspect": "unknown",
             "line": "No recognized light pattern",
             "boost": 0.0,
+            "pattern_conf": 0.775,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights"
           },
@@ -3147,15 +3102,20 @@
           "lights": [
             {
               "colour": "red",
-              "x": 468.125,
-              "y": 316.84375,
+              "x": 468.0,
+              "y": 317.0,
               "relative": [
-                0.502906976744186,
-                0.17662037037037037
+                0.5023255813953489,
+                0.17777777777777778
               ],
               "flashing": false,
+              "reflection": 33.8,
+              "sharp": false,
+              "colour_margin": 0.85,
+              "conf": 0.9499999999999998,
               "sodium_ambiguous": false,
-              "contrast": 226.0
+              "contrast": 220.0,
+              "persistence": 1
             },
             {
               "colour": "red",
@@ -3166,8 +3126,13 @@
                 0.3925925925925926
               ],
               "flashing": false,
+              "reflection": 33.8,
+              "sharp": false,
+              "colour_margin": 0.875,
+              "conf": 0.95,
               "sodium_ambiguous": false,
-              "contrast": 191.0
+              "contrast": 186.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
@@ -3175,6 +3140,7 @@
             "aspect": "unknown",
             "line": "Vessel showing red-over-red: not under command \u2014 keep clear",
             "boost": 0.9,
+            "pattern_conf": 0.9499999999999998,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 27(a)",
@@ -3213,39 +3179,54 @@
           "lights": [
             {
               "colour": "red",
-              "x": 762.1212121212121,
-              "y": 335.06060606060606,
+              "x": 762.0,
+              "y": 350.0,
               "relative": [
-                0.49823819591261453,
-                0.1782267115600449
+                0.49767441860465117,
+                0.28888888888888886
               ],
               "flashing": false,
+              "reflection": 61.7,
+              "sharp": false,
+              "colour_margin": 0.625,
+              "conf": 0.90625,
               "sodium_ambiguous": true,
-              "contrast": 238.0
+              "contrast": 237.0,
+              "persistence": 1
             },
             {
               "colour": "red",
-              "x": 762.21875,
-              "y": 350.09375,
+              "x": 762.0,
+              "y": 365.0,
               "relative": [
-                0.49869186046511627,
-                0.28958333333333336
+                0.49767441860465117,
+                0.4
               ],
               "flashing": false,
+              "reflection": 61.7,
+              "sharp": false,
+              "colour_margin": 0.575,
+              "conf": 0.8937499999999999,
               "sodium_ambiguous": true,
-              "contrast": 238.0
+              "contrast": 233.0,
+              "persistence": 1
             },
             {
               "colour": "red",
-              "x": 761.9117647058823,
-              "y": 364.79411764705884,
+              "x": 762.0,
+              "y": 335.0,
               "relative": [
-                0.49726402188782476,
-                0.39847494553376916
+                0.49767441860465117,
+                0.17777777777777778
               ],
               "flashing": false,
+              "reflection": 61.7,
+              "sharp": false,
+              "colour_margin": 0.6,
+              "conf": 0.9,
               "sodium_ambiguous": true,
-              "contrast": 237.0
+              "contrast": 228.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
@@ -3253,6 +3234,7 @@
             "aspect": "unknown",
             "line": "Vessel showing red-over-red-over-red: constrained by draught \u2014 avoid impeding safe passage",
             "boost": 0.7,
+            "pattern_conf": 0.8937499999999999,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 28",
@@ -3310,66 +3292,36 @@
           },
           "lights": [
             {
-              "colour": "white",
-              "x": 71.8,
-              "y": 313.0,
-              "relative": [
-                0.031627906976744176,
-                0.2814814814814815
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 242.0
-            },
-            {
-              "colour": "white",
-              "x": 249.0909090909091,
-              "y": 318.0909090909091,
-              "relative": [
-                0.8562367864693446,
-                0.3191919191919194
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 240.0
-            },
-            {
               "colour": "green",
-              "x": 171.95454545454547,
-              "y": 298.9318181818182,
+              "x": 172.0,
+              "y": 299.0,
               "relative": [
-                0.49746300211416494,
-                0.1772727272727273
+                0.49767441860465117,
+                0.17777777777777778
               ],
               "flashing": false,
+              "reflection": 97.2,
+              "sharp": false,
+              "colour_margin": 0.9,
+              "conf": 0.7416666666666667,
               "sodium_ambiguous": false,
-              "contrast": 239.0
-            },
-            {
-              "colour": "white",
-              "x": 172.0681818181818,
-              "y": 327.04545454545456,
-              "relative": [
-                0.49799154334038054,
-                0.38552188552188565
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 237.0
+              "contrast": 217.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
-            "rule_id": "trawling",
-            "aspect": "unknown",
-            "line": "Vessel showing green-over-white: engaged in trawling",
+            "rule_id": "starboard",
+            "aspect": "starboard_side_crossing_left_to_right",
+            "line": "Vessel showing green: her starboard side visible, likely crossing left to right; light alone does not establish right of way",
             "boost": 0.0,
-            "masthead_horizontal_offset": 100.26818181818182,
+            "pattern_conf": 0.7416666666666667,
+            "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
-            "ref": "Rule 26(b)",
+            "ref": "Rule 21(b)",
             "severity": "advisory",
             "assisted": false,
             "low_confidence": true,
-            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+            "confidence_note": "uncertain light evidence \u2014 verify, no priority boost"
           },
           "truth_rule_id": "trawling",
           "truth_lights": [
@@ -3400,28 +3352,21 @@
           },
           "lights": [
             {
-              "colour": "white",
-              "x": 379.2083333333333,
-              "y": 318.9583333333333,
+              "colour": "red",
+              "x": 468.0,
+              "y": 317.0,
               "relative": [
-                0.08934108527131775,
-                0.19228395061728382
+                0.5023255813953489,
+                0.17777777777777778
               ],
               "flashing": false,
+              "reflection": 98.8,
+              "sharp": false,
+              "colour_margin": 0.925,
+              "conf": 0.95,
               "sodium_ambiguous": false,
-              "contrast": 240.0
-            },
-            {
-              "colour": "white",
-              "x": 446.08333333333337,
-              "y": 319.0833333333333,
-              "relative": [
-                0.400387596899225,
-                0.19320987654320973
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 240.0
+              "contrast": 232.5,
+              "persistence": 1
             },
             {
               "colour": "white",
@@ -3432,70 +3377,28 @@
                 0.42962962962962964
               ],
               "flashing": false,
+              "reflection": 98.8,
+              "sharp": false,
+              "colour_margin": 0.9625,
+              "conf": 0.95,
               "sodium_ambiguous": false,
-              "contrast": 239.0
-            },
-            {
-              "colour": "red",
-              "x": 468.0,
-              "y": 317.1025641025641,
-              "relative": [
-                0.5023255813953489,
-                0.1785375118708451
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 238.0
-            },
-            {
-              "colour": "white",
-              "x": 326.0,
-              "y": 266.25,
-              "relative": [
-                -0.15813953488372093,
-                -0.19814814814814816
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 203.0
-            },
-            {
-              "colour": "white",
-              "x": 537.0,
-              "y": 266.25,
-              "relative": [
-                0.8232558139534883,
-                -0.19814814814814816
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 199.0
-            },
-            {
-              "colour": "red",
-              "x": 436.0,
-              "y": 309.0,
-              "relative": [
-                0.35348837209302325,
-                0.11851851851851852
-              ],
-              "flashing": false,
-              "sodium_ambiguous": true,
-              "contrast": 192.0
+              "contrast": 223.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
             "rule_id": "fishing",
             "aspect": "unknown",
             "line": "Vessel showing red-over-white: fishing other than trawling",
-            "boost": 0.0,
-            "masthead_horizontal_offset": 142.0,
+            "boost": 0.1,
+            "pattern_conf": 0.95,
+            "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 26(c)",
             "severity": "advisory",
             "assisted": false,
-            "low_confidence": true,
-            "confidence_note": "extra unexplained lights \u2014 verify, no priority boost"
+            "low_confidence": false,
+            "confidence_note": ""
           },
           "truth_rule_id": "fishing",
           "truth_lights": [
@@ -3526,50 +3429,49 @@
           },
           "lights": [
             {
-              "colour": "white",
-              "x": 762.1304347826087,
-              "y": 314.1304347826087,
+              "colour": "red",
+              "x": 762.0,
+              "y": 346.0,
               "relative": [
-                0.4982810920121337,
-                0.023188405797101394
+                0.49767441860465117,
+                0.25925925925925924
               ],
               "flashing": false,
+              "reflection": 105.7,
+              "sharp": false,
+              "colour_margin": 0.875,
+              "conf": 0.95,
               "sodium_ambiguous": false,
-              "contrast": 241.0
+              "contrast": 232.5,
+              "persistence": 1
             },
             {
               "colour": "white",
-              "x": 776.0,
-              "y": 338.8333333333333,
+              "x": 762.0,
+              "y": 335.0,
               "relative": [
-                0.5627906976744186,
-                0.2061728395061727
+                0.49767441860465117,
+                0.17777777777777778
               ],
               "flashing": false,
+              "reflection": 105.7,
+              "sharp": false,
+              "colour_margin": 0.984375,
+              "conf": 0.95,
               "sodium_ambiguous": false,
-              "contrast": 240.0
-            },
-            {
-              "colour": "white",
-              "x": 762.0952380952381,
-              "y": 334.92857142857144,
-              "relative": [
-                0.4981173864894794,
-                0.17724867724867738
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 238.0
+              "contrast": 215.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
-            "rule_id": "tow_long",
+            "rule_id": "pilot",
             "aspect": "unknown",
-            "line": "Vessel showing white-over-white-over-white: possible towing vessel, tow exceeds 200 m; verify towing lights and aspect",
-            "boost": 0.1,
-            "masthead_horizontal_offset": 13.869565217391255,
+            "line": "Vessel showing white-over-red: pilot vessel on duty",
+            "boost": 0,
+            "pattern_conf": 0.95,
+            "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
-            "ref": "Rule 24(a)",
+            "ref": "Rule 29",
             "severity": "advisory",
             "assisted": false,
             "low_confidence": false,
@@ -3757,18 +3659,6 @@
           "lights": [
             {
               "colour": "white",
-              "x": 171.95454545454547,
-              "y": 322.0681818181818,
-              "relative": [
-                0.49746300211416494,
-                0.3486531986531986
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 242.0
-            },
-            {
-              "colour": "white",
               "x": 172.0,
               "y": 299.0,
               "relative": [
@@ -3776,8 +3666,30 @@
                 0.17777777777777778
               ],
               "flashing": false,
+              "reflection": 92.0,
+              "sharp": false,
+              "colour_margin": 0.975,
+              "conf": 0.95,
               "sodium_ambiguous": false,
-              "contrast": 241.0
+              "contrast": 239.5,
+              "persistence": 1
+            },
+            {
+              "colour": "white",
+              "x": 172.0,
+              "y": 322.0,
+              "relative": [
+                0.49767441860465117,
+                0.34814814814814815
+              ],
+              "flashing": false,
+              "reflection": 92.0,
+              "sharp": false,
+              "colour_margin": 0.946875,
+              "conf": 0.95,
+              "sodium_ambiguous": false,
+              "contrast": 235.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
@@ -3785,7 +3697,8 @@
             "aspect": "unknown",
             "line": "Vessel showing white + white: ambiguous: towing (vertical whites) or power-driven vessel 50 m or longer (forward/aft mastheads); geometry alone is insufficient",
             "boost": 0,
-            "masthead_horizontal_offset": -0.045454545454532536,
+            "pattern_conf": 0.95,
+            "masthead_horizontal_offset": 0.0,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rules 23(a), 24(a)",
             "severity": "advisory",
@@ -3824,26 +3737,19 @@
             {
               "colour": "white",
               "x": 468.0,
-              "y": 342.0,
+              "y": 317.0,
               "relative": [
                 0.5023255813953489,
-                0.362962962962963
+                0.17777777777777778
               ],
               "flashing": false,
+              "reflection": 87.3,
+              "sharp": false,
+              "colour_margin": 0.95,
+              "conf": 0.9874999999999999,
               "sodium_ambiguous": false,
-              "contrast": 241.0
-            },
-            {
-              "colour": "white",
-              "x": 467.9318181818182,
-              "y": 316.95454545454544,
-              "relative": [
-                0.5020084566596195,
-                0.17744107744107732
-              ],
-              "flashing": false,
-              "sodium_ambiguous": false,
-              "contrast": 240.0
+              "contrast": 237.0,
+              "persistence": 1
             },
             {
               "colour": "white",
@@ -3854,8 +3760,30 @@
                 0.5555555555555556
               ],
               "flashing": false,
+              "reflection": 87.3,
+              "sharp": false,
+              "colour_margin": 0.946875,
+              "conf": 0.98671875,
               "sodium_ambiguous": false,
-              "contrast": 240.0
+              "contrast": 233.0,
+              "persistence": 1
+            },
+            {
+              "colour": "white",
+              "x": 468.0,
+              "y": 342.0,
+              "relative": [
+                0.5023255813953489,
+                0.362962962962963
+              ],
+              "flashing": false,
+              "reflection": 87.3,
+              "sharp": false,
+              "colour_margin": 0.95,
+              "conf": 0.9874999999999999,
+              "sodium_ambiguous": false,
+              "contrast": 231.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
@@ -3863,7 +3791,8 @@
             "aspect": "unknown",
             "line": "Vessel showing white-over-white-over-white: possible towing vessel, tow exceeds 200 m; verify towing lights and aspect",
             "boost": 0.1,
-            "masthead_horizontal_offset": 0.06818181818181301,
+            "pattern_conf": 0.98671875,
+            "masthead_horizontal_offset": 0.0,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Rule 24(a)",
             "severity": "advisory",
@@ -3921,15 +3850,20 @@
           "lights": [
             {
               "colour": "red",
-              "x": 467.97222222222223,
-              "y": 316.0833333333333,
+              "x": 468.0,
+              "y": 316.0,
               "relative": [
-                0.5021963824289406,
-                0.30432098765432086
+                0.5023255813953489,
+                0.3037037037037037
               ],
               "flashing": false,
+              "reflection": 30.0,
+              "sharp": false,
+              "colour_margin": 0.875,
+              "conf": 0.6979166666666667,
               "sodium_ambiguous": false,
-              "contrast": 239.0
+              "contrast": 218.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
@@ -3937,6 +3871,7 @@
             "aspect": "unknown",
             "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
             "boost": 1,
+            "pattern_conf": 0.6979166666666667,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
@@ -3966,15 +3901,20 @@
             "lights": [
               {
                 "colour": "red",
-                "x": 467.97222222222223,
-                "y": 316.0833333333333,
+                "x": 468.0,
+                "y": 316.0,
                 "relative": [
-                  0.5021963824289406,
-                  0.30432098765432086
+                  0.5023255813953489,
+                  0.3037037037037037
                 ],
                 "flashing": true,
+                "reflection": 30.0,
+                "sharp": false,
+                "colour_margin": 0.875,
+                "conf": 0.6979166666666667,
                 "sodium_ambiguous": false,
-                "contrast": 239.0
+                "contrast": 218.0,
+                "persistence": 2
               }
             ],
             "interpretation": {
@@ -3982,10 +3922,29 @@
               "aspect": "unknown",
               "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
               "boost": 1,
+              "pattern_conf": 0.6979166666666667,
               "masthead_horizontal_offset": null,
               "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
               "ref": "Annex IV 1(d)",
-              "severity": "urgent"
+              "severity": "urgent",
+              "assisted": true,
+              "low_confidence": false,
+              "confidence_note": ""
+            },
+            "burst": {
+              "requested": true,
+              "reasons": [
+                "flashing light, rate unresolved at base frame rate"
+              ],
+              "granted": null,
+              "fps": 8.0,
+              "duration_s": 3.0
+            },
+            "dark_contact": {
+              "flagged": true,
+              "confidence": 0.98,
+              "n_lights": 0,
+              "basis": "no_lights"
             }
           },
           "sequence_files": [
@@ -4024,6 +3983,7 @@
             "aspect": "unknown",
             "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
             "boost": 1,
+            "pattern_conf": 0.0,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
@@ -4053,15 +4013,20 @@
             "lights": [
               {
                 "colour": "red",
-                "x": 467.97222222222223,
-                "y": 316.0833333333333,
+                "x": 468.0,
+                "y": 316.0,
                 "relative": [
-                  0.5021963824289406,
-                  0.30432098765432086
+                  0.5023255813953489,
+                  0.3037037037037037
                 ],
                 "flashing": true,
+                "reflection": 30.0,
+                "sharp": false,
+                "colour_margin": 0.875,
+                "conf": 0.6979166666666667,
                 "sodium_ambiguous": false,
-                "contrast": 239.0
+                "contrast": 218.0,
+                "persistence": 2
               }
             ],
             "interpretation": {
@@ -4069,10 +4034,29 @@
               "aspect": "unknown",
               "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
               "boost": 1,
+              "pattern_conf": 0.6979166666666667,
               "masthead_horizontal_offset": null,
               "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
               "ref": "Annex IV 1(d)",
-              "severity": "urgent"
+              "severity": "urgent",
+              "assisted": true,
+              "low_confidence": false,
+              "confidence_note": ""
+            },
+            "burst": {
+              "requested": true,
+              "reasons": [
+                "flashing light, rate unresolved at base frame rate"
+              ],
+              "granted": null,
+              "fps": 8.0,
+              "duration_s": 3.0
+            },
+            "dark_contact": {
+              "flagged": true,
+              "confidence": 0.98,
+              "n_lights": 0,
+              "basis": "no_lights"
             }
           },
           "sequence_files": [
@@ -4108,15 +4092,20 @@
           "lights": [
             {
               "colour": "red",
-              "x": 467.97222222222223,
-              "y": 316.0833333333333,
+              "x": 468.0,
+              "y": 316.0,
               "relative": [
-                0.5021963824289406,
-                0.30432098765432086
+                0.5023255813953489,
+                0.3037037037037037
               ],
               "flashing": false,
+              "reflection": 30.0,
+              "sharp": false,
+              "colour_margin": 0.875,
+              "conf": 0.6979166666666667,
               "sodium_ambiguous": false,
-              "contrast": 239.0
+              "contrast": 218.0,
+              "persistence": 1
             }
           ],
           "interpretation": {
@@ -4124,6 +4113,7 @@
             "aspect": "unknown",
             "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
             "boost": 1,
+            "pattern_conf": 0.6979166666666667,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
@@ -4153,15 +4143,20 @@
             "lights": [
               {
                 "colour": "red",
-                "x": 467.97222222222223,
-                "y": 316.0833333333333,
+                "x": 468.0,
+                "y": 316.0,
                 "relative": [
-                  0.5021963824289406,
-                  0.30432098765432086
+                  0.5023255813953489,
+                  0.3037037037037037
                 ],
                 "flashing": true,
+                "reflection": 30.0,
+                "sharp": false,
+                "colour_margin": 0.875,
+                "conf": 0.6979166666666667,
                 "sodium_ambiguous": false,
-                "contrast": 239.0
+                "contrast": 218.0,
+                "persistence": 2
               }
             ],
             "interpretation": {
@@ -4169,10 +4164,29 @@
               "aspect": "unknown",
               "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
               "boost": 1,
+              "pattern_conf": 0.6979166666666667,
               "masthead_horizontal_offset": null,
               "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
               "ref": "Annex IV 1(d)",
-              "severity": "urgent"
+              "severity": "urgent",
+              "assisted": true,
+              "low_confidence": false,
+              "confidence_note": ""
+            },
+            "burst": {
+              "requested": true,
+              "reasons": [
+                "flashing light, rate unresolved at base frame rate"
+              ],
+              "granted": null,
+              "fps": 8.0,
+              "duration_s": 3.0
+            },
+            "dark_contact": {
+              "flagged": true,
+              "confidence": 0.98,
+              "n_lights": 0,
+              "basis": "no_lights"
             }
           },
           "sequence_files": [
@@ -4211,6 +4225,7 @@
             "aspect": "unknown",
             "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
             "boost": 1,
+            "pattern_conf": 0.0,
             "masthead_horizontal_offset": null,
             "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
             "ref": "Annex IV 1(d)",
@@ -4240,15 +4255,20 @@
             "lights": [
               {
                 "colour": "red",
-                "x": 467.97222222222223,
-                "y": 316.0833333333333,
+                "x": 468.0,
+                "y": 316.0,
                 "relative": [
-                  0.5021963824289406,
-                  0.30432098765432086
+                  0.5023255813953489,
+                  0.3037037037037037
                 ],
                 "flashing": true,
+                "reflection": 30.0,
+                "sharp": false,
+                "colour_margin": 0.875,
+                "conf": 0.6979166666666667,
                 "sodium_ambiguous": false,
-                "contrast": 239.0
+                "contrast": 218.0,
+                "persistence": 2
               }
             ],
             "interpretation": {
@@ -4256,10 +4276,29 @@
               "aspect": "unknown",
               "line": "Vessel showing SOS: SOS reported by flashing light: distress \u2014 render assistance as safe",
               "boost": 1,
+              "pattern_conf": 0.6979166666666667,
               "masthead_horizontal_offset": null,
               "aspect_basis": "isolated sidelights; offset whites conditionally assume higher aft/lower forward mastheads (Rule 23), not towing lights",
               "ref": "Annex IV 1(d)",
-              "severity": "urgent"
+              "severity": "urgent",
+              "assisted": true,
+              "low_confidence": false,
+              "confidence_note": ""
+            },
+            "burst": {
+              "requested": true,
+              "reasons": [
+                "flashing light, rate unresolved at base frame rate"
+              ],
+              "granted": null,
+              "fps": 8.0,
+              "duration_s": 3.0
+            },
+            "dark_contact": {
+              "flagged": true,
+              "confidence": 0.98,
+              "n_lights": 0,
+              "basis": "no_lights"
             }
           },
           "sequence_files": [

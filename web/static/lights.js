@@ -8,7 +8,7 @@
   if(!dots.length)return '';
   return `<span class="light-pattern" role="img" aria-label="${escape(dots.map(p=>(p.flashing?'flashing ':'')+p.colour).join(', '))}">${dots.map(p=>`<i class="light-dot light-${p.colour}${p.flashing?' light-flash':''}"></i>`).join('')}</span>`;
  }
- function caveat(signal){return signal?.lowConfidence?'Low confidence · extra unexplained lights — verify, no priority boost':signal?.assisted?'signal-assisted':'auto-detected — verify visually'}
+ function caveat(signal){return signal?.lowConfidence?`Low confidence · ${signal.confidenceNote||'extra unexplained lights — verify, no priority boost'}`:(signal?.assisted?'signal-assisted':'auto-detected — verify visually')+(signal?.boost>0?` · priority boost +${signal.boost.toFixed(2)}`:'')}
  function badge(item){return eligible(item)&&item.dets?.some(d=>d.sig)?'<span class="night-badge" title="Navigation-light interpretation — verify visually">☾ Lights</span>':''}
  function section(item,classes={}){
   if(!eligible(item))return '';

@@ -9,6 +9,7 @@ import (
 )
 
 type Light struct {
+	Conf     float64 `json:"conf"`
 	Colour   string  `json:"colour"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
@@ -16,6 +17,7 @@ type Light struct {
 }
 
 type LightSignal struct {
+	PatternConf    float64 `json:"patternConf"`
 	RuleID         string  `json:"ruleId"`
 	Line           string  `json:"line"`
 	Meaning        string  `json:"meaning"`
@@ -58,8 +60,17 @@ func completeLightSignal(lights []Light, signal *LightSignal) *LightSignal {
 		}
 		result := *signal
 		colours := make([]string, 0, len(lights))
+		result.PatternConf = 1
+		if len(lights) == 0 {
+			result.PatternConf = 0
+		}
 		for _, light := range lights {
 			colours = append(colours, light.Colour)
+			confidence := light.Conf
+			if math.IsNaN(confidence) || math.IsInf(confidence, 0) || confidence < 0 || confidence > 1 {
+				confidence = 0
+			}
+			result.PatternConf = math.Min(result.PatternConf, confidence)
 		}
 		want := append([]string(nil), rule.Pattern.Colours...)
 		slices.Sort(colours)
@@ -71,6 +82,13 @@ func completeLightSignal(lights []Light, signal *LightSignal) *LightSignal {
 		if result.LowConfidence {
 			result.Boost = 0
 			result.ConfidenceNote = "extra unexplained lights — verify, no priority boost"
+		}
+		if !assisted && result.PatternConf < catalog.NightConfig.Lights.PatternConfThreshold {
+			result.LowConfidence = true
+			result.Boost = 0
+			if result.ConfidenceNote == "" {
+				result.ConfidenceNote = "uncertain light evidence — verify, no priority boost"
+			}
 		}
 		return &result
 	}
@@ -199,7 +217,7 @@ func NightDetections(image catalog.NightImage) []Detection {
 			lights = d.TrackObservation.Lights
 		}
 		for _, p := range lights {
-			det.Lights = append(det.Lights, Light{Colour: p.Colour, X: p.X / 2, Y: p.Y / 2, Flashing: p.Flashing})
+			det.Lights = append(det.Lights, Light{Colour: p.Colour, X: p.X / 2, Y: p.Y / 2, Flashing: p.Flashing, Conf: p.Conf})
 		}
 		signal := ""
 		if d.Assisted {

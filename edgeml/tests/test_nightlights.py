@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import json
 import runpy
 
 import cv2
@@ -85,6 +86,19 @@ def test_bright_resolved_pair_confidence_with_faint_reflection():
     assert result['interpretation']['pattern_conf'] >= .9
     assert result['interpretation']['rule_id'] == 'nuc'
     assert result['interpretation']['boost'] == .9
+
+
+def test_demo_observations_are_shared_python_go_interpretation_fixtures():
+    catalog = Path(__file__).resolve().parents[2]/'internal/catalog/nightlights.json'
+    for image in json.loads(catalog.read_text())['nightLibrary']:
+        for det in image['dets']:
+            observation = det.get('track_observation', det)
+            lights = observation['lights']
+            assert all('conf' in p and 0 <= p['conf'] <= 1 for p in lights)
+            result = interpret(lights, image['night'], signal=det.get('signal'))
+            expected = det['interpretation']
+            assert result['rule_id'] == expected['rule_id']
+            assert result['boost'] == expected['boost']
 
 
 def test_boost_metric_denominators():

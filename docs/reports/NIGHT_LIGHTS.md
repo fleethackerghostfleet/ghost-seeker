@@ -2,15 +2,123 @@
 
 **Synthetic demonstration, not operational accuracy.** Automatic light detections remain unreliable in clutter. Partial patterns are displayed but cannot raise priority. All accuracy numbers below are measured on the named procedural datasets, not estimates of performance at sea.
 
+## Strict-gate detector v4 (before/after)
+
+**Synthetic-procedural measurements only, not at-sea accuracy.** Detector and
+threshold were frozen in `a3e3e9005fa3241368e9cddf38db0ce3cdb80a9d`.
+Only hard/dev and easy/dev informed v3/v4 tuning; easy/test was a regression
+confirmation, not a diagnosis set. Hard/test and hard/test2 were not accessed
+during tuning. Hard/test3 (base **4100000**, 112 night + 8 day + 16 twilight)
+was generated after the freeze and evaluated **exactly once**, followed by boost
+evaluation. Hard/test and hard/test2 were then evaluated for comparison only.
+No detector or threshold changes followed these evaluations. The older sections
+below retain explicitly historical v1/v2 results rather than describe v4.
+
+The frozen CPU detector combines fine/broad Gaussian local peaks and compact
+PSF centroids, saturated-core/chromatic-halo colour classification (including
+nonmatching `ambiguous_orange`), vertical grouping, local contrast, and
+colour-compatible water-reflection support below the hull. A resolved aligned
+pair can receive high confidence from pure colour and contrast without requiring
+three emitters or a bright reflection. No truth/distractor labels are used at
+inference. **Caveat:** the generator draws vessel-coloured reflection streaks
+but no equivalent shore-emitter streaks; this physically motivated cue is
+optimistically discriminative on this dataset and needs real-sensor validation.
+
+Strict complete-colour-multiset equality and **zero white allowance** remain
+mandatory. Pattern confidence is the minimum per-light `conf`; the shared
+`lights.pattern_conf_threshold` is **0.85**. The maximum hard/dev would-be false
+boost confidence is 0.791667, giving **0.058333 dev safety margin**. Confidence is
+heuristic, not a calibrated probability. Signal-assisted distress remains exempt.
+
+Go reads the same catalog threshold, carries `conf` through observations and
+rechecks both conditions in scoring/rescoring without changing rule-ID logic.
+Missing/zero/nonfinite/out-of-range Go confidence cannot automatically boost.
+**Legacy API difference:** frozen Python `interpret()` defaults a missing `conf`
+to 1.0; Go deliberately defaults it to zero. This is not missing-field parity.
+Frozen detector outputs always include confidence; the shared demo catalog is
+read by Python and Go tests to check rule/boost agreement for those observations.
+Old raw Python callers must supply `conf` explicitly for conservative behavior.
+The frozen Python detector/API was not changed to conceal this difference.
+
+Urgent columns are **true/false automatic boosts** (seven truth contacts per
+urgent rule); false-any is **all/automatic**. Rules have denominators 112/98.
+Historical dev/test2 boost columns refer to the archived strict-gate replay,
+not the original permissive interpreter. `n/r` means not recorded in the
+hard/test v1 archive; it was not reconstructed with a different detector.
+
+| Dataset / version | Light P | Light R | Rules /112 | Automatic /98 | RAM T/F | NUC T/F | CD T/F | False-any all/auto | Night gate | Day false-night |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| easy_dev v4 (unchanged detection accuracy) | 100% | 100% | 112 | 98 | 7/0 | 7/0 | 7/0 | 0/0 | 100% | 0% |
+| easy_test v4 (unchanged detection accuracy) | 100% | 100% | 112 | 98 | 7/0 | 7/0 | 7/0 | 0/0 | 100% | 0% |
+| hard_dev v2 | 19.76% | 40.49% | 25 | 11 | 0/0 | 0/0 | 0/0 | 0/0 | 97.06% | 0% |
+| hard_dev v4 | 76.64% | 50.31% | 38 | 24 | 2/0 | 1/0 | 1/0 | 0/0 | 97.06% | 0% |
+| hard_test v1 | 8.72% | 24.07% | 21 | 7 | n/r | n/r | n/r | n/r | 96.32% | 0% |
+| hard_test v4 | 81.03% | 58.02% | 40 | 26 | 0/0 | 0/0 | 1/0 | 0/0 | 96.32% | 0% |
+| hard_test2 v2 | 13.72% | 31.33% | 24 | 10 | 0/0 | 0/0 | 0/0 | 0/0 | 97.06% | 0% |
+| hard_test2 v4 | 80.43% | 44.58% | 34 | 20 | 0/0 | 2/0 | 1/0 | 0/0 | 97.06% | 0% |
+| hard_test3 v4 | 73.28% | 52.80% | 35 | 21 | 0/0 | 0/0 | 2/0 | 0/0 | 97.06% | 0% |
+
+The new boost evaluator also includes negatives: 136 all / 122 automatic hard
+records and 120 / 106 easy records, versus the older night-only 112 / 98.
+Each split has 14 externally assisted distress boosts; these are not automatic
+urgent recognition. **No test3 false-boost contacts occurred**, but only 2/21
+automatic urgent contacts boosted. Remaining automatic urgent misses are 17/21
+on dev, 20/21 on test, 18/21 on test2 and 19/21 on test3. Misses include permanent
+occlusion, missing/merged points, colour confusion, unexplained extras and
+confidence abstention. Hard/dev RAM 300000 and CD 300103 are correctly detected
+but suppressed at 0.7958 and 0.8230 respectively.
+
+Two dev terminal-occluded CD contacts (300101, 300106) look like NUC; confidence
+0.7889/0.7917 suppresses them, not any justified missing-middle spacing test.
+A terminal-occluded CD and genuine NUC can be indistinguishable. Zero observed
+false boosts does **not** establish general protection against this ambiguity.
+Four-frame persistence requires >=2/4 detections, retaining 2/4 flashing lights.
+Its measured v4 hard/dev effect is **107 -> 107 lights, 18 -> 18 boosts, zero
+false boosts before/after**: a no-op on static four-frame scenes, not a demonstrated
+clutter remedy. Phase-2 v3 likewise measured 101 -> 101 and 17 -> 17 boosts.
+
+### Exact v4 evaluation commands
+
+These document the completed experiment; **do not repeat the locked test3
+evaluation as another independent trial**. From the repository root with the
+frozen source/config:
+
+```sh
+export PATH="$HOME/sdk/go/bin:$PATH"
+PY="$HOME/nightlights-venv/bin/python"
+# Pre-freeze dev tuning and easy regression evaluation:
+$PY edgeml/scripts/nightlights_eval.py --tier easy --split dev --version v4
+$PY edgeml/scripts/nightlights_boost_eval.py --tier easy --split dev --version v4
+$PY edgeml/scripts/nightlights_eval.py --tier easy --split test --version v4
+$PY edgeml/scripts/nightlights_boost_eval.py --tier easy --split test --version v4
+$PY edgeml/scripts/nightlights_eval.py --tier hard --split dev --version v4
+$PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split dev --version v4
+# After freeze commit a3e3e900, in this order; each eval ran once:
+$PY edgeml/scripts/nightlights_synth.py --tier hard --split test3
+$PY edgeml/scripts/nightlights_eval.py --tier hard --split test3 --version v4
+$PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split test3 --version v4
+$PY edgeml/scripts/nightlights_synth.py --tier hard --split test2
+$PY edgeml/scripts/nightlights_eval.py --tier hard --split test2 --version v4
+$PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split test2 --version v4
+$PY edgeml/scripts/nightlights_synth.py --tier hard --split test
+$PY edgeml/scripts/nightlights_eval.py --tier hard --split test --version v4
+$PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split test --version v4
+# Phase 4: refresh observations from existing JPEGs (does not overwrite JPEGs):
+$PY edgeml/scripts/nightlights_demo.py
+```
+
+Summary artifacts are `edgeml/reports/nightlights/{easy,hard}_*_v4.{json,md}`
+and `boost_gate_{easy,hard}_*_v4.json`; full per-case dumps remain gitignored.
+
 ## Method
 
 | Component | Implementation / behavior |
 |---|---|
 | Day/night and mode gate | `edgeml/src/edgeml/nightlights/core.py`: mean luminance and dark fraction; confident image statistics win. Ambiguous images use NOAA approximate solar elevation below −6° when timezone-aware timestamp and lat/lon are available, otherwise report image ambiguity. SAR/radar night is not applicable; IR may estimate night but has no colour rules. |
-| Detector | CPU OpenCV: padded contact boxes, peak/local-background contrast, connected components, area/circularity/elongation/texture limits, maximum eight candidates, chromatic halo colour around saturated cores, contextual sodium suppression, full-image regular pier-row rejection and conservative 85%-box-height waterline prior. No reliable horizon/hull segmentation. |
+| Detector | Frozen v4 CPU OpenCV: fine/broad Gaussian peaks plus compact PSF centroids, halo colour, contrast, aligned columns and reflection support; confidence abstention. No reliable horizon/hull segmentation; see v4 section above. |
 | Flashing | Presence/absence over four registered frames. This can confuse occlusion or detector misses with flashing; no automatic flare or Morse recognition. |
 | Interpreter | Ordered vertical groups; set/isolated sidelight patterns; flashing constraints; first matching rule in catalog order. Red port side implies conditional right-to-left crossing; green starboard side implies left-to-right. Offset whites assume higher aft/lower forward mastheads, not tow lights; two whites remain ambiguous. |
-| Whole-contact boost gate | After matching, the complete detected colour multiset must equal the pattern multiset. **Zero white-light allowance**: no rule currently declares an allowance. Extra lights leave the rule ID/line visible but set boost to zero and low confidence: “extra unexplained lights — verify, no priority boost”. External signal-assisted distress is exempt. This is a conservative consistency check, not calibrated probability. |
+| Whole-contact boost gate | Complete colour-multiset equality, **zero white allowance**, and min light confidence >=0.85. Extra/uncertain lights retain the rule ID/line but cannot boost. External signal-assisted distress is exempt. This is not calibrated probability. |
 | Go integration | `internal/catalog/lights.go` embeds the data into typed rules and a separate `NightLibrary`. `InterpretLights` mirrors Python; coordinates convert from 960×600 observations to 480×300. Sensor selects night frames about 20% of eligible EO-P7/BY-12 captures. Ordinary 48-frame `Library` is unchanged. |
 | Scoring | Only known EO source + night=true can retain/score lights. `ScoreDet` and `RescoreAt` recheck the boost gate, including stale carried signals. Eligible positive boost b updates directive-adjusted weight w to 1−(1−w)(1−b), followed by confidence scaling and the existing score cap/frame aggregation. Day/unknown/IR/SAR cannot boost; SAR is marked not applicable. `DetectionScore.light` identifies actual light boosts. |
 | UI | Compact feed badge, per-contact coloured light stack with pulsing flashing dots and reduced-motion support, plain line/reference/aspect/caveats. Urgent supported signals appear in Review's why list. Partial interpretations are muted with a low-confidence/no-boost tag, not an alert claim. |
@@ -47,6 +155,7 @@ Source: [colregs_lights.json](../../internal/catalog/colregs_lights.json). Boost
 | hard/dev | Base 300000; 112 night contacts + 8 day + 16 twilight images (136 gate cases) | Only split used for detector improvements and boost-gate design. |
 | hard/test v1 | Base 900000; same counts as hard/dev | Evaluated before v2 development; preserved v1 reports, not reused to tune v2. |
 | hard/test2 | Fresh base 2700000; same counts | Generated after detector v2 freeze and evaluated once for v2. New boost gate developed on hard-dev and evaluated on the existing frozen test2 observations **once**, after locking the gate; no detector rerun/tuning. |
+| hard/test3 | Base 4100000; same counts | Generated after v4 freeze a3e3e900; evaluated once. Historical test/test2 also evaluated with v4 after freeze, never for v4 tuning. |
 | App demos | Eight 960×600 JPEGs, each <150 KB; 15 contacts | Moderate synthetic harbor/offshore scenes; observations separate from truth. Frames 05–08 are an externally identified SOS on/off proxy, not decoded Morse. |
 
 Night-contact seeds add rule_index×100 + repetition (seven repetitions/rule); day/twilight offsets are 9000/9500. Generated datasets/crops/caches live under gitignored `data/nightlights/`. Hard scenes include tiny one-pixel to 1–3 px lights, defocus/motion blur, bloom/merged points, warm whites, orange reds, cyan greens, white saturated cores, reflections, sodium/white shore and pier rows, moon glints, partial occlusion, noise, JPEG compression and twilight.
@@ -57,7 +166,7 @@ Unresolvable direct-light patterns are labeled, never removed: permanent occlusi
 
 Full-frame light matching requires position within 6 px and correct colour. Wrong colour penalizes precision/recall; unmatched predictions populate the background row. Flashing accuracy counts missed observable lights as errors. Aspect includes unknown labels and is not heading accuracy. Automatic rule accuracy excludes 14 externally signaled distress cases.
 
-## Measured full-frame / four-frame results
+## Historical v1/v2 full-frame / four-frame results
 
 Historic detector v1/v2 metrics are preserved, **not rerun for the new boost gate**. The gate changes boost eligibility only, not light detections, rule IDs, aspect or flashing. v1 test versus v2 test2 are different datasets; only hard-dev gives a paired v1/v2 comparison.
 
@@ -207,7 +316,7 @@ From repository root; the Python executable was `/home/ubuntu/nightlights-venv/b
 /home/ubuntu/nightlights-venv/bin/python edgeml/scripts/nightlights_eval.py --tier hard --split test2 --version v2
 ```
 
-## Measured Gemini comparison: identical contact crops
+## Historical Gemini comparison: identical contact crops (pre-v4)
 
 Gemini 2.5 Flash on Vertex, temperature 0, thinking budget 0, max output 1024 tokens, JSON MIME, four workers, 400-call cap. Each request contains the same four native-resolution contact crops padded 20%, JPEG quality 95; our detector sees those identical decoded crops. No truth or external distress signal supplied. Both methods use **per-contact colour-count overlap**, not spatial matching (Gemini returned colour/y order, not precise locations). A wrong-location same-colour shore light can receive count credit. Do not compare this P/R directly with full-frame spatial P/R.
 
@@ -232,7 +341,7 @@ Exact command (datasets hard/dev, hard/test2, easy/test):
 
 ## Measured boost-gate results (paired frozen v2 observations)
 
-Gate design: hard-dev only; exact multiset coverage, no optional white allowance, no tuned numeric threshold. Only `interpret` changed in Python core; every other function (including detector, image gate, colour and track analysis) is byte-identical to the committed v2 implementation. Test2 was evaluated **once for this new gate**, after the dev result, using saved observations from `hard_test2_v2.json`. No test2-driven adjustments.
+Historical gate design: hard-dev only; exact multiset coverage, no optional white allowance, no numeric threshold at that stage. Detector and track analysis then remained v2; only `interpret` changed in that stage. Test2 observations were replayed once after gate design, without test2-driven adjustments. Current v4 adds detector changes and the confidence gate described above.
 
 Definitions:
 - **False boost:** positive boost and truth's table boost is zero **or** predicted rule differs from truth. Rate = false / boosted; also report false / all contacts.
@@ -250,7 +359,7 @@ Definitions:
 | hard/test2 · automatic | off | 20 | 15/20 (75.00%) | 15/98 (15.31%) | 18/21 (85.71%) | 21/21 (100.00%) |
 | hard/test2 · automatic | on | 0 | 0/0 (undefined) | 0/98 (0.00%) | 21/21 (100.00%) | 21/21 (100.00%) |
 
-**Trade-off:** on these hard splits, the strict gate disables every automatic boost, including true urgent interpretations; all 14 remaining boosts are signal-assisted distress. Zero observed false boosts is therefore a conservative fallback, **not evidence of accurate automatic alerting**. The 21/21 automatic urgent missed-boost rate is 100% on both splits. Fully covered wrong patterns can still boost: the demo pilot→tow-long error retains its 0.1 advisory boost.
+**Historical v2 trade-off:** this replay disabled every automatic boost; all 14 remaining boosts were signal-assisted distress. The v4 table above supersedes that sensitivity result. Fully covered wrong patterns can still boost in principle; the historical demo pilot→tow-long error is no longer present in refreshed v4 observations.
 
 Exact commands, in order:
 ```sh
@@ -277,49 +386,49 @@ Exact command (all 48 ordinary library frames; latest stage-1 v2 export):
 /home/ubuntu/nightlights-venv/bin/python edgeml/scripts/nightlights_eval.py --library
 ```
 
-## Demo truth → detected (measured detector outputs, unchanged by gate)
+## Demo truth → detected (frozen v4 redetection of unchanged JPEGs)
 
 | Frame | Truth → detected, by contact | Current boosts | Low-confidence contacts |
 |---|---|---|---|
-| night-01.jpg | head_on → nuc; port → fishing; starboard → two_mastheads | 0, 0, 0 | 1, 2, 3 |
+| night-01.jpg | head_on → head_on; port → port; starboard → starboard | 0, 0, 0 | 1, 2, 3 |
 | night-02.jpg | ram → none; nuc → nuc; constrained_draught → constrained_draught | 0, 0.9, 0.7 | none |
-| night-03.jpg | trawling → trawling; fishing → fishing; pilot → tow_long | 0, 0, 0.1 | 1, 2 |
+| night-03.jpg | trawling → starboard; fishing → fishing; pilot → pilot | 0, 0.1, 0 | 1 |
 | night-04.jpg | two_mastheads → two_mastheads; tow_long → tow_long | 0, 0.1 | none |
 | night-05.jpg | distress_sos → distress_sos | 1 | none |
 | night-06.jpg | distress_sos → distress_sos | 1 | none |
 | night-07.jpg | distress_sos → distress_sos | 1 | none |
 | night-08.jpg | distress_sos → distress_sos | 1 | none |
 
-Frames 05–08 are signal-assisted. The five-light false NUC in night-01 contact 1 remains visible but now has **boost 0**, low confidence, and no light-driven priority marker. Truth is never relabeled to match detections.
+Frames 05–08 are signal-assisted, exempt even though their light confidence is below 0.85. Night-02 NUC/CD pattern confidence is 0.9500/0.89375 and both automatically boost correctly; RAM remains unrecognized. Truth is never relabeled to match detections. JPEG bytes are unchanged. The demo script now preserves existing images and refreshes observations, including confidence, from decoded JPEGs.
 
-Exact renderer/redetection command used for v2 demo observations:
+Exact observation refresh command (renders only missing JPEGs):
 ```sh
 /home/ubuntu/nightlights-venv/bin/python edgeml/scripts/nightlights_demo.py
 ```
-Current interpretation-only refresh command is listed with the gate evaluation above.
+The older interpretation-only refresh command above describes the historical gate replay, not this detector refresh.
 
 ## Integration checks and measured simulator benchmark
 
 Commands:
 ```sh
 go build ./... && go vet ./... && go test ./...
-go run ./cmd/bench
+go run ./cmd/bench -n 6000 -seeds 101,102,103
 /home/ubuntu/.nvm/versions/node/v24.22.2/bin/node --test web/*.test.cjs
 /home/ubuntu/nightlights-venv/bin/python -m pytest edgeml/tests -q
 go run ./cmd/ghost-seeker -addr :8090 -auto-cdr 0
 ```
 
-Build/vet/all Go tests pass; parity covers all 15 demo contacts including rule ID, gated boost and low-confidence state. Node: 29 tests pass; Python: 150 tests pass, 2 skipped. Ordinary-library regression floors pass.
+Build/vet/all Go tests pass; parity covers all 15 refreshed demo contacts including rule ID, gated boost and low-confidence state. Python also reads the same catalog as an agreement fixture. Node: 49 tests pass; Python: 184 tests pass, 3 skipped. Ordinary-library regression floors pass.
 
-Bench seeds 101,102,103 × 6000 frames; results unchanged from origin/main (3699324), using ordinary Library only. **Bench oracle ≠ field truth**.
+Bench seeds 101,102,103 × 6000 frames; current Phase-4 run below. **Bench oracle ≠ field truth**. This benchmark does not measure real-night detector performance.
 
 | Model | Edge drop | Edge miss P1 | Edge miss P1–2 | Tier exact | ±1 tier | P1 recall | P1 precision | Critical miss | False flash | Flash load | NDCG@20 | Review burden |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| maritime | 6.5% | 0.1% | 0.0% | 77.8% | 98.2% | 89.7% | 75.4% | 0.0% | 1.1% | 26.1% | 0.979 | 52.2% |
-| air | 6.5% | 0.1% | 0.1% | 91.2% | 98.8% | 91.5% | 92.6% | 0.0% | 0.5% | 14.4% | 0.979 | 21.4% |
-| sar | 6.5% | 0.0% | 0.0% | 79.8% | 96.2% | 99.3% | 73.3% | 0.0% | 0.2% | 6.2% | 0.977 | 5.7% |
+| maritime | 6.0% | 0.0% | 0.0% | 79.4% | 98.3% | 91.5% | 78.7% | 0.0% | 1.1% | 28.9% | 0.990 | 54.6% |
+| air | 6.0% | 0.1% | 0.1% | 91.9% | 98.9% | 93.5% | 94.4% | 0.0% | 0.5% | 17.8% | 0.988 | 25.4% |
+| sar | 6.0% | 0.0% | 0.0% | 81.5% | 96.5% | 99.6% | 84.3% | 0.0% | 0.3% | 10.0% | 0.989 | 9.4% |
 
-Screenshots are local evidence under `~/shots/night-{feed,detail}-{1280,360}.png` and `~/shots/night-review-1280.png`, not repository assets.
+Phase-4 screenshots (Playwright/Chrome, headless, 1440×900) are [night-v4-detail.png](img/night-v4-detail.png) and [night-v4-review.png](img/night-v4-review.png). Start with `go run ./cmd/ghost-seeker -addr :8090 -auto-cdr 0 -backfill 600`, pause the feed, select an actual `night-02.jpg` item and open its detail/Operator Review. Both show the correct urgent NUC/CD signals and priority boosts, with synthetic-data banners. Historical screenshots remain local under `~/shots/`.
 
 ## Measured versus estimated / limitations
 
@@ -334,7 +443,7 @@ Screenshots are local evidence under `~/shots/night-{feed,detail}-{1280,360}.png
 - Camera white balance, exposure, saturation and colour shift can change the observed signature. The whole-contact gate does not prove a fully covered pattern is the correct vessel state.
 - No automatic flare detection, SOS/Morse recognition, frequency estimation or reliable moving-track registration. Signal-assisted distress depends on an external report that must itself be verified.
 - Rule signatures cover selected COLREGS configurations, not the entire legal standard. White stern/anchor/tow/power-driven ambiguities and local-law blue lights remain explicit.
-- Hard-dev informed design; held-out splits reduce tuning leakage but cannot resolve the synthetic-to-real gap. The gate's zero automatic boosts on hard splits trades false alerts for missed urgent vessels.
+- Hard-dev informed design; held-out splits reduce tuning leakage but cannot resolve the synthetic-to-real gap. The v4 gate's few correct automatic urgent boosts still trade false alerts for many missed urgent vessels.
 - All interpretations require visual/operator verification. No automatic manoeuvring or operational safety claim is supported.
 
 ## Burst frame rate and dark contacts (ported from dynamic-interest)
@@ -384,26 +493,27 @@ samples use `render` in daylight). The hard positive is an unlit hull;
 lit-vessel negatives use random rules from `load_rules()`. These are synthetic
 counts, not field-performance estimates.
 
-The hard-tier lit-vessel false positives (12/28 in both splits) occur when
-rendered navigation lights are missed by `detect_lights` under hard degradation:
-spot checks found zero detections in the expanded window, including radius-0/1
-colored lights blurred into the noisy background and fully occluded lights, so
-the contact appears dark. This is a known limitation; the detector was not
-tuned.
+**Frozen-v4 regression:** this evaluation depends on the detector and was rerun
+in Phase 4. Dark-contact lit-vessel false positives increased from 12/28 to
+21/28 on hard/dev and 17/28 on hard/test2; easy/dev also gained one false dark
+contact. The conservative detector can miss real emitters and therefore make a
+lit vessel appear dark. These are observed regressions, not improvements; no
+detector/threshold retuning was done after freeze. Burst requests also regress,
+including more requests on complete steady patterns and fewer on yellow lights.
 
 | Tier / split | Dark hull + vessel | Lit vessel + box | Day + box | Dark hull + buoy | TP / FP / FN | Precision / recall |
 |---|---:|---:|---:|---:|---:|---:|
-| easy / dev | 28/28 | 0/28 | 0/28 | 0/28 | 28 / 0 / 0 | 100% / 100% |
+| easy / dev | 28/28 | 1/28 | 0/28 | 0/28 | 28 / 1 / 0 | 96.55% / 100% |
 | easy / test2 | 28/28 | 0/28 | 0/28 | 0/28 | 28 / 0 / 0 | 100% / 100% |
-| hard / dev | 28/28 | 12/28 | 0/28 | 0/28 | 28 / 12 / 0 | 70% / 100% |
-| hard / test2 | 28/28 | 12/28 | 0/28 | 0/28 | 28 / 12 / 0 | 70% / 100% |
+| hard / dev | 28/28 | 21/28 | 0/28 | 0/28 | 28 / 21 / 0 | 57.14% / 100% |
+| hard / test2 | 28/28 | 17/28 | 0/28 | 0/28 | 28 / 17 / 0 | 62.22% / 100% |
 
 | Tier / split | Flashing yellow, 4 frames | Single-frame yellow | Complete steady pattern | Low-confidence pattern | Day | Continuous 120 s: accepted (new intervals + extensions) / denied / duty |
 |---|---:|---:|---:|---:|---:|---:|
-| easy / dev | 28/28 | 28/28 | 0/28 | 28/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
-| easy / test2 | 28/28 | 28/28 | 0/28 | 28/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
-| hard / dev | 24/28 | 15/28 | 0/28 | 10/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
-| hard / test2 | 22/28 | 16/28 | 0/28 | 12/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+| easy / dev | 20/28 | 25/28 | 18/28 | 25/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+| easy / test2 | 19/28 | 25/28 | 16/28 | 27/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+| hard / dev | 0/28 | 9/28 | 13/28 | 17/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+| hard / test2 | 3/28 | 8/28 | 15/28 | 20/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
 
 Continuous-sequence `accepted` counts calls returning true; `new_intervals`
 counts newly granted intervals, and `extensions` counts successful extensions.
@@ -414,11 +524,10 @@ The JSON reports retain per-scenario flagged/request counts and seeds:
 Reproduce with:
 
 ```sh
-cd edgeml
-~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split dev --tier easy
-~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split test2 --tier easy
-~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split dev --tier hard
-~/gs-venv/bin/python scripts/nightlights_dark_eval.py --split test2 --tier hard
+~/nightlights-venv/bin/python edgeml/scripts/nightlights_dark_eval.py --split dev --tier easy
+~/nightlights-venv/bin/python edgeml/scripts/nightlights_dark_eval.py --split test2 --tier easy
+~/nightlights-venv/bin/python edgeml/scripts/nightlights_dark_eval.py --split dev --tier hard
+~/nightlights-venv/bin/python edgeml/scripts/nightlights_dark_eval.py --split test2 --tier hard
 ```
 
 Limitations: evaluation is synthetic only. IR hot-blob dark contacts from

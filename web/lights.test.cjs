@@ -23,3 +23,12 @@ test('partial interpretation is muted and never explains an alert boost',()=>{
  assert.equal(lights.why(value)[0].c,'light-low-confidence');assert.match(lights.why(value)[0].t,/no priority boost/);
  assert.match(lights.badge(value),/Lights/);
 });
+test('confidence suppression explains uncertainty, while supported boosts are explicit',()=>{
+ const sig={...item.dets[0].sig,lowConfidence:true,boost:0,confidenceNote:'uncertain light evidence — verify, no priority boost'};
+ const value={...item,dets:[{...item.dets[0],sig}]};
+ assert.match(lights.section(value),/uncertain light evidence/);
+ assert.doesNotMatch(lights.why(value)[0].t,/extra unexplained lights/);
+ const boosted={...item,dets:[{...item.dets[0],sig:{...item.dets[0].sig,boost:.9}}]};
+ assert.match(lights.section(boosted),/priority boost \+0\.90/);
+ assert.match(lights.why(boosted)[0].t,/priority boost \+0\.90/);
+});

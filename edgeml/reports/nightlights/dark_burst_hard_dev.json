@@ -11,7 +11,7 @@
         "positive": true
       },
       "lit vessel + box": {
-        "flagged": 12,
+        "flagged": 21,
         "samples": 28,
         "positive": false
       },
@@ -28,37 +28,37 @@
     },
     "total": 112,
     "tp": 28,
-    "fp": 12,
+    "fp": 21,
     "fn": 0,
-    "precision": 0.7,
+    "precision": 0.5714285714285714,
     "recall": 1.0
   },
   "burst_n_per_scenario": 28,
   "burst": {
     "scenarios": {
       "flashing yellow 4-frame (air_cushion)": {
-        "requested": 24,
-        "samples": 28,
-        "expected": true,
-        "request_rate": 0.8571428571428571
-      },
-      "single-frame yellow": {
-        "requested": 15,
-        "samples": 28,
-        "expected": true,
-        "request_rate": 0.5357142857142857
-      },
-      "complete steady pattern": {
         "requested": 0,
         "samples": 28,
-        "expected": false,
+        "expected": true,
         "request_rate": 0.0
       },
-      "partial/low-confidence pattern": {
-        "requested": 10,
+      "single-frame yellow": {
+        "requested": 9,
         "samples": 28,
         "expected": true,
-        "request_rate": 0.35714285714285715
+        "request_rate": 0.32142857142857145
+      },
+      "complete steady pattern": {
+        "requested": 13,
+        "samples": 28,
+        "expected": false,
+        "request_rate": 0.4642857142857143
+      },
+      "partial/low-confidence pattern": {
+        "requested": 17,
+        "samples": 28,
+        "expected": true,
+        "request_rate": 0.6071428571428571
       },
       "day": {
         "requested": 0,

@@ -17,7 +17,50 @@ The system pip/setuptools could not install editable PEP 660 packages. Installat
 was completed in `/home/ubuntu/nightlights-venv` after upgrading pip/setuptools;
 no repository dependency/build files were changed.
 
-## Frozen candidate before first test evaluation
+## Strict-gate detector v4 (before/after)
+
+**Synthetic-procedural only; not at-sea accuracy.** The frozen detector and
+`lights.pattern_conf_threshold=0.85` are at commit
+`a3e3e9005fa3241368e9cddf38db0ce3cdb80a9d`. Tuning used hard/dev and easy/dev
+only; easy/test was a regression confirmation. Hard test/test2/test3 were not
+generated or evaluated during v3/v4 tuning. After freeze, hard/test3 (seed base
+4100000, 112 night + 8 day + 16 twilight, four registered frames per contact)
+was generated and evaluated exactly once, then boost-evaluated. Historical
+hard/test2 (2700000) and hard/test (900000) were evaluated for comparison only.
+No Python detector or threshold changes followed. Summary commit: `68dc0b94`.
+
+The method combines local Gaussian peaks/compact PSFs, chromatic halos around
+saturated cores, contrast, aligned columns, resolved-pair confidence and
+colour-compatible reflections below the hull. No truth is used at inference.
+Vessel-only generated reflection streaks likely overstate the cue's real-world
+discrimination. Strict full multiset equality, zero white allowance and min
+light confidence >=0.85 are required for automatic boosts. The maximum dev
+would-be false boost confidence is 0.791667 (safety margin 0.058333).
+Signal-assisted distress is exempt. The two dev terminal-occluded CD->NUC
+ambiguities remain suppressed by confidence, not a demonstrated spacing cue;
+this does not guarantee safety for indistinguishable real patterns.
+Persistence requires >=2/4, including flashing 2/4; measured dev effect is a
+no-op. Many urgent contacts still miss (dev 17/21, test 20/21, test2 18/21,
+test3 19/21); zero observed false boosts is not accurate automatic recognition.
+
+The consolidated report's **Strict-gate detector v4 (before/after)** section
+contains the full P/R, rules, automatic rules, urgent true/false boosts,
+all/automatic false boosts, night/day-gate table, exact generation/evaluation
+commands and limitations. All v4 summaries are committed; detailed observations
+remain gitignored. Do not repeat test3 and count it as an independent trial.
+
+Go now reads the same threshold and carries `conf` through demo observations,
+scoring and rescoring. Missing confidence is conservatively zero in Go.
+Frozen Python's legacy direct `interpret()` defaults a missing `conf` to 1.0;
+this deliberate Go safety difference is **not** missing-field parity. All
+detector-produced observations carry explicit confidence. Python and Go both
+test the refreshed `internal/catalog/nightlights.json` as a shared fixture.
+JPEG bytes and frozen detector/config stay unchanged. Phase-4 dark/burst
+evaluation was rerun because it depends on detection; false dark contacts rose
+on hard/dev (12->21) and hard/test2 (12->17) and burst recognition regressed.
+These results are reported without retuning the frozen detector.
+
+## Historical stage-1 frozen candidate before first test evaluation
 
 Dev was generated and evaluated during implementation. The final candidate passed
 36 unit tests and dev evaluation before generating or evaluating test. Test seeds
@@ -90,4 +133,6 @@ when complete timezone-aware metadata is supplied, otherwise report
 - The rule table contains the requested signatures and references, not every
   possible configuration under Rules 20–31. Routine anchor/stern white ambiguity
   is explicit. Blue law-enforcement lights depend on local law, not COLREGS.
-- No Go code, integration, production deployment, or UI rendering is included.
+- Stage 1 included no Go integration or UI. Current v4 integration and synthetic
+  UI evidence are documented in NIGHT_LIGHTS.md; no operational validation or
+  production deployment is claimed.
