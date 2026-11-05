@@ -24,21 +24,21 @@ function uploadState(it){
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
   const f=forms[key]||{};
-  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(LIVE?.link?.controllable?LIVE.link.bps>0:!!(LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.linkUp!==false&&LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
+  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(!LIVE||!!(LIVE?.link?.controllable?LIVE.link.bps>0:LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.linkUp!==false&&LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
  const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
  const background=it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
- const queued=!done&&!held&&!background&&sent===0;
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
- const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
- const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':queued?'Queued: waiting for bandwidth':paused?transfer:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
  const sending=!done&&!held&&!paused&&!background&&!!u?.active;
+ const queued=!done&&!held&&!background&&!sending;
+ const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
+ const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
  return{bytes,sent,done,queued,label,form,held,next,paused,background,sending};
 }
 function uploadHTML(it){
  const u=uploadState(it);
- return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+ return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
 }
 function sendMark(it){
  const u=uploadState(it);
@@ -443,7 +443,8 @@ function renderDirBar(){
 function renderStats(){
  const vis=items.filter(i=>state.src==='ALL'||i.src.id===state.src);
  const uploads=vis.filter(i=>!i.dismissed).map(uploadState),done=uploads.filter(u=>u.done).length,queued=uploads.filter(u=>u.queued).length,held=uploads.filter(u=>u.held).length,kept=uploads.filter(u=>u.background).length;
- const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${uploads.length-done-queued-held-kept} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
+ const sending=uploads.filter(u=>u.sending).length;
+ const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
  $('hsImgs').textContent=vis.length;$('rvSentN').textContent=vis.filter(humanSent).length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
  const unrevLive=vis.filter(i=>!i.reviewed&&!i.dismissed).length;
  if(LIVE){renderLiveStrip();$('rvCount').textContent=unrevLive||'';if(state.page==='rv')rvProgress();if(state.page==='details')renderDetails();return}

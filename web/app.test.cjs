@@ -21,6 +21,19 @@ test('mobile review scrolls the whole page without shrinking its image track',()
  assert.match(css,/#pgRv\{overflow-y:auto\}/);
  assert.match(css,/#pgRv \.rvmain\{flex:none;grid-template-rows:minmax\(220px,38vh\) auto;overflow:visible\}/);
 });
+test('preempted partial uploads show queued progress and do not count as uploading',()=>{
+ const context=setup();
+ vm.runInContext(`items=[{id:'paused',src:{id:'EO-P7'},tier:2,upload:{bytes:1000,sent:400,bps:8000,active:false}},
+  {id:'active',src:{id:'EO-P7'},tier:2,upload:{bytes:1000,sent:100,bps:8000,active:true}}];
+  state.page='feed';renderSimLink=()=>{};fullRenderStats()`,context);
+ assert.equal(vm.runInContext('uploadState(items[0]).sending',context),false);
+ assert.equal(vm.runInContext('uploadState(items[0]).queued',context),true);
+ assert.match(vm.runInContext('uploadHTML(items[0])',context),/Queued for shore · 40%/);
+ assert.match(context.$('uploadSummary').textContent,/1 uploading · 1 queued/);
+ vm.runInContext('items[0].upload.bps=0;fullRenderStats()',context);
+ assert.match(vm.runInContext('uploadHTML(items[0])',context),/Link outage, paused/);
+ assert.match(context.$('uploadSummary').textContent,/1 uploading · 1 queued/);
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
@@ -649,7 +662,7 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
 test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
  const context=setup();
  assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
- assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 0.03 MB\/s/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000,active:true}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 0.03 MB\/s/);
  assert.match(vm.runInContext('uploadHTML({upload:{bytes:40,sent:40,done:true}})',context),/✓ Uploaded/);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
@@ -681,7 +694,7 @@ test('upload override labels, toggle undo and live/viewer guards',()=>{
  vm.runInContext("overrideItem.upload.override='next'",context);
  assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-next.*Upload next \(operator\)/);
  assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Back to priority order/);
- vm.runInContext("overrideItem.upload.override=''",context);
+ vm.runInContext("overrideItem.upload.override='';overrideItem.upload.active=true",context);
  assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/Uploading to shore/);
  vm.runInContext("overrideItem.upload.done=true;overrideItem.upload.override='hold'",context);
  assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/✓ Uploaded/);
@@ -970,7 +983,7 @@ test('upload summary counts retained empty water separately from queued and acti
  const context=setup();
  vm.runInContext(`
   const upload={bytes:1000,sent:0,done:false};
-  items=[{id:'ocean',background:true,upload:{...upload}},{id:'contact',upload:{...upload}},{id:'active',upload:{...upload,sent:20}}];
+  items=[{id:'ocean',background:true,upload:{...upload}},{id:'contact',upload:{...upload}},{id:'active',upload:{...upload,sent:20,active:true}}];
   fullRenderStats();
  `,context);
  assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 0 held · 0 uploaded · 1 kept on ship');
