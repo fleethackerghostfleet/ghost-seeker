@@ -1,5 +1,10 @@
 # Split by source recording, never by frame. Tune on dev; evaluate test once per candidate.
 version: 2
+singapore_maritime_v2:
+  # Quarantine lifted only for this reviewed by-video policy, never upstream frame splits.
+  test: [mvi1478vis, mvi1609vis, mvi1623vis, mvi1644vis, mvi1646vis]
+  dev: [mvi1448vishaze, mvi1486vis, mvi1578vis, mvi1610vis, mvi1625vis]
+  train: [mvi1451vishaze, mvi1452vishaze, mvi1469vis, mvi1474vis, mvi1479vis, mvi1481vis, mvi1482vis, mvi1484vis, mvi1582vis, mvi1583vis, mvi1584vis, mvi1587vis, mvi1592vis, mvi1612vis, mvi1613vis, mvi1614vis, mvi1615vis, mvi1617vis, mvi1619vis, mvi1620vis, mvi1622vis, mvi1624vis, mvi1626vis, mvi1627vis, mvi1640vis, mvi1645vis]
 rule: "split by source video / camera; adjacent frames never cross splits"
 source_video_aliases:
   Arriving_In_Norfolk_USA_3hr_uncut: Arriving_In_Norfolk
