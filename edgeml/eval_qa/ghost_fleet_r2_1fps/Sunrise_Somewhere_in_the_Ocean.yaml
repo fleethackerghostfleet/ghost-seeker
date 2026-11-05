@@ -1,6 +1,9 @@
 reviewed: false
-notes: 'QA f27 fail (fn): distant contact on horizon right of sun (labelled in adjacent
+notes: 'teacher labels; frame-sampled QA only; known FNs
+
+  QA f27 fail (fn): distant contact on horizon right of sun (labelled in adjacent
   frames f10/f17/f22) missing; verifier rejected it
 
   Sunrise f27 FN was not corrected: the v1 raw box center is 69.15px from the kept
   unknown box in f22, above the 40px threshold.'
+gt_status: partial

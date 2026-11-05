@@ -2,7 +2,9 @@ reviewed: false
 drop_boxes:
 - - 3
   - 3
-notes: 'QA f3 fail (fp): cargo box over canal+quay, oversized/not a distinct object
-  -> drop
+notes: 'teacher labels; frame-sampled QA only; known FNs
+
+  QA f3 fail (fp): cargo box over canal+quay, oversized/not a distinct object -> drop
 
   QA f11 pass (no issue): uncertain: possible moored barges at left quay'
+gt_status: partial

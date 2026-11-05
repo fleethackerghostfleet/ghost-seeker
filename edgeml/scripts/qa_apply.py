@@ -319,6 +319,9 @@ def main():
         by_id = defaultdict(int)
         for r in rows:
             by_id[r[1]] += 1
+        notes = m.get("notes", "")
+        if a.root.name == "ghost_fleet_r2_1fps":
+            notes = corr.get("notes") or notes
         e = {"seq_id": seq_dir.name, "set": a.root.name, "source_dataset": s.get("source_dataset", a.root.name),
              "split": split_of(a.root.name, seq_dir.name), "fps": float(s["frameRate"]),
              "n_frames": int(s["seqLength"]), "n_tracks": len(by_id), "n_boxes": len(rows),
@@ -332,7 +335,7 @@ def main():
              "qa_merged_tracks": sum(len(v) for v in (corr.get("merge") or {}).values()),
              "qa_added_tracks": len(corr.get("add_tracks") or []),
              "license": s.get("license", ""), "upstream": s.get("source_url", m.get("source_url", "")),
-             "notes": m.get("notes", "")}
+             "notes": notes}
         entries.append(e)
         print(f"{e['seq_id']}: {e['n_frames']} fr, {e['n_tracks']} tracks, {e['n_boxes']} boxes, {e['label_source']}, {e['split']}")
     (a.root / "index.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))

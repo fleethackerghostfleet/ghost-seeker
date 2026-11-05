@@ -1,2 +1,3 @@
 reviewed: false
-notes: ''
+notes: teacher labels; frame-sampled QA only; known FNs
+gt_status: partial
