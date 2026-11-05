@@ -160,7 +160,7 @@ func (s *Server) correctReview(w http.ResponseWriter, r *http.Request) {
 	audit(r, "review."+action, "record", original.ID, "reviewer", b.Reviewer)
 	if action == "undo" {
 		o := original.Before
-		item, cdr, ok := s.store.PatchItem(o.ID, &o.Manual, &o.Reviewed, &o.Dismissed, &o.Sent)
+		item, cdr, ok := s.store.RestoreReview(o)
 		if ok {
 			s.PublishUpdate(item, cdr)
 			writeJSON(w, 200, map[string]any{"record": rec, "item": item, "cdr": cdr})

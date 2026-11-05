@@ -262,6 +262,14 @@ func (s *Store) RestoreDirectives(directives []command.Directive) {
 }
 
 func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *bool) (command.Item, int, bool) {
+	return s.patchItem(id, manual, reviewed, dismissed, sent, nil)
+}
+
+func (s *Store) RestoreReview(before command.Item) (command.Item, int, bool) {
+	return s.patchItem(before.ID, &before.Manual, &before.Reviewed, &before.Dismissed, &before.Sent, &before)
+}
+
+func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *bool, before *command.Item) (command.Item, int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.items {
@@ -291,6 +299,9 @@ func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *boo
 				item.SentAt = nil
 			}
 			item.Sent, item.AutoSent = *sent, false
+		}
+		if before != nil {
+			item.HumanReviewed, item.AutoSent = before.HumanReviewed, before.AutoSent
 		}
 		command.Rescore(item, s.model, s.directives)
 		return cloneItem(*item), s.cdr, true
