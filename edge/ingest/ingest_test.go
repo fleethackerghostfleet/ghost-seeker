@@ -137,6 +137,67 @@ func TestDuplicateDarkContactUpdatesKnownSighting(t *testing.T) {
 	}
 }
 
+func TestDuplicateDarkContactReplacesWithStrongerEvidence(t *testing.T) {
+	ctx := context.Background()
+	box := &pb.Box{X: 0.45, Y: 0.45, W: 0.05, H: 0.05}
+	an := &scripted{
+		script: map[int][]*pb.Sighting{
+			1: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "tug")},
+			2: {sighting("s1", pb.Sighting_EVENT_DUPLICATE, false, "tug")},
+			3: {sighting("s1", pb.Sighting_EVENT_DUPLICATE, false, "tug")},
+		},
+		detections: map[int][]*pb.Detection{
+			2: {{Label: "dark contact", Confidence: 0.2, Box: box}},
+			3: {{Label: "dark contact", Confidence: 0.9, Box: box}},
+		},
+	}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	opened, err := g.Ingest(ctx, capture(clk, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := g.Ingest(ctx, capture(clk, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, reason := range first.Score.GetReasons() {
+		if reason.GetScorer() == "dark" {
+			t.Fatalf("below-threshold duplicate produced dark reason: %+v", reason)
+		}
+	}
+
+	if _, err := g.Ingest(ctx, capture(clk, 3)); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.Get(ctx, opened.Item.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	darkCount := 0
+	for _, detection := range stored.Item.Features.Detections {
+		if detection.GetLabel() == "dark contact" {
+			darkCount++
+			if detection.GetConfidence() != 0.9 {
+				t.Fatalf("stored dark-contact confidence = %v, want 0.9", detection.GetConfidence())
+			}
+		}
+	}
+	if darkCount != 1 {
+		t.Fatalf("stored %d dark-contact detections, want one: %+v", darkCount, stored.Item.Features.Detections)
+	}
+	foundDark := false
+	for _, reason := range stored.Score.GetReasons() {
+		if reason.GetScorer() == "dark" && reason.GetNote() == "dark contact: no navigation lights at night" {
+			foundDark = true
+			break
+		}
+	}
+	if !foundDark {
+		t.Fatalf("stronger duplicate dark-contact reason missing: %+v", stored.Score.GetReasons())
+	}
+}
+
 func TestReplaceKeyFrameClearsDarkContactTag(t *testing.T) {
 	ctx := context.Background()
 	box := &pb.Box{X: 0.45, Y: 0.45, W: 0.05, H: 0.05}

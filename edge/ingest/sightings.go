@@ -137,10 +137,27 @@ func (g *Ingester) applySighting(ctx context.Context, c *Capture, hash string, r
 			row.Item.Features.Tags = map[string]string{}
 		}
 		if _, tagged := row.Item.Features.Tags["dark_contact"]; tagged {
-			return nil, nil
+			existingIndex := -1
+			var existingConfidence float32
+			for i, detection := range row.Item.Features.Detections {
+				if strings.EqualFold(detection.GetLabel(), "dark contact") &&
+					(existingIndex < 0 || detection.GetConfidence() > existingConfidence) {
+					existingIndex = i
+					existingConfidence = detection.GetConfidence()
+				}
+			}
+			if existingIndex >= 0 {
+				if dark.GetConfidence() <= existingConfidence {
+					return nil, nil
+				}
+				row.Item.Features.Detections[existingIndex] = dark
+			} else {
+				row.Item.Features.Detections = append(row.Item.Features.Detections, dark)
+			}
+		} else {
+			row.Item.Features.Detections = append(row.Item.Features.Detections, dark)
+			row.Item.Features.Tags["dark_contact"] = "1"
 		}
-		row.Item.Features.Detections = append(row.Item.Features.Detections, dark)
-		row.Item.Features.Tags["dark_contact"] = "1"
 		if err := g.st.UpdateItem(ctx, row.Item); err != nil {
 			return nil, err
 		}
