@@ -1167,7 +1167,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		text = cur.Text
 	}
 	merged := mergePolicy(cur, suppress, boost)
-	pol := &pb.Policy{IssuedBy: "operator-ui", Text: text, Interest: &pb.Interest{SuppressLabels: merged.Suppress, BoostLabels: merged.Boost}, Emcon: cd.Emcon}
+	pol := &pb.Policy{IssuedBy: c.b.issuer(), Text: text, Interest: &pb.Interest{SuppressLabels: merged.Suppress, BoostLabels: merged.Boost}, Emcon: cd.Emcon}
 	if cd.DurationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(cd.DurationMin) * time.Minute).UnixMilli()
 	}

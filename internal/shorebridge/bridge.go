@@ -66,7 +66,7 @@ type Bridge struct {
 	edgeNodeID string
 
 	operatorJWT     string
-	operatorID      string
+	operatorJWTSub  string
 	operatorEchelon pb.Echelon
 
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
@@ -106,16 +106,19 @@ func (b *Bridge) SetOperatorJWT(token string) error {
 	}
 	b.mu.Lock()
 	b.operatorJWT = token
-	b.operatorID = operator.ID
+	b.operatorJWTSub = operator.ID
 	b.operatorEchelon = operator.Echelon
 	b.mu.Unlock()
 	return nil
 }
 
-func (b *Bridge) operatorSub() string {
+func (b *Bridge) issuer() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.operatorID
+	if b.operatorJWT != "" {
+		return b.operatorJWTSub
+	}
+	return b.operator
 }
 
 func (b *Bridge) echelon() pb.Echelon {
@@ -142,7 +145,9 @@ const DefaultOperator = "operator-ui"
 // authenticated console instance), never taken from the browser request.
 func (b *Bridge) WithOperator(id string) *Bridge {
 	if id = strings.TrimSpace(id); id != "" {
+		b.mu.Lock()
 		b.operator = id
+		b.mu.Unlock()
 	}
 	return b
 }
@@ -947,7 +952,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "text exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
-	issuedBy := b.operator
+	issuedBy := b.issuer()
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: issuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
 	var ruleExpiryUnixMs int64
@@ -1100,12 +1105,12 @@ func blockedMessage(c command.Compiled) string {
 // applyPolicy replaces the standing shore policy with the given interest and
 // asks the poller to refresh so the console sees the change at once.
 func (b *Bridge) applyPolicy(ctx context.Context, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
-	return b.applyPolicyAs(ctx, "operator-ui", text, suppress, boost)
+	return b.applyPolicyAs(ctx, b.issuer(), text, suppress, boost)
 }
 
 func (b *Bridge) applyPolicyAs(ctx context.Context, issuedBy, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
 	if issuedBy == "" {
-		issuedBy = "operator-ui"
+		issuedBy = b.issuer()
 	}
 	if suppress == nil {
 		suppress = []string{}
@@ -1140,9 +1145,7 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 // higher-echelon layers, locks and signatures survive. Returns warnings for
 // the readback.
 func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
-	if id := b.operatorSub(); id != "" {
-		pol.IssuedBy = id
-	}
+	pol.IssuedBy = b.issuer()
 	echelon := b.echelon()
 	var ruleExpiryUnixMs int64
 	if b.hasOperatorJWT() {
@@ -1261,7 +1264,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mode must be NORMAL, BURST, or SILENT", http.StatusBadRequest)
 		return
 	}
-	issuedBy := b.operator
+	issuedBy := b.issuer()
 	current, err := b.getPolicy(r.Context())
 	if err != nil {
 		if writeShoreAuthError(w, err) {
@@ -1282,7 +1285,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	pol.IssuedBy = issuedBy
 	if len(pol.Layers) > 0 {
 		pol.Layers = cloneLayers(pol.Layers)
-		operatorLayer := findOperatorLayer(pol.Layers, issuedBy)
+		operatorLayer := findOperatorLayer(pol.Layers, issuedBy, b.echelon())
 		if operatorLayer < 0 {
 			for i, layer := range pol.Layers {
 				if layer.Echelon == b.echelon() {

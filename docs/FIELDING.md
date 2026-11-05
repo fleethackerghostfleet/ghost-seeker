@@ -370,6 +370,9 @@ The operator workload reads the required `operator-token` key as
 The app sends the JWT only to shore. Shore derives `issuedBy` and echelon from
 the verified JWT, not from the request. An operator cannot add, change, or drop
 policy layers above their echelon, so higher-echelon layers are refused.
+With a JWT, the recorded issuer is its subject, overriding `-operator-id`.
+Command-layer edits still require a trusted policy signature in addition to a
+command-echelon JWT.
 
 ## Edge storage caps
 

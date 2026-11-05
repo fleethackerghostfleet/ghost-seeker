@@ -32,8 +32,8 @@ type Service struct {
 	St       *store.Store
 	Clk      clock.Clock
 	// Embedder compiles natural-language interest into vectors; optional.
-	Embedder inference.Analyzer
-	Signer   *policy.SigningKey
+	Embedder  inference.Analyzer
+	Signer    *policy.SigningKey
 	Operators *unitauth.Interceptor
 	// Keys trusts policies signed by higher echelons: a SetPolicy that changes
 	// layers above ECHELON_SHIP must itself verify against this keyring.

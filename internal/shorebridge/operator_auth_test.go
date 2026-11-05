@@ -235,7 +235,7 @@ func TestOperatorSubjectOverridesIssuedByForPolicyAndEMCON(t *testing.T) {
 	}))
 	defer shore.Close()
 
-	bridge := New(shore.URL, "", nil)
+	bridge := New(shore.URL, "", nil).WithOperator("spoof")
 	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
 		t.Fatal(err)
 	}
@@ -249,8 +249,8 @@ func TestOperatorSubjectOverridesIssuedByForPolicyAndEMCON(t *testing.T) {
 			t.Fatalf("POST %s: status=%d body=%s", path, rec.Code, rec.Body.String())
 		}
 	}
-	post("/api/shore/policy", `{"text":"ignore cargo","issuedBy":"spoof"}`)
-	post("/api/shore/policy", `{"text":"prioritize tankers","issuedBy":"spoof"}`)
+	post("/api/shore/policy", `{"text":"ignore cargo"}`)
+	post("/api/shore/policy", `{"text":"prioritize tankers"}`)
 
 	mu.Lock()
 	if len(requests) != 2 {
@@ -272,13 +272,87 @@ func TestOperatorSubjectOverridesIssuedByForPolicyAndEMCON(t *testing.T) {
 		t.Fatalf("second directive rule=%+v", rule)
 	}
 
-	post("/api/shore/emcon", `{"mode":"SILENT","issuedBy":"spoof"}`)
+	post("/api/shore/emcon", `{"mode":"SILENT"}`)
 	mu.Lock()
 	emconPolicy := proto.Clone(requests[len(requests)-1]).(*pb.Policy)
 	mu.Unlock()
 	if len(emconPolicy.Layers) != 1 || emconPolicy.Layers[0].Emcon == nil ||
 		emconPolicy.Layers[0].Emcon.SetBy != "ops-1" {
 		t.Fatalf("EMCON layer=%+v", emconPolicy.Layers)
+	}
+}
+
+func TestConfiguredOperatorUsedWithoutJWT(t *testing.T) {
+	const configuredOperator = "configured-operator"
+	stored := &pb.Policy{
+		Interest: &pb.Interest{},
+		Layers: []*pb.PolicyLayer{{
+			Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: configuredOperator,
+			Rules: []*pb.InterestRule{{Id: "old"}},
+		}},
+	}
+	var mu sync.Mutex
+	var requests []*pb.Policy
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetPolicy":
+			mu.Lock()
+			policy := proto.Clone(stored).(*pb.Policy)
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: policy})
+		case consolePath + "SetPolicy":
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var request pb.SetPolicyRequest
+			if err := protojson.Unmarshal(raw, &request); err != nil {
+				t.Errorf("decode SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			mu.Lock()
+			requests = append(requests, proto.Clone(request.Policy).(*pb.Policy))
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.SetPolicyResponse{Policy: request.Policy})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer shore.Close()
+
+	bridge := New(shore.URL, "", nil).WithOperator(configuredOperator)
+	handler := bridge.Handler()
+	for _, tc := range []struct {
+		path string
+		body string
+	}{
+		{"/api/shore/policy", `{"text":"ignore cargo"}`},
+		{"/api/shore/emcon", `{"mode":"SILENT"}`},
+	} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST %s: status=%d body=%s", tc.path, rec.Code, rec.Body.String())
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(requests) != 2 {
+		t.Fatalf("SetPolicy calls=%d, want 2", len(requests))
+	}
+	policyRequest, emconRequest := requests[0], requests[1]
+	if policyRequest.IssuedBy != configuredOperator || len(policyRequest.Layers) != 1 ||
+		policyRequest.Layers[0].IssuedBy != configuredOperator ||
+		policyRequest.Layers[0].Rules[0].Author != configuredOperator {
+		t.Fatalf("configured issuer policy=%+v", policyRequest)
+	}
+	if emconRequest.IssuedBy != configuredOperator || len(emconRequest.Layers) != 1 ||
+		emconRequest.Layers[0].Emcon == nil || emconRequest.Layers[0].Emcon.SetBy != configuredOperator {
+		t.Fatalf("configured issuer EMCON policy=%+v", emconRequest)
 	}
 }
 
@@ -370,13 +444,12 @@ func TestOperatorEMCONWrapPreservesFlatBoostFactor(t *testing.T) {
 	}))
 	defer shore.Close()
 
-	bridge := New(shore.URL, "", nil)
+	bridge := New(shore.URL, "", nil).WithOperator("spoof")
 	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/shore/emcon",
-		strings.NewReader(`{"mode":"SILENT","issuedBy":"spoof"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/shore/emcon", strings.NewReader(`{"mode":"SILENT"}`))
 	bridge.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -492,7 +565,7 @@ func TestConsoleDirectiveUsesOperatorJWTAndSendsHeaderOnlyToShore(t *testing.T) 
 	}))
 	defer edge.Close()
 
-	bridge := New(shore.URL, edge.URL, nil)
+	bridge := New(shore.URL, edge.URL, nil).WithOperator("spoof")
 	if err := bridge.SetOperatorJWT(jwtToken); err != nil {
 		t.Fatal(err)
 	}

@@ -2,12 +2,14 @@ package console
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 	"google.golang.org/protobuf/proto"
@@ -143,6 +145,20 @@ func TestSetPolicyOperatorAuthentication(t *testing.T) {
 		})
 	}
 
+	t.Run("ship token gets the layer authorization error before signature validation", func(t *testing.T) {
+		initial := &pb.Policy{Layers: []*pb.PolicyLayer{commandLayer()}}
+		svc, _ := makeOperatorService(t, initial)
+		edited := commandLayer()
+		edited.Rules[0].BoostLabels = []string{"tanker"}
+		_, err := svc.SetPolicy(context.Background(), operatorRequest(t, &pb.Policy{
+			Layers: []*pb.PolicyLayer{edited, shipLayer("TAO-DDG51")},
+		}, "operator", "TAO-DDG51", pb.Echelon_ECHELON_SHIP))
+		if connect.CodeOf(err) != connect.CodePermissionDenied ||
+			!strings.Contains(err.Error(), "cannot change ECHELON_COMMAND layer with ECHELON_SHIP token") {
+			t.Fatalf("SetPolicy error=%v, want ship-token command-layer denial", err)
+		}
+	})
+
 	t.Run("dropping stored command layer", func(t *testing.T) {
 		initial := &pb.Policy{Layers: []*pb.PolicyLayer{commandLayer(), shipLayer("TAO-DDG51")}}
 		svc, st := makeOperatorService(t, initial)
@@ -154,16 +170,39 @@ func TestSetPolicyOperatorAuthentication(t *testing.T) {
 		}
 	})
 
-	t.Run("command token edits command layer", func(t *testing.T) {
-		initial := &pb.Policy{Layers: []*pb.PolicyLayer{commandLayer()}}
+	t.Run("command token edits command layer with trusted signature", func(t *testing.T) {
+		initial := &pb.Policy{Version: 1, Layers: []*pb.PolicyLayer{commandLayer()}}
 		svc, _ := makeOperatorService(t, initial)
+		public, private, err := policy.GenerateKey("ctf72")
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc.Keys = policy.Keyring{"ctf72": public}
 		edited := commandLayer()
 		edited.Rules[0].BoostLabels = []string{"tanker"}
-		got := call(t, svc, operatorRequest(t, &pb.Policy{Layers: []*pb.PolicyLayer{edited}},
+		submitted := &pb.Policy{Version: 2, Layers: []*pb.PolicyLayer{edited}}
+		if err := policy.Sign(submitted, "ctf72", private); err != nil {
+			t.Fatal(err)
+		}
+		got := call(t, svc, operatorRequest(t, submitted,
 			"operator", "CTF-72", pb.Echelon_ECHELON_COMMAND), 0)
 		if len(got.Layers) != 1 || got.Layers[0].IssuedBy != "CTF-72" || got.Layers[0].Rules[0].BoostLabels[0] != "tanker" {
 			t.Fatalf("command operator result=%+v", got.Layers)
 		}
+	})
+
+	t.Run("unsigned command token edit is denied", func(t *testing.T) {
+		initial := &pb.Policy{Version: 1, Layers: []*pb.PolicyLayer{commandLayer()}}
+		svc, _ := makeOperatorService(t, initial)
+		public, _, err := policy.GenerateKey("ctf72")
+		if err != nil {
+			t.Fatal(err)
+		}
+		svc.Keys = policy.Keyring{"ctf72": public}
+		edited := commandLayer()
+		edited.Rules[0].BoostLabels = []string{"tanker"}
+		call(t, svc, operatorRequest(t, &pb.Policy{Version: 2, Layers: []*pb.PolicyLayer{edited}},
+			"operator", "CTF-72", pb.Echelon_ECHELON_COMMAND), connect.CodePermissionDenied)
 	})
 
 	t.Run("requires layered policy", func(t *testing.T) {
