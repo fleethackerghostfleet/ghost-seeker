@@ -72,7 +72,8 @@ static `ui/` files for edge/shore. The operator UI assets are embedded in
 
 Edge and shore flags are initialized from environment variables; an explicit
 flag overrides the environment. Empty environment values use the defaults
-shown below. Operator configuration is flags only.
+shown below. Operator settings are flags, with the token flags also accepting
+the environment variables shown in the table.
 
 ### `edge`
 
@@ -104,6 +105,7 @@ shown below. Operator configuration is flags only.
 | `-listen` | `LISTEN` | `:8080` | Shore HTTP listener |
 | `-infer` | `INFER_URL` | `mock` | Inference URL for text embedding, or `mock` |
 | `-require-auth` | `GS_REQUIRE_AUTH` | `false` | Require unit JWTs on SyncService |
+| `-require-operator-auth` | `GS_REQUIRE_OPERATOR_AUTH` | `false` | Require operator JWTs on SetPolicy |
 | `-signing-key` | `GS_SIGNING_KEY` | unset | HS256 signing key; also accepted by mint tool |
 | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset | Signing-key file; takes precedence over literal key |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
@@ -111,17 +113,19 @@ shown below. Operator configuration is flags only.
 
 ### `ghost-seeker` operator app
 
-| Flag | Default | Purpose |
-|---|---|---|
-| `-addr` | `:8080` | UI HTTP listener |
-| `-retain` | `260` | Maximum simulated items in memory |
-| `-backfill` | `84` | Simulated historical items at startup |
-| `-auto-cdr` | `15s` | Average watch-officer escalation interval; `0` disables |
-| `-shore` | empty | Enable live shore mode with this shore URL |
-| `-edge` | `http://localhost:8081` | Optional edge URL used in live mode |
-| `-link-listen` | `:18080` | Link shaper listener; empty disables shaping |
-| `-link-bps` | `2000000` | Initial shaped link rate in bits/s |
-| `-poll` | `1s` | Live shore polling interval |
+| Flag | Environment | Default | Purpose |
+|---|---|---|---|
+| `-addr` | — | `:8080` | UI HTTP listener |
+| `-retain` | — | `260` | Maximum simulated items in memory |
+| `-backfill` | — | `84` | Simulated historical items at startup |
+| `-auto-cdr` | — | `15s` | Average watch-officer escalation interval; `0` disables |
+| `-shore` | — | empty | Enable live shore mode with this shore URL |
+| `-edge` | — | `http://localhost:8081` | Optional edge URL used in live mode |
+| `-link-listen` | — | `:18080` | Link shaper listener; empty disables shaping |
+| `-link-bps` | — | `2000000` | Initial shaped link rate in bits/s |
+| `-poll` | — | `1s` | Live shore polling interval |
+| `-operator-token` | `GS_OPERATOR_TOKEN` | unset | Operator JWT for shore ConsoleService calls |
+| `-operator-token-file` | `GS_OPERATOR_TOKEN_FILE` | unset | Read operator JWT from a file; takes precedence over the literal token |
 
 ## State and ports
 
@@ -267,8 +271,10 @@ SyncService unit authentication is off by default. When enabled, shore accepts
 HS256 tokens with `sub` (edge ID), `role: "unit"`, and `exp` claims. The signing
 key must be non-default and at least 32 bytes. Missing, invalid, or expired
 tokens return `Unauthenticated`; an `ExchangeRequest.edge_id` that differs
-from `sub` returns `PermissionDenied`. Authentication protects SyncService
-only: ConsoleService has no auth, and neither service has TLS.
+from `sub` returns `PermissionDenied`. Unit authentication protects
+SyncService. ConsoleService reads remain unauthenticated; `SetPolicy` requires
+an operator token only when operator authentication is enabled. Neither
+service has TLS.
 
 `*_FILE` credentials take precedence over literal environment values. A
 nonempty file path is read at startup and a missing file is an error; do not
@@ -313,6 +319,27 @@ restart the edge StatefulSet:
 ```sh
 kubectl -n ghost-seeker rollout restart statefulset/edge
 ```
+
+## Operator authentication
+
+Operator authentication is off by default. Enable `GS_REQUIRE_OPERATOR_AUTH`
+on shore to require operator JWTs for `SetPolicy` requests. Use the same
+32-byte-or-longer signing key configured on shore to mint a token:
+
+```sh
+GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
+  -role operator -echelon ship -id TAO-DDG51 -ttl 720h > operator.jwt
+
+kubectl -n ghost-seeker create secret generic operator-auth \
+  --from-file=operator-token=./operator.jwt && rm operator.jwt
+```
+
+The operator workload reads this optional Secret as `GS_OPERATOR_TOKEN`; its
+token is sent only to shore. Set `GS_REQUIRE_OPERATOR_AUTH=true` in shore's
+configuration before deploying or restarting shore. Shore derives `issuedBy`
+and echelon from the verified token, not from the request. An operator cannot
+add, change, or drop policy layers above their echelon, so higher-echelon locks
+are refused.
 
 ## Edge storage caps
 
