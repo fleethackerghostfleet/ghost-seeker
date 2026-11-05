@@ -79,6 +79,46 @@ type runOpts struct {
 	dedup       string
 	gt          *gtIndex
 	updateEvery time.Duration
+	inferURL    string // sidecar for the tomer row (ImagePriority); mock otherwise
+}
+
+func envOr(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
+}
+
+// tomerAnalyzer keeps the mock's ground-truth detections (so object
+// bookkeeping is identical across rows) and adds the real sidecar's
+// ImagePriority. Each run gets its own source prefix so the sidecar's
+// per-source duplicate window starts empty.
+type tomerAnalyzer struct {
+	mock   inference.Analyzer
+	remote inference.Analyzer
+	prefix string
+}
+
+func (t *tomerAnalyzer) Analyze(ctx context.Context, f inference.Frame, known []string, hints map[string]string) (*pb.AnalyzeResponse, error) {
+	resp, err := t.mock.Analyze(ctx, f, known, hints)
+	if err != nil {
+		return nil, err
+	}
+	rf := f
+	rf.Source = t.prefix + f.Source
+	rr, err := t.remote.Analyze(ctx, rf, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("tomer sidecar: %w", err)
+	}
+	if rr.ImagePriority == nil {
+		return nil, fmt.Errorf("tomer sidecar returned no image_priority; start it with --prioritizer tomer|both")
+	}
+	resp.ImagePriority = rr.ImagePriority
+	return resp, nil
+}
+
+func (t *tomerAnalyzer) EmbedText(ctx context.Context, texts []string) ([][]float32, error) {
+	return t.mock.EmbedText(ctx, texts)
 }
 
 func main() {
@@ -90,7 +130,8 @@ func main() {
 	out := flag.String("out", "", "write JSON results here")
 	seed := flag.Int64("seed", 7, "loss seed")
 	sampleEvery := flag.Duration("sample", time.Minute, "metrics sample interval")
-	dedup := flag.String("dedup", "", "demo comparison: comma list of naive|hash|sightings (or 'all'); runs each mode under each -bps rate")
+	dedup := flag.String("dedup", "", "demo comparison: comma list of naive|hash|sightings|tomer (or 'all'); runs each mode under each -bps rate")
+	inferURL := flag.String("infer", envOr("INFER_URL", "http://127.0.0.1:9090"), "sidecar URL for the tomer row (must run --prioritizer tomer|both)")
 	bpsList := flag.String("bps", "", "comma list of fixed link rates in bit/s that replace -trace (e.g. 9600,64000,256000,2000000; 0 = link down)")
 	md := flag.String("md", "", "write a markdown summary table here")
 	updateEvery := flag.Duration("sighting-update", 30*time.Second, "sightings mode: refresh an object's image at most this often")
@@ -138,7 +179,7 @@ func main() {
 	for _, tr := range traces {
 		for _, mode := range modes {
 			for _, s := range splitComma(*strategies) {
-				r, err := run(scheduler.Strategy(s), tr, sc, *dur, *seed, *sampleEvery, runOpts{dedup: mode, gt: gt, updateEvery: *updateEvery})
+				r, err := run(scheduler.Strategy(s), tr, sc, *dur, *seed, *sampleEvery, runOpts{dedup: mode, gt: gt, updateEvery: *updateEvery, inferURL: *inferURL})
 				if err != nil {
 					fmt.Fprintln(os.Stderr, s, err)
 					os.Exit(1)
@@ -194,14 +235,20 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 	lk := link.NewSim(tr, clk, shore.Exchange, seed)
 	cfg := scheduler.DefaultConfig("edge-1")
 	cfg.Strategy = strat
-	sch, err := scheduler.New(cfg, est, lk, scoring.Default(), clk, nil)
+	eng := scoring.Default()
+	var an inference.Analyzer = inference.NewMock()
+	icfg := ingest.DefaultConfig()
+	icfg.EdgeID = "sim" // same ids across strategies so results can be joined by item
+	if opts.dedup == "tomer" {
+		eng = scoring.Tomer()
+		icfg.Prioritizer, icfg.Dedup = scoring.PrioritizerTomer, ingest.DedupHash
+		an = &tomerAnalyzer{mock: an, remote: inference.NewRemote(opts.inferURL), prefix: fmt.Sprintf("sim-%s-%d-%d/", strat, seed, time.Now().UnixNano())}
+	}
+	sch, err := scheduler.New(cfg, est, lk, eng, clk, nil)
 	if err != nil {
 		return nil, err
 	}
-	mock := inference.NewMock()
-	icfg := ingest.DefaultConfig()
-	icfg.EdgeID = "sim" // same ids across strategies so results can be joined by item
-	ing := ingest.New(icfg, est, mock, sch, clk, nil)
+	ing := ingest.New(icfg, est, an, sch, clk, nil)
 	replay, err := ingest.NewReplay(clk, 0, sc.Sets...)
 	if err != nil {
 		return nil, err
@@ -383,7 +430,7 @@ func run(strat scheduler.Strategy, tr link.Trace, sc *scenario.Scenario, dur tim
 	}
 	st := sch.Stats()
 	res.Exchanges, res.Failures, res.BytesOnAir = st.Exchanges, st.Failures, lk.BytesOnAir
-	res.Skipped = src.Skipped
+	res.Skipped = src.Skipped + ing.Deduped() // tomer: near-duplicates fold inside the ingester
 	if last := res.Samples[len(res.Samples)-1]; true {
 		res.ObjectsWithImage, res.ItemsWithImage = last.ObjectsWithImage, last.ItemsWithImage
 	}

@@ -73,7 +73,7 @@ func (x Sighting_Event) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Sighting_Event.Descriptor instead.
 func (Sighting_Event) EnumDescriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{3, 0}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{4, 0}
 }
 
 type AnalyzeRequest struct {
@@ -167,7 +167,11 @@ type AnalyzeResponse struct {
 	// behaviour.
 	Sightings []*Sighting `protobuf:"bytes,6,rep,name=sightings,proto3" json:"sightings,omitempty"`
 	// Temporary higher capture rate requested by the night-lights analysis; edge decays back to its base period.
-	Burst         *NightBurst `protobuf:"bytes,7,opt,name=burst,proto3" json:"burst,omitempty"`
+	Burst *NightBurst `protobuf:"bytes,7,opt,name=burst,proto3" json:"burst,omitempty"`
+	// Image-level prioritization from the "tomer" backend
+	// (algorithm/ghost_priority); unset unless the sidecar runs
+	// --prioritizer tomer|both. Additive; edgeml fields above are unchanged.
+	ImagePriority *ImagePriority `protobuf:"bytes,8,opt,name=image_priority,json=imagePriority,proto3" json:"image_priority,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -251,6 +255,13 @@ func (x *AnalyzeResponse) GetBurst() *NightBurst {
 	return nil
 }
 
+func (x *AnalyzeResponse) GetImagePriority() *ImagePriority {
+	if x != nil {
+		return x.ImagePriority
+	}
+	return nil
+}
+
 type NightBurst struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Fps           float64                `protobuf:"fixed64,1,opt,name=fps,proto3" json:"fps,omitempty"`
@@ -311,6 +322,134 @@ func (x *NightBurst) GetReason() string {
 	return ""
 }
 
+// ImagePriority is one whole-frame score plus near-duplicate evidence, computed
+// by algorithm/ghost_priority (policy.score_record + color/pHash similarity
+// against the source's recent kept frames). score == base_score *
+// (1 - duplicate_strength * max_similarity), exactly the rank_records term.
+type ImagePriority struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Engine          string                 `protobuf:"bytes,1,opt,name=engine,proto3" json:"engine,omitempty"`                                         // e.g. "ghost_priority/provider-pipeline-v1"
+	Score           float32                `protobuf:"fixed32,2,opt,name=score,proto3" json:"score,omitempty"`                                         // final priority in [0,1]
+	BaseScore       float32                `protobuf:"fixed32,3,opt,name=base_score,json=baseScore,proto3" json:"base_score,omitempty"`                // before duplicate suppression
+	MaxSimilarity   float32                `protobuf:"fixed32,4,opt,name=max_similarity,json=maxSimilarity,proto3" json:"max_similarity,omitempty"`    // combined color+pHash similarity to nearest prior kept frame
+	NearestPriorId  string                 `protobuf:"bytes,5,opt,name=nearest_prior_id,json=nearestPriorId,proto3" json:"nearest_prior_id,omitempty"` // frame_id of that prior frame as this sidecar named it ("" if none); edge/ingest maps it to an item id (tag tomer_near)
+	NearDuplicate   bool                   `protobuf:"varint,6,opt,name=near_duplicate,json=nearDuplicate,proto3" json:"near_duplicate,omitempty"`     // max_similarity >= sidecar --tomer-dup-threshold
+	VisualInterest  float32                `protobuf:"fixed32,7,opt,name=visual_interest,json=visualInterest,proto3" json:"visual_interest,omitempty"`
+	Quality         float32                `protobuf:"fixed32,8,opt,name=quality,proto3" json:"quality,omitempty"`
+	ObjectRelevance float32                `protobuf:"fixed32,9,opt,name=object_relevance,json=objectRelevance,proto3" json:"object_relevance,omitempty"` // -1 when the object provider is NoObjects
+	LatencyMs       int64                  `protobuf:"varint,10,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	FrameId         string                 `protobuf:"bytes,11,opt,name=frame_id,json=frameId,proto3" json:"frame_id,omitempty"` // sidecar-side id of this frame; nearest_prior_id refers to an earlier frame_id
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ImagePriority) Reset() {
+	*x = ImagePriority{}
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImagePriority) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImagePriority) ProtoMessage() {}
+
+func (x *ImagePriority) ProtoReflect() protoreflect.Message {
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImagePriority.ProtoReflect.Descriptor instead.
+func (*ImagePriority) Descriptor() ([]byte, []int) {
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ImagePriority) GetEngine() string {
+	if x != nil {
+		return x.Engine
+	}
+	return ""
+}
+
+func (x *ImagePriority) GetScore() float32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
+func (x *ImagePriority) GetBaseScore() float32 {
+	if x != nil {
+		return x.BaseScore
+	}
+	return 0
+}
+
+func (x *ImagePriority) GetMaxSimilarity() float32 {
+	if x != nil {
+		return x.MaxSimilarity
+	}
+	return 0
+}
+
+func (x *ImagePriority) GetNearestPriorId() string {
+	if x != nil {
+		return x.NearestPriorId
+	}
+	return ""
+}
+
+func (x *ImagePriority) GetNearDuplicate() bool {
+	if x != nil {
+		return x.NearDuplicate
+	}
+	return false
+}
+
+func (x *ImagePriority) GetVisualInterest() float32 {
+	if x != nil {
+		return x.VisualInterest
+	}
+	return 0
+}
+
+func (x *ImagePriority) GetQuality() float32 {
+	if x != nil {
+		return x.Quality
+	}
+	return 0
+}
+
+func (x *ImagePriority) GetObjectRelevance() float32 {
+	if x != nil {
+		return x.ObjectRelevance
+	}
+	return 0
+}
+
+func (x *ImagePriority) GetLatencyMs() int64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+func (x *ImagePriority) GetFrameId() string {
+	if x != nil {
+		return x.FrameId
+	}
+	return ""
+}
+
 // Sighting is a frame's contribution to one tracked object.
 type Sighting struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -332,7 +471,7 @@ type Sighting struct {
 
 func (x *Sighting) Reset() {
 	*x = Sighting{}
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[3]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -344,7 +483,7 @@ func (x *Sighting) String() string {
 func (*Sighting) ProtoMessage() {}
 
 func (x *Sighting) ProtoReflect() protoreflect.Message {
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[3]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -357,7 +496,7 @@ func (x *Sighting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Sighting.ProtoReflect.Descriptor instead.
 func (*Sighting) Descriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{3}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Sighting) GetId() string {
@@ -456,7 +595,7 @@ type FormHint struct {
 
 func (x *FormHint) Reset() {
 	*x = FormHint{}
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[4]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -468,7 +607,7 @@ func (x *FormHint) String() string {
 func (*FormHint) ProtoMessage() {}
 
 func (x *FormHint) ProtoReflect() protoreflect.Message {
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[4]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -481,7 +620,7 @@ func (x *FormHint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FormHint.ProtoReflect.Descriptor instead.
 func (*FormHint) Descriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{4}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *FormHint) GetKind() FormKind {
@@ -514,7 +653,7 @@ type EmbedTextRequest struct {
 
 func (x *EmbedTextRequest) Reset() {
 	*x = EmbedTextRequest{}
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[5]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +665,7 @@ func (x *EmbedTextRequest) String() string {
 func (*EmbedTextRequest) ProtoMessage() {}
 
 func (x *EmbedTextRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[5]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +678,7 @@ func (x *EmbedTextRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmbedTextRequest.ProtoReflect.Descriptor instead.
 func (*EmbedTextRequest) Descriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{5}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *EmbedTextRequest) GetTexts() []string {
@@ -559,7 +698,7 @@ type EmbedTextResponse struct {
 
 func (x *EmbedTextResponse) Reset() {
 	*x = EmbedTextResponse{}
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[6]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +710,7 @@ func (x *EmbedTextResponse) String() string {
 func (*EmbedTextResponse) ProtoMessage() {}
 
 func (x *EmbedTextResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[6]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +723,7 @@ func (x *EmbedTextResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmbedTextResponse.ProtoReflect.Descriptor instead.
 func (*EmbedTextResponse) Descriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{6}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *EmbedTextResponse) GetEmbeddings() []*Embedding {
@@ -610,7 +749,7 @@ type Embedding struct {
 
 func (x *Embedding) Reset() {
 	*x = Embedding{}
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[7]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -622,7 +761,7 @@ func (x *Embedding) String() string {
 func (*Embedding) ProtoMessage() {}
 
 func (x *Embedding) ProtoReflect() protoreflect.Message {
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[7]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -635,7 +774,7 @@ func (x *Embedding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Embedding.ProtoReflect.Descriptor instead.
 func (*Embedding) Descriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{7}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Embedding) GetValues() []float32 {
@@ -653,7 +792,7 @@ type CapabilitiesRequest struct {
 
 func (x *CapabilitiesRequest) Reset() {
 	*x = CapabilitiesRequest{}
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[8]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -665,7 +804,7 @@ func (x *CapabilitiesRequest) String() string {
 func (*CapabilitiesRequest) ProtoMessage() {}
 
 func (x *CapabilitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[8]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -678,7 +817,7 @@ func (x *CapabilitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapabilitiesRequest.ProtoReflect.Descriptor instead.
 func (*CapabilitiesRequest) Descriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{8}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{9}
 }
 
 type CapabilitiesResponse struct {
@@ -687,13 +826,14 @@ type CapabilitiesResponse struct {
 	OpenVocabulary bool                   `protobuf:"varint,2,opt,name=open_vocabulary,json=openVocabulary,proto3" json:"open_vocabulary,omitempty"`
 	FixedLabels    []string               `protobuf:"bytes,3,rep,name=fixed_labels,json=fixedLabels,proto3" json:"fixed_labels,omitempty"`
 	EmbeddingDim   int32                  `protobuf:"varint,4,opt,name=embedding_dim,json=embeddingDim,proto3" json:"embedding_dim,omitempty"`
+	Prioritizer    string                 `protobuf:"bytes,5,opt,name=prioritizer,proto3" json:"prioritizer,omitempty"` // "edgeml" | "tomer" | "both": whether AnalyzeResponse.image_priority is populated
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CapabilitiesResponse) Reset() {
 	*x = CapabilitiesResponse{}
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[9]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +845,7 @@ func (x *CapabilitiesResponse) String() string {
 func (*CapabilitiesResponse) ProtoMessage() {}
 
 func (x *CapabilitiesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ghostseeker_v1_inference_proto_msgTypes[9]
+	mi := &file_ghostseeker_v1_inference_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +858,7 @@ func (x *CapabilitiesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapabilitiesResponse.ProtoReflect.Descriptor instead.
 func (*CapabilitiesResponse) Descriptor() ([]byte, []int) {
-	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{9}
+	return file_ghostseeker_v1_inference_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CapabilitiesResponse) GetModelId() string {
@@ -749,6 +889,13 @@ func (x *CapabilitiesResponse) GetEmbeddingDim() int32 {
 	return 0
 }
 
+func (x *CapabilitiesResponse) GetPrioritizer() string {
+	if x != nil {
+		return x.Prioritizer
+	}
+	return ""
+}
+
 var File_ghostseeker_v1_inference_proto protoreflect.FileDescriptor
 
 const file_ghostseeker_v1_inference_proto_rawDesc = "" +
@@ -759,7 +906,7 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\fknown_labels\x18\x02 \x03(\tR\vknownLabels\x12%\n" +
 	"\x0ewant_embedding\x18\x03 \x01(\bR\rwantEmbedding\x12\x16\n" +
 	"\x06source\x18\x04 \x01(\tR\x06source\x12-\n" +
-	"\x13captured_at_unix_ms\x18\x05 \x01(\x03R\x10capturedAtUnixMs\"\xb0\x02\n" +
+	"\x13captured_at_unix_ms\x18\x05 \x01(\x03R\x10capturedAtUnixMs\"\xf6\x02\n" +
 	"\x0fAnalyzeResponse\x129\n" +
 	"\n" +
 	"detections\x18\x01 \x03(\v2\x19.ghostseeker.v1.DetectionR\n" +
@@ -770,13 +917,29 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\n" +
 	"latency_ms\x18\x05 \x01(\x03R\tlatencyMs\x126\n" +
 	"\tsightings\x18\x06 \x03(\v2\x18.ghostseeker.v1.SightingR\tsightings\x120\n" +
-	"\x05burst\x18\a \x01(\v2\x1a.ghostseeker.v1.NightBurstR\x05burst\"U\n" +
+	"\x05burst\x18\a \x01(\v2\x1a.ghostseeker.v1.NightBurstR\x05burst\x12D\n" +
+	"\x0eimage_priority\x18\b \x01(\v2\x1d.ghostseeker.v1.ImagePriorityR\rimagePriority\"U\n" +
 	"\n" +
 	"NightBurst\x12\x10\n" +
 	"\x03fps\x18\x01 \x01(\x01R\x03fps\x12\x1d\n" +
 	"\n" +
 	"duration_s\x18\x02 \x01(\x01R\tdurationS\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xad\x04\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xfc\x02\n" +
+	"\rImagePriority\x12\x16\n" +
+	"\x06engine\x18\x01 \x01(\tR\x06engine\x12\x14\n" +
+	"\x05score\x18\x02 \x01(\x02R\x05score\x12\x1d\n" +
+	"\n" +
+	"base_score\x18\x03 \x01(\x02R\tbaseScore\x12%\n" +
+	"\x0emax_similarity\x18\x04 \x01(\x02R\rmaxSimilarity\x12(\n" +
+	"\x10nearest_prior_id\x18\x05 \x01(\tR\x0enearestPriorId\x12%\n" +
+	"\x0enear_duplicate\x18\x06 \x01(\bR\rnearDuplicate\x12'\n" +
+	"\x0fvisual_interest\x18\a \x01(\x02R\x0evisualInterest\x12\x18\n" +
+	"\aquality\x18\b \x01(\x02R\aquality\x12)\n" +
+	"\x10object_relevance\x18\t \x01(\x02R\x0fobjectRelevance\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\n" +
+	" \x01(\x03R\tlatencyMs\x12\x19\n" +
+	"\bframe_id\x18\v \x01(\tR\aframeId\"\xad\x04\n" +
 	"\bSighting\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x124\n" +
 	"\x05event\x18\x02 \x01(\x0e2\x1e.ghostseeker.v1.Sighting.EventR\x05event\x12>\n" +
@@ -812,12 +975,13 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\bmodel_id\x18\x02 \x01(\tR\amodelId\"#\n" +
 	"\tEmbedding\x12\x16\n" +
 	"\x06values\x18\x01 \x03(\x02R\x06values\"\x15\n" +
-	"\x13CapabilitiesRequest\"\xa2\x01\n" +
+	"\x13CapabilitiesRequest\"\xc4\x01\n" +
 	"\x14CapabilitiesResponse\x12\x19\n" +
 	"\bmodel_id\x18\x01 \x01(\tR\amodelId\x12'\n" +
 	"\x0fopen_vocabulary\x18\x02 \x01(\bR\x0eopenVocabulary\x12!\n" +
 	"\ffixed_labels\x18\x03 \x03(\tR\vfixedLabels\x12#\n" +
-	"\rembedding_dim\x18\x04 \x01(\x05R\fembeddingDim2\x8b\x02\n" +
+	"\rembedding_dim\x18\x04 \x01(\x05R\fembeddingDim\x12 \n" +
+	"\vprioritizer\x18\x05 \x01(\tR\vprioritizer2\x8b\x02\n" +
 	"\x10InferenceService\x12J\n" +
 	"\aAnalyze\x12\x1e.ghostseeker.v1.AnalyzeRequest\x1a\x1f.ghostseeker.v1.AnalyzeResponse\x12P\n" +
 	"\tEmbedText\x12 .ghostseeker.v1.EmbedTextRequest\x1a!.ghostseeker.v1.EmbedTextResponse\x12Y\n" +
@@ -836,42 +1000,44 @@ func file_ghostseeker_v1_inference_proto_rawDescGZIP() []byte {
 }
 
 var file_ghostseeker_v1_inference_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_ghostseeker_v1_inference_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_ghostseeker_v1_inference_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_ghostseeker_v1_inference_proto_goTypes = []any{
 	(Sighting_Event)(0),          // 0: ghostseeker.v1.Sighting.Event
 	(*AnalyzeRequest)(nil),       // 1: ghostseeker.v1.AnalyzeRequest
 	(*AnalyzeResponse)(nil),      // 2: ghostseeker.v1.AnalyzeResponse
 	(*NightBurst)(nil),           // 3: ghostseeker.v1.NightBurst
-	(*Sighting)(nil),             // 4: ghostseeker.v1.Sighting
-	(*FormHint)(nil),             // 5: ghostseeker.v1.FormHint
-	(*EmbedTextRequest)(nil),     // 6: ghostseeker.v1.EmbedTextRequest
-	(*EmbedTextResponse)(nil),    // 7: ghostseeker.v1.EmbedTextResponse
-	(*Embedding)(nil),            // 8: ghostseeker.v1.Embedding
-	(*CapabilitiesRequest)(nil),  // 9: ghostseeker.v1.CapabilitiesRequest
-	(*CapabilitiesResponse)(nil), // 10: ghostseeker.v1.CapabilitiesResponse
-	(*Detection)(nil),            // 11: ghostseeker.v1.Detection
-	(FormKind)(0),                // 12: ghostseeker.v1.FormKind
+	(*ImagePriority)(nil),        // 4: ghostseeker.v1.ImagePriority
+	(*Sighting)(nil),             // 5: ghostseeker.v1.Sighting
+	(*FormHint)(nil),             // 6: ghostseeker.v1.FormHint
+	(*EmbedTextRequest)(nil),     // 7: ghostseeker.v1.EmbedTextRequest
+	(*EmbedTextResponse)(nil),    // 8: ghostseeker.v1.EmbedTextResponse
+	(*Embedding)(nil),            // 9: ghostseeker.v1.Embedding
+	(*CapabilitiesRequest)(nil),  // 10: ghostseeker.v1.CapabilitiesRequest
+	(*CapabilitiesResponse)(nil), // 11: ghostseeker.v1.CapabilitiesResponse
+	(*Detection)(nil),            // 12: ghostseeker.v1.Detection
+	(FormKind)(0),                // 13: ghostseeker.v1.FormKind
 }
 var file_ghostseeker_v1_inference_proto_depIdxs = []int32{
-	11, // 0: ghostseeker.v1.AnalyzeResponse.detections:type_name -> ghostseeker.v1.Detection
-	4,  // 1: ghostseeker.v1.AnalyzeResponse.sightings:type_name -> ghostseeker.v1.Sighting
+	12, // 0: ghostseeker.v1.AnalyzeResponse.detections:type_name -> ghostseeker.v1.Detection
+	5,  // 1: ghostseeker.v1.AnalyzeResponse.sightings:type_name -> ghostseeker.v1.Sighting
 	3,  // 2: ghostseeker.v1.AnalyzeResponse.burst:type_name -> ghostseeker.v1.NightBurst
-	0,  // 3: ghostseeker.v1.Sighting.event:type_name -> ghostseeker.v1.Sighting.Event
-	11, // 4: ghostseeker.v1.Sighting.key_detection:type_name -> ghostseeker.v1.Detection
-	5,  // 5: ghostseeker.v1.Sighting.forms:type_name -> ghostseeker.v1.FormHint
-	12, // 6: ghostseeker.v1.FormHint.kind:type_name -> ghostseeker.v1.FormKind
-	8,  // 7: ghostseeker.v1.EmbedTextResponse.embeddings:type_name -> ghostseeker.v1.Embedding
-	1,  // 8: ghostseeker.v1.InferenceService.Analyze:input_type -> ghostseeker.v1.AnalyzeRequest
-	6,  // 9: ghostseeker.v1.InferenceService.EmbedText:input_type -> ghostseeker.v1.EmbedTextRequest
-	9,  // 10: ghostseeker.v1.InferenceService.Capabilities:input_type -> ghostseeker.v1.CapabilitiesRequest
-	2,  // 11: ghostseeker.v1.InferenceService.Analyze:output_type -> ghostseeker.v1.AnalyzeResponse
-	7,  // 12: ghostseeker.v1.InferenceService.EmbedText:output_type -> ghostseeker.v1.EmbedTextResponse
-	10, // 13: ghostseeker.v1.InferenceService.Capabilities:output_type -> ghostseeker.v1.CapabilitiesResponse
-	11, // [11:14] is the sub-list for method output_type
-	8,  // [8:11] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	4,  // 3: ghostseeker.v1.AnalyzeResponse.image_priority:type_name -> ghostseeker.v1.ImagePriority
+	0,  // 4: ghostseeker.v1.Sighting.event:type_name -> ghostseeker.v1.Sighting.Event
+	12, // 5: ghostseeker.v1.Sighting.key_detection:type_name -> ghostseeker.v1.Detection
+	6,  // 6: ghostseeker.v1.Sighting.forms:type_name -> ghostseeker.v1.FormHint
+	13, // 7: ghostseeker.v1.FormHint.kind:type_name -> ghostseeker.v1.FormKind
+	9,  // 8: ghostseeker.v1.EmbedTextResponse.embeddings:type_name -> ghostseeker.v1.Embedding
+	1,  // 9: ghostseeker.v1.InferenceService.Analyze:input_type -> ghostseeker.v1.AnalyzeRequest
+	7,  // 10: ghostseeker.v1.InferenceService.EmbedText:input_type -> ghostseeker.v1.EmbedTextRequest
+	10, // 11: ghostseeker.v1.InferenceService.Capabilities:input_type -> ghostseeker.v1.CapabilitiesRequest
+	2,  // 12: ghostseeker.v1.InferenceService.Analyze:output_type -> ghostseeker.v1.AnalyzeResponse
+	8,  // 13: ghostseeker.v1.InferenceService.EmbedText:output_type -> ghostseeker.v1.EmbedTextResponse
+	11, // 14: ghostseeker.v1.InferenceService.Capabilities:output_type -> ghostseeker.v1.CapabilitiesResponse
+	12, // [12:15] is the sub-list for method output_type
+	9,  // [9:12] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_ghostseeker_v1_inference_proto_init() }
@@ -886,7 +1052,7 @@ func file_ghostseeker_v1_inference_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ghostseeker_v1_inference_proto_rawDesc), len(file_ghostseeker_v1_inference_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
