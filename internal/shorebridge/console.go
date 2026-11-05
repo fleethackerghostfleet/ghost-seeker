@@ -1090,9 +1090,6 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 			out.Warnings = append(out.Warnings, scopeWarning)
 		}
 		out.Readback = Readback(out.Suppress, out.Boost)
-		if out.DurationMin > 0 && len(out.Rules) > 0 {
-			out.Readback = strings.TrimSuffix(out.Readback, " Until cleared.") + fmt.Sprintf(" For %dm.", out.DurationMin)
-		}
 	} else if c.b.Compiler != nil && strings.TrimSpace(ruleText) != "" {
 		comp := c.b.Compiler.Compile(ctx, ruleText)
 		if !comp.Blocked {
@@ -1125,10 +1122,23 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 	if out.Warnings == nil {
 		out.Warnings = []string{}
 	}
+	if out.DurationMin == 0 && durationMin > 0 {
+		out.DurationMin = durationMin
+	}
+	out.Readback = withDuration(out.Readback, out.DurationMin)
 	if mode != "" {
 		out.Readback = strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(out.Readback, "No rules recognized."), "Feed ranked by the edge priority score only.") + " EMCON " + mode + ".")
 	}
 	return out
+}
+
+// withDuration swaps the interpreter's open-ended "Until cleared." for the
+// requested expiry so the readback says what the policy will actually do.
+func withDuration(readback string, durationMin int) string {
+	if durationMin <= 0 || !strings.Contains(readback, "Until cleared.") {
+		return readback
+	}
+	return strings.Replace(readback, "Until cleared.", fmt.Sprintf("For %dm.", durationMin), 1)
 }
 
 func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
@@ -1188,7 +1198,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "upstream shore error")
 		return
 	}
-	readback := Readback(merged.Suppress, merged.Boost)
+	readback := withDuration(Readback(merged.Suppress, merged.Boost), cd.DurationMin)
 	if cd.Compiled != nil || cd.Emcon != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		readback = cd.Readback
 	}
