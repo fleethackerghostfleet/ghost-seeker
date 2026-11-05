@@ -204,7 +204,7 @@ test('enabling team sync promotes an open local suggestion only with a reviewer 
 });
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
- const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
+ const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{documentElement:{style:{setProperty(){}}},body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
  vm.runInContext(settingsSource,context);
  return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved)};
 }
@@ -469,6 +469,35 @@ test('feed density offers only Small and Large, persists them and maps the old X
  }
  settings.density('xl');settings.density('s');settings.density(null);
  assert.equal(settings.get().density,'l');
+});
+test('text size defaults, validates, persists and reloads all sizes',()=>{
+ for(const saved of [null,'broken','{}','{"textSize":"invalid"}','{"textSize":null}','{"textSize":"toString"}']){
+  assert.equal(settingsContext(saved).settings.get().textSize,'default');
+ }
+ const {settings,saved}=settingsContext('{}');
+ for(const size of ['compact','default','large','extra-large']){
+  settings.textSize(size);
+  assert.equal(saved().textSize,size);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().textSize,size);
+ }
+ for(const invalid of [null,42,'invalid','toString'])settings.textSize(invalid);
+ assert.equal(settings.get().textSize,'extra-large');
+ assert.equal(saved().textSize,'extra-large');
+});
+test('text layout keeps enlarged image labels in frame without collisions and handles empty frames',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'static/text-layout.js'),'utf8');
+ const labels=Array.from({length:2},()=>({style:{},offsetWidth:100,offsetHeight:20,parentElement:{getBoundingClientRect:()=>({left:190,top:3})}}));
+ const frame={clientWidth:200,clientHeight:150,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:200,height:150}),querySelectorAll:selector=>selector==='.box em'?labels:[]};
+ const context=vm.createContext({window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
+ vm.runInContext(source,context);
+ assert.equal(labels[0].style.maxWidth,'192px');
+ assert.equal(labels[0].style.left,'-94px');
+ assert.equal(labels[0].style.top,'1px');
+ assert.equal(labels[1].style.top,'25px');
+ labels.length=0;
+ assert.doesNotThrow(()=>context.window.gsTextLayout());
+ frame.getBoundingClientRect=()=>({width:0,height:0});
+ assert.doesNotThrow(()=>context.window.gsTextLayout());
 });
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();

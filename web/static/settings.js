@@ -6,8 +6,10 @@ window.gsSettings=(()=>{
  const THEMES=[['cic','Dark'],['day','Day'],['red','Night mode (N)']];
  const PARTS=[['hstats','Header counts'],['live','Feed status'],['clock','Clock'],['user','Watch station'],['strip','Pipeline strip'],['dirbar','Active directives'],['ov','Thumbnail source & score'],['cl','Thumbnail captions'],['tbox','Thumbnail detection boxes']];
  const DENSITIES=['m','l'];
+ const TEXT_SIZES=[['compact','Compact'],['default','Default'],['large','Large'],['extra-large','Extra large']];
+ const TEXT_SCALES={compact:1,default:1.12,large:1.25,'extra-large':1.4};
  const REVIEWS=['all','reviewed','sent','unreviewed'];
- const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:cleanFeed()});
+ const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',textSize:'default',feed:cleanFeed()});
  function cleanFeed(value){return {showDuplicates:value?.showDuplicates!==false,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all'}}
  // "Sent by a person" is a temporary view; a reload must not leave the main feed stuck on it.
  function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';return feed}
@@ -23,12 +25,14 @@ window.gsSettings=(()=>{
  function load(){
   try{
    const v=JSON.parse(localStorage.getItem(KEY))||{};const d=defaults();
-   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:startFeed(v.feed)};
+   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:startFeed(v.feed),textSize:TEXT_SIZES.some(t=>t[0]===v.textSize)?v.textSize:d.textSize};
   }catch{return defaults()}
  }
  function save(){try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}}
  function apply(){
   const b=document.body;
+  document.documentElement.style.setProperty('--text-scale',TEXT_SCALES[s.textSize]);
+  window.gsTextLayout?.();
   for(const key of Object.keys(WIDTHS)){
    if(s.widths[key])b.style.setProperty('--width-'+key,s.widths[key]+'px');
    else b.style.removeProperty('--width-'+key);
@@ -53,6 +57,7 @@ window.gsSettings=(()=>{
   const seg=(k,opts)=>`<div class="seg" data-k="${k}">${opts.map(([v,l])=>`<button type="button" data-v="${v}">${l}</button>`).join('')}</div>`;
   dlg.innerHTML=`<h3>Display settings</h3>
   <div class="setsec"><div class="lbl">Feed controls position</div>${seg('bar',BARS)}</div>
+  <div class="setsec"><div class="lbl">Text size</div>${seg('textSize',TEXT_SIZES)}<small>Compact uses the original size. Default is 12% larger.</small></div>
   <div class="setsec"><div class="lbl">Theme</div>${seg('theme',THEMES)}<small>Night mode is also available with the N key.</small></div>
   <div class="setsec"><div class="lbl">Show</div><div class="setparts">${PARTS.map(([p,l])=>`<label><input type="checkbox" data-p="${p}"> ${l}</label>`).join('')}</div></div>
   <p class="hint">Classification banners are always shown. Settings are saved in this browser.</p>
@@ -75,5 +80,6 @@ window.gsSettings=(()=>{
  }
  function setFeed(value){s.feed=cleanFeed({...s.feed,...value});save()}
  function density(value){if(DENSITIES.includes(value))set('density',value)}
- return {toggleRed,resize,setFeed,density,get:()=>({...s,hide:[...s.hide],widths:{...s.widths},feed:{...s.feed}})};
+ function textSize(value){if(TEXT_SIZES.some(t=>t[0]===value))set('textSize',value)}
+ return {toggleRed,resize,setFeed,density,textSize,get:()=>({...s,hide:[...s.hide],widths:{...s.widths},feed:{...s.feed}})};
 })();
