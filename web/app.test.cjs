@@ -366,6 +366,16 @@ function settingsContext(saved){
  vm.runInContext(settingsSource,context);
  return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved),reset:()=>nodes.setReset.onclick()};
 }
+test('scalable header tabs keep intrinsic sizing and mobile arrows across views',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'static/text-size.css'),'utf8');
+ assert.match(css,/header \.view-tabs\s*\{[^}]*height:auto;[^}]*align-self:stretch;[^}]*max-width:100%/);
+ assert.match(css,/header \.view-tabs nav\s*\{[^}]*flex:1 1 0;[^}]*min-width:0;[^}]*flex-wrap:nowrap;[^}]*order:0/);
+ for(const selector of ['body:has(#pgFeed.on) header nav','body:not(:has(#pgFeed.on)) header nav']){
+  const rule=css.slice(css.indexOf(selector)).split('}')[0];
+  assert.match(rule,/flex:1 1 0/);
+  if(selector.startsWith('body:not'))assert.match(rule,/order:0/);
+ }
+});
 test('legacy density and feed preferences migrate to the two-size demo schema',()=>{
  for(const [old,size] of [['s','m'],['m','m'],['l','l'],['xl','l']]){
   assert.equal(settingsContext(JSON.stringify({density:old})).settings.get().density,size);
@@ -810,29 +820,48 @@ test('text size defaults, validates, persists and reloads all sizes',()=>{
 test('text layout keeps enlarged image labels in frame without collisions and handles empty frames',()=>{
  const source=fs.readFileSync(path.join(__dirname,'static/text-layout.js'),'utf8');
  const labels=Array.from({length:2},()=>({style:{},offsetWidth:100,offsetHeight:20,parentElement:{getBoundingClientRect:()=>({left:190,top:3})}}));
- const frame={clientWidth:200,clientHeight:150,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:200,height:150}),querySelectorAll:selector=>selector==='.box em'?labels:[]};
- const context=vm.createContext({window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
+ const frame={clientWidth:200,clientHeight:150,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:200,height:150}),querySelector:()=>null,querySelectorAll:selector=>selector==='.box em'?labels:[]};
+ const context=vm.createContext({getComputedStyle:()=>({fontSize:'16px'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
  vm.runInContext(source,context);
  assert.equal(labels[0].style.maxWidth,'192px');
  assert.equal(labels[0].style.left,'-94px');
  assert.equal(labels[0].style.top,'1px');
- assert.equal(labels[1].style.top,'25px');
+ assert.equal(labels[1].style.top,'24px');
  labels.length=0;
  assert.doesNotThrow(()=>context.window.gsTextLayout());
  frame.getBoundingClientRect=()=>({width:0,height:0});
  assert.doesNotThrow(()=>context.window.gsTextLayout());
 });
-test('scalable header tabs use intrinsic height rather than inheriting the wrapped header height',()=>{
- const css=fs.readFileSync(path.join(__dirname,'static/text-size.css'),'utf8');
- assert.match(html,/href="\/style\.css"[\s\S]*href="\/text-size\.css"/);
- assert.match(css,/header\s*\{[^}]*height:auto;[^}]*flex-wrap:wrap;[^}]*overflow:visible/);
- assert.match(css,/header \.view-tabs\s*\{[^}]*height:auto;[^}]*align-self:stretch;[^}]*max-width:100%/);
- assert.match(css,/header \.view-tabs nav\s*\{[^}]*flex:1 1 0;[^}]*min-width:0;[^}]*flex-wrap:nowrap;[^}]*order:0/);
- for(const selector of ['body:has(#pgFeed.on) header nav','body:not(:has(#pgFeed.on)) header nav']){
-  const rule=css.slice(css.indexOf(selector)).split('}')[0];
-  assert.match(rule,/flex:1 1 0/,'mobile tabs must share their row with both arrows on every view');
-  if(selector.startsWith('body:not'))assert.match(rule,/order:0/,'review navigation must remain between the arrows');
+test('dense labels repack around controls and use a readable scroll legend rather than collide when full',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'static/text-layout.js'),'utf8');
+ const labels=[190,200,160,170,150,160,380].map((width,i)=>({
+  textContent:'Detection '+i,style:{},parentElement:{getBoundingClientRect:()=>({left:120,top:80})},
+  get offsetWidth(){return Math.min(width*parseFloat(this.style.fontSize)/18,parseFloat(this.style.maxWidth))},
+  get offsetHeight(){return 26*parseFloat(this.style.fontSize)/18*Math.ceil(width*parseFloat(this.style.fontSize)/18/parseFloat(this.style.maxWidth))}
+ }));
+ const controls={getBoundingClientRect:()=>({left:4,top:4,width:230,height:36})};
+ let legend=null;
+ const frame={clientWidth:334,clientHeight:206,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:334,height:206}),querySelector:()=>legend,querySelectorAll:s=>s==='.box em'?labels:[controls],append:el=>legend=el};
+ const context=vm.createContext({getComputedStyle:()=>({fontSize:'18px',color:'black',backgroundColor:'orange'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:s=>s==='body>.banner'?[]:[frame],createElement:()=>({style:{},dataset:{},setAttribute(){},replaceChildren(...children){this.children=children},remove(){legend=null}})}});
+ vm.runInContext(source,context);
+ assert.equal(legend,null);
+ const rects=[{x:4,y:4,w:230,h:36}];
+ for(const label of labels){
+  const r={x:120+parseFloat(label.style.left),y:80+parseFloat(label.style.top),w:label.offsetWidth,h:label.offsetHeight};
+  assert.ok(r.x>=4&&r.y>=4&&r.x+r.w<=330&&r.y+r.h<=202);
+  assert.ok(rects.every(b=>r.x+r.w<=b.x||r.x>=b.x+b.w||r.y+r.h<=b.y||r.y>=b.y+b.h));
+  assert.ok(parseFloat(label.style.fontSize)>=12);rects.push(r);
  }
+ frame.clientHeight=60;
+ context.window.gsTextLayout();
+ assert.equal(legend.children.length,labels.length);
+ assert.ok(labels.every(label=>label.style.display==='none'));
+ context.window.gsTextLayout();
+ assert.equal(legend.children.length,labels.length);
+ frame.clientHeight=206;
+ context.window.gsTextLayout();
+ assert.equal(legend,null);
+ assert.ok(labels.every(label=>label.style.display===''));
 });
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();
@@ -1222,6 +1251,32 @@ test('live active and pending forms take precedence over a received preview',()=
  assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
  assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
 });
+test('feed images and detection planes share an intrinsic-size wrapper',()=>{
+ const c=setup();
+ vm.runInContext("imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';it={src:{id:'EO'},tier:3,central:.5,ts:new Date(),dets:[],det:[]}",c);
+ const markup=vm.runInContext('cardHTML(it,true)',c);
+ assert.match(markup,/<div class="thumb-image"><img src="\/frame.jpg" alt=""><div class="bx"><\/div><\/div><span class="tier/);
+});
+
+test('detail selection rejects removed images and never leaves an empty drawer open',()=>{
+ const c=setup();
+ vm.runInContext(`
+  opened=false;messages=[];document.body.classList={add(){opened=true},remove(){opened=false}};
+  toast=m=>messages.push(m);items=[normalizeItem(raw('kept'))];
+  openDetail('kept');
+ `,c);
+ assert.equal(vm.runInContext('state.sel',c),'kept');
+ assert.equal(c.opened,true);
+ vm.runInContext("items=[];openDetail('kept')",c);
+ assert.equal(vm.runInContext('state.sel',c),null);
+ assert.equal(c.opened,false);
+ assert.deepEqual(Array.from(c.messages),['This image is no longer in the feed.']);
+ vm.runInContext("state.sel='missing';opened=true;renderDetailContent()",c);
+ assert.equal(vm.runInContext('state.sel',c),null);
+ assert.equal(c.$('drawer').innerHTML,'');
+ assert.equal(c.opened,false);
+});
+
 function setup(){
  const elements=new Map();
  const context=vm.createContext({

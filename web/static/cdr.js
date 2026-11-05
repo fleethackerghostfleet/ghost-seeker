@@ -66,14 +66,27 @@ function renderLearned(directives){
  root.hidden=!learned.length;
  root.innerHTML=learned.length?`<b>Learned from operator</b><ul>${learned.map(d=>`<li>${esc(d.text.slice(prefix.length).trim())}</li>`).join('')}</ul>`:'';
 }
-function renderQueue(){
+let queueTab,queueSelection;
+function renderQueue(follow=false){
+ const queue=$('qlist'),scroll=queue.scrollTop;
+ const tabChanged=queueTab!==view.tab;
+ follow=follow||tabChanged||queueSelection!==view.sel;
+ queueTab=view.tab;queueSelection=view.sel;
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
   <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
   <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
- $('qlist').querySelector('.row.on')?.scrollIntoView({block:'nearest'});
+ queue.scrollTop=tabChanged?0:scroll;
+ if(follow){
+  const selected=queue.querySelector('.row.on');
+  if(selected){
+   const row=selected.getBoundingClientRect(),top=queue.getBoundingClientRect().top+queue.clientTop;
+   if(row.top<top)queue.scrollTop+=row.top-top;
+   else if(row.bottom>top+queue.clientHeight)queue.scrollTop+=row.bottom-top-queue.clientHeight;
+  }
+ }
 }
 function renderStage(){
  const it=items.get(view.sel),old=$('note'),keep=old&&old.dataset.id===view.sel?old.value:'';
@@ -137,7 +150,7 @@ async function undo(){
  if(!await decide('',id)&&fromStack&&revision===resetRevision)view.undo.push(id);
 }
 function setTab(t){view.tab=t;[...$('tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
-function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue();renderStage()}}
+function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue(true);renderStage()}}
 function setLive(on){$('live').classList.toggle('off',!on);$('live').querySelector('span').textContent=on?'LIVE':'RECONNECTING'}
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 
