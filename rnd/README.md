@@ -14,8 +14,9 @@ Selection is deterministic, without a random seed. A new output directory is
 required so interrupted runs cannot silently mix data.
 
 In v1, Dolphins_Pungo_Ferry_Bridge has only 5 frames; its 45-frame shortfall
-is shared equally by the other nine sources (55 each). There are 50 P1,
-125 P2, 175 P3 and 150 P4 predictions. The real
+is shared equally by the other nine sources (55 each). The 185 images with
+detections rank into 18 P1, 46 P2, 65 P3 and 56 P4 predictions. All 315
+no-detection scene images are P4, giving 371 P4 overall. The real
 `yolo11n-fp32-640-ort+mobileclip-s1-ort-fp32` run returned 219 detections,
 no non-tentative subtypes, and zero unknownness on every independent first
 frame. These are the actual API outputs, not filled-in maritime assumptions.
@@ -34,9 +35,14 @@ benchmark, not a replay of the live multi-frame sighting lifecycle.
 Primary `model_score` (also `edge_priority_score`) is
 `edge/scoring.Default()` for an image item with its Analyze features, no policy,
 no operator interests/overrides, no pull boost, and age zero. We call the actual
-shore bridge tier assignment on all 500 scores; ties retain manifest order.
-**Model tiers are rank-relative to this set**, not absolute per-image cutoffs:
-P1 top 10%, P2 next 25%, P3 next 35%, P4 remainder. This follows live edgeml's
+shore bridge tier assignment with no-detection images marked as scenes. Scenes
+are always P4 and excluded from the ranked population, regardless of score.
+**Model tiers are rank-relative to the detected-image subset**, not absolute
+per-image cutoffs: P1 top 10% (at least the first contact), P2 through 35%,
+P3 through 70%, P4 remainder. The bridge uses a stable descending score sort:
+exact ties among detected images retain manifest/input order, including across
+tier boundaries. IDs are generated in manifest order; no random tie breaker
+or secondary ID sort is applied. This follows live edgeml's
 scoring/ranking, not the simulation catalog model, and the comparison unit here
 is an image rather than a deduplicated live object. The live console has no
 catalog mission model for primary edgeml scoring (its display model is `shore`).
@@ -64,6 +70,16 @@ Copy the two generated JSONL files into `rnd/testsets/rnd-500-v1/` to version
 the metadata. To download elsewhere, create the local testset directory, copy
 the two committed JSONL files there, then download the GCS `images/` directory
 into it. Keep images outside Git.
+
+To re-derive tiers from stored inference without calling the sidecar:
+
+```sh
+./bin/rnd-testset -rerank -out "$HOME/rnd-data/rnd-500-v1"
+```
+
+This atomically replaces only `predictions.jsonl`, preserving all fields except
+`model_tier`. Copy it back to the versioned testset directory afterward.
+Stop the grader first and archive existing journals before changing tiers.
 
 ## Grade
 
