@@ -143,6 +143,11 @@ func ValidateSplits(images []Image, path string) (int, error) {
 			}
 		}
 	}
+	if len(policy.lockedSources["test"]) == 0 &&
+		len(policy.lockedSources["quarantine"]) == 0 &&
+		len(policy.pathDatasets) == 0 {
+		return 0, fmt.Errorf("dataset splits %q contain no test or quarantine entries", path)
+	}
 
 	rejected := 0
 	first := ""

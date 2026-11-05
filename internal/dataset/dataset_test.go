@@ -145,6 +145,23 @@ func TestValidateSplitsRejectsLockedRows(t *testing.T) {
 	}
 }
 
+func TestValidateSplitsRejectsEmptyPolicy(t *testing.T) {
+	for name, contents := range map[string]string{
+		"empty":        "",
+		"wrong policy": "dev:\n  clips: [Some_Clip]\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "splits.yaml")
+			if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ValidateSplits(nil, path); err == nil || !strings.Contains(err.Error(), "no test or quarantine entries") {
+				t.Fatalf("ValidateSplits error = %v, want empty-policy error", err)
+			}
+		})
+	}
+}
+
 func TestRealReviewManifestHasNoLockedRows(t *testing.T) {
 	manifestPath := filepath.Join("..", "..", "data", "review_set", "manifest.json")
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
