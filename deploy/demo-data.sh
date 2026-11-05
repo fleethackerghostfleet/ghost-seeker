@@ -14,7 +14,7 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 got=""
 if curl -fsSL --retry 2 -o "$tmp/$asset" "$url" 2>/dev/null && [ -s "$tmp/$asset" ]; then
   got="https"
-elif command -v gh >/dev/null 2>&1 && gh release download "$tag" -R "$repo" -p "$asset" -D "$tmp" 2>"$tmp/gh.err"; then
+elif rm -f "$tmp/$asset" && command -v gh >/dev/null 2>&1 && gh release download "$tag" -R "$repo" -p "$asset" -D "$tmp" --clobber 2>"$tmp/gh.err"; then
   got="gh"
 elif [ $# -gt 0 ] && command -v gcloud >/dev/null 2>&1; then
   echo "demo-data: release asset $asset unavailable (no gh auth?); falling back to gcloud" >&2
