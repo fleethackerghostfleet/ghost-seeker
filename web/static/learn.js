@@ -48,10 +48,10 @@ function createLearner(){
   if(index<0)return false;
   records.splice(index,1);return true;
  }
- function mostCommon(values){
-  const counts=new Map();let best=0,bestCount=0;
-  for(let i=values.length-1;i>=0;i--){const v=values[i];if(!v)continue;const c=(counts.get(v)||0)+1;counts.set(v,c);if(c>bestCount){best=v;bestCount=c}}
-  return best||null;
+ function commonChange(changes){
+  const counts=new Map();let best={from:null,to:null},bestCount=0;
+  for(let i=changes.length-1;i>=0;i--){const{from,to}=changes[i];if(!from||!to||from===to)continue;const k=from*10+to,c=(counts.get(k)||0)+1;counts.set(k,c);if(c>bestCount){best={from,to};bestCount=c}}
+  return best;
  }
  function suggestion(){
   const classes=[...new Set(records.filter(r=>r.cls&&!r.wrong).map(r=>r.cls))];
@@ -60,7 +60,7 @@ function createLearner(){
    for(const[dir,predicate]of [['lower',r=>r.dir>0],['raise',r=>r.dir<0]]){
     const lowered=window.filter(predicate);
     if(lowered.length<SUGGESTION_MIN_RERANKS||lowered.length/window.length<.7||new Set(lowered.map(r=>r.src)).size<2||cooldowns.has(cooldownKey(cls,dir)))continue;
-    return{cls,dir,n:lowered.length,of:window.length,highRisk:highRisk.has(cls),from:mostCommon(lowered.map(r=>r.from)),to:mostCommon(lowered.map(r=>r.to))};
+    return{cls,dir,n:lowered.length,of:window.length,highRisk:highRisk.has(cls),...commonChange(lowered)};
    }
   }
   return null;

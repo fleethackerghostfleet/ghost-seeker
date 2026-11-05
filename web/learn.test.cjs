@@ -34,6 +34,14 @@ test('suggestions report the exact tier change reviewers made',()=>{
  assert.equal(result.cls,'submarine');assert.equal(result.dir,'lower');assert.equal(result.from,1);assert.equal(result.to,2);assert.equal(result.highRisk,true);
 });
 
+test('the reported tier change is one that reviewers actually made',()=>{
+ const l=learner();let n=0;
+ const add=(sug,tier)=>l.record({id:'m'+n,src:n++%2?'EO-P7':'IR-HE',dets:[{cls:'small boat'}],det:[{s:.9}],sug,tier});
+ add(2,3);add(2,4);add(1,2);add(2,3);add(1,2);add(2,4);add(1,2);
+ const result=l.suggestion();
+ assert.equal(result.from,1);assert.equal(result.to,2);
+});
+
 test('lowering must recur across two sources and meets the eight-record window thresholds',()=>{
  const across=learner();addMany(across,MIN);
  const result=across.suggestion();
