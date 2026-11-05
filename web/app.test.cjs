@@ -110,6 +110,7 @@ test('failed rule after winning resolve defers learning and shows only the actio
   receiveTeamProposal(proposal);teamSync.local.set('bird:raise',proposal);
   request=async(path)=>{if(path==='/api/directives')throw Error('offline');const resolved={...proposal,status:'accepted',resolvedBy:'Alice'};receiveTeamProposal(resolved);return {proposal:resolved}};`,context);
  await vm.runInContext("answerTeamProposal('accepted')",context);
+ vm.runInContext("receiveTeamProposal({...proposal,status:'accepted',resolvedBy:'Alice'})",context);
  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(learned)',context)),['later']);
  assert.equal(vm.runInContext('messages.length',context),1);
  assert.match(vm.runInContext('messages[0]',context),/Accepted, but adding the rule failed: offline — add it on Collection Priorities/);

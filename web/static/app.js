@@ -500,7 +500,7 @@ async function refreshTeamProposals(){
  try{const data=await request('/api/review-sync');if(!teamSync.on||revision!==teamSync.revision)return;teamSync.proposals=data.proposals.filter(p=>!teamSync.resolved.has(p.id));if(rv.ask?.team&&!teamSync.proposals.some(p=>p.id===rv.ask.team)){rv.ask=null;rv.askBusy=false}renderAsk()}
  catch(error){toast('Team sync: '+error.message)}
 }
-function receiveTeamProposal(p){
+function receiveTeamProposal(p,finish=false){
  if(!teamSync.on)return;
  teamSync.revision++;
  const index=teamSync.proposals.findIndex(x=>x.id===p.id);
@@ -512,7 +512,7 @@ function receiveTeamProposal(p){
   const accepting=teamSync.accepting.has(p.id);if(accepting)teamSync.accepting.set(p.id,p);
   const key=p.cls+':'+p.dir,local=teamSync.local.get(key);
   const current=typeof gsLearn!=='undefined'?gsLearn.suggestion():null;
-  if(!accepting){if(typeof gsLearn!=='undefined'&&(local||(current?.cls===p.cls&&current?.dir===p.dir)))gsLearn.resolve(local||current,p.status==='accepted'?'yes':'no');teamSync.local.delete(key)}
+  if(!accepting&&(first||finish)){if(typeof gsLearn!=='undefined'&&(local||(current?.cls===p.cls&&current?.dir===p.dir)))gsLearn.resolve(local||current,p.status==='accepted'?'yes':'no');teamSync.local.delete(key)}
   if(rv.ask?.team===p.id||(rv.ask?.kind==='sug'&&rv.ask.s.cls===p.cls&&rv.ask.s.dir===p.dir)){rv.ask=null;rv.askBusy=false}
   if(teamSync.on&&first&&!accepting)toast(`${p.resolvedBy} ${p.status} ${p.dir==='lower'?'Lower':'Raise'} ${CLS[p.cls]?.lab||p.cls}`);
  }
@@ -545,7 +545,7 @@ async function answerTeamProposal(answer){
    }
   }
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
- finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
+ finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
 function rvQueue(){const l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
