@@ -75,7 +75,7 @@ func TestGroupUsesContactReportFrames(t *testing.T) {
 	img := view("a", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_CROP: true})
 	rec := view("r", 2000, map[string]string{"sighting_id": "s1", "event": "close"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
 	rec.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
-	objs, cnt := Group([]*pb.ItemView{img, rec}, nil, map[string]int{"r": 37})
+	objs, cnt := Group([]*pb.ItemView{img, rec}, nil, map[string]contactReport{"r": {NFrames: 37}})
 	if cnt.Objects != 1 || objs[0].Frames != 37 || !objs[0].FramesKnown || objs[0].Reports != 2 {
 		t.Fatalf("objs = %+v cnt = %+v", objs[0], cnt)
 	}
@@ -100,7 +100,7 @@ func TestGroupTwoFrameSightingFramesKnown(t *testing.T) {
 	img := view("a", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_CROP: true})
 	rec := view("r", 2000, map[string]string{"sighting_id": "s1", "event": "close"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
 	rec.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
-	objs, _ := Group([]*pb.ItemView{img, rec}, nil, map[string]int{"r": 2})
+	objs, _ := Group([]*pb.ItemView{img, rec}, nil, map[string]contactReport{"r": {NFrames: 2}})
 	if objs[0].Frames != 2 || !objs[0].FramesKnown {
 		t.Fatalf("n_frames equal to the report count must still count as known: %+v", objs[0])
 	}

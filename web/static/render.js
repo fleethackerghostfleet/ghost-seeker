@@ -110,7 +110,16 @@ function renderImage(item){
   Math.random=originalRandom;
  }
 }
+function factPlaceholder(){
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
+ ctx.fillStyle='#0b1218';ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle='#2a3a48';ctx.lineWidth=4;ctx.setLineDash([18,12]);ctx.strokeRect(12,12,W-24,H-24);
+ ctx.fillStyle='#8d99a5';ctx.textAlign='center';
+ ctx.font=`bold ${Math.round(H/9)}px ui-monospace,monospace`;ctx.fillText('FACT ONLY',W/2,H/2-H/20);
+ ctx.font=`${Math.round(H/18)}px ui-monospace,monospace`;ctx.fillText('no image has crossed the link yet',W/2,H/2+H/12);
+ return cv.toDataURL('image/png');
+}
 function imageFor(item){
- if(!imageCache.has(item.id))imageCache.set(item.id,item.img?`/${item.img}`:renderImage(item));
+ if(!imageCache.has(item.id))imageCache.set(item.id,item.img?`/${item.img}`:item.live?factPlaceholder():renderImage(item));
  return imageCache.get(item.id);
 }

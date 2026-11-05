@@ -57,16 +57,16 @@ demo-token:      ## print the local demo operator token (for curl: -H "Authoriza
 demo-shore: build
 	$(BIN)/shore -data data/shore -listen :8080 -dev-token-file $(DEV_TOKEN)
 
-demo-ui: build   ## operator UI on live shore data + the shaped link the edge talks through (:18080)
+demo-ui: build   ## Patrick's operator console (index.html / cdr.html) on live shore data + the shaped link the edge talks through (:18080)
 	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN)
 
 MODELS ?= $(HOME)/models/D
 PY ?= python
 
-demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) for the sidecar
+demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unknown_calib.npz for the sidecar
 	mkdir -p $(MODELS)/mobileclip-s1
 	gcloud storage cp -r gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/yolo11n-640 $(MODELS)/
-	gcloud storage cp gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/meta.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/model.onnx gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/text_cache.json $(MODELS)/mobileclip-s1/
+	gcloud storage cp gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/meta.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/model.onnx gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/text_cache.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/unknown_calib.npz $(MODELS)/mobileclip-s1/
 
 demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
 	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
