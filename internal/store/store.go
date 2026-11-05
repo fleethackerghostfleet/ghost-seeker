@@ -267,6 +267,10 @@ func (s *Store) RestoreDirectives(directives []command.Directive) {
 func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *bool) (command.Item, int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.patchItem(id, manual, reviewed, dismissed, sent)
+}
+
+func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *bool) (command.Item, int, bool) {
 	for i := range s.items {
 		item := &s.items[i]
 		if item.ID != id {

@@ -1,15 +1,32 @@
 package server
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
-func (s *Server) SetReviewLog(l *reviews.Log) { s.reviews = l }
+type reviewLog interface {
+	Append(reviews.Record) (reviews.Record, error)
+	Effective() []reviews.Record
+	Correct(string, string, string, string, string) (reviews.Record, error)
+	Summary() reviews.Summary
+	Export(io.Writer, string) error
+}
+
+func (s *Server) SetReviewLog(l *reviews.Log) {
+	if l == nil {
+		s.reviews = nil
+		return
+	}
+	s.reviews = l
+}
 func (s *Server) reviewAvailable(w http.ResponseWriter) bool {
 	if s.reviews == nil {
 		writeError(w, 503, "review logging disabled")
@@ -39,68 +56,64 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "reviewer required")
 		return
 	}
-	items, _, _, state := s.store.SnapshotWithDirectives()
-	var old command.Item
-	ok := false
-	for _, item := range items {
-		if item.ID == r.PathValue("id") {
-			old, ok = item, true
-			break
+	var rec reviews.Record
+	status := http.StatusInternalServerError
+	item, cdr, err := s.store.CommitReview(r.PathValue("id"), func(old command.Item, state store.State) (store.ReviewPatch, error) {
+		tier := b.Tier
+		var dismissed, sent *bool
+		yes := true
+		switch b.Action {
+		case "tier":
+			if tier < 1 || tier > 4 {
+				status = 400
+				return store.ReviewPatch{}, errors.New("tier must be 1–4")
+			}
+		case "accept":
+			if tier != 0 && tier != old.CentralTier {
+				status = 409
+				return store.ReviewPatch{}, errors.New("model priority changed — review the updated suggestion before accepting")
+			}
+			tier = old.CentralTier
+		case "dismiss":
+			tier = 4
+			dismissed = &yes
+		case "cdr":
+			tier = 1
+			sent = &yes
+		default:
+			status = 400
+			return store.ReviewPatch{}, errors.New("unknown review action")
 		}
-	}
-	if !ok {
+		texts := []string{}
+		for _, d := range state.Directives {
+			texts = append(texts, d.Text)
+		}
+		human := tier
+		if b.Action == "dismiss" {
+			human = 0
+		}
+		reason := ""
+		if old.DetectorNegative && human >= 1 && human <= 3 {
+			reason = "missed_detection"
+		}
+		var err error
+		rec, err = s.reviews.Append(reviews.Record{DetectorNegative: old.DetectorNegative, Reason: reason, Action: b.Action, ItemID: old.ID, Img: old.Img, SourceID: old.SourceID, DatasetID: old.DatasetID, ImageID: old.ImageID, SourceVideo: old.SourceVideo, SHA256: old.SHA256, TS: old.TS, Reviewer: b.Reviewer, Model: catalog.Models[state.Model].Name, ModelKey: state.Model, ModelTier: old.CentralTier, ModelScore: old.Central, Edge: old.Edge, BaseTier: old.BaseTier, HumanTier: human, Agreed: human == old.CentralTier, Detections: old.Dets, Scores: old.Det, Directives: texts, Note: reviews.Trim(b.Note, 280), Before: old})
+		if err != nil {
+			return store.ReviewPatch{}, errors.New("cannot persist review")
+		}
+
+		return store.ReviewPatch{Manual: &tier, Reviewed: &yes, Dismissed: dismissed, Sent: sent}, nil
+	})
+	if errors.Is(err, store.ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
-	tier := b.Tier
-	var dismissed, sent *bool
-	yes := true
-	switch b.Action {
-	case "tier":
-		if tier < 1 || tier > 4 {
-			writeError(w, 400, "tier must be 1–4")
-			return
-		}
-	case "accept":
-		if tier != 0 && tier != old.CentralTier {
-			writeError(w, 409, "model priority changed — review the updated suggestion before accepting")
-			return
-		}
-		tier = old.CentralTier
-	case "dismiss":
-		tier = 4
-		dismissed = &yes
-	case "cdr":
-		tier = 1
-		sent = &yes
-	default:
-		writeError(w, 400, "unknown review action")
-		return
-	}
-	texts := []string{}
-	for _, d := range state.Directives {
-		texts = append(texts, d.Text)
-	}
-	human := tier
-	if b.Action == "dismiss" {
-		human = 0
-	}
-	reason := ""
-	if old.DetectorNegative && human >= 1 && human <= 3 {
-		reason = "missed_detection"
-	}
-	rec, err := s.reviews.Append(reviews.Record{DetectorNegative: old.DetectorNegative, Reason: reason, Action: b.Action, ItemID: old.ID, Img: old.Img, SourceID: old.SourceID, DatasetID: old.DatasetID, ImageID: old.ImageID, SourceVideo: old.SourceVideo, SHA256: old.SHA256, TS: old.TS, Reviewer: b.Reviewer, Model: catalog.Models[state.Model].Name, ModelKey: state.Model, ModelTier: old.CentralTier, ModelScore: old.Central, Edge: old.Edge, BaseTier: old.BaseTier, HumanTier: human, Agreed: human == old.CentralTier, Detections: old.Dets, Scores: old.Det, Directives: texts, Note: reviews.Trim(b.Note, 280), Before: old})
 	if err != nil {
-		writeError(w, 500, "cannot persist review")
-		return
-	}
-	item, cdr, ok := s.store.PatchItem(old.ID, &tier, &yes, dismissed, sent)
-	if !ok {
-		writeError(w, 409, "item evicted after review was logged")
+		writeError(w, status, err.Error())
 		return
 	}
 	s.PublishUpdate(item, cdr)
-	audit(r, "item.review", "id", old.ID, "record", rec.ID, "reviewer", b.Reviewer)
+	audit(r, "item.review", "id", item.ID, "record", rec.ID, "reviewer", b.Reviewer)
 	writeJSON(w, 200, map[string]any{"item": item, "cdr": cdr, "record": rec})
 }
 func (s *Server) correctReview(w http.ResponseWriter, r *http.Request) {
