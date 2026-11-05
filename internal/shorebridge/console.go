@@ -260,10 +260,20 @@ func scoreObjects(objs []*Object) map[*Object]objectScore {
 	}
 	for i, o := range ranked {
 		s := out[o]
-		s.central, s.centralTier = rankScore(i, len(ranked)), rankTier(i, len(ranked))
+		s.central, s.centralTier = rankScore(i, len(ranked)), priorityTier(o.Priority, rankTier(i, len(ranked)))
 		out[o] = s
 	}
 	return out
+}
+
+// priorityTier reads the P1..P4 band the bridge assigned over the whole
+// shore picture (assignTiers), so a card shows the same tier the shore
+// reports even when untracked contacts are folded out of the feed.
+func priorityTier(priority string, fallback int) int {
+	if len(priority) == 2 && priority[0] == 'P' && priority[1] >= '1' && priority[1] <= '4' {
+		return int(priority[1] - '0')
+	}
+	return fallback
 }
 
 func rankScore(i, n int) float64 {
@@ -726,6 +736,12 @@ func (c *Console) Handler() http.Handler {
 	mux.HandleFunc("POST /api/items/{id}/decision", c.decide)
 	mux.HandleFunc("POST /api/items/{id}/full-res", c.fullRes)
 	mux.HandleFunc("POST /api/items/{id}/pull", c.pull)
+	mux.HandleFunc("GET /api/directives", func(w http.ResponseWriter, r *http.Request) {
+		c.mu.Lock()
+		d := c.directivesLocked()
+		c.mu.Unlock()
+		writeJSON(w, d)
+	})
 	mux.HandleFunc("POST /api/directives", c.addDirective)
 	mux.HandleFunc("DELETE /api/directives", c.clearDirectives)
 	mux.HandleFunc("DELETE /api/directives/{id}", c.clearDirectives)
@@ -1041,7 +1057,23 @@ type compiledDirective struct {
 	Path            string
 }
 
-func (c *Console) compileDirective(ctx context.Context, text string, rules *[]command.Rule) compiledDirective {
+const scopeWarning = "Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer."
+
+// flatRules keeps the rules the edge scorer can honour (plain class labels)
+// and reports whether any scoped rule was dropped.
+func flatRules(rules []command.Rule) (kept []command.Rule, dropped bool) {
+	kept = make([]command.Rule, 0, len(rules))
+	for _, rule := range rules {
+		if len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0 {
+			kept = append(kept, rule)
+		} else {
+			dropped = true
+		}
+	}
+	return kept, dropped
+}
+
+func (c *Console) compileDirective(ctx context.Context, text string, rules *[]command.Rule, durationMin int) compiledDirective {
 	var out compiledDirective
 	out.Path = "rules"
 	out.Warnings = []string{}
@@ -1050,26 +1082,26 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 		out.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 	}
 	if rules != nil && len(*rules) > 0 {
-		out.Suppress, out.Boost, out.Rules = rulesFromBody("", rules)
+		kept, dropped := flatRules(*rules)
+		out.Suppress, out.Boost, out.Rules = rulesFromBody("", &kept)
 		out.Path = "edited"
+		out.DurationMin = durationMin
+		if dropped {
+			out.Warnings = append(out.Warnings, scopeWarning)
+		}
 		out.Readback = Readback(out.Suppress, out.Boost)
+		if out.DurationMin > 0 && len(out.Rules) > 0 {
+			out.Readback = strings.TrimSuffix(out.Readback, " Until cleared.") + fmt.Sprintf(" For %dm.", out.DurationMin)
+		}
 	} else if c.b.Compiler != nil && strings.TrimSpace(ruleText) != "" {
 		comp := c.b.Compiler.Compile(ctx, ruleText)
 		if !comp.Blocked {
-			kept := make([]command.Rule, 0, len(comp.Rules))
-			dropped := false
-			for _, rule := range comp.Rules {
-				if len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0 {
-					kept = append(kept, rule)
-				} else {
-					dropped = true
-				}
-			}
+			kept, dropped := flatRules(comp.Rules)
 			if dropped {
 				prior, path := comp.Warnings, comp.Path
 				comp = c.b.Compiler.Review(ruleText, kept, comp.DurationMin)
 				comp.Path = path
-				comp.Warnings = mergeWarnings(prior, comp.Warnings, []string{"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer."})
+				comp.Warnings = mergeWarnings(prior, comp.Warnings, []string{scopeWarning})
 			}
 		}
 		out.Suppress, out.Boost = rulesToLabels(comp.Rules)
@@ -1101,8 +1133,9 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 
 func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Text  string          `json:"text"`
-		Rules *[]command.Rule `json:"rules"`
+		Text        string          `json:"text"`
+		Rules       *[]command.Rule `json:"rules"`
+		DurationMin int             `json:"durationMin"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
@@ -1114,7 +1147,11 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "text exceeds 500 characters")
 		return
 	}
-	cd := c.compileDirective(r.Context(), body.Text, body.Rules)
+	if body.DurationMin < 0 || body.DurationMin > 10080 {
+		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+		return
+	}
+	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin)
 	if cd.Blocked {
 		msg := "directive is blocked"
 		if cd.Compiled != nil {
@@ -1293,15 +1330,20 @@ func unknownWords(text string, suppress, boost []string) []string {
 
 func (c *Console) compile(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Text  string          `json:"text"`
-		Rules *[]command.Rule `json:"rules"`
+		Text        string          `json:"text"`
+		Rules       *[]command.Rule `json:"rules"`
+		DurationMin int             `json:"durationMin"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	cd := c.compileDirective(r.Context(), body.Text, body.Rules)
+	if body.DurationMin < 0 || body.DurationMin > 10080 {
+		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+		return
+	}
+	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin)
 	warnings := cd.Warnings
 	if len(cd.Rules) == 0 && !cd.Blocked && cd.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		warnings = mergeWarnings(warnings, []string{"Nothing recognized — the shore interpreter maps object names after ignore/suppress or prioritize/boost."})
