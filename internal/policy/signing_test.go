@@ -109,6 +109,21 @@ func TestLoadSigningFiles(t *testing.T) {
 	}
 }
 
+func TestLoadKeyringRejectsDuplicatePublicKeys(t *testing.T) {
+	pub, _, err := GenerateKey("duplicate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(pub)
+	path := filepath.Join(t.TempDir(), "keyring.json")
+	if err := os.WriteFile(path, []byte(`{"first":"`+encoded+`","second":"`+encoded+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadKeyring(path); err == nil {
+		t.Fatal("LoadKeyring accepted duplicate public keys")
+	}
+}
+
 func isError(err, target error) bool {
 	return err == target || (err != nil && target != nil && errorsIs(err, target))
 }
