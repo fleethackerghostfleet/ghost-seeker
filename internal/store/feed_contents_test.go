@@ -48,3 +48,11 @@ func TestAutoEscalationIsMarkedUntilAPersonChangesTheSend(t *testing.T) {
 		t.Fatalf("operator resend = %+v; want sent by a person", item)
 	}
 }
+
+func TestEmptyFrameKeepsEmptyDetectionLists(t *testing.T) {
+	data := New(10)
+	kept, _ := data.Add(&command.Item{ID: "empty", Filtered: command.FilteredLowValue, Dets: []command.Detection{}}, 0)
+	if kept.Dets == nil || kept.Det == nil || data.Items()[0].Dets == nil {
+		t.Fatal("empty frame lost its detection lists; the feed renders them as JSON arrays")
+	}
+}

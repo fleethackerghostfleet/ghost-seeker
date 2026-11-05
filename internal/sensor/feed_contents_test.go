@@ -16,6 +16,9 @@ func TestLowValueFramesAreKeptAtP4InsteadOfDropped(t *testing.T) {
 		if item == nil {
 			t.Fatal("Tick dropped a frame; every frame should reach the feed")
 		}
+		if item.Dets == nil {
+			t.Fatal("empty frame has nil detections; the feed needs an empty list")
+		}
 		if (item.Edge < EdgeKeep) != (item.Filtered == command.FilteredLowValue) {
 			t.Fatalf("edge %.2f filtered %q", item.Edge, item.Filtered)
 		}

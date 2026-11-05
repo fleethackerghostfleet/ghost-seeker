@@ -134,6 +134,9 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	if edge < EdgeKeep {
 		item.Filtered = command.FilteredLowValue
 	}
+	if item.Dets == nil {
+		item.Dets = []command.Detection{}
+	}
 	command.Rescore(item, model, directives)
 	return item, extra
 }
@@ -145,7 +148,7 @@ func (g *Generator) Repeat(item *command.Item, model string, directives []comman
 	repeat.Frame++
 	repeat.TS = item.TS.Add(250 * time.Millisecond)
 	repeat.Bands = append([]string(nil), item.Bands...)
-	repeat.Dets = append([]command.Detection(nil), item.Dets...)
+	repeat.Dets = append([]command.Detection{}, item.Dets...)
 	repeat.Det = nil
 	repeat.Filtered, repeat.DupOf = command.FilteredDuplicate, item.ID
 	command.Rescore(&repeat, model, directives)
