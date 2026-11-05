@@ -6,6 +6,8 @@ time a connection is available, *what to send, in what order, and in what
 form*, so the most important information reaches shore first and nothing is
 lost. Images are the first data type; the item model is type-agnostic.
 
+See [Fielding](docs/FIELDING.md) for offline builds, container staging, and Zarf deployment.
+
 Key behaviours (all covered by `go test ./...` and the simulator):
 
 - **Unknown-first.** Items the model can't classify score highest by default.
@@ -321,7 +323,7 @@ Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for 
   (CPU). See `inference/README.md`.
 - Natural-language interest compilation lives in the `dynamic-interest` repo;
   this repo consumes the compiled `Policy` (labels, vectors, thresholds).
-- No auth/TLS on either service. Zarf package is a skeleton.
+- No TLS on either service; SyncService unit auth is opt-in (see Configuration above) and ConsoleService has no auth.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
 - Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
   the boat is not visible in every frame). `scenarios/sailboats_example.json`
