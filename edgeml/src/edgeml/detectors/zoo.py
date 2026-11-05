@@ -11,6 +11,8 @@ from .labels import MARITIME_PROMPTS
 _REG: dict[str, Callable] = {}
 #: dataset_ids a model must NOT be scored on (trained on them)
 EXCLUDE: dict[str, set[str]] = {}
+#: dataset_ids whose DEV split a model trained on (the locked test split is still fair game)
+EXCLUDE_DEV: dict[str, set[str]] = {}
 TIER: dict[str, str] = {}
 
 
@@ -27,6 +29,27 @@ def _reg(name: str, tier: str, exclude: set[str] | None = None):
 
 def names() -> list[str]:
     return list(_REG)
+
+
+def register_extra(spec: str | None = None) -> list[str]:
+    """Register fine-tuned ultralytics checkpoints from ``EDGEML_ZOO_EXTRA="name=/path/best.pt[:ds1+ds2],..."``
+    (workstream G) so the B harness can score them next to the zoo models. The optional ``:ds1+ds2`` suffix lists the
+    catalog datasets whose DEV split the checkpoint trained on (skipped on the dev leaderboard, see EXCLUDE_DEV);
+    it defaults to ``seaships7000`` (G's recipe) and ``:-`` means none."""
+    import os
+    spec = spec if spec is not None else os.environ.get("EDGEML_ZOO_EXTRA", "")
+    added = []
+    for item in filter(None, (x.strip() for x in spec.split(","))):
+        name, _, path = item.partition("=")
+        path, _, trained = path.partition(":")
+        if path:
+            trained_on = {"seaships7000"} if not trained else set(trained.split("+")) - {"-"}
+            _reg(name, "finetune")(_ul(path, name, training="+".join(sorted(trained_on)) + "-dev (fine-tune)"))
+            EXCLUDE_DEV.pop(name, None)  # re-registering a name replaces its exclusions too
+            if trained_on:
+                EXCLUDE_DEV[name] = trained_on  # G trained on SeaShips train+valid = the whole SeaShips dev eval set
+            added.append(name)
+    return added
 
 
 def build(name: str, **kw):
@@ -137,3 +160,5 @@ def _argus_11l(imgsz=1280, **kw):
 
     return UltralyticsZooDetector(_hf_pt("alimkacar/argus-maritime-yolo11l", "argus-v2.pt")(), name="argus-yolo11l", imgsz=imgsz,
                                training_data="Marine Surveillance + Ship Detection (Roboflow) + SeaShips7000 + WaterScenes", **kw)
+
+register_extra()

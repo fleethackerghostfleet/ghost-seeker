@@ -8,10 +8,11 @@ from .cached import CachedDetector, dets_to_jsonl, jsonl_to_dets
 from .labels import MARITIME_PROMPTS, agnostic
 from .oracle import OracleDetector
 from .tiled import HorizonBandDetector, TiledDetector, estimate_horizon_y
-from .zoo import EXCLUDE, TIER, build, names
+from .zoo import EXCLUDE, EXCLUDE_DEV, TIER, build, names
 
 __all__ = [
     "EXCLUDE",
+    "EXCLUDE_DEV",
     "MARITIME_PROMPTS",
     "TIER",
     "BaseDetector",

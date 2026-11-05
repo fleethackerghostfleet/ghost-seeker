@@ -3,14 +3,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import logging
+
+
+# D's COCO YOLO11n export fetched by `make demo-models` (the G fine-tune did not win on the locked test, see
+# edgeml/reports/G_detector.md); $EDGEML_DETECTOR overrides, e.g. to try ~/models/G/yolo11n-ft-640-v1/model.onnx.
+DEFAULT_DETECTOR = "~/models/D/yolo11n-640/model.onnx"
+
+
+def default_detector() -> str | None:
+    env = os.environ.get("EDGEML_DETECTOR")
+    if env:
+        return env
+    p = os.path.expanduser(DEFAULT_DETECTOR)
+    return p if os.path.exists(p) else None
 
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="edgeml.sidecar", description=__doc__)
     ap.add_argument("--listen", default=":9090", help="host:port; a bare ':9090' binds 127.0.0.1 only, use 0.0.0.0:9090 to expose (default :9090)")
     ap.add_argument("--mock", action="store_true", help="scripted engine, no models (Go tests / CI)")
-    ap.add_argument("--detector", "--det", help="YOLO ONNX (ORT CPU) or OpenVINO IR, e.g. ~/models/D/yolo11n-640/model.onnx")
+    ap.add_argument("--detector", "--det", default=None,
+                    help=f"YOLO ONNX (ORT CPU) or OpenVINO IR; default $EDGEML_DETECTOR or {DEFAULT_DETECTOR} if present")
     ap.add_argument("--engine", default="auto", help="ort | openvino | auto")
     ap.add_argument("--embed", default=None, help="MobileCLIP ONNX export dir (meta.json, model.onnx, text_cache.json); 'none' disables")
     ap.add_argument("--threads", type=int, default=4)
@@ -46,8 +61,9 @@ def main(argv=None) -> None:
 
         engine = NoopEngine()
     else:
+        a.detector = a.detector or default_detector()
         if not a.detector:
-            ap.error("--detector is required unless --mock or --prioritizer tomer")
+            ap.error(f"--detector is required unless --mock or --prioritizer tomer (no {DEFAULT_DETECTOR} found)")
         from edgeml.runtime.threads import pin_threads
 
         pin_threads(a.threads)

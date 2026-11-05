@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 REPO = Path(__file__).resolve().parents[2]
 
 from edgeml.data.catalog import eval_set
-from edgeml.detectors import EXCLUDE, HorizonBandDetector, TiledDetector, build
+from edgeml.detectors import EXCLUDE, EXCLUDE_DEV, HorizonBandDetector, TiledDetector, build
 from edgeml.eval.detection import best_threshold, evaluate
 from edgeml.types import Detection
 
@@ -160,8 +160,8 @@ def main():
 def _run_model(mname, sets, args, run_dir, images_cache, metrics, metrics_path, fixed_taus):
         det = None
         for ds, stride in sets:
-            if ds in EXCLUDE.get(mname, set()):
-                print(f"  skip {ds}: {mname} was trained on it")
+            if ds in EXCLUDE.get(mname, set()) or (args.split == "dev" and ds in EXCLUDE_DEV.get(mname, set())):
+                print(f"  skip {ds} ({args.split}): {mname} was trained on it")
                 continue
             key = (ds, stride)
             if key not in images_cache:
