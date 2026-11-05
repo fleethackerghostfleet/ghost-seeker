@@ -29,6 +29,75 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
  settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
  settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
 });
+test('feed filters default safely, persist, validate, and return defensive copies',()=>{
+ for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showFiltered":"true","review":"invalid"}}']){
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showFiltered":false,"review":"all"}');
+ }
+ const {settings,saved}=settingsContext('{"bar":"right","feed":{"showFiltered":true,"review":"reviewed"}}');
+ settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
+ settings.setFeed({review:'unreviewed'});
+ assert.deepEqual(saved().feed,{showFiltered:true,review:'unreviewed'});
+ assert.equal(saved().bar,'right');
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
+ settings.setFeed({showFiltered:false,review:'bad'});
+ assert.deepEqual(saved().feed,{showFiltered:false,review:'all'});
+});
+function feedContext(){
+ const context=setup();
+ vm.runInContext(`
+  filters={showFiltered:false,review:'all'};gsSettings={get:()=>({feed:filters})};
+  function frame(id,extra={}){return {id,src:{id:'EO-P7'},tier:2,central:.7,ts:100,img:'/'+id+'.jpg',det:[],...extra}}
+  function ids(){return visible().l.map(i=>i.id).join(',')}
+ `,context);
+ return context;
+}
+test('feed checkbox reveals retained filtered and exact duplicate images at P4 without mutating scores',()=>{
+ const context=feedContext();
+ vm.runInContext(`
+  items=[frame('original',{tier:1,img:'/same.jpg',central:.9}),frame('duplicate',{img:'/same.jpg'}),
+   frame('dismissed',{dismissed:true}),frame('suppressed',{live:{suppressed:true}}),
+   frame('directive',{det:[{sup:true}]}),frame('mixed',{tier:3,det:[{sup:true},{sup:false}]}),frame('low',{tier:4})];
+  before=JSON.stringify(items);
+ `,context);
+ assert.equal(vm.runInContext('ids()',context),'original,mixed,low');
+ assert.equal(vm.runInContext('visible().counts.all',context),3);
+ vm.runInContext('filters.showFiltered=true',context);
+ assert.equal(vm.runInContext('ids()',context),'original,mixed,low,duplicate,dismissed,suppressed,directive');
+ assert.equal(vm.runInContext('visible().counts[4]',context),5);
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('ids()',context),'low,duplicate,dismissed,suppressed,directive');
+ assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
+ vm.runInContext("state.tier='all';filters.showFiltered=false;items=items.filter(i=>i.id!=='original')",context);
+ assert.equal(vm.runInContext('ids()',context),'duplicate,mixed,low');
+});
+test('duplicate filtering never folds different sensors, missing imagery, or live sighting placeholders',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('one',{img:'/same.jpg'}),frame('other-source',{src:{id:'IR-U1'},img:'/same.jpg'}),
+  frame('empty-one',{img:''}),frame('empty-two',{img:''}),frame('live-one',{img:'/placeholder.jpg',live:{}}),frame('live-two',{img:'/placeholder.jpg',live:{}})]`,context);
+ assert.equal(vm.runInContext('visible().l.length',context),6);
+ vm.runInContext("state.src='IR-U1'",context);
+ assert.equal(vm.runInContext('ids()',context),'other-source');
+});
+test('human review filter includes accepted, manually set and dismissed images and composes with other filters',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('accepted',{reviewed:true}),frame('manual',{manual:2}),frame('dismissed',{dismissed:true}),frame('pending'),frame('other',{src:{id:'IR-U1'},reviewed:true})];filters.review='reviewed'`,context);
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,other');
+ vm.runInContext("filters.showFiltered=true;state.src='EO-P7'",context);
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,dismissed');
+ vm.runInContext("filters.review='unreviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'pending');
+ vm.runInContext("items.find(i=>i.id==='pending').reviewed=true",context);
+ assert.equal(vm.runInContext('ids()',context),'');
+ vm.runInContext("items.find(i=>i.id==='pending').reviewed=false",context);
+ assert.equal(vm.runInContext('ids()',context),'pending');
+});
+test('reviewed-only can show a reviewed representative even when a higher-ranked duplicate is unreviewed',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('pending',{tier:1,img:'/same.jpg'}),frame('accepted',{reviewed:true,img:'/same.jpg'})];filters.review='reviewed'`,context);
+ assert.equal(vm.runInContext('ids()',context),'accepted');
+ vm.runInContext("filters.review='all';filters.showFiltered=true;state.sort='new';items[1].ts=200",context);
+ assert.equal(vm.runInContext('ids()',context),'accepted,pending');
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);
@@ -276,7 +345,7 @@ test('live card updates preserve canonical priority labels',()=>{
  const context=setup();
  vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
  vm.runInContext(`
-  badge={};other={};
+  badge={};other={setAttribute(){}};
   card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
   gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
   testItem={id:'test',el:card,tier:1,central:.9,base:.8};updateCard(testItem);

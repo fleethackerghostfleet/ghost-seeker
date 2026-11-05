@@ -3,6 +3,7 @@ let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:nul
 let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null,policyAuditTimer=null,policyRawTouched=false,policyRawLoaded=false;
 /* LIVE is the shore block of the snapshot when the console runs on a shore node (-shore); null on the simulation. */
 let LIVE=null;
+let feedReasons=new Map();
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
 const fmtRate=bps=>bps>=1e6?`${(bps/1e6).toFixed(1)} Mbps`:`${(bps/1000).toFixed(bps<10000?1:0)} kbps`;
@@ -232,6 +233,10 @@ async function init(){
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
  $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
+ const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showFiltered').checked=f.showFiltered;$('reviewFilter').value=f.review;closeDetail();renderFeed(true)};
+ $('showFiltered').onchange=e=>{gsSettings.setFeed({showFiltered:e.target.checked});syncFeedFilters()};
+ $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
+ window.addEventListener('gs:feed-filters',syncFeedFilters);syncFeedFilters();
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
  workbench.init();
  briefing.init();
@@ -276,11 +281,24 @@ function route(){
  if(state.page==='feed')renderFeed(true);else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
+function humanReviewed(it){return !!(it.reviewed||it.manual||it.dismissed)}
+function filteredReason(it){return it.dismissed?'Not relevant':it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup)?'Filtered by directive':''}
+function feedTier(it){return feedReasons.has(it.id)?4:it.tier}
 function visible(){
- let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.dismissed);
- const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[i.tier]++);
- if(state.tier!=='all')l=l.filter(i=>String(i.tier)===state.tier);
- l.sort(state.sort==='pri'?(a,b)=>a.tier-b.tier||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
+ const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showFiltered:false,review:'all'};
+ let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(f.review==='all'||humanReviewed(i)===(f.review==='reviewed')));
+ feedReasons=new Map();const originals=new Map();
+ for(const it of [...l].sort((a,b)=>a.tier-b.tier||b.central-a.central||b.ts-a.ts||String(a.id).localeCompare(String(b.id)))){
+  const reason=filteredReason(it);if(reason){feedReasons.set(it.id,reason);continue}
+  // Match only actual image paths, never placeholder URLs, seeds or sighting reports.
+  if(!it.img||it.live)continue;
+  const key=JSON.stringify([it.src.id,it.img]);
+  if(originals.has(key))feedReasons.set(it.id,'Duplicate image');else originals.set(key,it.id);
+ }
+ l=l.filter(i=>f.showFiltered||!feedReasons.has(i.id));
+ const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
+ if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
+ l.sort(state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
  return{l,counts};
 }
 function renderTierSeg(counts){
@@ -303,12 +321,14 @@ function cardHTML(it,mini){
 }
 function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
- const el=it.el;if(!el)return;el.className=`card p${it.tier}${it.fresh?' fresh':''}${it.sent?' sent':''}${it.reviewed?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
+ const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent?' sent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
+ const reviewMark=el.querySelector('.rvk');reviewMark.title=humanReviewed(it)?'Human reviewed':'Not reviewed';reviewMark.setAttribute('aria-label',reviewMark.title);
+ const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low in this feed only; stored model score and transfer priority are unchanged`:'';
  el.querySelector('.night-badge')?.remove();el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
- const t=el.querySelector('.tier');t.className='tier t'+it.tier;t.textContent=`P${it.tier} ${TNAME[it.tier]}`;t.title=it.tier===1?'Notify Commander':'Image priority';
+ const t=el.querySelector('.tier');t.className='tier t'+tier;t.textContent=`P${tier} ${TNAME[tier]}`;t.title=reason?status.title:it.tier===1?'Notify Commander':'Image priority';
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
  el.querySelector('.cs').textContent=it.central.toFixed(2);
- if(it.live){el.classList.toggle('sup',!!it.live.suppressed);const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?FORM_NAME[it.live.imageForm]:'Summary only';ft.title=it.live.imageForm?`Image shown is the ${FORM_NAME[it.live.imageForm]} (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the image-version labels below for transfer status.`:'Only the object summary has arrived. Images follow as bandwidth becomes available.';el.querySelector('.suptag').title=liveSuppressReason(it).replace(/<[^>]+>/g,'');el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
+ if(it.live){const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?FORM_NAME[it.live.imageForm]:'Summary only';ft.title=it.live.imageForm?`Image shown is the ${FORM_NAME[it.live.imageForm]} (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the image-version labels below for transfer status.`:'Only the object summary has arrived. Images follow as bandwidth becomes available.';el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
  const dl=it.central-it.base,de=el.querySelector('.delta');de.className='delta '+(dl>.04?'up':dl<-.04?'dn':'');de.textContent=dl>.04?`▲${dl.toFixed(2).slice(1)}`:dl<-.04?`▼${(-dl).toFixed(2).slice(1)}`:'';
 }
 function renderFeed(noAnim){
