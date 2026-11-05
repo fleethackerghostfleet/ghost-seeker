@@ -179,6 +179,100 @@ func TestSetPolicyBuildsOperatorLayerAtTokenEchelon(t *testing.T) {
 	}
 }
 
+func TestOperatorSubjectOverridesIssuedByForPolicyAndEMCON(t *testing.T) {
+	var mu sync.Mutex
+	stored := &pb.Policy{Interest: &pb.Interest{}}
+	var requests []*pb.Policy
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetPolicy":
+			mu.Lock()
+			policy := proto.Clone(stored).(*pb.Policy)
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: policy})
+		case consolePath + "SetPolicy":
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var request pb.SetPolicyRequest
+			if err := protojson.Unmarshal(raw, &request); err != nil {
+				t.Errorf("decode SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if request.Policy == nil {
+				t.Error("SetPolicy request omitted policy")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			received := proto.Clone(request.Policy).(*pb.Policy)
+			mu.Lock()
+			requests = append(requests, received)
+			stored = proto.Clone(received).(*pb.Policy)
+			for _, layer := range stored.Layers {
+				if layer != nil && layer.Echelon == pb.Echelon_ECHELON_SHIP {
+					layer.IssuedBy = "ops-1"
+				}
+			}
+			responsePolicy := proto.Clone(stored).(*pb.Policy)
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.SetPolicyResponse{Policy: responsePolicy})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer shore.Close()
+
+	bridge := New(shore.URL, "", nil)
+	if err := bridge.SetOperatorToken(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+		t.Fatal(err)
+	}
+	handler := bridge.Handler()
+	post := func(path, body string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		handler.ServeHTTP(rec, request)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST %s: status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
+	}
+	post("/api/shore/policy", `{"text":"ignore cargo","issuedBy":"spoof"}`)
+	post("/api/shore/policy", `{"text":"prioritize tankers","issuedBy":"spoof"}`)
+
+	mu.Lock()
+	if len(requests) != 2 {
+		mu.Unlock()
+		t.Fatalf("SetPolicy calls=%d, want 2", len(requests))
+	}
+	second := proto.Clone(requests[1]).(*pb.Policy)
+	mu.Unlock()
+	if len(second.Layers) != 1 || second.Layers[0].Echelon != pb.Echelon_ECHELON_SHIP ||
+		second.Layers[0].IssuedBy != "ops-1" {
+		t.Fatalf("second policy layers=%+v", second.Layers)
+	}
+	if len(second.Layers[0].Rules) != 1 {
+		t.Fatalf("second directive rules=%+v", second.Layers[0].Rules)
+	}
+	rule := second.Layers[0].Rules[0]
+	if rule.Author != "ops-1" || rule.Text != "prioritize tankers" ||
+		len(rule.BoostLabels) != 1 || rule.BoostLabels[0] != "tanker" || len(rule.SuppressLabels) != 0 {
+		t.Fatalf("second directive rule=%+v", rule)
+	}
+
+	post("/api/shore/emcon", `{"mode":"SILENT","issuedBy":"spoof"}`)
+	mu.Lock()
+	emconPolicy := proto.Clone(requests[len(requests)-1]).(*pb.Policy)
+	mu.Unlock()
+	if len(emconPolicy.Layers) != 1 || emconPolicy.Layers[0].Emcon == nil ||
+		emconPolicy.Layers[0].Emcon.SetBy != "ops-1" {
+		t.Fatalf("EMCON layer=%+v", emconPolicy.Layers)
+	}
+}
+
 func TestShoreAuthorizationFailureIsReturnedAsJSON(t *testing.T) {
 	for _, tc := range []struct {
 		name, path, body string

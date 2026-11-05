@@ -63,6 +63,7 @@ type Bridge struct {
 	records         map[string]int // RECORD item id -> n_frames
 	edgeNodeID      string
 	operatorToken   string
+	operatorID      string
 	operatorEchelon pb.Echelon
 }
 
@@ -89,9 +90,16 @@ func (b *Bridge) SetOperatorToken(token string) error {
 	}
 	b.mu.Lock()
 	b.operatorToken = token
+	b.operatorID = operator.ID
 	b.operatorEchelon = operator.Echelon
 	b.mu.Unlock()
 	return nil
+}
+
+func (b *Bridge) operatorSub() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.operatorID
 }
 
 func (b *Bridge) echelon() pb.Echelon {
@@ -845,6 +853,9 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	if in.IssuedBy == "" {
 		in.IssuedBy = "operator-ui"
 	}
+	if id := b.operatorSub(); id != "" {
+		in.IssuedBy = id
+	}
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
 	if mode != "" {
@@ -1024,6 +1035,9 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.IssuedBy == "" {
 		in.IssuedBy = "operator-ui"
+	}
+	if id := b.operatorSub(); id != "" {
+		in.IssuedBy = id
 	}
 	current, err := b.getPolicy(r.Context())
 	if err != nil {
