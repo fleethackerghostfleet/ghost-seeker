@@ -580,6 +580,10 @@ func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
 	p.Version, p.ExpiresAtUnixMs = info.Version, pol.GetExpiresAtUnixMs()
 	p.EMCON = EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy}
 	p.Locks, p.Conflicts = info.Locks, info.Conflicts
+	if p.ExpiresAtUnixMs > 0 {
+		until := time.UnixMilli(p.ExpiresAtUnixMs).UTC().Format("15:04Z")
+		p.Readback = strings.Replace(p.Readback, "Until cleared.", "Until "+until+".", 1)
+	}
 	return p
 }
 
