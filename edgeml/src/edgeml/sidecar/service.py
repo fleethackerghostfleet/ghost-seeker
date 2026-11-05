@@ -85,6 +85,14 @@ class _Source:
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
+def _wire_subtype(ev: dict) -> str:
+    """The proto has no tentative flag: a tentative sighting is tagged ``subtype="tentative"``; on confirmation the edge
+    only retags on a non-empty subtype, so a confirmation without a classifier subtype says ``"confirmed"``."""
+    if ev.get("tentative"):
+        return "tentative"
+    return ev.get("subtype") or ("confirmed" if ev.get("reason") == "confirmed" else "")
+
+
 class EdgemlEngine:
     """Detector + boxmot tracker + SightingAggregator (+ MobileCLIP zero-shot subtype) per source. CPU, no torch."""
 
@@ -136,8 +144,9 @@ class EdgemlEngine:
             if src is None:
                 from edgeml.tracking import make_tracker
 
-                tracker = make_tracker(self.tracker_variant, fps=self.fps, asso_func=self.asso, max_lost_s=self.max_lost_s,
-                                       det_thresh=self.score_thr, low_thresh=self.det_low_thr, **self.trk_params)
+                kw = {"asso_func": self.asso, "max_lost_s": self.max_lost_s, "det_thresh": self.score_thr,
+                      "low_thresh": self.det_low_thr, **self.trk_params}        # --trk may override any of these
+                tracker = make_tracker(self.tracker_variant, fps=self.fps, **kw)
                 agg = _ZeroShotAggregator(name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
                 src = self.sources[name] = _Source(tracker=tracker, agg=agg)
             return src
@@ -208,7 +217,7 @@ class EdgemlEngine:
         out = {"id": ev["sighting_id"], "event": EVENTS[ev["event"]],
                "keyDetection": {"label": label, "confidence": _f(ev.get("best_score")), "box": _norm_box(box, W, H)},
                "isKeyFrame": is_key, "unknownness": _f(ev.get("unknownness")),
-               "subtype": "tentative" if ev.get("tentative") else (ev.get("subtype") or ""), "value": _f(ev.get("value")),
+               "subtype": _wire_subtype(ev), "value": _f(ev.get("value")),
                "forms": [_form_hint(f) for f in (ev.get("forms") or [])],
                "firstSeenUnixMs": str(base_ms + int(float(ev.get("first_t_s", 0.0)) * 1000)),
                "lastSeenUnixMs": str(base_ms + int(float(ev.get("last_t_s", ev.get("t_s", 0.0))) * 1000)),
