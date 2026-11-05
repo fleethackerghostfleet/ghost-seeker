@@ -55,6 +55,9 @@ type overlay struct {
 	Decision     string
 	DecisionNote string
 	DecidedAt    *time.Time
+	FullRes      bool
+	FullResBy    string
+	FullResAt    *time.Time
 }
 
 type sseEvent struct {
@@ -177,11 +180,16 @@ func (c *Console) onSnapshot(snap *Snapshot, pol *pb.Policy) {
 	prev := c.base
 	c.base, c.order = map[string]*command.Item{}, nil
 	c.policy = c.policyFrom(snap, pol)
+	// Once the edge tracks sightings, per-frame items without a sighting_id
+	// (the first frames before the tracker locked on) are duplicates of a
+	// sighting card and are folded away; they still count in Counts.Objects.
+	sightingMode := snap.Counts.Grouped > 0
 	objects := make([]*Object, 0, len(snap.Objects))
 	for _, o := range snap.Objects {
-		if o.Best != nil && !o.Scene {
-			objects = append(objects, o)
+		if o.Best == nil || o.Scene || (sightingMode && o.SightingID == "") {
+			continue
 		}
+		objects = append(objects, o)
 	}
 	scores := scoreObjects(objects)
 	for _, o := range objects {
@@ -615,6 +623,7 @@ func (c *Console) withOverlay(base *command.Item) command.Item {
 	if o := c.overlay[item.ID]; o != nil {
 		item.Manual, item.Reviewed, item.Dismissed, item.Sent, item.SentAt = o.Manual, o.Reviewed, o.Dismissed, o.Sent, o.SentAt
 		item.Decision, item.DecisionNote, item.DecidedAt = o.Decision, o.DecisionNote, o.DecidedAt
+		item.FullRes, item.FullResBy, item.FullResAt = o.FullRes, o.FullResBy, o.FullResAt
 	}
 	if item.Manual > 0 {
 		item.Tier = item.Manual
@@ -706,6 +715,8 @@ func (c *Console) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stream", c.stream)
 	mux.HandleFunc("PATCH /api/items/{id}", c.patchItem)
 	mux.HandleFunc("POST /api/items/{id}/decision", c.decide)
+	mux.HandleFunc("POST /api/items/{id}/full-res", c.fullRes)
+	mux.HandleFunc("POST /api/items/{id}/pull", c.pull)
 	mux.HandleFunc("POST /api/directives", c.addDirective)
 	mux.HandleFunc("DELETE /api/directives", c.clearDirectives)
 	mux.HandleFunc("DELETE /api/directives/{id}", c.clearDirectives)
@@ -899,6 +910,86 @@ func (c *Console) decide(w http.ResponseWriter, r *http.Request) {
 	c.publish("update", map[string]any{"item": item, "cdr": cdr})
 	c.mu.Unlock()
 	writeJSON(w, map[string]any{"item": item, "cdr": cdr})
+}
+
+// fullRes is the operator override to send the original image at full size,
+// no re-encoding: RequestPull{original:true} to the shore for the card's item.
+func (c *Console) fullRes(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		By string `json:"by"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	by := strings.TrimSpace(body.By)
+	if by == "" {
+		writeError(w, http.StatusBadRequest, store.ErrOperatorRequired.Error())
+		return
+	}
+	id := r.PathValue("id")
+	c.mu.Lock()
+	base := c.base[id]
+	c.mu.Unlock()
+	if base == nil || base.Live == nil {
+		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
+		return
+	}
+	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: base.Live.ItemID, Form: pb.FormKind_FORM_KIND_FULL, RequestedBy: by, Original: true}}
+	var out pb.RequestPullResponse
+	if err := c.b.call(r.Context(), c.b.shore, "RequestPull", req, &out); err != nil {
+		log.Printf("console: full-res pull upstream: %v", err)
+		writeError(w, http.StatusBadGateway, "upstream shore error")
+		return
+	}
+	c.b.Poke()
+	c.mu.Lock()
+	o := c.overlayFor(id)
+	if !o.FullRes {
+		now := time.Now()
+		o.FullRes, o.FullResBy, o.FullResAt = true, by, &now
+	}
+	item, cdr := c.withOverlay(base), c.cdrLocked()
+	c.publish("update", map[string]any{"item": item, "cdr": cdr})
+	c.mu.Unlock()
+	writeJSON(w, map[string]any{"item": item, "cdr": cdr})
+}
+
+// pull asks the edge for one more form of the card's shore item (FULL by
+// default): the fidelity ladder's "give me the rest" action.
+func (c *Console) pull(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Form string `json:"form"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	id := r.PathValue("id")
+	c.mu.Lock()
+	base := c.base[id]
+	c.mu.Unlock()
+	if base == nil || base.Live == nil {
+		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
+		return
+	}
+	kind := pb.FormKind_FORM_KIND_FULL
+	for k, n := range formNames {
+		if n == body.Form {
+			kind = k
+		}
+	}
+	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: base.Live.ItemID, Form: kind, RequestedBy: "operator-ui"}}
+	var out pb.RequestPullResponse
+	if err := c.b.call(r.Context(), c.b.shore, "RequestPull", req, &out); err != nil {
+		log.Printf("console: pull upstream: %v", err)
+		writeError(w, http.StatusBadGateway, "upstream shore error")
+		return
+	}
+	c.b.Poke()
+	writeJSON(w, map[string]any{"ok": true, "itemId": base.Live.ItemID, "form": formNames[kind]})
 }
 
 // rulesFromBody turns a directive (free text or explicit rules) into the
