@@ -516,6 +516,7 @@ function setupFeedKeyboard(){
   if(k==='enter'||k===' '){e.preventDefault();e.stopPropagation();if(!e.repeat)openDetail(card.dataset.id);return}
   if(!['arrowleft','arrowup','arrowright','arrowdown'].includes(k))return;
   e.preventDefault();e.stopPropagation();
+  if(state.sel){step(k==='arrowleft'||k==='arrowup'?-1:1);findItem(state.sel)?.el?.focus();return}
   const index=feedOrdered.findIndex(it=>it.id===card.dataset.id),direction=k==='arrowleft'||k==='arrowup'?-1:1;
   const next=feedOrdered[Math.max(0,Math.min(feedOrdered.length-1,index+direction))];if(!next)return;
   if(revealFeedItem(next.id))renderFeed(true);

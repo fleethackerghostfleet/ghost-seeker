@@ -145,3 +145,12 @@ test('cards expose button semantics and theme-aware visible keyboard focus',()=>
  assert.match(css,/\.card:focus-visible\{outline:3px solid var\(--accent\);outline-offset:-4px\}/);
  assert.match(css,/body\.night \.card:focus-visible\{outline-color:#ff6666\}/);
 });
+test('arrows on a focused card step the open detail drawer and keep focus on the shown card',()=>{
+ const c=feed();
+ vm.runInContext("populate(5);renderFeed(true);openDetail=id=>{opens.push(id);state.sel=id};findItem('1').el.focus();state.sel='1';pressCard('ArrowRight')",c);
+ assert.equal(vm.runInContext('state.sel',c),'2');
+ assert.equal(vm.runInContext("opens.join(',')",c),'2');
+ assert.equal(vm.runInContext('document.activeElement.dataset.id',c),'2');
+ vm.runInContext("pressCard('ArrowUp')",c);
+ assert.equal(vm.runInContext('state.sel',c),'1');
+});
