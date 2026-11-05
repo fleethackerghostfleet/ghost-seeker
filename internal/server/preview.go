@@ -83,13 +83,22 @@ func (s *Server) previewDirectives(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rules, unknown := []command.Rule{}, []string{}
-	if body.Text != nil {
+	compiled := command.Compiled{}
+	if body.Text != nil && body.Rules == nil {
 		if utf8.RuneCountInString(*body.Text) > 500 {
 			writeError(w, 400, "Directive text must be 500 characters or fewer")
 			return
 		}
-		compiled := s.directiveCompiler().CompileRules(*body.Text)
+		compiler := s.directiveCompiler()
+		if compiler.Research != nil {
+			compiled = compiler.Compile(r.Context(), *body.Text)
+		} else {
+			compiled = compiler.CompileRules(*body.Text)
+		}
 		rules, unknown = compiled.Rules, compiled.Unknown
+		if compiled.Blocked && compiler.Research != nil {
+			rules = []command.Rule{}
+		}
 	}
 	if body.Rules != nil {
 		rules = *body.Rules
@@ -124,12 +133,17 @@ func (s *Server) previewDirectives(w http.ResponseWriter, r *http.Request) {
 		return item
 	}
 	result := struct {
-		Rules      []command.Rule    `json:"rules"`
-		Unknown    []string          `json:"unknown"`
-		Items      []previewItem     `json:"items"`
-		Counts     [4]int            `json:"counts"`
-		Candidates []candidateResult `json:"candidates"`
-	}{Rules: rules, Unknown: unknown, Items: make([]previewItem, 0, len(items)), Candidates: make([]candidateResult, 0, len(body.Candidates))}
+		Rules       []command.Rule               `json:"rules"`
+		Unknown     []string                     `json:"unknown"`
+		Items       []previewItem                `json:"items"`
+		Counts      [4]int                       `json:"counts"`
+		Candidates  []candidateResult            `json:"candidates"`
+		Path        string                       `json:"path,omitempty"`
+		Readback    string                       `json:"readback,omitempty"`
+		Warnings    []string                     `json:"warnings"`
+		Blocked     bool                         `json:"blocked"`
+		Resolutions []command.ResearchResolution `json:"resolutions,omitempty"`
+	}{Rules: rules, Unknown: unknown, Items: make([]previewItem, 0, len(items)), Candidates: make([]candidateResult, 0, len(body.Candidates)), Path: compiled.Path, Readback: compiled.Readback, Warnings: compiled.Warnings, Blocked: compiled.Blocked, Resolutions: compiled.Resolutions}
 	for _, item := range items {
 		after := score(item, rules)
 		entry := previewItem{ID: item.ID, Central: after.Central, Tier: after.Tier, Contrib: make([]contribution, 0, len(rules))}

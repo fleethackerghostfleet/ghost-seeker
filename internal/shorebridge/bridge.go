@@ -1079,7 +1079,7 @@ func emconReadback(readback, mode string, durationMin int) string {
 func rulesToLabels(rules []command.Rule) (suppress, boost []string) {
 	seen := map[string]bool{}
 	for _, rule := range rules {
-		for _, class := range rule.Classes {
+		for _, class := range transportLabels(rule.Classes) {
 			key := rule.Type + "/" + class
 			if class == "" || seen[key] {
 				continue
