@@ -160,7 +160,7 @@ func TestDatasetTickCapturesDespitePendingUploads(t *testing.T) {
 			}
 			bps := rate
 			if bps < 0 {
-				bps = uplink.distribution.MeanBps
+				bps = int64(uplink.distribution.MeanBps)
 			}
 			want := bps * int64(total/time.Millisecond) / 8000
 			if sent(data) != sent(baseline) || sent(data) != want {
