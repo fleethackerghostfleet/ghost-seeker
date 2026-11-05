@@ -9,9 +9,65 @@ import (
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 func hashOf(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
+
+func TestUpsertManifestNormalizesInvalidSource(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx, now := context.Background(), time.Now()
+
+	for i, source := range []string{`<style>.card{display:none}</style>`, `x"y`, `cam 1`} {
+		entry := &pb.ManifestEntry{ItemId: "invalid" + string(rune('a'+i)), Source: source}
+		if err := st.UpsertManifest(ctx, "edge", entry, now); err != nil {
+			t.Fatalf("UpsertManifest rejected source %q: %v", source, err)
+		}
+		if entry.Source != source {
+			t.Fatalf("UpsertManifest mutated caller source to %q, want %q", entry.Source, source)
+		}
+		var storedSource string
+		var raw []byte
+		if err := st.db.QueryRow("SELECT source, manifest FROM items WHERE id=?", entry.ItemId).Scan(&storedSource, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if storedSource != "" {
+			t.Errorf("stored source = %q, want empty", storedSource)
+		}
+		var stored pb.ManifestEntry
+		if err := proto.Unmarshal(raw, &stored); err != nil {
+			t.Fatal(err)
+		}
+		if stored.Source != "" {
+			t.Errorf("stored manifest source = %q, want empty", stored.Source)
+		}
+	}
+	for i, source := range []string{"Submarine_surfacing", ""} {
+		entry := &pb.ManifestEntry{ItemId: "accept" + string(rune('a'+i)), Source: source}
+		if err := st.UpsertManifest(ctx, "edge", entry, now); err != nil {
+			t.Fatalf("UpsertManifest rejected source %q: %v", source, err)
+		}
+		var storedSource string
+		var raw []byte
+		if err := st.db.QueryRow("SELECT source, manifest FROM items WHERE id=?", entry.ItemId).Scan(&storedSource, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if storedSource != source {
+			t.Errorf("stored source = %q, want %q", storedSource, source)
+		}
+		var stored pb.ManifestEntry
+		if err := proto.Unmarshal(raw, &stored); err != nil {
+			t.Fatal(err)
+		}
+		if stored.Source != source {
+			t.Errorf("stored manifest source = %q, want %q", stored.Source, source)
+		}
+	}
+}
 
 // A form regenerated mid-transfer (FULL after an original pull) restarts
 // from zero instead of mixing old and new bytes.

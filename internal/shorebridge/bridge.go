@@ -617,6 +617,9 @@ func ToCard(v *pb.ItemView) *Card {
 		Forms:       map[string]FormStatus{},
 		FactURL:     "/blob/" + it.GetId() + "/fact",
 	}
+	if !ids.ValidName(c.Source) {
+		c.Source = ""
+	}
 	for _, n := range formNames {
 		c.Forms[n] = FormStatus{State: "none"}
 	}
@@ -698,7 +701,7 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]con
 	var order []*Object
 	for _, v := range views {
 		c := ToCard(v)
-		if rep, ok := reports[c.ID]; ok && c.Type == "record" && c.Tags["sighting_id"] == "" && rep.SightingID != "" {
+		if rep, ok := reports[c.ID]; ok && c.Type == "record" && c.Tags["sighting_id"] == "" && ids.ValidSightingID(rep.SightingID) {
 			tags := map[string]string{"sighting_id": rep.SightingID}
 			for k, val := range c.Tags {
 				tags[k] = val
@@ -727,6 +730,9 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]con
 		}
 		key := "item:" + c.ID
 		sid := c.Tags["sighting_id"]
+		if !ids.ValidSightingID(sid) {
+			sid = ""
+		}
 		if sid != "" {
 			key = "sighting:" + sid
 			cnt.Grouped++

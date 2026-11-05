@@ -17,3 +17,30 @@ func Valid(s string) bool {
 	}
 	return true
 }
+
+// ValidName validates edge-supplied display identifiers (camera source, sighting_id);
+// the set excludes every HTML/attribute metacharacter.
+func ValidName(s string) bool {
+	return validName(s, 128)
+}
+
+// ValidSightingID validates a sighting identifier built from a source plus ":" plus a counter.
+func ValidSightingID(s string) bool {
+	return validName(s, 160)
+}
+
+func validName(s string, max int) bool {
+	if len(s) == 0 || len(s) > max {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9',
+			c == '_', c == '.', c == ':', c == '/', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
