@@ -73,7 +73,64 @@ Size bucket = longer box side rescaled to a 640 px long edge: **far < 24 px**, m
 
 ## 2. Phase B: edge detector
 
-DETECTOR_SECTION
+**Recipe (`edgeml/tools/cov_build_detector_dataset.py`, `cov_train.sh`).** Unlike G's `single_cls` fine-tune, the COCO 80-class head is kept.
+Maritime GT is added as extra COCO `boat` (class 8) examples, and SeaDronesSee swimmers as `person`. Training is 22,398 images: 5,000 COCO val2017
+replay images (all 80 classes), SeaShips train (1,746), SDS train (5,435), and FVessel/GF dev clips outside the holdout. Non-boat objects in maritime
+frames get YOLO11x pseudo-labels (1,497 boxes). Far-target frames are repeated (4,696) and tiled at native resolution (4,181 tiles).
+YOLO-val has 2,766 images. Two configs were trained from `yolo11n.pt` at 640 for 15 epochs on one T4: `yolo11n-cov-640` (full fine-tune) and
+`yolo11n-cov-640-fz10` (first 10 layers frozen). IR is excluded (unknown license).
+
+### 2a. Dev only (selection)
+
+Far/small dev slice (1,683 vessel objects < 32² px at 640, never trained on; IoU ≥ 0.3, conf ≥ 0.25, class `boat`; `cov_eval_farsmall.py`):
+
+| detector | far/small recall | SDS dev (927) | SeaShips valid (194) | FVessel 08/10 (530) | GF holdout (32) | dets/img |
+|---|---|---|---|---|---|---|
+| yolo11n COCO 640 (default) | 0.343 | 0.334 | 0.634 | 0.226 | 0.781 | 1.36 |
+| yolo11n-cov-640 | **0.739** | 0.852 | 0.866 | 0.477 | 1.000 | 2.75 |
+FARSMALL_ROWS
+
+C sighting metrics on dev (G's sidecar config: ByteTrack, centroid association, max_lost 6 s, min score 0.25; 15 dev clips, 34 GT objects;
+`run_c.py matrix`, aggregated by `cov_agg_c.py`):
+
+| detector | all dev: recall / false / false/min | holdout-only clips (10 obj): recall / false | reports |
+|---|---|---|---|
+| yolo11n COCO 640 (default) | 0.65 / 36 / 1.32 | 0.70 / 13 | 251 |
+| yolo11n-cov-640 | 0.79 / 19 / 0.70 | 0.80 / 13 | 216 |
+CDEV_ROWS
+
+All-dev rows are optimistic for the fine-tunes, because 11 of the 15 dev clips (all but the 4 holdout clips) are in their training set.
+The holdout-only column is the honest dev number.
+
+B harness, class-agnostic vessel AP50 on dev (`bench_detectors.py --split dev`; SeaShips dev is skipped for fine-tunes because it is their training data, as in G §4b):
+
+| detector | SMD onboard sample dev (MVI_0790/0799) | Singapore Maritime onshore dev | SeaShips dev |
+|---|---|---|---|
+| yolo11n COCO 640 | 0.639 (τ 0.35) | 0.067 | 0.452 |
+| yolo11n-cov-640 | 0.571 (τ 0.25) | 0.054 | skipped (training data) |
+BDEV_ROWS
+
+INT8 OpenVINO CPU latency (`edgeml.runtime.bench`, G's harness: 4 pinned threads, 80 SMD 1080p frames; NNCF calibration on 300 YOLO-val frames).
+Measured interleaved A/B on this session's 8-vCPU AVX2 box, which drifts by ~±15 % between runs:
+
+| detector | run 1 p50 / p95 ms | run 2 p50 / p95 ms |
+|---|---|---|
+| yolo11n COCO 640 | 54.4 / 79.4 | 63.7 / 91.3 |
+| yolo11n-cov-640 | 50.5 / 79.6 | 61.6 / 96.9 |
+
+The two INT8 graphs are identical (1,066 layers, 73 FakeQuantize nodes, same weight size), so latency is unchanged by construction. G measured
+32.4 / 40.9 ms for the same baseline on a quieter box. The p95 ≤ 50 ms target in G's rule is not reproducible on this VM for either model, so the gate here is
+"same graph and within noise of the baseline".
+
+**Decision rule (written before the test run, same as G §5).** A candidate wins if, on dev, holdout sighting recall goes up, holdout false sightings are not worse,
+far/small recall is not worse, and latency matches the baseline. Then, on the **locked test** (once), sighting recall must go up, false/min must not be worse,
+**and SeaShips-test R_small must not drop below the baseline's**. Only then would the default change.
+
+DEV_PICK
+
+### 2b. Locked test (evaluated once per final candidate; `splits.yaml` test)
+
+DETECTOR_TEST
 
 ## 3. Ship-type classifier (12-way taxonomy of `docs/reports/SHIP_CLASSIFICATION.md`)
 
@@ -186,8 +243,49 @@ Nothing below the double line was used for any training, threshold or model choi
 
 ## 5. Caveats
 
-CAVEATS
+* **SeaDronesSee recordings are inferred.** The HF mirror has no `source.video` ids. The split is by contiguous frame-id blocks with guard bands,
+  so a recording could still leak across splits. SDS dev/test numbers (far/small slice, sds_test) are therefore somewhat optimistic.
+  The fix is to re-ingest from the official COCO json (which carries `video_id`); the ingest's `infer_sequences` would then be replaced by a join on that id.
+* **IR license unknown.** IR is internal dev only. `probe-all` (and its IR numbers) must not ship. No detector saw IR.
+* **Lighting is a heuristic.** Median luma cannot tell night from dark water or overcast scenes, and video frames are classified from samples.
+  The night/twilight rows are indicative, not labels.
+* **Small held-out sets.** gf_dev/gf_test (48/56 crops, 6/7 tracks), the GF far/small slice (32 objects) and the C sighting test (52 objects) are small,
+  so differences of a few points are noise.
+* **One training seed per config** on a T4 (L4 was stocked out), 15 epochs. No hyper-parameter search beyond the two configs in `cov_train.sh`.
+* **Latency box.** CPU latency is measured on this session's 8-vCPU AVX2 Xeon (no AVX-512/VNNI, like G's box), with 4 pinned threads (`taskset -c 0-3`) on the 80 SMD 1080p frames.
+  Absolute p95 on a shared VM is noisy, so the baseline and candidate were measured back-to-back, and only their ratio is meaningful.
+* Gemini was run on a per-native-class capped subset because of the shared Vertex quota. Compare it only with the "same items" table.
+* Ship-type crops are GT boxes. End-to-end (detector box → type) accuracy is lower for every model, as in SHIP_CLASSIFICATION.md.
 
 ## 6. Reproduce
 
-REPRO
+```sh
+# Phase A (GCS writes are additive; refuses to overwrite)
+python datasets/ingest/seadronessee.py --snapshot <HF snapshot @ deb1f87>      # raw/ + datasets/ + catalog, sequences.jsonl
+python edgeml/tools/clean_v3.py --v2 <clean v2 catalog/> --ir-raw <IR raw> --ir-catalog <catalog/images> \
+    --sds-catalog <catalog> --sds-sequences sequences.jsonl --output ~/data/clean_v3      # issues.jsonl, audit.json
+python edgeml/tools/coverage_table.py --catalog ~/data/clean_v3/catalog --data-root ~/data \
+    --ir-recordings ~/data/clean_v3/ir_recordings.jsonl --eval-root ~/data/edgeml_eval --out coverage.json
+# detector (GPU box)
+python edgeml/tools/cov_build_detector_dataset.py --catalog ~/data/clean_v3/catalog --out ~/data/yolo_cov --device 0
+bash edgeml/tools/cov_train.sh ~/data/yolo_cov/data.yaml ~/runs/cov
+python edgeml/tools/cov_eval_farsmall.py --slice ~/data/yolo_cov/farsmall_dev.json --catalog ~/data/clean_v3/catalog \
+    --weights yolo11n.pt ~/runs/cov/<run>/weights/best.pt --out farsmall_dev.json
+python edgeml/tools/run_c.py cache --data ~/data/edgeml_eval --sets ghost_fleet_5fps fvessel_clip10 --split dev \
+    --detector <best.pt> --name <run> --imgsz 640 --conf 0.05 --device 0
+python edgeml/tools/run_c.py matrix --data ~/data/edgeml_eval --sets ghost_fleet_5fps fvessel_clip10 --split dev \
+    --detectors yolo11n-640 <run> --trackers bytetrack --trk '{"asso_func":"centroid","max_lost_s":6}' --min-score 0.25 --out ...
+#   locked test: the same two commands with --split test, once per final candidate; B harness:
+EDGEML_ZOO_EXTRA="<run>=<best.pt>:seaships7000" python edgeml/tools/bench_detectors.py --split test --taus taus.json \
+    --sets seaships7000:5,smd_vis_onboard_sample:1 --models yolo11n,<run> ...
+python edgeml/tools/g_export.py --weights <best.pt> --name <run> --size 640 --calib <dev frames> --out ~/models/COV --class-names model
+taskset -c 0-3 python -m edgeml.runtime.bench --model ~/models/COV/<run>/int8/model.xml --engine openvino --frames <1080p frames> --threads 4 --duration 60
+# ship type
+python edgeml/tools/ship_classify_eval.py --sets seaships_train ir_train sds_train seaships_dev seaships_test gf_dev gf_test ir_dev ir_test sds_test \
+    --models mobileclip-s1 dinov2-b14 siglip-b16 --square --probes probe-public=seaships_train+sds_train \
+    probe-all=seaships_train+ir_train+sds_train probe-ss=seaships_train --out ~/data/shipcls_cov
+python edgeml/tools/ship_classify_eval.py --sets seaships_test gf_test ir_test sds_test --models gemini-2.5-flash --out ~/data/shipcls_cov
+python edgeml/tools/ship_classify_report.py --out ~/data/shipcls_cov --sets ... [--subset-from gemini-2.5-flash]
+python edgeml/tools/ship_classify_hybrid.py --out ~/data/shipcls_cov --probe mobileclip-s1-probe-public --fallback mobileclip-s1-zeroshot \
+    --dev seaships_dev gf_dev ir_dev --test seaships_test gf_test ir_test sds_test
+```
