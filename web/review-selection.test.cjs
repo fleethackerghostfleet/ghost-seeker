@@ -138,3 +138,27 @@ test('leaving and returning during a review save never opens an unrelated image'
  active(h);h.run('complete()');await new Promise(setImmediate);active(h);
  h.finish(280);active(h,'urgent');assert.equal(h.run('rv.done'),1);
 });
+test('an explicit sensor switch releases the pinned image and reviews only the chosen source',async()=>{
+ const h=setup();
+ const start=source.indexOf(" $('srcSel').onchange=");
+ assert.ok(start>=0);
+ vm.runInContext(source.slice(start,source.indexOf('\n',start)),h.context);
+ h.run(`start();SRC.other={id:'other',name:'Other sensor'};
+  applyItemUpdate({...raw('other-image',1),src:'other'});flushFeed();
+  state.page='feed';$('srcSel').onchange({target:{value:'other'}});location={hash:'#review'};route()`);
+ active(h,'other-image');assert.equal(h.run("rv.cur.src.id===state.src"),true);
+ h.run("submitted=[];submitReview=(id,action,changes)=>{submitted.push({id,changes});return Promise.resolve()};rvAct('accept')");
+ await new Promise(setImmediate);assert.equal(h.run('submitted[0].id'),'other-image');
+});
+test('a sensor switch during a save waits, then selects once within the new source',async()=>{
+ const h=setup();
+ const start=source.indexOf(" $('srcSel').onchange=");
+ vm.runInContext(source.slice(start,source.indexOf('\n',start)),h.context);
+ h.run(`start();SRC.other={id:'other',name:'Other sensor'};
+  applyItemUpdate({...raw('other-image',1),src:'other'});flushFeed();
+  submitReview=(id,action,changes)=>new Promise(resolve=>complete=()=>{applyItemUpdate({...raw(id),...changes});resolve(findItem(id))});rvAct('accept');
+  state.page='feed';$('srcSel').onchange({target:{value:'other'}});location={hash:'#review'};route()`);
+ assert.equal(h.run('rv.cur'),null);assert.match(h.context.$('rvMain').innerHTML,/Saving review/);
+ h.run('complete()');await new Promise(setImmediate);h.finish(280);active(h,'other-image');
+ h.run('flushFeed()');active(h,'other-image');assert.equal(h.run('rv.done'),1);
+});

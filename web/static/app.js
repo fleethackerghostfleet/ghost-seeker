@@ -303,7 +303,7 @@ async function init(){
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
- $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp()};
+ $('srcSel').onchange=e=>{state.src=e.target.value;rv.cur=null;rv.shown=null;rv.displayed=null;closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp()};
  const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showFiltered').checked=f.showFiltered;$('reviewFilter').value=f.review;closeDetail();resetFeedWindow();renderFeed(true,true)};
  $('showFiltered').onchange=e=>{gsSettings.setFeed({showFiltered:e.target.checked});syncFeedFilters()};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
@@ -769,7 +769,7 @@ function renderReviewContent(){
  const it=rv.cur,unavailable=!!it&&!current;
  rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||rv.busy||(!it&&b.dataset.a!=='undo')||(unavailable&&!['skip','undo'].includes(b.dataset.a))});
- if(!it){rv.shown=null;rv.displayed=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>All caught up</b><div>New images will appear here as sensors report.</div></div><div class="rvflash" id="rvFlash"></div>`;return}
+ if(!it){rv.shown=null;rv.displayed=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>${rv.busy?'Saving review…':'All caught up'}</b><div>${rv.busy?'The next image will appear when the save completes.':'New images will appear here as sensors report.'}</div></div><div class="rvflash" id="rvFlash"></div>`;return}
  const {el,fresh,...displayed}=it;
  const key=JSON.stringify([displayed,unavailable]);if(rv.shown===key)return;rv.shown=key;rv.displayed=displayed;
  const sug=it.centralTier,rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s),why=buildWhy(it,rows).slice(0,4);
