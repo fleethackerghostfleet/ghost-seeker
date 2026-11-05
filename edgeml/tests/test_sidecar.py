@@ -141,6 +141,7 @@ def test_trk_override_may_repeat_engine_keys(monkeypatch):
     eng.sources, eng.fps, eng.tracker_variant, eng.asso, eng.max_lost_s = {}, 5.0, "bytetrack", "centroid", 6.0
     eng.score_thr, eng.det_low_thr = 0.35, 0.05
     eng.trk_params = {**svc.EdgemlEngine.TRK_DEFAULTS, "det_thresh": 0.4}
+    eng.det_low_thr = min(eng.det_low_thr, eng.trk_params.get("low_thresh", eng.det_low_thr))
     from edgeml.tracking import AggregatorParams
     eng.agg_params = AggregatorParams(**svc.EdgemlEngine.AGG_DEFAULTS)
     eng.embedder, eng.classifier = None, None
@@ -153,6 +154,6 @@ def test_trk_override_may_repeat_engine_keys(monkeypatch):
 def test_wire_subtype_tentative_then_confirmed():
     from edgeml.sidecar.service import _wire_subtype
     assert _wire_subtype({"tentative": True, "subtype": "tanker"}) == "tentative"
-    assert _wire_subtype({"tentative": False, "reason": "confirmed", "subtype": ""}) == "confirmed"
+    assert _wire_subtype({"tentative": False, "reason": "confirmed", "subtype": "", "label": "boat"}) == "boat"
     assert _wire_subtype({"tentative": False, "reason": "confirmed", "subtype": "tanker"}) == "tanker"
     assert _wire_subtype({"tentative": False, "subtype": ""}) == ""
