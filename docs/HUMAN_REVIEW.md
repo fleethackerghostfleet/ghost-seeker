@@ -36,13 +36,14 @@ for forwarded browsers, enter that token at the login page.
 ```sh
 ./bin/shore -listen 127.0.0.1:8080 -require-auth=false
 ./bin/ghost-seeker -addr :8091 -shore http://localhost:8080 \
-  -link-listen :18080 -review-log /home/ubuntu/ghost-review-data/live-reviews.jsonl
-./bin/edge -listen :8081 -shore http://localhost:18080 -frames ./frames -infer mock
+  -link-listen 127.0.0.1:18080 -review-log /home/ubuntu/ghost-review-data/live-reviews.jsonl
+./bin/edge -listen 127.0.0.1:8081 -shore http://localhost:18080 -frames ./frames -infer mock
 ```
 
 Open port 8091, select **Operator Review**, and set your reviewer name.
 The example replays real dataset frames with mock inference and disables unit JWT
-authentication only for the isolated lab link. Do not expose that shore listener;
+authentication only for the isolated lab link, so shore and the shaped link
+both bind to loopback. Do not expose either listener;
 use the signed unit-token setup in [DEMO.md](DEMO.md) for shared deployments.
 For real detections,
 replace `-infer mock` with the running sidecar URL; see [DEMO.md](DEMO.md) for
