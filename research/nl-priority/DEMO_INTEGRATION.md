@@ -46,7 +46,9 @@ live detector or MobileCLIP classification accuracy.
   standalone lab's active policy cannot leak into the demo.
 - Exact supported categories adapt to existing demo classes: research `fishing
   boat` becomes demo `fishing vessel`. Existing scoring, locks and human exceptions
-  remain authoritative.
+  remain authoritative. The live shore adapter transports both existing fishing
+  category names so the sidecar's `fishing boat` label reaches the edge scorer,
+  while the editable UI continues to show `fishing vessel`.
 - Experimental concepts such as `big ship` block Apply instead of being broadened.
   Cached-embedding/matching integration is still needed for those labels in the
   demo; they remain available in the standalone Priority Lab.
@@ -60,7 +62,7 @@ live detector or MobileCLIP classification accuracy.
 ## Checks
 
 ```sh
-go test -race ./internal/command ./internal/server ./cmd/ghost-seeker
+go test -race ./internal/command ./internal/server ./internal/shorebridge ./cmd/ghost-seeker
 go test ./research/nlpriority ./research/cmd/nl-priority
 node --test web/*.test.cjs
 ```

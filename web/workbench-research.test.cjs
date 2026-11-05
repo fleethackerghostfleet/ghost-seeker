@@ -19,7 +19,7 @@ function setup(interpret){
   return{items:items.map(i=>({id:i.id,tier:body.rules.length?1:3,central:body.rules.length?.9:.4,contrib:[]})),counts:[0,0,1,0],candidates:[]};
  };
  vm.runInContext(source+'\nworkbench.init();',ctx);
- return{$,calls,ctx,async type(text){$('nlIn').value=text;$('nlIn').oninput();},async preview(){const [id,cb]=timers.entries().next().value;timers.delete(id);cb();await tick()}};
+ return{$,calls,ctx,timers,async type(text){$('nlIn').value=text;$('nlIn').oninput();},async preview(){const [id,cb]=timers.entries().next().value;timers.delete(id);cb();await tick()}};
 }
 test('research interpretation is shown and changes require explicit confirmation',async()=>{
  const h=setup(()=>({rules:[rule()],path:'research/rules+granite-concepts',readback:'Prioritize fishing vessel',warnings:[],unknown:[]}));
@@ -55,4 +55,31 @@ test('a text change after confirmation prevents applying that stale interpretati
  const h=setup(()=>({rules:[rule()],path:'research/granite',readback:'Fishing vessels',warnings:[]}));
  await h.type('look for fishing vessels');await h.preview();await h.$('wbApply').onclick();
  await h.type('look for big ships');await h.$('wbConfirmApply').onclick();assert.equal(h.calls.filter(c=>c.url==='/api/directives').length,0);
+});
+
+test('Apply pauses scheduled live previews and prevents duplicate compiles until confirmation',async()=>{
+ const compiled={rules:[rule()],path:'research/granite',readback:'Fishing vessels',warnings:[]};
+ let finish;const pending=new Promise(resolve=>finish=resolve);
+ const h=setup((_body,url)=>url==='/api/directives/compile'?pending:compiled);
+ await h.type('look for fishing vessels');await h.preview();
+ vm.runInContext('workbench.live()',h.ctx);const scheduled=[...h.timers.values()][0];assert.ok(scheduled);
+ const apply=h.$('wbApply').onclick();await tick();assert.equal(h.$('wbApply').disabled,true);assert.equal(h.timers.size,0);
+ const count=h.calls.length;scheduled();vm.runInContext('workbench.live()',h.ctx);await h.$('wbApply').onclick();await tick();
+ assert.equal(h.calls.length,count);assert.equal(h.timers.size,0);
+ finish(compiled);await apply;assert.equal(h.$('wbConfirm').open,true);assert.equal(h.calls.filter(c=>c.url==='/api/directives/compile').length,1);
+});
+test('editing during compile releases the guard and ignores the obsolete compile',async()=>{
+ const compiled={rules:[rule()],path:'research/granite',readback:'Fishing vessels',warnings:[]};
+ let finish;const pending=new Promise(resolve=>finish=resolve);let count=0;
+ const h=setup((_body,url)=>url==='/api/directives/compile'&&count++===0?pending:compiled);
+ await h.type('look for fishing vessels');await h.preview();const old=h.$('wbApply').onclick();await tick();
+ await h.type('prioritize fishing vessels');await h.preview();assert.equal(h.$('wbApply').disabled,false);
+ await h.$('wbApply').onclick();assert.equal(h.$('wbConfirm').open,true);
+ finish({...compiled,readback:'Obsolete interpretation'});await old;assert.equal(h.$('wbReadback').textContent,'Fishing vessels');
+});
+test('compile error releases guard so a corrected request can open confirmation',async()=>{
+ const compiled={rules:[rule()],path:'research/granite',readback:'Fishing vessels',warnings:[]};let fail=true;
+ const h=setup((_body,url)=>{if(url==='/api/directives/compile'&&fail)throw Error('timeout');return compiled});
+ await h.type('look for fishing vessels');await h.preview();await h.$('wbApply').onclick();assert.equal(h.$('wbConfirm').open,false);
+ fail=false;await h.type('prioritize fishing vessels');await h.preview();await h.$('wbApply').onclick();assert.equal(h.$('wbConfirm').open,true);
 });

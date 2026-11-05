@@ -379,7 +379,11 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 	return item
 }
 
-func matchLabel(labels []string, candidates ...string) string {
+func matchLabel(labels []string, override string, candidates ...string) string {
+	// Match the edge scorer: a human override replaces machine labels.
+	if override != "" {
+		candidates = []string{override}
+	}
 	for _, l := range labels {
 		for _, c := range candidates {
 			if c != "" && strings.EqualFold(l, c) {
@@ -1077,7 +1081,7 @@ func rulesFromBody(text string, rules *[]command.Rule) (suppress, boost []string
 	} else if strings.TrimSpace(text) != "" {
 		suppress, boost = Interpret(text)
 	}
-	suppress, boost = dedupe(suppress), dedupe(boost)
+	suppress, boost = transportLabels(suppress), transportLabels(boost)
 	return suppress, boost, policyRules(flatDirectiveID, suppress, boost)
 }
 
@@ -1351,10 +1355,32 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 	if body.Text != nil {
 		text = *body.Text
 	}
-	suppress, boost, rules := rulesFromBody(text, body.Rules)
+	var compiled *command.Compiled
+	var cd compiledDirective
+	suppress, boost, rules := []string{}, []string{}, []command.Rule{}
+	if body.Rules != nil {
+		suppress, boost, rules = rulesFromBody("", body.Rules)
+	} else if c.b.Compiler != nil && c.b.Compiler.Research != nil && strings.TrimSpace(text) != "" {
+		// The model request must not hold the console's snapshot/overlay lock.
+		cd = c.compileDirective(r.Context(), text, nil, 0)
+		compiled = cd.Compiled
+		if !cd.Blocked {
+			suppress, boost, rules = cd.Suppress, cd.Boost, cd.Rules
+		}
+	} else {
+		suppress, boost, rules = rulesFromBody(text, nil)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	items, counts, _ := c.predictLocked(suppress, boost)
+	if cd.Blocked {
+		counts = [4]int{}
+		for i, id := range c.order {
+			item := c.withOverlay(c.base[id])
+			items[i].Central, items[i].Tier = item.Central, item.Tier
+			counts[item.Tier-1]++
+		}
+	}
 	cands := []candidateResult{}
 	for _, cand := range body.Candidates {
 		rs := cand.Rules
@@ -1362,7 +1388,14 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 		_, cc, changed := c.predictLocked(dedupe(append(append([]string{}, suppress...), s...)), dedupe(append(append([]string{}, boost...), b...)))
 		cands = append(cands, candidateResult{Key: cand.Key, Counts: cc, Changed: changed})
 	}
-	writeJSON(w, map[string]any{"rules": rules, "unknown": unknownWords(text, suppress, boost), "items": items, "counts": counts, "candidates": cands})
+	unknown := unknownWords(text, suppress, boost)
+	resolutions := []command.ResearchResolution{}
+	if compiled != nil {
+		unknown = compiled.Unknown
+		resolutions = compiled.Resolutions
+	}
+	writeJSON(w, map[string]any{"rules": rules, "unknown": unknown, "items": items, "counts": counts, "candidates": cands,
+		"path": cd.Path, "readback": cd.Readback, "warnings": cd.Warnings, "blocked": cd.Blocked, "resolutions": resolutions})
 }
 
 // unknownWords lists the directive's nouns the shore interpreter did not map.
@@ -1406,9 +1439,13 @@ func (c *Console) compile(w http.ResponseWriter, r *http.Request) {
 	if cd.Compiled != nil && cd.Compiled.Unknown != nil {
 		unknown = cd.Compiled.Unknown
 	}
+	resolutions := []command.ResearchResolution{}
+	if cd.Compiled != nil {
+		resolutions = cd.Compiled.Resolutions
+	}
 	writeJSON(w, map[string]any{
 		"rules": cd.Rules, "unknown": unknown, "durationMin": cd.DurationMin, "path": cd.Path,
-		"readback": cd.Readback, "warnings": warnings, "blocked": cd.Blocked,
+		"readback": cd.Readback, "warnings": warnings, "blocked": cd.Blocked, "resolutions": resolutions,
 	})
 }
 

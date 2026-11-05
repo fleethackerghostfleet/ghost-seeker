@@ -29,7 +29,7 @@ func (c shoreLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 	for i, rule := range rules {
 		converted[i] = policy.RuleLabels{
 			Type: rule.Type, Weight: rule.Weight,
-			Classes: rule.Classes, Attrs: rule.Attrs,
+			Classes: transportLabels(rule.Classes), Attrs: rule.Attrs,
 		}
 	}
 	c.bridge.mu.Lock()
