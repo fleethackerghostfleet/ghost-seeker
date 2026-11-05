@@ -1,10 +1,39 @@
 GO ?= go
 VERIFY_PYTHON ?= python3
 BIN := bin
+PRODUCT_PACKAGES := ./cmd/... ./edge/... ./shore/... ./internal/... ./web/... ./gen/...
 
 .PHONY: all gen build test sim run-shore run-edge compose compose-demo compose-demo-down compose-demo-logs clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
 
 all: build
+
+.PHONY: help build-research build-all test-product test-research test-all check-layout
+help:           ## show the product and research entry points
+	@echo "Product:  make compose-demo | compose-demo-logs | compose-demo-down"
+	@echo "Setup:    make demo-clips demo-models  (see docs/DEMO.md)"
+	@echo "Build:    make build (product) | build-research | build-all"
+	@echo "Checks:   make test-product | test-research | test-all | verify"
+	@echo "Research: see research/README.md; make sim or demo-compare"
+
+build-research:  ## offline simulator, benchmark, retuner, and test-PKI generator
+	mkdir -p $(BIN)
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o $(BIN)/ ./research/cmd/...
+
+build-all: build build-research
+
+check-layout:   ## enforce the product/research dependency boundary
+	$(VERIFY_PYTHON) -m unittest discover -s tools -p test_layout.py
+
+test-product: test check-layout
+	node --test web/*.test.cjs
+	$(VERIFY_PYTHON) -m pytest -q edgeml/tests
+
+test-research:
+	$(GO) vet ./research/...
+	$(GO) test ./research/...
+	PYTHONPATH=algorithm $(VERIFY_PYTHON) -m pytest -q research/edgeml/tests algorithm/tests
+
+test-all: test-product test-research
 
 .PHONY: verify
 verify:         ## all CI checks locally; fails on missing tools or dirty source
@@ -28,9 +57,9 @@ build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o $(BIN)/ ./cmd/...
 
 test:
-	$(GO) vet ./... && $(GO) test ./...
+	$(GO) vet $(PRODUCT_PACKAGES) && $(GO) test $(PRODUCT_PACKAGES)
 
-sim: build      ## FIFO vs prioritized on a contested SATCOM trace, 90 simulated minutes
+sim: build-research ## FIFO vs prioritized on a contested SATCOM trace, 90 simulated minutes
 	$(BIN)/sim -trace satcom_contested -duration 90m -out sim-results.json
 
 run-shore: build demo-key
@@ -38,7 +67,7 @@ run-shore: build demo-key
 
 run-edge: build demo-key ## replay the frame zips through the mock analyzer, 1 frame / 2 s
 	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
-	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:8080 -frames frames -period 2s -unit-token-file $(DEV_UNIT_TOKEN)
+	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:8080 -frames research/frames -period 2s -unit-token-file $(DEV_UNIT_TOKEN)
 
 DEMO := scenarios/ghostfleet_demo
 
@@ -48,7 +77,7 @@ demo: demo-clips demo-compare ## download the 5 fps clips, run naive vs hash vs 
 demo-clips:      ## fetch the demo clips from GCS into $(DEMO)/frames (gitignored; needs gcloud auth)
 	$(DEMO)/download.sh
 
-demo-compare: build
+demo-compare: build-research
 	$(DEMO)/compare.sh
 
 # Local demo auth: the first of shore/edge/ghost-seeker to start writes a random

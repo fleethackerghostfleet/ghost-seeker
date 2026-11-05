@@ -4,7 +4,15 @@ FROM ${GO_IMAGE} AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
+# Only product code enters this build. Research commands have a separate
+# `make build-research` target and must never be required by a runtime image.
+COPY cmd ./cmd
+COPY edge ./edge
+COPY shore ./shore
+COPY internal ./internal
+COPY gen ./gen
+COPY web ./web
+COPY ui ./ui
 RUN mkdir -p /out /data && chmod 0770 /data \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/...
 

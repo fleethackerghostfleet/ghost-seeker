@@ -1,6 +1,6 @@
 bin/
 dist/
-data/
+/data/
 sim-results.json
 *.db
 *.db-wal
@@ -21,3 +21,9 @@ scenarios/ghostfleet_demo/out/
 algorithm/runs/
 algorithm/models/
 /ghost-seeker
+
+# Local research outputs and Python wheel builds
+research/**/runs/
+research/**/out/
+research/edgeml/build/
+edgeml/build/

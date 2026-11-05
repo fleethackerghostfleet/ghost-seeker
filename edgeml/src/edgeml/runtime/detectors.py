@@ -206,7 +206,7 @@ def _meta_from_ws_b_export(exp: dict) -> dict:
 
 def load_detector(model_path: str | Path, engine: str = "auto", threads: int = 4, precision: str | None = None,
                   **kw) -> OnnxDetector:
-    """Build an adapter from the ``<model>.meta.json`` sidecar written by :mod:`edgeml.runtime.export`."""
+    """Build an adapter from the ``<model>.meta.json`` sidecar written by :mod:`edgeml_research.runtime.export`."""
     model_path = Path(model_path)
     meta_path = model_path.with_suffix("").with_suffix(".meta.json") if model_path.suffix else model_path / "meta.json"
     if not meta_path.exists():

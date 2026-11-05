@@ -30,5 +30,5 @@ endpoints by default. With `-shore http://localhost:8080` it connects to the liv
 shore ConsoleService through `internal/shorebridge`, and `-edge` selects the
 edge console used for queue status. The browser uses a session cookie; the bridge
 adds the operator bearer token server-side.
-See the [operator web app instructions](../README.md#operator-web-app) to run it;
+See the [operator web app instructions](../docs/REFERENCE.md#operator-web-app) to run it;
 use a port such as `:8090` when shore is already using `:8080`.

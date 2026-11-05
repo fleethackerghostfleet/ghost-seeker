@@ -64,7 +64,7 @@ make demo              # = make demo-clips demo-compare
           -out scenarios/ghostfleet_demo/out/compare.json -md scenarios/ghostfleet_demo/out/compare.md
 ```
 
-`cmd/sim` runs edge + shore in one process on a virtual clock (`internal/clock`), replaying
+`research/cmd/sim` runs edge + shore in one process on a virtual clock (`internal/clock`), replaying
 the clips at 5 fps through a flat link at each preset. `-dedup`:
 
 | mode | what the edge sends | source of "object" |
@@ -72,7 +72,7 @@ the clips at 5 fps through a flat link at each preset. `-dedup`:
 | `naive` | every frame (byte-identical frames still dropped by `edge/ingest`) | – |
 | `hash` | frames whose dHash differs from the last 64 kept by > 10 bits (image-level dedup) | – |
 | `sightings` | one item when an object appears + a refresh ≤ every `-sighting-update` (30 s) | **MOT ground truth** (`gt/gt.txt` + `qa/corrections.yaml` merges) — an oracle for this simulator comparison. `make demo-edge` instead uses the real sidecar with `-dedup sightings`. |
-| `tomer` | Tomer's `algorithm/ghost_priority` image-level ranking through the sidecar (`--prioritizer tomer|both`, started by `compare.sh` on :9093): priority = his whole-frame score, color+pHash near-duplicates folded like `hash` ([report](reports/TOMER_INTEGRATION.md)) | – |
+| `tomer` | Tomer's `algorithm/ghost_priority` image-level ranking through the sidecar (`--prioritizer tomer|both`, started by `compare.sh` on :9093): priority = his whole-frame score, color+pHash near-duplicates folded like `hash` ([report](../research/reports/TOMER_INTEGRATION.md)) | – |
 
 The simulator's `hash` row uses perceptual dHash; the live edge's `-dedup hash`
 uses exact-content hashing (plus the sidecar's near-duplicate flag in `tomer`

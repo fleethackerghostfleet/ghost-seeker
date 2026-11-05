@@ -55,7 +55,7 @@ class Aggregator(Protocol):
     def update(self, tracks: list[Track], image_bgr: np.ndarray, frame_idx: int, t_s: float) -> list[dict]: ...  # sighting events
     def flush(self, t_s: float) -> list[dict]: ...
 ```
-`edgeml.pipeline.run_clip(frames, detector, tracker, aggregator, embedder=None, detect_every=1)` is the reference
+`edgeml_research.pipeline.run_clip(frames, detector, tracker, aggregator, embedder=None, detect_every=1)` is the reference
 runner. The same code runs on GPU in GCP and on CPU (ONNX Runtime / OpenVINO) for the laptop.
 
 ## 3. Eval data (GCS: `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/`)
@@ -95,7 +95,7 @@ Assume a link API reports the bytes available right now (budget per window). **D
 deduplicated sightings with `value` and `forms`. **Selection** picks which forms to send under the budget. This is a
 knapsack over value per byte, with an item's cheaper forms sent before its expensive ones (the Go scheduler already
 ranks `priority × ladder_weight / bytes`). edgeml provides
-`edgeml.select.greedy(events, budget_bytes, ladder_decay=(1, 0.5, 0.25, 0.1), max_bytes_per_object=None)` as the
+`edgeml_research.select.greedy(events, budget_bytes, ladder_decay=(1, 0.5, 0.25, 0.1), max_bytes_per_object=None)` as the
 reference selector for evaluation only. It must not grow into a second scheduler. `ladder_decay` multiplies the value
 of each successive form of the same sighting (fact→crop→thumb→full) so bytes spread across objects before upgrading
 one; `max_bytes_per_object` caps what one sighting may consume in a window. Both exist because plain value/byte

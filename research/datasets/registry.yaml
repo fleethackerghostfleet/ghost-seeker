@@ -1,0 +1,143 @@
+- dataset_id: video_frames
+  dataset_id_pattern: video_*
+  name: Video frame datasets
+  source_type: mixed
+  source_url: null
+  license: unknown
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/video_frames.py
+  status: ingested
+- dataset_id: seaships7000
+  name: SeaShips 7000
+  source_type: huggingface
+  source_url: https://huggingface.co/datasets/dronefreak/SeaShips
+  license: unknown
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/hf_seaships.py
+  status: ingested
+- dataset_id: singapore_maritime
+  name: Singapore Maritime Dataset
+  hf_repo: ARG-NCTU/Singapore_Maritime_Dataset_coco
+  source_type: huggingface
+  source_url: https://huggingface.co/datasets/ARG-NCTU/Singapore_Maritime_Dataset_coco
+  license: unknown
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  annotation_format: hf-parquet image+objects (bbox_xywh px)
+  ingest_script: research/datasets/ingest/hf_dataset.py
+  status: ingested
+- dataset_id: mvtd
+  name: Maritime Visual Tracking Dataset
+  source_type: huggingface
+  source_url: https://huggingface.co/datasets/AhsanBB/Maritime_Visual_Tracking_Dataset_MVTD
+  license: cc0-1.0
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/hf_generic.py
+  status: planned
+- dataset_id: seadronessee
+  name: SeaDronesSee
+  source_type: huggingface
+  source_url: https://huggingface.co/datasets/dronefreak/SeaDronesSee
+  license: cc0-1.0
+  viewpoint: aerial
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/hf_generic.py
+  status: planned
+- dataset_id: ir_maritime_vessels
+  name: Real Infrared Maritime Vessel Dataset
+  source_type: huggingface
+  source_url: https://huggingface.co/datasets/hanchong/real-infrared-maritime-vessel-dataset
+  license: unknown
+  viewpoint: surface
+  modality: ir
+  synthetic: false
+  ingest_script: research/datasets/ingest/hf_generic.py
+  status: planned
+- dataset_id: boat_dataset_coco_2024
+  name: Boat Dataset COCO 2024
+  source_type: huggingface
+  source_url: https://huggingface.co/datasets/ARG-NCTU/Boat_dataset_coco_2024
+  license: unknown
+  viewpoint: mixed
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/hf_generic.py
+  status: planned
+- dataset_id: synthetic_boats
+  name: Synthetic Boats
+  source_type: huggingface
+  source_url: https://huggingface.co/datasets/Vivid3Dai/boat-detection-synthetic-data
+  license: cc-by-4.0
+  viewpoint: mixed
+  modality: rgb
+  synthetic: true
+  ingest_script: research/datasets/ingest/hf_generic.py
+  status: planned
+- dataset_id: openimages_maritime
+  name: Open Images V7 Maritime
+  source_type: openimages
+  source_url: https://storage.googleapis.com/openimages/web/index.html
+  license: unknown
+  viewpoint: mixed
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/openimages.py
+  status: planned
+- dataset_id: youtube_maritime
+  name: YouTube Maritime
+  source_type: youtube
+  source_url: https://www.youtube.com/
+  license: unknown
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/youtube.py
+  status: planned
+- dataset_id: lars
+  name: "LaRS: A Diverse Panoptic Maritime Obstacle Detection Dataset"
+  source_type: web
+  source_url: https://lojzezust.github.io/lars-dataset/
+  license: unknown
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/web.py
+  status: planned
+- dataset_id: mods
+  name: MODS - A USV-Oriented Object Detection and Obstacle Segmentation Benchmark
+  source_type: web
+  source_url: https://vicos.si/resources/mods_dataset/
+  license: unknown
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/web.py
+  status: planned
+- dataset_id: aboships
+  name: ABOships
+  source_type: web
+  source_url: https://research.abo.fi/en/datasets/aboships/
+  license: unknown
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/web.py
+  status: planned
+- dataset_id: smd_vis_onboard_sample
+  name: Singapore Maritime Dataset VIS Onboard sample
+  source_type: repo
+  source_url: https://sites.google.com/site/dilipprasad/home/singapore-maritime-dataset
+  license: unknown (academic research use)
+  viewpoint: surface
+  modality: rgb
+  synthetic: false
+  ingest_script: research/datasets/ingest/smd_vis_onboard.py
+  status: ingested

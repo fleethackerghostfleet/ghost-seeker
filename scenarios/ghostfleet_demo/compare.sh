@@ -13,7 +13,7 @@ DEDUP=${DEDUP:-all}
 DURATION=${DURATION:-6m}
 SAMPLE=${SAMPLE:-1m}
 mkdir -p "$OUT"
-[ -x "$ROOT/bin/sim" ] || (cd "$ROOT" && go build -o bin/ ./cmd/sim)
+[ -x "$ROOT/bin/sim" ] || (cd "$ROOT" && go build -o bin/ ./research/cmd/sim)
 "$HERE/download.sh" >/dev/null
 PY=${PY:-python}
 SIDECAR_PID=

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edgeml-research"
+version = "0.1.0"
+description = "Offline Ghost Seeker evaluation, export, and experiment helpers"
+requires-python = ">=3.10"
+dependencies = ["edgeml==0.1.0"]
+
+[project.optional-dependencies]
+eval = ["pycocotools", "faster-coco-eval", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git", "matplotlib"]
+audit = ["pyarrow", "google-cloud-storage", "google-cloud-bigquery"]
+gpu = ["torch", "torchvision", "ultralytics>=8.3", "transformers>=4.50", "timm", "huggingface_hub", "onnxruntime-gpu", "onnx", "onnxslim", "faster-coco-eval", "pillow"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

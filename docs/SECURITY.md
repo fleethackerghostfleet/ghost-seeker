@@ -4,7 +4,7 @@ Ghost Seeker has three network surfaces: the **shore node** (`cmd/shore`: SyncSe
 edges, ConsoleService + `/blob/` for operators), the **edge node** (`cmd/edge`: ship-side
 ConsoleService + `/blob/`) and the **operator web app** (`cmd/ghost-seeker`, which fronts the
 shore/edge consoles for a browser). This page lists the controls, how to run them locally with
-zero extra steps, and what production must set explicitly. `docs/reports/` holds the STIG /
+zero extra steps, and what production must set explicitly. `research/reports/` holds the STIG /
 pentest report; the Deep scan counts are at the bottom.
 
 ## 1. Operator authentication (shore console, edge console, web bridge, blobs)
@@ -173,7 +173,7 @@ bridge**, unchanged; keep that credential server-side and protect those links as
 ### Synthetic local demo and deployment
 
 ```sh
-go run ./cmd/piv-testpki -out data/piv-demo
+go run ./research/cmd/piv-testpki -out data/piv-demo
 # Prints the exact HTTPS ghost-seeker command and generates only short-lived fake PKI.
 # PEM client certificates/keys are produced; x/crypto/pkcs12 has no encoder, so no .p12 export.
 ```
@@ -260,7 +260,7 @@ shore/edge authentication or make their plain HTTP links suitable for untrusted 
 
 | Surface | Limit |
 |---|---|
-| Edge image decode (`edge/ingest`, `cmd/sim`) | `internal/imglimit`: `image.DecodeConfig` first, reject > 50 MP (`ErrTooLarge`) before any pixel allocation |
+| Edge image decode (`edge/ingest`, `research/cmd/sim`) | `internal/imglimit`: `image.DecodeConfig` first, reject > 50 MP (`ErrTooLarge`) before any pixel allocation |
 | Python sidecar `Analyze` | header-parsed dimensions (JPEG/PNG/GIF/BMP/WebP) must be ≤ 50 MP → else `413 resource_exhausted`; unknown containers → `400`; strict base64; body ≤ 32 MiB (existing) |
 | Python sidecar `EmbedText` | ≤ 64 texts, ≤ 512 chars each → else `400 invalid_argument` |
 | Sidecar / inference stub bind | `127.0.0.1` unless an interface is given (`--host 0.0.0.0`) |

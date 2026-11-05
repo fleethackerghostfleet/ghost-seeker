@@ -1,43 +1,42 @@
-# edgeml — edge ML pipeline and inference sidecar
+# Edge ML runtime
 
-Python detection, tracking, classification, sighting aggregation, and evaluation.
-The [sidecar](sidecar/README.md) exposes this pipeline to the Go edge through
-`InferenceService`; `-dedup sightings` stores its object-level reports. Its
-optional `tomer` adapter imports the separate `algorithm/` CPU prioritization
-baseline for image-level scoring. The Go core owns storage and transfer scheduling.
+This directory is the Python runtime shipped in the Ghost Seeker sidecar.
+The live demo runs detection, tracking, classification, sighting aggregation,
+night-light interpretation, and optional `ghost_priority` image scoring here.
+The Go edge owns storage and transfer scheduling.
 
-**Goal.** Turn a camera stream into **sightings**, which is what a human watch-stander reports. One report per
-real object for each continuous pass, plus one best key frame. Not one detection per frame. It has to run on a
-CPU-only Dell rugged laptop shared with other workloads. GCP GPUs run the *same* models fast for evaluation.
-Fine-tuning is optional, used only if zero-shot models leave a measured gap.
+- [Sidecar setup and API](sidecar/README.md)
+- [Live demo runbook](../docs/DEMO.md)
+- [Interfaces and data contracts](CONTRACTS.md)
+- [Offline ML research](../research/edgeml/README.md)
 
+## Runtime source
+
+| Path | Purpose |
+|---|---|
+| `src/edgeml/sidecar/` | HTTP service, live pipeline, and Tomer scoring adapter |
+| `src/edgeml/runtime/` | CPU detector sessions, backends, and thread controls |
+| `src/edgeml/tracking/` | Track adapters, realness, and sighting aggregation |
+| `src/edgeml/embed/` | Embeddings and zero-shot classification |
+| `src/edgeml/nightlights/` | Light interpretation and burst decisions |
+| `src/edgeml/detectors/` | Reusable detector adapters and label utilities |
+| `src/edgeml/types.py`, `interfaces.py` | Shared contracts |
+| `tests/` | Runtime regression tests, including the sidecar's mock HTTP service |
+
+Some adapters are optional; the live demo selects its models in
+[`demo.compose.yml`](../deploy/compose/demo.compose.yml). The package contains
+no model weights. Models are mounted separately. The `both` prioritizer uses
+`algorithm/ghost_priority`, and night-light rules come from `internal/catalog`;
+both mounts are retained by the demo Compose stack.
+
+```sh
+pip install -e 'edgeml[test]'                # from the repository root
+python -m pytest -q edgeml/tests
+pip install -e 'edgeml[tracking]' onnxruntime # live-model dependencies
+make demo-sidecar
 ```
-frames ─► 0 gate ─► 1 detect ─► 2 track ─► 3 embed/classify (per track) ─► 4 sighting aggregator ─► sightings
-         (cheap)    (1–5 Hz,    (ByteTrack/   (MobileCLIP-class, crop      (birth / material update / close;
-                     tiled       OC-SORT +      zero-shot subtype,           best key frame; re-link short gaps)
-                     horizon)    CMC)           unknownness)
-```
 
-See [CONTRACTS.md](CONTRACTS.md) for the interfaces, file formats, metrics and data rules every workstream follows.
-The diagram describes the evaluation pipeline; the live sidecar runs detection
-on each Analyze request and does not use the evaluation `FrameGate`.
-For the live stack, see [the demo runbook](../docs/DEMO.md). Reports under
-`reports/` record specific experiments and their limits, not field accuracy.
-
-## Layout
-```
-edgeml/
-  CONTRACTS.md        interfaces + formats + metrics (source of truth)
-  configs/splits.yaml dev/test split by source (test is locked)
-  src/edgeml/
-    types.py          shared dataclasses (Detection, Track, Sighting)
-    interfaces.py     Detector / Tracker / Embedder / Aggregator protocols
-    detectors/        one adapter per model family (workstream B)
-    tracking/         tracker adapters + sighting aggregator (workstream C)
-    embed/            embeddings, zero-shot subtype, unknownness (workstream D)
-    runtime/          CPU/OpenVINO runtime, frame gate, latency bench (workstream D)
-    eval/             metrics: detection, tracking (TrackEval), sightings (workstream C)
-    data/             loaders for eval sets in GCS (workstream A)
-    sidecar/          Connect JSON service and Go integration; optional tomer scoring adapter
-  tools/              one-off scripts (labeling, export, GCP job launchers)
-```
+Offline loaders, evaluation metrics, export/benchmark runners, scripts,
+reports, configs, annotations, and their tests now live in
+`research/edgeml/`. Install that package separately to use the
+`edgeml_research` namespace. The sidecar image installs only `edgeml`.

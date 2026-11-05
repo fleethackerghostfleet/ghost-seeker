@@ -8,7 +8,7 @@ import logging
 
 
 # D's COCO YOLO11n export fetched by `make demo-models` (the G fine-tune did not win on the locked test, see
-# edgeml/reports/G_detector.md); $EDGEML_DETECTOR overrides, e.g. to try ~/models/G/yolo11n-ft-640-v1/model.onnx.
+# research/edgeml/reports/G_detector.md); $EDGEML_DETECTOR overrides, e.g. to try ~/models/G/yolo11n-ft-640-v1/model.onnx.
 DEFAULT_DETECTOR = "~/models/D/yolo11n-640/model.onnx"
 
 

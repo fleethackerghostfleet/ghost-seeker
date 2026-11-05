@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import json
-import runpy
 
 import cv2
 import numpy as np
@@ -117,29 +116,8 @@ def test_invalid_light_confidence_is_conservative(value):
     assert interpret(lights, True, signal='sos')['boost'] == 1
 
 
-def test_boost_metric_denominators():
-    module = runpy.run_path(str(Path(__file__).parents[1]/"scripts/nightlights_boost_eval.py"))
-    rules = {r["id"]: r for r in load_rules()}
-    summarize = module["summarize"]
-    result = summarize([dict(truth="head_on", rule_id="nuc", boost=.9),
-                        dict(truth="nuc", rule_id="nuc", boost=0)], rules)
-    assert result["false_boost_rate"] == 1 and result["false_boost_per_contact"] == .5
-    assert result["missed_boost_rate"] == 1
-    assert summarize([], rules)["false_boost_rate"] is None
 
 
-def test_urgent_boost_metrics_include_background_and_confusions():
-    module = runpy.run_path(str(Path(__file__).parents[1]/"scripts/nightlights_boost_eval.py"))
-    rules = {r["id"]: r for r in load_rules()}
-    summarize = module["summarize"]
-    result = summarize([dict(truth="ram", rule_id="ram", boost=.9),
-                        dict(truth="nuc", rule_id="ram", boost=.9),
-                        dict(truth=None, rule_id="nuc", boost=.9),
-                        dict(truth="port", rule_id="port", boost=0)], rules)
-    assert result["urgent_rules"]["ram"] == dict(true_urgent_boosts=1, false_urgent_boosts=1)
-    assert result["urgent_rules"]["nuc"] == dict(true_urgent_boosts=0, false_urgent_boosts=1)
-    assert result["false_boosts"] == 2
-    assert summarize([], rules)["urgent_rules"]["ram"]["true_urgent_boosts"] == 0
 
 
 def test_gate_image_and_solar():
@@ -258,18 +236,6 @@ def test_tiny_isolated_light_and_low_contrast_rejection():
     assert detect_lights(image, [0, 0, 100, 100]) == []
 
 
-def test_hard_renderer_is_deterministic_and_labels_nuisances():
-    module = runpy.run_path(str(Path(__file__).resolve().parents[1]/"scripts/nightlights_synth.py"))
-    contact = module["hard_contact"](np.random.default_rng(88), [100, 90, 100, 90], ["red", "white", "red"], True)
-    contact["lights"][0]["occluded"] = True
-    image, nuisance = module["hard_scene"](np.random.default_rng(99), [contact])
-    repeat, labels = module["hard_scene"](np.random.default_rng(99), [contact])
-    assert np.array_equal(image, repeat) and nuisance == labels
-    assert image.shape == (240, 360, 3) and image.dtype == np.uint8
-    assert {p["source"] for p in nuisance} == {"pier", "shore"}
-    assert len(nuisance) == 17 and len(contact["lights"]) == 3
-    twilight, _ = module["hard_scene"](np.random.default_rng(66), [], twilight=60)
-    assert twilight.mean() > image.mean()
 
 
 def test_reflected_sibling_does_not_drop_unreflected_light():
@@ -316,13 +282,3 @@ def test_sodium_and_below_hull_rejection():
     image[:] = 0
     cv2.circle(image, (80, 105), 2, (255, 255, 255), -1)
     assert detect_lights(image, [20, 10, 120, 100]) == []
-
-
-def test_unresolvable_cases_are_labeled_not_removed():
-    module = runpy.run_path(str(Path(__file__).resolve().parents[1]/"scripts/nightlights_synth.py"))
-    record = dict(lights=[dict(colour="red", occluded=False)], degradation=dict(radius=0, saturate=False))
-    assert not module["observability"](record)["unresolvable"]
-    record["degradation"]["saturate"] = True
-    assert module["observability"](record)["reasons"] == ["single_pixel_colour_erased_by_saturation"]
-    record["lights"][0]["occluded"] = True
-    assert module["observability"](record)["reasons"] == ["permanently_occluded_light"]

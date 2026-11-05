@@ -16,7 +16,7 @@ Install the same auxiliary versions as the manual CI workflow:
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install -e 'edgeml[test]'
+python -m pip install -e 'edgeml[test]' -e research/edgeml
 go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
 go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.18.1
@@ -42,7 +42,7 @@ make verify
 ```
 
 The command runs verifier regression tests, Go vet/tests/race/build/module
-verification, pinned govulncheck, web tests, Python tests, protobuf lint/regeneration
+verification, pinned govulncheck, web tests, product and research Python tests, dependency-boundary checks, protobuf lint/regeneration
 and generated-code freshness, strict Kubernetes/Zarf checks, and all four Docker
 image builds. Existing make variables such as `GO_IMAGE` and `PY_IMAGE` can select
 approved base-image mirrors. Review the image choices alongside the report.
