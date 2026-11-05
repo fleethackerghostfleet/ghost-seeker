@@ -25,6 +25,68 @@ test('review suggestions alone use the overlay and retain busy buttons',()=>{
  assert.equal(box.innerHTML,'');
  assert.ok(!classes.has('rvask-suggestion'));
 });
+test('team proposals render escaped discussion, live own votes, busy buttons and isolated keys',()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.available=true;teamSync.on=true;reviewerName='Bob';
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'<Alice>',status:'pending',votes:{Bob:'agree'}};
+  receiveTeamProposal(proposal);`,context);
+ let html=context.$('rvAsk').innerHTML;
+ assert.match(html,/TEAM DISCUSSION — proposed by &lt;Alice&gt;/);
+ assert.match(html,/own-vote[^>]*>Bob: agree \(you\)/);
+ assert.equal((html.match(/data-ask="team"/g)||[]).length,5);
+ vm.runInContext('rv.askBusy=true;renderAsk()',context);
+ assert.equal((context.$('rvAsk').innerHTML.match(/disabled/g)||[]).length,5);
+ vm.runInContext("rv.askBusy=false;answers=[];answerTeamProposal=a=>answers.push(a);for(const key of ['y','n','a','r','l','escape','1','x'])reviewAskKey(key)",context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(answers)',context)),['agree','disagree','accepted','rejected','later','later']);
+ vm.runInContext("rv.askBusy=true;reviewAskKey('a')",context);
+ assert.equal(vm.runInContext('answers.length',context),6);
+});
+test('team resolution closes matching asks and learning, while sync off ignores events',()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.available=true;teamSync.on=true;messages=[];toast=m=>messages.push(m);resolved=[];
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise'}),resolve:(s,a)=>resolved.push(a)};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);receiveTeamProposal({...proposal,status:'accepted',resolvedBy:'Alice'});`,context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(resolved)',context)),['yes']);
+ assert.match(vm.runInContext('messages[0]',context),/Alice accepted Raise bird/);
+ vm.runInContext('receiveTeamProposal(proposal)',context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ vm.runInContext("teamSync.on=false;receiveTeamProposal({...proposal,id:'other'})",context);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('team sharing posts suggestions, supports local Later, and keeps failed actions open',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;teamSync.available=true;reviewerName='Alice';calls=[];toast=()=>{};
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise',n:4,of:5}),resolve:()=>{}};
+  request=async(path,method,body)=>{calls.push({path,body});return {proposal:{...body,id:'p',status:'pending',proposedBy:'Alice',votes:{}}}};
+  checkLearningSuggestion()`,context);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('calls[0].path',context),'/api/review-sync/proposals');
+ assert.equal(vm.runInContext('calls[0].body.reviewer',context),'Alice');
+ await vm.runInContext("answerTeamProposal('later')",context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ vm.runInContext("teamSync.hidden.clear();renderAsk();request=async()=>{throw Error('offline')}",context);
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ assert.equal(vm.runInContext('rv.ask.team',context),'p');
+ assert.equal(vm.runInContext('rv.askBusy',context),false);
+ vm.runInContext("rv.ask=null;teamSync.proposals=[];reviewerName='';checkLearningSuggestion()",context);
+ assert.equal(vm.runInContext('!!rv.ask&&!rv.ask.team',context),true);
+});
+test('team acceptance adds directive before resolving and votes do not add rules',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;teamSync.available=true;reviewerName='Alice';calls=[];toast=()=>{};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);
+  request=async(path,method,body)=>{calls.push({path,body});return {proposal:{...proposal,status:body.outcome||'pending',resolvedBy:'Alice'}}};`,context);
+ await vm.runInContext("answerTeamProposal('agree')",context);
+ assert.equal(vm.runInContext('calls.length',context),1);
+ assert.equal(vm.runInContext('calls[0].path',context),'/api/review-sync/proposals/p/vote');
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ assert.equal(vm.runInContext('calls[1].path',context),'/api/directives');
+ assert.equal(vm.runInContext('calls[2].path',context),'/api/review-sync/proposals/p/resolve');
+ assert.equal(context.$('rvAsk').hidden,true);
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);

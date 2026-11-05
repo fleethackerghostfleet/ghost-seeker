@@ -9,6 +9,17 @@ go run ./cmd/ghost-seeker -review-log data/reviews.jsonl
 Open **Operator Review** and enter your reviewer name. It is saved locally;
 use **Set / change reviewer** to change it. Review keys stay disabled until set.
 
+Optional **Team sync** (simulation console only) shares model-adjustment proposals
+with other opted-in sessions. The checkbox is saved in this browser. Set a reviewer
+name before sharing; otherwise suggestions stay local. Discuss the yellow **TEAM
+DISCUSSION** popup before accepting: **Y** agrees, **N** disagrees (votes do not
+apply rules), **A** accepts for the team and adds the rule, **R** rejects for the
+team, and **L / Escape** hides it only in your session. Votes update live and the
+proposal closes for everyone when resolved. Pending proposals and votes are
+in-memory, limited to 20, and lost on server restart. Reviewer names are labels,
+not authenticated identities. With sync off, local Y/N/L suggestions are unchanged;
+the attribution (**why**) bar is unchanged in either mode.
+
 - **1–4**: choose a priority; **Space / Enter**: accept the suggested priority.
 - **X / Delete**: dismiss; **C**: send to Commander; **S / Right arrow**: skip.
 - **Z / Backspace**: undo the last review (an appended correction, not deletion).
