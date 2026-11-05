@@ -60,6 +60,81 @@ cmd/edge ──► edge/ingest ──► sidecar InferenceService.Analyze ──
   sidecar automatically when `algorithm/` is present and adds the `tomer` row next to
   `naive / hash / sightings` at 9.6 kbps / 64 kbps / 256 kbps / 2 Mbps.
 
-## Comparison
+## Comparison (real numbers, `make demo-compare`)
 
-(filled in below from `make demo-compare`)
+`scenarios/ghostfleet_demo` (3 clips, 1270 frames at 5 fps = 254 s of footage, 6 ground-truth
+objects), flat link at each preset, 6 simulated minutes, `prioritized` strategy, mock detector
+for all rows (identical object bookkeeping); the `tomer` row's scores and near-duplicate
+flags come from the real `ghost_priority` code through the sidecar (`--prioritizer tomer`,
+no detector model, 10–25 ms/frame on this VM's CPU). "Frames dropped" = captures folded on
+the edge before they ever reached the queue.
+
+| link | mode | items sent | frames dropped | objects w/ image | all 6 at | bytes on air | bytes / delivered object |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 9.6 kbps | naive | 1249 | 21 | 0/6 | never | 386 KB | – |
+| 9.6 kbps | hash | 459 | 811 | 1/6 | never | 378 KB | 378 KB |
+| 9.6 kbps | **tomer** | 313 | 957 | **3/6** | never | 378 KB | **126 KB** |
+| 9.6 kbps | sightings | 19 | 1251 | 5/6 | never | 367 KB | 73 KB |
+| 64 kbps | naive | 1249 | 21 | 3/6 | never | 2508 KB | 836 KB |
+| 64 kbps | hash | 459 | 811 | 5/6 | never | 2466 KB | 493 KB |
+| 64 kbps | **tomer** | 313 | 957 | 5/6 | never | 2461 KB | 492 KB |
+| 64 kbps | sightings | 19 | 1251 | 6/6 | 303 s | 2431 KB | 405 KB |
+| 256 kbps | naive | 1249 | 21 | 5/6 | never | 10831 KB | 2166 KB |
+| 256 kbps | hash | 459 | 811 | 5/6 | never | 10786 KB | 2157 KB |
+| 256 kbps | **tomer** | 313 | 957 | 5/6 | never | 10746 KB | 2149 KB |
+| 256 kbps | sightings | 20 | 1250 | 6/6 | 242 s | 3049 KB | 508 KB |
+| 2 Mbps | naive | 1249 | 21 | 5/6 | never | 83810 KB | 16762 KB |
+| 2 Mbps | hash | 459 | 811 | 6/6 | 245 s | 64927 KB | 10821 KB |
+| 2 Mbps | **tomer** | 313 | 957 | 6/6 | 242 s | 57168 KB | 9528 KB |
+| 2 Mbps | sightings | 20 | 1250 | 6/6 | 240 s | 3038 KB | 506 KB |
+
+Objects with an image on shore over time (t = 0 … 366 s of link time):
+
+| link | naive | hash | tomer | sightings |
+|---|---|---|---|---|
+| 9.6 kbps | 0 0 0 0 0 0 0 | 0 0 0 0 1 1 1 | 0 1 1 1 1 1 3 | 0 2 3 4 5 5 5 |
+| 64 kbps | 0 1 1 1 2 3 3 | 0 2 3 4 5 5 5 | 0 2 4 4 5 5 5 | 0 2 3 4 5 6 6 |
+
+### Where each wins
+
+* **Tomer vs. image-level hash dedup (the fair comparison — both are image-level, neither
+  needs a detector):** his color+pHash near-duplicate suppression folds 957 of 1270 frames vs.
+  811 for dHash, i.e. 313 items instead of 459, and his score ranks the remaining frames by
+  visual interest × quality instead of treating them alike. At 9.6 kbps that is the difference
+  between 1 and 3 objects imaged in six minutes (3× better bytes/object: 126 KB vs 378 KB);
+  at 64 kbps he reaches 4 objects a minute earlier; at 2 Mbps the same 6/6 on 12 % fewer
+  bytes. That is the strongest result in the table for a pipeline that costs ~15 ms of CPU
+  per frame and zero model weights.
+* **Where ours wins:** `sightings` is object-level — one item per tracked object plus a
+  refresh ≤ every 30 s — so it sends 19–20 items where Tomer sends 313, and gets 5/6 at
+  9.6 kbps and 6/6 at 64 kbps on 73–405 KB/object. An image-level score cannot know that the
+  frame it is ranking shows the *same submarine* as 40 frames ago unless the pixels still look
+  alike (they do not once the vessel turns or the camera pans), so Tomer's mode keeps
+  re-sending the same objects at 256 kbps / 2 Mbps (57 MB vs 3 MB on air for the same 6/6).
+  The form ladder (FACT → THUMB → CROP → FULL under the live link estimate) is orthogonal and
+  applies to both; it is what lets *any* of the rows land something at 9.6 kbps.
+* **Cost:** `tomer` runs on the CPU with no model; `sightings` needs YOLO + tracker + CLIP
+  (~T4 or 4 CPU threads at 5 fps). On a platform without the model stack, `-prioritizer tomer
+  -dedup hash` is the best available mode; with the model stack, his score is still useful as
+  a tie-breaker / explanation (it rides in the tags in `both` mode) but should not replace the
+  object-level identity.
+* **What is not compared:** his `selection.select_ranked` (whole-JPEG byte allowance) is not
+  on the edge path at all — the scheduler's per-form priority-per-byte selection stands in for
+  it. His NanoDet object provider was not used (`--tomer-model` would enable it); the row is
+  the model-free configuration he documents as the baseline.
+
+## For the UI rebuild session
+
+`GetStatus.prioritizer` (string, `"edgeml"` / `"tomer"`) is new; `internal/shorebridge`
+forwards it as `edge.prioritizer` in the status JSON and `web/static/shore.js` prefixes the
+edge-queue line with `prioritization: <mode>` — one line, replace freely. Per-item explanation
+is in `Features.Tags`: `tomer_score`, `tomer_base`, `tomer_sim`, `tomer_dup`, `tomer_near`.
+
+## Running it
+
+```
+make demo-sidecar                      # --prioritizer both (default now): edgeml engine + Tomer score on every frame
+make demo-edge PRIORITIZER=tomer DEDUP=hash   # queue ranked by his score, near-duplicates folded
+python -m edgeml.sidecar --prioritizer tomer  # model-free sidecar (what compare.sh starts on :9093)
+make demo-compare                      # adds the tomer row when algorithm/ is checked out
+```
