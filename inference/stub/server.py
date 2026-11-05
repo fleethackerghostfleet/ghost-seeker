@@ -45,9 +45,16 @@ def embed(texts):
     return {"embeddings": [{"values": text_vec(t)} for t in texts], "modelId": MODEL}
 
 
+MAX_BODY_BYTES = 32 << 20
+
+
 class H(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
+        if n < 0 or n > MAX_BODY_BYTES:
+            self.send_response(413)
+            self.end_headers()
+            return
         body = json.loads(self.rfile.read(n) or b"{}")
         if self.path.endswith("/Analyze"):
             out = analyze(body.get("image", ""), body.get("knownLabels", []))
@@ -73,6 +80,7 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8090)
+    ap.add_argument("--host", default="127.0.0.1", help="bind address; the stub is unauthenticated, pass 0.0.0.0 to expose it")
     a = ap.parse_args()
     print(f"inference stub on :{a.port}")
-    ThreadingHTTPServer(("0.0.0.0", a.port), H).serve_forever()
+    ThreadingHTTPServer((a.host, a.port), H).serve_forever()

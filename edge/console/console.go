@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -49,6 +50,9 @@ func (s *Service) ListItems(ctx context.Context, req *connect.Request[pb.ListIte
 	}
 	q := req.Msg
 	var filtered []*store.Row
+	if err := ValidateLabel(q.Label); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	for _, r := range rows {
 		if q.Type != pb.ItemType_ITEM_TYPE_UNSPECIFIED && r.Item.Type != q.Type {
 			continue
@@ -64,16 +68,11 @@ func (s *Service) ListItems(ctx context.Context, req *connect.Request[pb.ListIte
 		}
 		filtered = append(filtered, r)
 	}
-	// Highest priority first.
-	for i := 1; i < len(filtered); i++ {
-		for j := i; j > 0 && filtered[j].Score.Priority > filtered[j-1].Score.Priority; j-- {
-			filtered[j], filtered[j-1] = filtered[j-1], filtered[j]
-		}
-	}
-	off, _ := strconv.Atoi(q.PageToken)
-	lim := int(q.Limit)
-	if lim <= 0 {
-		lim = 100
+	// Highest priority first (stable, so equal priorities keep store order).
+	sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].Score.Priority > filtered[j].Score.Priority })
+	off, lim, err := Page(q.PageToken, q.Limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	resp := &pb.ListItemsResponse{Total: int64(len(filtered))}
 	for i := off; i < len(filtered) && i < off+lim; i++ {
@@ -103,7 +102,7 @@ func (s *Service) GetQueue(ctx context.Context, req *connect.Request[pb.GetQueue
 	var tb int64
 	for i, e := range plan.Queue {
 		tb += e.BytesRemaining
-		if req.Msg.Limit <= 0 || i < int(req.Msg.Limit) {
+		if i < QueueLimit(req.Msg.Limit) {
 			resp.Entries = append(resp.Entries, e)
 		}
 	}
@@ -116,6 +115,9 @@ func (s *Service) GetPolicy(context.Context, *connect.Request[pb.GetPolicyReques
 }
 
 func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPolicyRequest]) (*connect.Response[pb.SetPolicyResponse], error) {
+	if err := ValidateInterest(req.Msg.GetPolicy().GetInterest()); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	if req.Msg.Policy == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("policy required"))
 	}
@@ -261,10 +263,7 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", httpx.SafeBlobMime(f.Mime))
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Disposition", "inline")
-		_, _ = w.Write(data)
+		httpx.ServeBlob(w, f.Mime, data)
 	})
 }
 

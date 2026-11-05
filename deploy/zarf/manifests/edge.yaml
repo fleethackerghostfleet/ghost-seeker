@@ -15,6 +15,7 @@ data:
   FRAMES_DIR: "###ZARF_VAR_FRAMES_DIR###"
   GS_EDGE_MAX_BYTES: "###ZARF_VAR_EDGE_MAX_BYTES###"
   GS_EDGE_MAX_ITEMS: "###ZARF_VAR_EDGE_MAX_ITEMS###"
+  GS_DEV_TOKEN_FILE: none
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -55,7 +56,11 @@ spec:
                 secretKeyRef:
                   name: edge-auth
                   key: unit-token
-                  optional: true
+            - name: GS_OPERATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: edge-auth
+                  key: operator-token
           readinessProbe:
             httpGet:
               path: /healthz

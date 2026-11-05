@@ -9,6 +9,7 @@ data:
   UI_DIR: /ui
   INFER_URL: "###ZARF_VAR_INFER_URL###"
   GS_REQUIRE_AUTH: "###ZARF_VAR_SHORE_REQUIRE_AUTH###"
+  GS_DEV_TOKEN_FILE: none
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -49,7 +50,11 @@ spec:
                 secretKeyRef:
                   name: shore-auth
                   key: signing-key
-                  optional: true
+            - name: GS_OPERATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: shore-auth
+                  key: operator-token
           readinessProbe:
             httpGet:
               path: /healthz
