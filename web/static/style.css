@@ -234,7 +234,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .rvask .rvask-btn{flex:none;min-width:76px;min-height:46px;padding:5px 10px;border-radius:8px;font-size:12px;gap:4px}
 .rvask .rvask-btn kbd{font-size:10px;padding:0 5px}
 .rvask .rvask-skip{border-style:dashed;color:var(--muted)}
-.rvask.rvask-suggestion{--suggestion-border:#f2d447;position:fixed;inset:10vh 10vw;width:80vw;height:80vh;z-index:65;flex-direction:column;flex-wrap:nowrap;justify-content:center;gap:clamp(24px,5vh,56px);padding:clamp(24px,5vw,72px);border:4px solid var(--suggestion-border);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.72);overflow-y:auto}
+.rvask.rvask-suggestion{--suggestion-border:#f2d447;position:fixed;inset:10vh 10vw;width:80vw;height:80vh;z-index:65;flex-direction:column;flex-wrap:nowrap;justify-content:safe center;gap:clamp(24px,5vh,56px);padding:clamp(24px,5vw,72px);border:4px solid var(--suggestion-border);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.72);overflow-y:auto}
 .rvask-suggestion .rvask-copy{flex:0 0 auto;text-align:center;gap:20px;font-size:clamp(18px,2vw,28px)}
 .rvask-suggestion .rvask-copy b{font-size:clamp(24px,3vw,44px);line-height:1.3}
 .rvask-suggestion .rvask-actions{width:100%;flex-wrap:wrap;justify-content:center;gap:clamp(12px,2vw,28px)}
