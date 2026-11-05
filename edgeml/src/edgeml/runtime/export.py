@@ -33,7 +33,7 @@ def export_ultralytics(weights: str, size: int, out: Path, vocab: list[str] | No
     from ultralytics import YOLO
 
     m = YOLO(weights)
-    names = COCO80
+    names = COCO80 if len(m.names) == 80 else tuple(str(m.names[i]) for i in sorted(m.names))  # fine-tunes keep their own names
     if vocab:
         m.set_classes(vocab)
         names = tuple(vocab)
