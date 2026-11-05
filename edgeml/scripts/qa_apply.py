@@ -238,6 +238,14 @@ def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     return out, {str(v): k for k, v in sorted(name_to_id.items(), key=lambda kv: kv[1])}
 
 
+def verdict_file_path(verdict_path: Path, repo_root: Path) -> str:
+    resolved = verdict_path.expanduser().resolve()
+    try:
+        return str(resolved.relative_to(repo_root.resolve()))
+    except ValueError:
+        return str(resolved)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True, type=Path)
@@ -260,7 +268,7 @@ def main():
                 verdicts_by_seq[seq_id][frame] = verdict
                 verdict_rows_by_seq.setdefault(seq_id, []).append(row)
         repo_root = Path(__file__).resolve().parents[2]
-        verdict_file = str(a.verdicts.expanduser().resolve().relative_to(repo_root))
+        verdict_file = verdict_file_path(a.verdicts, repo_root)
     entries = []
     for seq_dir in sorted(p for p in a.root.iterdir() if (p / "seqinfo.ini").exists()):
         labels = json.loads((seq_dir / "gt" / "labels.json").read_text())

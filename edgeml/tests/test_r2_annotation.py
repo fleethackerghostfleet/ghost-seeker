@@ -16,7 +16,12 @@ from autolabel_gemini import (
     verifier_cache_path,
 )
 from autolabel_owlv2 import read_gemini
-from qa_apply import apply, apply_sample_provenance, rewrite_attrs
+from qa_apply import (
+    apply,
+    apply_sample_provenance,
+    rewrite_attrs,
+    verdict_file_path,
+)
 
 
 def test_box_2d_to_xywh_scales_and_clips():
@@ -259,3 +264,14 @@ def test_qa_apply_records_frame_and_box_provenance(tmp_path):
         (False, None),
     ]
     assert [row["label_source"] for row in attrs] == ["teacher+human", "teacher"]
+
+
+def test_verdict_file_path_accepts_path_outside_checkout(tmp_path):
+    repo_root = tmp_path / "repo"
+    external_verdicts = tmp_path / "verdicts.csv"
+    repo_root.mkdir()
+    external_verdicts.write_text("seq_id,frame,verdict\n")
+
+    assert verdict_file_path(external_verdicts, repo_root) == str(
+        external_verdicts.resolve()
+    )
