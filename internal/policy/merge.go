@@ -125,6 +125,11 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	}
 	out := proto.Clone(p).(*pb.Policy)
 	interest, emcon, conflicts := Merge(out.Layers, nodeID, now)
+	if onlyLocalLayers(out.Layers) {
+		// A flat (layer-less) shore policy plus the ship console's own rules: keep both.
+		interest.BoostLabels = unionLabels(out.GetInterest().GetBoostLabels(), interest.BoostLabels)
+		interest.SuppressLabels = unionLabels(out.GetInterest().GetSuppressLabels(), interest.SuppressLabels)
+	}
 	if out.Interest == nil {
 		out.Interest = &pb.Interest{}
 	}

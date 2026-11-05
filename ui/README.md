@@ -1,8 +1,11 @@
 # ui/
 
 This is the static UI directory served by `edge` and `shore` through
-`internal/httpx.StaticUI`. It currently contains only this README, not an
-implemented console. Both services serve this directory at `/` when started
+`internal/httpx.StaticUI`. `index.html` is the ship console: the edge's uplink
+queue (Send now / Relabel) and the ship operator's own boost/suppress rules
+and EMCON (`GET|POST /ship/policy`, a SHIP-echelon `ship-console` layer that
+survives new shore policies; higher-echelon locks still win). On the shore it
+only points to the right ports. Both services serve this directory at `/` when started
 with `-ui ui` (the default); if the directory is missing, `StaticUI` serves a
 small API-hint page instead. The services expose the same JSON API:
 

@@ -90,6 +90,11 @@ func (s *Store) Accept(ctx context.Context, p *pb.Policy, source string, now tim
 	if accepted.IssuedAtUnixMs == 0 {
 		accepted.IssuedAtUnixMs = now.UnixMilli()
 	}
+	if prev := s.lastGood; prev != nil && LocalLayer(accepted) == nil && Expiry(prev, s.options.TTL).After(now) {
+		if local := LocalLayer(prev); local != nil {
+			accepted.Layers = append(accepted.Layers, proto.Clone(local).(*pb.PolicyLayer))
+		}
+	}
 	return s.acceptLocked(ctx, accepted, source, now, signed)
 }
 
