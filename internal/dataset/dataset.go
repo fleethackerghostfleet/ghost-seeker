@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
@@ -55,6 +57,19 @@ type Replay struct {
 	count   uint64
 }
 
+type splitConfig struct {
+	SourceVideoAliases map[string]string `yaml:"source_video_aliases"`
+	Test               map[string]any    `yaml:"test"`
+	Quarantine         map[string]any    `yaml:"quarantine"`
+}
+
+type splitPolicy struct {
+	aliases       map[string]string
+	aliasKeys     []string
+	lockedSources map[string]map[string]struct{}
+	pathDatasets  map[string]struct{}
+}
+
 type Summary struct {
 	DetectionsByClass map[string]int `json:"detections_by_class"`
 	ImagesWithPerson  int            `json:"images_with_person_detection"`
@@ -79,6 +94,124 @@ func LoadManifest(path string) ([]Image, error) {
 		}
 	}
 	return images, nil
+}
+
+func ValidateSplits(images []Image, path string) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("read dataset splits %q: %w", path, err)
+	}
+	var config splitConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return 0, fmt.Errorf("parse dataset splits %q: %w", path, err)
+	}
+	policy := splitPolicy{
+		aliases:       map[string]string{},
+		lockedSources: map[string]map[string]struct{}{"test": {}, "quarantine": {}},
+		pathDatasets:  map[string]struct{}{},
+	}
+	for source, target := range config.SourceVideoAliases {
+		policy.aliases[splitName(source)] = splitName(target)
+	}
+	for alias := range policy.aliases {
+		policy.aliasKeys = append(policy.aliasKeys, alias)
+	}
+	sort.Slice(policy.aliasKeys, func(i, j int) bool {
+		return len(policy.aliasKeys[i]) > len(policy.aliasKeys[j])
+	})
+	for split, section := range map[string]map[string]any{
+		"test": config.Test, "quarantine": config.Quarantine,
+	} {
+		for datasetID, value := range section {
+			switch entries := value.(type) {
+			case string:
+				policy.pathDatasets[normalizeDatasetID(datasetID)] = struct{}{}
+			case []any:
+				for _, entry := range entries {
+					source, ok := entry.(string)
+					if !ok {
+						return 0, fmt.Errorf("dataset splits %q: %s.%s entries must be strings", path, split, datasetID)
+					}
+					if policy.lockedSources[split] == nil {
+						policy.lockedSources[split] = map[string]struct{}{}
+					}
+					policy.lockedSources[split][policy.canonicalSource(source)] = struct{}{}
+				}
+			default:
+				return 0, fmt.Errorf("dataset splits %q: %s.%s must be a list or string", path, split, datasetID)
+			}
+		}
+	}
+
+	rejected := 0
+	first := ""
+	for _, image := range images {
+		reason := ""
+		if _, ok := policy.pathDatasets[normalizeDatasetID(image.DatasetID)]; ok && hasTestPathSegment(image.ImageID) {
+			reason = "image_id contains a locked /test/ path segment"
+		} else {
+			source := policy.canonicalSource(image.SourceVideo)
+			for split, locked := range policy.lockedSources {
+				for name := range locked {
+					if sourceMatches(source, name) {
+						reason = fmt.Sprintf("source_video matches %s split source %q", split, name)
+						break
+					}
+				}
+				if reason != "" {
+					break
+				}
+			}
+		}
+		if reason != "" {
+			rejected++
+			if first == "" {
+				first = fmt.Sprintf("image_id=%q dataset_id=%q source_video=%q: %s",
+					image.ImageID, image.DatasetID, image.SourceVideo, reason)
+			}
+		}
+	}
+	if rejected > 0 {
+		return rejected, fmt.Errorf("manifest contains %d locked test/quarantine row(s); first rejected row: %s", rejected, first)
+	}
+	return 0, nil
+}
+
+func normalizeDatasetID(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func splitName(value string) string {
+	value = filepath.Base(strings.TrimSpace(value))
+	value = strings.TrimSuffix(value, filepath.Ext(value))
+	value = strings.TrimPrefix(strings.ToLower(value), "video_")
+	return nonID.ReplaceAllString(value, "")
+}
+
+func (p splitPolicy) canonicalSource(value string) string {
+	name := splitName(value)
+	for _, alias := range p.aliasKeys {
+		if name == alias {
+			return p.aliases[alias]
+		}
+		if strings.HasPrefix(name, alias+"seg") {
+			return p.aliases[alias] + strings.TrimPrefix(name, alias)
+		}
+	}
+	return name
+}
+
+func sourceMatches(source, locked string) bool {
+	return source == locked || strings.HasPrefix(source, locked+"seg")
+}
+
+func hasTestPathSegment(imageID string) bool {
+	for _, part := range strings.Split(strings.ReplaceAll(imageID, `\`, "/"), "/") {
+		if strings.EqualFold(part, "test") {
+			return true
+		}
+	}
+	return false
 }
 
 func validateImage(image Image) error {

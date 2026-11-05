@@ -44,6 +44,7 @@ func main() {
 	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
 	datasetManifest := flag.String("dataset", "", "simulation mode: replay a clean-v2 review manifest")
 	datasetDir := flag.String("dataset-dir", "data/review_set/images", "simulation mode: dataset image directory")
+	splitsPath := flag.String("splits", "edgeml/configs/splits.yaml", "dataset mode: locked test and quarantine source policy")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
@@ -152,6 +153,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("load dataset manifest: %v", err)
 		}
+		rejected, err := reviewdataset.ValidateSplits(images, *splitsPath)
+		if err != nil {
+			log.Fatalf("validate dataset splits: %v", err)
+		}
+		log.Printf("dataset split guard: %d locked rows rejected", rejected)
 		replay, err = reviewdataset.NewReplay(images, *datasetDir, reviewdataset.Seed)
 		if err != nil {
 			log.Fatalf("load dataset images: %v", err)

@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -73,6 +74,111 @@ func TestValidateImageRejectsNonDevAndSingapore(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateSplitsRejectsLockedRows(t *testing.T) {
+	tests := []struct {
+		name  string
+		yaml  string
+		image Image
+	}{
+		{
+			name: "list match",
+			yaml: "test:\n  clips: [Spotted_A_Submarine]\n",
+			image: func() Image {
+				image := testImage("one", "video_spotted_a_submarine")
+				image.SourceVideo = "Spotted_A_Submarine"
+				return image
+			}(),
+		},
+		{
+			name: "alias match",
+			yaml: "source_video_aliases:\n  Old_Clip_Name: Canonical_Clip\ntest:\n  clips: [Canonical_Clip]\n",
+			image: func() Image {
+				image := testImage("one", "video_old_clip")
+				image.SourceVideo = "Old_Clip_Name"
+				return image
+			}(),
+		},
+		{
+			name: "segment prefix",
+			yaml: "test:\n  clips: [Sailboat_on_the_horizon]\n",
+			image: func() Image {
+				image := testImage("one", "video_sailboat")
+				image.SourceVideo = "Sailboat_on_the_horizon_seg0"
+				return image
+			}(),
+		},
+		{
+			name: "seaships upstream test path",
+			yaml: "test:\n  seaships7000: upstream test split\n",
+			image: func() Image {
+				image := testImage("seaships7000/test/one", "seaships7000")
+				image.SourceVideo = "000001"
+				return image
+			}(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "splits.yaml")
+			if err := os.WriteFile(path, []byte(test.yaml), 0600); err != nil {
+				t.Fatal(err)
+			}
+			rejected, err := ValidateSplits([]Image{test.image}, path)
+			if rejected != 1 || err == nil || !strings.Contains(err.Error(), test.image.ImageID) {
+				t.Fatalf("ValidateSplits = (%d, %v), want one rejection naming %q", rejected, err, test.image.ImageID)
+			}
+		})
+	}
+}
+
+func TestRealReviewManifestHasNoLockedRows(t *testing.T) {
+	manifestPath := filepath.Join("..", "..", "data", "review_set", "manifest.json")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		t.Skip("local review-set manifest is not present in this worktree")
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	images, err := LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejected, err := ValidateSplits(images, filepath.Join("..", "..", "edgeml", "configs", "splits.yaml"))
+	if err != nil || rejected != 0 {
+		t.Fatalf("real manifest locked-row count = %d, err=%v; want 0", rejected, err)
+	}
+	t.Logf("validated %d real manifest rows; rejected %d", len(images), rejected)
+}
+
+func TestAuthoritativeReviewSelectionHasNoLockedRows(t *testing.T) {
+	path := filepath.Join("..", "..", "datasets", "review", "clean_v2_dev_review.jsonl")
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	images := []Image{}
+	for scanner.Scan() {
+		var row struct {
+			ImageID     string `json:"image_id"`
+			DatasetID   string `json:"dataset_id"`
+			SourceVideo string `json:"source_video"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
+			t.Fatal(err)
+		}
+		images = append(images, Image{ImageID: row.ImageID, DatasetID: row.DatasetID, SourceVideo: row.SourceVideo})
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	rejected, err := ValidateSplits(images, filepath.Join("..", "..", "edgeml", "configs", "splits.yaml"))
+	if err != nil || rejected != 0 {
+		t.Fatalf("authoritative selection locked-row count = %d, err=%v; want 0", rejected, err)
+	}
+	t.Logf("validated %d authoritative selection rows; rejected %d", len(images), rejected)
 }
 
 func TestReplayOrderAndEachOncePerPass(t *testing.T) {
