@@ -186,8 +186,19 @@ The default `SHORE_URL` is the in-cluster shore service address. For a split
 deployment, install the `shore` and `operator` components in the shore/UDS
 cluster; install the `edge` component in the shipboard k3s cluster and override
 `SHORE_URL` with the shore address reachable from the ship. Deployments may
-override `EDGE_ID`, `SHORE_STORAGE`, and `EDGE_STORAGE` as well. For example,
-when staging an edge-only cluster:
+override `EDGE_ID`, `SHORE_STORAGE`, and `EDGE_STORAGE` as well. The shore
+package's `SHORE_PUBLIC_HOSTS` must include the ship-facing shore hostname for
+the DNS-rebinding guard; direct IP literals are always allowed and need no
+entry. Include any operator ingress hostname in this list too. For example,
+deploy the shore/operator components with:
+
+```sh
+zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
+  --confirm --components=shore,operator \
+  --set-variables=SHORE_PUBLIC_HOSTS=shore,shore.ghost-seeker,shore.ghost-seeker.svc,shore.ghost-seeker.svc.cluster.local,shore.example.internal
+```
+
+When staging an edge-only cluster:
 
 ```sh
 zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
