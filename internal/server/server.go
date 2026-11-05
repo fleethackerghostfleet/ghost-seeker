@@ -24,9 +24,9 @@ type Server struct {
 	store    *store.Store
 	hub      *hub
 	mux      *http.ServeMux
+	policy   *policyRuntime
 	compiler *command.Compiler
 	after    func(time.Duration, func())
-	policy   *policyRuntime
 }
 
 const maxStreamClients = 64
@@ -240,7 +240,10 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	candidate := &pb.Policy{Layers: append([]*pb.PolicyLayer(nil), s.policy.higherLayers...)}
 	operator := s.policy.operatorLayer()
 	for i, rule := range rules {
-		labels := append(append([]string(nil), rule.Classes...), rule.Attrs...)
+		labels := rule.Classes
+		if len(labels) == 0 {
+			labels = rule.Attrs
+		}
 		ir := &pb.InterestRule{Id: fmt.Sprintf("new:%d", i), Author: "TAO", Text: body.Text, Weight: rule.Weight}
 		if rule.Type == "suppress" {
 			ir.SuppressLabels = append([]string(nil), labels...)

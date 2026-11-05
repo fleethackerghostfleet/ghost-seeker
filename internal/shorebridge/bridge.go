@@ -805,9 +805,19 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	current, _ := b.getPolicy(r.Context())
 	if current != nil {
-		pol.Emcon = current.Emcon
-		if current.EmconSetting != nil {
-			pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
+		// An EMCON phrase in the directive ("go quiet") changes the ship-echelon
+		// EMCON unless a higher echelon has locked it; otherwise keep the current.
+		emconLocked := current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP
+		if mode == "" || emconLocked {
+			if mode != "" && compiled != nil {
+				compiled.Warnings = append(compiled.Warnings, "EMCON locked by "+current.EmconSetting.SetBy+"; not changed.")
+			}
+			pol.Emcon = current.Emcon
+			if current.EmconSetting != nil {
+				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
+			}
+		} else {
+			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
 		}
 		if len(current.Layers) > 0 {
 			pol.Layers = cloneLayers(current.Layers)
@@ -818,6 +828,10 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
 			} else {
 				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: in.IssuedBy, Rules: []*pb.InterestRule{rule}})
+				operatorLayer = len(pol.Layers) - 1
+			}
+			if mode != "" && !emconLocked {
+				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
 			}
 		}
 	}

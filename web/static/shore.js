@@ -65,7 +65,7 @@
     $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
-    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (snap.emcon ? ` · EMCON ${snap.emcon}` : '');
+    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (!snap.policyInfo && snap.emcon ? ` · EMCON ${snap.emcon}` : '');
     const focusedMode = document.activeElement?.closest?.('#shore-emcon button')?.dataset.mode;
     const mode = String(policyInfo.emcon || snap.emcon || 'NORMAL').toUpperCase();
     const lockTitle = policyInfo.emconLocked ? `EMCON locked by ${policyInfo.emconLockedBy || policyInfo.emconSetBy || 'higher echelon'}` : '';
@@ -257,7 +257,8 @@
         $('#readback').textContent = '';
         toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
       }
-      if (r.conflicts?.length) toast(window.gsPolicy.conflictToast(r.conflicts), true);
+      const conflicts = r.policy?.conflicts || r.conflicts;
+      if (conflicts?.length) toast(window.gsPolicy.conflictToast(conflicts), true);
       $('#directive').value = '';
     } catch (err) { toast(err.message, true); }
   });

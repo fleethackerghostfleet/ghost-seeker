@@ -38,7 +38,7 @@ test('global keyboard shortcuts ignore input while a dialog is open',()=>{
   document.addEventListener=(type,handler)=>{if(type==='keydown')handlers[type]=handler};
   toggleNight=()=>nightToggles++;
  `,context);
- const start=source.indexOf(" document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open||gsPolicy.isPolicyHotkeyTarget(e.target))return;");
+ const start=source.indexOf(" document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;");
  const end=source.indexOf(" $('rvKeys').onclick",start);
  assert.ok(start>=0&&end>start);
  vm.runInContext(source.slice(start,end),context);
