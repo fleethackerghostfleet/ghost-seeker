@@ -242,6 +242,14 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .rvask.rvask-suggestion .rvask-btn kbd{font-size:clamp(16px,1.6vw,24px);padding:2px 12px}
 .rvask.rvask-suggestion::before{content:"";position:fixed;inset:0;z-index:-1}
 .theme-day .rvask-suggestion{--suggestion-border:#ac8700}
+.rvask.rvask-team{gap:clamp(12px,2vh,20px);padding:clamp(20px,3vw,44px)}
+.rvask-team-banner{font-size:clamp(16px,1.6vw,23px);font-weight:800;color:var(--suggestion-border);text-align:center}
+.rvask-team .rvask-copy{gap:10px;font-size:clamp(16px,1.5vw,21px)}
+.rvask-team .rvask-copy b{font-size:clamp(24px,2.4vw,36px)}
+.rvask-votes{list-style:none;margin:0;padding:0;max-height:15vh;overflow:auto;width:100%;text-align:center;font-size:18px;color:var(--muted)}
+.rvask-votes .own-vote{font-weight:800;color:var(--text)}
+.rvask.rvask-team .rvask-btn{flex:1 1 140px;min-height:84px;font-size:clamp(18px,1.6vw,23px)}
+#reviewSyncLabel{margin-left:16px;white-space:nowrap}
 .rvkeys{flex:none;display:flex;gap:10px;padding:12px 20px 18px;align-items:stretch}
 .kb{flex:1;min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-radius:12px;border:2px solid var(--line);background:var(--panel2);color:var(--text);font:inherit;font-size:16px;font-weight:800;cursor:pointer;position:relative;transition:transform .08s,filter .08s}
 .kb:hover{filter:brightness(1.25)}

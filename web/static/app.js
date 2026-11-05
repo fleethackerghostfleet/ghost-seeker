@@ -175,7 +175,7 @@ async function request(path,method='GET',body){
  if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
  const response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const data=response.status===204?null:await response.json();
- if(!response.ok){const error=new Error(data?.message||data?.error||`Request failed (${response.status})`);if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
+ if(!response.ok){const error=new Error(data?.message||data?.error||`Request failed (${response.status})`);error.status=response.status;if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
  return data;
 }
 async function patchItem(id,changes){
@@ -198,7 +198,8 @@ function openStream(){
  const stream=new EventSource('/api/stream');
  stream.onopen=()=>{state.offline=false;renderLive()};
  stream.onerror=()=>{state.offline=true;renderLive()};
- stream.addEventListener('snapshot',event=>applySnapshot(JSON.parse(event.data)));
+ stream.addEventListener('snapshot',event=>{applySnapshot(JSON.parse(event.data));refreshTeamProposals()});
+ stream.addEventListener('review-sync',event=>receiveTeamProposal(JSON.parse(event.data).proposal));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
   stats=data.stats;if(state.paused){pendingItems.push(data);heldSnapshotIDs?.add(data.item.id);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
@@ -223,6 +224,7 @@ function openStream(){
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
  const config=await request('/api/config');
+ setupTeamSync(!!config.reviewSync);
  SOURCES=[{id:'ALL',name:'All sensors (combined)'},...config.sources];
  SRC=Object.fromEntries(SOURCES.map(source=>[source.id,source]));
  CLS=config.classes;MODELS=config.models;ATTR_LAB=config.attrLabels;EXAMPLES=config.examples;
@@ -260,7 +262,7 @@ async function init(){
   if(state.sel&&['1','2','3','4'].includes(k))setManual(state.sel,+k);
   if(state.sel&&['arrowright','arrowdown','arrowleft','arrowup'].includes(k)){e.preventDefault();step(k==='arrowright'||k==='arrowdown'?1:-1)}});
  $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b&&(!rv.ask||b.dataset.a==='undo')){b.blur();rvAct(b.dataset.a)}};
- $('rvAsk').onclick=e=>{const b=e.target.closest('[data-ask]');if(!b)return;if(b.dataset.ask==='why')answerWhy(b.dataset.choice);else answerSuggestion(b.dataset.answer)};
+ $('rvAsk').onclick=e=>{const b=e.target.closest('[data-ask]');if(!b)return;if(b.dataset.ask==='why')answerWhy(b.dataset.choice);else if(b.dataset.ask==='team')answerTeamProposal(b.dataset.answer);else answerSuggestion(b.dataset.answer)};
  $('rvOrder').onclick=e=>{const b=e.target.closest('button');if(!b)return;rv.order=b.dataset.o;[...$('rvOrder').children].forEach(x=>x.classList.toggle('on',x===b));rv.cur=null;renderReview()};
  $('nightBtn').onclick=toggleNight;
  window.addEventListener('hashchange',route);
@@ -476,11 +478,82 @@ function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
 let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
+const teamSync={available:false,on:false,proposals:[],hidden:new Set(),resolved:new Set(),local:new Map(),accepting:new Map(),revision:0,posting:false};
+function setupTeamSync(available){
+ teamSync.available=available;
+ try{teamSync.on=available&&localStorage.getItem('gs.reviewSync')==='true'}catch{teamSync.on=false}
+ $('reviewSyncLabel').hidden=!available;$('reviewSync').checked=teamSync.on;
+ $('reviewSync').onchange=()=>{
+  teamSync.on=available&&$('reviewSync').checked;
+  try{localStorage.setItem('gs.reviewSync',String(teamSync.on))}catch{}
+  if(!teamSync.on&&rv.ask?.team){rv.ask=null;rv.askBusy=false}
+  if(teamSync.on&&rv.ask?.kind==='sug'&&!rv.ask.team){
+   if(reviewerName){const s=rv.ask.s;rv.ask=null;rv.askBusy=false;proposeTeamSuggestion(s)}
+   else toast('Set your reviewer name to share suggestions with the team');
+  }
+  renderAsk();if(teamSync.on)refreshTeamProposals();
+ };
+}
+async function refreshTeamProposals(){
+ if(!teamSync.on)return;
+ const revision=teamSync.revision;
+ try{const data=await request('/api/review-sync');if(!teamSync.on||revision!==teamSync.revision)return;teamSync.proposals=data.proposals.filter(p=>!teamSync.resolved.has(p.id));if(rv.ask?.team&&!teamSync.proposals.some(p=>p.id===rv.ask.team)){rv.ask=null;rv.askBusy=false}renderAsk()}
+ catch(error){toast('Team sync: '+error.message)}
+}
+function receiveTeamProposal(p,finish=false){
+ if(!teamSync.on)return;
+ teamSync.revision++;
+ const index=teamSync.proposals.findIndex(x=>x.id===p.id);
+ if(p.status==='pending'){
+  if(!teamSync.resolved.has(p.id)){if(index<0)teamSync.proposals.push(p);else teamSync.proposals[index]=p}
+ }else{
+  teamSync.proposals=teamSync.proposals.filter(x=>x.id!==p.id);
+  const first=!teamSync.resolved.has(p.id);teamSync.resolved.add(p.id);
+  const accepting=teamSync.accepting.has(p.id);if(accepting)teamSync.accepting.set(p.id,p);
+  const key=p.cls+':'+p.dir,local=teamSync.local.get(key);
+  const current=typeof gsLearn!=='undefined'?gsLearn.suggestion():null;
+  if(!accepting&&(first||finish)){if(typeof gsLearn!=='undefined'&&(local||(current?.cls===p.cls&&current?.dir===p.dir)))gsLearn.resolve(local||current,p.status==='accepted'?'yes':'no');teamSync.local.delete(key)}
+  if(rv.ask?.team===p.id||(rv.ask?.kind==='sug'&&rv.ask.s.cls===p.cls&&rv.ask.s.dir===p.dir)){rv.ask=null;rv.askBusy=false}
+  if(teamSync.on&&first&&!accepting)toast(`${p.resolvedBy} ${p.status} ${p.dir==='lower'?'Lower':'Raise'} ${CLS[p.cls]?.lab||p.cls}`);
+ }
+ if(teamSync.on)renderAsk();
+}
+async function proposeTeamSuggestion(s){
+ teamSync.posting=true;teamSync.local.set(s.cls+':'+s.dir,s);
+ try{const data=await request('/api/review-sync/proposals','POST',{cls:s.cls,dir:s.dir,n:s.n,of:s.of,highRisk:!!s.highRisk,reviewer:reviewerName});receiveTeamProposal(data.proposal)}
+ catch(error){toast('Team sync: '+error.message);if(!rv.ask){rv.ask={kind:'sug',s};renderAsk()}}
+ finally{teamSync.posting=false}
+}
+async function answerTeamProposal(answer){
+ const ask=rv.ask;if(!ask?.team||rv.askBusy)return;
+ if(answer==='later'){teamSync.hidden.add(ask.team);rv.ask=null;renderAsk();return}
+ if(!reviewerName){toast('Set your reviewer name first');return}
+ rv.askBusy=true;renderAsk();
+ const base='/api/review-sync/proposals/'+encodeURIComponent(ask.team);
+ let won=false;
+ if(answer==='accepted')teamSync.accepting.set(ask.team,null);
+ try{
+  if(answer==='agree'||answer==='disagree'){
+   const data=await request(base+'/vote','POST',{reviewer:reviewerName,vote:answer});receiveTeamProposal(data.proposal);
+  }else if(answer==='accepted'||answer==='rejected'){
+   const data=await request(base+'/resolve','POST',{reviewer:reviewerName,outcome:answer});receiveTeamProposal(data.proposal);
+   if(answer==='accepted'){
+    won=true;
+    try{await addSuggestionDirective(ask.s);if(typeof gsLearn!=='undefined')gsLearn.resolve(ask.s,'yes');toast(`${reviewerName} accepted ${ask.s.dir==='lower'?'Lower':'Raise'} ${CLS[ask.s.cls]?.lab||ask.s.cls} — rule added`)}
+    catch(error){if(typeof gsLearn!=='undefined')gsLearn.resolve(ask.s,'later');toast(`Accepted, but adding the rule failed: ${error.message} — add it on Collection Priorities`)}
+    teamSync.local.delete(ask.s.cls+':'+ask.s.dir);
+   }
+  }
+ }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
+ finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
+}
 function rvQueue(){const l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
+ if(!rv.ask&&teamSync.on){const p=teamSync.proposals.find(p=>!teamSync.hidden.has(p.id));if(p)rv.ask={kind:'sug',s:p,team:p.id}}
  box.classList.toggle('rvask-suggestion',rv.ask?.kind==='sug');
+ box.classList.toggle('rvask-team',!!rv.ask?.team);
  if(!rv.ask){box.hidden=true;box.innerHTML='';return}
  box.hidden=false;
  if(rv.ask.kind==='why'){
@@ -490,10 +563,18 @@ function renderAsk(){
  }
  const s=rv.ask.s,label=CLS[s.cls]?.lab||s.cls,verb=s.dir==='lower'?'lowered':'raised',action=s.dir==='lower'?'Lower':'Raise';
  box.innerHTML=`<div class="rvask-copy"><b>You ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact. ${action} ${esc(label)} priority?</b>${s.highRisk?`<span class="rvask-warning">${esc(label)} is normally high priority — confirm this change.</span>`:''}</div><div class="rvask-actions"><button class="kb rvask-btn" data-ask="sug" data-answer="yes" ${rv.askBusy?'disabled':''}><kbd>Y</kbd>Yes</button><button class="kb rvask-btn" data-ask="sug" data-answer="no" ${rv.askBusy?'disabled':''}><kbd>N</kbd>No</button><button class="kb rvask-btn rvask-skip" data-ask="sug" data-answer="later" ${rv.askBusy?'disabled':''}><kbd>L</kbd>Later</button></div>`;
+ if(rv.ask.team){
+  const p=teamSync.proposals.find(p=>p.id===rv.ask.team)||s;
+  box.innerHTML=`<div class="rvask-team-banner">TEAM DISCUSSION — proposed by ${esc(p.proposedBy)}. Discuss with the team before accepting.</div><div class="rvask-copy"><b>${action} ${esc(label)} priority?</b><span>${esc(p.proposedBy)} ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact.</span>${s.highRisk?'<span class="rvask-warning">Normally high priority — confirm this change.</span>':''}</div><ul class="rvask-votes">${Object.entries(p.votes).map(([name,vote])=>`<li class="${name===reviewerName?'own-vote':''}">${esc(name)}: ${esc(vote)}${name===reviewerName?' (you)':''}</li>`).join('')||'<li>No votes yet — discuss with your team.</li>'}</ul><div class="rvask-actions">${[['Y','Agree','agree'],['N','Disagree','disagree'],['A','Accept for team','accepted'],['R','Reject for team','rejected'],['L','Later','later']].map(([key,label,answer])=>`<button class="kb rvask-btn" data-ask="team" data-answer="${answer}" ${rv.askBusy?'disabled':''}><kbd>${key}</kbd>${label}</button>`).join('')}</div>`;
+ }
 }
 function checkLearningSuggestion(){
- if(rv.ask||typeof gsLearn==='undefined')return;
- const s=gsLearn.suggestion();if(s){rv.ask={kind:'sug',s};rv.askBusy=false;renderAsk()}
+ if(rv.ask||teamSync.posting||typeof gsLearn==='undefined')return;
+ const s=gsLearn.suggestion();if(s){
+  if(teamSync.on&&reviewerName){proposeTeamSuggestion(s);return}
+  if(teamSync.on)toast('Set your reviewer name to share suggestions with the team');
+  rv.ask={kind:'sug',s};rv.askBusy=false;renderAsk();
+ }
 }
 async function answerWhy(choice){
  const ask=rv.ask;if(!ask||ask.kind!=='why'||rv.askBusy||typeof gsLearn==='undefined')return;
@@ -502,19 +583,23 @@ async function answerWhy(choice){
  else gsLearn.attribute(ask.id,choice==='skip'?null:choice);
  rv.ask=null;rv.askBusy=false;renderAsk();checkLearningSuggestion();
 }
+function addSuggestionDirective(s){
+ const label=CLS[s.cls]?.lab||s.cls;
+ return request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]});
+}
 function answerSuggestion(answer){
  const ask=rv.ask;if(!ask||ask.kind!=='sug'||rv.askBusy||typeof gsLearn==='undefined')return;
  const s=ask.s;
  if(answer!=='yes'){gsLearn.resolve(s,answer);rv.ask=null;rv.askBusy=false;renderAsk();return}
  rv.askBusy=true;renderAsk();
- const label=CLS[s.cls]?.lab||s.cls;
- request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]})
+ addSuggestionDirective(s)
   .then(result=>{gsLearn.resolve(s,'yes');toast(result.conflicts?.length?gsPolicy.conflictToast(result.conflicts):'Rule added — review it on Collection Priorities')})
   .catch(error=>{gsLearn.resolve(s,'later');if(!error.policyConflicts)toast(error.message)})
   .finally(()=>{rv.askBusy=false;if(rv.ask===ask)rv.ask=null;renderAsk()});
 }
 function reviewAskKey(k){
  if(!rv.ask||rv.askBusy)return;
+ if(rv.ask.team){const answer={y:'agree',n:'disagree',a:'accepted',r:'rejected',l:'later',escape:'later'}[k];if(answer)answerTeamProposal(answer);return}
  if(rv.ask.kind==='why'){
   if(k==='escape'){answerWhy('skip');return}
   const n=Number(k);if(n>=1&&n<=rv.ask.classes.length)answerWhy(rv.ask.classes[n-1]);else if(n===rv.ask.classes.length+1)answerWhy('wrong');

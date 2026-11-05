@@ -25,6 +25,116 @@ test('review suggestions alone use the overlay and retain busy buttons',()=>{
  assert.equal(box.innerHTML,'');
  assert.ok(!classes.has('rvask-suggestion'));
 });
+test('team proposals render escaped discussion, live own votes, busy buttons and isolated keys',()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.available=true;teamSync.on=true;reviewerName='Bob';
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'<Alice>',status:'pending',votes:{Bob:'agree'}};
+  receiveTeamProposal(proposal);`,context);
+ let html=context.$('rvAsk').innerHTML;
+ assert.match(html,/TEAM DISCUSSION — proposed by &lt;Alice&gt;/);
+ assert.match(html,/own-vote[^>]*>Bob: agree \(you\)/);
+ assert.equal((html.match(/data-ask="team"/g)||[]).length,5);
+ vm.runInContext('rv.askBusy=true;renderAsk()',context);
+ assert.equal((context.$('rvAsk').innerHTML.match(/disabled/g)||[]).length,5);
+ vm.runInContext("rv.askBusy=false;answers=[];answerTeamProposal=a=>answers.push(a);for(const key of ['y','n','a','r','l','escape','1','x'])reviewAskKey(key)",context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(answers)',context)),['agree','disagree','accepted','rejected','later','later']);
+ vm.runInContext("rv.askBusy=true;reviewAskKey('a')",context);
+ assert.equal(vm.runInContext('answers.length',context),6);
+});
+test('team resolution closes matching asks and learning, while sync off ignores events',()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.available=true;teamSync.on=true;messages=[];toast=m=>messages.push(m);resolved=[];
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise'}),resolve:(s,a)=>resolved.push(a)};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);receiveTeamProposal({...proposal,status:'accepted',resolvedBy:'Alice'});`,context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(resolved)',context)),['yes']);
+ assert.match(vm.runInContext('messages[0]',context),/Alice accepted Raise bird/);
+ vm.runInContext('receiveTeamProposal(proposal)',context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ vm.runInContext("teamSync.on=false;receiveTeamProposal({...proposal,id:'other'})",context);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('team sharing posts suggestions, supports local Later, and keeps failed actions open',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;teamSync.available=true;reviewerName='Alice';calls=[];toast=()=>{};
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise',n:4,of:5}),resolve:()=>{}};
+  request=async(path,method,body)=>{calls.push({path,body});return {proposal:{...body,id:'p',status:'pending',proposedBy:'Alice',votes:{}}}};
+  checkLearningSuggestion()`,context);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('calls[0].path',context),'/api/review-sync/proposals');
+ assert.equal(vm.runInContext('calls[0].body.reviewer',context),'Alice');
+ await vm.runInContext("answerTeamProposal('later')",context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ vm.runInContext("teamSync.hidden.clear();renderAsk();request=async()=>{throw Error('offline')}",context);
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ assert.equal(vm.runInContext('rv.ask.team',context),'p');
+ assert.equal(vm.runInContext('rv.askBusy',context),false);
+ vm.runInContext("rv.ask=null;teamSync.proposals=[];reviewerName='';checkLearningSuggestion()",context);
+ assert.equal(vm.runInContext('!!rv.ask&&!rv.ask.team',context),true);
+});
+test('team acceptance resolves before adding a directive and votes do not add rules',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;teamSync.available=true;reviewerName='Alice';calls=[];toast=()=>{};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);
+  request=async(path,method,body)=>{calls.push({path,body});return {proposal:{...proposal,status:body.outcome||'pending',resolvedBy:'Alice'}}};`,context);
+ await vm.runInContext("answerTeamProposal('agree')",context);
+ assert.equal(vm.runInContext('calls.length',context),1);
+ assert.equal(vm.runInContext('calls[0].path',context),'/api/review-sync/proposals/p/vote');
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ assert.equal(vm.runInContext('calls[1].path',context),'/api/review-sync/proposals/p/resolve');
+ assert.equal(vm.runInContext('calls[2].path',context),'/api/directives');
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('two team acceptors add only one directive when the second resolve returns 404',async()=>{
+ const contexts=[setup(),setup()];let winner=false,directives=0,resolves=0;
+ for(const context of contexts){
+  vm.runInContext(`teamSync.on=true;reviewerName='Alice';toast=()=>{};proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};receiveTeamProposal(proposal)`,context);
+  context.request=async(path)=>{
+   if(path==='/api/review-sync')return {proposals:[]};
+   if(path==='/api/directives'){directives++;return {}};
+   resolves++;if(winner)throw Object.assign(new Error('pending proposal not found'),{status:404});winner=true;
+   return {proposal:{id:'p',cls:'bird',dir:'raise',status:'accepted',resolvedBy:'Alice'}};
+  };
+ }
+ await Promise.all(contexts.map(context=>vm.runInContext("answerTeamProposal('accepted')",context)));
+ assert.equal(resolves,2);assert.equal(directives,1);
+ for(const context of contexts)assert.equal(context.$('rvAsk').hidden,true);
+});
+test('failed rule after winning resolve defers learning and shows only the actionable error',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;reviewerName='Alice';messages=[];toast=m=>messages.push(m);learned=[];
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise'}),resolve:(s,a)=>learned.push(a)};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);teamSync.local.set('bird:raise',proposal);
+  request=async(path)=>{if(path==='/api/directives')throw Error('offline');const resolved={...proposal,status:'accepted',resolvedBy:'Alice'};receiveTeamProposal(resolved);return {proposal:resolved}};`,context);
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ vm.runInContext("receiveTeamProposal({...proposal,status:'accepted',resolvedBy:'Alice'})",context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(learned)',context)),['later']);
+ assert.equal(vm.runInContext('messages.length',context),1);
+ assert.match(vm.runInContext('messages[0]',context),/Accepted, but adding the rule failed: offline — add it on Collection Priorities/);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('enabling team sync promotes an open local suggestion only with a reviewer name',async()=>{
+ for(const name of ['Alice','']){
+  const context=setup();
+  vm.runInContext(`reviewerName=${JSON.stringify(name)};messages=[];toast=m=>messages.push(m);calls=[];
+   setupTeamSync(true);rv.ask={kind:'sug',s:{cls:'bird',dir:'raise',n:4,of:5}};
+   request=async(path,method,body)=>{calls.push(path);if(path==='/api/review-sync')return {proposals:[]};return {proposal:{...body,id:'p',status:'pending',proposedBy:reviewerName,votes:{}}}};
+   $('reviewSync').checked=true;$('reviewSync').onchange();`,context);
+  await new Promise(resolve=>setImmediate(resolve));
+  if(name){
+   assert.equal(vm.runInContext('rv.ask.team',context),'p');
+   assert.equal(vm.runInContext("calls.filter(p=>p==='/api/review-sync/proposals').length",context),1);
+   assert.match(context.$('rvAsk').innerHTML,/TEAM DISCUSSION/);
+  }else{
+   assert.equal(vm.runInContext('!!rv.ask&&!rv.ask.team',context),true);
+   assert.equal(vm.runInContext("calls.includes('/api/review-sync/proposals')",context),false);
+   assert.match(vm.runInContext('messages[0]',context),/Set your reviewer name/);
+  }
+ }
+});
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
  const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});

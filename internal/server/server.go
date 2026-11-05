@@ -23,14 +23,16 @@ import (
 )
 
 type Server struct {
-	reviews  *reviews.Log
-	reviewMu sync.Mutex
-	store    *store.Store
-	hub      *hub
-	mux      *http.ServeMux
-	policy   *policyRuntime
-	compiler *command.Compiler
-	after    func(time.Duration, func())
+	syncMu    sync.Mutex
+	proposals []*reviewProposal
+	reviews   *reviews.Log
+	reviewMu  sync.Mutex
+	store     *store.Store
+	hub       *hub
+	mux       *http.ServeMux
+	policy    *policyRuntime
+	compiler  *command.Compiler
+	after     func(time.Duration, func())
 }
 
 const maxStreamClients = 64
@@ -47,6 +49,10 @@ func New(data *store.Store, options ...Option) *Server {
 	s.policy = newPolicyRuntime(opts, data)
 	s.policy.onChange = s.publishSnapshot
 	s.mux.HandleFunc("GET /api/config", s.config)
+	s.mux.HandleFunc("GET /api/review-sync", s.reviewSyncList)
+	s.mux.HandleFunc("POST /api/review-sync/proposals", s.reviewSyncCreate)
+	s.mux.HandleFunc("POST /api/review-sync/proposals/{id}/vote", s.reviewSyncVote)
+	s.mux.HandleFunc("POST /api/review-sync/proposals/{id}/resolve", s.reviewSyncResolve)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
 	s.mux.HandleFunc("GET /api/policy", s.getPolicy)
 	s.mux.HandleFunc("POST /api/policy/emcon", s.setPolicyEMCON)
@@ -119,6 +125,7 @@ func (s *Server) config(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sources": catalog.Sources, "classes": catalog.Classes, "models": catalog.Models,
 		"attrLabels": catalog.AttrLabels, "examples": catalog.Examples,
+		"reviewSync": true,
 	})
 }
 
