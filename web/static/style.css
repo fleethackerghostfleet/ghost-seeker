@@ -404,3 +404,25 @@ body.live .sim-only{display:none}
 .page,.fhead,.toolbar{min-width:0;max-width:100vw}
 .live-strip{flex-wrap:wrap;white-space:normal;overflow-x:hidden;row-gap:.3rem}
 .live-strip>div{white-space:nowrap}
+/* Sidebar sizing and readable content */
+.drawer{visibility:hidden;max-width:100%;--dw:var(--width-drawer,clamp(430px,46vw,780px))}
+body.drawer-open .drawer{visibility:visible}
+.feed{--dw:var(--width-drawer,clamp(430px,46vw,780px))}
+.sidebar-resizer{position:fixed;width:10px;z-index:30;cursor:col-resize;touch-action:none;border-inline:3px solid transparent;background:var(--line);background-clip:padding-box}
+.sidebar-resizer[hidden]{display:none}
+.sidebar-resizer:hover,.sidebar-resizer:focus-visible{background-color:var(--accent);outline:1px solid var(--accent)}
+:is(.fhead,.drawer,.rvside,.wb-layout>aside,.brief-controls){min-width:0;overflow-wrap:anywhere;word-break:normal}
+:is(.fhead,.drawer,.rvside,.wb-layout>aside,.brief-controls) :is(div,span,b,small,li,p,h2,h3,h4,td,th){min-width:0}
+:is(.drawer,.rvside) table{table-layout:fixed}
+:is(.fhead,.drawer,.rvside,.brief-controls) .btn{white-space:normal}
+:is(.bar-left,.bar-right) .dirbar .pill{white-space:normal;overflow:visible;text-overflow:clip;max-width:100%}
+:is(.bar-left,.bar-right) .strip .st{flex-wrap:wrap}
+:is(.bar-left,.bar-right) .live-strip>div{white-space:normal}
+:is(.bar-left,.bar-right) :is(.dirbar .readback,.strip .rb){white-space:normal;overflow:visible;text-overflow:clip;max-width:100%}
+.rvmeta{grid-template-columns:auto minmax(0,1fr)}
+.tl li{grid-template-columns:16px minmax(0,1fr) auto}
+@media(min-width:901px){
+ :is(.bar-left,.bar-right) .fhead{width:var(--width-controls,280px)}
+ .rvmain{grid-template-columns:minmax(0,1fr) var(--width-review,340px)}
+ .wb-layout{grid-template-columns:var(--width-priorities,340px) minmax(0,1fr)}
+}
