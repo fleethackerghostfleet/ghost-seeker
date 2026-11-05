@@ -47,6 +47,7 @@ func main() {
 	key := flag.String("signing-key", env("GS_SIGNING_KEY", ""), "HS256 signing key (prefer env or file)")
 	keyFile := flag.String("signing-key-file", env("GS_SIGNING_KEY_FILE", ""), "signing key file")
 	signingKey := flag.String("policy-signing-key", env("GS_POLICY_SIGNING_KEY", ""), "JSON Ed25519 policy signing key")
+	policyKeysPath := flag.String("policy-keys", env("GS_POLICY_KEYS", ""), "JSON public keyring; higher-echelon layers must be signed by one of these keys")
 	opToken := flag.String("operator-token", env("GS_OPERATOR_TOKEN", ""), "operator bearer token for ConsoleService and /blob/ (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", env("GS_OPERATOR_TOKEN_FILE", ""), "operator token file")
 	devTokenFile := flag.String("dev-token-file", env("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set ('none' = require an explicit token)")
@@ -89,6 +90,10 @@ func main() {
 	}
 	if *signingKey != "" {
 		con.Signer, err = policy.LoadSigningKey(*signingKey)
+		fatal(err)
+	}
+	if *policyKeysPath != "" {
+		con.Keys, err = policy.LoadKeyring(*policyKeysPath)
 		fatal(err)
 	}
 

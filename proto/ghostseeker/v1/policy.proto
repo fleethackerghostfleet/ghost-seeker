@@ -33,6 +33,7 @@ message Interest {
   repeated float negative_embedding = 4; // text embedding of what to ignore
   double boost_factor = 5; // default 2.0
   double suppress_factor = 6; // default 0.05 (deprioritize, never drop)
+  map<string, double> boost_weights = 7; // per-label boost from merged rule weights; missing = boost_factor
 }
 
 message Thresholds {

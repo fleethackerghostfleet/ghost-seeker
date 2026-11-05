@@ -62,6 +62,7 @@ type Bridge struct {
 	snap       []byte
 	subs       map[chan []byte]struct{}
 	records    map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
+	operator   string
 	edgeNodeID string
 
 	operatorJWT     string
@@ -74,13 +75,14 @@ type Bridge struct {
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	return &Bridge{
-		shore:   strings.TrimRight(shoreURL, "/"),
-		edge:    strings.TrimRight(edgeURL, "/"),
-		link:    link,
-		client:  &http.Client{Timeout: 10 * time.Second},
-		subs:    map[chan []byte]struct{}{},
-		records: map[string]contactReport{},
-		poke:    make(chan struct{}, 1),
+		shore:    strings.TrimRight(shoreURL, "/"),
+		edge:     strings.TrimRight(edgeURL, "/"),
+		link:     link,
+		client:   &http.Client{Timeout: 10 * time.Second},
+		subs:     map[chan []byte]struct{}{},
+		records:  map[string]contactReport{},
+		poke:     make(chan struct{}, 1),
+		operator: DefaultOperator,
 	}
 }
 
@@ -129,6 +131,20 @@ func (b *Bridge) hasOperatorJWT() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.operatorJWT != ""
+}
+
+// DefaultOperator is the issuer recorded on policies this console edits when
+// no -operator-id is configured.
+const DefaultOperator = "operator-ui"
+
+// WithOperator sets the identity recorded as IssuedBy / rule Author / EMCON
+// SetBy on policies this console submits. It is server configuration (the
+// authenticated console instance), never taken from the browser request.
+func (b *Bridge) WithOperator(id string) *Bridge {
+	if id = strings.TrimSpace(id); id != "" {
+		b.operator = id
+	}
+	return b
 }
 
 // ---- wire model (what the browser sees) ----
@@ -913,7 +929,6 @@ type policyBody struct {
 	Text     string   `json:"text"`
 	Suppress []string `json:"suppress"`
 	Boost    []string `json:"boost"`
-	IssuedBy string   `json:"issuedBy"`
 }
 
 // setPolicy forwards an operator directive to shore. A free-text directive is
@@ -932,14 +947,9 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "text exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
-	if in.IssuedBy == "" {
-		in.IssuedBy = "operator-ui"
-	}
-	if id := b.operatorSub(); id != "" {
-		in.IssuedBy = id
-	}
+	issuedBy := b.operator
 	mode, ruleText := command.SplitEmcon(in.Text)
-	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	pol := &pb.Policy{IssuedBy: issuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
 	var ruleExpiryUnixMs int64
 	if mode != "" {
 		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
@@ -1239,8 +1249,7 @@ func (b *Bridge) cachedEmcon() string {
 
 func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Mode     string `json:"mode"`
-		IssuedBy string `json:"issuedBy"`
+		Mode string `json:"mode"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
@@ -1252,12 +1261,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mode must be NORMAL, BURST, or SILENT", http.StatusBadRequest)
 		return
 	}
-	if in.IssuedBy == "" {
-		in.IssuedBy = "operator-ui"
-	}
-	if id := b.operatorSub(); id != "" {
-		in.IssuedBy = id
-	}
+	issuedBy := b.operator
 	current, err := b.getPolicy(r.Context())
 	if err != nil {
 		if writeShoreAuthError(w, err) {
@@ -1275,10 +1279,10 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pol := proto.Clone(current).(*pb.Policy)
-	pol.IssuedBy = in.IssuedBy
+	pol.IssuedBy = issuedBy
 	if len(pol.Layers) > 0 {
 		pol.Layers = cloneLayers(pol.Layers)
-		operatorLayer := findOperatorLayer(pol.Layers, in.IssuedBy, b.echelon())
+		operatorLayer := findOperatorLayer(pol.Layers, issuedBy)
 		if operatorLayer < 0 {
 			for i, layer := range pol.Layers {
 				if layer.Echelon == b.echelon() {
@@ -1287,14 +1291,14 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if operatorLayer < 0 {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: in.IssuedBy})
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: issuedBy})
 				operatorLayer = len(pol.Layers) - 1
 			}
 		}
 		if b.hasOperatorJWT() {
-			pol.Layers[operatorLayer].IssuedBy = in.IssuedBy
+			pol.Layers[operatorLayer].IssuedBy = issuedBy
 		}
-		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: b.echelon()}
+		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
 	} else if b.hasOperatorJWT() {
 		rules := make([]*pb.InterestRule, 0, 2)
 		if pol.Interest != nil && len(pol.Interest.BoostLabels) > 0 {
@@ -1302,20 +1306,20 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 			if pol.Interest.BoostFactor > 0 {
 				weight = pol.Interest.BoostFactor
 			}
-			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-boost", time.Now().UnixMilli()), Author: in.IssuedBy,
+			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-boost", time.Now().UnixMilli()), Author: issuedBy,
 				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), Weight: weight})
 		}
 		if pol.Interest != nil && len(pol.Interest.SuppressLabels) > 0 {
-			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-suppress", time.Now().UnixMilli()), Author: in.IssuedBy,
+			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-suppress", time.Now().UnixMilli()), Author: issuedBy,
 				SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...)})
 		}
 		pol.Layers = []*pb.PolicyLayer{{
-			Echelon: b.echelon(), IssuedBy: in.IssuedBy, Rules: rules,
-			Emcon: &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: b.echelon()},
+			Echelon: b.echelon(), IssuedBy: issuedBy, Rules: rules,
+			Emcon: &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()},
 		}}
 	} else {
 		pol.Emcon = mode
-		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: b.echelon()}
+		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse

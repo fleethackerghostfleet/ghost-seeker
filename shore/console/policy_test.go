@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"sync"
 	"testing"
 	"time"
@@ -26,16 +27,30 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cmdPub, cmdPriv, err := policy.GenerateKey("ctf72")
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := &Service{NodeID: "shore", St: st, Clk: clk, Embedder: inference.NewMock(),
-		Signer: &policy.SigningKey{KeyID: "shore", Private: priv}, EdgeID: "edge-1"}
-	layered := &pb.Policy{Id: "layered", IssuedBy: "TAO", Layers: []*pb.PolicyLayer{
-		{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
-			{Id: "locked", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
-		}},
+		Signer: &policy.SigningKey{KeyID: "shore", Private: priv}, Keys: policy.Keyring{"ctf72": cmdPub}, EdgeID: "edge-1"}
+	command := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
+		{Id: "locked", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
+	}}
+	layered := &pb.Policy{Id: "layered", IssuedBy: "TAO", Version: 10, Layers: []*pb.PolicyLayer{
+		command,
 		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO", Rules: []*pb.InterestRule{
 			{Id: "blocked", SuppressLabels: []string{"submarine"}},
 		}},
 	}}
+	// A new COMMAND layer the shore has never held is refused unless the
+	// submitted policy is signed by a trusted higher-echelon key.
+	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: proto.Clone(layered).(*pb.Policy)})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("unsigned command layer accepted: %v", err)
+	}
+	if err := policy.Sign(layered, "ctf72", cmdPriv); err != nil {
+		t.Fatal(err)
+	}
+	signedCommand := proto.Clone(layered).(*pb.Policy)
 	response, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: layered}))
 	if err != nil {
 		t.Fatal(err)
@@ -51,12 +66,33 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	if firstVersion == 0 {
 		t.Fatalf("version not assigned: %d", firstVersion)
 	}
-	next, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "next"}}))
+	// Ship-level edits that keep the held COMMAND layer unchanged need no signature.
+	next, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "next",
+		Layers: []*pb.PolicyLayer{proto.Clone(command).(*pb.PolicyLayer), {Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO"}}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.Msg.Policy.Version != firstVersion+1 {
-		t.Fatalf("next version=%d, want %d", next.Msg.Policy.Version, firstVersion+1)
+	// Dropping or altering the held COMMAND layer is refused.
+	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "drop"}})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("dropping the command layer accepted: %v", err)
+	}
+	// Command revokes its layer with a newer signed policy (one above what
+	// GetPolicy shows after the ship edit)...
+	revoke := &pb.Policy{Id: "revoke", IssuedBy: "CTF-72", Version: next.Msg.Policy.Version + 1,
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO"}}}
+	if err := policy.Sign(revoke, "ctf72", cmdPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: revoke})); err != nil {
+		t.Fatalf("signed revoke refused: %v", err)
+	}
+	// ...and replaying the old signed command policy (lower version) is refused,
+	// so revoked command rules cannot be restored by re-submitting them.
+	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: proto.Clone(signedCommand).(*pb.Policy)})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("replayed signed command policy accepted: %v", err)
+	}
+	if next.Msg.Policy.Version <= firstVersion || next.Msg.Policy.Version < clk.Now().UnixMilli() {
+		t.Fatalf("next version=%d, want > %d and >= clock ms", next.Msg.Policy.Version, firstVersion)
 	}
 	if err := policy.Verify(next.Msg.Policy, policy.Keyring{"shore": pub}); err != nil {
 		t.Fatalf("second signature failed verification: %v", err)

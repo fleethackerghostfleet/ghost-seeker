@@ -473,6 +473,18 @@ func TestEmconSilentSendsNothing(t *testing.T) {
 	if len(sh.chunks) != 0 || len(sh.manifests) != 0 {
 		t.Fatal("SILENT must transmit nothing")
 	}
+	// The exchange still runs empty so the downlink that lifts SILENT arrives.
+	sh.mu.Lock()
+	sh.downlink = append(sh.downlink, &pb.Downlink{Seq: 1, Msg: &pb.Downlink_Policy{Policy: &pb.Policy{Id: "normal", Emcon: pb.EmconMode_EMCON_MODE_NORMAL}}})
+	sh.mu.Unlock()
+	_, _ = s.Tick(ctx)
+	if s.Policy().GetEmcon() != pb.EmconMode_EMCON_MODE_NORMAL || s.Policy().Id != "normal" {
+		t.Fatalf("SILENT edge must still receive the downlinked policy: %+v", s.Policy())
+	}
+	_, _ = s.Tick(ctx)
+	if len(sh.chunks) == 0 && len(sh.manifests) == 0 {
+		t.Fatal("after NORMAL the edge must transmit again")
+	}
 }
 
 func TestScenePullOnlyFull(t *testing.T) {
