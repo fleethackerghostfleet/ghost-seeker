@@ -52,7 +52,7 @@ func TestOperatorFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	header := make(http.Header)
-	header.Set("Authorization", "Bearer "+strings.TrimSpace(stdout.String()))
+	header.Set(unitauth.OperatorJWTHeader, strings.TrimSpace(stdout.String()))
 	operator, err := auth.OperatorFromHeader(header)
 	if err != nil {
 		t.Fatal(err)
