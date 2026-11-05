@@ -987,7 +987,15 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
 	current, err := b.getPolicy(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("read current policy: %w", err) // never apply blind: a failed read would reset EMCON/layers
+		// Shore policy unreadable: don't apply blind. Keep the last EMCON the
+		// poller saw so an ordinary directive cannot reset BURST/SILENT to NORMAL.
+		warnings = append(warnings, "Current shore policy could not be read; higher-echelon layers were not merged.")
+		if mode == "" {
+			if cached, ok := parseEMCON(b.cachedEmcon()); ok {
+				pol.Emcon = cached
+			}
+		}
+		current = nil
 	}
 	if current != nil {
 		emconLocked := current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP
@@ -1046,6 +1054,20 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	return warnings, nil
+}
+
+// cachedEmcon is the EMCON label of the last snapshot the poller built ("" if none).
+func (b *Bridge) cachedEmcon() string {
+	b.mu.Lock()
+	raw := b.snap
+	b.mu.Unlock()
+	var snap struct {
+		Emcon string `json:"emcon"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &snap) != nil {
+		return ""
+	}
+	return snap.Emcon
 }
 
 func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
