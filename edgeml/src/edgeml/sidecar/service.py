@@ -186,7 +186,7 @@ class EdgemlEngine:
         out = {"id": ev["sighting_id"], "event": EVENTS[ev["event"]],
                "keyDetection": {"label": label, "confidence": _f(ev.get("best_score")), "box": _norm_box(box, W, H)},
                "isKeyFrame": is_key, "unknownness": _f(ev.get("unknownness")),
-               "subtype": ev.get("subtype") or ("tentative" if ev.get("tentative") else ""), "value": _f(ev.get("value")),
+               "subtype": "tentative" if ev.get("tentative") else (ev.get("subtype") or ""), "value": _f(ev.get("value")),
                "forms": [_form_hint(f) for f in (ev.get("forms") or [])],
                "firstSeenUnixMs": str(base_ms + int(float(ev.get("first_t_s", 0.0)) * 1000)),
                "lastSeenUnixMs": str(base_ms + int(float(ev.get("last_t_s", ev.get("t_s", 0.0))) * 1000)),

@@ -17,9 +17,10 @@
            reported. When set, such an object whose best score is >= `tentative_min_score` is reported as `open` with
            `tentative=true` once it is `tentative_after_s` old; a later confirmation emits an `update`
            (reason=confirmed, tentative=false). A second detection within the gap confirms it immediately.
-* Per-size gates: `relink_max_diag` caps the re-link distance at that many box diagonals so small adjacent boats are
-           not relinked into a neighbour's sighting (the frame-relative `relink_speed_frac` gate is ~100 px/s at 1080p,
-           larger than a dinghy).
+* Per-size gates: `relink_max_diag` caps the re-link distance at that many box diagonals per second of gap, so a
+           small boat appearing next to a just-lost neighbour is not relinked into its sighting (the frame-relative
+           `relink_speed_frac` gate is ~100 px/s at 1080p, larger than a dinghy) while a large ship re-acquired after a
+           long gap still is.
 * Optional own-ship mask (`static_mask_s`): a track that sits on the same pixels for that long marks a static region;
            new tracks inside it are not reported (railings, masts, deck gear on an onboard camera).
 """
@@ -70,7 +71,7 @@ class AggregatorParams:
     emit_closed_as_update: bool = True   # re-acquired after a close -> `update` with reason=relink
     tentative_after_s: Optional[float] = None  # report a single-detection object as tentative after this age (None = never)
     tentative_min_score: float = 0.5     # ... if its best detection score is at least this
-    relink_max_diag: Optional[float] = None    # cap re-link distance at this many box diagonals (None = frame-relative only)
+    relink_max_diag: Optional[float] = None    # cap re-link distance at this many box diagonals per second of gap (None = off)
     static_mask_s: Optional[float] = None  # own-ship mask: suppress tracks static for this long (None = off)
 
 
@@ -412,8 +413,8 @@ class SightingAggregator:
             ocx, ocy = ob[0] + ob[2] / 2 + st.velocity[0] * gap, ob[1] + ob[3] / 2 + st.velocity[1] * gap
             diag = math.hypot(ob[2], ob[3])
             allowed = self.p.relink_speed_frac * W * gap + 1.5 * diag
-            if self.p.relink_max_diag is not None:
-                allowed = min(allowed, self.p.relink_max_diag * diag)
+            if self.p.relink_max_diag is not None:        # per-size cap: diagonals per second of gap (at least 1 s)
+                allowed = min(allowed, self.p.relink_max_diag * diag * max(1.0, gap))
             dist = math.hypot(cx - ocx, cy - ocy)
             if dist > allowed:
                 continue

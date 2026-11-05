@@ -160,7 +160,7 @@ def test_relink_max_diag_blocks_neighbour_relink():
     ev = _run(SightingAggregator("c", AggregatorParams(**base)), steps)
     assert len({e["sighting_id"] for e in ev}) == 1          # frame-relative gate: 0.05*640*1.0 + 1.5*32 = 80 px -> relinks
     ev = _run(SightingAggregator("c", AggregatorParams(relink_max_diag=2.0, **base)), steps)
-    assert len({e["sighting_id"] for e in ev}) == 2          # per-size cap: 2 diagonals = 65 px < 72 px
+    assert len({e["sighting_id"] for e in ev}) == 2          # per-size cap: 2 diagonals/s x 1 s = 65 px < 72 px
 
 
 def test_tentative_not_reported_next_to_a_known_sighting():
