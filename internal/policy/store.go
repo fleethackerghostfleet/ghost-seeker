@@ -68,6 +68,11 @@ func (s *Store) Accept(ctx context.Context, p *pb.Policy, source string, now tim
 		_ = s.appendAudit(ctx, auditEntry(nil, source, now, "rejected", err.Error()))
 		return nil, err
 	}
+	if p.Version < 0 || p.Version > MaxVersion {
+		_ = s.appendAudit(ctx, auditEntry(p, source, now, "rejected", ErrVersionRange.Error()))
+		return nil, ErrVersionRange
+	}
+	signed := p.Signature != nil && len(p.Signature.Ed25519) > 0
 	if p.Signature != nil && len(p.Signature.Ed25519) > 0 {
 		if err := Verify(p, s.options.Keys); err != nil {
 			_ = s.appendAudit(ctx, auditEntry(p, source, now, "rejected", err.Error()))
@@ -85,12 +90,45 @@ func (s *Store) Accept(ctx context.Context, p *pb.Policy, source string, now tim
 	if accepted.IssuedAtUnixMs == 0 {
 		accepted.IssuedAtUnixMs = now.UnixMilli()
 	}
+	return s.acceptLocked(ctx, accepted, source, now, signed)
+}
+
+func (s *Store) AcceptLocal(ctx context.Context, p *pb.Policy, source string, now time.Time) (*pb.Policy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p == nil {
+		err := errors.New("policy required")
+		_ = s.appendAudit(ctx, auditEntry(nil, source, now, "rejected", err.Error()))
+		return nil, err
+	}
+	if s.options.RequireSigned {
+		_ = s.appendAudit(ctx, auditEntry(p, source, now, "rejected", ErrUnsigned.Error()))
+		return nil, ErrUnsigned
+	}
+	accepted := proto.Clone(p).(*pb.Policy)
+	accepted.Signature = nil
+	accepted.IssuedAtUnixMs = now.UnixMilli()
+	version, err := NextVersion(maxVersion(s.highWater, s.lastGood.GetVersion()), now)
+	if err != nil {
+		_ = s.appendAudit(ctx, auditEntry(accepted, source, now, "rejected", err.Error()))
+		return nil, err
+	}
+	accepted.Version = version
+	if HigherLayersChanged(s.lastGood, accepted, now, s.options.TTL) {
+		_ = s.appendAudit(ctx, auditEntry(accepted, source, now, "rejected", ErrHigherEchelon.Error()))
+		return nil, ErrHigherEchelon
+	}
+	ClampToHeldDeadline(s.lastGood, accepted, now, s.options.TTL)
+	return s.acceptLocked(ctx, accepted, source, now, false)
+}
+
+func (s *Store) acceptLocked(ctx context.Context, accepted *pb.Policy, source string, now time.Time, signed bool) (*pb.Policy, error) {
 	if expiry := Expiry(accepted, s.options.TTL); !expiry.IsZero() && !expiry.After(now) {
 		_ = s.appendAudit(ctx, auditEntry(accepted, source, now, "rejected", ErrExpired.Error()))
 		return nil, ErrExpired
 	}
 	nextHighWater := s.highWater
-	if accepted.Version > nextHighWater {
+	if signed && accepted.Version > nextHighWater {
 		nextHighWater = accepted.Version
 	}
 	if err := s.backend.SavePolicyState(ctx, accepted, nextHighWater); err != nil {
@@ -102,6 +140,13 @@ func (s *Store) Accept(ctx context.Context, p *pb.Policy, source string, now tim
 		return clonePolicy(accepted), nil
 	}
 	return clonePolicy(accepted), nil
+}
+
+func maxVersion(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (s *Store) Reject(ctx context.Context, p *pb.Policy, source, reason string, now time.Time) {
@@ -146,6 +191,12 @@ func (s *Store) HighWater() int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.highWater
+}
+
+func (s *Store) LastVersion() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return maxVersion(s.highWater, s.lastGood.GetVersion())
 }
 
 func (s *Store) Audit(ctx context.Context, limit int) ([]AuditEntry, error) {

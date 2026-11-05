@@ -5,7 +5,6 @@ package console
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"net/http"
 	"strconv"
 	"strings"
@@ -109,36 +108,51 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// The shore signs what the ship console submits, so it must not certify
-	// higher-echelon layers it did not already hold: those only change when
-	// the submitted policy carries a valid signature from a trusted key.
-	if higherLayersChanged(prev, p) {
-		if p.Signature == nil || len(s.Keys) == 0 {
+	var signedVersion int64
+	if policy.HigherLayersChanged(prev, p, now, policy.DefaultTTL) {
+		if p.Signature == nil || len(p.Signature.Ed25519) == 0 || len(s.Keys) == 0 {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon layers can only be set by a policy signed with a trusted key"))
 		}
 		if err := policy.Verify(p, s.Keys); err != nil {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
 		}
-		// The signed version is part of the signed bytes; requiring it to rise
-		// above the stored policy stops an old (revoked) command policy from
-		// being replayed and re-signed by the shore.
-		if p.Version == 0 || (prev != nil && p.Version <= prev.Version) {
-			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", prev.GetVersion()))
+		commandMark, err := s.St.GetCommandVersion(ctx)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
 		}
+		if p.Version <= commandMark {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", commandMark))
+		}
+		if p.Version > policy.MaxVersion {
+			return nil, connect.NewError(connect.CodeInvalidArgument, policy.ErrVersionRange)
+		}
+		if p.IssuedAtUnixMs == 0 {
+			p.IssuedAtUnixMs = now.UnixMilli()
+		}
+		deadline := policy.Expiry(p, policy.DefaultTTL)
+		if !deadline.After(now) {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, policy.ErrExpired)
+		}
+		if len(policy.HigherLayers(p.Layers)) > 0 {
+			p.ExpiresAtUnixMs = deadline.UnixMilli()
+		}
+		signedVersion = p.Version
+	} else {
+		p.IssuedAtUnixMs = now.UnixMilli()
+		p.Signature = nil
+		policy.ClampToHeldDeadline(prev, p, now, policy.DefaultTTL)
+	}
+	version, err := policy.NextVersion(prev.GetVersion(), now)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	if signedVersion > version {
+		version = signedVersion
 	}
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
 	}
-	if p.Version == 0 {
-		// Shore-assigned versions are wall-clock ms (so they stay above any
-		// ms-scale version the edge accepted directly) and strictly above the
-		// stored one; a signed higher-echelon issuer goes one above GetPolicy.
-		version := now.UnixMilli()
-		if prev != nil && prev.Version+1 > version {
-			version = prev.Version + 1
-		}
-		p.Version = version
-	}
+	p.Version = version
 	p.IssuedAtUnixMs = now.UnixMilli()
 	if len(p.Layers) > 0 {
 		p = policy.Flatten(p, s.EdgeID, now)
@@ -167,7 +181,7 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
-	if err := s.St.SetPolicy(ctx, p); err != nil {
+	if err := s.St.SetPolicyState(ctx, p, signedVersion); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_Policy{Policy: p}}, now); err != nil {
@@ -277,33 +291,4 @@ func (s *Service) BlobHandler() http.Handler {
 		}
 		httpx.ServeBlob(w, f.Mime, data)
 	})
-}
-
-// higherLayersChanged reports whether next carries layers above
-// ECHELON_SHIP that differ from the ones prev already held.
-func higherLayersChanged(prev, next *pb.Policy) bool {
-	var was, now []*pb.PolicyLayer
-	if prev != nil {
-		was = higherLayers(prev.Layers)
-	}
-	now = higherLayers(next.Layers)
-	if len(was) != len(now) {
-		return true
-	}
-	for i := range now {
-		if !proto.Equal(was[i], now[i]) {
-			return true
-		}
-	}
-	return false
-}
-
-func higherLayers(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
-	var out []*pb.PolicyLayer
-	for _, l := range layers {
-		if l != nil && l.Echelon > pb.Echelon_ECHELON_SHIP {
-			out = append(out, l)
-		}
-	}
-	return out
 }

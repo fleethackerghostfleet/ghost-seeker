@@ -175,7 +175,7 @@ func (rt *policyRuntime) apply(source, who, text string, now time.Time) (*pb.Pol
 	layers = append(layers, rt.operatorLayer())
 	p := &pb.Policy{
 		Id: fmt.Sprintf("sim-%d", now.UnixMilli()), IssuedAtUnixMs: now.UnixMilli(),
-		IssuedBy: who, Text: text, Version: rt.guard.HighWater() + 1, Layers: layers,
+		IssuedBy: who, Text: text, Version: rt.guard.LastVersion() + 1, Layers: layers,
 	}
 	p = policy.Flatten(p, rt.nodeID, now)
 	accepted, err := rt.guard.Accept(context.Background(), p, source, now)

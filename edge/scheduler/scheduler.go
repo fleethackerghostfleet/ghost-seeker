@@ -227,14 +227,31 @@ func (s *Scheduler) AcceptPolicy(ctx context.Context, p *pb.Policy, source strin
 	now := s.clk.Now()
 	accepted, err := s.guard.Accept(ctx, p, source, now)
 	if err != nil {
-		id := ""
-		if p != nil {
-			id = p.Id
-		}
-		s.log.Warn("reject policy", "id", id, "source", source, "err", err)
-		_ = s.st.Event(ctx, now, "policy", "", fmt.Sprintf("rejected %s: %v", id, err))
-		return 0, 0, err
+		return s.rejectPolicy(ctx, p, source, now, err)
 	}
+	return s.applyAcceptedPolicy(ctx, accepted, now)
+}
+
+func (s *Scheduler) AcceptLocalPolicy(ctx context.Context, p *pb.Policy, source string) (suppressed, boosted int64, err error) {
+	now := s.clk.Now()
+	accepted, err := s.guard.AcceptLocal(ctx, p, source, now)
+	if err != nil {
+		return s.rejectPolicy(ctx, p, source, now, err)
+	}
+	return s.applyAcceptedPolicy(ctx, accepted, now)
+}
+
+func (s *Scheduler) rejectPolicy(ctx context.Context, p *pb.Policy, source string, now time.Time, err error) (int64, int64, error) {
+	id := ""
+	if p != nil {
+		id = p.Id
+	}
+	s.log.Warn("reject policy", "id", id, "source", source, "err", err)
+	_ = s.st.Event(ctx, now, "policy", "", fmt.Sprintf("rejected %s: %v", id, err))
+	return 0, 0, err
+}
+
+func (s *Scheduler) applyAcceptedPolicy(ctx context.Context, accepted *pb.Policy, now time.Time) (suppressed, boosted int64, err error) {
 	flat := policy.Flatten(accepted, s.cfg.EdgeID, now)
 	suppressed, boosted, err = s.ApplyPolicy(ctx, flat)
 	if err != nil {
