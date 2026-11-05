@@ -25,12 +25,19 @@ if command -v kubeconform >/dev/null 2>&1; then
   done
   if kubeconform -strict -summary "$tmp" >"$tmp/kubeconform.log" 2>&1; then
     cat "$tmp/kubeconform.log"
-  elif grep -Eiq 'failed to fetch|failed to download|no such host|connection refused|TLS handshake timeout|i/o timeout|network is unreachable|temporary failure in name resolution' "$tmp/kubeconform.log"; then
-    cat "$tmp/kubeconform.log"
-    echo "skipped: kubeconform schemas could not be fetched (offline)"
   else
-    cat "$tmp/kubeconform.log"
-    exit 1
+    if grep -Eiq 'Invalid:[[:space:]]*[1-9][0-9]*([,[:space:]]|$)' "$tmp/kubeconform.log" ||
+      grep -Fq ' is invalid:' "$tmp/kubeconform.log"; then
+      cat "$tmp/kubeconform.log"
+      exit 1
+    elif grep -Eiq 'Invalid:[[:space:]]*0([,[:space:]]|$)' "$tmp/kubeconform.log" &&
+      grep -Eiq 'failed to fetch|failed to download|no such host|connection refused|TLS handshake timeout|i/o timeout|network is unreachable|temporary failure in name resolution' "$tmp/kubeconform.log"; then
+      cat "$tmp/kubeconform.log"
+      echo "skipped: kubeconform schemas could not be fetched (offline)"
+    else
+      cat "$tmp/kubeconform.log"
+      exit 1
+    fi
   fi
 else
   echo "skipped: kubeconform not installed"
