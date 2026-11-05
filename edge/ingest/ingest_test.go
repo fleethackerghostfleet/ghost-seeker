@@ -137,6 +137,48 @@ func TestDuplicateDarkContactUpdatesKnownSighting(t *testing.T) {
 	}
 }
 
+func TestReplaceKeyFrameClearsDarkContactTag(t *testing.T) {
+	ctx := context.Background()
+	box := &pb.Box{X: 0.45, Y: 0.45, W: 0.05, H: 0.05}
+	an := &scripted{
+		script: map[int][]*pb.Sighting{
+			1: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "tug")},
+			2: {sighting("s1", pb.Sighting_EVENT_UPDATE, true, "tug")},
+		},
+		detections: map[int][]*pb.Detection{
+			1: {{Label: "dark contact", Confidence: 0.9, Box: box}},
+			2: {{Label: "boat", Confidence: 0.9, Box: box}},
+		},
+	}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	opened, err := g.Ingest(ctx, capture(clk, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened.Item.Features.Tags["dark_contact"] != "1" {
+		t.Fatalf("opened item not tagged dark: %v", opened.Item.Features.Tags)
+	}
+	replaced, err := g.Ingest(ctx, capture(clk, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.Get(ctx, opened.Item.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced.Item.Id != opened.Item.Id || g.Replaced != 1 {
+		t.Fatalf("lit key frame did not replace the same item: id=%s replaced=%d", replaced.Item.Id, g.Replaced)
+	}
+	if _, tagged := stored.Item.Features.Tags["dark_contact"]; tagged {
+		t.Fatalf("lit replacement retained dark-contact tag: %v", stored.Item.Features.Tags)
+	}
+	for _, detection := range stored.Item.Features.Detections {
+		if detection.GetLabel() == "dark contact" {
+			t.Fatalf("lit replacement retained dark-contact detection: %+v", stored.Item.Features.Detections)
+		}
+	}
+}
+
 func TestReplayBurstShortensAndDecays(t *testing.T) {
 	clk := clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	replay := &Replay{clk: clk, period: 10 * time.Second,

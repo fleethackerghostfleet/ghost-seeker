@@ -250,6 +250,7 @@ func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Si
 	if f.Tags == nil {
 		f.Tags = map[string]string{}
 	}
+	delete(f.Tags, "dark_contact")
 	if s != nil {
 		if s.KeyDetection != nil {
 			f.Detections = []*pb.Detection{s.KeyDetection}
