@@ -109,7 +109,7 @@ def main():
     frozen = json.loads(args.threshold.read_text()) if args.threshold else None
     if frozen and frozen["configuration"] != configuration:
         raise ValueError("Inference configuration differs from frozen threshold")
-    first = cv2.imread(str(args.data / coco["images"][0]["file_name"]))
+    first = np.zeros((1080, 1920, 3), dtype=np.uint8)
     for _ in range(5):
         detector.detect(first)
     predictions, timings = [], []
