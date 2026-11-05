@@ -1150,7 +1150,9 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 	var ruleExpiryUnixMs int64
 	if b.hasOperatorJWT() {
 		ruleExpiryUnixMs = pol.GetExpiresAtUnixMs()
-		pol.ExpiresAtUnixMs = 0
+		if mode == "" {
+			pol.ExpiresAtUnixMs = 0
+		}
 	}
 	current, err := b.getPolicy(ctx)
 	if err != nil {
@@ -1166,6 +1168,14 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 	}
 	emconLocked := false
 	if current != nil {
+		if mode != "" && ruleExpiryUnixMs > 0 {
+			for _, layer := range current.Layers {
+				if layer != nil && layer.Echelon > echelon {
+					warnings = append(warnings, "Timed EMCON can't expire on its own while higher-echelon layers are present; it stays until changed.")
+					break
+				}
+			}
+		}
 		emconLocked = current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > echelon
 		if mode == "" || emconLocked {
 			if mode != "" {

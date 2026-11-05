@@ -412,6 +412,91 @@ func TestTimedOperatorDirectiveExpiresItsRule(t *testing.T) {
 	}
 }
 
+func submitTimedOperatorEMCON(t *testing.T, current *pb.Policy) (*pb.Policy, []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var submitted *pb.Policy
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetPolicy":
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: current})
+		case consolePath + "SetPolicy":
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var request pb.SetPolicyRequest
+			if err := protojson.Unmarshal(raw, &request); err != nil {
+				t.Errorf("decode SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			mu.Lock()
+			submitted = proto.Clone(request.Policy).(*pb.Policy)
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.SetPolicyResponse{Policy: request.Policy})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer shore.Close()
+
+	bridge := New(shore.URL, "", nil)
+	bridge.Compiler = &command.Compiler{}
+	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/shore/policy",
+		strings.NewReader(`{"text":"go quiet for 30 minutes"}`))
+	bridge.Handler().ServeHTTP(rec, request)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	mu.Lock()
+	policy := proto.Clone(submitted).(*pb.Policy)
+	mu.Unlock()
+	var response struct {
+		Compiled struct {
+			Warnings []string `json:"warnings"`
+		} `json:"compiled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
+	}
+	return policy, response.Compiled.Warnings
+}
+
+func TestTimedOperatorEMCONKeepsPolicyExpiry(t *testing.T) {
+	policy, _ := submitTimedOperatorEMCON(t, &pb.Policy{Interest: &pb.Interest{}})
+	if policy.GetExpiresAtUnixMs() <= time.Now().UnixMilli() {
+		t.Fatalf("policy expiry=%d, want a future deadline", policy.GetExpiresAtUnixMs())
+	}
+	if len(policy.Layers) != 1 || policy.Layers[0].GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("timed EMCON policy=%+v", policy)
+	}
+}
+
+func TestTimedOperatorEMCONWarnsWithHigherEchelonLayer(t *testing.T) {
+	policy, warnings := submitTimedOperatorEMCON(t, &pb.Policy{
+		Interest: &pb.Interest{},
+		Layers:   []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72"}},
+	})
+	if policy.GetExpiresAtUnixMs() <= time.Now().UnixMilli() {
+		t.Fatalf("policy expiry=%d, want a future deadline", policy.GetExpiresAtUnixMs())
+	}
+	const warning = "Timed EMCON can't expire on its own while higher-echelon layers are present; it stays until changed."
+	for _, got := range warnings {
+		if got == warning {
+			return
+		}
+	}
+	t.Fatalf("warnings=%q, want %q", warnings, warning)
+}
+
 func TestOperatorEMCONWrapPreservesFlatBoostFactor(t *testing.T) {
 	var mu sync.Mutex
 	var submitted *pb.Policy
