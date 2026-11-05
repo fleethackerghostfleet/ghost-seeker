@@ -8,6 +8,30 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
 
+func TestUploadNextRecordsOperatorSend(t *testing.T) {
+	for _, automatic := range []bool{false, true} {
+		s := New(1)
+		s.items = []command.Item{{ID: "image", Sent: automatic, AutoSent: automatic, Upload: command.Upload{Bytes: 1000}}}
+		if automatic {
+			s.cdr = 1
+		}
+		item, cdr, err := s.SetUploadOverride("image", "next", "Alice")
+		if err != nil || !item.Sent || item.AutoSent || !item.HumanReviewed || !item.Reviewed || item.SentAt == nil || cdr != 1 {
+			t.Fatalf("operator send: %+v, cdr=%d err=%v", item, cdr, err)
+		}
+		_, cdr, err = s.SetUploadOverride("image", "next", "Alice")
+		if err != nil || cdr != 1 {
+			t.Fatal("repeat upload next double counted send")
+		}
+	}
+	s := New(1)
+	s.items = []command.Item{{ID: "held", Upload: command.Upload{Bytes: 1000}}}
+	item, _, _ := s.SetUploadOverride("held", "hold", "Alice")
+	if item.Sent {
+		t.Fatal("holding image recorded a send")
+	}
+}
+
 func TestUploadHighRateBudget(t *testing.T) {
 	for _, tc := range []struct {
 		bps     int64

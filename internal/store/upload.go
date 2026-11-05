@@ -34,6 +34,11 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 			if override == "next" {
 				s.uploadOrder++
 				u.NextOrder = s.uploadOrder
+				if !item.Sent {
+					s.cdr++
+				}
+				item.Sent, item.AutoSent, item.HumanReviewed, item.Reviewed = true, false, true, true
+				item.SentAt = &now
 			}
 		}
 		return cloneItem(*item), s.cdr, nil
