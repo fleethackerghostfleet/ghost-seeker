@@ -84,14 +84,20 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	s.items = append(s.items, cloneItem(*item))
 	evicted := ""
 	if len(s.items) > s.retain {
-		oldest := oldestIndex(s.items[:len(s.items)-1], func(it command.Item) bool {
+		candidates := s.items[:len(s.items)-1]
+		oldest := oldestIndex(candidates, func(it command.Item) bool {
 			return it.Filtered != "" && !it.Sent && it.Decision == "" && it.Manual == 0 && !it.Reviewed && !it.Dismissed
 		})
 		if oldest < 0 {
-			oldest = oldestIndex(s.items[:len(s.items)-1], func(it command.Item) bool { return !it.Sent && it.Decision == "" })
+			oldest = oldestIndex(candidates, func(it command.Item) bool {
+				return !it.Sent && it.Decision == "" && !it.Reviewed && !it.Dismissed && it.Manual == 0 && !it.FullRes && it.Upload.Override == "" && (it.Upload.Done || it.Upload.Sent == 0)
+			})
 		}
 		if oldest < 0 {
-			oldest = oldestIndex(s.items, func(command.Item) bool { return true })
+			oldest = oldestIndex(candidates, func(it command.Item) bool { return !it.Sent && it.Decision == "" })
+		}
+		if oldest < 0 {
+			oldest = oldestIndex(candidates, func(command.Item) bool { return true })
 		}
 		evicted = s.items[oldest].ID
 		if s.items[oldest].Sent {

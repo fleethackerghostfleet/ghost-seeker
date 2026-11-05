@@ -321,10 +321,7 @@ func tickDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app 
 		}
 		app.PublishStats(stats)
 	}
-	items, _, _, state := data.Snapshot()
-	if !uplink.canGenerate(items) {
-		return
-	}
+	_, _, _, state := data.Snapshot()
 	item := replay.Next(now)
 	item.DetectorNegative = item.Edge < sensor.EdgeKeep
 	if item.DetectorNegative && !reviewdataset.SampleNegative(item.ImageID, negativesRate) {

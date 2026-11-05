@@ -422,7 +422,13 @@ Without `-shore` or `-dataset`, the Imagery Feed's automatic simulation link
 uses the shared normal distribution from `shaper.NewNormal`, resampled every
 five seconds with outages. Historical backfill starts uploaded.
 `-sim-link-bps N` fixes the rate in bits/second (`0` means outage); for example,
-`-sim-link-bps 2000000` can build a visible upload queue. Dataset replay is unchanged.
+`-sim-link-bps 2000000` can build a visible upload queue. Capture is independent of pending uploads in both synthetic and dataset simulation.
+`-capture-every` sets the positive mean interval (default 700ms, uniformly jittered
+from 2/3 to 4/3); `-capture-every 1.8s` restores the old 1.2–2.4s range.
+The bounded store evicts untouched filtered frames first, then other untouched
+queued/completed frames ahead of reviewed, manual, held or mid-transfer items.
+These are eviction preferences, not indefinite pins; the newly captured item is
+never its own eviction victim.
 
 ## Status / not done
 
