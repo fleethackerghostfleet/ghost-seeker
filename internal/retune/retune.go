@@ -55,6 +55,8 @@ type Proposal struct {
 	Accepted bool               `json:"accepted"`
 }
 type Result struct {
+	LiveExcluded                                int
+	LiveRecords                                 []reviews.Record
 	Raw, Effective, Usable, Excluded, Conflicts int
 	Reviewers                                   map[string]int
 	Models                                      []ModelResult
@@ -149,6 +151,11 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 	latestRecords := map[string]reviews.Record{}
 	for _, v := range rs {
 		r.Reviewers[v.Reviewer]++
+		if v.Live != nil || strings.HasPrefix(v.ModelKey, "live:") {
+			r.LiveExcluded++
+			r.LiveRecords = append(r.LiveRecords, v)
+			continue
+		}
 		key := ModelKey(v)
 		if key == "" || v.ItemID == "" {
 			if v.Reason == "wrong_detection" || v.HumanTier == 0 {
@@ -347,6 +354,8 @@ func (r Result) Markdown() string {
 	var b strings.Builder
 	fmt.Fprint(&b, "# Human review retuning proposal\n\n")
 	fmt.Fprintf(&b, "Records: %d unique log events; %d effective reviews; %d usable labels; %d excluded (dismissed/wrong detection). Conflicting items: %d (per mission).\n\n", r.Raw, r.Effective, r.Usable, r.Excluded, r.Conflicts)
+	fmt.Fprintf(&b, "Live reviews excluded from weight fitting: %d.\n\n", r.LiveExcluded)
+	r.writeLiveOutcomes(&b)
 	fmt.Fprintln(&b, "Per-reviewer effective records:")
 	names := []string{}
 	for n := range r.Reviewers {
