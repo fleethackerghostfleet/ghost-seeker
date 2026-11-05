@@ -33,6 +33,22 @@ def test_openai_architecture_matches_quickgelu_weights():
     assert MODELS["clip-b16-openai"] == ("ViT-B-16-quickgelu", "openai", 224)
 
 
+def test_hosted_raw_defaults_to_run_output(tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.delenv("BAKEOFF_API_RAW", raising=False)
+    runner().configure_raw_dir(["--run-id", "hosted-smoke", "--out", str(tmp_path)])
+    assert Path(os.environ["BAKEOFF_API_RAW"]) == tmp_path / "hosted-smoke" / "raw"
+
+
+def test_hosted_raw_explicit_directory_is_preserved(tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.setenv("BAKEOFF_API_RAW", str(tmp_path / "custom"))
+    runner().configure_raw_dir(["--run-id", "hosted-smoke"])
+    assert Path(os.environ["BAKEOFF_API_RAW"]) == tmp_path / "custom"
+
+
 class Response:
     status_code = 200
 

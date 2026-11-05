@@ -6,6 +6,8 @@ python edgeml/tools/bakeoff.py classifiers <d_eval_zeroshot.py flags>
 """
 from __future__ import annotations
 
+import argparse
+import os
 import runpy
 import sys
 from pathlib import Path
@@ -85,6 +87,15 @@ def register_classifiers():
     })
 
 
+def configure_raw_dir(argv):
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--run-id")
+    parser.add_argument("--out", default=str(Path.home() / "runs"))
+    args, _ = parser.parse_known_args(argv)
+    if args.run_id:
+        os.environ.setdefault("BAKEOFF_API_RAW", str(Path(args.out) / args.run_id / "raw"))
+
+
 def main():
     from edgeml.runtime.threads import pin_threads
 
@@ -99,6 +110,7 @@ def main():
     pin_threads(4)
     mode = sys.argv.pop(1)
     if mode == "detectors":
+        configure_raw_dir(sys.argv[1:])
         register_detectors()
         script = "bench_detectors.py"
     elif mode == "classifiers":
