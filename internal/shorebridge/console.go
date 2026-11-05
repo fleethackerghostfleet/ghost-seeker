@@ -17,6 +17,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -581,6 +582,7 @@ func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
 	if pol == nil {
 		return p
 	}
+	pol = policy.Flatten(pol, c.b.currentEdgeID(), time.Now())
 	info := policyInfo(pol, c.b.echelon()) // same merge/lock view as the F2 strip (#57)
 	p.Version, p.ExpiresAtUnixMs = info.Version, pol.GetExpiresAtUnixMs()
 	p.EMCON = EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy}
@@ -1112,9 +1114,13 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 	if out.DurationMin == 0 && durationMin > 0 {
 		out.DurationMin = durationMin
 	}
+	if out.DurationMin == 0 {
+		out.DurationMin = command.ExtractDurationMin(text)
+	}
 	out.Readback = withDuration(out.Readback, out.DurationMin)
 	if mode != "" {
-		out.Readback = strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(out.Readback, "No rules recognized."), "Feed ranked by the edge priority score only.") + " EMCON " + mode + ".")
+		out.Readback = emconReadback(strings.TrimSuffix(out.Readback, "Feed ranked by the edge priority score only."),
+			mode, out.DurationMin)
 	}
 	return out
 }

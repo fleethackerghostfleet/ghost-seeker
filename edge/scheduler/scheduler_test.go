@@ -487,6 +487,50 @@ func TestEmconSilentSendsNothing(t *testing.T) {
 	}
 }
 
+func TestLayeredEMCONExpiryReflattensWithoutExpiringPolicy(t *testing.T) {
+	s, _, _, clk := setup(t, Prioritized)
+	ctx := context.Background()
+	now := clk.Now()
+	emconExpiry := now.Add(30 * time.Minute)
+	p := &pb.Policy{
+		Id:              "layered-emcon",
+		IssuedAtUnixMs:  now.UnixMilli(),
+		ExpiresAtUnixMs: now.Add(2 * time.Hour).UnixMilli(),
+		Layers: []*pb.PolicyLayer{
+			{
+				Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+				Rules: []*pb.InterestRule{{Id: "command-rule", BoostLabels: []string{"submarine"}}},
+			},
+			{
+				Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO",
+				Emcon: &pb.EmconSetting{
+					Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO", Echelon: pb.Echelon_ECHELON_SHIP,
+					ExpiresAtUnixMs: emconExpiry.UnixMilli(),
+				},
+			},
+		},
+	}
+	if _, _, err := s.AcceptPolicy(ctx, p, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Policy().GetEmcon(); got != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("initial EMCON=%v, want SILENT", got)
+	}
+
+	clk.Advance(30 * time.Minute)
+	s.checkPolicyExpiry(ctx, clk.Now())
+	got := s.Policy()
+	if got.Id != "layered-emcon" || got.Emcon != pb.EmconMode_EMCON_MODE_NORMAL || got.EmconSetting != nil {
+		t.Fatalf("expired EMCON should revert without defaulting policy: %+v", got)
+	}
+	if len(got.Interest.GetBoostLabels()) != 1 || got.Interest.BoostLabels[0] != "submarine" {
+		t.Fatalf("command rule lost after EMCON expiry: %+v", got.Interest)
+	}
+	if s.policyExpiry.IsZero() || !s.policyExpiry.After(clk.Now()) {
+		t.Fatalf("policy expiry=%v, want future deadline after EMCON expiry", s.policyExpiry)
+	}
+}
+
 func TestScenePullOnlyFull(t *testing.T) {
 	s, st, _, clk := setup(t, Prioritized)
 	ctx := context.Background()

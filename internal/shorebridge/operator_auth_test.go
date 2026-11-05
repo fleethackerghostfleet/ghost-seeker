@@ -412,7 +412,7 @@ func TestTimedOperatorDirectiveExpiresItsRule(t *testing.T) {
 	}
 }
 
-func submitTimedOperatorEMCON(t *testing.T, current *pb.Policy) (*pb.Policy, []string) {
+func submitTimedDirective(t *testing.T, current *pb.Policy, compiler *command.Compiler, withJWT bool) (*pb.Policy, string, []string) {
 	t.Helper()
 	var mu sync.Mutex
 	var submitted *pb.Policy
@@ -444,13 +444,19 @@ func submitTimedOperatorEMCON(t *testing.T, current *pb.Policy) (*pb.Policy, []s
 	defer shore.Close()
 
 	bridge := New(shore.URL, "", nil)
-	bridge.Compiler = &command.Compiler{}
-	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
-		t.Fatal(err)
+	bridge.Compiler = compiler
+	if withJWT {
+		if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	rec := httptest.NewRecorder()
+	body, err := json.Marshal(map[string]string{"text": "go quiet for 30 minutes"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	request := httptest.NewRequest(http.MethodPost, "/api/shore/policy",
-		strings.NewReader(`{"text":"go quiet for 30 minutes"}`))
+		strings.NewReader(string(body)))
 	bridge.Handler().ServeHTTP(rec, request)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -460,6 +466,8 @@ func submitTimedOperatorEMCON(t *testing.T, current *pb.Policy) (*pb.Policy, []s
 	policy := proto.Clone(submitted).(*pb.Policy)
 	mu.Unlock()
 	var response struct {
+		Readback string   `json:"readback"`
+		Warnings []string `json:"warnings"`
 		Compiled struct {
 			Warnings []string `json:"warnings"`
 		} `json:"compiled"`
@@ -467,34 +475,78 @@ func submitTimedOperatorEMCON(t *testing.T, current *pb.Policy) (*pb.Policy, []s
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
 	}
-	return policy, response.Compiled.Warnings
+	return policy, response.Readback, append(response.Warnings, response.Compiled.Warnings...)
 }
 
-func TestTimedOperatorEMCONKeepsPolicyExpiry(t *testing.T) {
-	policy, _ := submitTimedOperatorEMCON(t, &pb.Policy{Interest: &pb.Interest{}})
-	if policy.GetExpiresAtUnixMs() <= time.Now().UnixMilli() {
-		t.Fatalf("policy expiry=%d, want a future deadline", policy.GetExpiresAtUnixMs())
+func TestTimedOperatorEMCONUsesLayerExpiry(t *testing.T) {
+	commandLayer := &pb.PolicyLayer{
+		Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+		Emcon: &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_NORMAL, SetBy: "CTF-72", Echelon: pb.Echelon_ECHELON_COMMAND},
 	}
-	if len(policy.Layers) != 1 || policy.Layers[0].GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT {
-		t.Fatalf("timed EMCON policy=%+v", policy)
+	policy, readback, warnings := submitTimedDirective(t, &pb.Policy{
+		Interest: &pb.Interest{}, Layers: []*pb.PolicyLayer{commandLayer},
+	}, &command.Compiler{}, true)
+	if policy.GetExpiresAtUnixMs() != 0 {
+		t.Fatalf("layered policy expiry=%d, want zero", policy.GetExpiresAtUnixMs())
+	}
+	if len(policy.Layers) != 2 {
+		t.Fatalf("timed EMCON policy layers=%+v", policy.Layers)
+	}
+	shipLayer := policy.Layers[1]
+	if shipLayer.GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("ship EMCON=%+v", shipLayer.GetEmcon())
+	}
+	wantAfter := time.Now().Add(29 * time.Minute).UnixMilli()
+	wantBefore := time.Now().Add(31 * time.Minute).UnixMilli()
+	if got := shipLayer.GetEmcon().GetExpiresAtUnixMs(); got < wantAfter || got > wantBefore {
+		t.Fatalf("EMCON expiry=%d, want about 30 minutes from now", got)
+	}
+	if len(shipLayer.Rules) != 1 || shipLayer.Rules[0].GetExpiresAtUnixMs() < wantAfter ||
+		shipLayer.Rules[0].GetExpiresAtUnixMs() > wantBefore {
+		t.Fatalf("timed rule=%+v, want deadline about 30 minutes from now", shipLayer.Rules)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("timed EMCON warnings=%q, want none", warnings)
+	}
+	if !strings.Contains(readback, "EMCON SILENT for 30 min.") {
+		t.Fatalf("readback=%q, want timed EMCON", readback)
 	}
 }
 
-func TestTimedOperatorEMCONWarnsWithHigherEchelonLayer(t *testing.T) {
-	policy, warnings := submitTimedOperatorEMCON(t, &pb.Policy{
-		Interest: &pb.Interest{},
-		Layers:   []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72"}},
-	})
-	if policy.GetExpiresAtUnixMs() <= time.Now().UnixMilli() {
-		t.Fatalf("policy expiry=%d, want a future deadline", policy.GetExpiresAtUnixMs())
+func TestTimedLayeredNonJWTEMCONUsesPerLayerExpiryWithoutCompiler(t *testing.T) {
+	current := &pb.Policy{Interest: &pb.Interest{}, Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72"},
+		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "operator-ui"},
+	}}
+	policy, readback, warnings := submitTimedDirective(t, current, nil, false)
+	if policy.GetExpiresAtUnixMs() != 0 {
+		t.Fatalf("layered non-JWT policy expiry=%d, want zero", policy.GetExpiresAtUnixMs())
 	}
-	const warning = "Timed EMCON can't expire on its own while higher-echelon layers are present; it stays until changed."
-	for _, got := range warnings {
-		if got == warning {
-			return
-		}
+	wantAfter := time.Now().Add(29 * time.Minute).UnixMilli()
+	wantBefore := time.Now().Add(31 * time.Minute).UnixMilli()
+	if len(policy.Layers) != 2 || policy.Layers[1].GetEmcon().GetExpiresAtUnixMs() < wantAfter ||
+		policy.Layers[1].GetEmcon().GetExpiresAtUnixMs() > wantBefore ||
+		len(policy.Layers[1].Rules) != 1 || policy.Layers[1].Rules[0].GetExpiresAtUnixMs() < wantAfter ||
+		policy.Layers[1].Rules[0].GetExpiresAtUnixMs() > wantBefore {
+		t.Fatalf("layered non-JWT timed policy=%+v", policy)
 	}
-	t.Fatalf("warnings=%q, want %q", warnings, warning)
+	if len(warnings) != 0 {
+		t.Fatalf("layered non-JWT timed EMCON warnings=%q, want none", warnings)
+	}
+	if !strings.Contains(readback, "EMCON SILENT for 30 min.") {
+		t.Fatalf("readback=%q, want timed EMCON", readback)
+	}
+}
+
+func TestTimedFlatNonJWTKeepsPolicyExpiry(t *testing.T) {
+	policy, _, _ := submitTimedDirective(t, &pb.Policy{Interest: &pb.Interest{}}, &command.Compiler{}, false)
+	if policy.GetExpiresAtUnixMs() <= time.Now().Add(29*time.Minute).UnixMilli() ||
+		policy.GetExpiresAtUnixMs() > time.Now().Add(31*time.Minute).UnixMilli() {
+		t.Fatalf("flat policy expiry=%d, want about 30 minutes from now", policy.GetExpiresAtUnixMs())
+	}
+	if len(policy.Layers) != 0 {
+		t.Fatalf("flat non-JWT policy unexpectedly gained layers: %+v", policy.Layers)
+	}
 }
 
 func TestOperatorEMCONWrapPreservesFlatBoostFactor(t *testing.T) {
@@ -723,7 +775,7 @@ func TestConsoleDirectiveUsesOperatorJWTAndSendsHeaderOnlyToShore(t *testing.T) 
 	handler := NewConsole(bridge).Handler()
 	rec := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/directives",
-		strings.NewReader(`{"text":"prioritize tanker","rules":[{"type":"boost","classes":["tanker"]}]}`))
+		strings.NewReader(`{"text":"prioritize tanker and go quiet for 30 minutes","rules":[{"type":"boost","classes":["tanker"]}]}`))
 	handler.ServeHTTP(rec, request)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -737,6 +789,13 @@ func TestConsoleDirectiveUsesOperatorJWTAndSendsHeaderOnlyToShore(t *testing.T) 
 	}
 	if len(policy.Layers[0].Rules) != 1 || policy.Layers[0].Rules[0].Author != "ops-1" {
 		t.Fatalf("policy rules=%+v", policy.Layers[0].Rules)
+	}
+	if policy.GetExpiresAtUnixMs() != 0 || policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() <= time.Now().UnixMilli() ||
+		policy.Layers[0].Rules[0].GetExpiresAtUnixMs() <= time.Now().UnixMilli() {
+		t.Fatalf("timed console directive should use per-item expiry: %+v", policy)
+	}
+	if !strings.Contains(rec.Body.String(), "EMCON SILENT for 30 min.") {
+		t.Fatalf("directive readback=%s, want timed EMCON", rec.Body.String())
 	}
 
 	bridge.refresh(context.Background())

@@ -24,6 +24,12 @@ type durationSpan struct {
 	indefinite bool
 }
 
+// ExtractDurationMin returns the duration in minutes expressed in text.
+func ExtractDurationMin(text string) int {
+	minutes, _ := extractDuration(text)
+	return minutes
+}
+
 func extractDuration(text string) (minutes int, rest string) {
 	text = strings.ToLower(text)
 	spans := make([]durationSpan, 0)

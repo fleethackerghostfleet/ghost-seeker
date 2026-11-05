@@ -403,20 +403,9 @@ func (b *Bridge) refresh(ctx context.Context) {
 	}
 	var pol pb.GetPolicyResponse
 	var suppressed []string
-	var policy *pb.Policy
+	var storedPolicy *pb.Policy
 	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &pol); err == nil {
-		policy = pol.GetPolicy()
-		snap.Policy = pol.GetPolicy().GetText()
-		if m := pol.GetPolicy().GetEmcon(); m != pb.EmconMode_EMCON_MODE_UNSPECIFIED && m != pb.EmconMode_EMCON_MODE_NORMAL {
-			snap.Emcon = strings.TrimPrefix(m.String(), "EMCON_MODE_")
-		}
-		snap.PolicyID = pol.GetPolicy().GetId()
-		suppressed = pol.GetPolicy().GetInterest().GetSuppressLabels()
-		snap.Suppress = suppressed
-		snap.Boost = pol.GetPolicy().GetInterest().GetBoostLabels()
-		if pol.Policy != nil {
-			snap.PolicyInfo = policyInfo(pol.Policy, b.echelon())
-		}
+		storedPolicy = pol.GetPolicy()
 	}
 	if b.edge != "" {
 		var est pb.GetStatusResponse
@@ -431,6 +420,16 @@ func (b *Bridge) refresh(ctx context.Context) {
 				b.mu.Unlock()
 			}
 		}
+	}
+	currentPolicy := policy.Flatten(storedPolicy, b.currentEdgeID(), time.Now())
+	if currentPolicy != nil {
+		snap.Policy = currentPolicy.GetText()
+		snap.Emcon = emconName(currentPolicy.GetEmcon())
+		snap.PolicyID = currentPolicy.GetId()
+		suppressed = currentPolicy.GetInterest().GetSuppressLabels()
+		snap.Suppress = suppressed
+		snap.Boost = currentPolicy.GetInterest().GetBoostLabels()
+		snap.PolicyInfo = policyInfo(currentPolicy, b.echelon())
 	}
 
 	var items []*pb.ItemView
@@ -452,7 +451,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 	}
 	snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
 	if b.onSnapshot != nil {
-		b.onSnapshot(snap, policy)
+		b.onSnapshot(snap, currentPolicy)
 	}
 
 	buf, err := json.Marshal(snap)
@@ -955,7 +954,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	issuedBy := b.issuer()
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: issuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
-	var ruleExpiryUnixMs int64
+	durationMin := command.ExtractDurationMin(in.Text)
 	if mode != "" {
 		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 	}
@@ -967,6 +966,12 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			if c.Blocked {
 				http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
 				return
+			}
+			if durationMin == 0 {
+				durationMin = c.DurationMin
+			}
+			if c.DurationMin == 0 && durationMin > 0 {
+				c.DurationMin = durationMin
 			}
 			kept := make([]command.Rule, 0, len(c.Rules))
 			for _, rule := range c.Rules {
@@ -990,17 +995,6 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
-			if mode != "" {
-				c.Readback = strings.TrimSuffix(c.Readback, "No rules recognized.") + " EMCON " + mode + "."
-				c.Readback = strings.TrimSpace(c.Readback)
-			}
-			if c.DurationMin > 0 {
-				ruleExpiryUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
-				pol.ExpiresAtUnixMs = ruleExpiryUnixMs
-				if !b.hasOperatorJWT() {
-					ruleExpiryUnixMs = 0
-				}
-			}
 			compiled = &c
 		}
 		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
@@ -1009,6 +1003,9 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				compiled = nil
 			}
 		}
+	}
+	if durationMin > 0 {
+		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(durationMin) * time.Minute).UnixMilli()
 	}
 	warnings, err := b.layerPolicy(r.Context(), pol, mode)
 	if err != nil {
@@ -1021,6 +1018,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	if compiled != nil {
 		compiled.Warnings = append(compiled.Warnings, warnings...)
+		compiled.Readback = emconReadback(compiled.Readback, mode, durationMin)
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse
@@ -1044,6 +1042,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	if rb, ok := policy["readback"].(string); ok && rb != "" { // a shore that compiles directives itself wins
 		readback = rb
 	}
+	readback = emconReadback(readback, mode, durationMin)
 	resp := struct {
 		Policy   json.RawMessage   `json:"policy"`
 		Compiled *command.Compiled `json:"compiled,omitempty"`
@@ -1051,6 +1050,25 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}{Policy: raw, Compiled: compiled, Readback: readback}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func emconReadback(readback, mode string, durationMin int) string {
+	if mode == "" {
+		return readback
+	}
+	phrase := "EMCON " + mode
+	if durationMin > 0 {
+		phrase += fmt.Sprintf(" for %d min", durationMin)
+	}
+	phrase += "."
+	if strings.Contains(readback, phrase) {
+		return readback
+	}
+	readback = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(readback), "No rules recognized."))
+	if readback == "" {
+		return phrase
+	}
+	return readback + " " + phrase
 }
 
 // rulesToLabels flattens compiled rules into the flat boost/suppress label
@@ -1147,13 +1165,8 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
 	pol.IssuedBy = b.issuer()
 	echelon := b.echelon()
+	durationExpiryUnixMs := pol.GetExpiresAtUnixMs()
 	var ruleExpiryUnixMs int64
-	if b.hasOperatorJWT() {
-		ruleExpiryUnixMs = pol.GetExpiresAtUnixMs()
-		if mode == "" {
-			pol.ExpiresAtUnixMs = 0
-		}
-	}
 	current, err := b.getPolicy(ctx)
 	if err != nil {
 		// Shore policy unreadable: don't apply blind. Keep the last EMCON the
@@ -1165,17 +1178,15 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 			}
 		}
 		current = nil
+	} else if current != nil {
+		current = policy.Flatten(current, b.currentEdgeID(), time.Now())
+	}
+	if durationExpiryUnixMs > 0 && (b.hasOperatorJWT() || (current != nil && len(current.Layers) > 0)) {
+		ruleExpiryUnixMs = durationExpiryUnixMs
+		pol.ExpiresAtUnixMs = 0
 	}
 	emconLocked := false
 	if current != nil {
-		if mode != "" && ruleExpiryUnixMs > 0 {
-			for _, layer := range current.Layers {
-				if layer != nil && layer.Echelon > echelon {
-					warnings = append(warnings, "Timed EMCON can't expire on its own while higher-echelon layers are present; it stays until changed.")
-					break
-				}
-			}
-		}
 		emconLocked = current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > echelon
 		if mode == "" || emconLocked {
 			if mode != "" {
@@ -1186,7 +1197,8 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
 			}
 		} else {
-			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
+			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon,
+				ExpiresAtUnixMs: ruleExpiryUnixMs}
 		}
 		if len(current.Layers) > 0 {
 			pol.Layers = cloneLayers(current.Layers)
@@ -1227,7 +1239,8 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 				operatorLayer = len(pol.Layers) - 1
 			}
 			if mode != "" && !emconLocked {
-				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
+				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon,
+					ExpiresAtUnixMs: ruleExpiryUnixMs}
 			}
 		}
 	}
@@ -1238,7 +1251,8 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 			Text:           pol.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
 		layer := &pb.PolicyLayer{Echelon: echelon, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}}
 		if mode != "" && !emconLocked {
-			layer.Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
+			layer.Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon,
+				ExpiresAtUnixMs: ruleExpiryUnixMs}
 		}
 		pol.Layers = []*pb.PolicyLayer{layer}
 	}
@@ -1258,6 +1272,12 @@ func (b *Bridge) cachedEmcon() string {
 		return ""
 	}
 	return snap.Emcon
+}
+
+func (b *Bridge) currentEdgeID() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.edgeNodeID
 }
 
 func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
@@ -1282,6 +1302,9 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
+	}
+	if current != nil {
+		current = policy.Flatten(current, b.currentEdgeID(), time.Now())
 	}
 	if current == nil {
 		current = &pb.Policy{Interest: &pb.Interest{}}

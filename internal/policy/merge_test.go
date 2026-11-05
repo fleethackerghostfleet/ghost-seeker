@@ -66,6 +66,44 @@ func TestMergeEmptyAndUnlockedEMCON(t *testing.T) {
 	}
 }
 
+func TestMergeEMCONExpiry(t *testing.T) {
+	expiredCommand := layer(pb.Echelon_ECHELON_COMMAND, "CTF-72")
+	expiredCommand.Emcon = &pb.EmconSetting{
+		Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "CTF-72", Echelon: pb.Echelon_ECHELON_COMMAND,
+		Locked: true, ExpiresAtUnixMs: mergeNow.Add(-time.Minute).UnixMilli(),
+	}
+	activeShip := layer(pb.Echelon_ECHELON_SHIP, "TAO")
+	activeShip.Emcon = &pb.EmconSetting{
+		Mode: pb.EmconMode_EMCON_MODE_BURST, SetBy: "TAO", Echelon: pb.Echelon_ECHELON_SHIP,
+		ExpiresAtUnixMs: mergeNow.Add(time.Hour).UnixMilli(),
+	}
+	_, emcon, conflicts := MergeRules([]*pb.PolicyLayer{expiredCommand, activeShip}, "", mergeNow)
+	if emcon == nil || !proto.Equal(emcon, activeShip.Emcon) || len(conflicts) != 0 {
+		t.Fatalf("expired locked command EMCON should yield to ship setting: emcon=%+v conflicts=%+v", emcon, conflicts)
+	}
+
+	unexpired := proto.Clone(activeShip.Emcon).(*pb.EmconSetting)
+	_, emcon, _ = MergeRules([]*pb.PolicyLayer{activeShip}, "", mergeNow)
+	if !proto.Equal(emcon, unexpired) {
+		t.Fatalf("unexpired EMCON setting changed: got=%+v want=%+v", emcon, unexpired)
+	}
+
+	expiredShip := layer(pb.Echelon_ECHELON_SHIP, "TAO")
+	expiredShip.Emcon = &pb.EmconSetting{
+		Mode: pb.EmconMode_EMCON_MODE_BURST, SetBy: "TAO", Echelon: pb.Echelon_ECHELON_SHIP,
+		ExpiresAtUnixMs: mergeNow.UnixMilli(),
+	}
+	p := &pb.Policy{
+		Emcon:        pb.EmconMode_EMCON_MODE_SILENT,
+		EmconSetting: &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "stale"},
+		Layers:       []*pb.PolicyLayer{expiredCommand, expiredShip},
+	}
+	flattened := Flatten(p, "", mergeNow)
+	if flattened.Emcon != pb.EmconMode_EMCON_MODE_NORMAL || flattened.EmconSetting != nil {
+		t.Fatalf("all-expired EMCON should reset to NORMAL without a setting: %+v", flattened)
+	}
+}
+
 func TestMergeTargetScopesReplacementAndSuppressOnly(t *testing.T) {
 	command := layer(pb.Echelon_ECHELON_COMMAND, "CTF-72",
 		rule("broad", []string{"submarine", "aircraft"}, []string{"fishing"}, 3))
@@ -178,6 +216,10 @@ func TestActiveLocksFilterExpiredAndOffTargetRules(t *testing.T) {
 	locks := ActiveLocks([]*pb.PolicyLayer{command}, "", mergeNow)
 	if len(locks) != 1 || !locks[0].Emcon || locks[0].Mode != pb.EmconMode_EMCON_MODE_SILENT {
 		t.Fatalf("active EMCON locks=%+v, want locked SILENT setting", locks)
+	}
+	command.Emcon.ExpiresAtUnixMs = mergeNow.UnixMilli()
+	if locks := ActiveLocks([]*pb.PolicyLayer{command}, "", mergeNow); len(locks) != 0 {
+		t.Fatalf("expired EMCON lock remains active: %+v", locks)
 	}
 }
 

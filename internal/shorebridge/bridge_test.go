@@ -1,14 +1,18 @@
 package shorebridge
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -116,7 +120,20 @@ func TestPolicyInfoAndLayeredDirectiveEMCON(t *testing.T) {
 	current := &pb.Policy{Id: "current", Version: 5, Emcon: pb.EmconMode_EMCON_MODE_SILENT,
 		EmconSetting: proto.Clone(command.Emcon).(*pb.EmconSetting), Layers: []*pb.PolicyLayer{command, operator},
 		Conflicts: []*pb.MergeConflict{{RuleId: "blocked", Reason: "Locked by CTF-72", BlockedBy: "sub"}}}
-	info := policyInfo(current)
+	infoPolicy := &pb.Policy{
+		Id: "current", Version: current.Version,
+		Layers: []*pb.PolicyLayer{
+			proto.Clone(command).(*pb.PolicyLayer),
+			{
+				Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO",
+				Rules: []*pb.InterestRule{{
+					Id: "blocked", SuppressLabels: []string{"submarine"},
+				}},
+				Emcon: &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO"},
+			},
+		},
+	}
+	info := policyInfo(policy.Flatten(infoPolicy, "", time.Now()))
 	if info.Version != 5 || info.Emcon != "SILENT" || !info.EmconLocked || info.EmconLockedBy != "CTF-72" ||
 		len(info.Locks) != 1 || info.Locks[0].RuleID != "sub" || len(info.Conflicts) != 1 {
 		t.Fatalf("policy info=%+v", info)
@@ -269,5 +286,100 @@ func TestDirectiveEmconPhraseUpdatesShipLayer(t *testing.T) {
 	if rec.Code != http.StatusOK || setPolicy.Emcon != pb.EmconMode_EMCON_MODE_NORMAL ||
 		setPolicy.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_NORMAL || setPolicy.Layers[1].Emcon != nil {
 		t.Fatalf("explicit-label locked EMCON must keep current mode: status=%d body=%s policy=%+v", rec.Code, rec.Body.String(), setPolicy)
+	}
+}
+
+func TestPolicyInfoPreservesEdgeScopedLayerConflict(t *testing.T) {
+	current := &pb.Policy{
+		Id: "layered", Version: 8,
+		Layers: []*pb.PolicyLayer{
+			{
+				Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+				Rules: []*pb.InterestRule{{
+					Id: "command-sub", Locked: true, BoostLabels: []string{"submarine"},
+					Targets: []string{"edge-1"},
+				}},
+			},
+			{
+				Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO",
+				Rules: []*pb.InterestRule{{
+					Id: "ship-suppress-sub", SuppressLabels: []string{"submarine"},
+				}},
+			},
+		},
+	}
+	writeResponse := func(w http.ResponseWriter, response proto.Message) {
+		t.Helper()
+		raw, err := protojson.Marshal(response)
+		if err != nil {
+			t.Errorf("marshal response: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(raw)
+	}
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetStatus":
+			writeResponse(w, &pb.GetStatusResponse{NodeId: "shore-1"})
+		case consolePath + "GetPolicy":
+			writeResponse(w, &pb.GetPolicyResponse{Policy: current})
+		case consolePath + "ListItems":
+			writeResponse(w, &pb.ListItemsResponse{})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(shore.Close)
+	edge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != consolePath+"GetStatus" {
+			http.NotFound(w, r)
+			return
+		}
+		writeResponse(w, &pb.GetStatusResponse{NodeId: "edge-1"})
+	}))
+	t.Cleanup(edge.Close)
+
+	bridge := New(shore.URL, edge.URL, nil)
+	console := NewConsole(bridge)
+	bridge.refresh(context.Background())
+
+	rec := httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/shore/snapshot", nil))
+	var snap Snapshot
+	if err := json.Unmarshal(rec.Body.Bytes(), &snap); err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	if snap.PolicyInfo == nil || len(snap.PolicyInfo.Conflicts) != 1 ||
+		snap.PolicyInfo.Conflicts[0].RuleID != "ship-suppress-sub" {
+		t.Fatalf("snapshot policy info lost the edge-scoped conflict: %+v", snap.PolicyInfo)
+	}
+
+	console.mu.Lock()
+	conflicts := append([]PolicyConflict(nil), console.policy.Conflicts...)
+	console.mu.Unlock()
+	if len(conflicts) != 1 || conflicts[0].RuleID != "ship-suppress-sub" {
+		t.Fatalf("console policy info lost the edge-scoped conflict: %+v", conflicts)
+	}
+}
+
+func TestPolicyInfoDoesNotShowExpiredLayeredEMCON(t *testing.T) {
+	expired := time.Now().Add(-time.Minute).UnixMilli()
+	current := policy.Flatten(&pb.Policy{
+		Emcon: pb.EmconMode_EMCON_MODE_SILENT,
+		EmconSetting: &pb.EmconSetting{
+			Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO", Echelon: pb.Echelon_ECHELON_SHIP,
+		},
+		Layers: []*pb.PolicyLayer{{
+			Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO",
+			Emcon: &pb.EmconSetting{
+				Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO",
+				Echelon: pb.Echelon_ECHELON_SHIP, ExpiresAtUnixMs: expired,
+			},
+		}},
+	}, "", time.Now())
+	info := policyInfo(current, pb.Echelon_ECHELON_SHIP)
+	if info.Emcon != "NORMAL" || info.EmconSetBy != "" || info.EmconLocked {
+		t.Fatalf("policy info should show default NORMAL after EMCON expiry: %+v", info)
 	}
 }
