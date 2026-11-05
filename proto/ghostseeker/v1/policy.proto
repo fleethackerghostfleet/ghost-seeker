@@ -80,6 +80,7 @@ message EmconSetting {
   string set_by = 2;
   Echelon echelon = 3;
   bool locked = 4;
+  int64 expires_at_unix_ms = 5;
 }
 
 message MergeConflict {

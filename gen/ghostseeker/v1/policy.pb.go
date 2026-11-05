@@ -614,13 +614,14 @@ func (x *InterestRule) GetText() string {
 }
 
 type EmconSetting struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Mode          EmconMode              `protobuf:"varint,1,opt,name=mode,proto3,enum=ghostseeker.v1.EmconMode" json:"mode,omitempty"`
-	SetBy         string                 `protobuf:"bytes,2,opt,name=set_by,json=setBy,proto3" json:"set_by,omitempty"`
-	Echelon       Echelon                `protobuf:"varint,3,opt,name=echelon,proto3,enum=ghostseeker.v1.Echelon" json:"echelon,omitempty"`
-	Locked        bool                   `protobuf:"varint,4,opt,name=locked,proto3" json:"locked,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Mode            EmconMode              `protobuf:"varint,1,opt,name=mode,proto3,enum=ghostseeker.v1.EmconMode" json:"mode,omitempty"`
+	SetBy           string                 `protobuf:"bytes,2,opt,name=set_by,json=setBy,proto3" json:"set_by,omitempty"`
+	Echelon         Echelon                `protobuf:"varint,3,opt,name=echelon,proto3,enum=ghostseeker.v1.Echelon" json:"echelon,omitempty"`
+	Locked          bool                   `protobuf:"varint,4,opt,name=locked,proto3" json:"locked,omitempty"`
+	ExpiresAtUnixMs int64                  `protobuf:"varint,5,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *EmconSetting) Reset() {
@@ -679,6 +680,13 @@ func (x *EmconSetting) GetLocked() bool {
 		return x.Locked
 	}
 	return false
+}
+
+func (x *EmconSetting) GetExpiresAtUnixMs() int64 {
+	if x != nil {
+		return x.ExpiresAtUnixMs
+	}
+	return 0
 }
 
 type MergeConflict struct {
@@ -851,12 +859,13 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\x06weight\x18\x06 \x01(\x01R\x06weight\x12+\n" +
 	"\x12expires_at_unix_ms\x18\a \x01(\x03R\x0fexpiresAtUnixMs\x12\x18\n" +
 	"\atargets\x18\b \x03(\tR\atargets\x12\x12\n" +
-	"\x04text\x18\t \x01(\tR\x04text\"\x9f\x01\n" +
+	"\x04text\x18\t \x01(\tR\x04text\"\xcc\x01\n" +
 	"\fEmconSetting\x12-\n" +
 	"\x04mode\x18\x01 \x01(\x0e2\x19.ghostseeker.v1.EmconModeR\x04mode\x12\x15\n" +
 	"\x06set_by\x18\x02 \x01(\tR\x05setBy\x121\n" +
 	"\aechelon\x18\x03 \x01(\x0e2\x17.ghostseeker.v1.EchelonR\aechelon\x12\x16\n" +
-	"\x06locked\x18\x04 \x01(\bR\x06locked\"_\n" +
+	"\x06locked\x18\x04 \x01(\bR\x06locked\x12+\n" +
+	"\x12expires_at_unix_ms\x18\x05 \x01(\x03R\x0fexpiresAtUnixMs\"_\n" +
 	"\rMergeConflict\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x1d\n" +
