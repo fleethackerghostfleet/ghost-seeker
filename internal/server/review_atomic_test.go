@@ -83,7 +83,9 @@ func TestReviewEvictionDuringAppend(t *testing.T) {
 			t.Fatalf("event=%s", event.name)
 		}
 	default:
-		t.Fatal("review update not published")
+		if d.Has("target") {
+			t.Fatal("retained review update not published")
+		}
 	}
 	items, _, _, _ := d.Snapshot()
 	if len(items) != 1 {

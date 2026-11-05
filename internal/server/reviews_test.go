@@ -57,6 +57,14 @@ func TestReviews(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 	assertSummary(1)
+	select {
+	case event := <-peer.events:
+		if event.name != "update" {
+			t.Fatalf("event=%s, want review update", event.name)
+		}
+	default:
+		t.Fatal("retained review update not published")
+	}
 	var v struct {
 		Record reviews.Record `json:"record"`
 	}
@@ -195,4 +203,3 @@ func TestReviewPreservesEscalation(t *testing.T) {
 		})
 	}
 }
-
