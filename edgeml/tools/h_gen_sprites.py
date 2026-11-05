@@ -92,7 +92,7 @@ def chroma_key(img_bgr: np.ndarray) -> np.ndarray | None:
             keep[lab == i] = 1
     alpha = (alpha.astype(np.float32) * keep).astype(np.uint8)
     frac = (alpha > 128).mean()
-    if frac < 0.02 or frac > 0.85:
+    if frac < 0.002 or frac > 0.85:   # periscope/snorkel masts are ~0.3 % of the render
         return None
     # despill: cap green at the mean of red and blue where it dominates
     out = img_bgr.copy().astype(np.float32)
