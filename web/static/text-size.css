@@ -25,6 +25,7 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 .drawer,.rvside,.brief-controls,.brief,.panel{overflow-wrap:anywhere}
 .setdlg{max-width:calc(100vw - 24px);margin-block:var(--banner-space,4rem);max-height:calc(100dvh - 2 * var(--banner-space,4rem));overflow:auto}
 .setdlg::backdrop{background:transparent}
+.toast{bottom:var(--banner-space,4rem)}
 .setparts{grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))}
 .setfoot{gap:8px}
 .thumb{display:grid;width:100%;min-width:0;aspect-ratio:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto auto auto 1fr;gap:2px;min-height:9rem}
@@ -50,7 +51,9 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 .tier,.cdrtag,.night-badge,.tg{max-width:calc(100% - 10px);white-space:normal;overflow-wrap:anywhere}
 #pgFeed:has(#feedHead.filters-open){overflow-y:auto}
 #pgFeed:has(#feedHead.filters-open) .feed{min-height:12rem;flex-shrink:0}
-.box em{white-space:normal;overflow-wrap:anywhere}
+.box em{white-space:normal;overflow-wrap:anywhere;z-index:1;line-height:1.1}
+.rvframe .box em{padding:0 3px}
+.det-counts td.n{white-space:nowrap;overflow-wrap:normal;word-break:normal}
 .detection-labels{position:absolute;inset:4px;z-index:3;display:flex;flex-wrap:wrap;align-content:start;gap:4px;overflow:auto;background:var(--panel)}
 .detection-labels em{font:700 .75rem var(--sans);padding:1px 4px;max-width:100%;overflow-wrap:anywhere}
 .rvkeys .kb{min-width:min-content;overflow-wrap:normal;word-break:normal}

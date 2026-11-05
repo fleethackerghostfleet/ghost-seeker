@@ -557,7 +557,7 @@ function liveWhy(it){
 }
 
 /* ---- detail drawer ---- */
-function openDetail(id){const prev=items.find(i=>i.id===state.sel);state.sel=id;document.body.classList.add('drawer-open');prev&&updateCard(prev);const it=items.find(i=>i.id===id);it&&updateCard(it);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
+function openDetail(id){const it=findItem(id);if(!it){closeDetail();toast('This image is no longer in the feed.');return}const prev=findItem(state.sel);state.sel=id;document.body.classList.add('drawer-open');prev&&updateCard(prev);updateCard(it);renderDetail();$('drawer').scrollTop=0;it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
 function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
 function renderZoom(){preserveBandFocus(renderZoomContent)}
@@ -579,7 +579,7 @@ function buildWhy(it,rows){
 function renderDetail(){preserveBandFocus(renderDetailContent)}
 function renderDetailContent(){
  const it=items.find(i=>i.id===state.sel);const D=$('drawer');
- if(!it){D.innerHTML='';return}
+ if(!it){D.innerHTML='';closeDetail();return}
 	if(isScene(it)){
 	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;

@@ -969,6 +969,25 @@ test('live active and pending forms take precedence over a received preview',()=
  assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
  assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
 });
+test('detail selection rejects removed images and never leaves an empty drawer open',()=>{
+ const c=setup();
+ vm.runInContext(`
+  opened=false;messages=[];document.body.classList={add(){opened=true},remove(){opened=false}};
+  toast=m=>messages.push(m);items=[normalizeItem(raw('kept'))];
+  openDetail('kept');
+ `,c);
+ assert.equal(vm.runInContext('state.sel',c),'kept');
+ assert.equal(c.opened,true);
+ vm.runInContext("items=[];openDetail('kept')",c);
+ assert.equal(vm.runInContext('state.sel',c),null);
+ assert.equal(c.opened,false);
+ assert.deepEqual(Array.from(c.messages),['This image is no longer in the feed.']);
+ vm.runInContext("state.sel='missing';opened=true;renderDetailContent()",c);
+ assert.equal(vm.runInContext('state.sel',c),null);
+ assert.equal(c.$('drawer').innerHTML,'');
+ assert.equal(c.opened,false);
+});
+
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
