@@ -2,6 +2,8 @@ package rnd
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -177,5 +179,41 @@ func TestPrediction(t *testing.T) {
 func TestBuildMissingSources(t *testing.T) {
 	if err := Build(context.Background(), t.TempDir(), "unused", nil); err == nil {
 		t.Fatal("accepted missing sources")
+	}
+}
+
+func TestSelectUnique(t *testing.T) {
+	frames := []frame{}
+	for _, value := range []string{"black", "left", "black", "right", "black"} {
+		frames = append(frames, frame{path: value, read: func() ([]byte, error) { return []byte(value), nil }})
+	}
+	seen := map[[32]byte]bool{}
+	f, _, _, err := selectUnique(frames, 0, seen)
+	if err != nil || f.path != "black" {
+		t.Fatal(f, err)
+	}
+	f, _, _, err = selectUnique(frames, 2, seen)
+	if err != nil || f.path != "right" {
+		t.Fatal("equal distance must prefer next frame", f, err)
+	}
+	f, _, _, err = selectUnique(frames, 4, seen)
+	if err != nil || f.path != "left" {
+		t.Fatal("nearest available earlier frame", f, err)
+	}
+	if _, _, _, err = selectUnique(frames, 0, seen); err == nil {
+		t.Fatal("duplicate exhaustion accepted")
+	}
+	if _, _, _, err = selectUnique(nil, 0, seen); err == nil {
+		t.Fatal("empty clip accepted")
+	}
+	otherClipSeen := map[[32]byte]bool{sha256.Sum256([]byte("black")): true}
+	f, _, _, err = selectUnique(frames, 0, otherClipSeen)
+	if err != nil || f.path != "left" {
+		t.Fatal("cross-clip duplicate not skipped", f, err)
+	}
+	failure := errors.New("read failed")
+	bad := []frame{{read: func() ([]byte, error) { return nil, failure }}}
+	if _, _, _, err = selectUnique(bad, 0, map[[32]byte]bool{}); !errors.Is(err, failure) {
+		t.Fatal(err)
 	}
 }

@@ -5,14 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed grade.html
 var page []byte
 
-func (s *Session) Handler() http.Handler {
+func (s *Session) Handler(allowHosts ...string) http.Handler {
+	allowed := map[string]bool{"127.0.0.1": true, "::1": true, "localhost": true}
+	for _, host := range allowHosts {
+		if host = hostname(host); host != "" {
+			allowed[host] = true
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -53,6 +62,13 @@ func (s *Session) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		host := hostname(r.Host)
+		if !allowed[host] {
+			log.Printf("grader rejected Host=%q method=%s", r.Host, r.Method)
+			http.Error(w, "host not allowed", http.StatusForbidden)
+			return
+		}
+		log.Printf("grader access Host=%q method=%s", r.Host, r.Method)
 		if r.Method == "POST" {
 			// This unauthenticated tool is loopback-only by default. Reject browser
 			// cross-origin mutation requests, including form posts.
@@ -67,6 +83,18 @@ func (s *Session) Handler() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+func hostname(host string) string {
+	if name, _, err := net.SplitHostPort(host); err == nil {
+		return strings.ToLower(name)
+	}
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	}
+	if strings.Contains(host, ":") && net.ParseIP(host) == nil {
+		return ""
+	}
+	return strings.ToLower(host)
 }
 func respond(w http.ResponseWriter, state State, err error) {
 	if err != nil {
