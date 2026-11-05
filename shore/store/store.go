@@ -471,20 +471,20 @@ func (s *Store) SetPolicy(ctx context.Context, p *pb.Policy) error {
 	return s.SetPolicyState(ctx, p, 0)
 }
 
-func (s *Store) GetCommandVersion(ctx context.Context) (int64, error) {
+func (s *Store) GetCommandVersion(ctx context.Context) (int64, bool, error) {
 	var raw []byte
 	err := s.db.QueryRowContext(ctx, `SELECT v FROM kv WHERE k='policy_command_version'`).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
+		return 0, false, nil
 	}
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	version, err := strconv.ParseInt(string(raw), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("parse command policy version: %w", err)
+		return 0, false, fmt.Errorf("parse command policy version: %w", err)
 	}
-	return version, nil
+	return version, true, nil
 }
 
 func (s *Store) SetPolicyState(ctx context.Context, p *pb.Policy, commandVersion int64) error {

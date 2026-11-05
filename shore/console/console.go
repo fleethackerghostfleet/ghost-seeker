@@ -116,9 +116,13 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		if err := policy.Verify(p, s.Keys); err != nil {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
 		}
-		commandMark, err := s.St.GetCommandVersion(ctx)
+		commandMark, hasCommandMark, err := s.St.GetCommandVersion(ctx)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if !hasCommandMark {
+			// Preserve the old replay guard for pre-upgrade stores.
+			commandMark = prev.GetVersion()
 		}
 		if p.Version <= commandMark {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", commandMark))
