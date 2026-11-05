@@ -166,6 +166,20 @@ func TestSimulationPolicyExpiryClearsLocksAndSourceDirectives(t *testing.T) {
 	}
 }
 
+func TestRestoreOperatorLayerSkipsScopedRules(t *testing.T) {
+	data := store.New(10)
+	rt := &policyRuntime{store: data}
+	rt.restoreOperatorLayer(&pb.PolicyLayer{Rules: []*pb.InterestRule{
+		{Id: "directive:0", BoostLabels: []string{"tanker"}},
+		{Id: "directive:1:scoped", BoostLabels: []string{"submarine"}},
+	}})
+	directives := data.Directives()
+	if len(directives) != 1 || len(directives[0].Rules) != 1 ||
+		len(directives[0].Rules[0].Classes) != 1 || directives[0].Rules[0].Classes[0] != "tanker" {
+		t.Fatalf("restored directives=%+v", directives)
+	}
+}
+
 func TestSimulationDelegatedTankerRuleCanBeOverridden(t *testing.T) {
 	data := store.New(10)
 	app := New(data, WithAdmin(true))

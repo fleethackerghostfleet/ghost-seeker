@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -102,8 +103,12 @@ func (rt *policyRuntime) restoreOperatorLayer(layer *pb.PolicyLayer) {
 	byID := make(map[string]*command.Directive)
 	var order []string
 	for _, rule := range layer.Rules {
-		id, _, ok := strings.Cut(rule.Id, ":")
+		id, _, scoped, ok := parsePolicyRuleID(rule.Id)
 		if !ok || id == "" {
+			continue
+		}
+		if scoped {
+			log.Printf("policy: skipping scoped operator rule %q during restore", rule.Id)
 			continue
 		}
 		directive := byID[id]
@@ -124,9 +129,23 @@ func (rt *policyRuntime) restoreOperatorLayer(layer *pb.PolicyLayer) {
 	}
 	directives := make([]command.Directive, 0, len(order))
 	for _, id := range order {
-		directives = append(directives, *byID[id])
+		if len(byID[id].Rules) > 0 {
+			directives = append(directives, *byID[id])
+		}
 	}
 	rt.store.RestoreDirectives(directives)
+}
+
+func parsePolicyRuleID(ruleID string) (string, int, bool, bool) {
+	parts := strings.SplitN(ruleID, ":", 3)
+	if len(parts) < 2 || parts[0] == "" {
+		return "", 0, false, false
+	}
+	index, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", 0, false, false
+	}
+	return parts[0], index, len(parts) == 3 && parts[2] == "scoped", true
 }
 
 func (rt *policyRuntime) apply(source, who, text string, now time.Time) (*pb.Policy, error) {
@@ -200,8 +219,12 @@ func (rt *policyRuntime) operatorLayer() *pb.PolicyLayer {
 		}
 		for i, rule := range directive.Rules {
 			labels := append(append([]string(nil), rule.Classes...), rule.Attrs...)
+			id := fmt.Sprintf("%s:%d", directive.ID, i)
+			if rule.Only || len(rule.Sources) > 0 || rule.WithinMin != 0 {
+				id += ":scoped"
+			}
 			interestRule := &pb.InterestRule{
-				Id: fmt.Sprintf("%s:%d", directive.ID, i), Author: "TAO", Text: directive.Text, Weight: rule.Weight,
+				Id: id, Author: "TAO", Text: directive.Text, Weight: rule.Weight,
 			}
 			if rule.Type == "suppress" {
 				interestRule.SuppressLabels = append([]string(nil), labels...)
