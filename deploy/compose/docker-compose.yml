@@ -6,6 +6,10 @@ services:
     image: ghost-seeker/shore:0.1.0
     entrypoint: ["/usr/local/bin/shore"]
     command: ["-data", "/data/shore", "-listen", ":8080", "-ui", "/ui"]
+    environment:
+      # Production posture: no auto-generated dev token; operators must set GS_OPERATOR_TOKEN.
+      GS_OPERATOR_TOKEN: ${GS_OPERATOR_TOKEN:?set GS_OPERATOR_TOKEN (>=16 bytes) for the shore/edge consoles}
+      GS_DEV_TOKEN_FILE: none
     ports: ["8080:8080"]
     volumes: ["shore-data:/data"]
 
@@ -20,6 +24,9 @@ services:
     build: { context: ../.., dockerfile: deploy/Dockerfile, target: edge }
     image: ghost-seeker/edge:0.1.0
     command: ["-data", "/data/edge", "-listen", ":8081", "-shore", "http://link:18080", "-frames", "/frames", "-period", "2s", "-ui", "/ui"]
+    environment:
+      GS_OPERATOR_TOKEN: ${GS_OPERATOR_TOKEN:?set GS_OPERATOR_TOKEN (>=16 bytes) for the shore/edge consoles}
+      GS_DEV_TOKEN_FILE: none
     ports: ["8081:8081"]
     volumes: ["edge-data:/data", "../../frames:/frames:ro"]
     depends_on: [link]

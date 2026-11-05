@@ -30,9 +30,10 @@ logger = logging.getLogger(__name__)
 class RpcError(Exception):
     """Maps to a Connect error (code is the Connect code string, e.g. ``invalid_argument``)."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, http_status: int | None = None):
         super().__init__(message)
         self.code = code
+        self.http_status = http_status
 
 
 def _norm_box(box, w: int, h: int) -> dict:
@@ -406,6 +407,65 @@ def _get(d: dict, camel: str, snake: str, default=None):
     return d.get(camel, d.get(snake, default))
 
 
+
+# Resource caps: a crafted header can declare a huge frame that a decoder
+# would allocate in full, and EmbedText runs the text tower once per string.
+MAX_PIXELS = 50_000_000
+MAX_TEXTS = 64
+MAX_TEXT_CHARS = 512
+
+
+def image_dims(data: bytes):
+    """Width/height from the container header (PNG, JPEG, GIF, BMP, WebP) without decoding.
+    Returns None for formats this sidecar does not accept."""
+    import struct
+
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        return struct.unpack(">II", data[16:24])
+    if data[:6] in (b"GIF87a", b"GIF89a") and len(data) >= 10:
+        return struct.unpack("<HH", data[6:10])
+    if data[:2] == b"BM" and len(data) >= 26:
+        w, h = struct.unpack("<ii", data[18:26])
+        return abs(w), abs(h)
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP" and len(data) >= 30:
+        chunk = data[12:16]
+        if chunk == b"VP8 ":
+            return struct.unpack("<HH", data[26:30])[0] & 0x3FFF, struct.unpack("<HH", data[26:30])[1] & 0x3FFF
+        if chunk == b"VP8L":
+            b = data[21:25]
+            return 1 + (((b[1] & 0x3F) << 8) | b[0]), 1 + (((b[3] & 0xF) << 10) | (b[2] << 2) | ((b[1] & 0xC0) >> 6))
+        if chunk == b"VP8X":
+            return 1 + int.from_bytes(data[24:27], "little"), 1 + int.from_bytes(data[27:30], "little")
+        return None
+    if data[:2] == b"\xff\xd8":
+        i, n = 2, len(data)
+        while i + 9 < n:
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            seg = struct.unpack(">H", data[i + 2:i + 4])[0]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                return w, h
+            i += 2 + seg
+        return None
+    return None
+
+
+def check_image_dims(data: bytes, max_pixels: int = MAX_PIXELS) -> tuple:
+    dims = image_dims(data)
+    if dims is None:
+        raise RpcError("invalid_argument", "image must be a JPEG, PNG, GIF, BMP or WebP with a readable header")
+    w, h = dims
+    if w <= 0 or h <= 0 or w * h > max_pixels:
+        raise RpcError("resource_exhausted", f"image {w}x{h} exceeds the {max_pixels} pixel cap", http_status=413)
+    return dims
+
+
 class InferenceService:
     """Decodes protobuf-JSON requests, dispatches to an engine, returns protobuf-JSON responses."""
 
@@ -429,7 +489,11 @@ class InferenceService:
         raw = _get(req, "image", "image")
         if not raw:
             raise RpcError("invalid_argument", "image is required")
-        buf = np.frombuffer(base64.b64decode(raw), np.uint8)
+        try:
+            buf = np.frombuffer(base64.b64decode(raw, validate=True), np.uint8)
+        except (ValueError, TypeError) as e:
+            raise RpcError("invalid_argument", f"image is not valid base64: {e}") from None
+        check_image_dims(buf.tobytes())
         img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
         if img is None:
             raise RpcError("invalid_argument", "image could not be decoded")
@@ -443,7 +507,12 @@ class InferenceService:
         return resp
 
     def EmbedText(self, req: dict) -> dict:
-        texts = [str(t) for t in (req.get("texts") or [])]
+        texts = req.get("texts") or []
+        if not isinstance(texts, list) or len(texts) > MAX_TEXTS:
+            raise RpcError("invalid_argument", f"texts must be a list of at most {MAX_TEXTS} strings")
+        texts = [str(t) for t in texts]
+        if any(len(t) > MAX_TEXT_CHARS for t in texts):
+            raise RpcError("invalid_argument", f"each text must be at most {MAX_TEXT_CHARS} characters")
         return {"embeddings": [{"values": v} for v in self.engine.embed_text(texts)], "modelId": getattr(self.engine, "model_id", "")}
 
     def Capabilities(self, req: dict) -> dict:

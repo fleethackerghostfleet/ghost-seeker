@@ -48,6 +48,7 @@ type LinkControl interface {
 }
 
 type Bridge struct {
+	token       string
 	shore, edge string
 	link        LinkControl
 	client      *http.Client
@@ -195,6 +196,19 @@ type Counts struct {
 
 // ---- console RPC helpers ----
 
+// WithToken sets the operator bearer token the bridge presents to the shore
+// and edge consoles (and to shore blobs it proxies).
+func (b *Bridge) WithToken(token string) *Bridge {
+	b.token = token
+	return b
+}
+
+func (b *Bridge) authorize(r *http.Request) {
+	if b.token != "" {
+		r.Header.Set("Authorization", "Bearer "+b.token)
+	}
+}
+
 func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.Message) error {
 	body, err := protojson.Marshal(req)
 	if err != nil {
@@ -205,6 +219,7 @@ func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.
 		return err
 	}
 	hr.Header.Set("Content-Type", "application/json")
+	b.authorize(hr)
 	res, err := b.client.Do(hr)
 	if err != nil {
 		return err
@@ -367,6 +382,7 @@ func (b *Bridge) fetchRecordFrames(ctx context.Context, id string) int {
 	if err != nil {
 		return -1
 	}
+	b.authorize(hr)
 	res, err := b.client.Do(hr)
 	if err != nil {
 		return -1
@@ -687,7 +703,17 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
 	mux.HandleFunc("POST /api/shore/link", b.setLink)
 	if u, err := url.Parse(b.shore); err == nil {
-		mux.Handle("/blob/", httputil.NewSingleHostReverseProxy(u))
+		rp := httputil.NewSingleHostReverseProxy(u)
+		director := rp.Director
+		// The browser's session cookie stays on this origin; the shore sees
+		// the operator bearer token instead.
+		rp.Director = func(r *http.Request) {
+			director(r)
+			r.Header.Del("Cookie")
+			r.Header.Del("Authorization")
+			b.authorize(r)
+		}
+		mux.Handle("GET /blob/", rp)
 	}
 	return mux
 }

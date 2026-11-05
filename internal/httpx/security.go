@@ -47,6 +47,8 @@ func SameOrigin(next http.Handler) http.Handler {
 	})
 }
 
+// SafeBlobMime is the declared-MIME allowlist kept for FACT metadata views;
+// serving goes through BlobContentType, which sniffs the bytes.
 func SafeBlobMime(mime string) string {
 	switch mime {
 	case "image/jpeg", "image/png", "image/webp", "image/avif", "application/json", "text/plain; charset=utf-8":
