@@ -628,3 +628,50 @@ test('shipLine formats classified ships and omits absent details',()=>{
  assert.equal(vm.runInContext("shipLine({ship:{type:'cargo',label:'Cargo',conf:0.7}})",context),'Type: Cargo (70%)');
  assert.equal(vm.runInContext("shipVisibleLine({ship:{features:['radar mast','cranes'],markings:'not visible'}})",context),'Visible: radar mast, cranes · markings not visible');
 });
+test('review buttons name their effect and key on screen',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ for(const [key,label] of [['1','Set P1 Critical &amp; next'],['2','Set P2 High &amp; next'],['3','Set P3 Routine &amp; next'],['4','Set P4 Low &amp; next'],['Space','Agree &amp; next'],['X','Not relevant: hide &amp; next'],['C','Send to Commander now &amp; next'],['Z','Undo last']]){
+  assert.ok(new RegExp(`<span class="kb-act"[^>]*>${label}</span><kbd>${key}</kbd>`).test(html),label);
+ }
+ assert.match(html,/Images left in feed to review:<\/span> <b id="rvLeft">/);
+ assert.match(html,/id="rvNext" role="status"/);
+});
+test('after a re-rank the next-step line confirms the save and names the keys',()=>{
+ const context=setup();
+ context.$('rvNext').classList={remove(){},add(){}};
+ vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};rv.last='';renderNext(rv.cur)",context);
+ let html=context.$('rvNext').innerHTML;
+ assert.match(html,/<b>Next:<\/b> Press <kbd>Space<\/kbd> to agree with P3 Routine, or <kbd>1<\/kbd>–<kbd>4<\/kbd>/);
+ assert.doesNotMatch(html,/rvnext-done/);
+ vm.runInContext("setLast('✓ Saved: last image changed P1 Critical → P2 High. Press Z to undo.');renderNext(rv.cur)",context);
+ html=context.$('rvNext').innerHTML;
+ assert.match(html,/rvnext-done">✓ Saved: last image changed P1 Critical → P2 High\. Press Z to undo\./);
+ assert.match(html,/This is the next image\. Press <kbd>Space<\/kbd>/);
+ vm.runInContext("rv.ask={kind:'why',classes:['vessel']};renderNext(rv.cur)",context);
+ assert.match(context.$('rvNext').innerHTML,/Answer the question above to continue/);
+ vm.runInContext("rv.ask=null;reviewerName='';renderNext(rv.cur)",context);
+ assert.match(context.$('rvNext').innerHTML,/Enter your reviewer name/);
+});
+test('suggestion overlay names the exact tier change',()=>{
+ const context=setup(),box=context.$('rvAsk');
+ vm.runInContext("CLS.submarine={lab:'Submarine'};rv.ask={kind:'sug',s:{cls:'submarine',dir:'lower',n:3,of:3,from:1,to:2,highRisk:true}};renderAsk()",context);
+ assert.match(box.innerHTML,/Submarine: <span class="tpill t1">P1 Critical<\/span> → <span class="tpill t2">P2 High<\/span>/);
+ assert.match(box.innerHTML,/from P1 Critical to P2 High\. Yes adds a rule that lowers Submarine priority/);
+ assert.match(box.innerHTML,/<kbd>Y<\/kbd>Yes, apply change/);
+ assert.doesNotMatch(box.innerHTML,/Lower Submarine priority\?/);
+});
+test('Send now moves a feed image to the top of the send queue',async()=>{
+ const context=setup();
+ vm.runInContext(`calls=[];messages=[];toast=m=>messages.push(m);
+  items=[{id:'img',src:{id:'EO-P7'},upload:{bytes:100,sent:0}}];
+  request=async(url,method,body)=>{calls.push([url,method,body]);return{cdr:2,item:{...items[0],upload:{...items[0].upload,override:'next'}}}};
+  applyItemUpdate=item=>{items[0]=item};`,context);
+ await vm.runInContext("sendNow('img')",context);
+ assert.equal(vm.runInContext('JSON.stringify(calls)',context),JSON.stringify([['/api/items/img/upload-override','POST',{override:'next'}]]));
+ assert.match(vm.runInContext('messages[0]',context),/top of the send queue/);
+ assert.equal(vm.runInContext('sendNowBlocked(items[0])',context),'Already at the top of the send queue');
+ await vm.runInContext("sendNow('img')",context);
+ assert.equal(vm.runInContext('calls.length',context),1);
+ vm.runInContext("items[0]={id:'img',src:{id:'EO-P7'},upload:{bytes:100,sent:100,done:true}}",context);
+ assert.equal(vm.runInContext('sendNowBlocked(items[0])',context),'Already uploaded to shore');
+});
