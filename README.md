@@ -413,20 +413,29 @@ Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for 
 
 ### Synthetic simulation uplink
 
-Without `-shore` or `-dataset`, the Imagery Feed uses a slower shared upload
+Without `-shore`, the Imagery Feed uses a slower shared upload
 budget: a normal distribution centered on **16 kbps**, standard deviation about
 9.73 kbps, clipped to 0–100 kbps and resampled every five seconds. About 5% of
 intervals are outages. The synthetic 18–45 KiB images take roughly 10–24 seconds
 of uninterrupted airtime near the mean rate; queueing, priority and outages can
 extend elapsed time. Upload chips report the applied slow rate.
 
-Historical backfill starts uploaded. At six outstanding uploads (or `retain-1`,
-whichever is smaller) the automatic
-sim pauses new frame generation until an upload finishes, keeping a visible
-shared queue without unbounded growth (including during outages or holds).
-`-sim-link-bps N` still selects a fixed bits/second rate (`0` means outage),
-without this automatic admission limit. The live TCP shaper described above
-remains centered on 8 Mbps; dataset replay is unchanged.
+Synthetic and dataset simulations capture independently of pending uploads,
+including during outages or holds. `-capture-every` sets the mean capture interval
+(default **700ms**, uniformly jittered to about **467–933ms**, must be positive).
+`-capture-every 1.8s` restores the old **1.2–2.4s** capture range. Historical
+backfill starts uploaded and its timing is unchanged. Dataset negative sampling
+and synthetic detector drops still apply.
+
+The store remains bounded by `-retain`: oldest untouched queued or completed
+items roll off first, ahead of reviewed, dismissed, manually prioritized,
+upload-overridden, or mid-transfer items. If none qualify, eviction falls back
+to the oldest non-escalated undecided item, then the oldest existing item;
+these protections are preferences, not indefinite pins. The new capture is
+never the eviction victim. Uploads retain their shared-budget priority queue.
+`-sim-link-bps N` selects a fixed bits/second rate (`0` means outage).
+Neither capture cadence nor backlog changes link bytes/second. The live TCP
+shaper described above remains centered on 8 Mbps.
 
 ## Status / not done
 
