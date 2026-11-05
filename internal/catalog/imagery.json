@@ -2164,5 +2164,7 @@
     }
    }
   ]
- }
+ },
+ {"file":"imagery/empty-ocean/sec_0001.jpg","src":"BY-12","dets":[],"background":true},
+ {"file":"imagery/empty-ocean/sec_0010.jpg","src":"BY-12","dets":[],"background":true}
 ]

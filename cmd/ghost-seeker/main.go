@@ -46,8 +46,8 @@ func main() {
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
-	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
-	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
+	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–2 MB/s ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
+	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -122,11 +122,12 @@ func main() {
 	}
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath)
 		return
 	}
 
 	data := store.New(*retain)
+	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
@@ -148,7 +149,7 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
-	go runSimulation(data, generator, app)
+	go runSimulation(data, generator, app, uplink)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
 		for i := 0; i < 4; i++ {
@@ -192,13 +193,34 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 		ts = ts.Add(time.Duration(rng.Intn(14)+8) * time.Second)
 		source := catalog.Sources[rng.Intn(len(catalog.Sources))]
 		item, extra := generator.Tick(&source, ts, "maritime", nil)
-		if item != nil {
-			data.Add(item, extra)
+		addCapture(data, generator, rng, item, extra, "maritime", nil)
+		if item != nil && item.Filtered == "" {
 			kept++
-		} else {
-			data.Add(nil, extra)
 		}
 	}
+}
+
+// addCapture stores one capture and, for about half of the bursts with
+// repeated frames, one near-duplicate view so the feed can show it at P4.
+func addCapture(data *store.Store, generator *sensor.Generator, rng *rand.Rand, item *command.Item, extra int, model string, directives []command.Directive) (stored []command.Item, evicted []string) {
+	if item == nil {
+		data.Add(nil, extra)
+		return nil, nil
+	}
+	captures := []*command.Item{item}
+	if extra > 0 && item.Filtered == "" && rng.Intn(2) == 0 {
+		captures = append(captures, generator.Repeat(item, model, directives))
+		extra--
+	}
+	for _, capture := range captures {
+		kept, gone := data.Add(capture, extra)
+		extra = 0
+		stored = append(stored, kept)
+		if gone != "" {
+			evicted = append(evicted, gone)
+		}
+	}
+	return stored, evicted
 }
 
 func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration) {
@@ -213,8 +235,8 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
-// link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string) {
+// link the edge talks through, with an automatically varying normal rate.
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -223,13 +245,13 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		if err != nil {
 			log.Fatalf("-shore: %v", err)
 		}
-		sh := shaper.New(target, linkBps)
+		sh := shaper.NewNormal(target)
 		go func() {
 			if err := sh.ListenAndServe(ctx, linkListen); err != nil {
 				log.Fatalf("shaper: %v", err)
 			}
 		}()
-		log.Printf("link shaper on %s -> %s at %d bit/s (start the edge with -shore http://localhost%s)", linkListen, target, linkBps, linkListen)
+		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)
@@ -248,8 +270,8 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 
 	// One site: Patrick's operator console (index.html / cdr.html) on live
 	// shore items. The console speaks the simulation's API (/api/config,
-	// /api/stream, /api/items, /api/directives); the shore-only actions (link
-	// presets, pulls, overrides) stay under /api/shore/ and blobs are proxied.
+	// /api/stream, /api/items, /api/directives); shore-only actions (pulls,
+	// overrides) and link status stay under /api/shore/ and blobs are proxied.
 	mux := http.NewServeMux()
 	mux.Handle("/api/shore/", bridge.Handler())
 	mux.Handle("/blob/", bridge.Handler())
@@ -289,19 +311,30 @@ func shaperTarget(shoreURL string) (string, error) {
 	return host, nil
 }
 
-func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server) {
+func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server, uplink *simulationUplink) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	last := time.Now()
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
+		now := time.Now()
+		updates := uplink.advance(now.Sub(last))
+		last = now
+		_, cdr := data.Stats()
+		for _, updated := range updates {
+			app.PublishUpdate(updated, cdr)
+		}
 		_, _, _, state := data.Snapshot()
-		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
-		stored, evicted := data.Add(item, extra)
-		app.PublishEvict(evicted)
-		if item != nil {
-			stats, _ := data.Stats()
-			app.PublishItem(stored, stats)
-		} else {
-			stats, _ := data.Stats()
+		directives := data.Directives()
+		item, extra := generator.Tick(nil, time.Now(), state.Model, directives)
+		stored, evicted := addCapture(data, generator, rng, item, extra, state.Model, directives)
+		for _, id := range evicted {
+			app.PublishEvict(id)
+		}
+		stats, _ := data.Stats()
+		for _, capture := range stored {
+			app.PublishItem(capture, stats)
+		}
+		if len(stored) == 0 {
 			app.PublishStats(stats)
 		}
 	}

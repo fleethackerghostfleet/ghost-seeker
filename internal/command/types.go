@@ -78,7 +78,15 @@ type Latency struct {
 	Cen  int `json:"cen"`
 }
 
+// Ship-side filter reasons for Item.Filtered.
+const (
+	FilteredLowValue  = "low-value"
+	FilteredDuplicate = "duplicate"
+)
+
 type Item struct {
+	Background  bool       `json:"background,omitempty"`
+	Upload      Upload     `json:"upload"`
 	Night       *bool      `json:"night,omitempty"`
 	Basis       string     `json:"basis,omitempty"`
 	Lum         float64    `json:"lum,omitempty"`
@@ -117,6 +125,26 @@ type Item struct {
 	// Live is set only when the item comes from a shore node (ghost-seeker
 	// -shore); the simulation leaves it nil.
 	Live *LiveMeta `json:"live,omitempty"`
+	// Filtered marks a ship-side low-value or repeat image. It stays in the
+	// feed at P4 Low instead of being dropped; DupOf names the original.
+	Filtered string `json:"filtered,omitempty"`
+	DupOf    string `json:"dupOf,omitempty"`
+	// AutoSent marks a commander send chosen by automatic escalation.
+	AutoSent      bool `json:"autoSent,omitempty"`
+	HumanReviewed bool `json:"humanReviewed,omitempty"`
+}
+
+type Upload struct {
+	Override   string     `json:"override,omitempty"`
+	OverrideBy string     `json:"overrideBy,omitempty"`
+	OverrideAt *time.Time `json:"overrideAt,omitempty"`
+	NextOrder  uint64     `json:"-"`
+	Bytes      int64      `json:"bytes"`
+	Sent       int64      `json:"sent"`
+	Done       bool       `json:"done"`
+	Active     bool       `json:"active"` // received bytes in the latest link tick
+	Received   bool       `json:"received,omitempty"`
+	BPS        int64      `json:"bps"`
 }
 
 // LiveForm is the shore-side state of one form of an item's fidelity ladder.
@@ -166,4 +194,8 @@ type Stats struct {
 	Drop  int `json:"drop"`
 	Bytes int `json:"bytes"`
 	DB    int `json:"db"`
+	// LinkBPS is the simulated ship-to-shore rate in bits/s (0 = outage).
+	LinkBPS int64 `json:"linkBps"`
+	// LinkFixed is true when -sim-link-bps pins the rate (no resampling).
+	LinkFixed bool `json:"linkFixed,omitempty"`
 }

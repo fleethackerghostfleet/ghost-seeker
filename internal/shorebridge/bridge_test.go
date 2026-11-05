@@ -14,9 +14,39 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestAutomaticLinkStatus(t *testing.T) {
+	link := shaper.NewNormal("unused")
+	bridge := New("", "", link)
+	rec := httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/shore/link", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var status LinkStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Controllable || status.Bps != link.Bps() || status.Distribution == nil || *status.Distribution != *link.Distribution() {
+		t.Fatalf("missing applied rate or distribution: %+v", status)
+	}
+	if strings.Contains(rec.Body.String(), "presets") {
+		t.Fatal("manual speed presets still advertised")
+	}
+	rec = httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/link", strings.NewReader(`{"bps":1}`)))
+	if rec.Code != http.StatusMethodNotAllowed || link.Bps() != status.Bps {
+		t.Fatalf("manual rate changes must be rejected: status %d, bps %d", rec.Code, link.Bps())
+	}
+	external := New("", "", nil).linkStatus()
+	if external.Controllable || external.Distribution != nil {
+		t.Fatalf("externally shaped link advertised automation: %+v", external)
+	}
+}
 
 func TestNodeStatusEvictions(t *testing.T) {
 	if n := nodeStatus(&pb.GetStatusResponse{ItemsEvicted: 7}); n.Evicted != 7 {
@@ -32,6 +62,32 @@ func view(id string, ms int64, tags map[string]string, forms map[pb.FormKind]boo
 		v.FormStates = append(v.FormStates, &pb.FormState{Kind: k, Bytes: 100, AckedThrough: 40, Complete: done})
 	}
 	return v
+}
+
+func TestGroupKeepsReceivedSummaryWhileNewerSummaryIsPending(t *testing.T) {
+	old := view("old", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	newer := view("new", 2000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})
+	for _, views := range [][]*pb.ItemView{{old, newer}, {newer, old}} {
+		objects, _ := Group(views, nil, nil)
+		if len(objects) != 1 || objects[0].Best.ID != "old" || objects[0].Best.Forms["fact"].State != "received" || objects[0].LastMs != 2000 || objects[0].Reports != 2 {
+			t.Fatalf("new pending summary hid receipt: %+v", objects)
+		}
+	}
+	old.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
+	objects, _ := Group([]*pb.ItemView{old, newer}, nil, nil)
+	if objects[0].Best.ID != "old" {
+		t.Fatal("pending image displaced received record")
+	}
+	old.Item.Type = newer.Item.Type
+	newer.FormStates[0].Complete = true
+	objects, _ = Group([]*pb.ItemView{old, newer}, nil, nil)
+	if objects[0].Best.ID != "new" || objects[0].Best.Forms["fact"].State != "received" {
+		t.Fatalf("new received summary did not replace earlier one: %+v", objects[0].Best)
+	}
+	objects, _ = Group([]*pb.ItemView{view("pending", 3000, nil, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})}, nil, nil)
+	if objects[0].Best.Forms["fact"].State == "received" {
+		t.Fatal("partial-only sighting gained a receipt")
+	}
 }
 
 func TestGroupBySighting(t *testing.T) {

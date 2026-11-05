@@ -38,9 +38,11 @@
   <div class="toolbar" id="feedControls">
     <span class="lbl">Sensor</span>
     <select id="srcSel"></select>
+    <label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates</label>
+    <label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter"><option value="all">All images</option><option value="sent">Sent by a person</option><option value="reviewed">Reviewed by a person</option><option value="unreviewed">Not reviewed yet</option></select></label><span class="feed-note" id="sentOrder" hidden>Newest send first</span>
     <div class="seg" id="tierSeg"></div>
     <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
-    <span class="lbl density-label">Size</span><div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button><button data-d="xl">XL</button></div>
+    <span class="lbl density-label">Size</span><div class="seg" id="densSeg"><button data-d="m" class="on">Small</button><button data-d="l">Large</button></div>
     <button type="button" class="btn sm" id="feedFilters" aria-expanded="false" aria-controls="feedControls">Filters</button>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
@@ -49,13 +51,15 @@
     <div class="spacer"></div>
     <div class="dirbar" id="dirBar"></div>
   </div>
+  <div class="upload-summary" id="uploadSummary" role="status"></div>
   <div class="strip" id="simStrip">
+    <div class="st link" id="stLink" title="Current ship-to-shore bandwidth. It changes automatically every 5 seconds; it is not adjustable."></div><span class="ar">›</span>
     <div class="st" id="st1" title="Images captured by sensors">Captured <b id="cCap">0</b></div><span class="ar">›</span>
     <div class="st" id="st2" title="Ship-side filtering keeps useful images and filters out low-value frames">Kept on ship <b id="cKeep">0</b> · filtered out <b id="cDrop">0</b></div><span class="ar">›</span>
     <div class="st" id="st3" title="Image data transmitted from ship to shore">Sent to shore <b id="cKB">0</b> MB</div><span class="ar">›</span>
-    <div class="st" id="st4" title="Images saved in storage">Stored <b id="cDb">0</b></div><span class="ar">›</span>
+    <div class="st" id="st4" title="Cumulative images saved on the ship since startup, including images later evicted from the retained feed">Saved on ship (total) <b id="cDb">0</b></div><span class="ar">›</span>
     <div class="st" id="st5" title="The scoring model ranks images using the base model and active directives">Scoring model: <b id="cModel"></b> · <b id="cP1">0</b> P1 Critical</div>
-    <span class="sv"><span id="cSaved">0%</span> of low-value frames filtered on the ship to save bandwidth</span>
+    <a class="btn sm details-link" href="#details">Details: counts &amp; filtered photos ›</a>
   </div>
   <div class="strip live-strip" id="liveStrip" hidden></div>
   <div class="cameras" id="cameras" hidden></div>
@@ -100,31 +104,37 @@
 <dialog id="wbConfirm"><h3>Read back before applying</h3><p id="wbReadback" class="wb-readback"></p><small id="wbPath" class="hint"></small><ul id="wbWarnings" class="wb-warnings" hidden></ul><p id="wbConfirmText"></p><p class="hint">Adds draft rules to active directives and saves pinned exceptions. Other sessions will update.</p><div class="wb-row"><button id="wbConfirmApply" class="primary">Confirm</button><button id="wbEditApply">Edit</button><button id="wbCancelApply">Cancel</button></div></dialog>
 </section>
 <section class="page" id="pgRv">
-  <div class="rvcard"><label>Reviewer <input id="reviewerName" maxlength="80" placeholder="Required reviewer name"></label> <button class="btn sm" id="reviewerSave">Set / change reviewer</button> <span id="reviewerStatus"></span></div>
+  <div class="rvcard"><label>Reviewer <input id="reviewerName" maxlength="80" placeholder="Required reviewer name"></label> <button class="btn sm" id="reviewerSave">Set / change reviewer</button> <span id="reviewerStatus"></span> <label id="reviewSyncLabel" hidden><input type="checkbox" id="reviewSync"> Team sync</label></div>
   <div class="rvcard"><b>Review data</b> <span id="reviewData"></span> <a href="/api/reviews/export?format=csv">Export CSV</a> · <a href="/api/reviews/export?format=jsonl">JSONL</a> <button class="btn sm" id="reviewNoteOpen">Note on last review (W)</button><div id="reviewNoteBox" hidden><input id="reviewNote" maxlength="280" placeholder="Optional note; Enter saves, Esc cancels"></div></div>
   <div class="rvtop">
-    <div class="rvprog"><b id="rvDone">0</b> reviewed · <b id="rvLeft">0</b> remaining <span id="rvSrc"></span></div>
-    <div class="rvbar"><i id="rvBarI"></i></div>
+    <div class="rvprog"><span class="rvprog-lbl">Images left in feed to review:</span> <b id="rvLeft">0</b> · <b id="rvDone">0</b> reviewed <span id="rvSrc"></span></div>
+    <div class="rvbar" role="progressbar" aria-label="Feed reviewed so far"><i id="rvBarI"></i></div><span class="rvbar-lbl">feed reviewed</span>
     <div class="spacer"></div>
+    <button class="btn sm human-btn" id="rvSent">➤ What I sent (<span id="rvSentN">0</span>)</button>
     <div class="seg" id="rvOrder"><button data-o="pri" class="on">Highest priority first</button><button data-o="new">Newest first</button></div>
     <button class="btn sm" id="nightBtn">Night mode (N)</button>
     <a class="btn sm" href="#feed">Exit (Esc)</a>
   </div>
   <div class="rvmain" id="rvMain"></div>
   <div class="rvask" id="rvAsk" hidden></div>
+  <div class="rvnext" id="rvNext" role="status" aria-live="polite"></div>
   <div class="rvkeys" id="rvKeys">
-    <button class="kb k1" data-a="1"><kbd>1</kbd>P1 Critical</button>
-    <button class="kb k2" data-a="2"><kbd>2</kbd>P2 High</button>
-    <button class="kb k3" data-a="3"><kbd>3</kbd>P3 Routine</button>
-    <button class="kb k4" data-a="4"><kbd>4</kbd>P4 Low</button>
+    <button class="kb k1" data-a="1"><span class="kb-act">Set P1 Critical &amp; next</span><kbd>1</kbd></button>
+    <button class="kb k2" data-a="2"><span class="kb-act">Set P2 High &amp; next</span><kbd>2</kbd></button>
+    <button class="kb k3" data-a="3"><span class="kb-act">Set P3 Routine &amp; next</span><kbd>3</kbd></button>
+    <button class="kb k4" data-a="4"><span class="kb-act">Set P4 Low &amp; next</span><kbd>4</kbd></button>
     <div class="kgap"></div>
-    <button class="kb acc" data-a="accept"><kbd>Space</kbd><span id="accLbl">Agree with suggested priority</span></button>
-    <button class="kb" title="Hide this image from the feed and mark it reviewed at P4 Low. The image remains stored." data-a="dismiss"><kbd>X</kbd>Not relevant</button>
-    <button class="kb cdrb" data-a="cdr"><kbd>C</kbd>Send to Commander</button>
+    <button class="kb acc" data-a="accept"><span class="kb-act" id="accLbl">Agree &amp; next</span><kbd>Space</kbd></button>
+    <button class="kb" title="Hide this image from the feed and mark it reviewed at P4 Low. The image remains stored." data-a="dismiss"><span class="kb-act">Not relevant: hide &amp; next</span><kbd>X</kbd></button>
+    <button class="kb cdrb" data-a="cdr"><span class="kb-act">Send to Commander now &amp; next</span><kbd>C</kbd></button>
     <div class="kgap"></div>
-    <button class="kb" data-a="skip" style="flex:.7"><kbd>→</kbd>Skip</button>
-    <button class="kb" data-a="undo" style="flex:.7"><kbd>Z</kbd>Undo</button>
+    <button class="kb" data-a="skip" style="flex:.7"><span class="kb-act">Skip for now</span><kbd>→</kbd></button>
+    <button class="kb" data-a="undo" style="flex:.7"><span class="kb-act">Undo last</span><kbd>Z</kbd></button>
   </div>
+</section>
+<section class="page" id="pgDetails" aria-label="Pipeline details">
+  <div class="details-head"><a class="btn sm" href="#feed">‹ Back to feed</a><h2>Details</h2></div>
+  <div id="detailsBody"></div>
 </section>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <section class="page" id="pgBrief" aria-label="Briefing workspace">
@@ -143,6 +153,7 @@
   <main id="briefPreview" aria-label="Briefing slide previews"></main>
  </div>
 </section>
+<div class="cardmenu" id="cardMenu" role="menu" hidden><button role="menuitem" class="cm-send" id="cmSendNow"><span>➤ Send now</span><small id="cmSendNowSub">Moves this image to the top of the send queue</small></button><button role="menuitem" id="cmOpen"><span>Open image details</span></button></div>
 <div class="toast" id="toast"></div>
 <dialog id="settings" class="setdlg"></dialog>
 <script src="/settings.js" defer></script>

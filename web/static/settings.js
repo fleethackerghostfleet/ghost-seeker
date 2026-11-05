@@ -5,8 +5,10 @@ window.gsSettings=(()=>{
  const BARS=[['top','Top'],['left','Left'],['right','Right'],['bottom','Bottom']];
  const THEMES=[['cic','Dark'],['day','Day'],['red','Night mode (N)']];
  const PARTS=[['hstats','Header counts'],['live','Feed status'],['clock','Clock'],['user','Watch station'],['strip','Pipeline strip'],['dirbar','Active directives'],['ov','Thumbnail source & score'],['cl','Thumbnail captions'],['tbox','Thumbnail detection boxes']];
- const DENSITIES=['s','m','l','xl'];
- const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m'});
+ const DENSITIES=['m','l'];
+ const REVIEWS=['all','reviewed','sent','unreviewed'];
+ const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:{showDuplicates:true,review:'all'}});
+ function cleanFeed(value){return {showDuplicates:value?.showDuplicates!==false,review:REVIEWS.includes(value?.review)?value.review:'all'}}
  const WIDTHS={controls:[240,480],drawer:[340,780],review:[260,600],priorities:[260,540],briefing:[240,480],commanderQueue:[240,480],commanderBrief:[280,540]};
  function cleanWidths(value){
   const result={};
@@ -19,7 +21,7 @@ window.gsSettings=(()=>{
  function load(){
   try{
    const v=JSON.parse(localStorage.getItem(KEY))||{};const d=defaults();
-   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:d.density};
+   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:cleanFeed(v.feed)};
   }catch{return defaults()}
  }
  function save(){try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}}
@@ -58,7 +60,7 @@ window.gsSettings=(()=>{
    const b=e.target.closest('.seg[data-k] button');if(b)set(b.parentElement.dataset.k,b.dataset.v);
   };
   dlg.onchange=e=>{const p=e.target.dataset.p;if(!p)return;s.hide=s.hide.filter(h=>h!==p);if(!e.target.checked)s.hide.push(p);save();apply()};
-  document.getElementById('setReset').onclick=()=>{s=defaults();save();apply()};
+  document.getElementById('setReset').onclick=()=>{s=defaults();save();apply();window.dispatchEvent(new Event('gs:feed-filters'))};
   document.getElementById('setDone').onclick=()=>dlg.close();
   document.getElementById('setBtn').onclick=()=>dlg.showModal();
  }
@@ -69,6 +71,7 @@ window.gsSettings=(()=>{
   else Object.assign(s.widths,cleanWidths({[key]:width}));
   save();apply();
  }
+ function setFeed(value){s.feed=cleanFeed({...s.feed,...value});save()}
  function density(value){if(DENSITIES.includes(value))set('density',value)}
- return {toggleRed,resize,density,get:()=>({...s,hide:[...s.hide],widths:{...s.widths}})};
+ return {toggleRed,resize,setFeed,density,get:()=>({...s,hide:[...s.hide],widths:{...s.widths},feed:{...s.feed}})};
 })();

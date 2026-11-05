@@ -26,8 +26,8 @@ make compose-demo-down        # stop + delete data and credentials -> next `make
 
 What runs (`deploy/compose/demo.compose.yml`, the same four processes as the native stack below):
 `sidecar` (edgeml image with the tracking extra, CPU torch + boxmot, `--prioritizer both`),
-`shore` (:8080), `ui` (Patrick's console on :8090 + the shaped link on :18080 — the bandwidth
-buttons work), `edge` (replays `scenarios/ghostfleet_demo` at 5 fps through the shaper into the
+`shore` (:8080), `ui` (Patrick's console on :8090 + the shaped link on :18080 — bandwidth
+varies automatically), `edge` (replays `scenarios/ghostfleet_demo` at 5 fps through the shaper into the
 sidecar, `-dedup sightings`). A one-shot `init` container writes the operator token, the HS256 unit
 key and the edge's 24 h JWT into the `demo-secrets` volume, so there is nothing to configure; the
 three Go containers run as the distroless `nonroot` user and bind to `127.0.0.1` on the host only.
@@ -144,16 +144,78 @@ then calls `/api/items/{id}/full-res`. In live mode the bridge calls shore
 `RequestPull` with `original: true`, so the edge sends the capture's original
 bytes as FULL with no re-encoding.
 
+## Transmit queue: what is sent next
+
+Bandwidth is simulated, not set by the operator: every 5 s a new rate is drawn from a normal
+distribution (mean 0.5 MB/s, clipped to 0–2 MB/s, ~5% of draws are 0 = link outage). The
+operator console shows that one rate in the connection panel. The rate is the only thing that
+decides *how fast* bytes leave the ship (`go test -run 'Throughput|GovernsSendTime' -v
+./internal/shaper ./cmd/ghost-seeker` measures it). The queue decides *what* goes next.
+
+**Simulation console (`go run ./cmd/ghost-seeker`, `internal/store/upload.go`).** On every tick
+the link budget (rate × elapsed time) is spent top-down on one ordered queue:
+
+1. Images the operator marked **Upload next**, in the order they were marked.
+2. Everything else by priority tier, P1 Critical → P4 Low.
+3. Within a tier, by shore score, highest first.
+
+Images marked **Hold upload** and images already on shore are skipped. The first image in the
+queue gets the whole budget until it is done; leftover bytes in the same tick go to the next
+one. A new higher-priority image pre-empts a partly sent one, which keeps its progress and
+resumes later. During an outage nothing moves and partly sent cards say "Link outage, paused".
+A card being sent has a blue ↑ badge in its top-right corner; a sent card has a green ✓ there.
+
+**Live stack (`edge/scheduler`).** The edge rebuilds its plan before every exchange: manifest
+entries (FACT summaries) for new items first, then payload forms ranked by priority × ladder
+weight ÷ remaining bytes, keeping each item's FACT → THUMB → CROP → FULL order. Operator pulls
+multiply an item's score by 100, so it goes next. Items below the image threshold or suppressed
+by a directive only send FACT until nothing better is waiting. The edge sizes each exchange from its own measured link
+estimate, which is internal to the scheduler; the operator only sees the shaped link rate.
+
+## Demo talking points
+
+- **Open integration:** It's an open system with an API, so any third-party system can pull the data (with authorized access).
+- **Adaptability during war:** Present the boss's mid-demo requests as proof of "adaptability during war": change collection priorities, review a contact, then show the updated report at command without rebuilding the system.
+- **Future work:** Granular audit logging of operator actions is a placeholder for later work; do not claim a complete operator-action audit trail exists today.
+
+### Empty water and shore receipts
+
+The standalone operator demo (`go run ./cmd/ghost-seeker -addr :8090`) includes
+two native-resolution, manually inspected empty-water frames from the team's
+`frames/Cruise_Ship_POV_frames/` GCS dataset. They show water, shoreline and the
+camera ship's wake, with no external contacts. No detections are invented for
+these frames. They appear under **BY-12** as **P4 Low / No contacts · empty water**
+and remain on ship, even when bandwidth is available. Interesting contacts use
+the link instead. An explicit **Upload next**, manual priority override,
+**Send to Commander**, or **Send full size** can release one for demonstration.
+The LFS archive `web/static/imagery/empty-ocean.zip` contains the original bytes
+and `provenance.json` with source, internal-use license restriction, GCS object
+generations and SHA-256 checksums. Run `git lfs pull` before building.
+
+Open **Commander View → Received** beside the ship feed: only completed demo
+uploads appear, independently of whether the operator has sent a command report.
+**Awaiting decision** contains received, escalated reports; **Decided** preserves
+the command outcome and note. Walk through sensor capture → ship scoring → shore
+receipt → operator report → command decision in the right-hand chain of custody.
+The Received count is the current retained picture, not a lifetime delivery total.
+
+In the live stack, Received reflects actual shore form states: a received summary
+can appear before an image, and Summary / Preview / Object close-up / Full image
+are listed separately. Pending or partial-only items do not count as received.
+The live object-free camera heartbeat behavior described above is unchanged;
+the empty-water backlog example is the standalone simulation, not a change to
+the sidecar or live edge scheduler. Commander View is a UI projection of the
+console feed, not a separate authorization boundary or a new audit log.
 ## 3. Three-minute presenter script
 
 | t | do | say |
 |---|---|---|
-| 0:00 | Stack already running, link preset **2 Mbps**, feed tab. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." Point at the strip: items on edge vs shore are equal, every card has a crop/thumb. |
-| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute." Watch the estimator adapt and the form chips advance. FACT and thumbnail precede larger images; actual delivery time depends on image sizes, backlog, and link overhead. FULL contains the complete capture. |
+| 0:00 | Stack already running, feed tab. Point to the automatic connection rate. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." The connection panel shows one number: the current ship-to-shore bandwidth in MB/s. |
+| 0:30 | Watch the rate change without touching any controls. | "Bandwidth is sampled every five seconds from a normal distribution centered on 0.5 MB/s, with a 0.30 MB/s standard deviation, clipped to 0–2 MB/s. About 5% of intervals drop the link." Watch the card being sent (blue ↑ badge and progress bar) and the green ✓ appear on each image once it is on shore. FACT and thumbnail precede larger images; actual delivery time depends on image sizes, backlog, and link overhead. FULL contains the complete capture. |
 | 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card with its crop, the zero-shot subtype, and we know exactly which forms have landed; 'duplicate frames folded on the edge' in the strip is what we did *not* send. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
 | 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed; matched on the sidecar subtype, the detector class or an operator override), submarines keep arriving. Policy text shows in the strip. Cards the edge flagged *unknown* are never suppressed (same rule as `edge/scoring`), so a low-confidence "Cargo Ship (Unknown)" stays — say so, it is the point of the unknown gate. |
 | 2:15 | On a card whose FULL chip is still pending click **Pull full image**, or use **Pull full frame** in the Cameras strip. | "A pull gives this image priority." Ordinary contact FULL forms can drain automatically after the smaller forms; camera-overview FULL forms are pull-only. Watch pending → partial → received on the form chip. Use **Send full size** in the image drawer to request the original bytes. |
-| 2:45 | Click **2 Mbps**; switch to **Review queue** / **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
+| 2:45 | Switch to **Review queue** / **Commander view**. | "The scheduler keeps adapting as the link varies automatically." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the separate fixed-rate headless numbers. |
 
 Historical dry run (2026-11-04, real sidecar, 8-core laptop-class VM; not rerun here with the current full-frame/form defaults): the three clips replay **interleaved** (same
 frame names, so `edge/ingest` sorts them together) and the sidecar tracks them as three sources; the

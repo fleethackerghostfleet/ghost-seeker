@@ -24,6 +24,11 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:340px minmax(0,1fr) 
 #learned ul{margin:0;padding:0;list-style:none}
 #learned li{padding:3px 0;color:var(--muted);overflow-wrap:anywhere}
 .tabs{display:flex;padding:10px 12px;gap:6px;border-bottom:1px solid var(--line)}
+.tabs{flex-wrap:wrap}.tabs button{min-height:44px;min-width:90px}
+.receipt-help{padding:10px 12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+.shore-receipt{padding:12px;border:1px solid var(--line);border-radius:6px;margin:12px 0;background:var(--panel2)}
+.shore-receipt>b,.shore-receipt>span{display:block}.shore-receipt>span{color:var(--muted)}
+.shore-receipt ul{display:flex;flex-wrap:wrap;gap:8px 20px;padding-left:16px;margin-bottom:0}
 .tabs button{flex:1;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:6px;font:inherit;font-weight:600;cursor:pointer}
 .tabs button.on{background:var(--panel2);color:var(--text);border-color:#3a4a66}.tabs span{font-size:11px;opacity:.8;margin-left:4px}
 .qlist{flex:1;overflow:auto;padding:8px}

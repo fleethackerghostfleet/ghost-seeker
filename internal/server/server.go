@@ -23,14 +23,16 @@ import (
 )
 
 type Server struct {
-	reviews  *reviews.Log
-	reviewMu sync.Mutex
-	store    *store.Store
-	hub      *hub
-	mux      *http.ServeMux
-	policy   *policyRuntime
-	compiler *command.Compiler
-	after    func(time.Duration, func())
+	syncMu    sync.Mutex
+	proposals []*reviewProposal
+	reviews   *reviews.Log
+	reviewMu  sync.Mutex
+	store     *store.Store
+	hub       *hub
+	mux       *http.ServeMux
+	policy    *policyRuntime
+	compiler  *command.Compiler
+	after     func(time.Duration, func())
 }
 
 const maxStreamClients = 64
@@ -47,6 +49,10 @@ func New(data *store.Store, options ...Option) *Server {
 	s.policy = newPolicyRuntime(opts, data)
 	s.policy.onChange = s.publishSnapshot
 	s.mux.HandleFunc("GET /api/config", s.config)
+	s.mux.HandleFunc("GET /api/review-sync", s.reviewSyncList)
+	s.mux.HandleFunc("POST /api/review-sync/proposals", s.reviewSyncCreate)
+	s.mux.HandleFunc("POST /api/review-sync/proposals/{id}/vote", s.reviewSyncVote)
+	s.mux.HandleFunc("POST /api/review-sync/proposals/{id}/resolve", s.reviewSyncResolve)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
 	s.mux.HandleFunc("GET /api/policy", s.getPolicy)
 	s.mux.HandleFunc("POST /api/policy/emcon", s.setPolicyEMCON)
@@ -60,6 +66,7 @@ func New(data *store.Store, options ...Option) *Server {
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
 	s.mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
+	s.mux.HandleFunc("POST /api/items/{id}/upload-override", s.uploadOverride)
 	s.mux.HandleFunc("POST /api/items/{id}/review", s.reviewItem)
 	s.mux.HandleFunc("POST /api/reviews/{id}/reason", s.correctReview)
 	s.mux.HandleFunc("POST /api/reviews/{id}/undo", s.correctReview)
@@ -119,6 +126,7 @@ func (s *Server) config(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sources": catalog.Sources, "classes": catalog.Classes, "models": catalog.Models,
 		"attrLabels": catalog.AttrLabels, "examples": catalog.Examples,
+		"reviewSync": true,
 	})
 }
 
@@ -406,6 +414,29 @@ func (s *Server) setModel(w http.ResponseWriter, r *http.Request) {
 	s.publishSnapshot()
 	audit(r, "model.set", "id", body.ID)
 	writeJSON(w, http.StatusOK, map[string]string{"id": body.ID})
+}
+
+func (s *Server) uploadOverride(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Override string `json:"override"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeRequestBodyError(w, err)
+		return
+	}
+	item, cdr, err := s.store.SetUploadOverride(r.PathValue("id"), body.Override, opauth.Actor(r.Context(), "TAO"))
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.PublishUpdate(item, cdr)
+	audit(r, "item.upload-override", "id", item.ID, "override", body.Override)
+	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 
 func (s *Server) patchItem(w http.ResponseWriter, r *http.Request) {

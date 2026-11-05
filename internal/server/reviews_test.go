@@ -60,8 +60,45 @@ func TestReviews(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 	it, _ := d.GetItem("i")
-	if it.Reviewed || it.Manual != 0 {
+	if it.Reviewed || it.Manual != 0 || it.HumanReviewed {
 		t.Fatal("undo did not restore")
+	}
+}
+
+func TestAutoSentReviewUndoRestoresHumanProvenance(t *testing.T) {
+	for _, priorHuman := range []bool{false, true} {
+		l, err := reviews.Open(filepath.Join(t.TempDir(), "log"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+		d := store.New(10)
+		d.Add(&command.Item{ID: "i", Manual: 1}, 0)
+		d.AutoEscalate()
+		if priorHuman {
+			tier := 2
+			d.PatchItem("i", &tier, nil, nil, nil)
+		}
+		s := New(d)
+		s.SetReviewLog(l)
+		post := func(path, body string) *httptest.ResponseRecorder {
+			w := httptest.NewRecorder()
+			s.ServeHTTP(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
+			return w
+		}
+		w := post("/api/items/i/review", `{"reviewer":"A","action":"tier","tier":3}`)
+		if w.Code != 200 {
+			t.Fatal(w.Body.String())
+		}
+		var result struct{ Record reviews.Record }
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		w = post("/api/reviews/"+result.Record.ID+"/undo", `{"reviewer":"A"}`)
+		item, _ := d.GetItem("i")
+		if w.Code != 200 || item.HumanReviewed != priorHuman || !item.AutoSent || !item.Sent {
+			t.Fatalf("undo priorHuman=%v: item=%+v response=%s", priorHuman, item, w.Body.String())
+		}
 	}
 }
 

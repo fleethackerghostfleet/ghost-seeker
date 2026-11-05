@@ -1,6 +1,6 @@
 // Package shaper is a TCP proxy with a token-bucket bandwidth cap: the
 // ship-to-shore "link" for laptop demos. The edge points its -shore at the
-// shaper and the operator UI changes the rate live (0 = link down).
+// shaper, which can vary the rate automatically (0 = link down).
 //
 // It shapes at the byte level, like Toxiproxy's bandwidth toxic, so it is
 // protocol-agnostic (gRPC/h2c, Connect, plain HTTP all pass through).
@@ -11,14 +11,34 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Preset rates in bits per second, matching the link traces and degrade.sh.
-var Presets = []int64{0, 9_600, 64_000, 256_000, 2_000_000}
+// Simulated ship-to-shore bandwidth: mean 0.5 MB/s, clipped to 0–2 MB/s.
+const (
+	MeanBps = 4_000_000
+	MaxBps  = 16_000_000
+)
+
+type NormalDistribution struct {
+	MinBps     int64   `json:"minBps"`
+	MaxBps     int64   `json:"maxBps"`
+	MeanBps    float64 `json:"meanBps"`
+	StdDevBps  float64 `json:"stdDevBps"`
+	IntervalMS int64   `json:"intervalMs"`
+}
+
+func (d NormalDistribution) rate(z float64) int64 {
+	return int64(math.Round(math.Max(float64(d.MinBps), math.Min(float64(d.MaxBps), d.MeanBps+z*d.StdDevBps))))
+}
+
+// Rate converts a standard normal sample to the available link rate.
+func (d NormalDistribution) Rate(z float64) int64 { return d.rate(z) }
 
 type Shaper struct {
 	target string
@@ -28,6 +48,7 @@ type Shaper struct {
 	conns  map[net.Conn]struct{}
 	ln     net.Listener
 	pacers [2]pacer // 0 = ship->shore, 1 = shore->ship; shared by all connections
+	normal *NormalDistribution
 }
 
 // pacer is a per-direction leaky bucket: every chunk books its airtime at
@@ -59,6 +80,43 @@ func New(target string, bps int64) *Shaper {
 	return s
 }
 
+// NewNormal samples a normal rate immediately, then every five seconds while
+// serving. The distribution is centered on 0.5 MB/s with 5% of samples at
+// zero; samples outside 0–2 MB/s are clipped (zero means a real link outage).
+// Rates stay in bits/s internally (1 MB/s = 8,000,000 bit/s).
+func NewNormal(target string) *Shaper {
+	const outageProbability = 0.05
+	stddev := MeanBps / (math.Sqrt2 * math.Erfcinv(2*outageProbability))
+	d := NormalDistribution{MinBps: 0, MaxBps: MaxBps, MeanBps: MeanBps, StdDevBps: stddev, IntervalMS: 5000}
+	s := New(target, d.rate(rand.NormFloat64()))
+	s.normal = &d
+	return s
+}
+
+func (s *Shaper) Distribution() *NormalDistribution {
+	if s.normal == nil {
+		return nil
+	}
+	d := *s.normal
+	return &d
+}
+
+func (s *Shaper) varyRate(ctx context.Context, sample func() float64) {
+	ticker := time.NewTicker(time.Duration(s.normal.IntervalMS) * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if ctx.Err() != nil {
+				return
+			}
+			s.SetBps(s.normal.rate(sample()))
+		}
+	}
+}
+
 func (s *Shaper) Bps() int64   { return s.bps.Load() }
 func (s *Shaper) Bytes() int64 { return s.bytes.Load() }
 
@@ -84,8 +142,13 @@ func (s *Shaper) ListenAndServe(ctx context.Context, addr string) error {
 	if err != nil {
 		return err
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	s.ln = ln
 	go func() { <-ctx.Done(); ln.Close() }()
+	if s.normal != nil {
+		go s.varyRate(ctx, rand.NormFloat64)
+	}
 	for {
 		c, err := ln.Accept()
 		if err != nil {

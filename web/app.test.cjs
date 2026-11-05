@@ -5,8 +5,138 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('review suggestions alone use the overlay and retain busy buttons',()=>{
+ const context=setup(),box=context.$('rvAsk'),classes=new Set();
+ box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
+ vm.runInContext("rv.ask={kind:'sug',s:{cls:'vessel',dir:'raise',n:4,of:5}};renderAsk()",context);
+ assert.equal(box.hidden,false);
+ assert.ok(classes.has('rvask-suggestion'));
+ assert.match(box.innerHTML,/Raise vessel priority\?/);
+ for(const answer of ['yes','no','later'])assert.ok(box.innerHTML.includes(`data-answer="${answer}"`));
+ vm.runInContext('rv.askBusy=true;renderAsk()',context);
+ assert.equal((box.innerHTML.match(/disabled/g)||[]).length,3);
+ vm.runInContext("rv.ask={kind:'why',id:'missing',classes:['vessel']};renderAsk()",context);
+ assert.ok(!classes.has('rvask-suggestion'));
+ assert.match(box.innerHTML,/Why did you set/);
+ vm.runInContext('rv.ask=null;renderAsk()',context);
+ assert.equal(box.hidden,true);
+ assert.equal(box.innerHTML,'');
+ assert.ok(!classes.has('rvask-suggestion'));
+});
+test('team proposals render escaped discussion, live own votes, busy buttons and isolated keys',()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.available=true;teamSync.on=true;reviewerName='Bob';
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'<Alice>',status:'pending',votes:{Bob:'agree'}};
+  receiveTeamProposal(proposal);`,context);
+ let html=context.$('rvAsk').innerHTML;
+ assert.match(html,/TEAM DISCUSSION — proposed by &lt;Alice&gt;/);
+ assert.match(html,/own-vote[^>]*>Bob: agree \(you\)/);
+ assert.equal((html.match(/data-ask="team"/g)||[]).length,5);
+ vm.runInContext('rv.askBusy=true;renderAsk()',context);
+ assert.equal((context.$('rvAsk').innerHTML.match(/disabled/g)||[]).length,5);
+ vm.runInContext("rv.askBusy=false;answers=[];answerTeamProposal=a=>answers.push(a);for(const key of ['y','n','a','r','l','escape','1','x'])reviewAskKey(key)",context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(answers)',context)),['agree','disagree','accepted','rejected','later','later']);
+ vm.runInContext("rv.askBusy=true;reviewAskKey('a')",context);
+ assert.equal(vm.runInContext('answers.length',context),6);
+});
+test('team resolution closes matching asks and learning, while sync off ignores events',()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.available=true;teamSync.on=true;messages=[];toast=m=>messages.push(m);resolved=[];
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise'}),resolve:(s,a)=>resolved.push(a)};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);receiveTeamProposal({...proposal,status:'accepted',resolvedBy:'Alice'});`,context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(resolved)',context)),['yes']);
+ assert.match(vm.runInContext('messages[0]',context),/Alice accepted Raise bird/);
+ vm.runInContext('receiveTeamProposal(proposal)',context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ vm.runInContext("teamSync.on=false;receiveTeamProposal({...proposal,id:'other'})",context);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('team sharing posts suggestions, supports local Later, and keeps failed actions open',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;teamSync.available=true;reviewerName='Alice';calls=[];toast=()=>{};
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise',n:4,of:5}),resolve:()=>{}};
+  request=async(path,method,body)=>{calls.push({path,body});return {proposal:{...body,id:'p',status:'pending',proposedBy:'Alice',votes:{}}}};
+  checkLearningSuggestion()`,context);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('calls[0].path',context),'/api/review-sync/proposals');
+ assert.equal(vm.runInContext('calls[0].body.reviewer',context),'Alice');
+ await vm.runInContext("answerTeamProposal('later')",context);
+ assert.equal(context.$('rvAsk').hidden,true);
+ vm.runInContext("teamSync.hidden.clear();renderAsk();request=async()=>{throw Error('offline')}",context);
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ assert.equal(vm.runInContext('rv.ask.team',context),'p');
+ assert.equal(vm.runInContext('rv.askBusy',context),false);
+ vm.runInContext("rv.ask=null;teamSync.proposals=[];reviewerName='';checkLearningSuggestion()",context);
+ assert.equal(vm.runInContext('!!rv.ask&&!rv.ask.team',context),true);
+});
+test('team acceptance resolves before adding a directive and votes do not add rules',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;teamSync.available=true;reviewerName='Alice';calls=[];toast=()=>{};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);
+  request=async(path,method,body)=>{calls.push({path,body});return {proposal:{...proposal,status:body.outcome||'pending',resolvedBy:'Alice'}}};`,context);
+ await vm.runInContext("answerTeamProposal('agree')",context);
+ assert.equal(vm.runInContext('calls.length',context),1);
+ assert.equal(vm.runInContext('calls[0].path',context),'/api/review-sync/proposals/p/vote');
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ assert.equal(vm.runInContext('calls[1].path',context),'/api/review-sync/proposals/p/resolve');
+ assert.equal(vm.runInContext('calls[2].path',context),'/api/directives');
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('two team acceptors add only one directive when the second resolve returns 404',async()=>{
+ const contexts=[setup(),setup()];let winner=false,directives=0,resolves=0;
+ for(const context of contexts){
+  vm.runInContext(`teamSync.on=true;reviewerName='Alice';toast=()=>{};proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};receiveTeamProposal(proposal)`,context);
+  context.request=async(path)=>{
+   if(path==='/api/review-sync')return {proposals:[]};
+   if(path==='/api/directives'){directives++;return {}};
+   resolves++;if(winner)throw Object.assign(new Error('pending proposal not found'),{status:404});winner=true;
+   return {proposal:{id:'p',cls:'bird',dir:'raise',status:'accepted',resolvedBy:'Alice'}};
+  };
+ }
+ await Promise.all(contexts.map(context=>vm.runInContext("answerTeamProposal('accepted')",context)));
+ assert.equal(resolves,2);assert.equal(directives,1);
+ for(const context of contexts)assert.equal(context.$('rvAsk').hidden,true);
+});
+test('failed rule after winning resolve defers learning and shows only the actionable error',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;reviewerName='Alice';messages=[];toast=m=>messages.push(m);learned=[];
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise'}),resolve:(s,a)=>learned.push(a)};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);teamSync.local.set('bird:raise',proposal);
+  request=async(path)=>{if(path==='/api/directives')throw Error('offline');const resolved={...proposal,status:'accepted',resolvedBy:'Alice'};receiveTeamProposal(resolved);return {proposal:resolved}};`,context);
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ vm.runInContext("receiveTeamProposal({...proposal,status:'accepted',resolvedBy:'Alice'})",context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(learned)',context)),['later']);
+ assert.equal(vm.runInContext('messages.length',context),1);
+ assert.match(vm.runInContext('messages[0]',context),/Accepted, but adding the rule failed: offline — add it on Collection Priorities/);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('enabling team sync promotes an open local suggestion only with a reviewer name',async()=>{
+ for(const name of ['Alice','']){
+  const context=setup();
+  vm.runInContext(`reviewerName=${JSON.stringify(name)};messages=[];toast=m=>messages.push(m);calls=[];
+   setupTeamSync(true);rv.ask={kind:'sug',s:{cls:'bird',dir:'raise',n:4,of:5}};
+   request=async(path,method,body)=>{calls.push(path);if(path==='/api/review-sync')return {proposals:[]};return {proposal:{...body,id:'p',status:'pending',proposedBy:reviewerName,votes:{}}}};
+   $('reviewSync').checked=true;$('reviewSync').onchange();`,context);
+  await new Promise(resolve=>setImmediate(resolve));
+  if(name){
+   assert.equal(vm.runInContext('rv.ask.team',context),'p');
+   assert.equal(vm.runInContext("calls.filter(p=>p==='/api/review-sync/proposals').length",context),1);
+   assert.match(context.$('rvAsk').innerHTML,/TEAM DISCUSSION/);
+  }else{
+   assert.equal(vm.runInContext('!!rv.ask&&!rv.ask.team',context),true);
+   assert.equal(vm.runInContext("calls.includes('/api/review-sync/proposals')",context),false);
+   assert.match(vm.runInContext('messages[0]',context),/Set your reviewer name/);
+  }
+ }
+});
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
  const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
@@ -29,19 +159,152 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
  settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
  settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
 });
-test('feed density defaults, validates, persists and reloads all sizes',()=>{
- for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}']){
+test('feed filters default to showing duplicates, persist, validate, and return defensive copies',()=>{
+ for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all"}');
+ }
+ const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
+ settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
+ settings.setFeed({review:'sent'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent'});
+ assert.equal(saved().bar,'right');
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'sent');
+ settings.setFeed({showDuplicates:true,review:'bad'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all'});
+});
+function feedContext(){
+ const context=setup();
+ vm.runInContext(`
+  filters={showDuplicates:true,review:'all'};gsSettings={get:()=>({feed:filters})};
+  function frame(id,extra={}){return {id,src:{id:'EO-P7'},tier:2,central:.7,ts:100,img:'/'+id+'.jpg',det:[],...extra}}
+  function ids(){return visible().l.map(i=>i.id).join(',')}
+ `,context);
+ return context;
+}
+test('feed shows every pipeline image by default with low-value, repeat and directive-lowered images at P4',()=>{
+ const context=feedContext();
+ vm.runInContext(`
+  items=[frame('original',{tier:1,central:.9}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),
+   frame('low',{tier:4,filtered:'low-value',central:.1}),frame('directive',{tier:4,det:[{sup:true}]}),
+   frame('mixed',{tier:3,det:[{sup:true},{sup:false}]}),frame('dismissed',{dismissed:true})];
+  before=JSON.stringify(items);
+ `,context);
+ assert.equal(vm.runInContext('ids()',context),'original,mixed,repeat,directive,low');
+ assert.equal(vm.runInContext('visible().counts[4]',context),3);
+ assert.equal(vm.runInContext("feedReasons.get('repeat')",context),'Repeat of an earlier image');
+ assert.equal(vm.runInContext("feedReasons.get('low')",context),'Low value');
+ assert.equal(vm.runInContext("feedReasons.get('directive')",context),'Lowered by directive');
+ vm.runInContext('filters.showDuplicates=false',context);
+ assert.equal(vm.runInContext('ids()',context),'original,mixed,directive,low');
+ vm.runInContext("filters.showDuplicates=true;state.tier='4'",context);
+ assert.equal(vm.runInContext('ids()',context),'repeat,directive,low');
+ assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
+});
+test('a later boost keeps the stored priority despite an earlier suppression flag',()=>{
+ const context=feedContext();
+ vm.runInContext("items=[frame('boosted',{tier:2,central:.7998,det:[{sup:true,matched:true}]}),frame('low',{tier:4})]",context);
+ assert.equal(vm.runInContext('ids()',context),'boosted,low');
+ assert.equal(vm.runInContext('visible().counts[2]',context),1);
+ assert.equal(vm.runInContext('feedTier(items[0])',context),2);
+ assert.equal(vm.runInContext('filteredReason(items[0])',context),'');
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('ids()',context),'low');
+});
+test('operator-chosen repeats stay visible at their own priority even with duplicates hidden',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('kept',{tier:2,manual:2,filtered:'duplicate'}),frame('sent',{tier:1,sent:true,filtered:'duplicate'}),frame('repeat',{tier:4,filtered:'duplicate'})];filters.showDuplicates=false`,context);
+ assert.equal(vm.runInContext('ids()',context),'sent,kept');
+ assert.equal(vm.runInContext("feedTier(items[0])",context),2);
+});
+test('human review filters separate people from automatic escalation and list newest human sends first',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('accepted',{reviewed:true}),frame('manual',{manual:2}),frame('dismissed',{dismissed:true}),frame('pending'),
+  frame('auto',{tier:1,manual:1,reviewed:true,sent:true,autoSent:true,sentAt:'2026-11-05T10:00:00Z'}),
+  frame('sent-old',{reviewed:true,sent:true,sentAt:'2026-11-05T10:01:00Z'}),frame('sent-new',{tier:4,reviewed:true,sent:true,sentAt:'2026-11-05T10:05:00Z'}),
+  frame('full',{fullRes:true,fullResAt:'2026-11-05T10:03:00Z'}),frame('other',{src:{id:'IR-U1'},reviewed:true,sent:true,sentAt:'2026-11-05T10:09:00Z'})]`,context);
+ vm.runInContext("filters.review='sent'",context);
+ assert.equal(vm.runInContext('ids()',context),'other,sent-new,full,sent-old');
+ vm.runInContext("state.src='EO-P7'",context);
+ assert.equal(vm.runInContext('ids()',context),'sent-new,full,sent-old');
+ vm.runInContext("filters.review='reviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,full,dismissed,sent-new');
+ vm.runInContext("filters.review='unreviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'auto,pending');
+ assert.equal(vm.runInContext("humanSent(items[4])",context),false);
+ assert.equal(vm.runInContext("humanSent(items[5])",context),true);
+ vm.runInContext("items[4].humanReviewed=true;items[4].manual=2;filters.review='reviewed'",context);
+ assert.ok(vm.runInContext('ids().split(",").includes("auto")',context));
+ assert.equal(vm.runInContext('humanSent(items[4])',context),false);
+});
+test('What I sent navigates from review to the filtered imagery feed',()=>{
+ const context=feedContext();
+ vm.runInContext("location={hash:'#review'};state.page='rv';state.tier='1';gsSettings.setFeed=f=>Object.assign(filters,f);syncFeedFilters=()=>{}",context);
+ const start=source.indexOf(" $('rvSent').onclick="),end=source.indexOf('\n',start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext("$('rvSent').onclick()",context);
+ assert.equal(vm.runInContext('location.hash',context),'#feed');
+ assert.equal(vm.runInContext('filters.review',context),'sent');
+ assert.equal(vm.runInContext('state.tier',context),'all');
+});
+test('cards mark human sends purple and automatic sends green',()=>{
+ assert.match(source,/<span class="cdrtag">✓ Auto-sent to Commander<\/span><span class="hsenttag">➤ Sent by operator<\/span>/);
+ assert.match(source,/\$\{it\.sent&&it\.autoSent\?' sent':''\}\$\{humanSent\(it\)\?' hsent':''\}/);
+ assert.match(css,/\.card\.hsent \.hsenttag\{display:block\}/);
+ assert.match(css,/--human:#a58bff/);
+ assert.match(html,/id="rvSent">➤ What I sent/);
+});
+test('main strip moves low-level counts to the Details screen',()=>{
+ assert.match(css,/#simStrip :is\(#st2,#st4\),#simStrip :is\(#st2,#st4\)\+\.ar,#liveStrip \.lowlevel,#liveStrip \.lowlevel\+\.ar\{display:none\}/);
+ assert.match(html,/href="#details">Details: counts &amp; filtered photos ›<\/a>/);
+ assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates<\/label>/);
+ assert.match(html,/<div class="seg" id="densSeg"><button data-d="m" class="on">Small<\/button><button data-d="l">Large<\/button><\/div>/);
+});
+test('Details screen lists automatically filtered photos by kind with their originals',()=>{
+ const context=feedContext();
+ vm.runInContext(`body={innerHTML:''};els={detailsBody:body,liveStrip:{innerHTML:''}};$=id=>els[id];imageFor=it=>'/img/'+it.id;zulu=()=>'12:00:00';
+  stats={cap:100,keep:20,drop:80,bytes:2048,db:5};
+  items=[frame('original',{tier:2}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),frame('low',{tier:4,filtered:'low-value'}),
+   frame('directive',{tier:4,det:[{sup:true}]}),frame('chosen',{filtered:'duplicate',manual:2}),frame('gone',{dismissed:true,filtered:'low-value'})];
+  renderDetails();`,context);
+ const page=()=>vm.runInContext('body.innerHTML',context);
+ assert.match(page(),/Repeats of earlier images \(1\)/);
+ assert.match(page(),/Low value \(1\)/);
+ assert.match(page(),/Lowered by directive \(1\)/);
+ assert.match(page(),/Low-value and repeat frames kept on the ship \(P4 Low\)<\/td><td class="n">80/);
+ assert.match(page(),/Useful images kept<\/td><td class="n">20/);
+ assert.doesNotMatch(page(),/Useful images sent to shore/);
+ assert.match(page(),/src="\/img\/original"[^]*Original · P2 High[^]*src="\/img\/repeat"/);
+ assert.doesNotMatch(page(),/data-id="chosen"/);
+ vm.runInContext("state.detKind='low-value';renderDetails()",context);
+ assert.match(page(),/data-id="low"/);
+ assert.doesNotMatch(page(),/data-id="gone"/);
+ vm.runInContext('stats.bytes=1048576;renderDetails()',context);
+ assert.match(page(),/Image data sent to shore<\/td><td class="n">1\.0 MB/);
+ vm.runInContext('stats.bytes=0;renderDetails()',context);
+ assert.match(page(),/Image data sent to shore<\/td><td class="n">0\.0 MB/);
+});
+test('shore rank uses all shore records by ship score regardless of review, sensor, tier or sort filters',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('highest',{live:{score:30},tier:1}),
+  frame('selected',{live:{score:20},reviewed:true}),frame('lowest',{live:{score:10}}),
+  frame('suppressed',{live:{score:40,suppressed:true}})];
+  filters.review='reviewed';state.sort='new';state.tier='2';state.src='IR-U1';
+ `,context);
+ assert.match(vm.runInContext("liveWhy(items[1])[0].t",context),/Rank 2 of 3 on shore by ship score \(20\.00\)/);
+});
+test('feed density offers only Small and Large, persists them and maps the old XL to Large',()=>{
+ for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}','{"density":"s"}']){
   assert.equal(settingsContext(saved).settings.get().density,'m');
  }
+ assert.equal(settingsContext('{"density":"xl"}').settings.get().density,'l');
  const {settings,saved}=settingsContext('{}');
- for(const density of ['s','m','l','xl']){
+ for(const density of ['m','l']){
   settings.density(density);
   assert.equal(saved().density,density);
   assert.equal(settingsContext(JSON.stringify(saved())).settings.get().density,density);
  }
- settings.density('invalid');settings.density(null);
- assert.equal(settings.get().density,'xl');
- assert.equal(saved().density,'xl');
+ settings.density('xl');settings.density('s');settings.density(null);
+ assert.equal(settings.get().density,'l');
 });
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();
@@ -320,7 +583,7 @@ test('live card updates preserve canonical priority labels',()=>{
  const context=setup();
  vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
  vm.runInContext(`
-  badge={};other={};
+  badge={};other={setAttribute(){}};
   card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
   gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
   testItem={id:'test',el:card,tier:1,central:.9,base:.8};updateCard(testItem);
@@ -343,6 +606,72 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
  assert.equal(vm.runInContext('indicator.textContent',context),'RECONNECTING');
  assert.equal(vm.runInContext("$('live').title",context),'Reconnecting — click to resume feed');
 });
+test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
+ const context=setup();
+ assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 0.03 MB\/s/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40,sent:40,done:true}})',context),/✓ Uploaded/);
+ assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
+ assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
+});
+test('partial simulation uploads show a link outage in the card and drawer state',()=>{
+ const context=setup();
+ vm.runInContext('outageItem={upload:{bytes:100,sent:25,bps:0}}',context);
+ assert.match(vm.runInContext('uploadState(outageItem).label',context),/^Link outage, paused · 25 B of 100 B$/);
+ assert.match(vm.runInContext('uploadHTML(outageItem)',context),/class="upload-label">Link outage, paused<\/span>/);
+ assert.match(vm.runInContext('uploadControlsHTML(outageItem)',context),/Link outage, paused/);
+ vm.runInContext("outageItem.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(outageItem)',context),/Upload next \(operator\) · Link outage, paused/);
+ for(const change of ["override:'hold'",'sent:0','sent:100,done:true','bps:8000','bps:undefined']){
+  assert.doesNotMatch(vm.runInContext(`uploadHTML({upload:{bytes:100,sent:25,bps:0,${change}}})`,context),/Link outage/);
+ }
+});
+test('live uploads derive progress from shown form, never from commander escalation',()=>{
+ const context=setup();
+ assert.equal(vm.runInContext("uploadState({sent:true,live:{imageForm:'crop',forms:{crop:{state:'partial',bytes:100,received:25}}}}).sent",context),25);
+ assert.equal(vm.runInContext("uploadState({live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100,received:0}}}}).done",context),true);
+ assert.equal(vm.runInContext("uploadState({live:{forms:{thumb:{state:'pending',bytes:100}}}}).queued",context),true);
+});
+test('upload override labels, toggle undo and live/viewer guards',()=>{
+ const context=setup();
+ vm.runInContext("overrideItem={upload:{bytes:100,sent:20,override:'hold'}}",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-held.*Held by operator/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Release upload/);
+ assert.equal(vm.runInContext('uploadState(overrideItem).queued',context),false);
+ vm.runInContext("overrideItem.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-next.*Upload next \(operator\)/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Back to priority order/);
+ vm.runInContext("overrideItem.upload.override=''",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/Uploading to shore/);
+ vm.runInContext("overrideItem.upload.done=true;overrideItem.upload.override='hold'",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/✓ Uploaded/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/already uploaded.*disabled/);
+ vm.runInContext("overrideItem.live={forms:{thumb:{state:'pending',bytes:100}}}",context);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/not supported by the live shore connection.*disabled/);
+ vm.runInContext("delete overrideItem.live;overrideItem.upload.done=false;gsAuth={viewer:()=>true}",context);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Viewer role is read-only.*disabled/);
+});
+test('summary corrections do not reset a received image upload',()=>{
+ const context=setup();
+ for(const state of ['pending','partial']){
+  vm.runInContext(`corrected={live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100},fact:{state:'${state}',bytes:200,received:10}}}}`,context);
+  assert.equal(vm.runInContext('uploadState(corrected).done',context),true);
+  assert.match(vm.runInContext('uploadHTML(corrected)',context),/✓ Uploaded/);
+ }
+});
+test('live active and pending forms take precedence over a received preview',()=>{
+ const context=setup();
+ vm.runInContext("liveItem={live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},crop:{state:'partial',bytes:100,received:25},full:{state:'pending',bytes:1000}}}}",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).sent',context),25);
+ assert.equal(vm.runInContext('uploadState(liveItem).done',context),false);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/Uploading to shore · 25% · Object close-up/);
+ vm.runInContext("liveItem.live.forms.crop.state='received'",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).queued',context),true);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/Queued for shore · Full image/);
+ vm.runInContext("liveItem.live.forms.full.state='received'",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
@@ -355,7 +684,7 @@ function setup(){
  vm.runInContext(policySource,context);
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
-  renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};
+  fullRenderStats=renderStats;renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};
   streamHandlers={};
   EventSource=class{addEventListener(type,handler){streamHandlers[type]=handler}};
   SRC={'EO-P7':{id:'EO-P7'}};
@@ -477,4 +806,153 @@ test('shipLine formats classified ships and omits absent details',()=>{
  assert.equal(vm.runInContext("shipLine({ship:{type:'unknown',label:'Unknown',conf:0.41}})",context),'Type: Unknown (41%)');
  assert.equal(vm.runInContext("shipLine({ship:{type:'cargo',label:'Cargo',conf:0.7}})",context),'Type: Cargo (70%)');
  assert.equal(vm.runInContext("shipVisibleLine({ship:{features:['radar mast','cranes'],markings:'not visible'}})",context),'Visible: radar mast, cranes · markings not visible');
+});
+test('bandwidth reads in MB/s and the simulation shows one connection value',()=>{
+ const src=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+ const c=vm.createContext({});
+ vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),c);
+ assert.equal(vm.runInContext('fmtRate(4000000)',c),'0.50 MB/s');
+ assert.equal(vm.runInContext('fmtRate(16000000)',c),'2.00 MB/s');
+ assert.equal(vm.runInContext('fmtRate(0)',c),'0.00 MB/s');
+ assert.equal(vm.runInContext('fmtRate(256000)',c),'0.03 MB/s');
+ assert.equal(vm.runInContext('fmtRate(73600)',c),'<0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(8000)',c),'<0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(1)',c),'<0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(80000)',c),'0.01 MB/s');
+ assert.equal(vm.runInContext('fmtRate(-1)',c),'0.00 MB/s');
+ const el={innerHTML:'',classList:{on:new Set(),toggle(k,v){v?this.on.add(k):this.on.delete(k)}}};
+ const ctx=vm.createContext({$:id=>id==='stLink'?el:null,esc:s=>String(s),stats:{linkBps:4000000}});
+ vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),ctx);
+ vm.runInContext(src.slice(src.indexOf('function linkPanelHTML('),src.indexOf('const pulling=new Set();')),ctx);
+ vm.runInContext('renderSimLink()',ctx);
+ assert.match(el.innerHTML,/Ship-to-shore connection<\/span> <b>0.50 MB\/s<\/b>.*Simulated · changes every 5 s/);
+ assert.doesNotMatch(el.innerHTML,/estimat/i);
+ assert.equal(el.classList.on.has('down'),false);
+ vm.runInContext('stats.linkBps=0;renderSimLink()',ctx);
+ assert.match(el.innerHTML,/<b>0.00 MB\/s<\/b>.*Link down — sending paused/);
+ assert.equal(el.classList.on.has('down'),true);
+ vm.runInContext('stats.linkBps=160000;stats.linkFixed=true;renderSimLink()',ctx);
+ assert.match(el.innerHTML,/Fixed test rate/);assert.doesNotMatch(el.innerHTML,/every 5 s/);
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ assert.match(html,/id="simStrip">\s*<div class="st link" id="stLink"/);
+ assert.doesNotMatch(html,/type="range"|linkPresets/);
+});
+test('cards being sent show a blue arrow and sent cards a green check in the top-right corner',()=>{
+ const context=setup();
+ const mark={},classes=new Set();
+ vm.runInContext(source.slice(source.indexOf('function sendMark('),source.indexOf('function uploadControlsHTML(')),context);
+ context.card={querySelector:s=>s==='.sendmark'?mark:null,classList:{toggle(k,v){v?classes.add(k):classes.delete(k)}}};
+ const apply=u=>{context.it={upload:u};vm.runInContext('applySendMark(card,it)',context)};
+ apply({bytes:100,sent:40,bps:8000,active:true});
+ assert.equal(mark.className,'sendmark sending');assert.equal(mark.textContent,'↑');assert.ok(classes.has('sending'));
+ apply({bytes:100,sent:40,bps:8000,active:false});
+ assert.equal(mark.className,'sendmark');assert.equal(classes.size,0);
+ apply({bytes:100,sent:40,bps:0,active:true});
+ assert.equal(mark.className,'sendmark','outage pauses the sending mark');
+ apply({bytes:100,sent:100,done:true});
+ assert.equal(mark.className,'sendmark done');assert.equal(mark.textContent,'✓');assert.ok(classes.has('uploaded'));
+ context.it={live:{imageForm:'thumb',forms:{thumb:{state:'partial',bytes:100,received:10}}}};
+ vm.runInContext("LIVE={link:{controllable:true,bps:4000000},edge:{}}",context);
+ vm.runInContext('applySendMark(card,it)',context);
+ assert.equal(mark.className,'sendmark sending');
+ vm.runInContext('LIVE.link.bps=0;applySendMark(card,it)',context);
+ assert.equal(mark.className,'sendmark','live outage: partial form is not on the wire');
+ vm.runInContext("LIVE={link:{},edge:{ok:false,estimateBps:0},shore:{estimateBps:64000}};applySendMark(card,it)",context);
+ assert.equal(mark.className,'sendmark sending','edge offline: shore estimate keeps the link up, matching the connection panel');
+ vm.runInContext("LIVE.shore.linkUp=false;applySendMark(card,it)",context);
+ assert.equal(mark.className,'sendmark','edge offline and shore reports link down: stale estimate does not mark sending');
+ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
+ assert.match(css,/\.sendmark\{[^}]*position:absolute;top:5px;right:5px/);
+ assert.match(css,/\.sendmark\.done\{[^}]*background:var\(--good\)/);
+});
+test('review buttons name their effect and key on screen',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ for(const [key,label] of [['1','Set P1 Critical &amp; next'],['2','Set P2 High &amp; next'],['3','Set P3 Routine &amp; next'],['4','Set P4 Low &amp; next'],['Space','Agree &amp; next'],['X','Not relevant: hide &amp; next'],['C','Send to Commander now &amp; next'],['Z','Undo last']]){
+  assert.ok(new RegExp(`<span class="kb-act"[^>]*>${label}</span><kbd>${key}</kbd>`).test(html),label);
+ }
+ assert.match(html,/Images left in feed to review:<\/span> <b id="rvLeft">/);
+ assert.match(html,/id="rvNext" role="status"/);
+});
+test('after a re-rank the next-step line confirms the save and names the keys',()=>{
+ const context=setup();
+ context.$('rvNext').classList={remove(){},add(){}};
+ vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};rv.last='';renderNext(rv.cur)",context);
+ let html=context.$('rvNext').innerHTML;
+ assert.match(html,/<b>Next:<\/b> Press <kbd>Space<\/kbd> to agree with P3 Routine, or <kbd>1<\/kbd>–<kbd>4<\/kbd>/);
+ assert.doesNotMatch(html,/rvnext-done/);
+ vm.runInContext("setLast('✓ Saved: last image changed P1 Critical → P2 High. Press Z to undo.');renderNext(rv.cur)",context);
+ html=context.$('rvNext').innerHTML;
+ assert.match(html,/rvnext-done">✓ Saved: last image changed P1 Critical → P2 High\. Press Z to undo\./);
+ assert.match(html,/This is the next image\. Press <kbd>Space<\/kbd>/);
+ vm.runInContext("rv.ask={kind:'why',classes:['vessel']};renderNext(rv.cur)",context);
+ assert.match(context.$('rvNext').innerHTML,/Answer the question above to continue/);
+ vm.runInContext("rv.ask=null;reviewerName='';renderNext(rv.cur)",context);
+ assert.match(context.$('rvNext').innerHTML,/Enter your reviewer name/);
+});
+test('suggestion overlay names the exact tier change',()=>{
+ const context=setup(),box=context.$('rvAsk');
+ vm.runInContext("CLS.submarine={lab:'Submarine'};rv.ask={kind:'sug',s:{cls:'submarine',dir:'lower',n:3,of:3,from:1,to:2,highRisk:true}};renderAsk()",context);
+ assert.match(box.innerHTML,/Submarine: <span class="tpill t1">P1 Critical<\/span> → <span class="tpill t2">P2 High<\/span>/);
+ assert.match(box.innerHTML,/from P1 Critical to P2 High\. Yes adds a rule that lowers Submarine priority/);
+ assert.match(box.innerHTML,/<kbd>Y<\/kbd>Yes, apply change/);
+ assert.doesNotMatch(box.innerHTML,/Lower Submarine priority\?/);
+});
+test('Send now moves a feed image to the top of the send queue',async()=>{
+ const context=setup();
+ vm.runInContext(`calls=[];messages=[];toast=m=>messages.push(m);
+  items=[{id:'img',src:{id:'EO-P7'},upload:{bytes:100,sent:0}}];
+  request=async(url,method,body)=>{calls.push([url,method,body]);return{cdr:2,item:{...items[0],upload:{...items[0].upload,override:'next'}}}};
+  applyItemUpdate=item=>{items[0]=item};`,context);
+ await vm.runInContext("sendNow('img')",context);
+ assert.equal(vm.runInContext('JSON.stringify(calls)',context),JSON.stringify([['/api/items/img/upload-override','POST',{override:'next'}]]));
+ assert.match(vm.runInContext('messages[0]',context),/top of the send queue/);
+ assert.equal(vm.runInContext('sendNowBlocked(items[0])',context),'Already at the top of the send queue');
+ await vm.runInContext("sendNow('img')",context);
+ assert.equal(vm.runInContext('calls.length',context),1);
+ vm.runInContext("items[0]={id:'img',src:{id:'EO-P7'},upload:{bytes:100,sent:100,done:true}}",context);
+ assert.equal(vm.runInContext('sendNowBlocked(items[0])',context),'Already uploaded to shore');
+});
+
+test('empty water has an obvious kept-on-ship label and explicit upload override',()=>{
+ const context=setup();
+ context.ocean={id:'ocean',src:'BY-12',ts:new Date(),background:true,dets:null,det:null,upload:{bytes:1000,sent:0,done:false,bps:64000}};
+ vm.runInContext('normalizeItem(ocean)',context);
+ assert.equal(vm.runInContext('topLine(ocean)',context),'No contacts · empty water');
+ assert.match(vm.runInContext('uploadHTML(ocean)',context),/Empty water · kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',context),false);
+ vm.runInContext("ocean.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(ocean)',context),/Upload next \(operator\)/);
+ assert.doesNotMatch(vm.runInContext('uploadHTML(ocean)',context),/kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',context),true);
+});
+
+test('upload summary counts retained empty water separately from queued and active transfers',()=>{
+ const context=setup();
+ vm.runInContext(`
+  const upload={bytes:1000,sent:0,done:false};
+  items=[{id:'ocean',background:true,upload:{...upload}},{id:'contact',upload:{...upload}},{id:'active',upload:{...upload,sent:20}}];
+  fullRenderStats();
+ `,context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 0 held · 0 uploaded · 1 kept on ship');
+ vm.runInContext("items[0].upload.override='hold';fullRenderStats()",context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 1 held · 0 uploaded');
+ vm.runInContext("items[0].upload.override='next';fullRenderStats()",context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 2 queued · 0 held · 0 uploaded');
+});
+
+test('empty water processing chain explains local retention without claiming shore delivery',()=>{
+ const context=setup();
+ context.$('drawer').querySelectorAll=()=>[];
+ context.briefing={renderDetections(){}};
+ context.zulu=()=> '12:00Z';
+ vm.runInContext(`
+  MODELS={maritime:{name:'Maritime'}};largeImage=()=>'';visible=()=>({l:items});
+  items=[normalizeItem({id:'ocean',src:'BY-12',ts:new Date(),tier:4,central:0,base:0,edge:.02,lat:{edge:15,cen:80},background:true,dets:null,det:null,upload:{bytes:1000,sent:0,done:false}})];
+  state.sel='ocean';renderDetailContent();
+ `,context);
+ const html=context.$('drawer').innerHTML;
+ assert.match(html,/empty water retained locally for demo · no automatic upload/);
+ assert.match(html,/Shore transfer: Empty water · kept on ship/);
+ assert.match(html,/Priority scoring \(simulated\)/);
+ assert.doesNotMatch(html,/0\.02 ≥ 0\.20|Sent to shore:/);
 });
