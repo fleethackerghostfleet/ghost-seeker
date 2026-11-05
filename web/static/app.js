@@ -24,7 +24,7 @@ function formChipsHTML(it){
  return FORMS.map(k=>{const st=f[k]||{state:'none'};const title=st.state==='received'?`${FORM_NAME[k]}: received (${fmtBytes(st.bytes)})`:st.state==='partial'?`${FORM_NAME[k]}: ${fmtBytes(st.received)} of ${fmtBytes(st.bytes)} — streaming over the link`:st.state==='pending'?`${FORM_NAME[k]}: waiting on the ship (${fmtBytes(st.bytes)})`:st.state==='offered'?`${FORM_NAME[k]}: available on the ship — request it to send it`:`${FORM_NAME[k]}: not available`;
   return`<span class="fchip ${st.state}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
 }
-function uploadState(it){
+function uploadState(it,describe=true){
  let u=it.upload,form='';
  if(it.live){
   const forms=it.live.forms||{};
@@ -42,8 +42,8 @@ function uploadState(it){
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
  const sending=!done&&!held&&!paused&&!background&&!!u?.active;
  const queued=!done&&!held&&!background&&!sending;
- const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
- const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
+ const transfer=describe?`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`:'';
+ const label=describe?(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:''):'';
  return{bytes,sent,done,queued,label,form,held,next,paused,background,sending};
 }
 function uploadHTML(it){
@@ -51,7 +51,7 @@ function uploadHTML(it){
  return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
 }
 function sendMark(it){
- const u=uploadState(it);
+ const u=uploadState(it,false);
  return u.done?{cls:'sendmark done',text:'✓',title:'Sent to shore'}:u.sending?{cls:'sendmark sending',text:'↑',title:'Sending to shore now'}:{cls:'sendmark',text:'',title:''};
 }
 function applySendMark(el,it){
@@ -207,7 +207,7 @@ function mergeItem(raw,fresh=true){
  }else{item.fresh=fresh;items.push(item);itemByID.set(item.id,item)}
  dirtyItems.add(item.id);
  if(rv.cur?.id===item.id)rv.cur=findItem(item.id);
- if(fresh){['st1','st2','st3','st4','st5'].forEach((id,index)=>setTimeout(()=>flash(id),index*140));setTimeout(()=>{const current=findItem(item.id);if(current){current.fresh=false;dirtyItems.add(current.id);scheduleFeedFlush()}},6000)}
+ if(fresh){['st1','st2','st3','st4','st5'].forEach((id,index)=>setTimeout(()=>flash(id),index*140));setTimeout(()=>{const current=findItem(item.id);if(current){current.fresh=false;dirtyItems.add(current.id);scheduleFeedFlush(true)}},6000)}
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
@@ -421,7 +421,7 @@ function feedTier(it){return it.tier}
 function reviewMatch(it,review){return isScene(it)?review==='all':review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
  const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:false,review:'all'};
- let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&!(f.hideUploaded&&uploadState(i).done));
+ let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&!(f.hideUploaded&&uploadState(i,false).done));
  feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
@@ -431,12 +431,13 @@ function visible(){
  return{l,counts};
 }
 function hideableRepeat(it){return !isScene(it)&&it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
-function uploadedCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&uploadState(i).done).length}
-function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)&&!(f.hideUploaded&&uploadState(i).done)).length}
+function uploadedCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&uploadState(i,false).done).length}
+function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)&&!(f.hideUploaded&&uploadState(i,false).done)).length}
 /* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
 function pairRepeats(l){
- const ids=new Set(l.map(i=>i.id)),after=new Map();
- for(const i of l)if(hideableRepeat(i)&&i.dupOf&&ids.has(i.dupOf)){const o=l.find(x=>x.id===i.dupOf);if(o&&!hideableRepeat(o)){if(!after.has(o.id))after.set(o.id,[]);after.get(o.id).push(i)}}
+ const originals=new Map(),after=new Map();
+ for(const i of l)if(!originals.has(i.id))originals.set(i.id,i);
+ for(const i of l)if(hideableRepeat(i)&&i.dupOf){const o=originals.get(i.dupOf);if(o&&!hideableRepeat(o)){if(!after.has(o.id))after.set(o.id,[]);after.get(o.id).push(i)}}
  if(!after.size)return l;
  const moved=new Set([...after.values()].flat().map(i=>i.id)),out=[];
  for(const i of l){if(moved.has(i.id))continue;out.push(i);if(after.has(i.id))out.push(...after.get(i.id))}
@@ -449,11 +450,12 @@ const SOURCE_MIX_WINDOW=8;
 function mixSources(l,group){
  const srcOf=i=>i.src?.id??i.src;
  if(new Set(l.map(srcOf)).size<2)return l;
- const rest=l.slice(),out=[],last=new Map();
- while(rest.length){
-  const g=group(rest[0]);let pick=0,best=Infinity;
-  for(let j=0;j<rest.length&&j<SOURCE_MIX_WINDOW&&group(rest[j])===g;j++){const seen=last.has(srcOf(rest[j]))?last.get(srcOf(rest[j])):-1;if(seen<best){best=seen;pick=j}}
-  const it=rest.splice(pick,1)[0];last.set(srcOf(it),out.length);out.push(it);
+ const window=[],out=[],last=new Map();let next=0;
+ while(next<l.length||window.length){
+  while(next<l.length&&window.length<SOURCE_MIX_WINDOW){const it=l[next++];window.push({it,src:srcOf(it),group:group(it)})}
+  const g=window[0].group;let pick=0,best=Infinity;
+  for(let j=0;j<window.length&&window[j].group===g;j++){const seen=last.has(window[j].src)?last.get(window[j].src):-1;if(seen<best){best=seen;pick=j}}
+  const {it,src}=window.splice(pick,1)[0];last.set(src,out.length);out.push(it);
  }
  return out;
 }
@@ -577,7 +579,7 @@ function renderStats(){
   if(it.tier===1)allP1++;
   if(state.src!=='ALL'&&it.src.id!==state.src)continue;
   total++;if(it.tier===1)p1++;if(!isScene(it)&&!it.reviewed&&!it.dismissed)unrev++;if(humanSent(it))humanSentCount++;
-  if(!it.dismissed){const u=uploadState(it);if(u.done)done++;if(u.queued)queued++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
+  if(!it.dismissed){const u=uploadState(it,false);if(u.done)done++;if(u.queued)queued++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
  }
  const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
  $('hsImgs').textContent=total;$('rvSentN').textContent=humanSentCount;$('hsP1').textContent=p1;$('hsCdr').textContent=cdr;

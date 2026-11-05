@@ -4,7 +4,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
-function setup(){
+function setup(appSource=source){
  const elements=new Map(),frames=new Map(),timers=new Map();let next=0;
  const grid={children:[],insertBefore(el,before){el.remove();const i=before?this.children.indexOf(before):this.children.length;this.children.splice(i,0,el)}};
  elements.set('grid',grid);
@@ -17,7 +17,7 @@ function setup(){
   card:id=>({dataset:{id},scrollIntoView(){},remove(){const i=grid.children.indexOf(this);if(i>=0)grid.children.splice(i,1)},getBoundingClientRect(){throw Error('large feeds must not read card geometry')}})
  });
  context.window=context;
- vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
+ vm.runInContext(appSource.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
   SRC={sensor:{id:'sensor'}};filters={showFiltered:true,review:'all'};gsSettings={get:()=>({feed:filters})};
   renderDirBar=()=>{};renderTierSeg=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};renderReview=()=>{};
@@ -168,4 +168,58 @@ test('sidebar mutation observers coalesce geometry work to one frame per panel',
  assert.equal(frames.length,observers.length);
  for(const callback of frames)callback();
  assert.equal(queries,before+observers.length);
+});
+test('bounded source mixing matches the original order on large mixed groups without mutating input',()=>{
+ const {context:c}=setup();
+ vm.runInContext(`
+  function oldMix(l,group){
+   const srcOf=i=>i.src?.id??i.src;
+   if(new Set(l.map(srcOf)).size<2)return l;
+   const rest=l.slice(),out=[],last=new Map();
+   while(rest.length){
+    const g=group(rest[0]);let pick=0,best=Infinity;
+    for(let j=0;j<rest.length&&j<8&&group(rest[j])===g;j++){const seen=last.has(srcOf(rest[j]))?last.get(srcOf(rest[j])):-1;if(seen<best){best=seen;pick=j}}
+    const it=rest.splice(pick,1)[0];last.set(srcOf(it),out.length);out.push(it);
+   }
+   return out;
+  }
+  mixed=Array.from({length:3200},(_,i)=>({id:i,src:i%2?{id:'s'+(i*17%13)}:'s'+(i*17%13),tier:Math.floor(i/800),minute:Math.floor(i/19)%7}));
+ `,c);
+ for(const group of ['i=>i.tier','i=>i.minute','()=>1']){
+  assert.equal(vm.runInContext(`JSON.stringify(mixSources(mixed,${group}).map(i=>i.id))===JSON.stringify(oldMix(mixed,${group}).map(i=>i.id))`,c),true);
+ }
+ assert.equal(vm.runInContext('mixed.every((it,i)=>it.id===i)',c),true);
+ assert.equal(vm.runInContext('mixSources([],()=>1).length',c),0);
+ assert.equal(vm.runInContext("single=mixed.slice(0,1);mixSources(single,()=>1)===single",c),true);
+ const started=performance.now();
+ assert.equal(vm.runInContext('calls=0;mixSources(mixed,i=>{calls++;return i.tier}).length===3200&&calls===3200',c),true);
+ assert.ok(performance.now()-started<1000,'mixing 3,200 items should take under one second');
+});
+test('repeat pairing indexes originals and preserves missing, repeated and chained duplicate behavior',()=>{
+ const {context:c}=setup();
+ vm.runInContext(`
+  original={id:'a'},repeat={id:'b',filtered:'duplicate',dupOf:'a'},chain={id:'c',filtered:'duplicate',dupOf:'b'},missing={id:'d',filtered:'duplicate',dupOf:'absent'};
+  list=[chain,repeat,missing,original];list.find=()=>{throw Error('linear original search')};
+ `,c);
+ assert.equal(vm.runInContext("pairRepeats(list).map(i=>i.id).join(',')",c),'c,d,a,b');
+ assert.equal(vm.runInContext('pairRepeats([]).length',c),0);
+});
+test('status-only upload checks do not format per-item byte or rate labels',()=>{
+ const {context:c}=setup(source.replace('const fmtBytes=','let fmtBytes=').replace('const fmtRate=','let fmtRate='));
+ vm.runInContext(`
+  upload={upload:{bytes:100,sent:20,bps:8000,active:true}};
+  described=uploadState(upload);plain=uploadState(upload,false);
+ `,c);
+ assert.equal(vm.runInContext("Object.keys(described).every(k=>k==='label'||described[k]===plain[k])&&plain.label===''&&described.label.includes('20 B')",c),true);
+ vm.runInContext(`fmtBytes=fmtRate=()=>{throw Error('status checks must not format labels')};
+  populate(3200);for(const it of items)it.upload=upload.upload;uploadedCount();filters.hideUploaded=true;visible();sendMark(items[0]);`,c);
+ vm.runInContext(source.slice(source.indexOf('function renderStats('),source.indexOf('/* ---- details screen:')),c);
+ vm.runInContext('renderSimLink=()=>{};stats={cap:3200,keep:3200,drop:0,bytes:0,db:3200};renderStats()',c);
+});
+test('freshness expiry updates cards without refiltering the retained collection',()=>{
+ const h=setup(),c=h.context;
+ vm.runInContext("mergeItem(raw('new'));renderFeed(true);updated=[];visible=()=>{throw Error('freshness does not affect ordering')}",c);
+ [...h.timers.values()].find(t=>t.ms===6000).fn();
+ h.frame();
+ assert.equal(vm.runInContext("updated.join(',')==='new'&&!findItem('new').fresh",c),true);
 });
