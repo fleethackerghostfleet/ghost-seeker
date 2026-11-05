@@ -7,6 +7,24 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('review suggestions alone use the overlay and retain busy buttons',()=>{
+ const context=setup(),box=context.$('rvAsk'),classes=new Set();
+ box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
+ vm.runInContext("rv.ask={kind:'sug',s:{cls:'vessel',dir:'raise',n:4,of:5}};renderAsk()",context);
+ assert.equal(box.hidden,false);
+ assert.ok(classes.has('rvask-suggestion'));
+ assert.match(box.innerHTML,/Raise vessel priority\?/);
+ for(const answer of ['yes','no','later'])assert.ok(box.innerHTML.includes(`data-answer="${answer}"`));
+ vm.runInContext('rv.askBusy=true;renderAsk()',context);
+ assert.equal((box.innerHTML.match(/disabled/g)||[]).length,3);
+ vm.runInContext("rv.ask={kind:'why',id:'missing',classes:['vessel']};renderAsk()",context);
+ assert.ok(!classes.has('rvask-suggestion'));
+ assert.match(box.innerHTML,/Why did you set/);
+ vm.runInContext('rv.ask=null;renderAsk()',context);
+ assert.equal(box.hidden,true);
+ assert.equal(box.innerHTML,'');
+ assert.ok(!classes.has('rvask-suggestion'));
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);

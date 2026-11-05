@@ -480,6 +480,7 @@ function rvQueue(){const l=items.filter(i=>(state.src==='ALL'||i.src.id===state.
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
+ box.classList.toggle('rvask-suggestion',rv.ask?.kind==='sug');
  if(!rv.ask){box.hidden=true;box.innerHTML='';return}
  box.hidden=false;
  if(rv.ask.kind==='why'){
