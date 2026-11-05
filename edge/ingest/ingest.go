@@ -13,7 +13,6 @@ import (
 	"hash/fnv"
 	"image"
 	"image/jpeg"
-	_ "image/png"
 	"io"
 	"log/slog"
 	"maps"
@@ -35,6 +34,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 )
 
 // Capture is one thing a source produced.
@@ -107,6 +107,10 @@ type Config struct {
 	// sidecar flags near_duplicate folds into its nearest prior item (counted in
 	// Deduped); in naive mode it is stored with the penalized score instead.
 	Prioritizer string
+	// FrameBufferAge / FrameBufferBytes bound the per-source ring of recent
+	// frames (sightings mode) that a late OPEN is cut from; see keyCapture.
+	FrameBufferAge   time.Duration
+	FrameBufferBytes int
 }
 
 // unknown reports whether an analyzer unknownness score marks the item
@@ -123,6 +127,7 @@ func DefaultConfig() Config {
 	return Config{ThumbWidth: 160, ThumbHeight: 160, ThumbQual: 55,
 		CropQual: 80, CropMargin: 1.5, CropMinShort: 96, CropPad: 0.15, CropMinConf: 0, CropMaxArea: 0.6,
 		FullQual: 90, Dedup: DedupHash, SceneEvery: 60 * time.Second,
+		FrameBufferAge: 3 * time.Second, FrameBufferBytes: 16 << 20,
 		KnownLabels: []string{"cargo ship", "container ship", "sailboat", "fishing vessel", "tanker", "small boat", "buoy"}}
 }
 
@@ -145,8 +150,11 @@ type Ingester struct {
 	// key frame. In-memory only: after a restart a later key frame opens a
 	// new item linked by tags["sighting_id"].
 	sightings map[string]string
-	lastScene map[string]time.Time // source -> captured-at of the last stored scene item
-	stateful  map[string]bool      // source -> the engine has reported sightings for it
+	lastScene map[string]time.Time     // source -> captured-at of the last stored scene item
+	stateful  map[string]bool          // source -> the engine has reported sightings for it
+	recent    map[string][]recentFrame // source -> recent frames, newest last (see remember)
+	// LateKeyFrames counts sightings whose image forms were cut from a buffered frame.
+	LateKeyFrames int64
 	// tomerItems maps the sidecar's ImagePriority.frame_id to the item that
 	// kept that frame, so near_duplicate frames can fold into it (bounded ring).
 	tomerItems map[string]string
@@ -215,6 +223,7 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 			}
 		}
 		if g.cfg.Dedup == DedupSightings {
+			g.remember(c, hash)
 			if len(resp.Sightings) > 0 {
 				return g.applySightings(ctx, c, hash, resp)
 			}
@@ -403,7 +412,7 @@ func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Si
 // capture when FULL was re-encoded, else nil.
 func (g *Ingester) imageForms(data []byte, resp *pb.AnalyzeResponse, s *pb.Sighting) (payloads map[pb.FormKind][]byte, original []byte) {
 	payloads = map[pb.FormKind][]byte{pb.FormKind_FORM_KIND_FULL: data}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := imglimit.Decode(data, 0)
 	if err != nil {
 		g.log.Warn("decode", "err", err)
 		return payloads, nil
@@ -441,7 +450,7 @@ func (g *Ingester) imageForms(data []byte, resp *pb.AnalyzeResponse, s *pb.Sight
 // a CROP from the previous frame would be wrong, so the usual gates (unknown,
 // smaller than FULL) don't apply; with no box at all the whole frame is used.
 func (g *Ingester) replacementCrop(data []byte, resp *pb.AnalyzeResponse, s *pb.Sighting) ([]byte, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := imglimit.Decode(data, 0)
 	if err != nil {
 		return nil, err
 	}

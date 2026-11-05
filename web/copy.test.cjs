@@ -23,15 +23,14 @@ test('advanced collection settings are together and collapsed, with active direc
 });
 
 test('different dismissal consequences are explained without changing action keys',()=>{
- const html=read('index.html'),app=read('app.js'),shore=read('shore.js'),workbench=read('workbench.js'),commander=read('cdr.js');
+ const html=read('index.html'),app=read('app.js'),workbench=read('workbench.js'),commander=read('cdr.js');
  assert.match(html,/title="Hide this image from the feed and mark it reviewed at P4 Low\. The image remains stored\." data-a="dismiss"/);
  assert.match(app,/id="aDis" title="Hide this image from the feed and mark it reviewed\. The image remains stored\.">Not relevant/);
  assert.match(app,/title="The computer drew a detection box on the wrong thing\.[^"]*" data-choice="wrong"/);
- assert.match(shore,/title="Mark this object as not relevant in this browser’s review queue\.[^"]*" data-act="dismiss"/);
  assert.match(workbench,/title="Propose a rule to lower the priority of similar images\.[^"]*">Not relevant/);
  assert.match(commander,/Record a final decision to take no further action\. The image remains stored in Decided\./);
  assert.match(app,/Image hidden from feed \(still stored\)/);
- for(const source of [app,shore])assert.match(source,/Not sent: enter your name or operator ID in the confirmation box/);
+ assert.match(app,/Not sent: enter your name or operator ID in the confirmation box/);
 });
 
 test('obsolete operator terms are absent from visible copy',()=>{

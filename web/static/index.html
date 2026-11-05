@@ -45,7 +45,7 @@
     <div class="spacer"></div>
     <div class="dirbar" id="dirBar"></div>
   </div>
-  <div class="strip">
+  <div class="strip" id="simStrip">
     <div class="st" id="st1" title="Images captured by sensors">Captured <b id="cCap">0</b></div><span class="ar">›</span>
     <div class="st" id="st2" title="Ship-side filtering keeps useful images and filters out low-value frames">Kept on ship <b id="cKeep">0</b> · filtered out <b id="cDrop">0</b></div><span class="ar">›</span>
     <div class="st" id="st3" title="Image data transmitted from ship to shore">Sent to shore <b id="cKB">0</b> MB</div><span class="ar">›</span>
@@ -53,6 +53,8 @@
     <div class="st" id="st5" title="The scoring model ranks images using the base model and active directives">Scoring model: <b id="cModel"></b> · <b id="cP1">0</b> P1 Critical</div>
     <span class="sv"><span id="cSaved">0%</span> of low-value frames filtered on the ship to save bandwidth</span>
   </div>
+  <div class="strip live-strip" id="liveStrip" hidden></div>
+  <div class="cameras" id="cameras" hidden></div>
  </div>
  <div class="fbody">
   <div class="feed" id="feed"><div class="grid m" id="grid"></div><div class="empty" id="empty" style="display:none">No images match this filter yet…</div></div>
@@ -84,10 +86,10 @@
   <div class="wb-admin">
    <section class="panel"><div class="wb-row"><h3>Active directives</h3><div class="spacer"></div><button class="btn sm" id="clearDir">Clear all</button></div><p class="hint">The base model sets starting scores. These directives adjust them to reflect what matters to you.</p><div class="dirs" id="directives"></div><div id="policyConflicts"></div></section>
    <details class="panel"><summary>Advanced settings</summary>
-   <section class="panel"><h3>Base prioritization model</h3><p class="hint">The base model gives each object a starting score. Active directives adjust those scores to reflect your priorities; image-specific exceptions override the resulting priority.</p><div class="mrow"><select id="modelSel"></select></div><div class="modeldesc" id="modelDesc"></div></section>
-   <section class="panel"><h3>Effective object weights <span id="wNote"></span></h3><div id="weights"></div></section>
+   <section class="panel sim-only"><h3>Base prioritization model</h3><p class="hint">The base model gives each object a starting score. Active directives adjust those scores to reflect your priorities; image-specific exceptions override the resulting priority.</p><div class="mrow"><select id="modelSel"></select></div><div class="modeldesc" id="modelDesc"></div></section>
+   <section class="panel sim-only"><h3>Effective object weights <span id="wNote"></span></h3><div id="weights"></div></section>
    <section class="panel" id="policyAdmin" hidden><h3>Super admin · raw policy (protojson)</h3><textarea id="polRaw" spellcheck="false" rows="14"></textarea><div class="wb-row"><button id="polRawValidate">Validate</button><button id="polRawApply" class="primary">Apply</button><button id="polRawReload">Reload</button></div><div id="polRawMsg" role="status"></div></section>
-   <section class="panel" id="policyAudit"><h3>Policy audit · newest 50</h3><div class="policy-table-wrap"><table class="policy-audit"><thead><tr><th>Time</th><th>Who</th><th>Source</th><th>Version</th><th>Text</th><th>Result</th><th>Reason</th></tr></thead><tbody id="policyAuditRows"></tbody></table></div></section>
+   <section class="panel sim-only" id="policyAudit"><h3>Policy audit · newest 50</h3><div class="policy-table-wrap"><table class="policy-audit"><thead><tr><th>Time</th><th>Who</th><th>Source</th><th>Version</th><th>Text</th><th>Result</th><th>Reason</th></tr></thead><tbody id="policyAuditRows"></tbody></table></div></section>
    </details>
   </div>
  </div>

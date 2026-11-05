@@ -3,6 +3,8 @@ package ingest
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -776,5 +778,120 @@ func TestReplacedKeyFrameRecutsExistingCrop(t *testing.T) {
 	f := rep.Form(pb.FormKind_FORM_KIND_CROP)
 	if f == nil || f.Hash == before || f.Mime != "image/jpeg" {
 		t.Fatalf("CROP must be re-cut from the new key frame: %+v (old hash %s)", f, before)
+	}
+}
+
+// A sighting the engine opens late (tentative single detection reported
+// tentative_after_s after it was seen) is cut from the buffered frame nearest
+// its last_seen, not from the object-free frame in hand.
+func TestLateOpenUsesBufferedFrame(t *testing.T) {
+	ctx := context.Background()
+	unknown := sighting("s1", pb.Sighting_EVENT_DUPLICATE, false, "") // not yet known: stores nothing, frames still buffered
+	late := sighting("s1", pb.Sighting_EVENT_OPEN, false, "tentative")
+	an := &scripted{script: map[int][]*pb.Sighting{1: {unknown}, 2: {unknown}, 3: {unknown}, 4: {late}}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+
+	var caps []*Capture
+	for shade := uint8(10); shade <= 30; shade += 10 {
+		c := capture(clk, shade)
+		c.Geo, c.Tags = &pb.Geo{Lat: float64(shade)}, map[string]string{"cam": "a"}
+		caps = append(caps, c)
+		if _, err := g.Ingest(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seen := caps[1] // the object was in frame 2, 400 ms before the frame that carries the OPEN
+	late.LastSeenUnixMs = seen.CapturedAt.UnixMilli() + 30
+	now := capture(clk, 40)
+	if _, err := g.Ingest(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	rows := items(t, st)
+	if len(rows) != 1 {
+		t.Fatalf("items = %d, want 1", len(rows))
+	}
+	sum := sha256.Sum256(seen.Data)
+	if got := rows[0].Item.ContentHash; got != hex.EncodeToString(sum[:]) {
+		t.Fatalf("item cut from the wrong frame: hash %s", got[:8])
+	}
+	if rows[0].Item.CapturedAtUnixMs != seen.CapturedAt.UnixMilli() {
+		t.Fatalf("captured_at = %d, want %d", rows[0].Item.CapturedAtUnixMs, seen.CapturedAt.UnixMilli())
+	}
+	if g.LateKeyFrames != 1 {
+		t.Fatalf("LateKeyFrames = %d", g.LateKeyFrames)
+	}
+	if got := rows[0].Item.GetGeo().GetLat(); got != seen.Geo.Lat {
+		t.Fatalf("item geo lat = %v, want the buffered frame's %v", got, seen.Geo.Lat)
+	}
+	if _, leaked := g.recent["cam-a"][1].tags["subtype"]; leaked {
+		t.Fatal("the item's feature tags leaked into the buffered frame")
+	}
+	if full := mustRead(t, st, rows[0].Item.Id, pb.FormKind_FORM_KIND_FULL); len(full) == 0 {
+		t.Fatal("no FULL form")
+	}
+}
+
+// An OPEN whose last_seen is the frame in hand (the normal case) and one older
+// than the buffer are both cut from the current frame.
+func TestOpenInHandOrBeyondBufferUsesCurrentFrame(t *testing.T) {
+	ctx := context.Background()
+	open1 := sighting("s1", pb.Sighting_EVENT_OPEN, true, "")
+	open2 := sighting("s2", pb.Sighting_EVENT_OPEN, false, "tentative")
+	an := &scripted{script: map[int][]*pb.Sighting{1: {open1}, 2: {open2}}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	g.cfg.FrameBufferAge = 300 * time.Millisecond
+
+	c1 := capture(clk, 10)
+	open1.LastSeenUnixMs = c1.CapturedAt.UnixMilli()
+	if _, err := g.Ingest(ctx, c1); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(2 * time.Second)
+	c2 := capture(clk, 20)
+	open2.LastSeenUnixMs = c1.CapturedAt.UnixMilli() // older than the frame in hand, but c1 has aged out of the ring
+	if _, err := g.Ingest(ctx, c2); err != nil {
+		t.Fatal(err)
+	}
+	rows := items(t, st)
+	if len(rows) != 2 {
+		t.Fatalf("items = %d, want 2", len(rows))
+	}
+	for _, c := range []*Capture{c1, c2} {
+		sum := sha256.Sum256(c.Data)
+		found := false
+		for _, r := range rows {
+			found = found || r.Item.ContentHash == hex.EncodeToString(sum[:])
+		}
+		if !found {
+			t.Fatalf("no item cut from frame at %d", c.CapturedAt.UnixMilli())
+		}
+	}
+	if g.LateKeyFrames != 0 {
+		t.Fatalf("LateKeyFrames = %d, want 0", g.LateKeyFrames)
+	}
+}
+
+func TestRememberBounds(t *testing.T) {
+	g, _, clk := newIngester(t, DedupSightings, &scripted{})
+	g.cfg.FrameBufferAge, g.cfg.FrameBufferBytes = time.Second, 3*len(frameJPEG(1))+1
+	for i := 0; i < 10; i++ {
+		c := capture(clk, uint8(i))
+		g.remember(c, "h")
+	}
+	ring := g.recent["cam-a"]
+	if len(ring) != 3 {
+		t.Fatalf("ring = %d frames, want 3 (bytes bound)", len(ring))
+	}
+	clk.Advance(5 * time.Second)
+	g.remember(capture(clk, 99), "h2")
+	if n := len(g.recent["cam-a"]); n != 1 {
+		t.Fatalf("ring after 5 s gap = %d, want 1 (age bound)", n)
+	}
+	clk.Advance(5 * time.Second)
+	other := capture(clk, 1)
+	other.Source = "cam-b"
+	g.remember(other, "h3")
+	if _, kept := g.recent["cam-a"]; kept {
+		t.Fatal("a source that went quiet still holds frames")
 	}
 }

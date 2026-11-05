@@ -18,9 +18,10 @@ def main(argv=None) -> None:
     ap.add_argument("--tracker", default="bytetrack")
     ap.add_argument("--asso", default="centroid")
     ap.add_argument("--max-lost-s", type=float, default=6.0)
-    ap.add_argument("--score-thr", type=float, default=0.25)
+    ap.add_argument("--score-thr", type=float, default=0.35, help="new tracks / reports need a detection at least this confident")
     ap.add_argument("--det-low-thr", type=float, default=0.05)
     ap.add_argument("--agg", default=None, help='AggregatorParams overrides as JSON, e.g. \'{"min_hits":2}\'')
+    ap.add_argument("--trk", default=None, help='TrackerParams overrides as JSON, e.g. \'{"tentative_thresh":null}\'')
     ap.add_argument("--text-tower", default="cache", choices=["cache", "torch"],
                     help="EmbedText source: 'cache' = ORT text_cache.json only (no torch); 'torch' = fall back to the torch text tower for uncached text")
     ap.add_argument("--prioritizer", default="edgeml", choices=["edgeml", "tomer", "both"],
@@ -30,6 +31,8 @@ def main(argv=None) -> None:
     ap.add_argument("--tomer-dup-threshold", type=float, default=0.5,
                     help="combined color+pHash similarity at/above which a frame is flagged near_duplicate (default 0.5)")
     ap.add_argument("--tomer-window", type=int, default=64, help="kept frames per source compared against (default 64)")
+    ap.add_argument("--anomaly-fallback", nargs="?", const="{}", default=None, metavar="JSON",
+                    help='add the horizon-band sea-anomaly proposer behind the detector (optional SeaAnomalyProposer kwargs JSON, e.g. \'{"z_thr":3.5}\')')
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -52,7 +55,9 @@ def main(argv=None) -> None:
 
         engine = EdgemlEngine(a.detector, a.embed, threads=a.threads, fps=a.fps, engine=a.engine, tracker=a.tracker, asso=a.asso,
                               max_lost_s=a.max_lost_s, score_thr=a.score_thr, det_low_thr=a.det_low_thr,
-                              agg=json.loads(a.agg) if a.agg else None, text_tower=a.text_tower)
+                              agg=json.loads(a.agg) if a.agg else None, trk=json.loads(a.trk) if a.trk else None,
+                              text_tower=a.text_tower,
+                              anomaly_fallback=json.loads(a.anomaly_fallback) if a.anomaly_fallback is not None else None)
     prioritizer = None
     if a.prioritizer != "edgeml":
         from .tomer import TomerPrioritizer

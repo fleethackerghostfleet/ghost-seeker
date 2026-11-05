@@ -14,12 +14,14 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shorebridge"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
@@ -38,6 +40,7 @@ func main() {
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
+	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
 	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
@@ -48,6 +51,11 @@ func main() {
 	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
 	llmModel := flag.String("llm-model", os.Getenv("GS_LLM_MODEL"), "local LLM model name")
 	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
+	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
+	opTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "operator token file")
+	operatorJWT := flag.String("operator-jwt", os.Getenv("GS_OPERATOR_JWT"), "operator JWT for shore policy authorization")
+	operatorJWTFile := flag.String("operator-jwt-file", os.Getenv("GS_OPERATOR_JWT_FILE"), "read operator JWT from a file")
+	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
 	flag.Parse()
 
 	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
@@ -57,15 +65,28 @@ func main() {
 		log.Printf("NL compiler: local LLM at %s", *llmURL)
 	}
 
+	operator, devMode, err := opauth.Load(*opToken, *opTokenFile, *devTokenFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sessions := opauth.NewSessions(operator, devMode)
+	if devMode {
+		log.Printf("operator token auto-generated for a local demo (%s); loopback browsers are signed in automatically", *devTokenFile)
+	}
+
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler)
+		jwt, err := unitauth.Credential(*operatorJWT, *operatorJWTFile)
+		if err != nil {
+			log.Fatalf("-operator-jwt: %v", err)
+		}
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID, jwt)
 		return
 	}
 
 	data := store.New(*retain)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
-	options := []server.Option{server.WithAdmin(*admin), server.WithNodeID("DDG-51")}
+	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
 		if err != nil {
@@ -86,7 +107,7 @@ func main() {
 	}
 
 	log.Printf("Ghost Seeker listening on %s", *addr)
-	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(app))))
+	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(app)))))
 }
 
 func serve(addr string, handler http.Handler) error {
@@ -137,7 +158,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID, operatorJWT string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -155,23 +176,35 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		log.Printf("link shaper on %s -> %s at %d bit/s (start the edge with -shore http://localhost%s)", linkListen, target, linkBps, linkListen)
 		link = sh
 	}
-	bridge := shorebridge.New(shoreURL, edgeURL, link)
+	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)
+	if err := bridge.SetOperatorJWT(operatorJWT); err != nil {
+		log.Fatalf("-operator-jwt: %v", err)
+	}
 	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
+	console := shorebridge.NewConsole(bridge)
 	go bridge.Run(ctx, poll)
 
+	// One site: Patrick's operator console (index.html / cdr.html) on live
+	// shore items. The console speaks the simulation's API (/api/config,
+	// /api/stream, /api/items, /api/directives); the shore-only actions (link
+	// presets, pulls, overrides) stay under /api/shore/ and blobs are proxied.
 	mux := http.NewServeMux()
 	mux.Handle("/api/shore/", bridge.Handler())
 	mux.Handle("/blob/", bridge.Handler())
-	static := web.Handler()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/cdr" {
-			r.URL.Path = "/shore.html"
-		}
-		static.ServeHTTP(w, r)
-	})
+	mux.Handle("/api/", console.Handler())
+	mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
+	mux.Handle("GET /shore.html", http.RedirectHandler("/", http.StatusFound)) // retired F2 UI; same console at /
+	mux.Handle("/", web.Handler())
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
-	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(mux))))
+	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(mux)))))
+}
+
+func envOr(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }
 
 func shaperTarget(shoreURL string) (string, error) {

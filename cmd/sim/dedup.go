@@ -18,12 +18,11 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"image"
 	"image/color"
-	_ "image/jpeg"
-	_ "image/png"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 	"math/bits"
 	"os"
 	"path/filepath"
@@ -248,7 +247,7 @@ func frameHash(key string, data []byte) (uint64, bool) {
 	if ok {
 		return h, true
 	}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := imglimit.Decode(data, 0)
 	if err != nil {
 		return 0, false
 	}

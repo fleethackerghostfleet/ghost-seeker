@@ -5,6 +5,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,7 +20,9 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
+	"google.golang.org/protobuf/proto"
 )
 
 type Service struct {
@@ -29,8 +32,12 @@ type Service struct {
 	St       *store.Store
 	Clk      clock.Clock
 	// Embedder compiles natural-language interest into vectors; optional.
-	Embedder inference.Analyzer
-	Signer   *policy.SigningKey
+	Embedder  inference.Analyzer
+	Signer    *policy.SigningKey
+	Operators *unitauth.Interceptor
+	// Keys trusts policies signed by higher echelons: a SetPolicy that changes
+	// layers above ECHELON_SHIP must itself verify against this keyring.
+	Keys policy.Keyring
 	// Edge to address downlink to; "" = broadcast to all edges.
 	EdgeID string
 }
@@ -56,9 +63,12 @@ func view(it *store.Item) *pb.ItemView {
 }
 
 func (s *Service) ListItems(ctx context.Context, req *connect.Request[pb.ListItemsRequest]) (*connect.Response[pb.ListItemsResponse], error) {
-	off, _ := strconv.Atoi(req.Msg.PageToken)
+	off, lim, err := console.Page(req.Msg.PageToken, req.Msg.Limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	items, total, err := s.St.List(ctx, store.ListFilter{Type: req.Msg.Type, UnknownOnly: req.Msg.UnknownOnly, Label: req.Msg.Label,
-		Limit: int(req.Msg.Limit), Offset: off})
+		Limit: lim, Offset: off})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -98,14 +108,93 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	s.policyMu.Lock()
 	defer s.policyMu.Unlock()
 	now := s.Clk.Now()
+	prev, err := s.St.GetPolicy(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	var op unitauth.Operator
+	if s.Operators != nil {
+		op, err = s.Operators.OperatorFromHeader(req.Header())
+		if err != nil {
+			log.Printf("console: SetPolicy operator= echelon= result=rejected reason=%q", err)
+			return nil, err
+		}
+		if len(p.Layers) == 0 {
+			err := connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("operator auth requires layered policy"))
+			log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
+			return nil, err
+		}
+		if err := authorizeOperatorLayers(p, prev, op); err != nil {
+			log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
+			return nil, err
+		}
+		higher := false
+		if prev != nil {
+			for _, layer := range prev.Layers {
+				if layer != nil && layer.Echelon > op.Echelon {
+					higher = true
+					break
+				}
+			}
+		}
+		if higher {
+			deadline := policy.Expiry(prev, 0)
+			if !deadline.After(now) {
+				err := connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("stored policy with higher-echelon layers has expired; it must be reissued by that echelon"))
+				log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
+				return nil, err
+			}
+			p.ExpiresAtUnixMs = deadline.UnixMilli()
+		}
+	}
+	// The shore signs what the ship console submits, so it must not certify
+	// higher-echelon layers it did not already hold: those only change when
+	// the submitted policy carries a valid signature from a trusted key.
+	if higherLayersChanged(prev, p) {
+		if p.Signature == nil || len(s.Keys) == 0 {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon layers can only be set by a policy signed with a trusted key"))
+		}
+		if err := policy.Verify(p, s.Keys); err != nil {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
+		}
+		// The signed version is part of the signed bytes; requiring it to rise
+		// above the stored policy stops an old (revoked) command policy from
+		// being replayed and re-signed by the shore.
+		if p.Version == 0 || (prev != nil && p.Version <= prev.Version) {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", prev.GetVersion()))
+		}
+	}
+	if s.Operators != nil {
+		peerUntouched := untouchedPeerLayers(p, prev, op)
+		p.IssuedBy = op.ID
+		for index, layer := range p.Layers {
+			if layer == nil {
+				continue
+			}
+			if layer.Echelon <= op.Echelon && layer.Emcon != nil {
+				layer.Emcon.Echelon = layer.Echelon
+			}
+			if layer.Echelon == op.Echelon && !peerUntouched[index] {
+				layer.IssuedBy = op.ID
+				for _, rule := range layer.Rules {
+					if rule != nil {
+						rule.Author = op.ID
+					}
+				}
+				if layer.Emcon != nil {
+					layer.Emcon.SetBy = op.ID
+				}
+			}
+		}
+		log.Printf("console: SetPolicy operator=%s echelon=%s result=accepted reason=authorized", op.ID, op.Echelon.String())
+	}
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
 	}
 	if p.Version == 0 {
-		prev, err := s.St.GetPolicy(ctx)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
+		// Shore-assigned versions are wall-clock ms (so they stay above any
+		// ms-scale version the edge accepted directly) and strictly above the
+		// stored one; a signed higher-echelon issuer goes one above GetPolicy.
 		version := now.UnixMilli()
 		if prev != nil && prev.Version+1 > version {
 			version = prev.Version + 1
@@ -126,6 +215,9 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if p.Interest == nil {
 		p.Interest = &pb.Interest{}
 	}
+	if err := console.ValidateInterest(p.Interest); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	if s.Embedder != nil {
 		if err := s.compileInterest(ctx, p.Interest); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
@@ -144,6 +236,87 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&pb.SetPolicyResponse{Policy: p, Conflicts: p.Conflicts}), nil
+}
+
+func authorizeOperatorLayers(request, stored *pb.Policy, operator unitauth.Operator) error {
+	var storedLayers []*pb.PolicyLayer
+	if stored != nil {
+		storedLayers = stored.Layers
+	}
+	matched := make(map[int]bool)
+	for _, requestedLayer := range request.Layers {
+		if requestedLayer == nil || requestedLayer.Echelon <= operator.Echelon {
+			continue
+		}
+		index := matchingStoredLayer(requestedLayer, storedLayers, matched)
+		if index < 0 || !proto.Equal(requestedLayer, storedLayers[index]) {
+			return cannotChangeLayer(requestedLayer.Echelon, operator.Echelon)
+		}
+		matched[index] = true
+	}
+	for index, storedLayer := range storedLayers {
+		if storedLayer != nil && storedLayer.Echelon > operator.Echelon && !matched[index] {
+			return cannotChangeLayer(storedLayer.Echelon, operator.Echelon)
+		}
+	}
+	return nil
+}
+
+func untouchedPeerLayers(request, stored *pb.Policy, operator unitauth.Operator) map[int]bool {
+	untouched := make(map[int]bool)
+	if request == nil || stored == nil {
+		return untouched
+	}
+	matchedStored := make(map[int]bool)
+	for requestIndex, requestedLayer := range request.Layers {
+		if requestedLayer == nil || requestedLayer.Echelon != operator.Echelon {
+			continue
+		}
+		for storedIndex, storedLayer := range stored.Layers {
+			if storedLayer == nil || matchedStored[storedIndex] ||
+				storedLayer.Echelon != operator.Echelon || storedLayer.IssuedBy == operator.ID ||
+				!proto.Equal(requestedLayer, storedLayer) {
+				continue
+			}
+			matchedStored[storedIndex] = true
+			untouched[requestIndex] = true
+			break
+		}
+	}
+	return untouched
+}
+
+func matchingStoredLayer(requested *pb.PolicyLayer, stored []*pb.PolicyLayer, matched map[int]bool) int {
+	var sameEchelon []int
+	for index, layer := range stored {
+		if layer != nil && layer.Echelon == requested.Echelon {
+			sameEchelon = append(sameEchelon, index)
+		}
+	}
+	if len(sameEchelon) == 1 {
+		if matched[sameEchelon[0]] {
+			return -1
+		}
+		return sameEchelon[0]
+	}
+	if len(sameEchelon) > 1 {
+		match := -1
+		for _, index := range sameEchelon {
+			if !matched[index] && stored[index].IssuedBy == requested.IssuedBy {
+				if match >= 0 {
+					return -1
+				}
+				match = index
+			}
+		}
+		return match
+	}
+	return -1
+}
+
+func cannotChangeLayer(layer, operator pb.Echelon) error {
+	return connect.NewError(connect.CodePermissionDenied,
+		fmt.Errorf("cannot change %s layer with %s token", layer.String(), operator.String()))
 }
 
 // compileInterest turns boost/suppress label lists into positive/negative
@@ -245,9 +418,35 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", httpx.SafeBlobMime(f.Mime))
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Disposition", "inline")
-		_, _ = w.Write(data)
+		httpx.ServeBlob(w, f.Mime, data)
 	})
+}
+
+// higherLayersChanged reports whether next carries layers above
+// ECHELON_SHIP that differ from the ones prev already held.
+func higherLayersChanged(prev, next *pb.Policy) bool {
+	var was, now []*pb.PolicyLayer
+	if prev != nil {
+		was = higherLayers(prev.Layers)
+	}
+	now = higherLayers(next.Layers)
+	if len(was) != len(now) {
+		return true
+	}
+	for i := range now {
+		if !proto.Equal(was[i], now[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func higherLayers(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
+	var out []*pb.PolicyLayer
+	for _, l := range layers {
+		if l != nil && l.Echelon > pb.Echelon_ECHELON_SHIP {
+			out = append(out, l)
+		}
+	}
+	return out
 }

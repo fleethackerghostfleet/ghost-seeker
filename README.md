@@ -63,7 +63,8 @@ Live, two processes, replaying the frame zips through the mock analyzer:
 ```sh
 make run-shore             # :8080  SyncService + shore console + ui/
 make run-edge              # :8081  edge console; syncs to shore
-curl -s -H content-type:application/json -d '{}' localhost:8080/ghostseeker.v1.ConsoleService/GetStatus
+TOKEN=$(make -s demo-token)   # or: cat data/operator.token
+curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{}' localhost:8080/ghostseeker.v1.ConsoleService/GetStatus
 curl -s -H content-type:application/json -d '{"limit":10}' localhost:8081/ghostseeker.v1.ConsoleService/GetQueue
 # operator on shore: "ignore cargo ships" -> downlinked on the next exchange, edge re-ranks
 curl -s -H content-type:application/json -d '{"policy":{"issuedBy":"ops","text":"ignore cargo ships","interest":{"suppressLabels":["cargo ship"]}}}' \
@@ -79,6 +80,17 @@ With a shaped network instead of the in-process simulator:
 make compose                       # shore, toxiproxy, edge
 deploy/compose/degrade.sh satcom   # 64 kbps / 600 ms; also trickle | starlink | down | up
 ```
+
+## Configuration: operator authentication
+
+Shore ConsoleService, the edge console, `/blob/` on both and the operator web app share one
+**operator bearer token**: `-operator-token` / `GS_OPERATOR_TOKEN` or `-operator-token-file` /
+`GS_OPERATOR_TOKEN_FILE` (production, required), or `-dev-token-file` / `GS_DEV_TOKEN_FILE`
+(default `data/operator.token`, auto-generated for a local demo; `none` to require an explicit
+token). API calls need `Authorization: Bearer <token>` (401 otherwise); the web app exchanges it
+for an `HttpOnly; SameSite=Strict` session cookie at `/login` (automatic for a loopback browser in
+dev mode). CORS is same-origin unless `-cors-origins` / `GS_CORS_ORIGINS` lists an origin. See
+`docs/SECURITY.md` for the full control list and the Deep-scan before/after.
 
 ## Configuration: unit sync authentication and edge storage caps
 
@@ -153,6 +165,33 @@ for retry, while preserving progress through already-applied messages.
 
 `GetStatusResponse.items_evicted` reports cumulative evictions. The live-shore
 operator app displays it alongside the existing edge queue status.
+
+
+### Signed policies (opt-in)
+
+Policies downlinked to the edge can be signed by the shore with an Ed25519 key so
+the edge only applies command policy from a trusted issuer; the shore in turn only
+signs higher-echelon (fleet/command) layers that arrive already signed by a key it
+trusts, so a ship console cannot mint locked COMMAND rules under the shore's key.
+
+| Process | Flag | Environment | Default |
+|---|---|---|---|
+| shore | `-policy-signing-key` (JSON private key from `policy-keygen`) | `GS_POLICY_SIGNING_KEY` | unset (unsigned) |
+| shore | `-policy-keys` (JSON keyring trusted for higher-echelon layers) | `GS_POLICY_KEYS` | unset (higher layers immutable) |
+| edge | `-require-signed-policy` | `GS_REQUIRE_SIGNED_POLICY` | `false` |
+| edge | `-policy-keys` (JSON keyring; required with the flag above) | `GS_POLICY_KEYS` | unset |
+
+```sh
+go run ./cmd/policy-keygen -id shore-1 -out-dir keys     # keys/shore-1.key.json (0600) + keys/keyring.json
+go run ./cmd/shore -policy-signing-key keys/shore-1.key.json
+go run ./cmd/edge -require-signed-policy -policy-keys keys/keyring.json
+```
+
+Unsigned or badly signed policies are rejected and audited; the edge keeps its
+last-good policy. A signed higher-echelon policy must carry a `version` above the
+one `GetPolicy` currently shows (ship edits continue that sequence), which keeps a
+revoked command policy from being replayed. In EMCON `SILENT` the edge still exchanges an empty heartbeat so
+the policy that lifts SILENT arrives.
 
 ## How ranking works
 

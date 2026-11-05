@@ -58,6 +58,27 @@ func TestInterestBoostAndSuppress(t *testing.T) {
 	}
 }
 
+func TestInterestPerLabelBoostWeights(t *testing.T) {
+	p := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"submarine", "tanker"}, BoostWeights: map[string]float64{"submarine": 3}}}
+	ctx := &Context{Policy: p, Now: time.Now()}
+	if r := (Interest{}).Score(img("submarine", 0.9, 0), ctx); r.Multiplier != 3 {
+		t.Fatalf("weighted label multiplier=%v, want 3", r.Multiplier)
+	}
+	if r := (Interest{}).Score(img("tanker", 0.9, 0), ctx); r.Multiplier != DefaultBoostFactor {
+		t.Fatalf("unweighted label multiplier=%v, want default %v", r.Multiplier, DefaultBoostFactor)
+	}
+	// Plural / spaced labels keep their weight (keyed as Merge stores them),
+	// and the strongest of several matching labels wins regardless of order.
+	plural := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"vessel", "Submarines "}, BoostWeights: map[string]float64{"submarines": 5}}}
+	if r := (Interest{}).Score(img("submarine", 0.9, 0), &Context{Policy: plural, Now: time.Now()}); r.Multiplier != 5 {
+		t.Fatalf("plural weighted label multiplier=%v, want 5", r.Multiplier)
+	}
+	several := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"submarine", "submarine periscope"}, BoostWeights: map[string]float64{"submarine": 3, "submarine periscope": 6}}}
+	if r := (Interest{}).Score(img("submarine periscope", 0.9, 0), &Context{Policy: several, Now: time.Now()}); r.Multiplier != 6 {
+		t.Fatalf("strongest matching label multiplier=%v, want 6", r.Multiplier)
+	}
+}
+
 func TestFreshnessFloor(t *testing.T) {
 	it := img("x", 0.9, 0)
 	it.CapturedAtUnixMs = time.Now().Add(-100 * time.Hour).UnixMilli()

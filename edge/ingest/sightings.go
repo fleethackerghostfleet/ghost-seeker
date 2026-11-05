@@ -95,7 +95,8 @@ func (g *Ingester) applySightings(ctx context.Context, c *Capture, hash string, 
 func (g *Ingester) applySighting(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting) (*store.Row, error) {
 	switch s.Event {
 	case pb.Sighting_EVENT_OPEN:
-		return g.openItem(ctx, c, hash, resp, s)
+		kc, kh := g.keyCapture(c, hash, s)
+		return g.openItem(ctx, kc, kh, resp, s)
 	case pb.Sighting_EVENT_UPDATE:
 		id, known := g.sightings[s.Id]
 		if !s.IsKeyFrame {

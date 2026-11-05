@@ -29,6 +29,20 @@ spec:
             - "-shore=http://shore:8080"
             - "-edge="
             - "-link-listen="
+          env:
+            - name: GS_DEV_TOKEN_FILE
+              value: none
+            - name: GS_OPERATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: operator-auth
+                  key: operator-token
+            - name: GS_OPERATOR_JWT
+              valueFrom:
+                secretKeyRef:
+                  name: operator-auth
+                  key: operator-jwt
+                  optional: true
           ports:
             - name: http
               containerPort: 8090

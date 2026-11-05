@@ -196,8 +196,8 @@ func TestMergeWeightExpiryTargetsLocksAndFlatten(t *testing.T) {
 		t.Fatalf("accepted=%v conflicts=%v", accepted, conflicts)
 	}
 	interest, _, _ := Merge(layers, "USV-1", mergeNow)
-	if interest.BoostFactor != 4 {
-		t.Fatalf("boost factor=%v, want 4", interest.BoostFactor)
+	if interest.BoostFactor != 0 || interest.BoostWeights["submarine"] != 4 || len(interest.BoostWeights) != 1 {
+		t.Fatalf("boost weights=%v (factor %v), want submarine=4 only", interest.BoostWeights, interest.BoostFactor)
 	}
 	locks := Locks([]*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
 		Rules: []*pb.InterestRule{{Id: "r", Locked: true}}, Emcon: &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_SILENT, Locked: true}}})
@@ -257,11 +257,11 @@ func TestFlattenEmbeddingsAndExpiredBoost(t *testing.T) {
 	}
 
 	expired := &pb.Policy{Interest: &pb.Interest{
-		BoostLabels: []string{"submarine"}, PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
+		BoostLabels: []string{"submarine"}, BoostFactor: 2.5, PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
 	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
 		&pb.InterestRule{Id: "short", BoostLabels: []string{"submarine"}, Weight: 7, ExpiresAtUnixMs: mergeNow.UnixMilli()})}}
 	got = Flatten(expired, "USV-1", mergeNow)
-	if len(got.Interest.BoostLabels) != 0 || got.Interest.BoostFactor != 0 ||
+	if len(got.Interest.BoostLabels) != 0 || got.Interest.BoostFactor != 2.5 || len(got.Interest.BoostWeights) != 0 ||
 		got.Interest.PositiveEmbedding != nil || got.Interest.NegativeEmbedding == nil {
 		t.Fatalf("expired rule retained stale interest: %+v", got.Interest)
 	}
@@ -287,5 +287,19 @@ func TestCheckRuleSameIDAndWeightBoundary(t *testing.T) {
 	}
 	if c := CheckRule([]Lock{lock}, pb.Echelon_ECHELON_SHIP, rule("greater", []string{"submarine"}, nil, 4)); c != nil {
 		t.Fatalf("greater weight blocked: %v", c)
+	}
+}
+
+func TestCheckCommandRulesUsesCallerEchelonName(t *testing.T) {
+	locks := []Lock{{RuleID: "sub", LockedBy: "CTF-72", Echelon: pb.Echelon_ECHELON_COMMAND,
+		BoostLabels: []string{"submarine"}, Weight: 3}}
+	warnings, blocked := CheckCommandRules(locks, pb.Echelon_ECHELON_UNIT, []RuleLabels{{
+		Type: "suppress", Classes: []string{"submarine"},
+	}})
+	if !blocked || len(warnings) != 1 {
+		t.Fatalf("warnings=%v blocked=%t", warnings, blocked)
+	}
+	if want := "Locked by CTF-72 — submarine can't be overridden at unit level"; warnings[0] != want {
+		t.Fatalf("warning=%q, want %q", warnings[0], want)
 	}
 }

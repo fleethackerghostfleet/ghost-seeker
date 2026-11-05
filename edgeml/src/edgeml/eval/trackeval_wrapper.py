@@ -71,6 +71,8 @@ def run_trackeval(seq_roots: list[Path], tracker_files: dict[str, Path], tracker
                     continue
                 v = line.split(",")
                 fr = int(float(v[0]))
+                if int(float(v[1])) < 0:      # tentative pass-through tracks (boxmot_adapter) are not tracker output
+                    continue
                 if _keep(fr):
                     v[0] = str(_renum(fr))
                     trows.append(",".join(v))

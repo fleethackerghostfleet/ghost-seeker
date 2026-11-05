@@ -37,8 +37,8 @@ def make_handler(svc: InferenceService, quiet: bool = True):
             self.end_headers()
             self.wfile.write(data)
 
-        def _error(self, code: str, message: str):
-            self._send(STATUS.get(code, 500), {"code": code, "message": message})
+        def _error(self, code: str, message: str, http_status: int | None = None):
+            self._send(http_status or STATUS.get(code, 500), {"code": code, "message": message})
 
         def do_GET(self):  # noqa: N802
             if self.path in ("/healthz", "/health"):
@@ -60,7 +60,7 @@ def make_handler(svc: InferenceService, quiet: bool = True):
                 req = json.loads(self.rfile.read(n) or b"{}")
                 resp = svc.dispatch(self.path[len(prefix):], req)
             except RpcError as e:
-                return self._error(e.code, str(e))
+                return self._error(e.code, str(e), getattr(e, "http_status", None))
             except (ValueError, KeyError) as e:
                 return self._error("invalid_argument", f"{type(e).__name__}: {e}")
             except Exception as e:  # noqa: BLE001 - surface as Connect internal error

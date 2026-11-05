@@ -124,13 +124,13 @@ var Pools = map[string]map[string]float64{
 
 var Models = map[string]Model{
 	"maritime": {
-		Name: "Maritime OOI v2 (default)", Desc: "Default command model. Scores ships, aircraft and other objects of interest; raises contacts that are approaching, loitering or not broadcasting AIS.",
+		Name: "Maritime scoring model (default)", Desc: "Scores ships, aircraft and other objects of interest. Raises the priority of objects that approach, stay in one area or do not broadcast their identity (AIS).",
 		W:          map[string]float64{"submarine": 1, "person": 1, "warship": .75, "military aircraft": .75, "drone": .75, "small boat": .55, "helicopter": .55, "debris": .35, "tanker": .3, "cargo ship": .3, "fishing vessel": .3, "civil aircraft": .3, "buoy": .05, "bird": .03},
 		Lift:       map[string]float64{"approaching": .45, "dark": .5, "loitering": .4},
 		LiftGroups: []string{"vessel", "aircraft", "other"},
 	},
 	"air": {
-		Name: "Air Picture Focus", Desc: "Weights airborne contacts (military, rotary, UAS) above surface traffic; raises aircraft that are approaching or not transponding.",
+		Name: "Aircraft focus", Desc: "Gives aircraft, helicopters and drones higher scores than ships. Raises the priority of aircraft that approach or do not broadcast their identity.",
 		W:          map[string]float64{"military aircraft": 1, "drone": .75, "helicopter": .75, "submarine": .75, "warship": .5, "civil aircraft": .3, "person": .3, "small boat": .2, "tanker": .15, "cargo ship": .15, "fishing vessel": .15, "debris": .1, "bird": .05, "buoy": .03},
 		Lift:       map[string]float64{"approaching": .45, "dark": .8, "loitering": .4},
 		LiftGroups: []string{"aircraft", "other"},

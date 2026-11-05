@@ -17,6 +17,7 @@ type RuleLabels struct {
 func CheckCommandRules(locks []Lock, echelon pb.Echelon, rules []RuleLabels) ([]string, bool) {
 	var warnings []string
 	blocked := false
+	echelonName := strings.ToLower(strings.TrimPrefix(echelon.String(), "ECHELON_"))
 	for i, rule := range rules {
 		labels := append(append([]string(nil), rule.Classes...), rule.Attrs...)
 		interestRule := &pb.InterestRule{Id: fmt.Sprintf("new:%d", i), Weight: rule.Weight}
@@ -29,7 +30,7 @@ func CheckCommandRules(locks []Lock, echelon pb.Echelon, rules []RuleLabels) ([]
 			continue
 		}
 		if conflict := CheckRule(locks, echelon, interestRule); conflict != nil {
-			warnings = append(warnings, conflict.Reason+" — "+strings.Join(labels, ", ")+" can't be overridden at ship level")
+			warnings = append(warnings, conflict.Reason+" — "+strings.Join(labels, ", ")+" can't be overridden at "+echelonName+" level")
 			blocked = true
 		}
 	}

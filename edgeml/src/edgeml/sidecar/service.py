@@ -30,9 +30,10 @@ logger = logging.getLogger(__name__)
 class RpcError(Exception):
     """Maps to a Connect error (code is the Connect code string, e.g. ``invalid_argument``)."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, http_status: int | None = None):
         super().__init__(message)
         self.code = code
+        self.http_status = http_status
 
 
 def _norm_box(box, w: int, h: int) -> dict:
@@ -84,34 +85,64 @@ class _Source:
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
+def _wire_subtype(ev: dict) -> str:
+    """The proto has no tentative flag: a tentative sighting is tagged ``subtype="tentative"``; on confirmation the edge
+    only retags on a non-empty subtype, so a confirmation without a classifier subtype retags with the coarse label."""
+    if ev.get("tentative"):
+        return "tentative"
+    return ev.get("subtype") or ((ev.get("label") or "") if ev.get("reason") == "confirmed" else "")
+
+
 class EdgemlEngine:
     """Detector + boxmot tracker + SightingAggregator (+ MobileCLIP zero-shot subtype) per source. CPU, no torch."""
 
     COARSE = {"aircraft": "aircraft", "buoy": "buoy", "marine mammal": "marine_mammal"}
+    # demo defaults (C.md §9 + I_tracking.md §7); `--agg` / `--trk` JSON override individual keys.
+    # I_tracking: tracks start at score >= score_thr (0.35) but continue through low-score detections (det_low_thr);
+    # per-size association (centroid gate 0.04 of the frame diagonal, re-id on jumps > 1.5 box diagonals, re-link capped at
+    # 2 diagonals); unmatched detections >= 0.5 become tentative tracks and are reported after 2 s if still unexplained.
+    AGG_DEFAULTS: dict = {"relink_gap_s": 20.0, "min_update_interval_s": 10.0, "relink_max_diag": 2.0, "tentative_after_s": 2.0,
+                          "gate_unknown_bonus_on_realness": True}
+    TRK_DEFAULTS: dict = {"centroid_max_distance": 0.04, "max_jump_diag": 1.5, "tentative_thresh": 0.5}
 
     def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
-                 score_thr: float = 0.25, det_low_thr: float = 0.05, agg: Optional[dict] = None, text_tower: str = "cache"):
+                 score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
+                 text_tower: str = "cache", anomaly_fallback: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
         self.threads, self.fps, self.tracker_variant, self.asso = threads, fps, tracker, asso
         self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
         self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, det_low_thr))
+        if anomaly_fallback is not None:
+            # H: cheap "anything-on-water" proposer (horizon-band colour anomaly) fills in where YOLO11n is blind
+            # (semi-submersibles, small debris); proposals carry label "anomaly" and feed the tracker like detections.
+            from edgeml.detectors.anomaly import AnomalyFusionDetector, SeaAnomalyProposer
+
+            self.detector = AnomalyFusionDetector(self.detector, SeaAnomalyProposer(**anomaly_fallback))
         self.embedder = self.classifier = None
         self.clip_name = None
         self._text_tower, self._torch_clip = text_tower, None
         if embed and str(embed).lower() != "none":
             from edgeml.embed.clip_embedder import ClipEmbedder
-            from edgeml.embed.zeroshot import ZeroShotClassifier
+            from edgeml.embed.zeroshot import load_classifier
 
             d = Path(embed).expanduser()
             meta = json.loads((d / "meta.json").read_text())
             clip = ClipEmbedder(meta["model"], backend="ort", onnx_dir=d, threads=threads, precision=meta.get("precision", "fp32"))
             self.embedder = _TextEmbedder(clip)
-            self.classifier = ZeroShotClassifier(self.embedder)
+            # H: dev-fitted sim_ref/sim_width + kNN bank (unknown_calib.npz next to the export) make `unknownness`
+            # informative (AUROC known-vs-unknown 0.49 -> ~0.8 on synth_unknown dev); without the file: MCM defaults.
+            self.classifier = load_classifier(self.embedder, embed_dir=d)
+            self.unknown_calib = self.classifier.calibration_path
             self.clip_name = getattr(clip, "name", meta["model"])
-        self.agg_params = AggregatorParams(**{"relink_gap_s": 20.0, "min_update_interval_s": 10.0, **(agg or {})})
+        # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
+        # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
+        self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
+        self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
+        # the detector floor must admit everything the tracker's low stage accepts (--trk may lower low_thresh)
+        self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
         self.sources: dict[str, _Source] = {}
         self._lock = threading.Lock()
         self.model_id = self.detector.name + (f"+{self.clip_name}" if self.clip_name else "")
@@ -127,8 +158,9 @@ class EdgemlEngine:
             if src is None:
                 from edgeml.tracking import make_tracker
 
-                tracker = make_tracker(self.tracker_variant, fps=self.fps, asso_func=self.asso, max_lost_s=self.max_lost_s,
-                                       det_thresh=self.score_thr, low_thresh=self.det_low_thr)
+                kw = {"asso_func": self.asso, "max_lost_s": self.max_lost_s, "det_thresh": self.score_thr,
+                      "low_thresh": self.det_low_thr, **self.trk_params}        # --trk may override any of these
+                tracker = make_tracker(self.tracker_variant, fps=self.fps, **kw)
                 agg = _ZeroShotAggregator(name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
                 src = self.sources[name] = _Source(tracker=tracker, agg=agg)
             return src
@@ -199,7 +231,7 @@ class EdgemlEngine:
         out = {"id": ev["sighting_id"], "event": EVENTS[ev["event"]],
                "keyDetection": {"label": label, "confidence": _f(ev.get("best_score")), "box": _norm_box(box, W, H)},
                "isKeyFrame": is_key, "unknownness": _f(ev.get("unknownness")),
-               "subtype": ev.get("subtype") or "", "value": _f(ev.get("value")),
+               "subtype": _wire_subtype(ev), "value": _f(ev.get("value")),
                "forms": [_form_hint(f) for f in (ev.get("forms") or [])],
                "firstSeenUnixMs": str(base_ms + int(float(ev.get("first_t_s", 0.0)) * 1000)),
                "lastSeenUnixMs": str(base_ms + int(float(ev.get("last_t_s", ev.get("t_s", 0.0))) * 1000)),
@@ -406,6 +438,68 @@ def _get(d: dict, camel: str, snake: str, default=None):
     return d.get(camel, d.get(snake, default))
 
 
+
+# Resource caps: a crafted header can declare a huge frame that a decoder
+# would allocate in full, and EmbedText runs the text tower once per string.
+MAX_PIXELS = 50_000_000
+MAX_TEXTS = 64
+MAX_TEXT_CHARS = 512
+
+
+def image_dims(data: bytes):
+    """Width/height from the container header (PNG, JPEG, GIF, BMP, WebP) without decoding.
+    Returns None for formats this sidecar does not accept."""
+    import struct
+
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+        return struct.unpack(">II", data[16:24])
+    if data[:6] in (b"GIF87a", b"GIF89a") and len(data) >= 10:
+        return struct.unpack("<HH", data[6:10])
+    if data[:2] == b"BM" and len(data) >= 26:
+        w, h = struct.unpack("<ii", data[18:26])
+        return abs(w), abs(h)
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP" and len(data) >= 30:
+        chunk = data[12:16]
+        if chunk == b"VP8 ":
+            return struct.unpack("<HH", data[26:30])[0] & 0x3FFF, struct.unpack("<HH", data[26:30])[1] & 0x3FFF
+        if chunk == b"VP8L":
+            b = data[21:25]
+            return 1 + (((b[1] & 0x3F) << 8) | b[0]), 1 + (((b[3] & 0xF) << 10) | (b[2] << 2) | ((b[1] & 0xC0) >> 6))
+        if chunk == b"VP8X":
+            return 1 + int.from_bytes(data[24:27], "little"), 1 + int.from_bytes(data[27:30], "little")
+        return None
+    if data[:2] == b"\xff\xd8":
+        i, n = 2, len(data)
+        while i + 9 < n:
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker == 0xFF:  # fill bytes before a marker
+                i += 1
+                continue
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            seg = struct.unpack(">H", data[i + 2:i + 4])[0]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                return w, h
+            i += 2 + seg
+        return None
+    return None
+
+
+def check_image_dims(data: bytes, max_pixels: int = MAX_PIXELS) -> tuple:
+    dims = image_dims(data)
+    if dims is None:
+        raise RpcError("invalid_argument", "image must be a JPEG, PNG, GIF, BMP or WebP with a readable header")
+    w, h = dims
+    if w <= 0 or h <= 0 or w * h > max_pixels:
+        raise RpcError("resource_exhausted", f"image {w}x{h} exceeds the {max_pixels} pixel cap", http_status=413)
+    return dims
+
+
 class InferenceService:
     """Decodes protobuf-JSON requests, dispatches to an engine, returns protobuf-JSON responses."""
 
@@ -429,7 +523,11 @@ class InferenceService:
         raw = _get(req, "image", "image")
         if not raw:
             raise RpcError("invalid_argument", "image is required")
-        buf = np.frombuffer(base64.b64decode(raw), np.uint8)
+        try:
+            buf = np.frombuffer(base64.b64decode(raw, validate=True), np.uint8)
+        except (ValueError, TypeError) as e:
+            raise RpcError("invalid_argument", f"image is not valid base64: {e}") from None
+        check_image_dims(buf.tobytes())
         img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
         if img is None:
             raise RpcError("invalid_argument", "image could not be decoded")
@@ -443,7 +541,12 @@ class InferenceService:
         return resp
 
     def EmbedText(self, req: dict) -> dict:
-        texts = [str(t) for t in (req.get("texts") or [])]
+        texts = req.get("texts") or []
+        if not isinstance(texts, list) or len(texts) > MAX_TEXTS:
+            raise RpcError("invalid_argument", f"texts must be a list of at most {MAX_TEXTS} strings")
+        texts = [str(t) for t in texts]
+        if any(len(t) > MAX_TEXT_CHARS for t in texts):
+            raise RpcError("invalid_argument", f"each text must be at most {MAX_TEXT_CHARS} characters")
         return {"embeddings": [{"values": v} for v in self.engine.embed_text(texts)], "modelId": getattr(self.engine, "model_id", "")}
 
     def Capabilities(self, req: dict) -> dict:
