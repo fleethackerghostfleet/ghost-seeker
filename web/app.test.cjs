@@ -7,6 +7,22 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('clear priority preview preserves detector-negative P4 pinning',()=>{
+ const context=vm.createContext({});
+ vm.runInContext(`
+  const items=[{id:'negative',detectorNegative:true},{id:'positive'}];
+  const findItem=id=>items.find(it=>it.id===id);
+  const draft={pins:{negative:0,positive:0}};
+  const after=items.map(it=>({id:it.id,central:.9,tier:2}));
+  const sorted=rows=>rows;
+ `,context);
+ const rows=workbenchSource.split('\n').find(line=>line.includes('const rows=()=>'));
+ vm.runInContext(rows,context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),4);
+ assert.equal(vm.runInContext("rows()[1].tier",context),1);
+ vm.runInContext("draft.pins.negative=2",context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),2);
+});
 test('null detection arrays are normalized on snapshots, SSE and direct updates, including paused queues',()=>{
  const context=setup();
  vm.runInContext(`

@@ -8,7 +8,7 @@ const workbench=(()=>{
  const delta=(before,next)=>next.map((n,i)=>`${n-before[i]>=0?'+':'−'}${Math.abs(n-before[i])} P${i+1} ${TNAME[i+1]}`).join(' · ');
  const changes=(before,next)=>{const map=new Map(before.map(i=>[i.id,i.tier]));return next.filter(i=>map.has(i.id)&&map.get(i.id)!==i.tier).length};
  const normalize=r=>({...r,classes:r.classes||[],attrs:r.attrs||[],sources:r.sources||[],withinMin:r.withinMin||0,weight:r.weight||1});
- const rows=()=>sorted(after.map(result=>{const item=findItem(result.id),pin=draft.pins[result.id];return item?{...item,...result,tier:pin===0?(result.central>=.8?1:result.central>=.6?2:result.central>=.35?3:4):pin??result.tier}:null}).filter(Boolean));
+ const rows=()=>sorted(after.map(result=>{const item=findItem(result.id),pin=draft.pins[result.id];return item?{...item,...result,tier:pin===0?(item.detectorNegative?4:result.central>=.8?1:result.central>=.6?2:result.central>=.35?3:4):pin??result.tier}:null}).filter(Boolean));
  function ruleText(r){return `${r.type==='boost'?'Prioritize':'Suppress'} ${r.only?'only ':''}${r.classes.join(' or ')||'any object'}${r.attrs.length?' '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):''}${r.sources.length?' from '+r.sources.join(' or '):''}${r.withinMin?' last '+r.withinMin+' min':''}`}
  function rewrite(){draft.text=draft.rules.map(ruleText).join('; ').slice(0,500);$('nlIn').value=draft.text}
  function save(label){
