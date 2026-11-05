@@ -80,6 +80,17 @@ existing interest. Source/geographic/time conditions, behavior inferred from a
 single crop, and changes to unknown/human protection are outside this version.
 The preview's readback is important: a tiny model can misunderstand an instruction.
 
+Simple command verbs use the fast parser. Category names outside the known
+vocabulary still go through Granite: it can resolve an equivalent term to an
+existing category, or preserve the full phrase as a candidate concept. For
+example, `prioritize fishing vessels` should interpret the category as
+`fishing boat` rather than create a competing experimental label. There is no
+hardcoded synonym table. The constrained response can select only a supplied
+category or retain the original phrase; malformed or unavailable responses
+cannot change active state. This validates the response structure, not its
+semantic truth. Preview displays resolved terms, the number of priorities
+changed, and warnings when no current images match. Apply remains explicit.
+
 ## Native development
 
 Use Go matching the root `go.mod`, Python 3.11, and a CPU llama.cpp build at
@@ -136,6 +147,14 @@ PYTHONPATH=edgeml/src:research/edgeml/src python -m pytest \
 python -m unittest discover -s tools -p 'test_layout.py'
 python research/nl-priority/tools/eval_commands.py --url http://127.0.0.1:8097 \
   --corpus research/nl-priority/eval/commands.json --output research/nl-priority/data/commands.json
+```
+
+With the native Granite service running, the targeted semantic integration test
+uses real model responses (including legacy literal-rule resolution):
+
+```sh
+GRANITE_TEST_URL=http://127.0.0.1:8099 go test ./research/nlpriority \
+  -run TestLiveGraniteCategoryResolution -count=1 -v
 ```
 
 Use `tools/benchmark.py --help` for measured aggregate RSS and warm p95 latency.

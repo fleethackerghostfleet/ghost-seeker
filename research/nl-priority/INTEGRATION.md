@@ -5,8 +5,10 @@
 1. Existing detector/algorithm emits a crop and its original label, unknownness,
    optional human override and Tomer score.
 2. The matching MobileCLIP image encoder computes a reusable embedding.
-3. A command compiler (strict rules, otherwise local IBM Granite) proposes
-   validated interest rules. The LLM never sees or processes image pixels.
+3. A command compiler uses strict rules for simple operations and local IBM
+   Granite for broader phrasing and category equivalence. Even fast-path commands
+   send unfamiliar category names through Granite before proposing validated
+   interest rules. The LLM never sees or processes image pixels.
 4. The text encoder compares the base vocabulary and up to16 operator concepts
    against cached image embeddings. Low similarity/margin produces abstention.
 5. A scoring copy receives accepted interest markers. Original inference evidence,
@@ -33,6 +35,12 @@ All requests/responses are JSON. Page and API share one localhost origin.
 | `POST /api/apply` | `{previewId}` → new active state; stale/expired previews rejected |
 | `POST /api/undo` | Recovery API restoring previous revision; UI uses previewed `undo` instead |
 | `POST /api/items` | `{items:[...]}` → append original evidence with unique IDs and classify against active interests |
+
+Drafts optionally include `resolutions: [{input, canonical}]`, recording Granite's
+category interpretation. Equal strings mean the phrase was preserved. Only a
+known category or the original phrase is allowed. These are proposed changes;
+existing saved rules are never rewritten at startup. Preview warnings report
+unmatched interests and unchanged priorities.
 
 The Python service provides `GET /health`, `POST /embed {texts}`, `POST /classify
 {concepts,items}`, and `POST /image-embed {images:[{id,imageBase64}]}`. Embeddings

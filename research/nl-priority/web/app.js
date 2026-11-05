@@ -48,18 +48,28 @@ function showState(state) {
   $('empty').hidden=items.length>0; $('comparison').hidden=items.length===0; cards(items,$('before'));
   if(!preview) cards([],$('after')); controls();
 }
-function clearPreview(){ preview=null; $('draft').replaceChildren(el('p','Your interpretation and vocabulary changes will appear here.','muted')); $('warnings').replaceChildren(); $('preview-meta').textContent='Nothing changes until you apply.'; $('after-caption').textContent='Waiting for instruction'; cards([],$('after')); delivery([],$('delivery-after')); controls(); }
+function clearPreview(){ $('impact').textContent=''; preview=null; $('draft').replaceChildren(el('p','Your interpretation and vocabulary changes will appear here.','muted')); $('warnings').replaceChildren(); $('preview-meta').textContent='Nothing changes until you apply.'; $('after-caption').textContent='Waiting for instruction'; cards([],$('after')); delivery([],$('delivery-after')); controls(); }
 $('preview').addEventListener('click',()=>action(async()=>{
   const text=$('instruction').value.trim(); if(!text)throw new Error('Enter an instruction first.');
   clearPreview(); message('Compiling intent and comparing the queue…');
   preview=await api('/api/preview',{text,engine:$('engine').value,basePreviewId:draftContext || undefined});
   draftContext=preview.previewId; const draft=preview.draft || {}; $('draft').replaceChildren(el('p',draft.readback || 'Review these proposed interests.')); const rules=el('div'); renderRules(draft.rules,rules); $('draft').append(rules);
+  for(const resolution of draft.resolutions || []) {
+    if(resolution.input!==resolution.canonical) $('draft').append(el('p',`Granite interpreted “${resolution.input}” as “${resolution.canonical}”.`,'hint'));
+  }
   if(draft.vocabulary?.length)$('draft').append(el('p',`Candidate concepts: ${draft.vocabulary.join(', ')}`,'hint'));
   $('warnings').replaceChildren(...(preview.warnings || []).map(w=>el('p',w)));
   cards(preview.before?.items || current?.items || [],$('before')); cards(preview.after?.items || [],$('after'),preview.before?.items || []);
   delivery(preview.before?.delivery,$('delivery-before')); delivery(preview.after?.delivery,$('delivery-after'));
   $('preview-meta').textContent=`${draft.path || 'compiler'} · ${Math.round(preview.elapsedMs || 0)} ms · based on revision ${preview.revision}`;
-  $('after-caption').textContent='Proposed policy'; message('Preview ready. Review the interpretation before applying.');
+  $('after-caption').textContent='Proposed policy';
+  const beforeById=new Map((preview.before?.items || []).map((item,index)=>[item.id,{...item,rank:index}]));
+  const proposed=preview.after?.items || [];
+  const changed=proposed.filter(item=>beforeById.has(item.id) && (Math.abs(item.priority-beforeById.get(item.id).priority)>1e-9 || Boolean(item.suppressed)!==Boolean(beforeById.get(item.id).suppressed))).length;
+  const movedUp=proposed.filter((item,index)=>beforeById.has(item.id) && index<beforeById.get(item.id).rank).length;
+  const summary=changed ? `${changed} image${changed===1?' changes':'s change'} priority out of ${proposed.length}; ${movedUp} ${movedUp===1?'moves':'move'} higher in the queue.` : 'No image priorities change in this preview.';
+  $('impact').textContent=summary;
+  message(changed ? `${summary} Review the preview, then Apply.` : `${summary} Check the interpretation and matching warnings. Applying can still update interests for future images.`);
 }));
 $('apply').addEventListener('click',()=>action(async()=>{if(!preview)return; const state=await api('/api/apply',{previewId:preview.previewId}); draftContext=null;clearPreview();showState(state);message('Applied to the research queue and incoming images.');}));
 $('undo').addEventListener('click',()=>{if(busy)return;$('instruction').value='undo';$('preview').click();});

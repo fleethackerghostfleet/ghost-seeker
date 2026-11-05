@@ -54,19 +54,7 @@ func scoringItem(it Item, rules []Rule, matches map[string]Match) *pb.Item {
 	}
 	markers := []string{}
 	for _, r := range rules {
-		match := false
-		if it.LabelOverride != "" {
-			match = NormalizeConcept(it.LabelOverride) == r.Concept
-		} else {
-			match = (it.Confidence >= scoring.DefaultDetectionMin && NormalizeConcept(it.Label) == r.Concept) || NormalizeConcept(it.Subtype) == r.Concept
-			if r.Concept == "unknown" && it.Unknownness >= scoring.DefaultUnknownMin {
-				match = true
-			}
-			if m, ok := matches[it.ID]; ok && m.Accepted && NormalizeConcept(m.Label) == r.Concept {
-				match = true
-			}
-		}
-		if match {
+		if conceptMatches(it, r.Concept, matches) {
 			markers = append(markers, conceptMarker(r.Concept))
 		}
 	}
@@ -74,6 +62,54 @@ func scoringItem(it Item, rules []Rule, matches map[string]Match) *pb.Item {
 		tags["subtype"] = it.Subtype + " " + strings.Join(markers, " ")
 	}
 	return &pb.Item{Id: it.ID, Type: pb.ItemType_ITEM_TYPE_IMAGE, CapturedAtUnixMs: it.CapturedAt, Source: it.Source, Features: f}
+}
+
+func conceptMatches(it Item, concept string, matches map[string]Match) bool {
+	if it.LabelOverride != "" {
+		return NormalizeConcept(it.LabelOverride) == concept
+	}
+	if (it.Confidence >= scoring.DefaultDetectionMin && NormalizeConcept(it.Label) == concept) || NormalizeConcept(it.Subtype) == concept {
+		return true
+	}
+	if concept == "unknown" && it.Unknownness >= scoring.DefaultUnknownMin {
+		return true
+	}
+	m, ok := matches[it.ID]
+	return ok && m.Accepted && NormalizeConcept(m.Label) == concept
+}
+
+func previewImpactWarnings(items []Item, rules []Rule, matches map[string]Match, before, after Evaluation) []string {
+	out := []string{}
+	if len(items) == 0 {
+		return []string{"The research queue is empty; import image records to preview priority changes."}
+	}
+	for _, r := range rules {
+		count := 0
+		for _, it := range items {
+			if conceptMatches(it, r.Concept, matches) {
+				count++
+			}
+		}
+		if count == 0 {
+			out = append(out, fmt.Sprintf("No images currently match %q; this rule will not change priorities in the current queue.", r.Concept))
+		}
+	}
+	prior := map[string]RankedItem{}
+	for _, it := range before.Items {
+		prior[it.ID] = it
+	}
+	changed := false
+	for _, it := range after.Items {
+		old := prior[it.ID]
+		if it.Priority != old.Priority || it.Suppressed != old.Suppressed {
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		out = append(out, "No image priorities changed in this preview. The same interests may already be active, no images may match, or existing protections may apply.")
+	}
+	return out
 }
 
 // Evaluate invokes the production engine and BuildPlan. The local delivery

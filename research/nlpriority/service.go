@@ -207,6 +207,7 @@ func (s *Service) PreviewFrom(ctx context.Context, text, engine, basePreviewID s
 	if err != nil {
 		return Preview{}, err
 	}
+	warnings = append(warnings, previewImpactWarnings(s.data.Items, draft.Rules, matches, before, after)...)
 	if engine == "tomer" {
 		for _, it := range s.data.Items {
 			if it.TomerScore == nil {

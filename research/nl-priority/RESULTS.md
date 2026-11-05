@@ -61,3 +61,38 @@ were not measured.
 Raw reports, including failures, are in [reports/](reports/). Export numerical
 checks are in [vision/export-validation.json](vision/export-validation.json).
 The first and fresh evaluations remain distinct from subsequent regression runs.
+
+## Follow-up: semantic category resolution
+
+A reported no-op on `prioritize fishing vessels` exposed a fast-parser bug: the
+phrase became a novel `fishing vessel` concept instead of matching the existing
+`fishing boat` subtype. Simple command operations now also ask Granite to resolve
+unfamiliar category names. The model selects from the supplied vocabulary or
+retains the original phrase. No fishing-vessel alias table is used. The UI exposes
+the interpretation and an explicit count of changed priorities; unmatched rules
+and unchanged previews produce warnings.
+
+The resolver development probe passed **14/15** targeted cases using the base
+subtype catalog. It recognized fishing vessel(s), retained red fishing boat,
+rescue boat and fishing net, but incorrectly dropped `small` from `small fishing
+vessel`. This is a known semantic limitation and **not a fresh held-out accuracy
+result**. The exact prompt, candidate catalog, schema and raw outputs are retained
+in [the targeted report](reports/granite-semantic-resolution-targeted.json).
+
+The resource benchmark above predates this added resolution step and is retained
+as historical evidence; it must not be presented as acceptance of the changed
+compiler. A semantic resolution runs once per unfamiliar concept at command
+time, never per image, with a shared five-second deadline. Failed model requests
+cannot activate partial changes.
+
+End-to-end verification with the actual running Granite service and 45 real
+crops confirmed `prioritize fishing vessels` resolves to `fishing boat`: EdgeML
+rank **12 → 1**, priority **2.072 → 5.945**, with only that image's priority
+changed. The same category boost works through Tomer (rank **13 → 1** against
+its own baseline), although these imported records lack Tomer values and use
+its documented fallback. Recorded warm preview times for the exact phrase were
+**73 ms** in each mode. Red fishing boat and rescue boat remained new concepts;
+the UI correctly reported no matching images. The active state file was unchanged.
+See [the live smoke report](reports/semantic-resolution-smoke.json). Browser
+verification also confirmed Granite's interpretation, one changed image, and an
+enabled Apply button; the proposed policy was left unapplied.

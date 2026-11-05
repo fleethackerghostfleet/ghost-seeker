@@ -9,11 +9,12 @@ type Rule struct {
 }
 
 type Draft struct {
-	Rules      []Rule   `json:"rules"`
-	Vocabulary []string `json:"vocabulary"`
-	Readback   string   `json:"readback"`
-	Path       string   `json:"path"`
-	Operation  string   `json:"operation,omitempty"`
+	Rules       []Rule              `json:"rules"`
+	Vocabulary  []string            `json:"vocabulary"`
+	Readback    string              `json:"readback"`
+	Path        string              `json:"path"`
+	Operation   string              `json:"operation,omitempty"`
+	Resolutions []ConceptResolution `json:"resolutions,omitempty"`
 }
 
 // Item retains the original inference values. Experimental classifications

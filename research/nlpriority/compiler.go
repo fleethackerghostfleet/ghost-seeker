@@ -58,11 +58,7 @@ func validConcept(s string) bool {
 }
 
 func vocabulary(rules []Rule) []string {
-	base := map[string]bool{}
-	base["unknown"] = true
-	for _, x := range BaseVocabulary {
-		base[x] = true
-	}
+	base := fixedConcepts()
 	out := []string{}
 	for _, r := range rules {
 		if !base[r.Concept] {
@@ -100,6 +96,8 @@ func validateRules(rules []Rule) error {
 }
 
 func (c *Compiler) Compile(ctx context.Context, text string, current []Rule) (Draft, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	if err := validateRules(current); err != nil {
 		return Draft{}, err
 	}
@@ -128,13 +126,23 @@ func (c *Compiler) Compile(ctx context.Context, text string, current []Rule) (Dr
 		if len(current) != 1 || current[0].Action != "boost" {
 			return Draft{}, errors.New("clarification required: name the concept to adjust")
 		}
-		r := append([]Rule{}, current...)
+		resolved, _, resolutions, err := c.resolveConcepts(ctx, current, nil)
+		if err != nil {
+			return Draft{}, err
+		}
+		r := append([]Rule{}, resolved...)
 		delta := 0.5
 		if strings.Contains(t, "less") {
 			delta = -0.5
 		}
 		r[0].Weight = math.Max(1, math.Min(4, r[0].Weight+delta))
-		return makeDraft(r, "rules", ""), nil
+		path := "rules"
+		if len(resolutions) > 0 {
+			path += "+granite-concepts"
+		}
+		draft := makeDraft(r, path, "")
+		draft.Resolutions = resolutions
+		return draft, nil
 	}
 	if t == "remove that" || t == "remove it" || t == "stop that" {
 		if len(current) != 1 {
@@ -167,11 +175,20 @@ func (c *Compiler) Compile(ctx context.Context, text string, current []Rule) (Dr
 		}
 		path = "granite"
 	}
+	current, ops, resolutions, err := c.resolveConcepts(ctx, current, ops)
+	if err != nil {
+		return Draft{}, err
+	}
+	if len(resolutions) > 0 {
+		path += "+granite-concepts"
+	}
 	next, err := applyOperations(current, ops)
 	if err != nil {
 		return Draft{}, err
 	}
-	return makeDraft(next, path, ""), nil
+	draft := makeDraft(next, path, "")
+	draft.Resolutions = resolutions
+	return draft, nil
 }
 
 func makeDraft(rules []Rule, path, op string) Draft {
@@ -234,30 +251,6 @@ func parseSimple(text string, current []Rule) ([]operation, bool, error) {
 		if !validConcept(op.Concept) {
 			return nil, true, errors.New("clarification required: name a visual object category without negation or conditions")
 		}
-		if op.Action == "more" || op.Action == "less" {
-			found := false
-			for _, r := range current {
-				if r.Concept == op.Concept && r.Action == "boost" {
-					found = true
-					op.Weight = r.Weight
-					break
-				}
-			}
-			if op.Action == "less" {
-				if found {
-					op.Action = "boost"
-					op.Weight = math.Max(1, op.Weight-.5)
-				} else {
-					op.Action = "suppress"
-					op.Weight = 1
-				}
-			} else {
-				op.Action = "boost"
-				if found {
-					op.Weight = math.Min(4, op.Weight+.5)
-				}
-			}
-		}
 		ops = append(ops, op)
 		previous = op
 	}
@@ -290,6 +283,24 @@ func applyOperations(current []Rule, ops []operation) ([]Rule, error) {
 			if r.Concept == op.Concept {
 				index = i
 				break
+			}
+		}
+		if op.Action == "more" || op.Action == "less" {
+			found := index >= 0 && next[index].Action == "boost"
+			if op.Action == "less" {
+				if found {
+					op.Action = "boost"
+					op.Weight = math.Max(1, next[index].Weight-.5)
+				} else {
+					op.Action = "suppress"
+					op.Weight = 1
+				}
+			} else {
+				op.Action = "boost"
+				op.Weight = 2
+				if found {
+					op.Weight = math.Min(4, next[index].Weight+.5)
+				}
 			}
 		}
 		if op.Action == "remove" {

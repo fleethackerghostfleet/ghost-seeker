@@ -18,7 +18,7 @@ import (
 )
 
 func TestCompilerCommandsAndContext(t *testing.T) {
-	c := &Compiler{}
+	c := resolverFixture(t, nil)
 	ctx := context.Background()
 	d, e := c.Compile(ctx, "prioritize rescue boats and show fewer cargo ships", nil)
 	if e != nil {
@@ -66,7 +66,7 @@ func TestCompilerRejectsUnsupportedAndConflicting(t *testing.T) {
 }
 
 func TestGraniteConstrainedOutputAndFailures(t *testing.T) {
-	var content = `{"operations":[{"action":"boost","concept":"rescue boat","weight":2}],"clarification":""}`
+	var content = `{"operations":[{"action":"boost","concept":"cargo ship","weight":2}],"clarification":""}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			t.Error(r.URL.Path)
@@ -82,19 +82,19 @@ func TestGraniteConstrainedOutputAndFailures(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := &Compiler{URL: srv.URL}
-	d, e := c.Compile(context.Background(), "Give rescue boats a higher priority", nil)
-	if e != nil || d.Path != "granite" || d.Rules[0].Concept != "rescue boat" {
+	d, e := c.Compile(context.Background(), "Give cargo ships a higher priority", nil)
+	if e != nil || d.Path != "granite" || d.Rules[0].Concept != "cargo ship" {
 		t.Fatalf("%+v %v", d, e)
 	}
 	for _, bad := range []string{`not json`, `{"operations":[],"clarification":"Which boats?"}`, `{"operations":[{"action":"boost","concept":"rescue boat","weight":100}],"clarification":""}`, `{"operations":[{"action":"boost","concept":"rescue boat","weight":2,"extra":true}],"clarification":""}`, `{"operations":[{"action":"boost","concept":"moving boat","weight":2}],"clarification":""}`} {
 		content = bad
-		if _, e = c.Compile(context.Background(), "Give rescue boats a higher priority", nil); e == nil {
+		if _, e = c.Compile(context.Background(), "Give cargo ships a higher priority", nil); e == nil {
 			t.Fatalf("accepted bad result %s", bad)
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, e = c.Compile(ctx, "Give rescue boats a higher priority", nil); e == nil {
+	if _, e = c.Compile(ctx, "Give cargo ships a higher priority", nil); e == nil {
 		t.Fatal("cancelled request accepted")
 	}
 }
@@ -347,7 +347,7 @@ func TestInputValidationAndHTTP(t *testing.T) {
 
 func TestFollowUpToUnappliedDraft(t *testing.T) {
 	ctx := context.Background()
-	s, _ := Open(Config{DataDir: t.TempDir()})
+	s, _ := Open(Config{DataDir: t.TempDir(), Compiler: resolverFixture(t, nil)})
 	p, e := s.Preview(ctx, "prioritize rescue boats", "")
 	if e != nil {
 		t.Fatal(e)
@@ -420,7 +420,7 @@ func TestDuplicateIDsAndMixedEncoderBatchAreAtomic(t *testing.T) {
 }
 
 func TestProtectionCommandsAndCompoundPolarity(t *testing.T) {
-	c := &Compiler{}
+	c := resolverFixture(t, nil)
 	for _, text := range []string{"ignore human overrides", "disable unknown protection", "remove human labels", "reset human overrides", "ignore unknown objects", "ignore manual corrections", "suppress operator overrides", "change base scores"} {
 		if d, e := c.Compile(context.Background(), text, nil); e == nil {
 			t.Fatalf("protection request %q accepted: %+v", text, d)
