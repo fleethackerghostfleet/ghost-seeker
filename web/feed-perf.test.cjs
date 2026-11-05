@@ -42,6 +42,18 @@ test('SSE item/update bursts merge by ID and render once per frame with latest v
  assert.equal(vm.runInContext('counts.feed===1&&counts.stats===1&&counts.rp===1',c),true);
  assert.equal([...h.timers.values()].filter(t=>t.ms===100).length,0);
 });
+test('merge removes omitted server fields while retaining identity and client card state',()=>{
+ const {context:c}=setup();
+ vm.runInContext(`
+  mergeItem({...raw('one'),reviewed:true,dismissed:true,escalated:true,sent:true,note:'old',upload:{override:'hold'}},true);
+  original=findItem('one');original.el=card('one');originalElement=original.el;rv.cur=original;
+  mergeItem({...raw('one'),central:.9},false);
+ `,c);
+ assert.equal(vm.runInContext("['reviewed','dismissed','escalated','sent','note','upload'].every(key=>!Object.hasOwn(original,key))",c),true);
+ assert.equal(vm.runInContext("items.length===1&&items[0]===original&&findItem('one')===original&&itemByID.get('one')===original&&rv.cur===original",c),true);
+ assert.equal(vm.runInContext('original.el===originalElement&&original.fresh===false&&original.central===.9',c),true);
+ assert.equal(vm.runInContext("Object.keys(original).sort().join(',')===[...Object.keys(raw('one')),'el','fresh'].sort().join(',')",c),true);
+});
 test('hidden-tab timeout flushes once and cancels the pending animation frame',()=>{
  const h=setup(),c=h.context;
  vm.runInContext('document.hidden=true;calls=0;renderFeed=()=>calls++;scheduleFeedFlush();scheduleFeedFlush()',c);

@@ -177,7 +177,11 @@ function renderAll(){
 function mergeItem(raw,fresh=true){
  const item=normalizeItem(raw);if(evictedIDs.has(item.id))return;
  const previous=findItem(item.id);
- if(previous)Object.assign(previous,item,{el:previous.el,fresh});else{item.fresh=fresh;items.push(item);itemByID.set(item.id,item)}
+ if(previous){
+  const el=previous.el;
+  for(const key of Object.keys(previous))if(!Object.hasOwn(item,key))delete previous[key];
+  Object.assign(previous,item,{el,fresh});
+ }else{item.fresh=fresh;items.push(item);itemByID.set(item.id,item)}
  dirtyItems.add(item.id);
  if(rv.cur?.id===item.id)rv.cur=findItem(item.id);
  if(fresh){['st1','st2','st3','st4','st5'].forEach((id,index)=>setTimeout(()=>flash(id),index*140));setTimeout(()=>{const current=findItem(item.id);if(current){current.fresh=false;dirtyItems.add(current.id);scheduleFeedFlush()}},6000)}
