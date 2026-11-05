@@ -1,7 +1,7 @@
 const workbench=(()=>{
  const copy=x=>JSON.parse(JSON.stringify(x));
  const empty=()=>({text:'',rules:[],pins:{}});
- let draft=empty(),unknown=[],after=[],candidates=[],proposal=null,comparison=null,pendingDuration=0,closeFocus='apply';
+ let draft=empty(),unknown=[],after=[],candidates=[],proposal=null,comparison=null,pendingDuration=0,parsedSnapshot=JSON.stringify(draft.rules),closeFocus='apply';
  let versions=[],cursor=-1,serial=0,selected=null,textTimer=null,weightTimer=null,liveTimer=null,lastPreview=0,sequence=0,busy=false,initialized=false,renderDeferred=false;
  const sorted=rows=>[...rows].sort((a,b)=>a.tier-b.tier||b.central-a.central||a.id.localeCompare(b.id));
  const counts=rows=>[1,2,3,4].map(t=>rows.filter(i=>i.tier===t).length);
@@ -43,7 +43,7 @@ const workbench=(()=>{
     const text=$('nlIn').value;
     const parsed=await request('/api/directives/preview','POST',{text});
     if(token!==sequence)return;
-    draft.text=text;draft.rules=parsed.rules.map(normalize);unknown=parsed.unknown;proposal=null;renderChips();
+    draft.text=text;draft.rules=parsed.rules.map(normalize);parsedSnapshot=JSON.stringify(draft.rules);unknown=parsed.unknown;proposal=null;renderChips();
    }
    buildCandidates();
    const submitted=candidates.map(c=>({key:c.key,rules:c.rules}));
@@ -122,7 +122,7 @@ const workbench=(()=>{
   $('wbUndo').disabled=cursor<=0;$('wbRedo').disabled=cursor>=versions.length-1;
  }
  async function travel(change){await flush();const index=cursor+change;if(index<0||index>=versions.length)return;cursor=index;draft=copy(versions[index].draft);$('nlIn').value=draft.text;unknown=[];proposal=null;renderChips();await preview()}
- async function reset(label='Reset draft'){++sequence;clearTimeout(textTimer);textTimer=null;draft=empty();$('nlIn').value='';unknown=[];proposal=null;comparison=null;renderChips();await preview({label})}
+ async function reset(label='Reset draft'){++sequence;clearTimeout(textTimer);textTimer=null;draft=empty();parsedSnapshot=JSON.stringify(draft.rules);$('nlIn').value='';unknown=[];proposal=null;comparison=null;renderChips();await preview({label})}
  function init(){
   initialized=true;renderChips();
   $('nlIn').oninput=textChanged;
@@ -150,10 +150,10 @@ const workbench=(()=>{
   });
   $('wbApply').onclick=async()=>{
    if(!await flush())return;
-   const edited=draft.rules.some(r=>r.edited),payload=edited||!draft.text.trim()?{text:draft.text,rules:draft.rules}:{text:draft.text};
+   const edited=draft.rules.some(r=>r.edited)||JSON.stringify(draft.rules)!==parsedSnapshot,payload=edited||!draft.text.trim()?{text:draft.text,rules:draft.rules}:{text:draft.text};
    let compiled;
    try{compiled=await request('/api/directives/compile','POST',payload)}catch(error){toast(error.message);return}
-   if(!edited&&compiled.path==='llm'){draft.rules=compiled.rules.map(normalize);renderChips()}
+   if(!edited&&compiled.path==='llm'){draft.rules=compiled.rules.map(normalize);parsedSnapshot=JSON.stringify(draft.rules);renderChips()}
    pendingDuration=compiled.durationMin||0;
    if(!await preview())return;
    $('wbReadback').textContent=compiled.readback;
