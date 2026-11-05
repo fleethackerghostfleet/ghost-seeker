@@ -216,6 +216,10 @@ def test_qa_apply_box_corrections_and_preserve_no_correction_output(tmp_path):
 def test_qa_apply_rebuilds_attrs_from_pristine_teacher_copy(tmp_path):
     seq_dir, _ = _make_sequence(tmp_path)
     original_attrs = (seq_dir / "gt" / "attrs.jsonl").read_bytes()
+    labels_path = seq_dir / "gt" / "labels.json"
+    labels = json.loads(labels_path.read_text())
+    labels["qa"] = {}
+    labels_path.write_text(json.dumps(labels))
     rows, classes = apply(
         seq_dir, {"drop_boxes": [[1, 2]]}, {"1": "ship", "2": "buoy"}
     )
@@ -230,11 +234,6 @@ def test_qa_apply_rebuilds_attrs_from_pristine_teacher_copy(tmp_path):
             for f, i, x, y, w, h, c, k, v in rows
         )
     )
-    labels_path = seq_dir / "gt" / "labels.json"
-    labels = json.loads(labels_path.read_text())
-    labels["qa"] = {}
-    labels_path.write_text(json.dumps(labels))
-
     rows, classes = apply(seq_dir, {}, {"1": "ship", "2": "buoy"})
     rewrite_attrs(seq_dir, {}, rows, classes)
     restored = [
