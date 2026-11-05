@@ -159,3 +159,5 @@ def test_source_routes_and_bucket_boundaries():
     assert export.catalog_frame_index("gs://bucket/MVI_0790_f00570.jpg") == 570
     assert export.catalog_frame_index("gs://bucket/MVI_1448_VIS_Haze_frame_000123.jpg") == 123
     assert export.catalog_frame_index("gs://bucket/000001.jpg") is None
+    assert export.catalog_annotation({"label": "horizon", "label_norm": None, "box": []}) is None
+    assert export.catalog_annotation({"label": "boat", "label_norm": "vessel", "box": [0, 0, 3, 4]}) == {"bbox": [0, 0, 3, 4], "ignore": False}

@@ -7,6 +7,7 @@ Training data has train/valid only. Locked sets live under locked/, separately.
 from __future__ import annotations
 
 import argparse
+import base64
 import collections
 import concurrent.futures
 import configparser
@@ -73,6 +74,12 @@ def catalog_frame_index(uri):
     return int(match[1]) if match else None
 
 
+def catalog_annotation(row):
+    if row["label"] == "horizon" and not row["box"]:
+        return None
+    return {"bbox": row["box"], "ignore": row["label_norm"] != "vessel"}
+
+
 def main():
     from google.cloud import bigquery, storage
     from inventory_gcs import credentials
@@ -83,6 +90,7 @@ def main():
     ap.add_argument("--manifests", type=Path, required=True, help="New directory of small commit-ready manifests")
     ap.add_argument("--splits", type=Path, default=Path(__file__).parents[1] / "configs/splits.yaml")
     ap.add_argument("--workers", type=int, default=16)
+    ap.add_argument("--resume-incomplete", action="store_true", help="Resume only an unfinished prefix; verify existing bytes, never overwrite")
     args = ap.parse_args()
     prefix = args.prefix.strip("/") + "/"
     if not prefix.startswith("edgeml/shore/") or ".." in prefix.split("/"):
@@ -90,10 +98,12 @@ def main():
     auth = credentials()
     client = storage.Client(project=PROJECT, credentials=auth)
     bucket = client.bucket(BUCKET)
-    if next(iter(client.list_blobs(BUCKET, prefix=prefix, max_results=1)), None):
+    if args.resume_incomplete and bucket.blob(prefix + "COMPLETE.json").exists():
+        ap.error("Completed freezes cannot be resumed")
+    if not args.resume_incomplete and next(iter(client.list_blobs(BUCKET, prefix=prefix, max_results=1)), None):
         ap.error("Destination exists; choose a new freeze ID")
-    args.output.mkdir(parents=True, exist_ok=False)
-    args.manifests.mkdir(parents=True, exist_ok=False)
+    args.output.mkdir(parents=True, exist_ok=args.resume_incomplete)
+    args.manifests.mkdir(parents=True, exist_ok=args.resume_incomplete)
     policy = yaml.safe_load(args.splits.read_text())
     sg = policy["singapore_maritime_v2"]
     assert [len(sg[k]) for k in ("train", "dev", "test")] == [26, 5, 5]
@@ -103,6 +113,13 @@ def main():
         return bucket.blob(path.removeprefix(f"gs://{BUCKET}/")).download_as_bytes()
 
     def publish(path, data):
+        if args.resume_incomplete:
+            existing = bucket.get_blob(prefix + path)
+            if existing is not None:
+                digest = base64.b64encode(hashlib.md5(data).digest()).decode()
+                if existing.md5_hash != digest:
+                    raise ValueError(f"Resume bytes differ: {path}")
+                return
         bucket.blob(prefix + path).upload_from_string(data, if_generation_match=0, timeout=180)
 
     def artifact(path, data):
@@ -111,11 +128,14 @@ def main():
         local.write_bytes(data)
         publish(path, data)
 
-    bq = bigquery.Client(project=PROJECT, credentials=auth)
     where = 'dataset_id IN ("seaships7000", "singapore_maritime", "smd_vis_onboard_sample")'
     catalog = {}
     for table in ("images", "annotations"):
-        rows = [dict(r) for r in bq.query(f"SELECT * FROM `{PROJECT}.ghost_fleet.{table}_clean_v2` WHERE {where}").result()]
+        if args.resume_incomplete:
+            rows = json.loads(read(prefix + f"inputs/{table}_clean_v2.json"))
+        else:
+            bq = bigquery.Client(project=PROJECT, credentials=auth)
+            rows = [dict(r) for r in bq.query(f"SELECT * FROM `{PROJECT}.ghost_fleet.{table}_clean_v2` WHERE {where}").result()]
         catalog[table] = rows
         artifact(f"inputs/{table}_clean_v2.json", encode(rows))
     artifact("inputs/splits.yaml", args.splits.read_bytes())
@@ -124,7 +144,9 @@ def main():
     excluded = {r["ref"].removeprefix(f"gs://{BUCKET}/") for r in map(json.loads, selected.splitlines()) if r["status"] == "quarantine"}
     annotations = collections.defaultdict(list)
     for a in catalog["annotations"]:
-        annotations[a["dataset_id"], a["image_id"]].append({"bbox": a["box"], "ignore": a["label_norm"] != "vessel"})
+        box = catalog_annotation(a)
+        if box is not None:
+            annotations[a["dataset_id"], a["image_id"]].append(box)
     frames = []
     for im in catalog["images"]:
         split = route(im["dataset_id"], im["source_video"], im["eval_split"], policy)

@@ -20,6 +20,21 @@ Only a prefix with `COMPLETE.json` is a usable freeze. The abandoned v1 prefix
 contains input metadata only; it failed closed on normalized onboard source IDs
 before publishing a dataset. Do not use it.
 
+| Set | Images | Tiny | Small | Medium | Large | Low-light frames / boxes |
+|---|---:|---:|---:|---:|---:|---:|
+| train | 15,101 | 2 | 1,494 | 33,646 | 40,762 | 16 / 13 |
+| valid | 2,423 | 17 | 1,989 | 7,943 | 7,684 | 505 / 3,535 |
+| test_sg | 1,984 | 30 | 3,395 | 7,616 | 5,010 | 0 / 0 |
+| test_gf | 4,926 | 644 | 713 | 3,199 | 2,820 | 27 / 3 |
+| test_fvessel | 1,189 | 0 | 1 | 871 | 882 | 0 / 0 |
+| test_smd | 40 | 0 | 0 | 20 | 52 | 0 / 0 |
+| test_seaships | 3,500 | 0 | 9 | 426 | 4,248 | 13 / 13 |
+
+The freeze check verified all seven annotation hashes, image-shard hashes and
+bucket counts, known source frame indices, zero exact-image/source-recording
+overlap across partitions, and manifest files individually below 1 MB. SeaShips
+recording independence remains unknown despite distinct catalog source IDs.
+
 Layout:
 
 ```
@@ -63,6 +78,10 @@ python edgeml/tools/shore_export.py \
 Publication uses GCS generation-match-zero writes. Existing freezes cannot be
 overwritten by the exporter. Manifests are content locks, not bucket retention
 policies; privileged bucket administrators can still delete objects.
+`--resume-incomplete` reuses the snapshotted catalog and accepts existing objects
+only when their byte checksums match; it rejects any prefix with `COMPLETE.json`.
+The initial export was resumed after identifying SMD's 40 non-box `horizon`
+annotations. Those are excluded from detection COCO, not converted to fake boxes.
 
 ## Labels and limitations
 
