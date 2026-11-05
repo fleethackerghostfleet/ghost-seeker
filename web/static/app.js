@@ -485,7 +485,7 @@ function renderLiveStrip(){
  const rate=link.controllable?link.bps:shoreDown?0:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
  const d=link.distribution;
  const measuring=!link.controllable&&!rate&&!shoreDown;
- const linkNote=d?`Simulated · changes every ${d.intervalMs/1000} s`:measuring?'Measuring link speed…':'Measured by the ship';
+ const linkNote=d?`Changes every ${d.intervalMs/1000} s`:measuring?'Measuring link speed…':'Measured by the ship';
  const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds.`:'Ship-to-shore speed is controlled outside this console.';
  const sightingMode=counts.grouped>0;
  const objsShown=sightingMode?counts.sightings:counts.objects,objsImg=sightingMode?counts.sightingsWithImage:counts.objectsWithImage;
@@ -505,7 +505,7 @@ function linkPanelHTML(bps,note,measuring){
 }
 function renderSimLink(){
  const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
- el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'Simulated · changes every 5 s');
+ el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'Changes every 5 s');
 }
 const pulling=new Set();
 function renderCameras(){
