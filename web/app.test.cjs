@@ -1142,6 +1142,22 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
  assert.equal(vm.runInContext('indicator.textContent',context),'RECONNECTING');
  assert.equal(vm.runInContext("$('live').title",context),'Reconnecting — click to resume feed');
 });
+test('shore outage is visible without diagnostics and recovers without affecting simulation',()=>{
+ const context=setup();
+ vm.runInContext("indicator={};statusClasses=new Set();$('live').classList={toggle:(key,on)=>on?statusClasses.add(key):statusClasses.delete(key)};$('live').querySelector=()=>indicator;applyLive({shore:{ok:false,error:'upstream shore error'}})",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'SHORE UNREACHABLE');
+ assert.equal(vm.runInContext("statusClasses.has('off')",context),true);
+ assert.equal(context.$('shoreWarning').hidden,false);
+ assert.match(context.$('live').title,/showing last-known data/);
+ assert.match(html,/id="shoreWarning" role="status" hidden>Shore unreachable — showing last-known data/);
+ vm.runInContext("applyLive({shore:{ok:true}})",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED ACTIVE');
+ assert.equal(vm.runInContext("statusClasses.has('off')",context),false);
+ assert.equal(context.$('shoreWarning').hidden,true);
+ vm.runInContext("applyLive(null)",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED ACTIVE');
+ assert.equal(context.$('shoreWarning').hidden,true);
+});
 test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
  const context=setup();
  assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);

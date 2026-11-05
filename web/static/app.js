@@ -260,6 +260,7 @@ function setupDemoReset(enabled){
 }
 function applyLive(live){
  LIVE=live||null;const cl=document.body?.classList;if(cl?.toggle)cl.toggle('live',!!LIVE);
+ renderLive();
  if(!LIVE)return;
  mergeLiveConfig(LIVE);
  const banner=document.querySelector?.('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE';
@@ -288,10 +289,12 @@ async function patchItem(id,changes){
  cdr=result.cdr;applyItemUpdate(result.item);return findItem(id);
 }
 function renderLive(){
- const live=$('live');live.classList.toggle('off',!!state.offline);live.classList.toggle('paused',!state.offline&&state.paused);
- live.querySelector('span').textContent=state.offline?'RECONNECTING':state.paused?'FEED PAUSED':'FEED ACTIVE';
+ const shoreUnavailable=!!LIVE?.shore?.error;
+ const warning=$('shoreWarning');if(warning)warning.hidden=!shoreUnavailable;
+ const live=$('live');live.classList.toggle('off',!!state.offline||shoreUnavailable);live.classList.toggle('paused',!state.offline&&!shoreUnavailable&&state.paused);
+ live.querySelector('span').textContent=shoreUnavailable?'SHORE UNREACHABLE':state.offline?'RECONNECTING':state.paused?'FEED PAUSED':'FEED ACTIVE';
  const action=state.paused?'resume feed':'pause feed';
- live.title=state.offline?`Reconnecting — click to ${action}`:state.paused?'Feed paused — click to resume feed':'Feed active — click to pause feed';
+ live.title=shoreUnavailable?`Shore unreachable — showing last-known data; click to ${action}`:state.offline?`Reconnecting — click to ${action}`:state.paused?'Feed paused — click to resume feed':'Feed active — click to pause feed';
  live.setAttribute('aria-label',live.title);live.setAttribute('aria-pressed',String(!!state.paused));
  $('pauseBtn').textContent=state.paused?'Resume feed':'Pause feed';$('wbHeld').hidden=!state.paused;
 }
