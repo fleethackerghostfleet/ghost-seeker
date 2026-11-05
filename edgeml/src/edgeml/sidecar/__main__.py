@@ -7,20 +7,17 @@ import os
 import logging
 
 
-# Workstream G fine-tune (edgeml/reports/G_detector.md) fetched by `make demo-models`; D's COCO export is the fallback.
-DEFAULT_DETECTOR = "~/models/D/yolo11n-ft-640-v1/model.onnx"
-FALLBACK_DETECTOR = "~/models/D/yolo11n-640/model.onnx"
+# D's COCO YOLO11n export fetched by `make demo-models` (the G fine-tune did not win on the locked test, see
+# edgeml/reports/G_detector.md); $EDGEML_DETECTOR overrides, e.g. to try ~/models/G/yolo11n-ft-640-v1/model.onnx.
+DEFAULT_DETECTOR = "~/models/D/yolo11n-640/model.onnx"
 
 
 def default_detector() -> str | None:
     env = os.environ.get("EDGEML_DETECTOR")
     if env:
         return env
-    for cand in (DEFAULT_DETECTOR, FALLBACK_DETECTOR):
-        p = os.path.expanduser(cand)
-        if os.path.exists(p):
-            return p
-    return None
+    p = os.path.expanduser(DEFAULT_DETECTOR)
+    return p if os.path.exists(p) else None
 
 
 def main(argv=None) -> None:
