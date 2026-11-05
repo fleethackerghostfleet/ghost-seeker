@@ -461,6 +461,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	s.policy.mu.Lock()
 	defer s.policy.mu.Unlock()
+	prev := s.policy.higherLayers
 	s.policy.higherLayers = nil
 	for _, layer := range p.Layers {
 		if layer.Echelon == pb.Echelon_ECHELON_SHIP && layer.IssuedBy == "TAO" {
@@ -470,6 +471,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	accepted, err := s.policy.apply("admin", "super-admin", fallback(p.Text, "raw policy edit"), now)
 	if err != nil {
+		s.policy.higherLayers = prev
 		s.policy.guard.Reject(r.Context(), p, "admin", err.Error(), now)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

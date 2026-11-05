@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,9 +12,41 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"google.golang.org/protobuf/encoding/protojson"
 )
+
+type failingSaveBackend struct {
+	policy.Backend
+}
+
+func (failingSaveBackend) SavePolicyState(context.Context, *pb.Policy, int64) error {
+	return errors.New("save failed")
+}
+
+func TestAdminPolicyApplyFailureRestoresHigherLayers(t *testing.T) {
+	app := New(store.New(10), WithAdmin(true), WithNodeID("DDG-51"),
+		WithPolicyBackend(failingSaveBackend{Backend: policy.NewMemBackend()}))
+	previous := app.policy.higherLayers
+	if len(previous) == 0 {
+		t.Fatal("expected seeded higher policy layer")
+	}
+	raw, err := protojson.Marshal(&pb.Policy{Layers: []*pb.PolicyLayer{{
+		Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-99",
+		Rules: []*pb.InterestRule{{Id: "new-lock", Locked: true, BoostLabels: []string{"aircraft"}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := rawPolicyRequest(app, http.MethodPut, "/api/policy", string(raw))
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("PUT status=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(app.policy.higherLayers) != len(previous) || app.policy.higherLayers[0] != previous[0] {
+		t.Fatalf("higher layers changed after failure: got=%v want=%v", app.policy.higherLayers, previous)
+	}
+}
 
 func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	data := store.New(10)
