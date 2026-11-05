@@ -37,8 +37,8 @@ def make_handler(svc: InferenceService, quiet: bool = True):
             self.end_headers()
             self.wfile.write(data)
 
-        def _error(self, code: str, message: str):
-            self._send(STATUS.get(code, 500), {"code": code, "message": message})
+        def _error(self, code: str, message: str, http_status: int | None = None):
+            self._send(http_status or STATUS.get(code, 500), {"code": code, "message": message})
 
         def do_GET(self):  # noqa: N802
             if self.path in ("/healthz", "/health"):
@@ -60,7 +60,7 @@ def make_handler(svc: InferenceService, quiet: bool = True):
                 req = json.loads(self.rfile.read(n) or b"{}")
                 resp = svc.dispatch(self.path[len(prefix):], req)
             except RpcError as e:
-                return self._error(e.code, str(e))
+                return self._error(e.code, str(e), getattr(e, "http_status", None))
             except (ValueError, KeyError) as e:
                 return self._error("invalid_argument", f"{type(e).__name__}: {e}")
             except Exception as e:  # noqa: BLE001 - surface as Connect internal error
@@ -78,15 +78,16 @@ def parse_listen(listen: str) -> tuple[str, int]:
     return (host or "127.0.0.1", int(port or 9090))
 
 
-def make_server(engine, listen: str = ":9090", quiet: bool = True) -> ThreadingHTTPServer:
-    srv = ThreadingHTTPServer(parse_listen(listen), make_handler(InferenceService(engine), quiet=quiet))
+def make_server(engine, listen: str = ":9090", quiet: bool = True, prioritizer=None, mode: str = "edgeml") -> ThreadingHTTPServer:
+    svc = InferenceService(engine, prioritizer=prioritizer, mode=mode)
+    srv = ThreadingHTTPServer(parse_listen(listen), make_handler(svc, quiet=quiet))
     srv.daemon_threads = True
     return srv
 
 
-def serve(engine, listen: str = ":9090", quiet: bool = False) -> None:
-    srv = make_server(engine, listen, quiet=quiet)
-    log.info("sidecar listening on %s (%s)", listen, getattr(engine, "model_id", "?"))
+def serve(engine, listen: str = ":9090", quiet: bool = False, prioritizer=None, mode: str = "edgeml") -> None:
+    srv = make_server(engine, listen, quiet=quiet, prioritizer=prioritizer, mode=mode)
+    log.info("sidecar listening on %s (%s, prioritizer=%s)", listen, getattr(engine, "model_id", "?"), mode)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -95,9 +96,9 @@ def serve(engine, listen: str = ":9090", quiet: bool = False) -> None:
         srv.server_close()
 
 
-def start_in_thread(engine, listen: str = "127.0.0.1:0") -> tuple[ThreadingHTTPServer, str]:
+def start_in_thread(engine, listen: str = "127.0.0.1:0", **kw) -> tuple[ThreadingHTTPServer, str]:
     """For tests: serve on an ephemeral port, return (server, base_url)."""
-    srv = make_server(engine, listen)
+    srv = make_server(engine, listen, **kw)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     host, port = srv.server_address[:2]
     return srv, f"http://{host}:{port}"

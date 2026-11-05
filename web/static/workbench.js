@@ -1,7 +1,7 @@
 const workbench=(()=>{
  const copy=x=>JSON.parse(JSON.stringify(x));
  const empty=()=>({text:'',rules:[],pins:{}});
- let draft=empty(),unknown=[],after=[],candidates=[],proposal=null,comparison=null;
+ let draft=empty(),unknown=[],after=[],candidates=[],proposal=null,comparison=null,pendingDuration=0,parsedSnapshot=JSON.stringify(draft.rules),closeFocus='apply';
  let versions=[],cursor=-1,serial=0,selected=null,textTimer=null,weightTimer=null,liveTimer=null,lastPreview=0,sequence=0,busy=false,initialized=false,renderDeferred=false;
  const sorted=rows=>[...rows].sort((a,b)=>a.tier-b.tier||b.central-a.central||a.id.localeCompare(b.id));
  const counts=rows=>[1,2,3,4].map(t=>rows.filter(i=>i.tier===t).length);
@@ -34,6 +34,7 @@ const workbench=(()=>{
   if(proposal)candidates.push({key:'correction',label:proposal.label,rules:proposal.rules});
  }
  async function preview({parse=false,label=null,background=false}={}){
+  if(document.querySelector('dialog[open]'))return false;
   clearTimeout(liveTimer);liveTimer=null;
   const token=++sequence;lastPreview=Date.now();
   $('wbStatus').textContent='Scoring preview…';
@@ -42,7 +43,7 @@ const workbench=(()=>{
     const text=$('nlIn').value;
     const parsed=await request('/api/directives/preview','POST',{text});
     if(token!==sequence)return;
-    draft.text=text;draft.rules=parsed.rules.map(normalize);unknown=parsed.unknown;proposal=null;renderChips();
+    draft.text=text;draft.rules=parsed.rules.map(normalize);parsedSnapshot=JSON.stringify(draft.rules);unknown=parsed.unknown;proposal=null;renderChips();
    }
    buildCandidates();
    const submitted=candidates.map(c=>({key:c.key,rules:c.rules}));
@@ -62,8 +63,8 @@ const workbench=(()=>{
  }
  async function flush(){if(textTimer){clearTimeout(textTimer);textTimer=null;return preview({parse:true,label:'Directive edited'})}return true}
  function live(){
-  if(!initialized||state.page!=='rp'||textTimer||busy)return;
-  clearTimeout(liveTimer);liveTimer=setTimeout(()=>{liveTimer=null;if(state.page==='rp'&&!textTimer&&!busy)preview({background:true})},Math.max(0,3000-(Date.now()-lastPreview)));
+  if(!initialized||state.page!=='rp'||textTimer||busy||document.querySelector('dialog[open]'))return;
+  clearTimeout(liveTimer);liveTimer=setTimeout(()=>{liveTimer=null;if(state.page==='rp'&&!textTimer&&!busy&&!document.querySelector('dialog[open]'))preview({background:true})},Math.max(0,3000-(Date.now()-lastPreview)));
  }
  function activate(){if($('nlIn').value!==draft.text)textChanged();else live()}
  function opts(entries,values){return entries.map(([v,l])=>`<option value="${esc(String(v))}" ${values.includes(String(v))?'selected':''}>${esc(l)}</option>`).join('')}
@@ -121,7 +122,7 @@ const workbench=(()=>{
   $('wbUndo').disabled=cursor<=0;$('wbRedo').disabled=cursor>=versions.length-1;
  }
  async function travel(change){await flush();const index=cursor+change;if(index<0||index>=versions.length)return;cursor=index;draft=copy(versions[index].draft);$('nlIn').value=draft.text;unknown=[];proposal=null;renderChips();await preview()}
- async function reset(label='Reset draft'){++sequence;clearTimeout(textTimer);textTimer=null;draft=empty();$('nlIn').value='';unknown=[];proposal=null;comparison=null;renderChips();await preview({label})}
+ async function reset(label='Reset draft'){++sequence;clearTimeout(textTimer);textTimer=null;draft=empty();parsedSnapshot=JSON.stringify(draft.rules);$('nlIn').value='';unknown=[];proposal=null;comparison=null;renderChips();await preview({label})}
  function init(){
   initialized=true;renderChips();
   $('nlIn').oninput=textChanged;
@@ -140,23 +141,44 @@ const workbench=(()=>{
   $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;unknown=[];renderChips();await preview({label:'Version restored'})}};
   $('wbUndo').onclick=()=>travel(-1);$('wbRedo').onclick=()=>travel(1);$('wbReset').onclick=()=>reset();
   document.addEventListener('keydown',e=>{
-   if(state.page!=='rp'||busy||$('settings').open||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
+   if(document.querySelector('dialog[open]')||gsPolicy.isPolicyHotkeyTarget(e.target)||state.page!=='rp'||busy||$('settings').open||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
    const k=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();travel(e.shiftKey?1:-1);return}if(e.ctrlKey||e.metaKey)return;
    if(e.target.closest('select,input,button'))return;
    const tile=e.target.closest('.wb-tile');if(!tile)return;
    if(['arrowup','arrowdown','x'].includes(k)){e.preventDefault();if(!e.repeat)correct(tile.dataset.id,k==='arrowup'?'higher':k==='arrowdown'?'lower':'irrelevant')}
    if(['arrowleft','arrowright','j','k'].includes(k)){e.preventDefault();const tiles=[...$('wbGrid').querySelectorAll('.wb-tile')],index=tiles.indexOf(tile),offset=k==='arrowleft'||k==='k'?-1:1;tiles[Math.max(0,Math.min(tiles.length-1,index+offset))]?.focus()}
   });
-  $('wbApply').onclick=async()=>{if(!await flush())return;if(!await preview())return;$('wbConfirmText').textContent=`${changes(items,rows())} images change tier. Add ${draft.rules.length} draft rules and save ${Object.keys(draft.pins).length} tier exceptions.`;$('wbConfirm').showModal()};
-  $('wbCancelApply').onclick=()=>$('wbConfirm').close();
+  $('wbApply').onclick=async()=>{
+   if(!await flush())return;
+   const edited=draft.rules.some(r=>r.edited)||JSON.stringify(draft.rules)!==parsedSnapshot,payload=edited||!draft.text.trim()?{text:draft.text,rules:draft.rules}:{text:draft.text};
+   let compiled;
+   try{compiled=await request('/api/directives/compile','POST',payload)}catch(error){toast(error.message);return}
+   if(!edited&&compiled.path==='llm'){draft.rules=compiled.rules.map(normalize);parsedSnapshot=JSON.stringify(draft.rules);renderChips()}
+   pendingDuration=compiled.durationMin||0;
+   if(!await preview())return;
+   $('wbReadback').textContent=compiled.readback;
+   $('wbPath').textContent={llm:'Compiled by local LLM',rules:'Compiled by rule-based parser',edited:'Your edited rules'}[compiled.path]||'';
+   const list=$('wbWarnings');list.replaceChildren();
+   for(const warning of compiled.warnings||[]){const item=document.createElement('li');item.textContent=warning;if(warning.startsWith('Blocked'))item.className='blocked';list.append(item)}
+   list.hidden=!compiled.warnings?.length;
+   $('wbConfirmText').textContent=`${changes(items,rows())} images change tier. Add ${draft.rules.length} draft rules and save ${Object.keys(draft.pins).length} tier exceptions.`;
+   $('wbConfirmApply').disabled=compiled.blocked||(!draft.rules.length&&!Object.keys(draft.pins).length);
+   closeFocus='apply';$('wbConfirm').showModal();
+   ($('wbConfirmApply').disabled?$('wbEditApply'):$('wbConfirmApply')).focus();
+  };
+  $('wbConfirm').addEventListener('close',()=>{if(closeFocus==='apply')$('wbApply').focus();else if(closeFocus==='edit')focusInput();closeFocus='apply'});
+  $('wbCancelApply').onclick=()=>{closeFocus='apply';$('wbConfirm').close()};
+  $('wbEditApply').onclick=()=>{closeFocus='edit';$('wbConfirm').close();focusInput()};
   $('wbConfirmApply').onclick=async()=>{
    busy=true;$('wbConfirmApply').disabled=true;
    try{
-    if(draft.rules.length){await request('/api/directives','POST',{text:draft.text||draft.rules.map(ruleText).join('; ').slice(0,500),rules:draft.rules});draft.rules=[]}
+    let conflicts=[];
+    if(draft.rules.length){const added=await request('/api/directives','POST',{text:draft.text||draft.rules.map(ruleText).join('; ').slice(0,500),rules:draft.rules,durationMin:pendingDuration});conflicts=added.conflicts||[];draft.rules=[]}
     for(const [id,manual]of Object.entries(draft.pins)){if(findItem(id))await patchItem(id,{manual});delete draft.pins[id]}
-    $('wbConfirm').close();await reset('Applied to live feed');toast('Workbench applied to live feed');
-   }catch(error){renderChips();$('wbConfirm').close();toast('Apply stopped: '+error.message+'; successful changes are already live.')}finally{busy=false;$('wbConfirmApply').disabled=false;live()}
+    closeFocus='confirm';$('wbConfirm').close();await reset('Applied to live feed');$('nlIn').focus();toast(conflicts.length?gsPolicy.conflictToast(conflicts):'Workbench applied to live feed');
+   }catch(error){renderChips();closeFocus='apply';$('wbConfirm').close();if(!error.policyConflicts)toast('Apply stopped: '+error.message+'; successful changes are already live.')}finally{busy=false;$('wbConfirmApply').disabled=false;live()}
   };
  }
+ function focusInput(){const input=$('nlIn');input.focus();input.setSelectionRange(input.value.length,input.value.length)}
  return {init,live,activate,textChanged};
 })();

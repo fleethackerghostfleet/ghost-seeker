@@ -1,15 +1,26 @@
 GO ?= go
 BIN := bin
 
-.PHONY: all gen build test sim run-shore run-edge compose clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar
+.PHONY: all gen build test sim run-shore run-edge compose clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token
 
 all: build
+
+GO_IMAGE ?=
+PY_IMAGE ?=
+GO_BUILD_ARG = $(if $(GO_IMAGE),--build-arg GO_IMAGE=$(GO_IMAGE))
+PY_BUILD_ARG = $(if $(PY_IMAGE),--build-arg PY_IMAGE=$(PY_IMAGE))
+SHORE_IMAGE := ghost-seeker/shore:0.1.0
+EDGE_IMAGE := ghost-seeker/edge:0.1.0
+OPERATOR_IMAGE := ghost-seeker/operator:0.1.0
+EDGEML_IMAGE := ghost-seeker/edgeml-sidecar:0.1.0
+IMAGES := $(SHORE_IMAGE) $(EDGE_IMAGE) $(OPERATOR_IMAGE) $(EDGEML_IMAGE)
 
 gen:            ## regenerate Go from proto (needs buf, protoc-gen-go, protoc-gen-connect-go)
 	buf lint && buf generate
 
 build:
-	$(GO) build -o $(BIN)/ ./cmd/...
+	mkdir -p $(BIN)
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o $(BIN)/ ./cmd/...
 
 test:
 	$(GO) vet ./... && $(GO) test ./...
@@ -25,7 +36,7 @@ run-edge: build ## replay the frame zips through the mock analyzer, 1 frame / 2 
 
 DEMO := scenarios/ghostfleet_demo
 
-demo: demo-clips demo-compare ## download the 5 fps clips, run naive vs hash vs sightings over the link presets (headless, virtual time)
+demo: demo-clips demo-compare ## download the 5 fps clips, run naive vs hash vs sightings vs tomer over the link presets (headless, virtual time)
 	@echo; echo "Live demo: 'make demo-sidecar', 'make demo-shore', 'make demo-ui', 'make demo-edge' in four terminals, open http://localhost:8090 (see docs/DEMO.md)"
 
 demo-clips:      ## fetch the demo clips from GCS into $(DEMO)/frames (gitignored; needs gcloud auth)
@@ -34,11 +45,20 @@ demo-clips:      ## fetch the demo clips from GCS into $(DEMO)/frames (gitignore
 demo-compare: build
 	$(DEMO)/compare.sh
 
+# Local demo auth: the first of shore/edge/ghost-seeker to start writes a random
+# operator token to data/operator.token (0600); the others read it, and a
+# browser on localhost is signed in automatically. See docs/SECURITY.md.
+DEV_TOKEN ?= data/operator.token
+
+demo-token:      ## print the local demo operator token (for curl: -H "Authorization: Bearer $$(make -s demo-token)")
+	@test -s $(DEV_TOKEN) || { mkdir -p $(dir $(DEV_TOKEN)) && umask 077 && head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > $(DEV_TOKEN); }
+	@cat $(DEV_TOKEN)
+
 demo-shore: build
-	$(BIN)/shore -data data/shore -listen :8080
+	$(BIN)/shore -data data/shore -listen :8080 -dev-token-file $(DEV_TOKEN)
 
 demo-ui: build   ## operator UI on live shore data + the shaped link the edge talks through (:18080)
-	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
+	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN)
 
 MODELS ?= $(HOME)/models/D
 PY ?= python
@@ -48,14 +68,34 @@ demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) for the sid
 	gcloud storage cp -r gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/yolo11n-640 $(MODELS)/
 	gcloud storage cp gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/meta.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/model.onnx gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/text_cache.json $(MODELS)/mobileclip-s1/
 
-demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first)
-	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5
+demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
+	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
 
-demo-edge: build ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub)
-	$(BIN)/edge -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings)
+demo-edge: build ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
+	$(BIN)/edge -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN)
 
 compose:
 	docker compose -f deploy/compose/docker-compose.yml up --build
+
+images:
+	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
+	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
+	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
+	docker build $(PY_BUILD_ARG) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
+
+images-save:
+	mkdir -p dist
+	docker save -o dist/ghost-seeker-images.tar $(IMAGES)
+
+images-load:
+	docker load -i dist/ghost-seeker-images.tar
+
+package-check:
+	sh deploy/zarf/check.sh
+
+zarf-package:
+	mkdir -p dist
+	zarf package create deploy/zarf --confirm --output dist
 
 clean:
 	rm -rf $(BIN) data sim-results.json

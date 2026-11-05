@@ -1,0 +1,80 @@
+{
+  "split": "dev",
+  "tier": "easy",
+  "seed": 94109,
+  "n_per_scenario": 28,
+  "dark_contact": {
+    "scenarios": {
+      "dark hull + vessel box": {
+        "flagged": 28,
+        "samples": 28,
+        "positive": true
+      },
+      "lit vessel + box": {
+        "flagged": 0,
+        "samples": 28,
+        "positive": false
+      },
+      "day + box": {
+        "flagged": 0,
+        "samples": 28,
+        "positive": false
+      },
+      "dark hull + non-vessel label (buoy)": {
+        "flagged": 0,
+        "samples": 28,
+        "positive": false
+      }
+    },
+    "total": 112,
+    "tp": 28,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "burst_n_per_scenario": 28,
+  "burst": {
+    "scenarios": {
+      "flashing yellow 4-frame (air_cushion)": {
+        "requested": 28,
+        "samples": 28,
+        "expected": true,
+        "request_rate": 1.0
+      },
+      "single-frame yellow": {
+        "requested": 28,
+        "samples": 28,
+        "expected": true,
+        "request_rate": 1.0
+      },
+      "complete steady pattern": {
+        "requested": 0,
+        "samples": 28,
+        "expected": false,
+        "request_rate": 0.0
+      },
+      "partial/low-confidence pattern": {
+        "requested": 28,
+        "samples": 28,
+        "expected": true,
+        "request_rate": 1.0
+      },
+      "day": {
+        "requested": 0,
+        "samples": 28,
+        "expected": false,
+        "request_rate": 0.0
+      }
+    },
+    "continuous_triggers_120s_at_1fps": {
+      "accepted": 20,
+      "new_intervals": 2,
+      "extensions": 18,
+      "denied": 100,
+      "duty": 0.2,
+      "duration_s": 120,
+      "source_fps": 1.0
+    }
+  }
+}

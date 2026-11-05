@@ -1,10 +1,14 @@
 # Split by source recording, never by frame. Tune on dev; evaluate test once per candidate.
 version: 2
 rule: "split by source video / camera; adjacent frames never cross splits"
+source_video_aliases:
+  Arriving_In_Norfolk_USA_3hr_uncut: Arriving_In_Norfolk
+quarantine:
+  fvessel_clip10: [fvessel_clip05]  # all 185 frames exactly overlap locked clip07
 test:
   # locked held-out sources (do not tune on these)
   smd_vis_onboard_sample: [MVI_0797, MVI_0801]
-  ghost_fleet_clips: [Spotted_A_Submarine, US_Destroyer_POV_Warship_Crossing, Ship_in_the_Distance_Ian, Dolphin_from_far_distance_in_Bay_of_Bengal]
+  ghost_fleet_clips: [Spotted_A_Submarine, US_Destroyer_POV_Warship_Crossing, Ship_in_the_Distance_Ian, Dolphin_from_far_distance_in_Bay_of_Bengal, Sailboat_on_the_horizon, Arriving_In_Norfolk_USA_3hr_uncut, Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats, Ferry_Passing_By_On_River]
   seaships7000: "upstream test split"
   # MOT identity sets (edgeml/eval/<set>/, workstream A). Same source clip => same split as ghost_fleet_clips above.
   ghost_fleet_5fps:
@@ -24,4 +28,28 @@ dev:
   ghost_fleet_clips: "all other clips"
   seaships7000: "upstream train/valid splits"
   ghost_fleet_5fps: [A_ship_in_the_distance, Canadian_Coast_Guard_Helicopter_Landing, Chase_N_Fish_Sharky, Cruise_ship_Mediterranean_sunset_off_Italy, Far_away_but_did_you_see_that_splash, Sailing_POV_Corfu_Paxos, Ship_in_the_Distance_Utopia_of_the_Seas, Submarine_surfacing, Two_Dolphins_near_the_coast_of_Gibraltar]
-  fvessel_clip10: [fvessel_clip01, fvessel_clip02, fvessel_clip03, fvessel_clip04, fvessel_clip05, fvessel_clip06, fvessel_clip08, fvessel_clip10]
+  fvessel_clip10: [fvessel_clip01, fvessel_clip02, fvessel_clip03, fvessel_clip04, fvessel_clip06, fvessel_clip08, fvessel_clip10]
+  ghost_fleet_r2_1fps:
+    - Cruise_Ship_POV
+    - Dolphins_Pungo_Ferry_Bridge
+    - NCL_Breakaway_Bomb_Cyclone
+    - Pacific_Ocean_at_night_from_Cruise_Balcony
+    - Partially_Obstructed_Balcony
+    - Sailing_drone_inside_a_hurricane
+    - Ship_crossing_Mariana_Trench
+    - Sunrise_Somewhere_in_the_Ocean
+    - Tarpon_Offshore
+    - Whale_Watching_in_Northern_Peru
+    - Argentina_to_Alaska_Cruise_Bridge_Timelapse
+    - 30_Days_at_Sea_Timelapse_w1
+    - 30_Days_at_Sea_Timelapse_w196
+    - 30_Days_at_Sea_Timelapse_w390
+    - 30_Days_at_Sea_Timelapse_w585
+    - Cargo_Ship_Storm_first_hour_w1
+    - Cargo_Ship_Storm_first_hour_w1181
+    - Cargo_Ship_Storm_first_hour_w2361
+    - Cargo_Ship_Storm_first_hour_w3541
+    - Cargo_Ship_Uncut_View_w1
+    - Cargo_Ship_Uncut_View_w2981
+    - Cargo_Ship_Uncut_View_w4515
+    - Cargo_Ship_Uncut_View_w8941

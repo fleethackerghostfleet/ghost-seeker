@@ -74,6 +74,8 @@ body.drawer-open .feed{padding-right:calc(var(--dw) + 16px)}
 .box.hi{border-color:var(--p1)}.box.md{border-color:var(--p2)}.box.lo{border-color:rgba(200,215,230,.5)}
 .box.match{border-color:var(--accent);box-shadow:0 0 8px rgba(79,195,217,.6)}
 .box.sup{border-style:dashed;border-color:rgba(150,160,170,.6)}
+.box.unknown{border-color:#c4a1ff;border-style:dashed;box-shadow:0 0 7px #a879e580}
+.box.unknown em{background:#c4a1ff;color:#160c29}
 .box em{position:absolute;left:-1.5px;bottom:100%;font-style:normal;font-size:10px;font-weight:700;white-space:nowrap;padding:0 4px;color:#071018;border-radius:2px 2px 0 0}
 .box.hi em{background:var(--p1)}.box.md em{background:var(--p2)}.box.lo em{background:#c8d7e6}.box.match em{background:var(--accent)}.box.sup em{background:#8d99a5}
 .tier{position:absolute;top:6px;left:5px;font-weight:800;font-size:10.5px;padding:1px 5px;border-radius:3px;color:#0a0f14;letter-spacing:.03em}
@@ -174,6 +176,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .dir .x{cursor:pointer;color:var(--muted);border:none;background:none;font-size:17px;line-height:1;padding:0 3px}.dir .x:hover{color:var(--text)}
 .rule{font-size:11px;font-weight:700;border-radius:4px;padding:1px 7px;background:#123a55;color:#7fd0ff}
 .rule.sup{background:#2b2f36;color:#a7b2bd}.rule.focus{background:#2d2440;color:#c6a8ff}
+.emcon{align-items:center;gap:0;white-space:nowrap}.emcon-label{padding:0 7px;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.08em}.emcon button{font-size:10px!important;padding:3px 6px!important}.emcon button:disabled{opacity:.55;cursor:not-allowed}.emcon-tip{display:inline-flex}.policy-badge{display:inline-block;margin-top:4px;padding:1px 6px;border:1px solid var(--line);border-radius:4px;color:var(--muted);font-size:10px}.policy-badge.locked{color:#ffd58a;border-color:#765b24}.policy-badge.delegated{color:#9fd8ff}.policy-badge.blocked{color:#ff9a9a;border-color:#753737}.policy-blocked{opacity:.58;text-decoration:line-through}.policy-conflicts{margin:8px 0 0;padding:7px 10px 7px 26px;border-left:2px solid var(--p2);color:#ffd58a;font-size:11px}.policy-conflicts small{color:var(--muted)}#policyAdmin[hidden]{display:none!important}#polRaw{min-height:250px;font:12px/1.45 var(--mono)!important;white-space:pre}#polRawMsg{margin-top:8px;font-size:12px}.policy-error{color:#ff8b8b}.policy-valid{color:var(--good)}.policy-table-wrap{overflow:auto}.policy-audit{width:100%;border-collapse:collapse;font-size:11px}.policy-audit th,.policy-audit td{padding:5px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.policy-audit td:nth-child(5){max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.audit-applied{color:var(--good)}.audit-rejected{color:var(--p1)}.audit-expired{color:var(--p3)}
 .nodir{color:var(--muted);font-size:12.5px;padding:12px;border:1px dashed var(--line);border-radius:8px;text-align:center}
 .mrow{display:flex;gap:10px;align-items:center}.mrow select{flex:1;padding:8px 10px}
 .modeldesc{font-size:12px;color:var(--muted);margin-top:8px}
@@ -219,6 +222,8 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .rvsub{color:var(--muted);font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums}
 .rvside .why li{font-size:14.5px;padding:5px 0 5px 20px}.rvside .why li::before{top:12px;width:8px;height:8px}
 .rvmeta{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}.rvmeta span{color:var(--muted)}
+.rvmeta .rvclassification{font-weight:500;line-height:1.5}
+.shipline,.shipfeatures{display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:2px}
 .rvask[hidden]{display:none}
 .rvask{flex:none;display:flex;align-items:center;gap:14px;padding:8px 20px;border-top:1px solid var(--line);background:var(--panel);color:var(--text)}
 .rvask-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
@@ -268,6 +273,9 @@ nav a.on{background:var(--panel2);border-bottom:3px solid var(--accent)}
 .dirbar .pill,.dir{background:#0c2228;border-color:#1d5560;color:#a6e3ee}
 .kb.acc{background:#0d3038}
 .wb button,.wb textarea,.wb select,.wb .panel,.wb .examples>*,dialog#wbConfirm{border-radius:2px}
+.wb-readback{font-weight:600;margin:.8rem 0}
+.wb-warnings{color:var(--muted);padding-left:1.2rem}
+.wb-warnings .blocked{color:var(--p1);font-weight:700}
 /* Responsive: short and narrow windows */
 body{overflow:auto}
 .page{min-height:420px;overflow-x:clip}

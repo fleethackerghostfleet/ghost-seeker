@@ -2,9 +2,17 @@
 # toxiproxy API (see README). Mount frames to replay.
 services:
   shore:
-    build: { context: ../.., dockerfile: deploy/Dockerfile }
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: shore }
+    image: ghost-seeker/shore:0.1.0
     entrypoint: ["/usr/local/bin/shore"]
     command: ["-data", "/data/shore", "-listen", ":8080", "-ui", "/ui"]
+    environment:
+      # Production posture: no auto-generated dev token; operators must set GS_OPERATOR_TOKEN.
+      GS_OPERATOR_TOKEN: ${GS_OPERATOR_TOKEN:?set GS_OPERATOR_TOKEN (>=16 bytes) for the shore/edge consoles}
+      GS_DEV_TOKEN_FILE: none
+      # Unit (edge->shore) auth is mandatory in production: mint edge tokens with cmd/mint-unit-token.
+      GS_REQUIRE_AUTH: "true"
+      GS_SIGNING_KEY: ${GS_SIGNING_KEY:?set GS_SIGNING_KEY (>=32 bytes) for unit JWTs}
     ports: ["8080:8080"]
     volumes: ["shore-data:/data"]
 
@@ -16,8 +24,13 @@ services:
     depends_on: [shore]
 
   edge:
-    build: { context: ../.., dockerfile: deploy/Dockerfile }
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: edge }
+    image: ghost-seeker/edge:0.1.0
     command: ["-data", "/data/edge", "-listen", ":8081", "-shore", "http://link:18080", "-frames", "/frames", "-period", "2s", "-ui", "/ui"]
+    environment:
+      GS_OPERATOR_TOKEN: ${GS_OPERATOR_TOKEN:?set GS_OPERATOR_TOKEN (>=16 bytes) for the shore/edge consoles}
+      GS_DEV_TOKEN_FILE: none
+      GS_UNIT_TOKEN: ${GS_UNIT_TOKEN:?set GS_UNIT_TOKEN (edge JWT from cmd/mint-unit-token)}
     ports: ["8081:8081"]
     volumes: ["edge-data:/data", "../../frames:/frames:ro"]
     depends_on: [link]

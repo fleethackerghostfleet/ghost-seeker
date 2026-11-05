@@ -435,6 +435,9 @@ type Heartbeat struct {
 	UnmanifestedItems int64                  `protobuf:"varint,4,opt,name=unmanifested_items,json=unmanifestedItems,proto3" json:"unmanifested_items,omitempty"`
 	PolicyId          string                 `protobuf:"bytes,5,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"` // policy the edge is currently applying
 	LinkEstimateBps   float64                `protobuf:"fixed64,6,opt,name=link_estimate_bps,json=linkEstimateBps,proto3" json:"link_estimate_bps,omitempty"`
+	ModelId           string                 `protobuf:"bytes,7,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"` // edge analyzer capabilities, so shore can lint rules
+	OpenVocabulary    bool                   `protobuf:"varint,8,opt,name=open_vocabulary,json=openVocabulary,proto3" json:"open_vocabulary,omitempty"`
+	FixedLabels       []string               `protobuf:"bytes,9,rep,name=fixed_labels,json=fixedLabels,proto3" json:"fixed_labels,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -509,6 +512,27 @@ func (x *Heartbeat) GetLinkEstimateBps() float64 {
 		return x.LinkEstimateBps
 	}
 	return 0
+}
+
+func (x *Heartbeat) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *Heartbeat) GetOpenVocabulary() bool {
+	if x != nil {
+		return x.OpenVocabulary
+	}
+	return false
+}
+
+func (x *Heartbeat) GetFixedLabels() []string {
+	if x != nil {
+		return x.FixedLabels
+	}
+	return nil
 }
 
 type Ack struct {
@@ -703,6 +727,9 @@ type Pull struct {
 	Form          FormKind               `protobuf:"varint,2,opt,name=form,proto3,enum=ghostseeker.v1.FormKind" json:"form,omitempty"`
 	PriorityBoost float64                `protobuf:"fixed64,3,opt,name=priority_boost,json=priorityBoost,proto3" json:"priority_boost,omitempty"` // added to the item's priority; default large
 	RequestedBy   string                 `protobuf:"bytes,4,opt,name=requested_by,json=requestedBy,proto3" json:"requested_by,omitempty"`
+	// Operator override: send the capture's original bytes as FULL (no
+	// re-encoding) and skip THUMB/CROP. Requires requested_by.
+	Original      bool `protobuf:"varint,5,opt,name=original,proto3" json:"original,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -763,6 +790,13 @@ func (x *Pull) GetRequestedBy() string {
 		return x.RequestedBy
 	}
 	return ""
+}
+
+func (x *Pull) GetOriginal() bool {
+	if x != nil {
+		return x.Original
+	}
+	return false
 }
 
 type LabelOverride struct {
@@ -864,14 +898,17 @@ const file_ghostseeker_v1_sync_proto_rawDesc = "" +
 	"totalBytes\x12\x12\n" +
 	"\x04data\x18\x05 \x01(\fR\x04data\x12!\n" +
 	"\fcontent_hash\x18\x06 \x01(\tR\vcontentHash\x12\x12\n" +
-	"\x04mime\x18\a \x01(\tR\x04mime\"\xf0\x01\n" +
+	"\x04mime\x18\a \x01(\tR\x04mime\"\xd7\x02\n" +
 	"\tHeartbeat\x12%\n" +
 	"\x0fsent_at_unix_ms\x18\x01 \x01(\x03R\fsentAtUnixMs\x12!\n" +
 	"\fqueued_items\x18\x02 \x01(\x03R\vqueuedItems\x12!\n" +
 	"\fqueued_bytes\x18\x03 \x01(\x03R\vqueuedBytes\x12-\n" +
 	"\x12unmanifested_items\x18\x04 \x01(\x03R\x11unmanifestedItems\x12\x1b\n" +
 	"\tpolicy_id\x18\x05 \x01(\tR\bpolicyId\x12*\n" +
-	"\x11link_estimate_bps\x18\x06 \x01(\x01R\x0flinkEstimateBps\"\xa9\x01\n" +
+	"\x11link_estimate_bps\x18\x06 \x01(\x01R\x0flinkEstimateBps\x12\x19\n" +
+	"\bmodel_id\x18\a \x01(\tR\amodelId\x12'\n" +
+	"\x0fopen_vocabulary\x18\b \x01(\bR\x0eopenVocabulary\x12!\n" +
+	"\ffixed_labels\x18\t \x03(\tR\vfixedLabels\"\xa9\x01\n" +
 	"\x03Ack\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12,\n" +
 	"\x04form\x18\x02 \x01(\x0e2\x18.ghostseeker.v1.FormKindR\x04form\x12#\n" +
@@ -883,12 +920,13 @@ const file_ghostseeker_v1_sync_proto_rawDesc = "" +
 	"\x06policy\x18\x02 \x01(\v2\x16.ghostseeker.v1.PolicyH\x00R\x06policy\x12*\n" +
 	"\x04pull\x18\x03 \x01(\v2\x14.ghostseeker.v1.PullH\x00R\x04pull\x12F\n" +
 	"\x0elabel_override\x18\x04 \x01(\v2\x1d.ghostseeker.v1.LabelOverrideH\x00R\rlabelOverrideB\x05\n" +
-	"\x03msg\"\x97\x01\n" +
+	"\x03msg\"\xb3\x01\n" +
 	"\x04Pull\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12,\n" +
 	"\x04form\x18\x02 \x01(\x0e2\x18.ghostseeker.v1.FormKindR\x04form\x12%\n" +
 	"\x0epriority_boost\x18\x03 \x01(\x01R\rpriorityBoost\x12!\n" +
-	"\frequested_by\x18\x04 \x01(\tR\vrequestedBy\"N\n" +
+	"\frequested_by\x18\x04 \x01(\tR\vrequestedBy\x12\x1a\n" +
+	"\boriginal\x18\x05 \x01(\bR\boriginal\"N\n" +
 	"\rLabelOverride\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x0e\n" +

@@ -21,13 +21,20 @@
   }
   async function post(url, body) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-    return r.json();
+    const text = await r.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch {}
+    if (!r.ok) {
+      if (data?.conflicts?.length) toast(window.gsPolicy.conflictToast(data.conflicts), true);
+      throw new Error(data?.error || `${r.status} ${text}`);
+    }
+    return data;
   }
 
   // ---- status strip ----
   function renderStrip() {
     const { shore, edge, link, counts, policy } = snap;
+    const policyInfo = snap.policyInfo || {};
     const c = $('#conn');
     c.textContent = shore.ok ? `shore ok · ${new Date(snap.ts).toLocaleTimeString()}` : `shore: ${shore.error || 'unreachable'}`;
     c.className = 'conn ' + (shore.ok ? 'ok' : 'bad');
@@ -51,14 +58,25 @@
     for (const b of pr.children) b.classList.toggle('on', link.controllable && +b.dataset.bps === link.bps);
     $('#items-shore').textContent = shore.ok ? shore.itemsTotal : '—';
     $('#items-edge').textContent = edge.ok ? edge.itemsTotal : (edge.error ? 'n/a' : '—');
-    $('#edge-queue').textContent = edge.ok ? `${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)}${edge.itemsDeduped ? ` · ${edge.itemsDeduped} duplicate frames folded on the edge` : ''}` : '';
+    $('#edge-queue').textContent = edge.ok ? `prioritization: ${edge.prioritizer || 'edgeml'} · ${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)} · ${edge.itemsEvicted || 0} delivered items evicted${edge.itemsDeduped ? ` · ${edge.itemsDeduped} duplicate frames folded on the edge` : ''}` : '';
     const sightingMode = counts.grouped > 0;
     $('#obj-img').textContent = sightingMode ? counts.sightingsWithImage : counts.objectsWithImage;
     $('#obj-all').textContent = sightingMode ? counts.sightings : counts.objects;
-    $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} scene tiles not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
+    $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
-    $('#policy').textContent = policy ? `“${policy}”` : 'none set';
+    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (!snap.policyInfo && snap.emcon ? ` · EMCON ${snap.emcon}` : '');
+    const focusedMode = document.activeElement?.closest?.('#shore-emcon button')?.dataset.mode;
+    const mode = String(policyInfo.emcon || snap.emcon || 'NORMAL').toUpperCase();
+    const lockTitle = policyInfo.emconLocked ? `EMCON locked by ${policyInfo.emconLockedBy || policyInfo.emconSetBy || 'higher echelon'}` : '';
+    $('#shore-emcon').innerHTML = `<div class="shore-emcon" role="group" aria-label="Go quiet (EMCON)" tabindex="-1" ${lockTitle ? `title="${esc(lockTitle)}"` : ''}><b>EMCON</b>${['NORMAL', 'BURST', 'SILENT'].map(value => `<button type="button" data-mode="${value}" aria-pressed="${mode === value}" class="${mode === value ? 'on' : ''}" ${policyInfo.emconLocked ? 'disabled' : ''} ${lockTitle ? `title="${esc(lockTitle)}"` : ''}>${value[0] + value.slice(1).toLowerCase()}</button>`).join('')}</div>`;
+    if (focusedMode) {
+      const button = $('#shore-emcon').querySelector(`[data-mode="${focusedMode}"]`);
+      (button && !button.disabled ? button : $('#shore-emcon').querySelector('.shore-emcon'))?.focus({ preventScroll: true });
+    }
+    const locks = (policyInfo.locks || []).map(lock => `${esc(lock.lockedBy)}: ${esc((lock.labels || []).join(', '))}`).join(' · ');
+    const conflicts = (policyInfo.conflicts || []).map(conflict => `${esc(conflict.ruleId)} — ${esc(conflict.reason)}`).join(' · ');
+    $('#policy-info').innerHTML = [locks && `Locks: ${locks}`, conflicts && `Conflicts: ${conflicts}`].filter(Boolean).join(' | ');
     const review = snap.objects.filter(o => !decided.has(o.key) && !o.suppressed && !o.scene && (o.sightingId || !sightingMode));
     $('#review-n').textContent = review.length;
   }
@@ -94,19 +112,37 @@
       render();
     } catch { setTimeout(() => factCache.delete(card.id), 5000); }
   }
-  function sceneTile(o) {
-    const b = o.best;
-    return `<div class="card scene" data-key="${esc(o.key)}" title="Object-free context frame: the edge sends one FACT+THUMB scene per source per minute; no FULL unless pulled">
-      ${imageBlock(b)}
-      <div class="body">
-        <div class="title"><span class="label">Scene</span><span class="tier P4">context</span></div>
-        <div class="meta">${ago(o.lastMs)} · ${esc(b.source)}</div>
-        <div class="forms">${formChips(b)}</div>
-        <div class="actions"><button class="btn" data-act="pull" data-id="${esc(b.id)}" ${pulling.has(b.id) || b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full frame</button></div>
-      </div></div>`;
+  // Cameras strip: per-source heartbeat built from object-free "scene" items
+  // (falling back to the latest contact's image), instead of scene tiles in the feed.
+  function renderCameras(objs, sightingMode) {
+    const cams = new Map();
+    for (const o of objs) {
+      const src = o.best.source || 'camera';
+      const c = cams.get(src) || { src, lastMs: 0, scene: null, latest: null, contacts: 0 };
+      c.lastMs = Math.max(c.lastMs, o.lastMs);
+      if (o.scene) { if (!c.scene || o.lastMs > c.scene.lastMs) c.scene = o; }
+      else {
+        if (!c.latest || o.lastMs > c.latest.lastMs) c.latest = o;
+        if (o.sightingId || !sightingMode) c.contacts++; // untagged per-frame items are not contacts in sightings mode
+      }
+      cams.set(src, c);
+    }
+    const el = $('#cameras');
+    if (!cams.size) { el.innerHTML = ''; return 0; }
+    el.innerHTML = [...cams.values()].sort((a, b) => a.src.localeCompare(b.src)).map(c => {
+      const v = c.scene || c.latest; // prefer the object-free context frame; else the newest contact's image
+      const b = v?.best;
+      const img = b?.image ? `<img src="${b.image}?v=${b.forms[b.imageForm]?.bytes || 0}" alt="">` : '<div class="noimg">no view yet</div>';
+      const full = b?.forms.full?.state;
+      const pull = b ? `<button class="btn mini" data-act="pull" data-id="${esc(b.id)}" ${pulling.has(b.id) || full === 'received' ? 'disabled' : ''}>${full === 'received' ? 'full frame received' : full === 'partial' ? 'full frame…' : pulling.has(b.id) ? 'requested…' : 'Pull full frame'}</button>` : '';
+      return `<div class="cam" title="${c.scene ? 'Latest object-free context frame from this camera (edge heartbeat, ~2 KB/min). Not a contact.' : 'Latest contact image from this camera (no heartbeat frame received yet).'}">
+        ${img}
+        <div class="meta"><div class="k">${esc(c.src)}</div><div class="u">seen ${ago(c.lastMs)} · ${c.contacts} contact${c.contacts === 1 ? '' : 's'}${v ? ` · view ${ago(v.lastMs)}` : ''}</div>${pull}</div>
+      </div>`;
+    }).join('');
+    return cams.size;
   }
   function objectCard(o) {
-    if (o.scene) return sceneTile(o);
     const b = o.best;
     // Zero-shot subtype is the operator-facing name; the detector class stays in the meta line.
     const label = b.override || o.subtype || o.label || 'unknown';
@@ -121,7 +157,7 @@
         <div class="meta">${o.sightingId ? `sighting ${esc(o.sightingId)}` : `item ${esc(b.id.slice(-8))}`}</div>
         <div class="forms">${formChips(b)}</div>
         <div class="actions">
-          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${canPull ? '' : 'disabled'}>${b.forms.full?.state === 'received' ? 'full received' : b.forms.full?.state === 'pending' || b.forms.full?.state === 'partial' ? 'full pending…' : 'Pull full image'}</button>
+          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${canPull ? '' : 'disabled'}>${b.forms.full?.state === 'received' ? 'full received' : b.forms.full?.state === 'pending' || b.forms.full?.state === 'partial' ? 'full pending…' : 'Pull full image'}</button>${b.forms.full ? `<button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>` : ''}
           <button class="btn" data-act="escalate" data-key="${esc(o.key)}">${escalated.has(o.key) ? 'Escalated ✓' : 'Escalate to CDR'}</button>
         </div>
       </div></div>`;
@@ -137,7 +173,7 @@
         <div class="actions">
           <button class="btn primary" data-act="confirm" data-key="${esc(o.key)}">Confirm ${esc(b.override || o.subtype || o.label || '')}</button>
           <button class="btn" data-act="relabel" data-key="${esc(o.key)}" data-id="${esc(b.id)}">Relabel…</button>
-          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full image</button>
+          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full image</button>${b.forms.full ? `<button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>` : ''}
           <button class="btn" data-act="escalate" data-key="${esc(o.key)}">Escalate to CDR</button>
           <button class="btn" data-act="dismiss" data-key="${esc(o.key)}">Dismiss</button>
         </div>
@@ -149,16 +185,17 @@
     renderStrip();
     const objs = snap.objects;
     if (view === 'feed') {
-      let list = objs;
-      const onlySightings = $('#only-sightings').checked && snap.counts.grouped > 0;
-      // Scene tiles (object-free context frames) stay as dim tiles; per-frame leftovers are hidden.
-      if (onlySightings) list = list.filter(o => o.sightingId || o.scene);
+      const sightingMode = snap.counts.grouped > 0;
+      const ncams = renderCameras(objs, sightingMode);
+      let list = objs.filter(o => !o.scene); // scenes live in the cameras strip
+      const onlySightings = $('#only-sightings').checked && sightingMode;
+      if (onlySightings) list = list.filter(o => o.sightingId);
       if ($('#hide-suppressed').checked) list = list.filter(o => !o.suppressed);
       if ($('#only-image').checked) list = list.filter(o => o.hasImage);
-      const hidden = objs.length - list.length;
-      const scenes = list.filter(o => o.scene).length;
-      $('#feed-note').textContent = `${list.length - scenes} objects${scenes ? ` + ${scenes} scene tiles` : ''} · newest first${onlySightings && hidden ? ` · ${hidden} object-free frames hidden` : ''}`;
-      $('#feed').innerHTML = list.length ? list.map(objectCard).join('') : '<div class="empty">No items on shore yet. Start the edge and open the link.</div>';
+      const hidden = objs.filter(o => !o.scene).length - list.length;
+      $('#feed-note').textContent = `${list.length} objects · newest first${onlySightings && hidden ? ` · ${hidden} object-free frames hidden` : ''}`;
+      const empty = ncams ? `No contacts yet. ${ncams} camera${ncams === 1 ? '' : 's'} reporting${hidden ? `; ${hidden} item${hidden === 1 ? '' : 's'} hidden by filters` : ''}.` : 'No items on shore yet. Start the edge and open the link.';
+      $('#feed').innerHTML = list.length ? list.map(objectCard).join('') : `<div class="empty">${empty}</div>`;
     } else if (view === 'review') {
       const order = { P1: 0, P2: 1, P3: 2, P4: 3 };
       const list = objs.filter(o => !o.suppressed && !o.scene && (o.sightingId || snap.counts.grouped === 0)).sort((a, b) => (decided.has(a.key) - decided.has(b.key)) || (b.unknown - a.unknown) || (order[a.priority] - order[b.priority]) || (b.lastMs - a.lastMs));
@@ -179,6 +216,12 @@
         pulling.add(id); b.disabled = true; b.textContent = 'requesting…';
         await post('/api/shore/pull', { itemId: id, form: 'full' });
         toast('full image requested from edge');
+      } else if (act === 'fullsize') {
+        const by = prompt('Operator override: send this image at FULL SIZE with NO compression.\nThis uses much more link bandwidth than the usual thumbnail/crop.\n\nEnter your name or operator ID to confirm:');
+        if (by === null) return;
+        if (!by.trim()) { toast('not sent: operator name is required', true); return; }
+        await post('/api/shore/pull', { itemId: id, form: 'full', original: true, by: by.trim() });
+        toast(`full-size original requested by ${by.trim()}`);
       } else if (act === 'escalate') {
         escalated.has(key) ? escalated.delete(key) : escalated.add(key);
         localStorage.setItem('shore.escalated', JSON.stringify([...escalated]));
@@ -206,8 +249,26 @@
     if (!text) return;
     try {
       const r = await post('/api/shore/policy', { text });
-      toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
+      const c = r.compiled;
+      if (c) {
+        $('#readback').textContent = `${c.readback} [${c.path}]${c.warnings.length ? ' — ' + c.warnings.join(' ') : ''}`;
+        toast(`policy set (${c.path}): ${c.readback}`);
+      } else {
+        $('#readback').textContent = '';
+        toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
+      }
+      const conflicts = r.policy?.conflicts || r.conflicts;
+      if (conflicts?.length) toast(window.gsPolicy.conflictToast(conflicts), true);
       $('#directive').value = '';
+    } catch (err) { toast(err.message, true); }
+  });
+  $('#shore-emcon').addEventListener('click', async e => {
+    const button = e.target.closest('button[data-mode]');
+    if (!button || button.disabled) return;
+    try {
+      const response = await post('/api/shore/emcon', { mode: button.dataset.mode });
+      if (response.conflicts?.length) toast(window.gsPolicy.conflictToast(response.conflicts), true);
+      else toast(`EMCON set to ${button.dataset.mode}`);
     } catch (err) { toast(err.message, true); }
   });
   for (const t of document.querySelectorAll('.tab')) t.onclick = () => {

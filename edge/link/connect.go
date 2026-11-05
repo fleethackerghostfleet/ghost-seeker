@@ -1,7 +1,9 @@
 package link
 
 import (
+	"compress/gzip"
 	"context"
+	"io"
 	"net/http"
 	"time"
 
@@ -16,19 +18,57 @@ import (
 type Connect struct {
 	client ghostseekerv1connect.SyncServiceClient
 	est    *Estimator
+	token  string
 }
 
-func NewConnect(shoreURL string, timeout time.Duration, est *Estimator) *Connect {
+// CompressMinBytes is the smallest message worth gzipping. Below it the
+// gzip header and CPU outweigh the saving.
+const CompressMinBytes = 512
+
+// Requests are gzipped (manifest entries, FACT JSON and protobuf framing
+// compress well; image chunks are already JPEG and pass through at ~0.1%
+// overhead). Fast level: on a fat link the exchange is mostly image bytes.
+func NewConnect(shoreURL string, timeout time.Duration, est *Estimator, token ...string) *Connect {
 	hc := &http.Client{Timeout: timeout}
-	return &Connect{
-		client: ghostseekerv1connect.NewSyncServiceClient(hc, shoreURL, connect.WithGRPC()),
-		est:    est,
+	c := &Connect{
+		client: ghostseekerv1connect.NewSyncServiceClient(hc, shoreURL, connect.WithGRPC(),
+			connect.WithAcceptCompression(gzipName, newGzipDecompressor, newGzipCompressor),
+			connect.WithSendCompression(gzipName),
+			connect.WithCompressMinBytes(CompressMinBytes)),
+		est: est,
 	}
+	if len(token) > 0 {
+		c.token = token[0]
+	}
+	return c
+}
+
+// HandlerOptions configures the shore SyncService handler to match: accept
+// gzip requests and gzip responses (acks, downlink policy) to clients that
+// accept it.
+func HandlerOptions() []connect.HandlerOption {
+	return []connect.HandlerOption{
+		connect.WithCompression(gzipName, newGzipDecompressor, newGzipCompressor),
+		connect.WithCompressMinBytes(CompressMinBytes),
+	}
+}
+
+const gzipName = "gzip"
+
+func newGzipDecompressor() connect.Decompressor { return &gzip.Reader{} }
+
+func newGzipCompressor() connect.Compressor {
+	w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+	return w
 }
 
 func (c *Connect) Exchange(ctx context.Context, req *pb.ExchangeRequest) (*pb.ExchangeResponse, error) {
 	start := time.Now()
-	resp, err := c.client.Exchange(ctx, connect.NewRequest(req))
+	request := connect.NewRequest(req)
+	if c.token != "" {
+		request.Header().Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.client.Exchange(ctx, request)
 	if err != nil {
 		c.est.Failure()
 		return nil, err

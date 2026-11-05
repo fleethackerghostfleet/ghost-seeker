@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -111,7 +112,57 @@ func (g *Ingester) applySighting(ctx context.Context, c *Capture, hash string, r
 		return g.openItem(ctx, c, hash, resp, s)
 	case pb.Sighting_EVENT_DUPLICATE:
 		atomic.AddInt64(&g.Dups, 1)
-		return nil, nil
+		id, known := g.sightings[s.Id]
+		if !known || s.GetKeyDetection().GetBox() == nil {
+			return nil, nil
+		}
+		var dark *pb.Detection
+		for _, detection := range resp.Detections {
+			if strings.EqualFold(detection.GetLabel(), "dark contact") &&
+				boxIoU(detection.GetBox(), s.KeyDetection.GetBox()) >= 0.5 {
+				dark = detection
+				break
+			}
+		}
+		if dark == nil {
+			return nil, nil
+		}
+		row, err := g.st.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if row.Item.Features == nil {
+			row.Item.Features = &pb.Features{}
+		}
+		if row.Item.Features.Tags == nil {
+			row.Item.Features.Tags = map[string]string{}
+		}
+		if _, tagged := row.Item.Features.Tags["dark_contact"]; tagged {
+			existingIndex := -1
+			var existingConfidence float32
+			for i, detection := range row.Item.Features.Detections {
+				if strings.EqualFold(detection.GetLabel(), "dark contact") &&
+					(existingIndex < 0 || detection.GetConfidence() > existingConfidence) {
+					existingIndex = i
+					existingConfidence = detection.GetConfidence()
+				}
+			}
+			if existingIndex >= 0 {
+				if dark.GetConfidence() <= existingConfidence {
+					return nil, nil
+				}
+				row.Item.Features.Detections[existingIndex] = dark
+			} else {
+				row.Item.Features.Detections = append(row.Item.Features.Detections, dark)
+			}
+		} else {
+			row.Item.Features.Detections = append(row.Item.Features.Detections, dark)
+			row.Item.Features.Tags["dark_contact"] = "1"
+		}
+		if err := g.st.UpdateItem(ctx, row.Item); err != nil {
+			return nil, err
+		}
+		return g.rescore(ctx, id)
 	case pb.Sighting_EVENT_CLOSE:
 		id, known := g.sightings[s.Id]
 		delete(g.sightings, s.Id)
@@ -146,15 +197,26 @@ func imageShipped(row *store.Row) bool {
 
 // replaceKeyFrame swaps the item's image payloads and features for a better
 // key frame of the same object and re-scores it. Forms the item never had
-// (e.g. CROP when the first key frame carried no box) are not added.
+// (e.g. CROP when the first key frame carried no box) are not added; a CROP
+// it already has is always re-cut from the new frame.
 func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting) (*store.Row, error) {
 	it := row.Item
 	it.ContentHash = hash
 	g.applyFeatures(it, resp, s)
-	payloads := g.imageForms(c.Data, s)
+	payloads, original := g.imageForms(c.Data, resp, s)
+	if err := g.keepOriginal(ctx, it.Id, original); err != nil {
+		return nil, err
+	}
+	if _, ok := payloads[pb.FormKind_FORM_KIND_CROP]; !ok && row.Form(pb.FormKind_FORM_KIND_CROP) != nil {
+		cr, err := g.replacementCrop(c.Data, resp, s)
+		if err != nil {
+			return nil, fmt.Errorf("replace CROP: %w", err)
+		}
+		payloads[pb.FormKind_FORM_KIND_CROP] = cr
+	}
 	payloads[pb.FormKind_FORM_KIND_FACT] = fact.FromItem(it).Marshal()
 	for k, data := range payloads {
-		nf, err := g.st.ReplaceForm(ctx, it.Id, k, data)
+		nf, err := g.replaceForm(ctx, it.Id, k, data)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -187,7 +249,7 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 	if s.Subtype != "" {
 		it.Features.Tags["subtype"] = s.Subtype
 	}
-	nf, err := g.st.ReplaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal())
+	nf, err := g.replaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal())
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +273,18 @@ func setForm(it *pb.Item, nf *pb.Form) {
 	sort.Slice(it.Forms, func(i, j int) bool { return it.Forms[i].Kind < it.Forms[j].Kind })
 }
 
+func (g *Ingester) replaceForm(ctx context.Context, id string, kind pb.FormKind, data []byte) (*pb.Form, error) {
+	for {
+		form, err := g.st.ReplaceForm(ctx, id, kind, data)
+		if !g.cfg.WaitForSpace || !errors.Is(err, store.ErrFull) {
+			return form, err
+		}
+		if err := g.clk.Sleep(ctx, 5*time.Second); err != nil {
+			return nil, err
+		}
+	}
+}
+
 // sceneItem handles a frame without sightings in sightings mode.
 //
 // Frames with detections: once the engine has reported a sighting for this
@@ -219,20 +293,20 @@ func setForm(it *pb.Item, nf *pb.Form) {
 // engine may be stateless (inference.Mock, an older sidecar) and the frame
 // keeps hash behaviour, so detected images are never lost.
 //
-// Object-free frames become a FACT+THUMB "scene" item at most once per
-// SceneEvery per source; the rest fold (counted as deduped). A scene item
-// carries no FULL: shore can pull the next scene.
+// Object-free frames become a "scene" item at most once per SceneEvery per
+// source; the rest fold (counted as deduped). A scene ships FACT+THUMB only;
+// its FULL stays on the edge and is pull-only (see scheduler.PullOnly).
 func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
 	if len(resp.Detections) > 0 {
 		if !g.stateful[c.Source] {
-			// Hash behaviour, except that a scene item (no FULL) holding the
-			// same bytes must not swallow a frame that now shows an object.
+			// Hash behaviour, except that a scene item holding the same
+			// bytes must not swallow a frame that now shows an object.
 			ids, err := g.st.IDsByHash(ctx, hash)
 			if err != nil {
 				return nil, err
 			}
 			for _, id := range ids {
-				if row, err := g.st.Get(ctx, id); err == nil && row.Form(pb.FormKind_FORM_KIND_FULL) != nil {
+				if row, err := g.st.Get(ctx, id); err == nil && row.Item.GetFeatures().GetTags()["event"] != "scene" {
 					atomic.AddInt64(&g.Dups, 1)
 					return row, nil
 				}
@@ -257,7 +331,7 @@ func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp 
 	tags["event"] = "scene"
 	sc := *c
 	sc.Tags = tags
-	row, err := g.newItem(ctx, &sc, hash, resp, nil, pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB)
+	row, err := g.newItem(ctx, &sc, hash, resp, nil, pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIND_FULL)
 	if err == nil {
 		g.lastScene[c.Source] = ts
 	}

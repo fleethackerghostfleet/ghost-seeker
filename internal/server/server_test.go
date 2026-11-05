@@ -2,14 +2,19 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -100,6 +105,202 @@ func TestDirectiveLengthLimit(t *testing.T) {
 	}
 }
 
+func TestDirectiveBodySizeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body []byte
+		want int
+	}{
+		{name: "malformed 128 KiB body", body: bytes.Repeat([]byte("x"), 128<<10), want: http.StatusBadRequest},
+		{name: "valid oversized JSON", body: []byte(`{"text":"` + strings.Repeat("x", 128<<10) + `"}`), want: http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := New(store.New(10))
+			req := httptest.NewRequest(http.MethodPost, "/api/directives", bytes.NewReader(tc.body))
+			response := httptest.NewRecorder()
+			app.ServeHTTP(response, req)
+			if response.Code != tc.want {
+				t.Fatalf("POST oversized directive status = %d, want %d", response.Code, tc.want)
+			}
+		})
+	}
+}
+
+func TestStreamClientLimit(t *testing.T) {
+	app := New(store.New(10))
+	cancels := make([]context.CancelFunc, 0, maxStreamClients)
+	var wg sync.WaitGroup
+	defer func() {
+		for _, cancel := range cancels {
+			cancel()
+		}
+		wg.Wait()
+	}()
+
+	for i := 0; i < maxStreamClients; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/stream", nil)
+		ctx, cancel := context.WithCancel(req.Context())
+		req = req.WithContext(ctx)
+		cancels = append(cancels, cancel)
+		response := httptest.NewRecorder()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			app.ServeHTTP(response, req)
+		}()
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		app.hub.mu.Lock()
+		count := len(app.hub.clients)
+		app.hub.mu.Unlock()
+		if count == maxStreamClients {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("active stream clients = %d, want %d", count, maxStreamClients)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	response := request(app, http.MethodGet, "/api/stream", nil)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("65th stream client status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCompileDirectiveEndpoint(t *testing.T) {
+	app := New(store.New(10))
+	response := request(app, http.MethodPost, "/api/directives/compile", map[string]string{"text": "small boats for 2 hours"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("compile status = %d: %s", response.Code, response.Body.String())
+	}
+	var compiled command.Compiled
+	if err := json.Unmarshal(response.Body.Bytes(), &compiled); err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Path != "rules" || compiled.Readback != "Boost: small boat. For 2h." {
+		t.Fatalf("compiled = %+v", compiled)
+	}
+}
+
+func TestBlockedDirectiveAndDurationExpiry(t *testing.T) {
+	app := New(store.New(10))
+	response := request(app, http.MethodPost, "/api/directives", map[string]string{"text": "prioritize everything"})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("blocked add status = %d, want %d: %s", response.Code, http.StatusUnprocessableEntity, response.Body.String())
+	}
+
+	var expire func()
+	var delay time.Duration
+	app.after = func(d time.Duration, callback func()) {
+		delay, expire = d, callback
+	}
+	response = request(app, http.MethodPost, "/api/directives", map[string]string{"text": "small boats for 1 hour"})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed add status = %d: %s", response.Code, response.Body.String())
+	}
+	if delay != time.Hour || expire == nil {
+		t.Fatalf("expiry scheduler got delay=%s callback=%t", delay, expire != nil)
+	}
+	_, _, _, state := app.store.Snapshot()
+	if len(state.Directives) != 1 {
+		t.Fatalf("active directives before expiry = %d", len(state.Directives))
+	}
+	expire()
+	_, _, _, state = app.store.Snapshot()
+	if len(state.Directives) != 0 {
+		t.Fatalf("active directives after expiry = %d", len(state.Directives))
+	}
+}
+
+func TestTimedDirectiveExpiryPersistsPolicyRemoval(t *testing.T) {
+	backend, err := policy.NewFileBackend(filepath.Join(t.TempDir(), "policy.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	newServer := func() *Server {
+		return New(store.New(10), WithAdmin(true), WithNodeID("DDG-51"), WithPolicyBackend(backend))
+	}
+	app := newServer()
+	var expire func()
+	app.after = func(_ time.Duration, callback func()) { expire = callback }
+
+	response := request(app, http.MethodPost, "/api/directives", map[string]string{"text": "small boats for 1 hour"})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed add status=%d: %s", response.Code, response.Body.String())
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" {
+		t.Fatalf("timed add omitted directive ID: %s", response.Body.String())
+	}
+	if expire == nil || len(app.policy.operatorLayer().Rules) == 0 {
+		t.Fatalf("timed directive was not persisted before expiry: callback=%t layer=%+v", expire != nil, app.policy.operatorLayer())
+	}
+
+	expire()
+	for _, directive := range app.store.Directives() {
+		if directive.ID == created.ID {
+			t.Fatalf("expired directive remains in store: %+v", directive)
+		}
+	}
+
+	restarted := newServer()
+	for _, directive := range restarted.store.Directives() {
+		if directive.ID == created.ID {
+			t.Fatalf("expired directive restored after restart: %+v", directive)
+		}
+	}
+	active, expired := restarted.policy.guard.Active(time.Now())
+	if active == nil || expired {
+		t.Fatalf("restarted active policy = %v, expired=%t", active, expired)
+	}
+	for _, layer := range active.Layers {
+		if layer.Echelon == pb.Echelon_ECHELON_SHIP && layer.IssuedBy == "TAO" {
+			if len(layer.Rules) != 0 {
+				t.Fatalf("operator policy restored expired rule: %+v", layer.Rules)
+			}
+			return
+		}
+	}
+	t.Fatal("restarted policy has no operator layer")
+}
+
+func TestExplicitDurationForTextDirective(t *testing.T) {
+	app := New(store.New(10))
+	var delay time.Duration
+	app.after = func(d time.Duration, _ func()) { delay = d }
+	response := request(app, http.MethodPost, "/api/directives", map[string]any{"text": "small boats", "durationMin": 60})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed add status = %d: %s", response.Code, response.Body.String())
+	}
+	if delay != time.Hour {
+		t.Fatalf("expiry delay = %s, want 1h", delay)
+	}
+}
+
+func TestEditedDirectiveExtractsDurationForExpiry(t *testing.T) {
+	app := New(store.New(10))
+	var delay time.Duration
+	app.after = func(d time.Duration, _ func()) { delay = d }
+	rules := []command.Rule{{Type: "boost", Classes: []string{"tanker"}, Weight: 1}}
+	response := request(app, http.MethodPost, "/api/directives", map[string]any{
+		"text": "boost tankers for 2 hours", "rules": rules,
+	})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed edited add status = %d: %s", response.Code, response.Body.String())
+	}
+	if delay != 120*time.Minute {
+		t.Fatalf("expiry delay = %s, want 2h", delay)
+	}
+}
+
 func TestDirectiveCountLimit(t *testing.T) {
 	app := New(store.New(10))
 	for i := 0; i < store.MaxActiveDirectives; i++ {
@@ -139,4 +340,28 @@ func request(handler http.Handler, method, target string, body any) *httptest.Re
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+func TestFullResOverrideRequiresOperator(t *testing.T) {
+	data := store.New(10)
+	app := New(data)
+	data.Add(&command.Item{ID: "img-1", TS: time.Now(), Dets: []command.Detection{{Class: "bird", Conf: .8}}}, 0)
+
+	if r := request(app, http.MethodPost, "/api/items/missing/full-res", map[string]string{"by": "op1"}); r.Code != http.StatusNotFound {
+		t.Fatalf("missing item status = %d, want 404", r.Code)
+	}
+	if r := request(app, http.MethodPost, "/api/items/img-1/full-res", map[string]string{"by": "  "}); r.Code != http.StatusBadRequest {
+		t.Fatalf("blank operator status = %d, want 400", r.Code)
+	}
+	r := request(app, http.MethodPost, "/api/items/img-1/full-res", map[string]string{"by": "op1"})
+	if r.Code != http.StatusOK {
+		t.Fatalf("full-res status = %d: %s", r.Code, r.Body.String())
+	}
+	var body struct{ Item command.Item }
+	if err := json.Unmarshal(r.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.Item.FullRes || body.Item.FullResBy != "op1" || body.Item.FullResAt == nil {
+		t.Fatalf("item = %+v, want fullRes by op1", body.Item)
+	}
 }

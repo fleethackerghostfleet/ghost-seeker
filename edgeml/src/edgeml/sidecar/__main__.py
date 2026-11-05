@@ -24,6 +24,13 @@ def main(argv=None) -> None:
     ap.add_argument("--trk", default=None, help='TrackerParams overrides as JSON, e.g. \'{"tentative_thresh":null}\'')
     ap.add_argument("--text-tower", default="cache", choices=["cache", "torch"],
                     help="EmbedText source: 'cache' = ORT text_cache.json only (no torch); 'torch' = fall back to the torch text tower for uncached text")
+    ap.add_argument("--prioritizer", default="edgeml", choices=["edgeml", "tomer", "both"],
+                    help="scoring backend: edgeml (default) | tomer (algorithm/ghost_priority image-level score, no model needed) | both")
+    ap.add_argument("--tomer-model", default=None, help="NanoDet ONNX for ghost_priority's object provider (default: NoObjects)")
+    ap.add_argument("--tomer-policy", default=None, help="ghost_priority policy JSON (default: DEFAULT_POLICY)")
+    ap.add_argument("--tomer-dup-threshold", type=float, default=0.5,
+                    help="combined color+pHash similarity at/above which a frame is flagged near_duplicate (default 0.5)")
+    ap.add_argument("--tomer-window", type=int, default=64, help="kept frames per source compared against (default 64)")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -32,9 +39,13 @@ def main(argv=None) -> None:
         from .service import MockEngine
 
         engine = MockEngine()
+    elif a.prioritizer == "tomer" and not a.detector:
+        from .service import NoopEngine
+
+        engine = NoopEngine()
     else:
         if not a.detector:
-            ap.error("--detector is required unless --mock")
+            ap.error("--detector is required unless --mock or --prioritizer tomer")
         from edgeml.runtime.threads import pin_threads
 
         pin_threads(a.threads)
@@ -44,9 +55,15 @@ def main(argv=None) -> None:
                               max_lost_s=a.max_lost_s, score_thr=a.score_thr, det_low_thr=a.det_low_thr,
                               agg=json.loads(a.agg) if a.agg else None, trk=json.loads(a.trk) if a.trk else None,
                               text_tower=a.text_tower)
+    prioritizer = None
+    if a.prioritizer != "edgeml":
+        from .tomer import TomerPrioritizer
+
+        prioritizer = TomerPrioritizer(a.tomer_model, a.tomer_policy, threads=a.threads, window=a.tomer_window,
+                                       dup_threshold=a.tomer_dup_threshold)
     from .server import serve
 
-    serve(engine, a.listen, quiet=not a.verbose)
+    serve(engine, a.listen, quiet=not a.verbose, prioritizer=prioritizer, mode=a.prioritizer)
 
 
 if __name__ == "__main__":

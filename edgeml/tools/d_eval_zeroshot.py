@@ -169,6 +169,8 @@ def main():
         emb = ClipEmbedder(short, backend=args.backend, onnx_dir=onnx_dir, threads=args.threads, precision=args.clip_precision or "fp32")
         zs = ZeroShotClassifier(emb)
         res = {"embedder": emb.name, "dim": emb.dim, "model_mb": emb.model_bytes / 1e6}
+        res["params_m"] = sum(p.numel() for p in emb.model.parameters()) / 1e6 if emb.model is not None else None
+        res["visual_params_m"] = sum(p.numel() for p in emb.model.visual.parameters()) / 1e6 if emb.model is not None else None
         if seaships:
             t0 = time.perf_counter()
             feats = np.concatenate([emb.embed_crops([c for c, *_ in seaships[i:i + 16]]) for i in range(0, len(seaships), 16)])

@@ -73,6 +73,58 @@ func (EmconMode) EnumDescriptor() ([]byte, []int) {
 	return file_ghostseeker_v1_policy_proto_rawDescGZIP(), []int{0}
 }
 
+type Echelon int32
+
+const (
+	Echelon_ECHELON_UNSPECIFIED Echelon = 0
+	Echelon_ECHELON_UNIT        Echelon = 1 // USV / sensor operator
+	Echelon_ECHELON_SHIP        Echelon = 2 // e.g. DDG-51
+	Echelon_ECHELON_COMMAND     Echelon = 3 // e.g. CTF-72
+)
+
+// Enum value maps for Echelon.
+var (
+	Echelon_name = map[int32]string{
+		0: "ECHELON_UNSPECIFIED",
+		1: "ECHELON_UNIT",
+		2: "ECHELON_SHIP",
+		3: "ECHELON_COMMAND",
+	}
+	Echelon_value = map[string]int32{
+		"ECHELON_UNSPECIFIED": 0,
+		"ECHELON_UNIT":        1,
+		"ECHELON_SHIP":        2,
+		"ECHELON_COMMAND":     3,
+	}
+)
+
+func (x Echelon) Enum() *Echelon {
+	p := new(Echelon)
+	*p = x
+	return p
+}
+
+func (x Echelon) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Echelon) Descriptor() protoreflect.EnumDescriptor {
+	return file_ghostseeker_v1_policy_proto_enumTypes[1].Descriptor()
+}
+
+func (Echelon) Type() protoreflect.EnumType {
+	return &file_ghostseeker_v1_policy_proto_enumTypes[1]
+}
+
+func (x Echelon) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Echelon.Descriptor instead.
+func (Echelon) EnumDescriptor() ([]byte, []int) {
+	return file_ghostseeker_v1_policy_proto_rawDescGZIP(), []int{1}
+}
+
 // Policy is the operator-controlled "scope out". It is small (target < 2 KB)
 // so it can be downlinked over any link. The edge applies it to the whole
 // backlog immediately. Natural-language intent is compiled (shore side) into
@@ -88,6 +140,12 @@ type Policy struct {
 	Emcon           EmconMode              `protobuf:"varint,7,opt,name=emcon,proto3,enum=ghostseeker.v1.EmconMode" json:"emcon,omitempty"`
 	DigestIntervalS int32                  `protobuf:"varint,8,opt,name=digest_interval_s,json=digestIntervalS,proto3" json:"digest_interval_s,omitempty"`                                                                    // 0 = no periodic digest
 	ScorerWeights   map[string]float64     `protobuf:"bytes,9,rep,name=scorer_weights,json=scorerWeights,proto3" json:"scorer_weights,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"` // override default weights by scorer name
+	Version         int64                  `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`                                                                                                            // monotonic; edge ignores a policy whose version <= last applied version (0 = unversioned, always accepted)
+	ExpiresAtUnixMs int64                  `protobuf:"varint,11,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`                                                                 // 0 = issued_at + 12h default; an expired policy falls back to the built-in default policy
+	Layers          []*PolicyLayer         `protobuf:"bytes,12,rep,name=layers,proto3" json:"layers,omitempty"`                                                                                                               // echelon layers; when non-empty, edge derives interest + emcon from merge(layers)
+	EmconSetting    *EmconSetting          `protobuf:"bytes,13,opt,name=emcon_setting,json=emconSetting,proto3" json:"emcon_setting,omitempty"`                                                                               // who set EMCON and whether lower echelons may change it
+	Signature       *PolicySignature       `protobuf:"bytes,14,opt,name=signature,proto3" json:"signature,omitempty"`                                                                                                         // optional Ed25519 over proto.MarshalOptions{Deterministic:true} of the policy with signature cleared
+	Conflicts       []*MergeConflict       `protobuf:"bytes,15,rep,name=conflicts,proto3" json:"conflicts,omitempty"`                                                                                                         // filled by merge: lower-echelon rules dropped because they hit a lock
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -181,6 +239,48 @@ func (x *Policy) GetDigestIntervalS() int32 {
 func (x *Policy) GetScorerWeights() map[string]float64 {
 	if x != nil {
 		return x.ScorerWeights
+	}
+	return nil
+}
+
+func (x *Policy) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *Policy) GetExpiresAtUnixMs() int64 {
+	if x != nil {
+		return x.ExpiresAtUnixMs
+	}
+	return 0
+}
+
+func (x *Policy) GetLayers() []*PolicyLayer {
+	if x != nil {
+		return x.Layers
+	}
+	return nil
+}
+
+func (x *Policy) GetEmconSetting() *EmconSetting {
+	if x != nil {
+		return x.EmconSetting
+	}
+	return nil
+}
+
+func (x *Policy) GetSignature() *PolicySignature {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+func (x *Policy) GetConflicts() []*MergeConflict {
+	if x != nil {
+		return x.Conflicts
 	}
 	return nil
 }
@@ -329,11 +429,367 @@ func (x *Thresholds) GetMinPriorityForImages() float64 {
 	return 0
 }
 
+type PolicyLayer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Echelon       Echelon                `protobuf:"varint,1,opt,name=echelon,proto3,enum=ghostseeker.v1.Echelon" json:"echelon,omitempty"`
+	IssuedBy      string                 `protobuf:"bytes,2,opt,name=issued_by,json=issuedBy,proto3" json:"issued_by,omitempty"`
+	Rules         []*InterestRule        `protobuf:"bytes,3,rep,name=rules,proto3" json:"rules,omitempty"`
+	Emcon         *EmconSetting          `protobuf:"bytes,4,opt,name=emcon,proto3" json:"emcon,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PolicyLayer) Reset() {
+	*x = PolicyLayer{}
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PolicyLayer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PolicyLayer) ProtoMessage() {}
+
+func (x *PolicyLayer) ProtoReflect() protoreflect.Message {
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PolicyLayer.ProtoReflect.Descriptor instead.
+func (*PolicyLayer) Descriptor() ([]byte, []int) {
+	return file_ghostseeker_v1_policy_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PolicyLayer) GetEchelon() Echelon {
+	if x != nil {
+		return x.Echelon
+	}
+	return Echelon_ECHELON_UNSPECIFIED
+}
+
+func (x *PolicyLayer) GetIssuedBy() string {
+	if x != nil {
+		return x.IssuedBy
+	}
+	return ""
+}
+
+func (x *PolicyLayer) GetRules() []*InterestRule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+func (x *PolicyLayer) GetEmcon() *EmconSetting {
+	if x != nil {
+		return x.Emcon
+	}
+	return nil
+}
+
+type InterestRule struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Author          string                 `protobuf:"bytes,2,opt,name=author,proto3" json:"author,omitempty"`
+	Locked          bool                   `protobuf:"varint,3,opt,name=locked,proto3" json:"locked,omitempty"` // lower echelons cannot remove, suppress, or lower the weight of these labels
+	BoostLabels     []string               `protobuf:"bytes,4,rep,name=boost_labels,json=boostLabels,proto3" json:"boost_labels,omitempty"`
+	SuppressLabels  []string               `protobuf:"bytes,5,rep,name=suppress_labels,json=suppressLabels,proto3" json:"suppress_labels,omitempty"`
+	Weight          float64                `protobuf:"fixed64,6,opt,name=weight,proto3" json:"weight,omitempty"`                                             // boost factor override; 0 = Interest default
+	ExpiresAtUnixMs int64                  `protobuf:"varint,7,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"` // 0 = no per-rule expiry
+	Targets         []string               `protobuf:"bytes,8,rep,name=targets,proto3" json:"targets,omitempty"`                                             // edge node ids; empty = all
+	Text            string                 `protobuf:"bytes,9,opt,name=text,proto3" json:"text,omitempty"`                                                   // operator's words, for readback/audit
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *InterestRule) Reset() {
+	*x = InterestRule{}
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterestRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterestRule) ProtoMessage() {}
+
+func (x *InterestRule) ProtoReflect() protoreflect.Message {
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterestRule.ProtoReflect.Descriptor instead.
+func (*InterestRule) Descriptor() ([]byte, []int) {
+	return file_ghostseeker_v1_policy_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *InterestRule) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *InterestRule) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
+}
+
+func (x *InterestRule) GetLocked() bool {
+	if x != nil {
+		return x.Locked
+	}
+	return false
+}
+
+func (x *InterestRule) GetBoostLabels() []string {
+	if x != nil {
+		return x.BoostLabels
+	}
+	return nil
+}
+
+func (x *InterestRule) GetSuppressLabels() []string {
+	if x != nil {
+		return x.SuppressLabels
+	}
+	return nil
+}
+
+func (x *InterestRule) GetWeight() float64 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *InterestRule) GetExpiresAtUnixMs() int64 {
+	if x != nil {
+		return x.ExpiresAtUnixMs
+	}
+	return 0
+}
+
+func (x *InterestRule) GetTargets() []string {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+func (x *InterestRule) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+type EmconSetting struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mode          EmconMode              `protobuf:"varint,1,opt,name=mode,proto3,enum=ghostseeker.v1.EmconMode" json:"mode,omitempty"`
+	SetBy         string                 `protobuf:"bytes,2,opt,name=set_by,json=setBy,proto3" json:"set_by,omitempty"`
+	Echelon       Echelon                `protobuf:"varint,3,opt,name=echelon,proto3,enum=ghostseeker.v1.Echelon" json:"echelon,omitempty"`
+	Locked        bool                   `protobuf:"varint,4,opt,name=locked,proto3" json:"locked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmconSetting) Reset() {
+	*x = EmconSetting{}
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmconSetting) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmconSetting) ProtoMessage() {}
+
+func (x *EmconSetting) ProtoReflect() protoreflect.Message {
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmconSetting.ProtoReflect.Descriptor instead.
+func (*EmconSetting) Descriptor() ([]byte, []int) {
+	return file_ghostseeker_v1_policy_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *EmconSetting) GetMode() EmconMode {
+	if x != nil {
+		return x.Mode
+	}
+	return EmconMode_EMCON_MODE_UNSPECIFIED
+}
+
+func (x *EmconSetting) GetSetBy() string {
+	if x != nil {
+		return x.SetBy
+	}
+	return ""
+}
+
+func (x *EmconSetting) GetEchelon() Echelon {
+	if x != nil {
+		return x.Echelon
+	}
+	return Echelon_ECHELON_UNSPECIFIED
+}
+
+func (x *EmconSetting) GetLocked() bool {
+	if x != nil {
+		return x.Locked
+	}
+	return false
+}
+
+type MergeConflict struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`                        // e.g. "Locked by CTF-72"
+	BlockedBy     string                 `protobuf:"bytes,3,opt,name=blocked_by,json=blockedBy,proto3" json:"blocked_by,omitempty"` // id of the locking rule (or "emcon")
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MergeConflict) Reset() {
+	*x = MergeConflict{}
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MergeConflict) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MergeConflict) ProtoMessage() {}
+
+func (x *MergeConflict) ProtoReflect() protoreflect.Message {
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MergeConflict.ProtoReflect.Descriptor instead.
+func (*MergeConflict) Descriptor() ([]byte, []int) {
+	return file_ghostseeker_v1_policy_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MergeConflict) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *MergeConflict) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *MergeConflict) GetBlockedBy() string {
+	if x != nil {
+		return x.BlockedBy
+	}
+	return ""
+}
+
+type PolicySignature struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Ed25519       []byte                 `protobuf:"bytes,2,opt,name=ed25519,proto3" json:"ed25519,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PolicySignature) Reset() {
+	*x = PolicySignature{}
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PolicySignature) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PolicySignature) ProtoMessage() {}
+
+func (x *PolicySignature) ProtoReflect() protoreflect.Message {
+	mi := &file_ghostseeker_v1_policy_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PolicySignature.ProtoReflect.Descriptor instead.
+func (*PolicySignature) Descriptor() ([]byte, []int) {
+	return file_ghostseeker_v1_policy_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PolicySignature) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+func (x *PolicySignature) GetEd25519() []byte {
+	if x != nil {
+		return x.Ed25519
+	}
+	return nil
+}
+
 var File_ghostseeker_v1_policy_proto protoreflect.FileDescriptor
 
 const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\n" +
-	"\x1bghostseeker/v1/policy.proto\x12\x0eghostseeker.v1\"\xd7\x03\n" +
+	"\x1bghostseeker/v1/policy.proto\x12\x0eghostseeker.v1\"\x92\x06\n" +
 	"\x06Policy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12)\n" +
 	"\x11issued_at_unix_ms\x18\x02 \x01(\x03R\x0eissuedAtUnixMs\x12\x1b\n" +
@@ -345,7 +801,14 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"thresholds\x12/\n" +
 	"\x05emcon\x18\a \x01(\x0e2\x19.ghostseeker.v1.EmconModeR\x05emcon\x12*\n" +
 	"\x11digest_interval_s\x18\b \x01(\x05R\x0fdigestIntervalS\x12P\n" +
-	"\x0escorer_weights\x18\t \x03(\v2).ghostseeker.v1.Policy.ScorerWeightsEntryR\rscorerWeights\x1a@\n" +
+	"\x0escorer_weights\x18\t \x03(\v2).ghostseeker.v1.Policy.ScorerWeightsEntryR\rscorerWeights\x12\x18\n" +
+	"\aversion\x18\n" +
+	" \x01(\x03R\aversion\x12+\n" +
+	"\x12expires_at_unix_ms\x18\v \x01(\x03R\x0fexpiresAtUnixMs\x123\n" +
+	"\x06layers\x18\f \x03(\v2\x1b.ghostseeker.v1.PolicyLayerR\x06layers\x12A\n" +
+	"\remcon_setting\x18\r \x01(\v2\x1c.ghostseeker.v1.EmconSettingR\femconSetting\x12=\n" +
+	"\tsignature\x18\x0e \x01(\v2\x1f.ghostseeker.v1.PolicySignatureR\tsignature\x12;\n" +
+	"\tconflicts\x18\x0f \x03(\v2\x1d.ghostseeker.v1.MergeConflictR\tconflicts\x1a@\n" +
 	"\x12ScorerWeightsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x80\x02\n" +
@@ -361,12 +824,45 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\vunknown_min\x18\x01 \x01(\x02R\n" +
 	"unknownMin\x12,\n" +
 	"\x12detection_min_conf\x18\x02 \x01(\x02R\x10detectionMinConf\x125\n" +
-	"\x17min_priority_for_images\x18\x03 \x01(\x01R\x14minPriorityForImages*k\n" +
+	"\x17min_priority_for_images\x18\x03 \x01(\x01R\x14minPriorityForImages\"\xc5\x01\n" +
+	"\vPolicyLayer\x121\n" +
+	"\aechelon\x18\x01 \x01(\x0e2\x17.ghostseeker.v1.EchelonR\aechelon\x12\x1b\n" +
+	"\tissued_by\x18\x02 \x01(\tR\bissuedBy\x122\n" +
+	"\x05rules\x18\x03 \x03(\v2\x1c.ghostseeker.v1.InterestRuleR\x05rules\x122\n" +
+	"\x05emcon\x18\x04 \x01(\v2\x1c.ghostseeker.v1.EmconSettingR\x05emcon\"\x8d\x02\n" +
+	"\fInterestRule\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06author\x18\x02 \x01(\tR\x06author\x12\x16\n" +
+	"\x06locked\x18\x03 \x01(\bR\x06locked\x12!\n" +
+	"\fboost_labels\x18\x04 \x03(\tR\vboostLabels\x12'\n" +
+	"\x0fsuppress_labels\x18\x05 \x03(\tR\x0esuppressLabels\x12\x16\n" +
+	"\x06weight\x18\x06 \x01(\x01R\x06weight\x12+\n" +
+	"\x12expires_at_unix_ms\x18\a \x01(\x03R\x0fexpiresAtUnixMs\x12\x18\n" +
+	"\atargets\x18\b \x03(\tR\atargets\x12\x12\n" +
+	"\x04text\x18\t \x01(\tR\x04text\"\x9f\x01\n" +
+	"\fEmconSetting\x12-\n" +
+	"\x04mode\x18\x01 \x01(\x0e2\x19.ghostseeker.v1.EmconModeR\x04mode\x12\x15\n" +
+	"\x06set_by\x18\x02 \x01(\tR\x05setBy\x121\n" +
+	"\aechelon\x18\x03 \x01(\x0e2\x17.ghostseeker.v1.EchelonR\aechelon\x12\x16\n" +
+	"\x06locked\x18\x04 \x01(\bR\x06locked\"_\n" +
+	"\rMergeConflict\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x1d\n" +
+	"\n" +
+	"blocked_by\x18\x03 \x01(\tR\tblockedBy\"B\n" +
+	"\x0fPolicySignature\x12\x15\n" +
+	"\x06key_id\x18\x01 \x01(\tR\x05keyId\x12\x18\n" +
+	"\aed25519\x18\x02 \x01(\fR\aed25519*k\n" +
 	"\tEmconMode\x12\x1a\n" +
 	"\x16EMCON_MODE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11EMCON_MODE_NORMAL\x10\x01\x12\x14\n" +
 	"\x10EMCON_MODE_BURST\x10\x02\x12\x15\n" +
-	"\x11EMCON_MODE_SILENT\x10\x03BPZNgithub.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1;ghostseekerv1b\x06proto3"
+	"\x11EMCON_MODE_SILENT\x10\x03*[\n" +
+	"\aEchelon\x12\x17\n" +
+	"\x13ECHELON_UNSPECIFIED\x10\x00\x12\x10\n" +
+	"\fECHELON_UNIT\x10\x01\x12\x10\n" +
+	"\fECHELON_SHIP\x10\x02\x12\x13\n" +
+	"\x0fECHELON_COMMAND\x10\x03BPZNgithub.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1;ghostseekerv1b\x06proto3"
 
 var (
 	file_ghostseeker_v1_policy_proto_rawDescOnce sync.Once
@@ -380,25 +876,40 @@ func file_ghostseeker_v1_policy_proto_rawDescGZIP() []byte {
 	return file_ghostseeker_v1_policy_proto_rawDescData
 }
 
-var file_ghostseeker_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_ghostseeker_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_ghostseeker_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_ghostseeker_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_ghostseeker_v1_policy_proto_goTypes = []any{
-	(EmconMode)(0),     // 0: ghostseeker.v1.EmconMode
-	(*Policy)(nil),     // 1: ghostseeker.v1.Policy
-	(*Interest)(nil),   // 2: ghostseeker.v1.Interest
-	(*Thresholds)(nil), // 3: ghostseeker.v1.Thresholds
-	nil,                // 4: ghostseeker.v1.Policy.ScorerWeightsEntry
+	(EmconMode)(0),          // 0: ghostseeker.v1.EmconMode
+	(Echelon)(0),            // 1: ghostseeker.v1.Echelon
+	(*Policy)(nil),          // 2: ghostseeker.v1.Policy
+	(*Interest)(nil),        // 3: ghostseeker.v1.Interest
+	(*Thresholds)(nil),      // 4: ghostseeker.v1.Thresholds
+	(*PolicyLayer)(nil),     // 5: ghostseeker.v1.PolicyLayer
+	(*InterestRule)(nil),    // 6: ghostseeker.v1.InterestRule
+	(*EmconSetting)(nil),    // 7: ghostseeker.v1.EmconSetting
+	(*MergeConflict)(nil),   // 8: ghostseeker.v1.MergeConflict
+	(*PolicySignature)(nil), // 9: ghostseeker.v1.PolicySignature
+	nil,                     // 10: ghostseeker.v1.Policy.ScorerWeightsEntry
 }
 var file_ghostseeker_v1_policy_proto_depIdxs = []int32{
-	2, // 0: ghostseeker.v1.Policy.interest:type_name -> ghostseeker.v1.Interest
-	3, // 1: ghostseeker.v1.Policy.thresholds:type_name -> ghostseeker.v1.Thresholds
-	0, // 2: ghostseeker.v1.Policy.emcon:type_name -> ghostseeker.v1.EmconMode
-	4, // 3: ghostseeker.v1.Policy.scorer_weights:type_name -> ghostseeker.v1.Policy.ScorerWeightsEntry
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	3,  // 0: ghostseeker.v1.Policy.interest:type_name -> ghostseeker.v1.Interest
+	4,  // 1: ghostseeker.v1.Policy.thresholds:type_name -> ghostseeker.v1.Thresholds
+	0,  // 2: ghostseeker.v1.Policy.emcon:type_name -> ghostseeker.v1.EmconMode
+	10, // 3: ghostseeker.v1.Policy.scorer_weights:type_name -> ghostseeker.v1.Policy.ScorerWeightsEntry
+	5,  // 4: ghostseeker.v1.Policy.layers:type_name -> ghostseeker.v1.PolicyLayer
+	7,  // 5: ghostseeker.v1.Policy.emcon_setting:type_name -> ghostseeker.v1.EmconSetting
+	9,  // 6: ghostseeker.v1.Policy.signature:type_name -> ghostseeker.v1.PolicySignature
+	8,  // 7: ghostseeker.v1.Policy.conflicts:type_name -> ghostseeker.v1.MergeConflict
+	1,  // 8: ghostseeker.v1.PolicyLayer.echelon:type_name -> ghostseeker.v1.Echelon
+	6,  // 9: ghostseeker.v1.PolicyLayer.rules:type_name -> ghostseeker.v1.InterestRule
+	7,  // 10: ghostseeker.v1.PolicyLayer.emcon:type_name -> ghostseeker.v1.EmconSetting
+	0,  // 11: ghostseeker.v1.EmconSetting.mode:type_name -> ghostseeker.v1.EmconMode
+	1,  // 12: ghostseeker.v1.EmconSetting.echelon:type_name -> ghostseeker.v1.Echelon
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_ghostseeker_v1_policy_proto_init() }
@@ -411,8 +922,8 @@ func file_ghostseeker_v1_policy_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ghostseeker_v1_policy_proto_rawDesc), len(file_ghostseeker_v1_policy_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   4,
+			NumEnums:      2,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -7,9 +7,15 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
@@ -19,6 +25,15 @@ import (
 )
 
 func main() {
+	llmTimeoutDefault := 8 * time.Second
+	if value := os.Getenv("GS_LLM_TIMEOUT"); value != "" {
+		timeout, err := time.ParseDuration(value)
+		if err != nil || timeout <= 0 {
+			log.Printf("invalid GS_LLM_TIMEOUT %q; using 8s", value)
+		} else {
+			llmTimeoutDefault = timeout
+		}
+	}
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
@@ -28,17 +43,52 @@ func main() {
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
 	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
+	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
+	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
+	policyState := flag.String("policy-state", "", "persist simulation policy state at this path")
+	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
+	llmModel := flag.String("llm-model", os.Getenv("GS_LLM_MODEL"), "local LLM model name")
+	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
+	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
+	opTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "operator token file")
+	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
 	flag.Parse()
 
+	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
+	if *llmURL == "" {
+		log.Printf("NL compiler: rules parser (set GS_LLM_URL to enable LLM)")
+	} else {
+		log.Printf("NL compiler: local LLM at %s", *llmURL)
+	}
+
+	operator, devMode, err := opauth.Load(*opToken, *opTokenFile, *devTokenFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sessions := opauth.NewSessions(operator, devMode)
+	if devMode {
+		log.Printf("operator token auto-generated for a local demo (%s); loopback browsers are signed in automatically", *devTokenFile)
+	}
+
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions)
 		return
 	}
 
 	data := store.New(*retain)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
-	app := server.New(data)
+	options := []server.Option{server.WithAdmin(*admin), server.WithNodeID("DDG-51")}
+	if *policyState != "" {
+		backend, err := policy.NewFileBackend(*policyState)
+		if err != nil {
+			log.Fatal(err)
+		}
+		options = append(options, server.WithPolicyBackend(backend))
+	}
+	app := server.New(data, options...)
+	compiler.Locks = app.PolicyLocks()
+	app.SetCompiler(compiler)
 	go runSimulation(data, generator, app)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
@@ -49,7 +99,18 @@ func main() {
 	}
 
 	log.Printf("Ghost Seeker listening on %s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, app))
+	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(app)))))
+}
+
+func serve(addr string, handler http.Handler) error {
+	return (&http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}).ListenAndServe()
 }
 
 func refreshTimeScopes(app *server.Server) {
@@ -89,7 +150,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -107,7 +168,9 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		log.Printf("link shaper on %s -> %s at %d bit/s (start the edge with -shore http://localhost%s)", linkListen, target, linkBps, linkListen)
 		link = sh
 	}
-	bridge := shorebridge.New(shoreURL, edgeURL, link)
+	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator)
+	compiler.Locks = bridge.PolicyLocks()
+	bridge.Compiler = compiler
 	go bridge.Run(ctx, poll)
 
 	mux := http.NewServeMux()
@@ -121,7 +184,14 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		static.ServeHTTP(w, r)
 	})
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(mux)))))
+}
+
+func envOr(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }
 
 func shaperTarget(shoreURL string) (string, error) {
@@ -145,7 +215,7 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
 		_, _, _, state := data.Snapshot()
-		item, extra := generator.Tick(nil, time.Now(), state.Model, state.Directives)
+		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
 		stored, evicted := data.Add(item, extra)
 		app.PublishEvict(evicted)
 		if item != nil {

@@ -3,8 +3,11 @@ package console
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -15,6 +18,9 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 )
 
 type Service struct {
@@ -25,6 +31,8 @@ type Service struct {
 	Clk    clock.Clock
 	// Deduped reports captures folded into existing items (ingest.Ingester.Deduped); optional.
 	Deduped func() int64
+	// Prioritizer is the active scoring backend ("edgeml" | "tomer"), reported in GetStatus.
+	Prioritizer string
 }
 
 func view(r *store.Row) *pb.ItemView {
@@ -42,6 +50,9 @@ func (s *Service) ListItems(ctx context.Context, req *connect.Request[pb.ListIte
 	}
 	q := req.Msg
 	var filtered []*store.Row
+	if err := ValidateLabel(q.Label); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	for _, r := range rows {
 		if q.Type != pb.ItemType_ITEM_TYPE_UNSPECIFIED && r.Item.Type != q.Type {
 			continue
@@ -57,16 +68,11 @@ func (s *Service) ListItems(ctx context.Context, req *connect.Request[pb.ListIte
 		}
 		filtered = append(filtered, r)
 	}
-	// Highest priority first.
-	for i := 1; i < len(filtered); i++ {
-		for j := i; j > 0 && filtered[j].Score.Priority > filtered[j-1].Score.Priority; j-- {
-			filtered[j], filtered[j-1] = filtered[j-1], filtered[j]
-		}
-	}
-	off, _ := strconv.Atoi(q.PageToken)
-	lim := int(q.Limit)
-	if lim <= 0 {
-		lim = 100
+	// Highest priority first (stable, so equal priorities keep store order).
+	sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].Score.Priority > filtered[j].Score.Priority })
+	off, lim, err := Page(q.PageToken, q.Limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	resp := &pb.ListItemsResponse{Total: int64(len(filtered))}
 	for i := off; i < len(filtered) && i < off+lim; i++ {
@@ -96,7 +102,7 @@ func (s *Service) GetQueue(ctx context.Context, req *connect.Request[pb.GetQueue
 	var tb int64
 	for i, e := range plan.Queue {
 		tb += e.BytesRemaining
-		if req.Msg.Limit <= 0 || i < int(req.Msg.Limit) {
+		if i < QueueLimit(req.Msg.Limit) {
 			resp.Entries = append(resp.Entries, e)
 		}
 	}
@@ -109,14 +115,55 @@ func (s *Service) GetPolicy(context.Context, *connect.Request[pb.GetPolicyReques
 }
 
 func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPolicyRequest]) (*connect.Response[pb.SetPolicyResponse], error) {
+	if err := ValidateInterest(req.Msg.GetPolicy().GetInterest()); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	if req.Msg.Policy == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("policy required"))
 	}
-	sup, boost, err := s.Sch.ApplyPolicy(ctx, req.Msg.Policy)
+	sup, boost, err := s.Sch.AcceptPolicy(ctx, req.Msg.Policy, "console")
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		code := connect.CodeInvalidArgument
+		switch {
+		case errors.Is(err, policy.ErrStaleVersion), errors.Is(err, policy.ErrExpired):
+			code = connect.CodeFailedPrecondition
+		case errors.Is(err, policy.ErrUnsigned), errors.Is(err, policy.ErrUnknownKey), errors.Is(err, policy.ErrBadSignature):
+			code = connect.CodePermissionDenied
+		}
+		return nil, connect.NewError(code, err)
 	}
-	return connect.NewResponse(&pb.SetPolicyResponse{Policy: s.Sch.Policy(), SuppressedCount: sup, BoostedCount: boost}), nil
+	applied := s.Sch.Policy()
+	return connect.NewResponse(&pb.SetPolicyResponse{Policy: applied, SuppressedCount: sup, BoostedCount: boost, Conflicts: applied.Conflicts}), nil
+}
+
+func (s *Service) PolicyAuditHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		limit := 100
+		if value := r.URL.Query().Get("limit"); value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed < 0 {
+				http.Error(w, "invalid limit", http.StatusBadRequest)
+				return
+			}
+			if parsed > 1000 {
+				parsed = 1000
+			}
+			if parsed > 0 {
+				limit = parsed
+			}
+		}
+		entries, err := s.Sch.PolicyAudit(r.Context(), limit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"entries": entries})
+	})
 }
 
 func (s *Service) OverrideLabel(ctx context.Context, req *connect.Request[pb.OverrideLabelRequest]) (*connect.Response[pb.OverrideLabelResponse], error) {
@@ -133,6 +180,9 @@ func (s *Service) RequestPull(ctx context.Context, req *connect.Request[pb.Reque
 	if req.Msg.Pull == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("pull required"))
 	}
+	if req.Msg.Pull.Original && strings.TrimSpace(req.Msg.Pull.RequestedBy) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("original (full-size) pull is an operator override: requestedBy is required"))
+	}
 	if err := s.Sch.Pull(ctx, req.Msg.Pull); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -147,8 +197,16 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 	st := s.Sch.Stats()
 	resp := &pb.GetStatusResponse{NodeId: s.NodeID, Role: "edge", Link: s.Sch.Link().State(), PolicyId: s.Sch.Policy().Id,
 		BytesSent: st.BytesPayload + st.BytesManifest, ItemsTotal: int64(len(rows))}
+	resp.ItemsEvicted, err = s.St.ItemsEvicted(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	if s.Deduped != nil {
 		resp.ItemsDeduped = s.Deduped()
+	}
+	resp.Prioritizer = s.Prioritizer
+	if resp.Prioritizer == "" {
+		resp.Prioritizer = scoring.PrioritizerEdgeml
 	}
 	var queued, qb int64
 	for _, r := range rows {
@@ -159,8 +217,9 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 			resp.ItemsUnknown++
 		}
 		done := true
-		for _, f := range r.Forms {
-			if !f.Complete {
+		for i := range r.Forms {
+			f := &r.Forms[i]
+			if !f.Complete && !scheduler.PullOnly(r, f) {
 				done = false
 				queued++
 				qb += f.Bytes - f.AckedThrough
@@ -184,6 +243,10 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		if !ids.Valid(parts[0]) {
+			http.NotFound(w, r)
+			return
+		}
 		kind := parseForm(parts[1])
 		row, err := s.St.Get(r.Context(), parts[0])
 		if err != nil {
@@ -200,8 +263,7 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", f.Mime)
-		_, _ = w.Write(data)
+		httpx.ServeBlob(w, f.Mime, data)
 	})
 }
 

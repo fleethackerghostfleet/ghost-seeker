@@ -16,6 +16,7 @@ usage: python qa_apply.py --root <set_dir> --meta <set_dir>/clips_meta.yaml
 
 import argparse
 import configparser
+import csv
 import json
 import shutil
 from collections import defaultdict
@@ -65,6 +66,140 @@ def interp_keyframes(kf, start, end):
     return out
 
 
+def box_key(value):
+    frame, track_id = value.split(":", 1)
+    return int(frame), int(track_id)
+
+
+def apply_box_corrections(out, corr, name_to_id):
+    drop_boxes = {tuple(map(int, item)) for item in corr.get("drop_boxes") or []}
+    relabel_boxes = {box_key(key): value for key, value in (corr.get("relabel_boxes") or {}).items()}
+    fix_boxes = {box_key(key): value for key, value in (corr.get("fix_boxes") or {}).items()}
+    corrected = []
+    for row in out:
+        frame, track_id = int(row[0]), int(row[1])
+        key = (frame, track_id)
+        if key in drop_boxes:
+            continue
+        if key in relabel_boxes:
+            label = relabel_boxes[key]
+            if label not in name_to_id:
+                name_to_id[label] = max(name_to_id.values(), default=0) + 1
+            row[7] = name_to_id[label]
+        if key in fix_boxes:
+            row[2:6] = list(map(float, fix_boxes[key]))
+        corrected.append(row)
+    for item in corr.get("add_boxes") or []:
+        label = item["cls"]
+        if label not in name_to_id:
+            name_to_id[label] = max(name_to_id.values(), default=0) + 1
+        frame, track_id = int(item["frame"]), int(item["id"])
+        if (frame, track_id) in drop_boxes:
+            continue
+        corrected.append(
+            [frame, track_id, *map(float, item["box"]), 1, name_to_id[label], 1.0]
+        )
+    return corrected
+
+
+def rewrite_attrs(seq_dir, corr, rows, classes):
+    attrs_path = seq_dir / "gt" / "attrs.jsonl"
+    if not attrs_path.exists():
+        return
+    teacher_attrs_path = seq_dir / "teacher" / "attrs_teacher.jsonl"
+    teacher_attrs_path.parent.mkdir(parents=True, exist_ok=True)
+    if not teacher_attrs_path.exists():
+        shutil.copyfile(attrs_path, teacher_attrs_path)
+    drop = {int(track_id) for track_id in corr.get("drop") or []}
+    remap = {
+        int(old): int(new)
+        for new, olds in (corr.get("merge") or {}).items()
+        for old in olds
+    }
+    trim = {int(track_id): interval for track_id, interval in (corr.get("trim") or {}).items()}
+    relabel = {int(track_id): label for track_id, label in (corr.get("relabel") or {}).items()}
+    relabel_boxes = {
+        box_key(key): value for key, value in (corr.get("relabel_boxes") or {}).items()
+    }
+    class_by_key = {(int(row[0]), int(row[1])): classes[str(int(row[7]))] for row in rows}
+    survivors = set(class_by_key)
+    output = {}
+    current_by_key = {}
+    for line in attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        current_by_key[(int(row["frame"]), int(row["id"]))] = row
+    for line in teacher_attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        frame, old_id = int(row["frame"]), int(row["id"])
+        if old_id in drop or (old_id in trim and not (trim[old_id][0] <= frame <= trim[old_id][1])):
+            continue
+        track_id = int(remap.get(old_id, old_id))
+        key = (frame, track_id)
+        if key not in survivors:
+            continue
+        row["id"] = track_id
+        row["label"] = relabel_boxes.get(key, relabel.get(track_id, class_by_key[key]))
+        output[key] = row
+    for frame, track_id in sorted(survivors - output.keys()):
+        mot_row = next(row for row in rows if (int(row[0]), int(row[1])) == (frame, track_id))
+        visibility = {1.0: "full", 0.5: "partial", 0.25: "heavy"}.get(
+            float(mot_row[8]), "heavy"
+        )
+        output[(frame, track_id)] = {
+            "frame": frame,
+            "id": track_id,
+            "label": class_by_key[(frame, track_id)],
+            "nav_lights_visible": False,
+            "lights": [],
+            "approaching": None,
+            "wake": False,
+            "visibility": visibility,
+            "confidence": float(mot_row[6]),
+        }
+    if output == current_by_key:
+        return
+    attrs_path.write_text(
+        "".join(json.dumps(output[key], ensure_ascii=False) + "\n" for key in sorted(output)),
+        encoding="utf-8",
+    )
+
+
+def apply_sample_provenance(seq_dir: Path, verdicts: dict[int, str]) -> None:
+    frame_attrs_path = seq_dir / "gt" / "frame_attrs.jsonl"
+    frame_attrs = []
+    for line in frame_attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        frame = int(row["frame"])
+        row["qa_reviewed"] = frame in verdicts
+        row["qa_verdict"] = verdicts.get(frame)
+        frame_attrs.append(row)
+    frame_attrs_path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in frame_attrs),
+        encoding="utf-8",
+    )
+
+    attrs_path = seq_dir / "gt" / "attrs.jsonl"
+    attrs = []
+    for line in attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        row["label_source"] = (
+            "teacher+human" if int(row["frame"]) in verdicts else "teacher"
+        )
+        attrs.append(row)
+    attrs_path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in attrs),
+        encoding="utf-8",
+    )
+
+
 def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     teacher = seq_dir / "teacher" / "gt_teacher.txt"
     gt = seq_dir / "gt" / "gt.txt"
@@ -96,6 +231,7 @@ def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
         boxes = interp_keyframes(kf, min(kf), max(kf))
         for f, (x, y, w, h) in boxes.items():
             out.append([f, int(t["id"]), x, y, w, h, 1, name_to_id[t["cls"]], 1.0 if f in kf else 0.5])
+    out = apply_box_corrections(out, corr, name_to_id)
     # after merges a frame may hold two boxes with the same id: keep the larger box (full object extent), vis breaks ties
     best = {}
     for r in out:
@@ -106,12 +242,37 @@ def apply(seq_dir: Path, corr: dict, classes: dict) -> tuple[list, dict]:
     return out, {str(v): k for k, v in sorted(name_to_id.items(), key=lambda kv: kv[1])}
 
 
+def verdict_file_path(verdict_path: Path, repo_root: Path) -> str:
+    resolved = verdict_path.expanduser().resolve()
+    try:
+        return str(resolved.relative_to(repo_root.resolve()))
+    except ValueError:
+        return str(resolved)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True, type=Path)
     ap.add_argument("--meta", required=True, type=Path, help="yaml: {seq_id: {viewpoint, platform_motion, sea_state, ...}}")
+    ap.add_argument("--verdicts", type=Path, help="CSV with seq_id, frame, verdict QA results")
     a = ap.parse_args()
     meta = yaml.safe_load(a.meta.read_text())
+    verdicts_by_seq = {}
+    verdict_rows_by_seq = {}
+    if a.verdicts:
+        with a.verdicts.open(encoding="utf-8", newline="") as stream:
+            for row in csv.DictReader(stream):
+                seq_id = row["seq_id"]
+                frame = int(row["frame"])
+                verdict = row["verdict"]
+                if verdict not in {"pass", "fail"}:
+                    raise ValueError(f"invalid QA verdict for {seq_id} frame {frame}: {verdict}")
+                if frame in verdicts_by_seq.setdefault(seq_id, {}):
+                    raise ValueError(f"duplicate QA verdict for {seq_id} frame {frame}")
+                verdicts_by_seq[seq_id][frame] = verdict
+                verdict_rows_by_seq.setdefault(seq_id, []).append(row)
+        repo_root = Path(__file__).resolve().parents[2]
+        verdict_file = verdict_file_path(a.verdicts, repo_root)
     entries = []
     for seq_dir in sorted(p for p in a.root.iterdir() if (p / "seqinfo.ini").exists()):
         labels = json.loads((seq_dir / "gt" / "labels.json").read_text())
@@ -120,6 +281,10 @@ def main():
         rows, classes = apply(seq_dir, corr or {}, labels["classes"])
         (seq_dir / "gt" / "gt.txt").write_text("".join(
             f"{f},{i},{x:.1f},{y:.1f},{w:.1f},{h:.1f},{c},{k},{v:.2f}\n" for f, i, x, y, w, h, c, k, v in rows))
+        rewrite_attrs(seq_dir, corr or {}, rows, classes)
+        if a.verdicts:
+            sample_verdicts = verdicts_by_seq.get(seq_dir.name, {})
+            apply_sample_provenance(seq_dir, sample_verdicts)
         reviewed = bool(corr.get("reviewed"))
         labels.update({"classes": classes, "label_source": "teacher+human" if reviewed else "teacher",
                        "qa": {"reviewed": reviewed, "drop": corr.get("drop") or [], "merge": corr.get("merge") or {},
@@ -128,6 +293,20 @@ def main():
                               "same_object_groups": corr.get("same_object_groups") or [],
                               "gt_status": corr.get("gt_status", "complete"),
                               "notes": corr.get("notes", "")}})
+        for key in ("drop_boxes", "relabel_boxes", "fix_boxes", "add_boxes"):
+            if key in corr:
+                labels["qa"][key] = corr[key]
+        if a.verdicts:
+            sample_rows = verdict_rows_by_seq.get(seq_dir.name, [])
+            labels["qa"].update(
+                {
+                    "sample_frames": len(sample_rows),
+                    "pass": sum(row["verdict"] == "pass" for row in sample_rows),
+                    "fail": sum(row["verdict"] == "fail" for row in sample_rows),
+                    "verdict_file": verdict_file,
+                    "method": "lead visual spot-check of contact sheets, edgeml/tools/contact_sheets.py labels",
+                }
+            )
         teacher_rows = read_rows(seq_dir / "teacher" / "gt_teacher.txt")
         (seq_dir / "gt" / "labels.json").write_text(json.dumps(labels, indent=1))
         cp = configparser.ConfigParser()
@@ -144,6 +323,9 @@ def main():
         by_id = defaultdict(int)
         for r in rows:
             by_id[r[1]] += 1
+        notes = m.get("notes", "")
+        if a.root.name == "ghost_fleet_r2_1fps":
+            notes = corr.get("notes") or notes
         e = {"seq_id": seq_dir.name, "set": a.root.name, "source_dataset": s.get("source_dataset", a.root.name),
              "split": split_of(a.root.name, seq_dir.name), "fps": float(s["frameRate"]),
              "n_frames": int(s["seqLength"]), "n_tracks": len(by_id), "n_boxes": len(rows),
@@ -157,7 +339,7 @@ def main():
              "qa_merged_tracks": sum(len(v) for v in (corr.get("merge") or {}).values()),
              "qa_added_tracks": len(corr.get("add_tracks") or []),
              "license": s.get("license", ""), "upstream": s.get("source_url", m.get("source_url", "")),
-             "notes": m.get("notes", "")}
+             "notes": notes}
         entries.append(e)
         print(f"{e['seq_id']}: {e['n_frames']} fr, {e['n_tracks']} tracks, {e['n_boxes']} boxes, {e['label_source']}, {e['split']}")
     (a.root / "index.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))
