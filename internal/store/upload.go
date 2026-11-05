@@ -56,6 +56,7 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 		u := &s.items[i].Upload
 		n := min(budget, u.Bytes-u.Sent)
 		u.Sent += n
+		s.stats.Bytes += int(n)
 		budget -= n
 		u.Done = u.Sent == u.Bytes
 		changed = append(changed, cloneItem(s.items[i]))

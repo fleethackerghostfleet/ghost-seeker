@@ -79,3 +79,31 @@ func TestUploadEvictionAndFullSize(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestUploadStatisticsCountTransferredBytesAndShipStorage(t *testing.T) {
+	s := New(1)
+	s.SetLinkBPS(0)
+	s.Add(&command.Item{ID: "queued", KB: 1}, 0)
+	s.AdvanceUploads(time.Second)
+	stats, _ := s.Stats()
+	if stats.Bytes != 0 || stats.DB != 1 {
+		t.Fatalf("offline stats: %+v", stats)
+	}
+	s.SetLinkBPS(8_000)
+	s.AdvanceUploads(time.Second)
+	stats, _ = s.Stats()
+	if stats.Bytes != 1000 || stats.DB != 1 {
+		t.Fatalf("partial stats: %+v", stats)
+	}
+	s.AdvanceUploads(time.Second)
+	s.AdvanceUploads(time.Second)
+	stats, _ = s.Stats()
+	if stats.Bytes != 1536 || stats.DB != 1 {
+		t.Fatalf("completed stats: %+v", stats)
+	}
+	s.Add(&command.Item{ID: "replacement", KB: 1}, 0)
+	stats, _ = s.Stats()
+	if stats.Bytes != 1536 || stats.DB != 2 {
+		t.Fatalf("eviction changed totals: %+v", stats)
+	}
+}

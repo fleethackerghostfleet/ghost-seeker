@@ -62,7 +62,6 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 		return command.Item{}, ""
 	}
 	s.stats.Keep++
-	s.stats.Bytes += item.KB
 	s.stats.DB++
 	item.DBID = s.stats.DB + 180000
 	command.Rescore(item, s.model, s.directives)
