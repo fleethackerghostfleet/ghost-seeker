@@ -420,6 +420,15 @@ header{min-width:0;overflow:hidden}
 nav{flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none}
 @media(max-width:1150px){.hstats,.clock{display:none}}
 
+.view-tabs{display:flex;align-items:center;flex:0 1 auto;min-width:0;height:100%;margin-left:10px}
+.view-tabs nav{flex:1 1 auto;margin-left:0}
+.view-tabs-arrow{flex:none;width:28px;height:32px;padding:0;border:1px solid var(--accent);border-radius:2px;background:var(--panel2);color:var(--accent);font-size:26px;line-height:1;cursor:pointer}
+.view-tabs-arrow[hidden]{display:none}
+.view-tabs-arrow:disabled{border-color:var(--line);color:var(--muted);opacity:.4;cursor:default}
+.view-tabs-arrow:hover:not(:disabled){background:var(--panel3);color:var(--text)}
+.view-tabs-arrow:focus-visible,.view-tabs nav a:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+@media(max-width:760px){header{height:auto;min-height:52px;flex-wrap:wrap;padding-top:6px;gap:6px 10px}.view-tabs{order:1;flex:1 0 100%;width:100%;height:42px;margin-left:0}}
+
 /* ---- live shore mode (ghost-seeker -shore) ---- */
 .strip.live-strip{gap:0}.strip.live-strip .st{gap:6px}.strip.live-strip .seg{display:inline-flex;margin:0 4px}.strip.live-strip .seg button{padding:2px 7px;font-size:11px}
 .strip .hint{color:var(--muted);font-size:10.5px}.strip .bad{color:var(--p1);font-weight:700}.strip .rb{max-width:340px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:bottom}
