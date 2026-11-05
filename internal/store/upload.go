@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"sort"
@@ -8,6 +9,34 @@ import (
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
+
+var ErrInvalidUploadOverride = errors.New("upload override must be empty, next, or hold")
+
+func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, error) {
+	if override != "" && override != "next" && override != "hold" {
+		return command.Item{}, 0, ErrInvalidUploadOverride
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.items {
+		item := &s.items[i]
+		if item.ID != id {
+			continue
+		}
+		u := &item.Upload
+		if !u.Done && u.Override != override {
+			now := time.Now()
+			u.Override, u.OverrideBy, u.OverrideAt = override, by, &now
+			u.NextOrder = 0
+			if override == "next" {
+				s.uploadOrder++
+				u.NextOrder = s.uploadOrder
+			}
+		}
+		return cloneItem(*item), s.cdr, nil
+	}
+	return command.Item{}, s.cdr, ErrNotFound
+}
 
 func (s *Store) SetLinkBPS(bps int64) {
 	s.mu.Lock()
@@ -37,12 +66,18 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 	}
 	queue := make([]int, 0, len(s.items))
 	for i := range s.items {
-		if !s.items[i].Upload.Done {
+		if !s.items[i].Upload.Done && s.items[i].Upload.Override != "hold" {
 			queue = append(queue, i)
 		}
 	}
 	sort.SliceStable(queue, func(i, j int) bool {
 		a, b := s.items[queue[i]], s.items[queue[j]]
+		if (a.Upload.Override == "next") != (b.Upload.Override == "next") {
+			return a.Upload.Override == "next"
+		}
+		if a.Upload.Override == "next" {
+			return a.Upload.NextOrder < b.Upload.NextOrder
+		}
 		if a.Tier != b.Tier {
 			return a.Tier < b.Tier
 		}
@@ -59,6 +94,10 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 		s.stats.Bytes += int(n)
 		budget -= n
 		u.Done = u.Sent == u.Bytes
+		if u.Done {
+			u.Override = ""
+			u.NextOrder = 0
+		}
 		changed = append(changed, cloneItem(s.items[i]))
 	}
 	return changed

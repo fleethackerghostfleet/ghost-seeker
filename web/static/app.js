@@ -27,13 +27,19 @@ function uploadState(it){
   u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
- const done=!!u?.done&&bytes>0,queued=!done&&sent===0;
- const label=(done?'✓ Uploaded':queued?'Queued: waiting for bandwidth':`Uploading to shore: ${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`)+(form?` · ${form}`:'');
- return{bytes,sent,done,queued,label,form};
+ const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next',queued=!done&&!held&&sent===0;
+ const transfer=`${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
+ const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:queued?'Queued: waiting for bandwidth':`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
+ return{bytes,sent,done,queued,label,form,held,next};
 }
 function uploadHTML(it){
  const u=uploadState(it);
- return`<div class="upload-info${u.done?' uploaded':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+ return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?'Upload next (operator)':(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+}
+function uploadControlsHTML(it){
+ const u=uploadState(it),live=!!(LIVE||it.live),viewer=typeof gsAuth!=='undefined'&&gsAuth.viewer();
+ const disabled=live||viewer||u.done,reason=live?'Transfer overrides are not supported by the live shore connection':viewer?'Viewer role is read-only':u.done?'Image is already uploaded':'Default: priority tier, then score. Operator overrides affect uploads only.';
+ return`<div class="dsec upload-controls"><h4>Shore upload queue</h4>${uploadHTML(it)}<div class="actions"><button class="btn ${u.next?'done':''}" id="aUploadNext" aria-pressed="${u.next}" title="${esc(reason)}" ${disabled?'disabled':''}>${u.next?'Back to priority order':'Upload next'}</button><button class="btn ${u.held?'done':''}" id="aUploadHold" aria-pressed="${u.held}" title="${esc(reason)}" ${disabled?'disabled':''}>${u.held?'Release upload':'Hold upload'}</button></div></div>`;
 }
 function mergeLiveConfig(live){
  if(!live)return;
@@ -350,8 +356,8 @@ function renderDirBar(){
 }
 function renderStats(){
  const vis=items.filter(i=>state.src==='ALL'||i.src.id===state.src);
- const uploads=vis.filter(i=>!i.dismissed).map(uploadState),done=uploads.filter(u=>u.done).length,queued=uploads.filter(u=>u.queued).length;
- const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${uploads.length-done-queued} uploading · ${queued} queued · ${done} uploaded`;
+ const uploads=vis.filter(i=>!i.dismissed).map(uploadState),done=uploads.filter(u=>u.done).length,queued=uploads.filter(u=>u.queued).length,held=uploads.filter(u=>u.held).length;
+ const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${uploads.length-done-queued-held} uploading · ${queued} queued · ${held} held · ${done} uploaded`;
  $('hsImgs').textContent=vis.length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
  const unrevLive=vis.filter(i=>!i.reviewed&&!i.dismissed).length;
  if(LIVE){renderLiveStrip();$('rvCount').textContent=unrevLive||'';if(state.page==='rv')rvProgress();return}
@@ -458,6 +464,7 @@ function renderDetailContent(){
    <li><i></i><div>Stored on ship<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
    <li><i></i><div>Shore priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
   </ul></div>`}
+  ${uploadControlsHTML(it)}
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}" id="aCdr">${it.sent?'✓ Sent to Commander':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
@@ -465,6 +472,7 @@ function renderDetailContent(){
  briefing.renderDetections(it);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
+ for(const [id,override] of [['aUploadNext','next'],['aUploadHold','hold']])$(id).onclick=async()=>{if(it.live||LIVE||uploadState(it).done)return;try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:it.upload?.override===override?'':override});cdr=result.cdr;applyItemUpdate(result.item)}catch(error){toast(error.message)}};
  const aPull=$('aPull');if(aPull)aPull.onclick=async()=>{const id=it.live.itemId;pulling.add(id);aPull.disabled=true;aPull.textContent='requested…';try{await request(`/api/items/${encodeURIComponent(it.id)}/pull`,'POST',{form:'full'});toast('Full image requested from the ship — its status changes from waiting to transferring to received')}catch(error){pulling.delete(id);toast(error.message)}};
  $('aSim').onclick=()=>{const k=rows[0]&&rows[0][0].cls;if(!k)return;$('nlIn').value=`Prioritize ${clsOf(k).lab.toLowerCase()}s`;location.hash='#reprioritize';toast('Drafted a directive from this image — review and apply')};
  $('aDis').onclick=async()=>{const l=visible().l,i=l.indexOf(it),nx=l[i+1]||l[i-1];try{await patchItem(it.id,{dismissed:true,reviewed:true});nx&&findItem(nx.id)?openDetail(nx.id):closeDetail();toast(it.live?'Image hidden from this console (still stored on shore)':'Image hidden from feed (still stored)')}catch(error){toast(error.message)}};

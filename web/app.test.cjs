@@ -291,6 +291,25 @@ test('live uploads derive progress from shown form, never from commander escalat
  assert.equal(vm.runInContext("uploadState({live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100,received:0}}}}).done",context),true);
  assert.equal(vm.runInContext("uploadState({live:{forms:{thumb:{state:'pending',bytes:100}}}}).queued",context),true);
 });
+test('upload override labels, toggle undo and live/viewer guards',()=>{
+ const context=setup();
+ vm.runInContext("overrideItem={upload:{bytes:100,sent:20,override:'hold'}}",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-held.*Held by operator/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Release upload/);
+ assert.equal(vm.runInContext('uploadState(overrideItem).queued',context),false);
+ vm.runInContext("overrideItem.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-next.*Upload next \(operator\)/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Back to priority order/);
+ vm.runInContext("overrideItem.upload.override=''",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/Uploading to shore/);
+ vm.runInContext("overrideItem.upload.done=true;overrideItem.upload.override='hold'",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/✓ Uploaded/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/already uploaded.*disabled/);
+ vm.runInContext("overrideItem.live={forms:{thumb:{state:'pending',bytes:100}}}",context);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/not supported by the live shore connection.*disabled/);
+ vm.runInContext("delete overrideItem.live;overrideItem.upload.done=false;gsAuth={viewer:()=>true}",context);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Viewer role is read-only.*disabled/);
+});
 test('summary corrections do not reset a received image upload',()=>{
  const context=setup();
  for(const state of ['pending','partial']){

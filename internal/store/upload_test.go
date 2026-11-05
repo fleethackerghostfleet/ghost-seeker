@@ -116,3 +116,60 @@ func TestUploadStatisticsCountTransferredBytesAndShipStorage(t *testing.T) {
 		t.Fatalf("eviction changed totals: %+v", stats)
 	}
 }
+
+func TestUploadOverridesOrderHoldAndRelease(t *testing.T) {
+	s := New(10)
+	s.SetLinkBPS(8_000)
+	s.items = []command.Item{
+		{ID: "held", Tier: 1, Central: 1, Upload: command.Upload{Bytes: 1000}},
+		{ID: "priority", Tier: 1, Central: .9, Upload: command.Upload{Bytes: 1000}},
+		{ID: "second", Tier: 3, Central: .5, Upload: command.Upload{Bytes: 1000}},
+		{ID: "first", Tier: 4, Central: .1, Upload: command.Upload{Bytes: 1000}},
+	}
+	for _, change := range []struct{ id, override string }{{"held", "hold"}, {"first", "next"}, {"second", "next"}, {"first", "next"}} {
+		if _, _, err := s.SetUploadOverride(change.id, change.override, "operator"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, want := range []string{"first", "second", "priority"} {
+		got := s.AdvanceUploads(time.Second)
+		if len(got) != 1 || got[0].ID != want {
+			t.Fatalf("want %s, got %+v", want, got)
+		}
+	}
+	if got := s.AdvanceUploads(time.Second); len(got) != 0 {
+		t.Fatalf("held item uploaded: %+v", got)
+	}
+	it, _, err := s.SetUploadOverride("held", "", "operator")
+	if err != nil || it.Upload.Override != "" || it.Upload.OverrideBy != "operator" || it.Upload.OverrideAt == nil {
+		t.Fatalf("release: %+v %v", it, err)
+	}
+	if got := s.AdvanceUploads(time.Second); len(got) != 1 || got[0].ID != "held" {
+		t.Fatalf("released item: %+v", got)
+	}
+	it, _, err = s.SetUploadOverride("held", "next", "operator")
+	if err != nil || it.Upload.Override != "" {
+		t.Fatalf("completed override: %+v %v", it, err)
+	}
+	if _, _, err := s.SetUploadOverride("held", "invalid", "operator"); err != ErrInvalidUploadOverride {
+		t.Fatal(err)
+	}
+	if _, _, err := s.SetUploadOverride("missing", "hold", "operator"); err != ErrNotFound {
+		t.Fatal(err)
+	}
+}
+
+func TestUploadNextReturnsToPriorityOrder(t *testing.T) {
+	s := New(2)
+	s.SetLinkBPS(8_000)
+	s.items = []command.Item{
+		{ID: "critical", Tier: 1, Upload: command.Upload{Bytes: 1000}},
+		{ID: "routine", Tier: 3, Upload: command.Upload{Bytes: 1000}},
+	}
+	s.SetUploadOverride("routine", "next", "operator")
+	s.SetUploadOverride("routine", "", "operator")
+	got := s.AdvanceUploads(time.Second)
+	if len(got) != 1 || got[0].ID != "critical" {
+		t.Fatalf("priority order not restored: %+v", got)
+	}
+}

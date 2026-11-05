@@ -43,6 +43,7 @@ type Store struct {
 	directives      []command.Directive
 	linkBPS         int64
 	uploadRemainder int64
+	uploadOrder     uint64
 }
 
 func New(retain int) *Store {

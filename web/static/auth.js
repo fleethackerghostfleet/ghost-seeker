@@ -1,7 +1,7 @@
 /* Shared browser identity and read-only affordances. Authorization stays server-side. */
 const gsAuth=(()=>{
  let identity={mode:'token',role:''};
- const writeControls='#rvKeys button,#rvAsk button,.tierbtns button,#dReset,#aCdr,#aFull,#aSim,#aDis,#aPull,[data-pull],#clearDir,#directives .x,#modelSel,#emconControl button,#linkPresets button,#wbAdd,#nlIn,#examples,#wbChips,#wbSuggestions,#wbReset,#wbUndo,#wbRedo,.wb-pin,.wb-actions,#wbAcceptFix,#wbHistory [data-revert],#wbApply,#wbConfirmApply,#polRawApply,#polRawValidate,.decs button,#reopen,#note';
+ const writeControls='#aUploadNext,#aUploadHold,#rvKeys button,#rvAsk button,.tierbtns button,#dReset,#aCdr,#aFull,#aSim,#aDis,#aPull,[data-pull],#clearDir,#directives .x,#modelSel,#emconControl button,#linkPresets button,#wbAdd,#nlIn,#examples,#wbChips,#wbSuggestions,#wbReset,#wbUndo,#wbRedo,.wb-pin,.wb-actions,#wbAcceptFix,#wbHistory [data-revert],#wbApply,#wbConfirmApply,#polRawApply,#polRawValidate,.decs button,#reopen,#note';
  const viewer=()=>identity.mode==='piv'&&identity.role==='viewer';
  const mayWrite=method=>!viewer()||['GET','HEAD'].includes(method.toUpperCase());
  function requireWrite(method){if(!mayWrite(method))throw new Error('read-only role')}

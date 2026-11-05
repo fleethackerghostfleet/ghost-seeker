@@ -13,6 +13,16 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .uploaded .upload-bar::-webkit-progress-value{background:var(--good)}
 .uploaded .upload-bar::-moz-progress-bar{background:var(--good)}
 .upload-summary{padding:4px 16px;color:var(--muted);font:11px var(--mono);border-bottom:1px solid var(--line)}
+.upload-held .upload-label{color:var(--p2)}
+.upload-held .upload-bar{border:1px dashed var(--p2)}
+.upload-held .upload-bar::-webkit-progress-value{background:var(--p2)}
+.upload-held .upload-bar::-moz-progress-bar{background:var(--p2)}
+.upload-next{--upload-next:#b38cff}
+.theme-day .upload-next{--upload-next:#7040a0}
+.upload-next .upload-label{color:var(--upload-next)}
+.upload-next .upload-bar{border-top:2px solid var(--upload-next);height:7px}
+.upload-next .upload-bar::-webkit-progress-value{background:var(--upload-next)}
+.upload-next .upload-bar::-moz-progress-bar{background:var(--upload-next)}
 .banner{position:relative;z-index:70;background:#007a33;color:#fff;text-align:center;font-weight:700;font-size:11px;letter-spacing:.18em;padding:3px 0;flex:none}
 header{flex:none;display:flex;align-items:center;gap:18px;padding:0 16px;height:54px;border-bottom:1px solid var(--line);background:var(--panel)}
 .logo{display:flex;align-items:center;gap:10px}

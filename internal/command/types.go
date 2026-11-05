@@ -121,10 +121,14 @@ type Item struct {
 }
 
 type Upload struct {
-	Bytes int64 `json:"bytes"`
-	Sent  int64 `json:"sent"`
-	Done  bool  `json:"done"`
-	BPS   int64 `json:"bps"`
+	Override   string     `json:"override,omitempty"`
+	OverrideBy string     `json:"overrideBy,omitempty"`
+	OverrideAt *time.Time `json:"overrideAt,omitempty"`
+	NextOrder  uint64     `json:"-"`
+	Bytes      int64      `json:"bytes"`
+	Sent       int64      `json:"sent"`
+	Done       bool       `json:"done"`
+	BPS        int64      `json:"bps"`
 }
 
 // LiveForm is the shore-side state of one form of an item's fidelity ladder.
