@@ -10,6 +10,12 @@ var Missions = map[string]string{"maritime": "maritime", "air": "air", "sar": "s
 // It is a written spec, independent of model weights: confidence and false positives are ignored.
 func OracleTier(mission string, d command.Detection) int {
 	a := d.Attrs
+	if d.Class == "unknown" {
+		if a.Transient {
+			return 4
+		}
+		return pick(a.Approaching || a.Dark, 1, 2)
+	}
 	switch mission {
 	case "air":
 		switch d.Class {

@@ -27,6 +27,7 @@ class EvalImage:
     height: int
     split: str  # upstream split name
     source_ref: str
+    eval_split: Optional[str] = None  # clean catalogs can explicitly quarantine unsafe upstream splits
     boxes: list[list[float]] = field(default_factory=list)  # pixel [x, y, w, h]
     labels: list[str] = field(default_factory=list)  # native labels
     horizon: Optional[dict] = None  # {X, Y, Nx, Ny} when the catalog has one (SMD)
@@ -66,6 +67,7 @@ def load_dataset(dataset_id: str, catalog_dir: str, data_root: str) -> list[Eval
             height=int(r["height"]),
             split=r.get("split") or "all",
             source_ref=r.get("source_ref") or "",
+            eval_split=r.get("eval_split"),
         )
     ann_path = os.path.join(catalog_dir, "annotations", f"{dataset_id}.jsonl")
     if os.path.exists(ann_path):
@@ -103,7 +105,12 @@ def eval_set(dataset_id: str, split: str, catalog_dir: str, data_root: str, stri
     """split is 'dev' or 'test' per configs/splits.yaml; stride subsamples deterministically (dev only)."""
     assert split in ("dev", "test"), split
     images = load_dataset(dataset_id, catalog_dir, data_root)
-    if dataset_id == "smd_vis_onboard_sample":
+    explicit = [im for im in images if im.eval_split is not None]
+    if explicit:
+        if len(explicit) != len(images):
+            raise ValueError("mixed legacy/clean split metadata; refusing an ambiguous evaluation set")
+        images = [im for im in images if im.eval_split == split]
+    elif dataset_id == "smd_vis_onboard_sample":
         vids = set(_load_splits()[split]["smd_vis_onboard_sample"])
         images = [im for im in images if im.video in vids]
     elif dataset_id in UPSTREAM_SPLITS:

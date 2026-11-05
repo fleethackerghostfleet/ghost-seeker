@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"image"
@@ -66,6 +67,8 @@ type Config struct {
 	// frame per source per interval, FACT+THUMB only; 0 keeps hash behaviour
 	// for object-free frames (one item per frame).
 	SceneEvery time.Duration
+	// WaitForSpace pauses intake on a full store instead of consuming the next capture.
+	WaitForSpace bool
 }
 
 func DefaultConfig() Config {
@@ -201,8 +204,17 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 			}
 		}
 	}
-	if _, err := g.st.Put(ctx, it, payloads); err != nil {
-		return nil, err
+	for {
+		_, err := g.st.Put(ctx, it, payloads)
+		if err == nil {
+			break
+		}
+		if !g.cfg.WaitForSpace || !errors.Is(err, store.ErrFull) {
+			return nil, err
+		}
+		if err := g.clk.Sleep(ctx, 5*time.Second); err != nil {
+			return nil, err
+		}
 	}
 	row, err := g.st.Get(ctx, it.Id)
 	if err != nil {

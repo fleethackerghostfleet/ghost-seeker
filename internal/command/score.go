@@ -29,6 +29,8 @@ func RuleMatch(r Rule, d Detection) bool {
 			attrMatch = attrMatch || d.Attrs.Moving
 		case "loitering":
 			attrMatch = attrMatch || d.Attrs.Loitering
+		case "transient":
+			attrMatch = attrMatch || d.Attrs.Transient
 		}
 	}
 	return classMatch && attrMatch
@@ -82,7 +84,12 @@ func ScoreDet(d Detection, rules []Rule, model string, opticalNight ...bool) Det
 	if light {
 		w = 1 - (1-w)*(1-min(1, max(0, signal.Boost)))
 	}
-	return DetectionScore{Score: min(.99, w*ConfFactor(d.Conf)), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes, Light: light}
+	confidence := ConfFactor(d.Conf)
+	if d.Class == "unknown" {
+		// Classification confidence is not evidence that a persistent contact is noise.
+		confidence = 1
+	}
+	return DetectionScore{Score: min(.99, w*confidence), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes, Light: light}
 }
 
 // ConfSat is the detector confidence treated as certain; lower confidences scale the score down linearly.
@@ -97,6 +104,15 @@ func ConfFactor(conf float64) float64 { return min(1, conf/ConfSat) }
 func ContactWeight(d Detection, model string) float64 {
 	m := catalog.Models[model]
 	w := m.W[d.Class]
+	if d.Class == "unknown" && w > 0 {
+		if d.Attrs.Transient {
+			return .05
+		}
+		if d.Attrs.Approaching || d.Attrs.Dark {
+			return max(w, .9)
+		}
+		return w
+	}
 	if !slices.Contains(m.LiftGroups, catalog.Classes[d.Class].Group) {
 		return w
 	}

@@ -4,12 +4,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/scenario"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
 
 func main() {
@@ -43,15 +46,24 @@ func main() {
 	period := flag.Duration("period", 5*time.Second, "capture period for replay")
 	tick := flag.Duration("tick", 3*time.Second, "scheduler tick")
 	initBps := flag.Float64("init-bps", 64000, "initial link estimate (bits/s)")
+	tokenFlag := flag.String("unit-token", env("GS_UNIT_TOKEN", ""), "unit JWT (prefer env or file)")
+	tokenFile := flag.String("unit-token-file", env("GS_UNIT_TOKEN_FILE", ""), "unit JWT file")
+	maxBytes := flag.Int64("max-bytes", envInt64("GS_EDGE_MAX_BYTES"), "edge payload byte cap (0 = unlimited)")
+	maxItems := flag.Int64("max-items", envInt64("GS_EDGE_MAX_ITEMS"), "edge item cap (0 = unlimited)")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
+	token, err := unitauth.Credential(*tokenFlag, *tokenFile)
+	fatal(err)
 
 	st, err := store.Open(*data)
 	fatal(err)
 	defer st.Close()
+	if err := st.SetLimits(context.Background(), store.Limits{MaxBytes: *maxBytes, MaxItems: *maxItems}); err != nil && !errors.Is(err, store.ErrFull) {
+		fatal(err)
+	}
 	clk := clock.Real{}
-	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9))
+	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9), token)
 	cfg := scheduler.DefaultConfig(*id)
 	cfg.Tick = *tick
 	sch, err := scheduler.New(cfg, st, lk, scoring.Default(), clk, log)
@@ -65,6 +77,7 @@ func main() {
 	}
 	icfg := ingest.DefaultConfig()
 	icfg.EdgeID = *id
+	icfg.WaitForSpace = true
 	icfg.Dedup, err = ingest.ParseDedup(*dedup)
 	fatal(err)
 	icfg.SceneEvery = *sceneEvery
@@ -125,4 +138,10 @@ func fatal(err error) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func envInt64(k string) int64 {
+	v, err := strconv.ParseInt(env(k, "0"), 10, 64)
+	fatal(err)
+	return v
 }

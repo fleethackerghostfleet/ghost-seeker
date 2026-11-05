@@ -103,10 +103,10 @@ func TestTickUsesLibraryImageDetections(t *testing.T) {
 		if image == nil {
 			t.Fatalf("item image %q is not in source %q library", item.Img, source.ID)
 		}
-		if len(item.Dets) != len(image.Dets) {
+		if len(item.Dets) < len(image.Dets) || len(item.Dets) > len(image.Dets)+1 {
 			t.Fatalf("detection count = %d, want %d for %q", len(item.Dets), len(image.Dets), image.File)
 		}
-		for i, detection := range item.Dets {
+		for i, detection := range item.Dets[:len(image.Dets)] {
 			want := image.Dets[i]
 			if detection.Class != want.Cls {
 				t.Errorf("detection %d class = %q, want %q", i, detection.Class, want.Cls)

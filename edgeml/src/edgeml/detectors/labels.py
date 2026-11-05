@@ -6,13 +6,13 @@ from __future__ import annotations
 
 _VESSEL = {
     # COCO / generic
-    "boat", "ship", "vessel", "watercraft", "yacht", "sailboat", "sail boat", "sailing boat", "sailing ship",
+    "boat", "small boat", "ship", "vessel", "watercraft", "yacht", "sailboat", "sail boat", "sailing boat", "sailing ship",
     "ferry", "cargo ship", "container ship", "tanker", "tanker ship", "oil tanker", "fishing boat", "fishing vessel",
     "speedboat", "speed boat", "motorboat", "motor boat", "kayak", "canoe", "jet ski", "warship", "destroyer",
     "frigate", "aircraft carrier", "navy ship", "patrol boat", "submarine", "cruise ship", "passenger ship",
     "tugboat", "tug", "barge", "lifeboat", "dinghy", "rowboat", "pontoon", "trawler", "bulk carrier",
     # SeaShips
-    "ore carrier", "bulk cargo carrier", "general cargo ship",
+    "ore carrier", "bulk cargo carrier", "general cargo ship", "liner",
     # Singapore Maritime / SMD
     "Vessel/ship", "Boat", "Speed boat", "Sail boat", "Kayak", "Ferry",
     # Argus (alimkacar) maritime checkpoints
@@ -21,7 +21,8 @@ _VESSEL = {
 _BUOY = {"buoy", "Buoy", "navigation buoy", "channel marker", "mooring buoy", "marker buoy"}
 _OBJECT = {
     # things a watch-stander would still report / things in the maritime GT that are not vessels
-    "bird", "airplane", "aeroplane", "helicopter", "Flying bird/plane", "Other", "person", "swimmer",
+    "bird", "airplane", "aeroplane", "helicopter", "military aircraft", "civil aircraft", "drone",
+    "Flying bird/plane", "Other", "person", "swimmer", "shark fin",
     "floating debris", "debris", "whale", "dolphin", "periscope", "obstacle", "iceberg", "rock",
     "surfboard", "kite", "surfer",
 }
