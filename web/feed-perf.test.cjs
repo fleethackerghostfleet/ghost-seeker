@@ -14,7 +14,7 @@ function setup(){
   setTimeout:(fn,ms)=>{const id=++next;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),
   document:{hidden:false,body:{classList:{add(){},remove(){}}},querySelector:()=>null},
   $:id=>{if(!elements.has(id))elements.set(id,{style:{},classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
-  card:id=>({dataset:{id},remove(){const i=grid.children.indexOf(this);if(i>=0)grid.children.splice(i,1)},getBoundingClientRect(){throw Error('large feeds must not read card geometry')}})
+  card:id=>({dataset:{id},scrollIntoView(){},remove(){const i=grid.children.indexOf(this);if(i>=0)grid.children.splice(i,1)},getBoundingClientRect(){throw Error('large feeds must not read card geometry')}})
  });
  context.window=context;
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
@@ -97,6 +97,32 @@ test('filter resets, empty feeds and off-window dirty items keep a bounded grid'
  vm.runInContext("state.src='missing';renderFeed(true)",c);
  assert.equal(h.grid.children.length,0);
  assert.equal(vm.runInContext("$('feedMore').hidden&&$('empty').style.display==='block'",c),true);
+});
+test('selection uses cached order and updates only the old and new cards on the next frame',()=>{
+ const h=setup(),c=h.context;
+ vm.runInContext(`populate(3100);renderFeed(true);state.sel='0';updated=[];details=0;
+  renderDetail=()=>details++;visible=()=>{throw Error('selection must use cached order')};
+  renderStats=renderRp=()=>{throw Error('selection must not render stats or priorities')};step(1);`,c);
+ assert.equal(vm.runInContext("state.sel==='1'&&details===1&&updated.length===0",c),true);
+ h.frame();
+ assert.equal(vm.runInContext("updated.join(',')",c),'0,1');
+ vm.runInContext('updated=[];closeDetail()',c);
+ assert.equal(vm.runInContext('updated.length',c),0);
+ h.frame();
+ assert.equal(vm.runInContext("state.sel===null&&updated.join(',')==='1'&&details===1",c),true);
+});
+test('selection-only batching still flushes concurrent server updates through the full render path',()=>{
+ const h=setup(),c=h.context;
+ vm.runInContext("populate(3100);renderFeed(true);state.sel='0';step(1);applyItemUpdate({...raw('2'),central:.6})",c);
+ h.frame();
+ assert.equal(vm.runInContext("feedOrdered[0].id==='2'&&dirtyItems.size===0",c),true);
+});
+test('skipping animations does not refresh clean cards, but an explicit display refresh does',()=>{
+ const h=setup(),c=h.context;
+ vm.runInContext('populate(3100);renderFeed(true);updated=[];renderFeed(true)',c);
+ assert.equal(vm.runInContext('updated.length',c),0);
+ vm.runInContext('renderFeed(true,true)',c);
+ assert.equal(vm.runInContext('updated.length',c),120);
 });
 test('sentinel grows one page and keyboard stepping reveals the next off-window item',()=>{
  const h=setup(),c=h.context;

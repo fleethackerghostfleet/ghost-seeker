@@ -3,7 +3,7 @@ let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:nul
 let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null,policyAuditTimer=null,policyRawTouched=false,policyRawLoaded=false;
 let indexedItems=null,itemByID=new Map(),indexedPending=null,pendingByID=new Map();
 const dirtyItems=new Set();
-let feedFrame=null,feedTimer=null,feedScheduled=false;
+let feedFrame=null,feedTimer=null,feedScheduled=false,feedNeedsRender=false;
 const FEED_PAGE_SIZE=120;
 let feedLimit=FEED_PAGE_SIZE,feedOrdered=[],renderedFeedIDs=[],renderedFeedReasons=new Map();
 /* LIVE is the shore block of the snapshot when the console runs on a shore node (-shore); null on the simulation. */
@@ -155,7 +155,8 @@ function queuePending(data){
  const previous=pendingByID.get(data.item.id);
  if(previous)Object.assign(previous,data);else{pendingItems.push(data);pendingByID.set(data.item.id,data)}
 }
-function scheduleFeedFlush(){
+function scheduleFeedFlush(selectionOnly=false){
+ if(!selectionOnly)feedNeedsRender=true;
  if(feedScheduled)return;
  feedScheduled=true;
  if(typeof requestAnimationFrame==='function')feedFrame=requestAnimationFrame(flushFeed);
@@ -166,6 +167,11 @@ function flushFeed(){
  feedScheduled=false;
  if(feedFrame!==null&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(feedFrame);
  clearTimeout(feedTimer);feedFrame=feedTimer=null;
+ if(!feedNeedsRender){
+  for(const id of dirtyItems){const it=findItem(id);if(it?.el)updateCard(it)}
+  dirtyItems.clear();return;
+ }
+ feedNeedsRender=false;
  const selectedDirty=dirtyItems.has(state.sel);
  renderFeed();renderStats();renderRp(true);
  if(selectedDirty)renderDetail();
@@ -189,6 +195,7 @@ function mergeItem(raw,fresh=true){
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
  const selection=state.sel;
+ for(const item of data.items)dirtyItems.add(item.id);
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
@@ -289,8 +296,8 @@ async function init(){
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
- $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();resetFeedWindow();renderFeed(true);renderStats();renderRp()};
- const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showFiltered').checked=f.showFiltered;$('reviewFilter').value=f.review;closeDetail();resetFeedWindow();renderFeed(true)};
+ $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp()};
+ const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showFiltered').checked=f.showFiltered;$('reviewFilter').value=f.review;closeDetail();resetFeedWindow();renderFeed(true,true)};
  $('showFiltered').onchange=e=>{gsSettings.setFeed({showFiltered:e.target.checked});syncFeedFilters()};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
  window.addEventListener('gs:feed-filters',syncFeedFilters);syncFeedFilters();
@@ -298,9 +305,9 @@ async function init(){
  workbench.init();
  briefing.init();
  $('clearDir').onclick=async()=>{if(!state.directives.length)return;try{await request('/api/directives','DELETE');toast('Directives cleared — base model restored')}catch(error){toast(error.message)}};
- $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));resetFeedWindow();renderFeed(true)};
- $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens;renderFeed(true)};
- $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;resetFeedWindow();renderFeed(true)};
+ $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));resetFeedWindow();renderFeed(true,true)};
+ $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens;renderFeed(true,true)};
+ $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;resetFeedWindow();renderFeed(true,true)};
  $('pauseBtn').onclick=toggleHold;$('live').onclick=toggleHold;$('wbResume').onclick=toggleHold;
  $('emconControl').onclick=async e=>{const button=e.target.closest('#emconSeg [data-mode]');if(!button||button.disabled)return;try{const result=await request('/api/policy/emcon','POST',{mode:button.dataset.mode});if(result.conflicts?.length)toast(gsPolicy.conflictToast(result.conflicts))}catch(error){if(!error.policyConflicts)toast(error.message)}};
  $('polRaw').oninput=()=>{policyRawTouched=true};
@@ -326,7 +333,7 @@ async function init(){
  $('rvOrder').onclick=e=>{const b=e.target.closest('button');if(!b)return;rv.order=b.dataset.o;[...$('rvOrder').children].forEach(x=>x.classList.toggle('on',x===b));rv.cur=null;renderReview()};
  $('nightBtn').onclick=toggleNight;
  window.addEventListener('hashchange',route);
- window.addEventListener('gs:display-settings',()=>renderFeed(true));
+ window.addEventListener('gs:display-settings',()=>renderFeed(true,true));
  setupFeedWindow();
  setInterval(()=>$('clock').textContent=zulu(new Date()),1000);$('clock').textContent=zulu(new Date());
  route();renderFeed(true);renderStats();renderRp();openStream();
@@ -398,8 +405,9 @@ function growFeedWindow(){
 }
 function revealFeedItem(id){
  const index=feedOrdered.findIndex(it=>it.id===id);
- if(index<feedLimit)return;
+ if(index<feedLimit)return false;
  feedLimit=Math.ceil((index+1)/FEED_PAGE_SIZE)*FEED_PAGE_SIZE;
+ return true;
 }
 function setupFeedWindow(){
  const more=$('feedMore');more.onclick=growFeedWindow;
@@ -408,7 +416,7 @@ function setupFeedWindow(){
   observer.observe(more);
  }
 }
-function renderFeed(noAnim){
+function renderFeed(noAnim,refreshCards=false){
  const{l,counts}=visible();feedOrdered=l;renderTierSeg(counts);$('empty').style.display=l.length?'none':'block';
  const windowed=l.slice(0,feedLimit),ids=windowed.map(it=>it.id),grid=$('grid');
  const changed=ids.length!==renderedFeedIDs.length||ids.some((id,i)=>id!==renderedFeedIDs[i]);
@@ -421,7 +429,7 @@ function renderFeed(noAnim){
  }
  windowed.forEach((it,idx)=>{
   const fresh=!it.el,el=it.el||makeCard(it),reason=feedReasons.get(it.id);
-  if(fresh||noAnim||dirtyItems.has(it.id)||renderedFeedReasons.get(it.id)!==reason)updateCard(it);
+  if(fresh||refreshCards||dirtyItems.has(it.id)||renderedFeedReasons.get(it.id)!==reason)updateCard(it);
   if(changed&&grid.children[idx]!==el)grid.insertBefore(el,grid.children[idx]||null);
  });
  if(animate){
@@ -515,14 +523,19 @@ function liveWhy(it){
 }
 
 /* ---- detail drawer ---- */
-function openDetail(id){state.sel=id;document.body.classList.add('drawer-open');feedOrdered=visible().l;revealFeedItem(id);renderFeed(true);const it=findItem(id);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
+function selectFeedItem(id){
+ if(state.sel)dirtyItems.add(state.sel);
+ state.sel=id;if(id)dirtyItems.add(id);
+ if(id&&revealFeedItem(id))renderFeed(true);else scheduleFeedFlush(true);
+}
+function openDetail(id){document.body.classList.add('drawer-open');selectFeedItem(id);const it=findItem(id);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
 function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
 function renderZoom(){preserveBandFocus(renderZoomContent)}
 function renderZoomContent(){const it=findItem(state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
  z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
-function closeDetail(){closeZoom();state.sel=null;document.body.classList.remove('drawer-open');renderFeed(true)}
-function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
+function closeDetail(){closeZoom();selectFeedItem(null);document.body.classList.remove('drawer-open')}
+function step(dir){const l=feedOrdered;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function buildWhy(it,rows){
  const why=[...liveWhy(it),...gsLights.why(it)];const top=rows[0];
  rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
