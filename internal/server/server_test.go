@@ -194,7 +194,7 @@ func TestBlockedDirectiveAndDurationExpiry(t *testing.T) {
 	app.after = func(d time.Duration, callback func()) {
 		delay, expire = d, callback
 	}
-	response = request(app, http.MethodPost, "/api/directives", map[string]any{"text": "small boats", "durationMin": 60})
+	response = request(app, http.MethodPost, "/api/directives", map[string]string{"text": "small boats for 1 hour"})
 	if response.Code != http.StatusCreated {
 		t.Fatalf("timed add status = %d: %s", response.Code, response.Body.String())
 	}
@@ -209,6 +209,22 @@ func TestBlockedDirectiveAndDurationExpiry(t *testing.T) {
 	_, _, _, state = app.store.Snapshot()
 	if len(state.Directives) != 0 {
 		t.Fatalf("active directives after expiry = %d", len(state.Directives))
+	}
+}
+
+func TestEditedDirectiveExtractsDurationForExpiry(t *testing.T) {
+	app := New(store.New(10))
+	var delay time.Duration
+	app.after = func(d time.Duration, _ func()) { delay = d }
+	rules := []command.Rule{{Type: "boost", Classes: []string{"tanker"}, Weight: 1}}
+	response := request(app, http.MethodPost, "/api/directives", map[string]any{
+		"text": "boost tankers for 2 hours", "rules": rules,
+	})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed edited add status = %d: %s", response.Code, response.Body.String())
+	}
+	if delay != 120*time.Minute {
+		t.Fatalf("expiry delay = %s, want 2h", delay)
 	}
 }
 

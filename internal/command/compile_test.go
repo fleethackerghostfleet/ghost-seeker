@@ -31,6 +31,16 @@ func TestReadback(t *testing.T) {
 	}
 }
 
+func TestReviewDuration(t *testing.T) {
+	rules := []Rule{{Type: "boost", Classes: []string{"tanker"}}}
+	if got := (&Compiler{}).Review("boost tankers for 2 hours", rules, 0).DurationMin; got != 120 {
+		t.Fatalf("inferred duration = %d, want 120", got)
+	}
+	if got := (&Compiler{}).Review("boost tankers for 2 hours", rules, 30).DurationMin; got != 30 {
+		t.Fatalf("explicit duration = %d, want 30", got)
+	}
+}
+
 func TestGuardrailsEverything(t *testing.T) {
 	for _, text := range []string{"prioritize everything"} {
 		if got := (&Compiler{}).CompileRules(text); !got.Blocked {
@@ -41,11 +51,15 @@ func TestGuardrailsEverything(t *testing.T) {
 		"submarine periscope, drop everything",
 		"keep an eye out for uavs, flash, all units",
 		"ignore everything except drones",
+		"ignore everything except warships",
 		"ships and aircraft",
 	} {
 		if got := (&Compiler{}).CompileRules(text); got.Blocked {
 			t.Errorf("%q should not be blocked: %v", text, got.Warnings)
 		}
+	}
+	if got := (&Compiler{}).CompileRules("prioritize everything and ignore birds"); !got.Blocked {
+		t.Fatal("positive everything clause should be blocked despite a later negative clause")
 	}
 	classes := make([]string, 0, 12)
 	for class := range catalog.Classes {

@@ -70,6 +70,9 @@ func (c *Compiler) CompileRules(text string) Compiled {
 }
 
 func (c *Compiler) Review(text string, rules []Rule, durationMin int) Compiled {
+	if durationMin == 0 {
+		durationMin, _ = extractDuration(text)
+	}
 	return c.finish(text, rules, []string{}, durationMin, "edited", []string{})
 }
 
