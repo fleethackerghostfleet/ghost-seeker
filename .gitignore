@@ -20,3 +20,7 @@ scenarios/ghostfleet_demo/out/
 *.py[cod]
 algorithm/runs/
 algorithm/models/
+/ghost-seeker
+/shore
+/edge
+/sim
