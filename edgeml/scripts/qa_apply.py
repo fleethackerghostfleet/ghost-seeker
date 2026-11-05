@@ -124,13 +124,17 @@ def rewrite_attrs(seq_dir, corr, rows, classes):
     class_by_key = {(int(row[0]), int(row[1])): classes[str(int(row[7]))] for row in rows}
     survivors = set(class_by_key)
     output = {}
-    original_by_key = {}
+    current_by_key = {}
+    for line in attrs_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        current_by_key[(int(row["frame"]), int(row["id"]))] = row
     for line in teacher_attrs_path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         row = json.loads(line)
         frame, old_id = int(row["frame"]), int(row["id"])
-        original_by_key[(frame, old_id)] = dict(row)
         if old_id in drop or (old_id in trim and not (trim[old_id][0] <= frame <= trim[old_id][1])):
             continue
         track_id = int(remap.get(old_id, old_id))
@@ -156,7 +160,7 @@ def rewrite_attrs(seq_dir, corr, rows, classes):
             "visibility": visibility,
             "confidence": float(mot_row[6]),
         }
-    if output == original_by_key and len(original_by_key) == len(survivors):
+    if output == current_by_key:
         return
     attrs_path.write_text(
         "".join(json.dumps(output[key], ensure_ascii=False) + "\n" for key in sorted(output)),
