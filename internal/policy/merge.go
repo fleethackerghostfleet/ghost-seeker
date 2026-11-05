@@ -308,13 +308,13 @@ func CheckRule(locks []Lock, echelon pb.Echelon, r *pb.InterestRule) *pb.MergeCo
 				blocked = true
 			}
 			for lockedLabel, lockedTier := range lock.TierLabels {
-				if normalizeLabel(label) == normalizeLabel(lockedLabel) && tier > lockedTier {
+				if normalizeLabel(label) == normalizeLabel(lockedLabel) && tier != lockedTier {
 					blocked = true
 				}
 			}
 		}
-		for label, tier := range lock.TierLabels {
-			if tier < 4 && containsLabel(r.SuppressLabels, label) {
+		for label := range lock.TierLabels {
+			if containsLabel(r.SuppressLabels, label) || containsLabel(r.BoostLabels, label) {
 				blocked = true
 			}
 		}

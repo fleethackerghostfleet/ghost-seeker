@@ -43,7 +43,7 @@ func TestTierMergePrecedence(t *testing.T) {
 	}
 	low.Rules[0].TierLabels = map[string]int32{"tanker": 1}
 	in, _, conflicts = Merge([]*pb.PolicyLayer{high, low}, "edge", time.Now())
-	if in.TierLabels["tanker"] != 1 || len(conflicts) != 0 {
+	if in.TierLabels["tanker"] != 2 || len(conflicts) != 1 {
 		t.Fatalf("%v %v", in, conflicts)
 	}
 	high.Rules[0].TierLabels = nil
@@ -52,6 +52,28 @@ func TestTierMergePrecedence(t *testing.T) {
 	_, _, conflicts = Merge([]*pb.PolicyLayer{high, low}, "edge", time.Now())
 	if len(conflicts) != 1 {
 		t.Fatal("pin must not lower a locked boost", conflicts)
+	}
+}
+
+func TestLockedPinsRejectLowerEchelonGenericAndTierOverrides(t *testing.T) {
+	for lockedTier := int32(1); lockedTier <= 4; lockedTier++ {
+		for _, kind := range []string{"boost", "suppress", "pin"} {
+			high := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, Rules: []*pb.InterestRule{{Id: "locked", Locked: true, TierLabels: map[string]int32{"tanker": lockedTier}}}}
+			lower := &pb.InterestRule{Id: "override"}
+			switch kind {
+			case "boost":
+				lower.BoostLabels = []string{" Tanker "}
+			case "suppress":
+				lower.SuppressLabels = []string{"tanker"}
+			case "pin":
+				lower.TierLabels = map[string]int32{"tanker": lockedTier%4 + 1}
+			}
+			low := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, Rules: []*pb.InterestRule{lower}}
+			in, _, conflicts := Merge([]*pb.PolicyLayer{high, low}, "edge", time.Now())
+			if in.TierLabels["tanker"] != lockedTier || len(conflicts) != 1 || conflicts[0].BlockedBy != "locked" || conflicts[0].RuleId != "override" {
+				t.Fatalf("P%d %s bypassed lock: %v %v", lockedTier, kind, in, conflicts)
+			}
+		}
 	}
 }
 
