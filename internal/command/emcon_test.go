@@ -30,7 +30,12 @@ func TestSplitEmcon(t *testing.T) {
 		text, wantMode, wantRest string
 	}{
 		{"Ⱥ prioritize submarines and go quiet", "SILENT", "Ⱥ prioritize submarines and"},
+		{"set the fleet to go dark", "SILENT", "set the fleet to"},
 		{"prioritize ships going dark", "", "prioritize ships going dark"},
+		{"flag contacts that go quiet", "", "flag contacts that go quiet"},
+		{"watch for tankers which are going dark", "", "watch for tankers which are going dark"},
+		{"flag targets that go quiet", "", "flag targets that go quiet"},
+		{"watch tracks which are going dark", "", "watch tracks which are going dark"},
 		{"prioritize submarines and go dark", "SILENT", "prioritize submarines and"},
 		{"Go quiet", "SILENT", ""},
 		{"we are going dark", "SILENT", "we are"},

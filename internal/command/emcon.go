@@ -53,7 +53,8 @@ var emconMatchers = func() []struct {
 	return out
 }()
 
-var emconIntentSuffix = regexp.MustCompile(`(?i)\b(?:and|then|now|please|we are|we're|all units)$`)
+var emconContactPostureSuffix = regexp.MustCompile(`^[ \t]*(?:(?:that|which|who)[ \t]+)?(?:(?:are|is)[ \t]+)?$`)
+var emconContactNounPattern = regexp.MustCompile(`\b(contacts?|targets?|tracks?)\b`)
 
 // ParseEmcon returns the EMCON mode ("SILENT", "BURST" or "NORMAL") a
 // directive asks for, or "" when it says nothing about transmit posture.
@@ -63,8 +64,8 @@ func ParseEmcon(text string) string {
 	return mode
 }
 
-// SplitEmcon extracts the requested transmit posture and removes all EMCON
-// phrases from the text passed to the directive rules parser.
+// SplitEmcon extracts the requested transmit posture and removes recognized
+// EMCON phrases while preserving phrases that describe contacts.
 func SplitEmcon(text string) (mode, rest string) {
 	best, bestPos := "", -1
 	spans := make([][2]int, 0)
@@ -101,17 +102,20 @@ func SplitEmcon(text string) (mode, rest string) {
 }
 
 func emconPostureHasContext(text string, start int) bool {
-	rawPrefix := text[:start]
-	if lineBreak := strings.LastIndexByte(rawPrefix, '\n'); lineBreak >= 0 &&
-		strings.TrimSpace(rawPrefix[lineBreak+1:]) == "" {
-		return true
+	prefix := strings.ToLower(text[:start])
+	lastEnd := -1
+	updateLastEnd := func(re *regexp.Regexp) {
+		matches := re.FindAllStringIndex(prefix, -1)
+		if len(matches) > 0 && matches[len(matches)-1][1] > lastEnd {
+			lastEnd = matches[len(matches)-1][1]
+		}
 	}
-	prefix := strings.TrimSpace(rawPrefix)
-	if prefix == "" {
-		return true
+	for _, pattern := range synonymPatterns {
+		updateLastEnd(pattern.re)
 	}
-	if strings.ContainsRune(";,.:!", rune(prefix[len(prefix)-1])) {
-		return true
+	for _, pattern := range genericPatterns {
+		updateLastEnd(pattern.re)
 	}
-	return emconIntentSuffix.MatchString(prefix)
+	updateLastEnd(emconContactNounPattern)
+	return lastEnd < 0 || !emconContactPostureSuffix.MatchString(prefix[lastEnd:])
 }
