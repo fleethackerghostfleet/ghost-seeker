@@ -9,6 +9,71 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('learning acceptance sends the advertised tier for the whole class',async()=>{
+ const context=setup();
+ vm.runInContext("calls=[];CLS={tanker:{lab:'Tanker'}};request=async(...args)=>{calls.push(args)}",context);
+ await vm.runInContext("addSuggestionDirective({cls:'tanker',dir:'lower',from:1,to:2})",context);
+ const body=JSON.parse(vm.runInContext('JSON.stringify(calls[0][2])',context));
+ assert.equal(body.text,'Operator feedback: lower Tanker to P2 High');
+ assert.deepEqual(body.rules,[{type:'suppress',classes:['tanker'],attrs:[],only:false,tier:2}]);
+});
+test('mobile review scrolls the whole page without shrinking its image track',()=>{
+ assert.match(css,/#pgRv\{overflow-y:auto\}/);
+ assert.match(css,/#pgRv \.rvmain\{flex:none;grid-template-rows:minmax\(220px,38vh\) auto;overflow:visible\}/);
+});
+test('preempted partial uploads show queued progress and do not count as uploading',()=>{
+ const context=setup();
+ vm.runInContext(`items=[{id:'paused',src:{id:'EO-P7'},tier:2,upload:{bytes:1000,sent:400,bps:8000,active:false}},
+  {id:'active',src:{id:'EO-P7'},tier:2,upload:{bytes:1000,sent:100,bps:8000,active:true}}];
+  state.page='feed';renderSimLink=()=>{};fullRenderStats()`,context);
+ assert.equal(vm.runInContext('uploadState(items[0]).sending',context),false);
+ assert.equal(vm.runInContext('uploadState(items[0]).queued',context),true);
+ assert.match(vm.runInContext('uploadHTML(items[0])',context),/Queued for shore · 40%/);
+ assert.match(context.$('uploadSummary').textContent,/1 uploading · 1 queued/);
+ vm.runInContext('items[0].upload.bps=0;fullRenderStats()',context);
+ assert.match(vm.runInContext('uploadHTML(items[0])',context),/Link outage, paused/);
+ assert.match(context.$('uploadSummary').textContent,/1 uploading · 1 queued/);
+});
+test('peer review summary updates through the stream and beats an older in-flight response',async()=>{
+ const context=setup();
+ vm.runInContext(`openStream();request=()=>new Promise(resolve=>{finishSummary=resolve});pendingSummary=refreshReviewData();
+  streamHandlers['review-data']({data:JSON.stringify({count:20,agreement:.5,reviewers:{Alice:{count:17},Bob:{count:3}}})})`,context);
+ assert.match(context.$('reviewData').textContent,/20 reviews/);
+ vm.runInContext('finishSummary({count:17,agreement:.5,reviewers:{Alice:{count:17}}})',context);
+ await vm.runInContext('pendingSummary',context);
+ assert.match(context.$('reviewData').textContent,/20 reviews/);
+ assert.match(context.$('reviewData').textContent,/Bob: 3/);
+ vm.runInContext(`streamHandlers['review-data']({data:JSON.stringify({count:0,agreement:0,reviewers:{}})});
+  request=async()=>{throw Error('offline')}`,context);
+ assert.match(context.$('reviewData').textContent,/0 reviews/);
+ await vm.runInContext('refreshReviewData()',context);
+ assert.equal(context.$('reviewData').textContent,'offline');
+});
+test('Details distinguishes cumulative filtered frames from photos in the current feed',()=>{
+ const context=feedContext();
+ vm.runInContext(`stats={cap:5000,keep:581,drop:4419,db:1000,bytes:0};
+  items=[frame('repeat',{filtered:'duplicate'}),frame('low',{filtered:'low-value'}),frame('sent',{filtered:'duplicate',sent:true})];
+  imageFor=()=>'/image.jpg';zulu=()=> '12:00:00';renderDetails()`,context);
+ const output=context.$('detailsBody').innerHTML;
+ assert.match(output,/Frames filtered on ship \(cumulative, including unretained frames\)<\/td><td class="n">4,419/);
+ assert.match(output,/Repeats of earlier images \(1\)/);
+ assert.match(output,/Low value \(1\)/);
+ assert.match(output,/Current feed only/);
+ assert.match(output,/Up to 60 photos shown per category/);
+});
+test('operator send provenance does not remove an image from the review queue',()=>{
+ const context=feedContext();
+ vm.runInContext("items=[frame('sent',{sent:true,autoSent:false,sentAt:'2026-11-05T10:00:00Z',reviewed:false}),frame('reviewed',{reviewed:true})]",context);
+ assert.equal(vm.runInContext('rvQueue().map(i=>i.id).join() ',context),'sent');
+ assert.equal(vm.runInContext('humanSent(items[0])',context),true);
+ assert.equal(vm.runInContext('humanReviewed(items[0])',context),false);
+ vm.runInContext("filters.review='unreviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'sent');
+ vm.runInContext("filters.review='reviewed'",context);
+ assert.equal(vm.runInContext('ids()',context),'reviewed');
+ vm.runInContext("filters.review='sent'",context);
+ assert.equal(vm.runInContext('ids()',context),'sent');
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
@@ -161,19 +226,63 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
 });
 test('feed filters default to showing duplicates, persist, validate, and return defensive copies',()=>{
  for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
-  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all"}');
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all","sensor":"ALL","tier":"all"}');
  }
  const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
  settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
  settings.setFeed({review:'sent'});
- assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all'});
  assert.equal(saved().bar,'right');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'all','a reload must not keep the main feed on sent-only');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,false);
  settings.setFeed({review:'unreviewed'});
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
  settings.setFeed({showDuplicates:true,review:'bad'});
- assert.deepEqual(saved().feed,{showDuplicates:true,review:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+});
+test('sensor and priority filters persist, validate, and clear with all feed filters',()=>{
+ const stored=settingsContext('{}');
+ stored.settings.setFeed({sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
+ const reloaded=settingsContext(JSON.stringify(stored.saved()));
+ stored.settings.setFeed({review:'sent'});
+ const sentReload=settingsContext(JSON.stringify(stored.saved())).settings.get().feed;
+ assert.equal(sentReload.review,'all');
+ assert.equal(sentReload.sensor,'EO-P7');
+ assert.equal(sentReload.tier,'2');
+ assert.equal(sentReload.showDuplicates,false);
+ assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
+ const context=setup();context.gsSettings=reloaded.settings;
+ vm.runInContext("SRC={ALL:{id:'ALL'},'EO-P7':{id:'EO-P7'}};closeDetail=()=>{};syncFeedFilters()",context);
+ assert.equal(vm.runInContext('state.src',context),'EO-P7');
+ assert.equal(vm.runInContext('state.tier',context),'2');
+ assert.equal(context.$('clearFeedFilters').hidden,false);
+ vm.runInContext("rv.cur={id:'previous'};rv.shown='previous';rv.displayed={id:'previous'};filterNavigation=rv.navigation",context);
+ vm.runInContext('resetFeedFilters()',context);
+ assert.equal(vm.runInContext('rv.navigation===filterNavigation+1&&rv.cur===null&&rv.shown===null&&rv.displayed===null',context),true);
+ assert.equal(vm.runInContext('state.src',context),'ALL');
+ assert.equal(vm.runInContext('state.tier',context),'all');
+ assert.equal(context.$('clearFeedFilters').hidden,true);
+ assert.deepEqual(reloaded.saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ reloaded.settings.setFeed({sensor:'missing',tier:'1'});
+ vm.runInContext('syncFeedFilters()',context);
+ assert.equal(vm.runInContext('state.src',context),'ALL');
+ assert.equal(reloaded.saved().feed.sensor,'ALL');
+ for(const invalid of [{sensor:42,tier:2},{sensor:'<bad>',tier:'5'},{sensor:'',tier:null}]){
+  reloaded.settings.setFeed(invalid);
+  assert.equal(reloaded.settings.get().feed.sensor,'ALL');
+  assert.equal(reloaded.settings.get().feed.tier,'all');
+ }
+ assert.match(html,/id="clearFeedFilters"[^>]*>Clear filters/);
+});
+test('sensor persistence accepts exactly the ValidName character set and length',()=>{
+ for(const sensor of ['deck/port','aZ09_.:/-','a'.repeat(128)]){
+  const stored=settingsContext('{}');stored.settings.setFeed({sensor});
+  assert.equal(settingsContext(JSON.stringify(stored.saved())).settings.get().feed.sensor,sensor);
+ }
+ for(const sensor of ['',null,42,'a'.repeat(129),'deck port','deck\\port','deck<port','deck"port','é','port\n']){
+  const stored=settingsContext('{}');stored.settings.setFeed({sensor});
+  assert.equal(settingsContext(JSON.stringify(stored.saved())).settings.get().feed.sensor,'ALL');
+ }
 });
 function feedContext(){
  const context=setup();
@@ -282,9 +391,9 @@ test('human review filters separate people from automatic escalation and list ne
  vm.runInContext("state.src='EO-P7'",context);
  assert.equal(vm.runInContext('ids()',context),'sent-new,full,sent-old');
  vm.runInContext("filters.review='reviewed'",context);
- assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,full,dismissed,sent-new');
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,dismissed,sent-new');
  vm.runInContext("filters.review='unreviewed'",context);
- assert.equal(vm.runInContext('ids()',context),'auto,pending');
+ assert.equal(vm.runInContext('ids()',context),'auto,pending,full');
  assert.equal(vm.runInContext("humanSent(items[4])",context),false);
  assert.equal(vm.runInContext("humanSent(items[5])",context),true);
  vm.runInContext("items[4].humanReviewed=true;items[4].manual=2;filters.review='reviewed'",context);
@@ -293,7 +402,7 @@ test('human review filters separate people from automatic escalation and list ne
 });
 test('What I sent navigates from review to the filtered imagery feed',()=>{
  const context=feedContext();
- vm.runInContext("location={hash:'#review'};state.page='rv';state.tier='1';gsSettings.setFeed=f=>Object.assign(filters,f);syncFeedFilters=()=>{}",context);
+ vm.runInContext("location={hash:'#review'};state.page='rv';state.tier='1';gsSettings.setFeed=f=>Object.assign(filters,f);syncFeedFilters=()=>{state.tier=filters.tier}",context);
  const start=source.indexOf(" $('rvSent').onclick="),end=source.indexOf('\n',start);
  vm.runInContext(source.slice(start,end),context);
  vm.runInContext("$('rvSent').onclick()",context);
@@ -325,7 +434,7 @@ test('Details screen lists automatically filtered photos by kind with their orig
  assert.match(page(),/Repeats of earlier images \(1\)/);
  assert.match(page(),/Low value \(1\)/);
  assert.match(page(),/Lowered by directive \(1\)/);
- assert.match(page(),/Low-value and repeat frames kept on the ship \(P4 Low\)<\/td><td class="n">80/);
+ assert.match(page(),/Frames filtered on ship \(cumulative, including unretained frames\)<\/td><td class="n">80/);
  assert.match(page(),/Useful images kept<\/td><td class="n">20/);
  assert.doesNotMatch(page(),/Useful images sent to shore/);
  assert.match(page(),/src="\/img\/original"[^]*Original · P2 High[^]*src="\/img\/repeat"/);
@@ -664,7 +773,7 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
 test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
  const context=setup();
  assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
- assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 0.03 MB\/s/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000,active:true}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 0.03 MB\/s/);
  assert.match(vm.runInContext('uploadHTML({upload:{bytes:40,sent:40,done:true}})',context),/✓ Uploaded/);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
@@ -696,7 +805,7 @@ test('upload override labels, toggle undo and live/viewer guards',()=>{
  vm.runInContext("overrideItem.upload.override='next'",context);
  assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-next.*Upload next \(operator\)/);
  assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Back to priority order/);
- vm.runInContext("overrideItem.upload.override=''",context);
+ vm.runInContext("overrideItem.upload.override='';overrideItem.upload.active=true",context);
  assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/Uploading to shore/);
  vm.runInContext("overrideItem.upload.done=true;overrideItem.upload.override='hold'",context);
  assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/✓ Uploaded/);
@@ -987,7 +1096,7 @@ test('upload summary counts retained empty water separately from queued and acti
  const context=setup();
  vm.runInContext(`
   const upload={bytes:1000,sent:0,done:false};
-  items=[{id:'ocean',background:true,upload:{...upload}},{id:'contact',upload:{...upload}},{id:'active',upload:{...upload,sent:20}}];
+  items=[{id:'ocean',background:true,upload:{...upload}},{id:'contact',upload:{...upload}},{id:'active',upload:{...upload,sent:20,active:true}}];
   fullRenderStats();
  `,context);
  assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 0 held · 0 uploaded · 1 kept on ship');

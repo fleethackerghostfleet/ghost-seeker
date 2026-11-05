@@ -45,3 +45,13 @@ func TestShipConsoleLayerSurvivesDownlinkAndKeepsFlatInterest(t *testing.T) {
 		t.Fatalf("clear: %v (input %v)", cleared.Layers, accepted.Layers)
 	}
 }
+
+func TestShipRuleWinsOverFlatShoreOnSameLabel(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	flat := &pb.Policy{Id: "scenario", Interest: &pb.Interest{SuppressLabels: []string{"submarine"}, BoostLabels: []string{"tanker"}}}
+	ship := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, Rules: []*pb.InterestRule{{Id: "s1", BoostLabels: []string{"Submarine"}, SuppressLabels: []string{"tanker"}}}}
+	got := Flatten(WithLocalLayer(flat, ship), "edge", now).Interest
+	if len(got.BoostLabels) != 1 || got.BoostLabels[0] != "Submarine" || len(got.SuppressLabels) != 1 || got.SuppressLabels[0] != "tanker" {
+		t.Fatalf("boost %v suppress %v", got.BoostLabels, got.SuppressLabels)
+	}
+}

@@ -294,6 +294,7 @@ type Interest struct {
 	BoostFactor       float64                `protobuf:"fixed64,5,opt,name=boost_factor,json=boostFactor,proto3" json:"boost_factor,omitempty"`                                                                              // default 2.0
 	SuppressFactor    float64                `protobuf:"fixed64,6,opt,name=suppress_factor,json=suppressFactor,proto3" json:"suppress_factor,omitempty"`                                                                     // default 0.05 (deprioritize, never drop)
 	BoostWeights      map[string]float64     `protobuf:"bytes,7,rep,name=boost_weights,json=boostWeights,proto3" json:"boost_weights,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"` // per-label boost from merged rule weights; missing = boost_factor
+	TierLabels        map[string]int32       `protobuf:"bytes,8,rep,name=tier_labels,json=tierLabels,proto3" json:"tier_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`        // normalized label → pinned priority tier 1–4 (P1–P4), overriding the shore's relative rank band
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -373,6 +374,13 @@ func (x *Interest) GetSuppressFactor() float64 {
 func (x *Interest) GetBoostWeights() map[string]float64 {
 	if x != nil {
 		return x.BoostWeights
+	}
+	return nil
+}
+
+func (x *Interest) GetTierLabels() map[string]int32 {
+	if x != nil {
+		return x.TierLabels
 	}
 	return nil
 }
@@ -512,10 +520,11 @@ type InterestRule struct {
 	Locked          bool                   `protobuf:"varint,3,opt,name=locked,proto3" json:"locked,omitempty"` // lower echelons cannot remove, suppress, or lower the weight of these labels
 	BoostLabels     []string               `protobuf:"bytes,4,rep,name=boost_labels,json=boostLabels,proto3" json:"boost_labels,omitempty"`
 	SuppressLabels  []string               `protobuf:"bytes,5,rep,name=suppress_labels,json=suppressLabels,proto3" json:"suppress_labels,omitempty"`
-	Weight          float64                `protobuf:"fixed64,6,opt,name=weight,proto3" json:"weight,omitempty"`                                             // boost factor override; 0 = Interest default
-	ExpiresAtUnixMs int64                  `protobuf:"varint,7,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"` // 0 = no per-rule expiry
-	Targets         []string               `protobuf:"bytes,8,rep,name=targets,proto3" json:"targets,omitempty"`                                             // edge node ids; empty = all
-	Text            string                 `protobuf:"bytes,9,opt,name=text,proto3" json:"text,omitempty"`                                                   // operator's words, for readback/audit
+	Weight          float64                `protobuf:"fixed64,6,opt,name=weight,proto3" json:"weight,omitempty"`                                                                                                     // boost factor override; 0 = Interest default
+	ExpiresAtUnixMs int64                  `protobuf:"varint,7,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`                                                         // 0 = no per-rule expiry
+	Targets         []string               `protobuf:"bytes,8,rep,name=targets,proto3" json:"targets,omitempty"`                                                                                                     // edge node ids; empty = all
+	Text            string                 `protobuf:"bytes,9,opt,name=text,proto3" json:"text,omitempty"`                                                                                                           // operator's words, for readback/audit
+	TierLabels      map[string]int32       `protobuf:"bytes,10,rep,name=tier_labels,json=tierLabels,proto3" json:"tier_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // normalized label → pinned priority tier 1–4 (P1–P4), overriding the shore's relative rank band
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -611,6 +620,13 @@ func (x *InterestRule) GetText() string {
 		return x.Text
 	}
 	return ""
+}
+
+func (x *InterestRule) GetTierLabels() map[string]int32 {
+	if x != nil {
+		return x.TierLabels
+	}
+	return nil
 }
 
 type EmconSetting struct {
@@ -827,7 +843,7 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\tconflicts\x18\x0f \x03(\v2\x1d.ghostseeker.v1.MergeConflictR\tconflicts\x1a@\n" +
 	"\x12ScorerWeightsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x92\x03\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x9c\x04\n" +
 	"\bInterest\x12!\n" +
 	"\fboost_labels\x18\x01 \x03(\tR\vboostLabels\x12'\n" +
 	"\x0fsuppress_labels\x18\x02 \x03(\tR\x0esuppressLabels\x12-\n" +
@@ -835,10 +851,15 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\x12negative_embedding\x18\x04 \x03(\x02R\x11negativeEmbedding\x12!\n" +
 	"\fboost_factor\x18\x05 \x01(\x01R\vboostFactor\x12'\n" +
 	"\x0fsuppress_factor\x18\x06 \x01(\x01R\x0esuppressFactor\x12O\n" +
-	"\rboost_weights\x18\a \x03(\v2*.ghostseeker.v1.Interest.BoostWeightsEntryR\fboostWeights\x1a?\n" +
+	"\rboost_weights\x18\a \x03(\v2*.ghostseeker.v1.Interest.BoostWeightsEntryR\fboostWeights\x12I\n" +
+	"\vtier_labels\x18\b \x03(\v2(.ghostseeker.v1.Interest.TierLabelsEntryR\n" +
+	"tierLabels\x1a?\n" +
 	"\x11BoostWeightsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x92\x01\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a=\n" +
+	"\x0fTierLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"\x92\x01\n" +
 	"\n" +
 	"Thresholds\x12\x1f\n" +
 	"\vunknown_min\x18\x01 \x01(\x02R\n" +
@@ -849,7 +870,7 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\aechelon\x18\x01 \x01(\x0e2\x17.ghostseeker.v1.EchelonR\aechelon\x12\x1b\n" +
 	"\tissued_by\x18\x02 \x01(\tR\bissuedBy\x122\n" +
 	"\x05rules\x18\x03 \x03(\v2\x1c.ghostseeker.v1.InterestRuleR\x05rules\x122\n" +
-	"\x05emcon\x18\x04 \x01(\v2\x1c.ghostseeker.v1.EmconSettingR\x05emcon\"\x8d\x02\n" +
+	"\x05emcon\x18\x04 \x01(\v2\x1c.ghostseeker.v1.EmconSettingR\x05emcon\"\x9b\x03\n" +
 	"\fInterestRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06author\x18\x02 \x01(\tR\x06author\x12\x16\n" +
@@ -859,7 +880,13 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\x06weight\x18\x06 \x01(\x01R\x06weight\x12+\n" +
 	"\x12expires_at_unix_ms\x18\a \x01(\x03R\x0fexpiresAtUnixMs\x12\x18\n" +
 	"\atargets\x18\b \x03(\tR\atargets\x12\x12\n" +
-	"\x04text\x18\t \x01(\tR\x04text\"\xcc\x01\n" +
+	"\x04text\x18\t \x01(\tR\x04text\x12M\n" +
+	"\vtier_labels\x18\n" +
+	" \x03(\v2,.ghostseeker.v1.InterestRule.TierLabelsEntryR\n" +
+	"tierLabels\x1a=\n" +
+	"\x0fTierLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"\xcc\x01\n" +
 	"\fEmconSetting\x12-\n" +
 	"\x04mode\x18\x01 \x01(\x0e2\x19.ghostseeker.v1.EmconModeR\x04mode\x12\x15\n" +
 	"\x06set_by\x18\x02 \x01(\tR\x05setBy\x121\n" +
@@ -898,7 +925,7 @@ func file_ghostseeker_v1_policy_proto_rawDescGZIP() []byte {
 }
 
 var file_ghostseeker_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ghostseeker_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_ghostseeker_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_ghostseeker_v1_policy_proto_goTypes = []any{
 	(EmconMode)(0),          // 0: ghostseeker.v1.EmconMode
 	(Echelon)(0),            // 1: ghostseeker.v1.Echelon
@@ -912,6 +939,8 @@ var file_ghostseeker_v1_policy_proto_goTypes = []any{
 	(*PolicySignature)(nil), // 9: ghostseeker.v1.PolicySignature
 	nil,                     // 10: ghostseeker.v1.Policy.ScorerWeightsEntry
 	nil,                     // 11: ghostseeker.v1.Interest.BoostWeightsEntry
+	nil,                     // 12: ghostseeker.v1.Interest.TierLabelsEntry
+	nil,                     // 13: ghostseeker.v1.InterestRule.TierLabelsEntry
 }
 var file_ghostseeker_v1_policy_proto_depIdxs = []int32{
 	3,  // 0: ghostseeker.v1.Policy.interest:type_name -> ghostseeker.v1.Interest
@@ -923,16 +952,18 @@ var file_ghostseeker_v1_policy_proto_depIdxs = []int32{
 	9,  // 6: ghostseeker.v1.Policy.signature:type_name -> ghostseeker.v1.PolicySignature
 	8,  // 7: ghostseeker.v1.Policy.conflicts:type_name -> ghostseeker.v1.MergeConflict
 	11, // 8: ghostseeker.v1.Interest.boost_weights:type_name -> ghostseeker.v1.Interest.BoostWeightsEntry
-	1,  // 9: ghostseeker.v1.PolicyLayer.echelon:type_name -> ghostseeker.v1.Echelon
-	6,  // 10: ghostseeker.v1.PolicyLayer.rules:type_name -> ghostseeker.v1.InterestRule
-	7,  // 11: ghostseeker.v1.PolicyLayer.emcon:type_name -> ghostseeker.v1.EmconSetting
-	0,  // 12: ghostseeker.v1.EmconSetting.mode:type_name -> ghostseeker.v1.EmconMode
-	1,  // 13: ghostseeker.v1.EmconSetting.echelon:type_name -> ghostseeker.v1.Echelon
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	12, // 9: ghostseeker.v1.Interest.tier_labels:type_name -> ghostseeker.v1.Interest.TierLabelsEntry
+	1,  // 10: ghostseeker.v1.PolicyLayer.echelon:type_name -> ghostseeker.v1.Echelon
+	6,  // 11: ghostseeker.v1.PolicyLayer.rules:type_name -> ghostseeker.v1.InterestRule
+	7,  // 12: ghostseeker.v1.PolicyLayer.emcon:type_name -> ghostseeker.v1.EmconSetting
+	13, // 13: ghostseeker.v1.InterestRule.tier_labels:type_name -> ghostseeker.v1.InterestRule.TierLabelsEntry
+	0,  // 14: ghostseeker.v1.EmconSetting.mode:type_name -> ghostseeker.v1.EmconMode
+	1,  // 15: ghostseeker.v1.EmconSetting.echelon:type_name -> ghostseeker.v1.Echelon
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_ghostseeker_v1_policy_proto_init() }
@@ -946,7 +977,7 @@ func file_ghostseeker_v1_policy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ghostseeker_v1_policy_proto_rawDesc), len(file_ghostseeker_v1_policy_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

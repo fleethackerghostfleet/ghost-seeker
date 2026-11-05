@@ -1,0 +1,240 @@
+{
+  "kind": "targeted regression on actual local Granite and existing real crop queue; not a held-out acceptance result",
+  "queueCount": 45,
+  "activeRevision": 3,
+  "activeStateUnchanged": true,
+  "semanticsSourceSHA256": "a10cabc607f73151b1e2c205d285bf615a49d6ef9ddb0b23e74a1ec58d9e0a36",
+  "records": [
+    {
+      "engine": "edgeml",
+      "instruction": "prioritize fishing vessels",
+      "draft": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (2.0\u00d7)",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "fishing vessel",
+            "canonical": "fishing boat"
+          }
+        ]
+      },
+      "wallSeconds": 0.07498366601066664,
+      "elapsedMs": 73,
+      "changed": [
+        {
+          "id": "dev-Submarine_surfacing-000313-012",
+          "subtype": "fishing boat",
+          "beforeRank": 12,
+          "afterRank": 1,
+          "beforePriority": 2.0722748395980437,
+          "afterPriority": 5.94505415989731
+        }
+      ],
+      "beforeFirstPayload": {
+        "id": "dev-Cruise_ship_Mediterranean_sunset_off_Italy-000146-004",
+        "form": "THUMB",
+        "bytes": 977,
+        "tick": 1,
+        "complete": true
+      },
+      "afterFirstPayload": {
+        "id": "dev-Cruise_ship_Mediterranean_sunset_off_Italy-000146-004",
+        "form": "THUMB",
+        "bytes": 977,
+        "tick": 1,
+        "complete": true
+      },
+      "beforeFishingPayload": {
+        "id": "dev-Submarine_surfacing-000313-012",
+        "form": "THUMB",
+        "bytes": 2567,
+        "tick": 1,
+        "complete": true
+      },
+      "afterFishingPayload": {
+        "id": "dev-Submarine_surfacing-000313-012",
+        "form": "THUMB",
+        "bytes": 2567,
+        "tick": 1,
+        "complete": true
+      },
+      "warnings": []
+    },
+    {
+      "engine": "tomer",
+      "instruction": "prioritize fishing vessels",
+      "draft": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (2.0\u00d7)",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "fishing vessel",
+            "canonical": "fishing boat"
+          }
+        ]
+      },
+      "wallSeconds": 0.07597320800414309,
+      "elapsedMs": 73,
+      "changed": [
+        {
+          "id": "dev-Submarine_surfacing-000313-012",
+          "subtype": "fishing boat",
+          "beforeRank": 13,
+          "afterRank": 1,
+          "beforePriority": 0.13503776322369698,
+          "afterPriority": 2.070568202212748
+        }
+      ],
+      "beforeFirstPayload": {
+        "id": "heldout-Spotted_A_Submarine-000127-025",
+        "form": "THUMB",
+        "bytes": 873,
+        "tick": 1,
+        "complete": true
+      },
+      "afterFirstPayload": {
+        "id": "dev-Submarine_surfacing-000313-012",
+        "form": "THUMB",
+        "bytes": 2567,
+        "tick": 1,
+        "complete": true
+      },
+      "beforeFishingPayload": {
+        "id": "dev-Submarine_surfacing-000313-012",
+        "form": "THUMB",
+        "bytes": 2567,
+        "tick": 1,
+        "complete": true
+      },
+      "afterFishingPayload": {
+        "id": "dev-Submarine_surfacing-000313-012",
+        "form": "THUMB",
+        "bytes": 2567,
+        "tick": 1,
+        "complete": true
+      },
+      "warnings": [
+        "Some items lack Tomer image-priority values; production fallback scores are shown."
+      ]
+    },
+    {
+      "instruction": "prioritize red fishing boats",
+      "draft": {
+        "rules": [
+          {
+            "concept": "red fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "red fishing boat"
+        ],
+        "readback": "Prioritize red fishing boat (2.0\u00d7)",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "red fishing boat",
+            "canonical": "red fishing boat",
+            "reason": "Preserved as a new visual concept."
+          }
+        ]
+      },
+      "wallSeconds": 0.2139932500431314,
+      "elapsedMs": 212,
+      "warnings": [
+        "No images currently match \"red fishing boat\"; this rule will not change priorities in the current queue.",
+        "No image priorities changed in this preview. The same interests may already be active, no images may match, or existing protections may apply."
+      ]
+    },
+    {
+      "instruction": "prioritize rescue boats",
+      "draft": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (2.0\u00d7)",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "rescue boat",
+            "canonical": "rescue boat",
+            "reason": "Preserved as a new visual concept."
+          }
+        ]
+      },
+      "wallSeconds": 0.08914916700450704,
+      "elapsedMs": 87,
+      "warnings": [
+        "No images currently match \"rescue boat\"; this rule will not change priorities in the current queue.",
+        "No image priorities changed in this preview. The same interests may already be active, no images may match, or existing protections may apply."
+      ]
+    },
+    {
+      "instruction": "prioritize cargo vessels",
+      "draft": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize cargo ship (2.0\u00d7)",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "cargo vessel",
+            "canonical": "cargo ship"
+          }
+        ]
+      },
+      "wallSeconds": 0.09626404196023941,
+      "elapsedMs": 94,
+      "warnings": []
+    },
+    {
+      "instruction": "prioritize speedboats",
+      "draft": {
+        "rules": [
+          {
+            "concept": "speedboat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize speedboat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "warnings": [
+        "No images currently match \"speedboat\"; this rule will not change priorities in the current queue.",
+        "No image priorities changed in this preview. The same interests may already be active, no images may match, or existing protections may apply."
+      ]
+    }
+  ]
+}
