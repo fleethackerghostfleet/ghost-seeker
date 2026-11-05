@@ -974,6 +974,7 @@ type GetStatusResponse struct {
 	PolicyId        string                 `protobuf:"bytes,10,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
 	ItemsDeduped    int64                  `protobuf:"varint,11,opt,name=items_deduped,json=itemsDeduped,proto3" json:"items_deduped,omitempty"` // edge: captures folded into an existing item (hash or sighting duplicates)
 	ItemsEvicted    int64                  `protobuf:"varint,12,opt,name=items_evicted,json=itemsEvicted,proto3" json:"items_evicted,omitempty"` // edge: delivered items evicted by the storage cap
+	Prioritizer     string                 `protobuf:"bytes,13,opt,name=prioritizer,proto3" json:"prioritizer,omitempty"`                        // active prioritization backend: "edgeml" | "tomer"
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1090,6 +1091,13 @@ func (x *GetStatusResponse) GetItemsEvicted() int64 {
 		return x.ItemsEvicted
 	}
 	return 0
+}
+
+func (x *GetStatusResponse) GetPrioritizer() string {
+	if x != nil {
+		return x.Prioritizer
+	}
+	return ""
 }
 
 type LinkState struct {
@@ -1222,7 +1230,7 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	"\x12RequestPullRequest\x12(\n" +
 	"\x04pull\x18\x01 \x01(\v2\x14.ghostseeker.v1.PullR\x04pull\"\x15\n" +
 	"\x13RequestPullResponse\"\x12\n" +
-	"\x10GetStatusRequest\"\xc6\x03\n" +
+	"\x10GetStatusRequest\"\xe8\x03\n" +
 	"\x11GetStatusResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x127\n" +
@@ -1238,7 +1246,8 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	"\tpolicy_id\x18\n" +
 	" \x01(\tR\bpolicyId\x12#\n" +
 	"\ritems_deduped\x18\v \x01(\x03R\fitemsDeduped\x12#\n" +
-	"\ritems_evicted\x18\f \x01(\x03R\fitemsEvicted\"\xa2\x01\n" +
+	"\ritems_evicted\x18\f \x01(\x03R\fitemsEvicted\x12 \n" +
+	"\vprioritizer\x18\r \x01(\tR\vprioritizer\"\xa2\x01\n" +
 	"\tLinkState\x12\x0e\n" +
 	"\x02up\x18\x01 \x01(\bR\x02up\x12!\n" +
 	"\festimate_bps\x18\x02 \x01(\x01R\vestimateBps\x12/\n" +

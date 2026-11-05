@@ -45,7 +45,7 @@ const (
 	hashWindow = 64 // recently kept frames compared against
 )
 
-var dedupModes = []string{"naive", "hash", "sightings"}
+var dedupModes = []string{"naive", "hash", "sightings", "tomer"}
 
 // ---- MOT ground truth ----
 
