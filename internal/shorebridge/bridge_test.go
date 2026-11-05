@@ -101,6 +101,16 @@ func TestGroupIgnoresInvalidSightingID(t *testing.T) {
 	}
 }
 
+func TestGroupAcceptsLongSightingID(t *testing.T) {
+	sid := strings.Repeat("a", 124) + ":0001"
+	objs, _ := Group([]*pb.ItemView{
+		view("a", 1000, map[string]string{"sighting_id": sid}, nil),
+	}, nil, nil)
+	if len(objs) != 1 || objs[0].Key != "sighting:"+sid {
+		t.Fatalf("long valid sighting ID was not grouped: %+v", objs)
+	}
+}
+
 func TestToCardClearsInvalidSource(t *testing.T) {
 	v := view("a", 1000, nil, nil)
 	v.Item.Source = `<b>y</b>`

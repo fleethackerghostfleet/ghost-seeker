@@ -41,3 +41,30 @@ func TestValidName(t *testing.T) {
 		})
 	}
 }
+
+func TestValidSightingID(t *testing.T) {
+	valid := []string{
+		strings.Repeat("a", 124) + ":0001",
+		strings.Repeat("a", 128) + ":12345",
+	}
+	for _, s := range valid {
+		t.Run(s, func(t *testing.T) {
+			if !ValidSightingID(s) {
+				t.Fatalf("ValidSightingID(%q) = false", s)
+			}
+		})
+	}
+
+	invalid := []string{
+		strings.Repeat("a", 161),
+		`x"y`,
+		"",
+	}
+	for _, s := range invalid {
+		t.Run("invalid_"+s, func(t *testing.T) {
+			if ValidSightingID(s) {
+				t.Fatalf("ValidSightingID(%q) = true", s)
+			}
+		})
+	}
+}
