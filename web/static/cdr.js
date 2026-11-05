@@ -16,6 +16,7 @@ const ago=d=>{const s=Math.max(0,(Date.now()-d)/1000);return s<60?Math.round(s)+
 const lab=c=>CLS[c]?.lab||c;
 
 function norm(it){
+ it.dets=Array.isArray(it.dets)?it.dets:[];it.det=Array.isArray(it.det)?it.det:[];
  it.ts=new Date(it.ts);it.src=SRC[typeof it.src==='string'?it.src:it.src.id]||{id:String(it.src),name:String(it.src),scene:'open',mode:'eo'};
  it.sentAt=it.sentAt?new Date(it.sentAt):null;it.decidedAt=it.decidedAt?new Date(it.decidedAt):null;return it;
 }

@@ -7,6 +7,33 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('null detection arrays are normalized on snapshots, SSE and direct updates, including paused queues',()=>{
+ const context=setup();
+ vm.runInContext(`
+  function negative(id){return {...raw(id,4),detectorNegative:true,dets:null,det:null,centralTier:4,edge:0}}
+  applySnapshot(snapshot([negative('initial')]));
+  openStream();
+  streamHandlers.item({data:JSON.stringify({item:negative('item'),stats:{}})});
+  streamHandlers.update({data:JSON.stringify({item:negative('update'),cdr:0})});
+  applyItemUpdate(negative('direct'));
+  state.paused=true;
+  streamHandlers.item({data:JSON.stringify({item:negative('held-item'),stats:{}})});
+  applyItemUpdate(negative('held-update'));
+  applySnapshot(snapshot([...items,negative('held-snapshot')]));
+  for(const it of [...items,...pendingItems.map(e=>e.item)]){
+   if(!Array.isArray(it.dets)||!Array.isArray(it.det))throw Error('null detection arrays: '+it.id);
+   boxesHTML(it,true);topLine(it);
+  }
+  toggleHold();
+  reviewDataReady=true;reviewerName='devin-verify';DATASET_MODE=true;
+  imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';
+  $('rvKeys').children=[];$('rvKeys').querySelectorAll=()=>[];$('rvBarI').style={};
+  rv.cur=findItem('initial');rv.shown=null;
+  renderReviewContent();
+ `,context);
+ assert.match(context.$('rvMain').innerHTML,/Detector found nothing — check for missed objects/);
+ assert.equal(context.$('accLbl').textContent,'Nothing here');
+});
 test('detector negatives have clear labels and retain review keys',()=>{
  const context=setup();
  assert.equal(context.detectorNegativeLabel({detectorNegative:true}),'Detector found nothing — check for missed objects');

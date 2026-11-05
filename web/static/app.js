@@ -138,6 +138,7 @@ function selectBand(it,band){
  if(state.page==='rv'){rv.shown=null;renderReview()}else if(state.sel===it.id)renderDetail();
 }
 function normalizeItem(item){
+ item.dets=Array.isArray(item.dets)?item.dets:[];item.det=Array.isArray(item.det)?item.det:[];
  const sid=typeof item.src==='string'?item.src:item.src.id;
  item.ts=new Date(item.ts);item.src=SRC[sid]||{id:sid,name:String(sid).replace(/_/g,' '),scene:'open',mode:'eo',hw:'edge node',em:'edge detector',link:'ship→shore link'};
  const prev=findItem(item.id);if(prev&&prev.img!==item.img)imageCache.delete(item.id);
@@ -158,6 +159,7 @@ function mergeItem(raw,fresh=true){
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
+ data.items=data.items.map(normalizeItem);
  const selection=state.sel;
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
@@ -188,6 +190,7 @@ function applyLive(live){
  const banner=document.querySelector?.('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE';
 }
 function applyItemUpdate(raw){
+ raw=normalizeItem(raw);
  if(state.paused&&!findItem(raw.id)){
   if(evictedIDs.has(raw.id))return;
   heldSnapshotIDs?.add(raw.id);
@@ -230,6 +233,7 @@ function openStream(){
  stream.addEventListener('review-sync',event=>receiveTeamProposal(JSON.parse(event.data).proposal));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
+  data.item=normalizeItem(data.item);
   stats=data.stats;if(state.paused){pendingItems.push(data);heldSnapshotIDs?.add(data.item.id);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
  });
  stream.addEventListener('stats',event=>{
