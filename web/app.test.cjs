@@ -1058,7 +1058,7 @@ test('band controls keep native Enter and Space activation without accepting rev
    assert.equal(vm.runInContext('prevented',context),false);
   }
   vm.runInContext("rv.ask=null;insideBands=false;actions=[];press(key);insideBands=true",context);
-  assert.equal(vm.runInContext("actions.join(',')",context),'accept');
+  assert.equal(vm.runInContext("actions.join(',')",context),'');
  }
  vm.runInContext("actions=[];press('B');press('1');press('2');press('3');press('4');press('Escape')",context);
  assert.equal(vm.runInContext("actions.join(',')",context),'band:IR,1,2,3,4');
@@ -1120,15 +1120,17 @@ test('live card updates preserve canonical priority labels',()=>{
  vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
  vm.runInContext(`
   badge={};other={setAttribute(){}};
-  card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
+  card={setAttribute(name,value){this[name]=value},querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
   gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
-  testItem={id:'test',el:card,tier:1,central:.9,base:.8};updateCard(testItem);
+  testItem={id:'test',src:{id:'EO-P7',name:'Mast camera'},el:card,tier:1,central:.9,base:.8};updateCard(testItem);
  `,context);
  assert.equal(vm.runInContext('badge.textContent',context),'P1 Critical');
  assert.equal(vm.runInContext('badge.title',context),'Notify Commander');
+ assert.equal(vm.runInContext("card['aria-label']",context),'P1 Critical image from Mast camera. Open image details');
  vm.runInContext('testItem.tier=4;updateCard(testItem)',context);
  assert.equal(vm.runInContext('badge.textContent',context),'P4 Low');
  assert.equal(vm.runInContext('badge.title',context),'Image priority');
+ assert.equal(vm.runInContext("card['aria-label']",context),'P4 Low image from Mast camera. Open image details');
 });
 test('feed state uses clear active, paused and reconnecting labels',()=>{
  const context=setup();

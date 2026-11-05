@@ -7,6 +7,7 @@ const dirtyItems=new Set();
 let feedFrame=null,feedTimer=null,feedScheduled=false,feedNeedsRender=false;
 const FEED_PAGE_SIZE=120;
 let feedLimit=FEED_PAGE_SIZE,feedOrdered=[],renderedFeedIDs=[],renderedFeedReasons=new Map();
+let feedFocusID=null;
 /* LIVE is the shore block of the snapshot when the console runs on a shore node (-shore); null on the simulation. */
 let LIVE=null;
 let snapshotEpoch=null,resetRevision=0;
@@ -367,12 +368,14 @@ async function init(){
  $('polRaw').oninput=()=>{policyRawTouched=true};
  $('polRawValidate').onclick=()=>rawPolicyAction('validate');$('polRawApply').onclick=()=>rawPolicyAction('apply');$('polRawReload').onclick=()=>{policyRawTouched=false;loadRawPolicy(true)};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
+ setupFeedKeyboard();
  $('grid').oncontextmenu=openCardMenu;$('cmSendNow').onclick=()=>sendNow($('cardMenu').dataset.id);$('cmOpen').onclick=()=>{const id=$('cardMenu').dataset.id;closeCardMenu();openDetail(id)};
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#cardMenu'))closeCardMenu()},true);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cardMenu').hidden){e.stopImmediatePropagation();closeCardMenu()}},true);window.addEventListener('blur',closeCardMenu);window.addEventListener('hashchange',closeCardMenu);$('feed').addEventListener('scroll',closeCardMenu);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
-  if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
+  if(e.defaultPrevented||e.target.isContentEditable)return;
+  if((k==='enter'||k===' ')&&(tg==='BUTTON'||e.target.closest?.('button, a[href], summary, header, .band-controls')))return;
   if(state.page==='rv'&&k==='w'){e.preventDefault();openReviewNote();return}
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
@@ -507,9 +510,26 @@ async function sendNow(id){
  try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:'next'});cdr=result.cdr;applyItemUpdate(result.item);toast(`Sending now: ${it.src.id} image moved to the top of the send queue`)}
  catch(error){toast(error.message)}
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
+function setupFeedKeyboard(){
+ const grid=$('grid');
+ grid.onfocusin=e=>{const card=e.target.closest('.card');if(!card)return;const previous=findItem(feedFocusID)?.el;if(previous&&previous!==card)previous.tabIndex=-1;feedFocusID=card.dataset.id;card.tabIndex=0};
+ grid.onkeydown=e=>{
+  const card=e.target.closest('.card');if(!card||e.target!==card||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==='enter'||k===' '){e.preventDefault();e.stopPropagation();if(!e.repeat)openDetail(card.dataset.id);return}
+  if(!['arrowleft','arrowup','arrowright','arrowdown'].includes(k))return;
+  e.preventDefault();e.stopPropagation();
+  if(state.sel){step(k==='arrowleft'||k==='arrowup'?-1:1);findItem(state.sel)?.el?.focus();return}
+  const index=feedOrdered.findIndex(it=>it.id===card.dataset.id),direction=k==='arrowleft'||k==='arrowup'?-1:1;
+  const next=feedOrdered[Math.max(0,Math.min(feedOrdered.length-1,index+direction))];if(!next)return;
+  if(revealFeedItem(next.id))renderFeed(true);
+  next.el?.focus();
+ };
+}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.tabIndex=-1;el.setAttribute('role','button');el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent&&it.autoSent?' sent':''}${humanSent(it)?' hsent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
+ el.setAttribute('aria-label',`P${tier} ${TNAME[tier]} image from ${it.src.name||it.src.id}. Open image details`);
  const reviewMark=el.querySelector('.rvk');reviewMark.title=humanReviewed(it)?'Human reviewed':'Not reviewed';reviewMark.setAttribute('aria-label',reviewMark.title);
  const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low`:'';
  el.querySelector('.night-badge')?.remove();if(!DATASET_MODE)el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
@@ -545,6 +565,8 @@ function setupFeedWindow(){
 function renderFeed(noAnim,refreshCards=false){
  const{l,counts}=visible();feedOrdered=l;renderTierSeg(counts);const dc=$('dupCount');if(dc)dc.textContent=String(repeatCount());const uc=$('uploadedCount');if(uc)uc.textContent=String(uploadedCount());$('empty').style.display=l.length?'none':'block';
  const windowed=l.slice(0,feedLimit),ids=windowed.map(it=>it.id),grid=$('grid');
+ const focusedCard=document.activeElement?.closest?.('#grid .card');
+ if(!ids.includes(feedFocusID))feedFocusID=ids[0]||null;
  const changed=ids.length!==renderedFeedIDs.length||ids.some((id,i)=>id!==renderedFeedIDs[i]);
  const animate=changed&&!noAnim&&state.page==='feed'&&windowed.length<=60&&dirtyItems.size<=12;
  const first=new Map();
@@ -556,8 +578,10 @@ function renderFeed(noAnim,refreshCards=false){
  windowed.forEach((it,idx)=>{
   const fresh=!it.el,el=it.el||makeCard(it),reason=feedReasons.get(it.id);
   if(fresh||refreshCards||dirtyItems.has(it.id)||renderedFeedReasons.get(it.id)!==reason)updateCard(it);
+  const tabIndex=it.id===feedFocusID?0:-1;if(el.tabIndex!==tabIndex)el.tabIndex=tabIndex;
   if(changed&&grid.children[idx]!==el)grid.insertBefore(el,grid.children[idx]||null);
  });
+ if(focusedCard&&document.activeElement!==findItem(feedFocusID)?.el)findItem(feedFocusID)?.el?.focus({preventScroll:true});
  if(animate){
   const positions=windowed.map(it=>({it,rect:it.el.getBoundingClientRect()})),vh=$('feed').getBoundingClientRect().bottom+200;
   for(const {it,rect:r} of positions){
@@ -987,7 +1011,7 @@ let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').tr
 let reviewDataReady=false,lastReview=null,reviewDataRevision=0;
 function renderReviewData(s){$('reviewData').textContent=`${s.count} reviews · ${Math.round(s.agreement*100)}% agreement · `+Object.entries(s.reviewers).map(([n,v])=>`${n}: ${v.count}`).join(', ')}
 function refreshReviewData(){const revision=++reviewDataRevision;return request('/api/reviews/summary').then(s=>{if(revision===reviewDataRevision)renderReviewData(s)}).catch(error=>{if(revision===reviewDataRevision)$('reviewData').textContent=error.message})}
-function setupReviewData(){if(reviewDataReady)return;reviewDataReady=true;$('reviewerName').value=reviewerName;$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';$('reviewerSave').onclick=()=>{reviewerName=$('reviewerName').value.trim().slice(0,80);try{localStorage.setItem('gsReviewer',reviewerName)}catch{}$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';renderReview()};$('reviewNoteOpen').onclick=openReviewNote;$('reviewNote').onkeydown=async e=>{e.stopPropagation();if(e.key==='Escape'){$('reviewNoteBox').hidden=true;return}if(e.key!=='Enter')return;e.preventDefault();try{await saveReviewReason(lastReview.id,lastReview.reason||'',$('reviewNote').value);lastReview.note=$('reviewNote').value;$('reviewNoteBox').hidden=true;toast('Note saved')}catch(error){toast(error.message)}};refreshReviewData()}
+function setupReviewData(){if(reviewDataReady)return;reviewDataReady=true;$('reviewerName').value=reviewerName;$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';$('reviewerSave').onclick=()=>{reviewerName=$('reviewerName').value.trim().slice(0,80);try{localStorage.setItem('gsReviewer',reviewerName)}catch{}$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';renderReview()};$('reviewerName').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();$('reviewerSave').click()}};$('reviewNoteOpen').onclick=openReviewNote;$('reviewNote').onkeydown=async e=>{e.stopPropagation();if(e.key==='Escape'){$('reviewNoteBox').hidden=true;return}if(e.key!=='Enter')return;e.preventDefault();try{await saveReviewReason(lastReview.id,lastReview.reason||'',$('reviewNote').value);lastReview.note=$('reviewNote').value;$('reviewNoteBox').hidden=true;toast('Note saved')}catch(error){toast(error.message)}};refreshReviewData()}
 function openReviewNote(){if(!lastReview){toast('Review an image first');return}$('reviewNoteBox').hidden=false;$('reviewNote').value=lastReview.note||'';$('reviewNote').focus()}
 async function submitReview(id,action,changes,p){const r=await request(`/api/items/${encodeURIComponent(id)}/review`,'POST',{reviewer:reviewerName,action:'1234'.includes(action)?'tier':action,tier:changes.manual});p.record=r.record.id;lastReview=r.record;cdr=r.cdr;applyItemUpdate(r.item);refreshReviewData();return findItem(id)}
 async function undoReview(p){const r=await request(`/api/reviews/${encodeURIComponent(p.record)}/undo`,'POST',{reviewer:reviewerName});if(r.item){cdr=r.cdr;applyItemUpdate(r.item)}if(lastReview?.id===p.record)lastReview=null;refreshReviewData();return findItem(p.id)}

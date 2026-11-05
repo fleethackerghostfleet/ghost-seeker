@@ -125,6 +125,8 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:34px}
 @container (min-width:720px) and (min-aspect-ratio:1/1){.grid.l{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(orientation:portrait){.grid.l{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;cursor:pointer;position:relative;will-change:transform}
+.card:focus-visible{outline:3px solid var(--accent);outline-offset:-4px}
+body.night .card:focus-visible{outline-color:#ff6666}
 .card:hover{border-color:#4a6a88}
 .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .card.enter{animation:enter .6s ease}
