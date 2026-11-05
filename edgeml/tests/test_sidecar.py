@@ -124,3 +124,36 @@ def test_duplicate_uses_current_track_box_and_best_metadata():
 
     fallback = engine._duplicate(state, 3, 200, 100, 1000)
     assert fallback["keyDetection"]["box"] == {"x": 0.05, "y": 0.1, "w": 0.15, "h": 0.2}
+
+
+def test_trk_override_may_repeat_engine_keys(monkeypatch):
+    """--trk '{"det_thresh":0.4}' must override the engine's det_thresh, not raise on a duplicate keyword."""
+    from edgeml.sidecar import service as svc
+    seen = {}
+
+    def fake_make_tracker(variant, **kw):
+        seen.update(kw)
+        return object()
+
+    import edgeml.tracking as trk
+    monkeypatch.setattr(trk, "make_tracker", fake_make_tracker)
+    eng = svc.EdgemlEngine.__new__(svc.EdgemlEngine)
+    eng.sources, eng.fps, eng.tracker_variant, eng.asso, eng.max_lost_s = {}, 5.0, "bytetrack", "centroid", 6.0
+    eng.score_thr, eng.det_low_thr = 0.35, 0.05
+    eng.trk_params = {**svc.EdgemlEngine.TRK_DEFAULTS, "det_thresh": 0.4}
+    eng.det_low_thr = min(eng.det_low_thr, eng.trk_params.get("low_thresh", eng.det_low_thr))
+    from edgeml.tracking import AggregatorParams
+    eng.agg_params = AggregatorParams(**svc.EdgemlEngine.AGG_DEFAULTS)
+    eng.embedder, eng.classifier = None, None
+    import threading
+    eng._lock = threading.Lock()
+    eng._source("cam0")
+    assert seen["det_thresh"] == 0.4 and seen["low_thresh"] == 0.05 and seen["centroid_max_distance"] == 0.04
+
+
+def test_wire_subtype_tentative_then_confirmed():
+    from edgeml.sidecar.service import _wire_subtype
+    assert _wire_subtype({"tentative": True, "subtype": "tanker"}) == "tentative"
+    assert _wire_subtype({"tentative": False, "reason": "confirmed", "subtype": "", "label": "boat"}) == "boat"
+    assert _wire_subtype({"tentative": False, "reason": "confirmed", "subtype": "tanker"}) == "tanker"
+    assert _wire_subtype({"tentative": False, "subtype": ""}) == ""
