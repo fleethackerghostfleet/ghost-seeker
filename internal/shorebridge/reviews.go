@@ -46,6 +46,10 @@ func (c *Console) reviewItem(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if isScene(base) {
+		writeError(w, http.StatusConflict, "camera overviews cannot be reviewed or escalated")
+		return
+	}
 	old := c.withOverlay(base)
 	effect, err := reviews.ReviewEffect(b.Action, b.Tier, old.CentralTier)
 	if err != nil {

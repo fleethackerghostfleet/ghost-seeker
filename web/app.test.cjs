@@ -9,6 +9,79 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('live ocean scenes are P4 feed imagery, not contact review or actions',async()=>{
+ const c=setup();
+ vm.runInContext(`
+  scene=normalizeItem({...raw('ocean',4),background:true,central:0,base:0,edge:0,live:{event:'scene',forms:{}},dets:[],det:[]});
+  ship=normalizeItem({...raw('ship',4),live:{event:'open'},dets:[],det:[]});
+  items=[scene,ship];state.src='ALL';state.tier='all';state.sort='pri';state.sel='ocean';
+  calls=[];request=async(...args)=>{calls.push(args)};
+  zulu=()=> '12:00:00Z';largeImage=()=> '<img src="/ocean.jpg">';
+ `,c);
+ assert.equal(vm.runInContext('visible().l.length',c),2);
+ assert.equal(vm.runInContext('rvQueue().length',c),1);
+ assert.equal(vm.runInContext('rvQueue()[0].id',c),'ship');
+ assert.equal(vm.runInContext('topLine(scene)',c),'Empty water · no contacts');
+ assert.equal(vm.runInContext("topLine({...scene,src:{id:'Submarine_surfacing'}})",c),'Empty water · no contacts');
+ assert.equal(vm.runInContext('boxesHTML(scene,true)',c),'');
+ assert.equal(vm.runInContext('humanSent({...scene,sent:true,fullRes:true})',c),false);
+ for(const filter of ['reviewed','unreviewed','sent'])assert.equal(vm.runInContext(`reviewMatch(scene,'${filter}')`,c),false);
+ await vm.runInContext("setManual('ocean',1);requestFullRes(scene)",c);
+ assert.equal(vm.runInContext('calls.length',c),0);
+ vm.runInContext('renderDetailContent()',c);
+ const html=c.$('drawer').innerHTML;
+ assert.match(html,/Empty water · no contacts/);
+ assert.doesNotMatch(html,/id="aCdr"|id="aFull"|data-t=|Detections<|Ship score/);
+ vm.runInContext('items=[]',c);
+ assert.equal(vm.runInContext('rvQueue().length',c),0);
+});
+test('live scene FULLs stay on ship until pulled, separately from the upload queue',()=>{
+ const c=setup();
+ vm.runInContext(`
+  ocean={id:'ocean',live:{itemId:'ocean',event:'scene',imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},full:{state:'pending',bytes:1000,received:0}}}};
+  contact={id:'contact',upload:{bytes:100,sent:0}};
+  items=[ocean,contact];fullRenderStats();
+ `,c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 0 uploading · 1 queued · 0 held · 0 uploaded · 1 kept on ship');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/Empty water · kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',c),false);
+ for(const forms of ['{}',"{full:{state:'offered',bytes:1000}}"]){
+  assert.equal(vm.runInContext(`uploadState({...ocean,live:{...ocean.live,forms:${forms}}}).background`,c),true);
+ }
+ vm.runInContext("pulling.add('ocean');fullRenderStats()",c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 0 uploading · 2 queued · 0 held · 0 uploaded');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/Queued for shore · Full image/);
+ vm.runInContext("pulling.delete('ocean');ocean.live.forms.full={state:'partial',bytes:1000,received:250};fullRenderStats()",c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 0 held · 0 uploaded');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/Uploading to shore · 25% · Full image/);
+ vm.runInContext("ocean.live.forms.full={state:'received',bytes:1000,received:1000};ocean.live.imageForm='full';fullRenderStats()",c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 0 uploading · 1 queued · 0 held · 1 uploaded');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/✓ Uploaded · Full image/);
+});
+test('scene repeats never enter scoped repeat counts or disappear with duplicates hidden',()=>{
+ const c=feedContext();
+ vm.runInContext(`items=[frame('repeat',{tier:4,filtered:'duplicate'}),frame('ocean',{tier:4,filtered:'duplicate',live:{event:'scene'}})];filters.showDuplicates=false`,c);
+ assert.equal(vm.runInContext('repeatCount()',c),1);
+ assert.equal(vm.runInContext('ids()',c),'ocean');
+ vm.runInContext("state.tier='1'",c);
+ assert.equal(vm.runInContext('repeatCount()',c),0);
+ vm.runInContext("state.tier='4';filters.review='unreviewed'",c);
+ assert.equal(vm.runInContext('repeatCount()',c),1);
+ vm.runInContext("state.src='IR-U1'",c);
+ assert.equal(vm.runInContext('repeatCount()',c),0);
+});
+test('scene sources interleave inside P4 without moving contact tiers',()=>{
+ const c=setup();
+ vm.runInContext(`
+  items=[normalizeItem(raw('critical',1)),...Array.from({length:12},(_,i)=>normalizeItem({...raw('ship-'+i,4),central:.1})),
+   ...Array.from({length:4},(_,i)=>normalizeItem({...raw('ocean-'+i,4),src:'Open_ocean_watch',central:0,live:{event:'scene'}}))];
+  state.src='ALL';state.tier='all';state.sort='pri';
+ `,c);
+ const ids=JSON.parse(vm.runInContext('JSON.stringify(visible().l.map(i=>i.id))',c));
+ assert.equal(ids[0],'critical');
+ assert.ok(ids.findIndex(id=>id.startsWith('ocean-'))<=8);
+ assert.equal(ids.length,17);
+});
 test('learning acceptance sends the advertised tier for the whole class',async()=>{
  const context=setup();
  vm.runInContext("calls=[];CLS={tanker:{lab:'Tanker'}};request=async(...args)=>{calls.push(args)}",context);

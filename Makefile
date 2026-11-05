@@ -2,7 +2,7 @@ GO ?= go
 VERIFY_PYTHON ?= python3
 BIN := bin
 
-.PHONY: all gen build test sim run-shore run-edge compose compose-demo compose-demo-ship compose-demo-down compose-demo-logs clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
+.PHONY: all gen build test sim run-shore run-edge compose compose-demo compose-demo-ship compose-demo-down compose-demo-logs clean demo demo-clips demo-ship-clips demo-ocean demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
 
 all: build
 
@@ -42,11 +42,16 @@ run-edge: build demo-key ## replay the frame zips through the mock analyzer, 1 f
 
 DEMO := scenarios/ghostfleet_demo
 
-demo: demo-clips demo-compare ## download the 5 fps clips, run naive vs hash vs sightings vs tomer over the link presets (headless, virtual time)
+demo: demo-ship-clips demo-compare ## download the 5 fps clips, run naive vs hash vs sightings vs tomer over the link presets (headless, virtual time)
 	@echo; echo "Live demo: 'make demo-sidecar', 'make demo-shore', 'make demo-ui', 'make demo-edge' in four terminals, open http://localhost:8090 (see docs/DEMO.md)"
 
-demo-clips:      ## fetch the demo clips into $(DEMO)/frames (gitignored; GitHub release demo-data-v1 via gh, gcloud fallback)
+demo-clips: demo-ship-clips demo-ocean ## prepare all live clips, including the generated ocean watch
+
+demo-ship-clips: ## fetch the three ship clips (gitignored; GitHub release demo-data-v1 via gh, gcloud fallback)
 	$(DEMO)/download.sh
+
+demo-ocean:      ## generate live-only ocean crops from the existing LFS ZIP (Python + Pillow)
+	$(PY) $(DEMO)/ocean.py $(DEMO)/frames
 
 demo-compare: build
 	$(DEMO)/compare.sh
@@ -85,9 +90,9 @@ demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unkno
 demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
 	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
 
-demo-edge: build demo-key ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
+demo-edge: build demo-key demo-ocean ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
 	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
-	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
+	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/live.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
 
 compose:
 	docker compose -f deploy/compose/docker-compose.yml up --build
@@ -99,8 +104,8 @@ compose:
 DEMO_COMPOSE := deploy/compose/demo.compose.yml
 DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) docker compose -f $(DEMO_COMPOSE)
 
-compose-demo:    ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
-	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO)/scenario.json); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (see docs/DEMO.md)"; exit 1; }; done
+compose-demo: demo-ocean ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
+	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO)/live.json); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (see docs/DEMO.md)"; exit 1; }; done
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (or MODELS=/path/to/D)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d
 	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"
