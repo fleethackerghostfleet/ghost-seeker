@@ -220,7 +220,7 @@ test('reviewer sessions keep team sync disabled',()=>{
 });
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
- const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
+ const context=vm.createContext({Event:class{constructor(type){this.type=type}},window:{dispatchEvent(){}},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
  vm.runInContext(settingsSource,context);
  return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved)};
 }
@@ -374,6 +374,32 @@ test('shore rank uses all shore records by ship score regardless of review, sens
   filters.review='reviewed';state.sort='new';state.tier='2';state.src='IR-U1';
  `,context);
  assert.match(vm.runInContext("liveWhy(items[1])[0].t",context),/Rank 2 of 3 on shore by ship score \(20\.00\)/);
+});
+test('feed density defaults, validates, persists and reloads all sizes',()=>{
+ for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}']){
+  assert.equal(settingsContext(saved).settings.get().density,'m');
+ }
+ const {settings,saved}=settingsContext('{}');
+ for(const density of ['s','m','l','xl']){
+  settings.density(density);
+  assert.equal(saved().density,density);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().density,density);
+ }
+ settings.density('invalid');settings.density(null);
+ assert.equal(settings.get().density,'xl');
+ assert.equal(saved().density,'xl');
+});
+test('feed filters toggle synchronizes expansion and accessibility state',()=>{
+ const context=setup();
+ vm.runInContext(`
+  let expanded=false;
+  $('feedHead').classList.toggle=name=>{if(name!=='filters-open')throw Error(name);return expanded=!expanded};
+  $('feedFilters').setAttribute=(name,value)=>{if(name!=='aria-expanded')throw Error(name);filterExpanded=value};
+  toggleFeedFilters();
+ `,context);
+ assert.equal(vm.runInContext('filterExpanded',context),'true');
+ vm.runInContext('toggleFeedFilters()',context);
+ assert.equal(vm.runInContext('filterExpanded',context),'false');
 });
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);

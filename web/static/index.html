@@ -38,15 +38,16 @@
 </header>
 
 <section class="page on" id="pgFeed">
- <div class="fhead">
-  <div class="toolbar">
+ <div class="fhead" id="feedHead">
+  <div class="toolbar" id="feedControls">
     <span class="lbl" id="sourceLabel">Sensor</span>
     <select id="srcSel"></select>
     <label class="feed-check" title="Show retained images hidden by review or directives, and exact image-path duplicates from the same sensor. Shown at P4 in this feed only; discarded ship-side frames are unavailable."><input type="checkbox" id="showFiltered"> Show filtered / duplicate images</label>
     <label class="feed-review" for="reviewFilter">Human reviewed <select id="reviewFilter"><option value="all">All images</option><option value="reviewed">Yes — reviewed</option><option value="unreviewed">No — not reviewed</option></select></label>
     <div class="seg" id="tierSeg"></div>
     <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
-    <span class="lbl">Size</span><div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button></div>
+    <span class="lbl density-label">Size</span><div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button><button data-d="xl">XL</button></div>
+    <button type="button" class="btn sm" id="feedFilters" aria-expanded="false" aria-controls="feedControls">Filters</button>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
     <button class="btn sm" id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing (0)</button>
