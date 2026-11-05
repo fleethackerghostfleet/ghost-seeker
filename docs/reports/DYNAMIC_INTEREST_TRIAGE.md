@@ -9,7 +9,10 @@ landed. Nothing was merged into dynamic-interest `main`; its open PRs were close
 pointer to the ghost-seeker PR that carries the useful part.
 
 Verdicts: **covered** = ghost-seeker already had an equivalent, **ported** = carried over
-(PR number), **dropped** = not useful for the ghost-seeker demo.
+(PR number), **dropped** = not useful for the ghost-seeker demo. ghost-seeker PR numbers
+(#54, #55, #56, #57) refer to the in-flight PRs that carry the port; at the time of writing
+they were validated against `main` but not yet merged, so the files they cite are not in this
+tree until they land.
 
 ## dynamic-interest `main` (merged PRs #1, #2, #3, #7, #10)
 
