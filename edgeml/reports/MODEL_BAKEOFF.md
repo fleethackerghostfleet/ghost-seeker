@@ -26,7 +26,7 @@ Hardware: session VM, Intel Xeon virtual CPU, 8 visible vCPUs, **CPUs 0–3 pinn
 | SeaShips classifier dev | 720 labelled crops | 6 native → 4 coarse types | balanced:120 per native class | N/A |
 | SeaShips locked classifier test | 4,683 labelled crops | 6 native → 4 coarse types | all available locked-test labelled crops | N/A |
 
-Area buckets use original-image pixel area: tiny <16², small <32², medium 32²…<96², large ≥96². **Small includes tiny**, per CONTRACTS. A “sea-only” frame here means no **vessel** GT, not a certified empty scene: SMD has 17 vessel-empty dev frames versus 14 all-object-empty frames. No SMD test sea-only frames means test FP/sea is **N/A**, never zero. Singapore Maritime remains excluded because its annotation joins are invalid. SeaShips uses the catalog/upstream split, not a newly established independent-camera split. SMD uses the locked source-video split in `configs/splits.yaml`.
+Area buckets use original-image pixel area and the evaluator's disjoint ranges: tiny <16², small 16²…<32², medium 32²…<96², large ≥96². Small does not include tiny. No measured set here contains tiny GT, so this wording correction changes no numbers. A “sea-only” frame here means no **vessel** GT, not a certified empty scene: SMD has 17 vessel-empty dev frames versus 14 all-object-empty frames. No SMD test sea-only frames means test FP/sea is **N/A**, never zero. Singapore Maritime remains excluded because its annotation joins are invalid. SeaShips uses the catalog/upstream split, not a newly established independent-camera split. SMD uses the locked source-video split in `configs/splits.yaml`.
 
 ## 3. Ranked new local detectors — dev
 
