@@ -22,6 +22,7 @@ function norm(it){
 const awaiting=it=>it.sent&&!it.decision;
 function upsert(raw){
  const it=norm(raw),had=items.get(it.id);
+ if(had&&had.img!==it.img)imageCache.delete(it.id);
  if(it.sent||it.decision)items.set(it.id,it);else items.delete(it.id);
  return{it,isNew:awaiting(it)&&!(had&&awaiting(had))};
 }
@@ -126,7 +127,7 @@ let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on'
 function connect(){
  const es=new EventSource('/api/stream');
  es.onopen=()=>setLive(true);es.onerror=()=>setLive(false);
- es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
+ es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);if(m.live){const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
  es.addEventListener('update',e=>{
   const m=JSON.parse(e.data),prev=view.sel,{it,isNew}=upsert(m.item);
   if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}
