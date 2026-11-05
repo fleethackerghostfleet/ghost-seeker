@@ -176,7 +176,6 @@ func TestSessionsProductionFlow(t *testing.T) {
 	if w := do(h, http.MethodPost, "/login", "10.0.0.9:5", form); w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), `name="next" value="/cdr"`) {
 		t.Fatalf("failed login must keep next: %d", w.Code)
 	}
-	form["form"] = url.Values{"token": {"secret-token-12345"}, "next": {"//evil.example/x"}}.Encode()
 	cs := w.Result().Cookies()
 	if len(cs) != 1 || cs[0].Name != CookieName || !cs[0].HttpOnly || cs[0].SameSite != http.SameSiteStrictMode || cs[0].Path != "/" || cs[0].Secure {
 		t.Fatalf("cookie attrs: %+v", cs)
