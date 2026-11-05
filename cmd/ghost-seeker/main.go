@@ -47,7 +47,8 @@ func main() {
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
-	linkBps := flag.Int64("link-bps", 256_000, "ship-to-shore link rate in bits/s (0 disables uploads)")
+	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
+	simLinkBps := flag.Int64("sim-link-bps", 256_000, "simulation: ship-to-shore upload rate in bits/s (0 pauses uploads)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -120,7 +121,7 @@ func main() {
 	}
 
 	data := store.New(*retain)
-	data.SetLinkBPS(*linkBps)
+	data.SetLinkBPS(*simLinkBps)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
