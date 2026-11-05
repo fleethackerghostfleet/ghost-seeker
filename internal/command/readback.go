@@ -8,10 +8,14 @@ import (
 )
 
 func readback(rules []Rule, durationMin int) string {
-	boost, suppress := make([]string, 0), make([]string, 0)
+	boost, suppress, targets := make([]string, 0), make([]string, 0), make([]string, 0)
 	focus := false
 	for _, rule := range rules {
 		phrase := readbackRule(rule)
+		if rule.Tier >= 1 && rule.Tier <= 4 {
+			targets = append(targets, "Set "+phrase)
+			continue
+		}
 		if rule.Type == "boost" {
 			boost = append(boost, phrase)
 			focus = focus || rule.Only
@@ -19,10 +23,13 @@ func readback(rules []Rule, durationMin int) string {
 			suppress = append(suppress, phrase)
 		}
 	}
-	if len(boost) == 0 && len(suppress) == 0 {
+	if len(boost) == 0 && len(suppress) == 0 && len(targets) == 0 {
 		return "No rules recognized."
 	}
 	parts := make([]string, 0, 4)
+	if len(targets) > 0 {
+		parts = append(parts, strings.Join(targets, "; ")+".")
+	}
 	if len(boost) > 0 {
 		parts = append(parts, "Boost: "+strings.Join(boost, "; ")+".")
 	}
@@ -63,6 +70,9 @@ func readbackRule(rule Rule) string {
 	}
 	if rule.WithinMin > 0 {
 		parts = append(parts, fmt.Sprintf("in last %d min", rule.WithinMin))
+	}
+	if rule.Tier >= 1 && rule.Tier <= 4 {
+		parts = append(parts, fmt.Sprintf("→ P%d %s", rule.Tier, [...]string{"", "Critical", "High", "Routine", "Low"}[rule.Tier]))
 	}
 	return strings.Join(parts, " ")
 }
