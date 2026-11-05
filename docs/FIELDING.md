@@ -1,7 +1,7 @@
 # Ghost Seeker fielding
 
 This is a **demo package, not an accredited operational system**. Unit
-SyncService authentication and edge storage caps are opt-in; there is no TLS
+SyncService authentication is on by default; edge storage caps are opt-in. There is no TLS
 or deployment-specific security review. Use only in an isolated, approved
 environment. The operator application is in-memory; shore and edge data are
 SQLite databases.
@@ -73,8 +73,8 @@ static `ui/` files for edge/shore. The operator UI assets are embedded in
 
 Edge and shore flags are initialized from environment variables; an explicit
 flag overrides the environment. Empty environment values use the defaults
-shown below. Operator settings are flags, with the token flags also accepting
-the environment variables shown in the table.
+shown below. The operator table lists its flags and supported environment
+variables.
 
 ### `edge`
 
@@ -82,7 +82,7 @@ the environment variables shown in the table.
 |---|---|---|---|
 | `-id` | `EDGE_ID` | `edge-1` | Edge identifier |
 | `-data` | `DATA_DIR` | `data/edge` | SQLite store and blobs |
-| `-listen` | `LISTEN` | `:8081` | Console and sync HTTP listener |
+| `-listen` | `LISTEN` | `:8081` | Console HTTP listener (sync is outbound to shore) |
 | `-public-hosts` | `GS_PUBLIC_HOSTS` | empty | Additional Host names accepted by the DNS-rebinding guard |
 | `-shore` | `SHORE_URL` | `http://localhost:8080` | Shore base URL |
 | `-infer` | `INFER_URL` | `mock` | Inference URL or `mock` |
@@ -92,6 +92,7 @@ the environment variables shown in the table.
 | `-max-items` | `GS_EDGE_MAX_ITEMS` | `0` (unlimited) | Maximum retained item rows |
 | `-scene-every` | — | `60s` | Scene interval for sightings mode; `0` disables interval |
 | `-dedup` | `DEDUP` | `hash` | `naive`, `hash`, or `sightings` |
+| `-prioritizer` | `PRIORITIZER` | `edgeml` | Object-level scoring or `tomer` image-level scoring; `tomer` needs a sidecar in `tomer`/`both` mode |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
 | `-scenario` | `SCENARIO` | empty | Optional scenario JSON to replay |
 | `-frames` | `FRAMES_DIR` | empty | Optional frame directory to replay |
@@ -128,7 +129,8 @@ the environment variables shown in the table.
 | `-poll` | — | `1s` | Live shore polling interval |
 | `-operator-token` | `GS_OPERATOR_TOKEN` | unset | Opaque bearer token for the shore/edge ConsoleService transport gate |
 | `-operator-token-file` | `GS_OPERATOR_TOKEN_FILE` | unset | Read the opaque token from a file; takes precedence over the literal token |
-| `-operator-id` | — | `operator-ui` | Issuer recorded on policy edits |
+| `-operator-id` | `GS_OPERATOR_ID` | `operator-ui` | Issuer recorded on policy edits |
+| `-dev-token-file` | `GS_DEV_TOKEN_FILE` | `data/operator.token` | Local demo token; `none` requires an explicit operator credential |
 
 ## State and ports
 
@@ -142,22 +144,29 @@ database. Edge storage caps are opt-in; see [Edge storage caps](#edge-storage-ca
 | Service | Port | Notes |
 |---|---:|---|
 | Shore | 8080 | Sync/console HTTP; `GET /healthz` |
-| Edge | 8081 | Console/sync HTTP; `GET /healthz` |
+| Edge | 8081 | Console HTTP; `GET /healthz`; sync connects outbound to shore |
 | Operator | 8090 in containers/Kubernetes; `:8080` by default | `GET /` serves the UI; no `/healthz` |
 | Operator link shaper | 18080 | Disabled in the Kubernetes operator deployment |
 | edgeml sidecar | 9090 | `GET /healthz`, Connect JSON RPC |
 | Toxiproxy admin API | 8474 | Compose demo only |
 
-SyncService unit JWT authentication is opt-in. The opaque operator bearer
+SyncService unit JWT authentication is on by default. The opaque operator bearer
 token gates every ConsoleService RPC and `/blob/` request. Neither service
 provides TLS. Do not expose them to an untrusted network.
 
 ## Compose demonstration
 
 The Compose demo runs shore, Toxiproxy, and edge; use `frames/` locally if
-replaying the Git LFS demo clips:
+replaying the Git LFS demo clips. Compose requires `GS_OPERATOR_TOKEN`,
+`GS_SIGNING_KEY`, and `GS_UNIT_TOKEN`; it disables automatic dev-token creation
+inside the containers. For a local demonstration, populate them from the
+same generated credentials as the Makefile demo:
 
 ```sh
+make build demo-key
+export GS_OPERATOR_TOKEN="$(make -s demo-token)"
+export GS_SIGNING_KEY="$(cat data/unit.key)"
+export GS_UNIT_TOKEN="$(./bin/mint-unit-token -id edge-1 -ttl 24h)"
 make compose
 deploy/compose/degrade.sh satcom
 # Stop with Ctrl-C, or use docker compose -f deploy/compose/docker-compose.yml down.
@@ -225,7 +234,7 @@ yet). The packaged edge mounts the node directory `FRAMES_HOSTPATH` (default
 `/var/lib/ghost-seeker/frames`) read-only at `/frames`; with `FRAMES_DIR` and
 `SCENARIO` empty (the defaults) the edge starts healthy but idle and shore
 receives nothing. To replay the demo clips, copy `scenarios/ghostfleet_demo`
-(including its LFS `frames/`) onto the node and point the edge at it:
+(including the `frames/` downloaded by `make demo-clips`) onto the node and point the edge at it:
 
 ```sh
 zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
@@ -257,8 +266,10 @@ outside the runtime; keep Hugging Face offline and telemetry disabled.
 Tracking is optional because `boxmot` brings in PyTorch and substantially
 increases build time and image size. To include it, build with
 `--build-arg WITH_TRACKING=1`; this installs `boxmot` and CPU PyTorch from the
-PyTorch CPU wheel index. The default image does not include tracking. Real-model
-inference, model compatibility, and tracking behavior are **unverified**.
+PyTorch CPU wheel index. The default image does not include tracking.
+Real-model inference and tracking in the packaged container remain
+**unverified**; the source-based experiments are documented separately in
+[the edgeml reports](../edgeml/reports/E.md).
 
 ## Verification and troubleshooting
 
@@ -277,11 +288,12 @@ inference, model compatibility, and tracking behavior are **unverified**.
 - CI builds images with `push: false`; no public image deployment occurs.
 
 The Kubernetes manifests have not been deployed to a cluster. Real-model
-inference and a field installation remain unverified.
+inference in this deployment package and a field installation remain unverified.
 
 ## Sync authentication
 
-SyncService unit authentication is off by default. When enabled, shore accepts
+SyncService unit authentication is on by default. Shore requires a signing key
+unless explicitly started with `-require-auth=false` for an isolated lab link. It accepts
 HS256 tokens with `sub` (edge ID), `role: "unit"`, and `exp` claims. The signing
 key must be non-default and at least 32 bytes. Missing, invalid, or expired
 tokens return `Unauthenticated`; an `ExchangeRequest.edge_id` that differs
@@ -337,7 +349,8 @@ zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
 ```
 
 Setting `SHORE_REQUIRE_AUTH=false` is for lab clusters only; shore then logs a WARN at startup and
-accepts any edge. The operator token is always required outside `make demo-*`.
+accepts any edge. ConsoleService always requires an operator token; local
+binary runs may auto-generate one, while Compose and Zarf require an explicit credential.
 
 To rotate before expiry, mint a new token, replace the `edge-auth` Secret, and
 restart the edge StatefulSet:

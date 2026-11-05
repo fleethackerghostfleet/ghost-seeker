@@ -116,8 +116,11 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 
 * No TLS inside the repo: terminate TLS in front of every listener; the operator token and
   session cookie are bearer secrets.
-* The shore→edge downlink is authenticated at the transport by the unit JWT only; policy
-  payload signing (Ed25519) is a separate change (`internal/policy`).
+* The unit JWT authenticates the edge to shore; it does not authenticate plaintext
+  shore responses to the edge. Use the TLS boundary above for transport protection.
+  Ed25519 policy payload signing is implemented in `internal/policy` and remains
+  opt-in: configure shore's `-policy-signing-key` and edge's
+  `-require-signed-policy` / `-policy-keys`.
 * Sessions live in process memory: a web-app restart signs everyone out (by design).
 
 ## 7. Deep scan: before / after
@@ -127,36 +130,42 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 | Baseline ([scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@548487e` | 4 | 4 | 10 |
 | After PR #60, branch ([scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | branch `655e371` | 1 | 3 | 6 |
 | After PR #60 merged (incremental re-run of the baseline [scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@a9bd43e` | 3 | 0 | 5 |
-| **Current: after PR #75 (unit auth on by default) + #61–#74** (incremental re-run of the [post-#60 scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | `main@1a6382e` | **0** | 5 | 10 |
+| **Latest recorded scan: after PR #75 (unit auth on by default) + #61–#74** (incremental re-run of the [post-#60 scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | `main@1a6382e` | **0** | 5 | 10 |
 
 The post-#60 run re-validated the 18 baseline findings on `main@a9bd43e`: 13 resolved, 3 highs
 open (one root cause — the unit-auth default on the ship-to-shore link), 5 lows.
 
-The current run (after PR #75) covers every commit merged since (#61–#75: Patrick's console on
-live shore data, policy layers / locks / signing, per-directive expiry, frame ring buffer). All
-3 highs are resolved (the three duplicates were dismissed). The 5 mediums and 10 lows below are
-what remains open; none is reachable without either an enrolled unit token or the operator token.
+The latest recorded run (after PR #75) covers the changes in #61–#75: Patrick's console on
+live shore data, policy layers / locks / signing, per-directive expiry, and frame ring buffer. All
+3 highs were resolved (the three duplicates were dismissed). The table preserves that scan's
+5 medium and 10 low findings; it is not a new scan of the current code. Subsequent
+resolutions are called out below, including item ownership (PR #78), the Host allowlist
+(PR #77), and display-identifier escaping and validation (PR #79).
 
-* **Medium — edge-supplied `Source` name rendered as raw HTML in the live feed**
-  (`web/static/app.js` `cardHTML` / source dropdown); the same unescaped-ID pattern appears in the
-  Commander View `data-id` (`web/static/cdr.js`, low) and the workbench tiles (low). CSP blocks
-  inline script, so the impact is hiding or faking tiles. Fix: `esc()` at every interpolation and
-  an `ids.Valid`-style allowlist for `Source` / `sighting_id` on the shore bridge.
+* **Resolved by PR #79 — edge-supplied display identifiers rendered as raw HTML**:
+  the live feed, Commander View, and workbench now escape the affected source and item
+  identifiers. Shore normalizes invalid manifest sources to empty, and the bridge
+  validates source and sighting identifiers before using them for display or grouping.
 * **Medium ×2 — caller-chosen policy `Version`** on shore `SetPolicy` and the edge console: one
   max-version policy from an operator-token holder makes the edge reject every later policy,
   including signed command policies, until its DB is wiped. Fix: the server assigns
   `max(now, prev+1)`; console policies must not move the high-water mark that guards downlinks.
-* **Medium — shore items have no owning edge** (`UpsertManifest` / `WriteChunk`): one compromised
-  unit token can overwrite other ships' contacts. Fix: bind items to the JWT `sub` and reject
-  writes from a different unit (operator overrides stay allowed).
+* **Resolved by PR #78 — shore items had no owning edge** (`UpsertManifest` / `WriteChunk`):
+  items now belong to the authenticated unit, and manifests, chunks, and sync overrides
+  from other units are rejected. Operator overrides stay cross-edge. Legacy unowned
+  items are adopted by the first writer.
 * **Resolved — `CORSAllow` trusted `Host`** (DNS rebinding against SyncService): shore and edge
   now check the `-public-hosts` allowlist before CORS.
-* **Low ×10** — SSE stream has no subscriber cap / stalled-client eviction; EMCON SILENT still
+* **Low ×10 at scan time** — SSE stream has no subscriber cap / stalled-client eviction; EMCON SILENT still
   sends a heartbeat every tick; an attribute-only suppress directive can defeat a command-locked
   priority rule; 1-byte chunks make the shore re-read and re-hash a 256 MiB blob per chunk;
   full-res request handler reads an unbounded body; login `next=` check bypassed by a tab/newline;
   JPEG fill bytes skip the sidecar's 50-megapixel cap; chunk uploads have no item-count / disk
   cap; the two HTML-escape siblings above.
+
+  The current live-console full-res handler (`internal/shorebridge/console.go`)
+  limits its body to 64 KiB, and PR #79 resolves the two HTML-escape siblings;
+  the list above retains the scan-time findings.
 
 Earlier residuals (post-#60 run), kept for history:
 

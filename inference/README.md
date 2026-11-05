@@ -1,8 +1,9 @@
 # Inference engine (interchangeable)
 
 The edge never imports a model. It calls `InferenceService` (see
-`proto/ghostseeker/v1/inference.proto`) over HTTP (Connect protocol, JSON or
-protobuf). Anything that answers these three calls is a valid engine:
+`proto/ghostseeker/v1/inference.proto`) over HTTP. The Go remote client and
+Python sidecars use Connect with protobuf-JSON. Anything that answers these
+three calls is a valid engine:
 
 | RPC | In | Out | Used for |
 |---|---|---|---|
@@ -22,8 +23,17 @@ Implementations:
   from scenario hints. Used by the simulator and tests.
 - `inference/stub/server.py`: the Python shape of a sidecar, no model. Start
   it and point the edge at it with `-infer http://localhost:8090`.
-- Planned: ONNX Runtime sidecar (OpenVINO EP on the rugged Dell's Intel CPU)
-  with a YOLO-family detector + MobileCLIP-class embedding. CPU-only.
+- `edgeml/src/edgeml/sidecar/`: implemented CPU sidecar with ONNX Runtime or
+  OpenVINO detection, BoxMOT tracking, sighting aggregation, and optional
+  MobileCLIP embedding/classification. It also supports a scripted `--mock`
+  engine and the `tomer`/`both` prioritizer modes. Models and runtime dependencies
+  are provisioned separately; see [sidecar setup](../edgeml/sidecar/README.md).
+
+Stateful clients send `source` and `capturedAtUnixMs` so tracks stay separate
+per camera. `AnalyzeResponse` can include sighting lifecycle events and an
+image-priority score in addition to the stateless fields above. The Go edge
+uses `-dedup sightings` for object-level items or `-prioritizer tomer` for the
+integrated image-level score; transfer selection remains in the Go scheduler.
 
 Wire format for JSON: `POST /ghostseeker.v1.InferenceService/Analyze` with
 `{"image": "<base64>", "knownLabels": [...], "wantEmbedding": true}`.

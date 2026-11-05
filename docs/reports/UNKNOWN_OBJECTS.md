@@ -21,8 +21,15 @@ Requirement: "If an object is unknown but not noise it should still be prioritiz
 
 ### Edge ML (edgeml)
 - New `edgeml/src/edgeml/tracking/realness.py`: a "not noise" test on a sighting's trajectory. It checks persistence (≥N distinct frames and ≥T s), size stability (coefficient of variation of sqrt(area)) and motion consistency (constant-velocity residual, normalised by box size). Stationary contacts are allowed. The output is `realness` in [0,1].
-- `aggregator.py` / `types.py` / `CONTRACTS.md`: sightings and events gain informational `realness` and `unknown_real` (unknownness ≥ τ and realness ≥ ρ). The realness bonus gate is **off by default** (`gate_unknown_bonus_on_realness=False`): the bonus remains keyed on unknownness alone after `unknown_bonus_age_s`, exactly as before, with no real-unknown value floor. Opting into the flag requires `unknown_real` for the bonus and enables a floor equal to a known contact at 0.6 confidence. Library defaults are N=3, ρ=0.5.
+- `aggregator.py` / `types.py` / `CONTRACTS.md`: sightings and events gain informational `realness` and `unknown_real` (unknownness ≥ τ and realness ≥ ρ). The realness bonus gate is **off in the aggregator library defaults** (`gate_unknown_bonus_on_realness=False`): the bonus remains keyed on unknownness alone after `unknown_bonus_age_s`, exactly as before, with no real-unknown value floor. Opting into the flag requires `unknown_real` for the bonus and enables a floor equal to a known contact at 0.6 confidence. Library defaults are N=3, ρ=0.5.
 - `edgeml/tools/eval_unknown.py`: replays cached detections through ByteTrack and the aggregator, with MobileCLIP-S1 zero-shot MCM unknownness calibrated on 136 dev GT crops. It matches sightings to GT and reports per-split metrics. It checks splits against `configs/splits.yaml`.
+
+**Current live-sidecar configuration:** `EdgemlEngine.AGG_DEFAULTS` in
+`edgeml/src/edgeml/sidecar/service.py` overrides the library and enables
+`gate_unknown_bonus_on_realness=True`. Pass
+`--agg '{"gate_unknown_bonus_on_realness":false}'` to disable it. The frozen
+evaluation below used a different operating point; its numbers are preserved
+and should not be read as a measurement of the current live-sidecar defaults.
 
 ## Measured results
 
@@ -66,7 +73,7 @@ OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 ~/edgeml-venv/bin/python -u edgeml/tools/eva
 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 ~/edgeml-venv/bin/python -u edgeml/tools/eval_unknown.py --data ~/data/edgeml_eval --split test --out ~/unknown-eval-flush --frozen ~/unknown-eval/frozen.json
 ```
 
-These locked evaluation metrics measure flag eligibility, not default bonus gating. "Before" means unknownness ≥ τ alone. "After" also requires `unknown_real`; the realness bonus gate remains off by default. No evaluation was re-run for the default-policy change.
+These locked evaluation metrics measure flag eligibility, not default bonus gating. "Before" means unknownness ≥ τ alone. "After" also requires `unknown_real`. The aggregator library defaults leave the gate off, while the live sidecar enables it as described above. No evaluation was re-run for the library default-policy change.
 
 | Split | Mode | GT objects surfaced | Matched unknown sightings flagged | False unknowns / complete sea-only frame |
 |---|---|---:|---:|---:|

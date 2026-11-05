@@ -1,17 +1,21 @@
 # edgeml sidecar — `InferenceService` over Connect/HTTP+JSON
 
-The sidecar wraps the phase-1 `edgeml` pipeline (detect → boxmot track → `SightingAggregator` → MobileCLIP zero-shot)
+The sidecar wraps the `edgeml` pipeline (detect → boxmot track → `SightingAggregator` → MobileCLIP zero-shot)
 behind the `ghostseeker.v1.InferenceService` contract the Go edge already speaks (`edge/inference.Remote`,
 `connect.WithProtoJSON()`), and adds **sightings** to `AnalyzeResponse` so the edge can store one item per object
 instead of one per frame. Code lives in the package at `edgeml/src/edgeml/sidecar/` (`python -m edgeml.sidecar`).
 
 ```
 python -m edgeml.sidecar --listen :9090 \
-    --detector ~/models/D/yolo11n-640/model.onnx \      # YOLO11n FP32 ONNX on ONNX Runtime CPU (or int8/model.xml on OpenVINO)
-    --embed    ~/models/D/mobileclip-s1 \               # MobileCLIP-S1 ONNX export: meta.json, model.onnx, text_cache.json
+    --detector ~/models/D/yolo11n-640/model.onnx \
+    --embed ~/models/D/mobileclip-s1 \
     --threads 4 --fps 5
 python -m edgeml.sidecar --listen :9090 --mock           # scripted engine, no models (Go tests / CI)
 ```
+
+The detector above uses ONNX Runtime CPU; an OpenVINO `int8/model.xml` export
+can be passed instead. The embed directory contains `meta.json`, `model.onnx`,
+and `text_cache.json`.
 
 Models (D's exports, see `edgeml/reports/E.md`):
 
@@ -26,6 +30,20 @@ the hot path: detector and CLIP image tower run on ONNX Runtime, `pin_threads` f
 
 `--listen :9090` binds **127.0.0.1** (the service is unauthenticated); use `--listen 0.0.0.0:9090` to expose it. Request
 bodies are capped at 32 MiB.
+
+`--prioritizer edgeml` is the CLI default. `--prioritizer tomer` runs the
+image-level `algorithm/ghost_priority` adapter without a detector when none is
+specified; `both` adds its score to the edgeml output. `make demo-sidecar` uses
+`both` by default. Select `-prioritizer tomer` on the Go edge to use that score;
+the Go scheduler still selects forms and chunks, rather than calling the
+offline whole-JPEG selector.
+
+The live `EdgemlEngine` sets `gate_unknown_bonus_on_realness=True`, overriding
+the aggregator library's `False` default. Pass
+`--agg '{"gate_unknown_bonus_on_realness":false}'` to use the library behavior.
+These defaults differ from the frozen operating point in the
+[unknown-object evaluation](../../docs/reports/UNKNOWN_OBJECTS.md); those
+measurements do not establish the live configuration's accuracy.
 
 ## RPCs
 
@@ -46,7 +64,8 @@ bodies are capped at 32 MiB.
 
 `key_detection` is the best key frame's label / confidence / normalized box, `subtype` comes from zero-shot
 MobileCLIP on the key crop, `forms` are the byte-exact fact/crop/thumb/full sizes the aggregator would produce.
-Frames with no tracked object return no sightings and the Go edge behaves exactly as in `hash` mode for them.
+Frames with no reported sighting follow the Go edge's scene/tracker-warmup
+handling described below; they do not all become ordinary hash-mode items.
 
 ## Integration test: one item per object
 
@@ -54,22 +73,32 @@ Frames with no tracked object return no sightings and the Go edge behaves exactl
 # 1. sidecar (real models, or --mock)
 python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1
 
-# 2. edge replaying a frame directory at 5 fps in sightings mode (a scenario JSON points `sets[].Path` at MOT img1 dirs)
-go build -o bin/edge ./cmd/edge
-./bin/edge -infer http://localhost:9090 -dedup sightings -scenario scenario.json -period 200ms -shore http://localhost:8080
+# 2. in another terminal, start shore with the local demo signing key
+make run-shore
+
+# 3. in another terminal, mint a unit token and replay a scenario at 5 fps
+# (scenario.json must point sets[].Path at the intended MOT img1 directories)
+(umask 077; ./bin/mint-unit-token -id edge-1 -ttl 24h -signing-key-file data/unit.key > data/edge.jwt)
+./bin/edge -id edge-1 -unit-token-file data/edge.jwt -infer http://localhost:9090 \
+    -dedup sightings -scenario scenario.json -period 200ms -shore http://localhost:8080
 #    (-frames <dir> replays the built-in demo scenario from that dir; -dedup naive|hash|sightings, default hash)
 
-# 3. queue = one image item per object (+ a tiny RECORD contact report per closed sighting), duplicates counted
-curl -s -X POST -H 'Content-Type: application/json' -d '{}' localhost:8081/ghostseeker.v1.ConsoleService/GetStatus   # itemsTotal, itemsDeduped
-curl -s -X POST -H 'Content-Type: application/json' -d '{"limit":20}' localhost:8081/ghostseeker.v1.ConsoleService/GetQueue
+# 4. in another terminal, inspect the authenticated edge console
+TOKEN=$(make -s demo-token)
+curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' localhost:8081/ghostseeker.v1.ConsoleService/GetStatus
+curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"limit":20}' localhost:8081/ghostseeker.v1.ConsoleService/GetQueue
 ```
 
 Edge-side semantics (`edge/ingest/sightings.go`): OPEN → item with `tags{sighting_id,subtype,event}` and a CROP form
-(key box × 1.5 margin, short side ≥ 96 px, JPEG q75); DUPLICATE → counted in `GetStatus.items_deduped`, no item;
-UPDATE with a better key frame → thumb/crop/full + features replaced in place while nothing of the item has shipped,
+(key box × 1.5 margin, short side ≥ 96 px, JPEG q80 by default). Unknowns skip CROP by default,
+and a crop no smaller than FULL is omitted. FULL retains the complete capture (JPEG/WebP bytes are kept as-is).
+DUPLICATE → counted in `GetStatus.items_deduped`, no item;
+UPDATE with a better key frame → thumb/crop/full + features replaced in place while no image form has started to ship
+(manifest/FACT may already have been sent),
 otherwise a new item with the same `sighting_id`; non-key UPDATE → tags + FACT refreshed; CLOSE → ~200 B RECORD
 contact report (sighting id, item id, label, subtype, first/last seen, n frames). Frames with **no sighting and no
-detection** (open ocean) become at most one `event=scene` item (FACT+THUMB only, no FULL/CROP) per source per
+detection** (open ocean) become at most one `event=scene` item (FACT+THUMB sent automatically;
+FULL retained locally and sent only on request, no CROP) per source per
 `-scene-every` (default 60 s); the rest fold into `items_deduped`, as do frames with detections but no sighting yet
 (tracker warming up — the OPEN follows with the key frame; this only applies once the engine has reported a sighting
 for that source, so a stateless engine such as `-infer mock` keeps per-frame items for detected frames). `-scene-every 0` restores one item per object-free frame.
