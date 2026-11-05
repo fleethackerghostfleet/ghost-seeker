@@ -62,6 +62,10 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "accept":
+		if tier != 0 && tier != old.CentralTier {
+			writeError(w, 409, "model priority changed — review the updated suggestion before accepting")
+			return
+		}
 		tier = old.CentralTier
 	case "dismiss":
 		tier = 4
