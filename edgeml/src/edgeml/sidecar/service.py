@@ -314,8 +314,15 @@ class NoopEngine:
 
     model_id = "none"
 
+    def __init__(self):
+        self.frames = 0
+
     def analyze(self, source, img, captured_at_ms, known_labels, want_embedding):
+        self.frames += 1
         return {"detections": [], "unknownness": 0.0, "modelId": self.model_id, "latencyMs": "0", "sightings": []}
+
+    def stats(self) -> dict:
+        return {"frames": self.frames, "ms_per_frame": 0.0, "sources": {}}
 
     def embed_text(self, texts):
         raise RpcError("unimplemented", "no text tower in prioritizer-only mode")

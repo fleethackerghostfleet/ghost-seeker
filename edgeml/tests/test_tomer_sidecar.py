@@ -73,6 +73,20 @@ def test_both_mode_keeps_engine_output_and_adds_priority_over_http():
         srv.shutdown()
 
 
+@needs_gp
+def test_tomer_only_sidecar_reports_health_and_capabilities():
+    srv, base = start_in_thread(NoopEngine(), prioritizer=TomerPrioritizer(), mode="tomer")
+    try:
+        health = json.load(urllib.request.urlopen(f"{base}/healthz"))
+        assert health["ok"] is True and health["frames"] == 0
+        req = urllib.request.Request(f"{base}/ghostseeker.v1.InferenceService/Capabilities", data=b"{}",
+                                     headers={"Content-Type": "application/json"})
+        caps = json.load(urllib.request.urlopen(req))
+        assert caps["modelId"] == "none" and caps["prioritizer"] == "tomer"
+    finally:
+        srv.shutdown()
+
+
 def test_edgeml_mode_is_unchanged():
     svc = InferenceService(MockEngine())
     a, _ = _frames()
