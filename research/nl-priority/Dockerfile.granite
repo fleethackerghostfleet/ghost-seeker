@@ -1,0 +1,14 @@
+# Build a reproducible CPU-only llama.cpp server. No host GPU is required.
+FROM debian:bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git cmake g++ make && rm -rf /var/lib/apt/lists/*
+ARG LLAMA_CPP_REV=45b6604b20f17b7d7638042306c0cd1b6af5999c
+WORKDIR /build
+RUN git init && git remote add origin https://github.com/ggml-org/llama.cpp.git && git fetch --depth 1 origin ${LLAMA_CPP_REV} && git checkout --detach FETCH_HEAD
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_METAL=OFF -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=OFF && cmake --build build --target llama-server -j2
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libstdc++6 ca-certificates curl && rm -rf /var/lib/apt/lists/* && useradd -u 10001 -m research
+COPY --from=build /build/build/bin/llama-server /usr/local/bin/llama-server
+USER research
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/llama-server"]
+CMD ["--model", "/models/granite-4.0-350m-Q4_K_M.gguf", "--alias", "granite-4.0-350m", "--host", "0.0.0.0", "--port", "8080", "--ctx-size", "2048", "--threads", "2", "--parallel", "1", "--n-gpu-layers", "0", "--batch-size", "128", "--ubatch-size", "128", "--cache-ram", "0", "--no-webui"]

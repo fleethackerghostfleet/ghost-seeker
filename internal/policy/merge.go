@@ -154,11 +154,22 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	out := proto.Clone(p).(*pb.Policy)
 	interest, emcon, conflicts := Merge(out.Layers, nodeID, now)
 	if onlyLocalLayers(out.Layers) {
-		// A flat (layer-less) shore policy plus the ship console's own rules: keep both.
-		interest.BoostLabels = unionLabels(out.GetInterest().GetBoostLabels(), interest.BoostLabels)
-		interest.SuppressLabels = unionLabels(out.GetInterest().GetSuppressLabels(), interest.SuppressLabels)
+		// A flat (layer-less) shore policy plus the ship console's own rules:
+		// keep both; on the same label the ship's rule wins (nothing is locked).
+		shore := out.GetInterest()
+		localBoost, localSuppress := interest.BoostLabels, interest.SuppressLabels
+		interest.BoostLabels = unionLabels(withoutLabels(shore.GetBoostLabels(), localSuppress), localBoost)
+		interest.SuppressLabels = unionLabels(withoutLabels(shore.GetSuppressLabels(), localBoost), localSuppress)
+		for label, w := range shore.GetBoostWeights() {
+			if _, ok := interest.BoostWeights[label]; !ok && len(withoutLabels([]string{label}, localSuppress)) == 1 {
+				if interest.BoostWeights == nil {
+					interest.BoostWeights = map[string]float64{}
+				}
+				interest.BoostWeights[label] = w
+			}
+		}
 		pins := map[string]int32{}
-		for label, tier := range out.GetInterest().GetTierLabels() {
+		for label, tier := range shore.GetTierLabels() {
 			pins[normalizeLabel(label)] = tier
 		}
 		for _, layer := range out.Layers {

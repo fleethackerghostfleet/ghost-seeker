@@ -40,6 +40,12 @@ ghost-seeker-demo_demo-secrets:/s:ro alpine cat /s/operator.token`).
 This is a laptop demo, not the fielding topology — `deploy/compose/docker-compose.yml` (Toxiproxy
 link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, production posture) is unchanged.
 
+## Optional local-language research integration
+
+`./research/nl-priority/demo.sh` adds the isolated IBM Granite compiler to the
+demo. See [the integration runbook](../research/nl-priority/DEMO_INTEGRATION.md)
+for supported classes, native startup, and validation limits.
+
 ## 0. One-time setup
 
 ### Demo-only login fallback

@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY research/nl-priority/vision/THIRD_PARTY_NOTICES.md /app/THIRD_PARTY_NOTICES.md
+COPY research/nl-priority/vision/requirements.txt research/nl-priority/vision/requirements-export.txt /tmp/
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.2 \
+    && pip install --no-cache-dir -r /tmp/requirements-export.txt
+COPY edgeml/src/edgeml/embed/zeroshot.py /app/edgeml/embed/zeroshot.py
+COPY research/edgeml/src/edgeml_research/nl_priority /app/edgeml_research/nl_priority
+ENV PYTHONPATH=/app PYTHONUNBUFFERED=1 OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=1
+ENTRYPOINT ["python", "-m", "edgeml_research.nl_priority.export"]
+CMD ["--output", "/models/mobileclip", "--cache-dir", "/models/cache"]

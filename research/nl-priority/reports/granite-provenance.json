@@ -1,0 +1,22 @@
+{
+  "modelRepository": "ibm-granite/granite-4.0-350m-GGUF",
+  "modelRevision": "b8208a86a58427e1739265318028eb5895b74bf2",
+  "modelSha256": "771c588a49607f274a2bba3185733607ebe6f74b996ab90e2d6bee0d98bcec52",
+  "llamaCppRevision": "45b6604b20f17b7d7638042306c0cd1b6af5999c",
+  "finalBackendFilesSha256": {
+    "research/nlpriority/compiler.go": "e32484b6366cfea87cb7ed849d0a45196e0935d1fe4d19ae9334835c7e994e32",
+    "research/nlpriority/evaluate.go": "1d12910e47bca102f9df4d46c646eaeb27a13676ef8d29b7802a174999bc23a2",
+    "research/nlpriority/http.go": "73becb942b5569b96e40bac32f2aa1e8a27fb6ed766d0277028b196d3e020d46",
+    "research/nlpriority/service.go": "9895b4062e8068d13dbd2e954b071c882d027ee65b2099e7c22e1edffb0c3503",
+    "research/nlpriority/types.go": "dd996e97bdc57c95fa7b1b9a440d2d468c18e25a010c53e82aabba8c7272add5",
+    "research/nlpriority/validate.go": "e8d480e6e99d4f70a15dcdfefec64baecc591d43de8eb2cb138207dd88646653",
+    "research/nlpriority/vision.go": "890248e97a0333dbb5fe88e93b2a8aa9511608b2f6cfcdce8402b14cc319ce1f"
+  },
+  "finalBackendBinarySha256": "bc45e0ac2787cb5ddbf359b2f0b29b3321cdc7d39cb4484e9a74ec014f858b2a",
+  "resourceBenchmarkBinarySha256": "8772d3444a7a42428830c0de776957fcda11a1f91f9b05b2358bbddbfc9404c1",
+  "notes": [
+    "Resource benchmark was collected before final admission/polarity guards; scorer, scheduler and vision path unchanged.",
+    "Final compiler source hashes apply to granite-final-regression.json, not the initial heldout or earlier resource binary.",
+    "Resource queue repeated45realcropembeddings to1000uniqueIDs; synthetic scale, not recognition quality."
+  ]
+}

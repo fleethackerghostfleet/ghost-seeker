@@ -120,7 +120,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		TS:         ts.Truncate(time.Millisecond),
 		Seed:       seed,
 		HZ:         hz,
-		KB:         rng.Intn(28) + 18,
+		KB:         rng.Intn(1600) + 800, // full camera JPEG, so the 0.5 MB/s sim link queues P3/P4
 		Edge:       edge,
 		Lat: command.Latency{
 			Edge: int(math.Round(randBetween(rng, 14, 60))),

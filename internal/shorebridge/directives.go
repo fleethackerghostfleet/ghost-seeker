@@ -542,10 +542,10 @@ func sortedLayersHighFirst(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
 
 func policyRules(directiveID string, suppress, boost []string, pins ...map[string]int32) []command.Rule {
 	rules := []command.Rule{}
-	for _, l := range dedupe(boost) {
+	for _, l := range displayLabels(boost) {
 		rules = append(rules, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: directiveID})
 	}
-	for _, l := range dedupe(suppress) {
+	for _, l := range displayLabels(suppress) {
 		rules = append(rules, command.Rule{Type: "suppress", Classes: []string{l}, Attrs: []string{}, DirectiveID: directiveID})
 	}
 	for _, tiers := range pins {
