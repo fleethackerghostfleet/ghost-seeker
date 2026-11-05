@@ -765,7 +765,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			compiled = &c
 		}
 		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
-			if !droppedScopedRules {
+			if !droppedScopedRules && pol.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
 				compiled = nil
 			}
