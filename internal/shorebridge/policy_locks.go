@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 )
@@ -36,5 +35,5 @@ func (c shoreLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 	c.bridge.mu.Lock()
 	nodeID := c.bridge.edgeNodeID
 	c.bridge.mu.Unlock()
-	return policy.CheckCommandRules(policy.ActiveLocks(active.Layers, nodeID, now), pb.Echelon_ECHELON_SHIP, converted)
+	return policy.CheckCommandRules(policy.ActiveLocks(active.Layers, nodeID, now), c.bridge.echelon(), converted)
 }

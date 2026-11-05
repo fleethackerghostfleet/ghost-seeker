@@ -20,6 +20,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shorebridge"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
@@ -42,6 +43,8 @@ func main() {
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
 	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
+	operatorToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator JWT for shore ConsoleService")
+	operatorTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "read operator JWT from a file")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
 	policyState := flag.String("policy-state", "", "persist simulation policy state at this path")
@@ -58,7 +61,11 @@ func main() {
 	}
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler)
+		token, err := unitauth.Credential(*operatorToken, *operatorTokenFile)
+		if err != nil {
+			log.Fatalf("-operator-token: %v", err)
+		}
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, token, compiler)
 		return
 	}
 
@@ -137,7 +144,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, operatorToken string, compiler *command.Compiler) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -156,6 +163,9 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link)
+	if err := bridge.SetOperatorToken(operatorToken); err != nil {
+		log.Fatalf("-operator-token: %v", err)
+	}
 	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
 	go bridge.Run(ctx, poll)
