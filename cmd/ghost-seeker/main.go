@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -42,6 +43,7 @@ func main() {
 	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
+	captureEvery := flag.Duration("capture-every", 700*time.Millisecond, "simulation: mean edge capture interval (>0), uniformly jittered from 2/3 to 4/3; independent of upload bandwidth")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
@@ -71,6 +73,9 @@ func main() {
 	oids := flag.String("piv-policy-oids", os.Getenv("GS_PIV_POLICY_OIDS"), "comma-separated policy OIDs")
 	users := flag.String("piv-users", os.Getenv("GS_PIV_USERS"), "PIV user role mapping")
 	flag.Parse()
+	if *captureEvery <= 0 {
+		log.Fatal("-capture-every must be >0")
+	}
 	if *demoAcceptAnyToken && *authMode != "token" {
 		log.Fatal("-demo-accept-any-token requires -auth-mode token; incompatible with PIV")
 	}
@@ -149,7 +154,7 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
-	go runSimulation(data, generator, app, uplink)
+	go runSimulation(data, generator, app, uplink, *captureEvery)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
 		for i := 0; i < 4; i++ {
@@ -311,11 +316,18 @@ func shaperTarget(shoreURL string) (string, error) {
 	return host, nil
 }
 
-func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server, uplink *simulationUplink) {
+func captureDelay(rng *rand.Rand, mean time.Duration) time.Duration {
+	spread := mean / 3
+	upper := mean + min(spread, time.Duration(math.MaxInt64)-mean)
+	lower := mean - spread
+	return lower + time.Duration(rng.Int63n(int64(upper-lower)+1))
+}
+
+func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server, uplink *simulationUplink, captureEvery time.Duration) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	last := time.Now()
 	for {
-		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
+		time.Sleep(captureDelay(rng, captureEvery))
 		now := time.Now()
 		updates := uplink.advance(now.Sub(last))
 		last = now
