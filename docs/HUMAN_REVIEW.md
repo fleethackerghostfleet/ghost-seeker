@@ -40,10 +40,11 @@ go run ./cmd/retune -demo demo-reviews.jsonl
 
 The tool reads logs without opening them for writes. It deduplicates record IDs,
 replays corrections, and excludes undone, wrong-detection and dismissed labels.
-When combining raw logs and effective exports, duplicate IDs from files with
-correction events take precedence, then corrections are replayed. For remaining
-ties, more populated reason/note fields win, followed by canonical JSON order;
-the merge does not depend on input path order.
+When combining raw logs and effective exports, each duplicate ID is resolved
+independently: more populated reason/note fields win, followed by canonical
+JSON order. All correction records across all inputs are then replayed onto
+the merged bases in timestamp/ID order. Unrelated corrections do not influence
+base selection; the merge does not depend on input path order.
 Legacy records without a model key are matched by catalog key or display name;
 unrecognized models fail rather than guessing. Per item/mission, each reviewer's
 latest label counts once; the upper median is used for even numbers of labels.

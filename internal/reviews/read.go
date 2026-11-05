@@ -8,13 +8,12 @@ import (
 	"sort"
 )
 
-// ReadEffective prefers versions from files containing correction events over
-// exports. Ties prefer populated attribution fields, then canonical JSON order.
+// ReadEffective merges each ID independently, preferring populated attribution
+// fields, then canonical JSON order. All corrections are replayed after merging.
 func ReadEffective(paths []string) ([]Record, int, error) {
 	l := &Log{}
 	type version struct {
 		record    Record
-		raw       bool
 		canonical string
 	}
 	seen := map[string]version{}
@@ -27,7 +26,6 @@ func ReadEffective(paths []string) ([]Record, int, error) {
 		s.Buffer(make([]byte, 4096), 4<<20)
 		line := 0
 		fileRecords := []Record{}
-		raw := false
 		for s.Scan() {
 			line++
 			var r Record
@@ -40,7 +38,6 @@ func ReadEffective(paths []string) ([]Record, int, error) {
 				return nil, 0, fmt.Errorf("%s:%d: missing record id", p, line)
 			}
 			fileRecords = append(fileRecords, r)
-			raw = raw || r.Ref != ""
 		}
 		err = s.Err()
 		f.Close()
@@ -60,8 +57,8 @@ func ReadEffective(paths []string) ([]Record, int, error) {
 				}
 				return n
 			}
-			if !ok || (raw && !old.raw) || (raw == old.raw && (fields(r) > fields(old.record) || (fields(r) == fields(old.record) && string(b) > old.canonical))) {
-				seen[r.ID] = version{r, raw, string(b)}
+			if !ok || fields(r) > fields(old.record) || (fields(r) == fields(old.record) && string(b) > old.canonical) {
+				seen[r.ID] = version{r, string(b)}
 			}
 		}
 	}
@@ -70,10 +67,10 @@ func ReadEffective(paths []string) ([]Record, int, error) {
 	}
 	sort.SliceStable(l.events, func(i, j int) bool {
 		a, b := l.events[i], l.events[j]
+		if (a.Ref == "") != (b.Ref == "") {
+			return a.Ref == ""
+		}
 		if a.ReviewedAt.Equal(b.ReviewedAt) {
-			if (a.Ref == "") != (b.Ref == "") {
-				return a.Ref == ""
-			}
 			return a.ID < b.ID
 		}
 		return a.ReviewedAt.Before(b.ReviewedAt)

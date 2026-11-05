@@ -1,10 +1,57 @@
 package reviews
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestUnrelatedCorrectionDoesNotResurrectStaleLabel(t *testing.T) {
+	dir := t.TempDir()
+	raw, export, corrections := filepath.Join(dir, "raw"), filepath.Join(dir, "export"), filepath.Join(dir, "corrections")
+	target := Record{ID: "target", ItemID: "item", Reviewer: "A", HumanTier: 1, ReviewedAt: time.Unix(10, 0)}
+	updated := target
+	updated.Reason = "wrong_detection"
+	write := func(p string, rs ...Record) {
+		f, err := os.Create(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		for _, r := range rs {
+			if err = json.NewEncoder(f).Encode(r); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	write(raw, target, Record{ID: "other", ItemID: "other"}, Record{ID: "unrelated", Ref: "other", Action: "reason", Reason: "debris"})
+	write(export, updated)
+	for _, paths := range [][]string{{raw, export}, {export, raw}} {
+		rs, _, err := ReadEffective(paths)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rs {
+			if r.ID == target.ID && r.Reason != "wrong_detection" {
+				t.Fatalf("stale label resurrected: %+v", r)
+			}
+		}
+	}
+	write(corrections, Record{ID: "target-correction", Ref: target.ID, Action: "reason", Reason: "debris", ReviewedAt: time.Unix(1, 0)})
+	for _, paths := range [][]string{{raw, export, corrections}, {corrections, export, raw}} {
+		rs, _, err := ReadEffective(paths)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rs {
+			if r.ID == target.ID && r.Reason != "debris" {
+				t.Fatalf("cross-input correction not replayed: %+v", r)
+			}
+		}
+	}
+}
 
 func TestMergeRawAndCorrectedExport(t *testing.T) {
 	dir := t.TempDir()
