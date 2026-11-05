@@ -339,7 +339,23 @@ function visible(){
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
  l.sort(f.review==='sent'?(a,b)=>sendTime(b)-sendTime(a)||b.ts-a.ts:state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
+ if(state.src==='ALL'&&f.review!=='sent')l=mixSources(l,state.sort==='pri'?i=>feedTier(i)+(feedReasons.has(i.id)?'f':''):i=>Math.floor(i.ts/60000));
  return{l,counts};
+}
+/* Display-only: interleave sensors so the feed shows several camera feeds at once.
+   Items only move within a run sharing the same group key (priority tier, or capture minute when sorted by time)
+   and at most SOURCE_MIX_WINDOW places, so priorities and visible ordering cues are unchanged. */
+const SOURCE_MIX_WINDOW=8;
+function mixSources(l,group){
+ const srcOf=i=>i.src?.id??i.src;
+ if(new Set(l.map(srcOf)).size<2)return l;
+ const rest=l.slice(),out=[],last=new Map();
+ while(rest.length){
+  const g=group(rest[0]);let pick=0,best=Infinity;
+  for(let j=0;j<rest.length&&j<SOURCE_MIX_WINDOW&&group(rest[j])===g;j++){const seen=last.has(srcOf(rest[j]))?last.get(srcOf(rest[j])):-1;if(seen<best){best=seen;pick=j}}
+  const it=rest.splice(pick,1)[0];last.set(srcOf(it),out.length);out.push(it);
+ }
+ return out;
 }
 function renderTierSeg(counts){
  const T=[['all','All'],['1','P1 Critical'],['2','P2 High'],['3','P3 Routine'],['4','P4 Low']];
