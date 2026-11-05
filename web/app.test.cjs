@@ -620,6 +620,35 @@ test('processing timeline formats latencies outside the detail renderer',()=>{
  assert.match(html,/>2\.0 s</);
 });
 
+test('dataset detail rendering tolerates omitted upload controls and wires navigation',()=>{
+ const context=setup(),buttons=new Map();
+ const drawer={innerHTML:'',querySelectorAll:()=>[],scrollTop:0};
+ const item={
+  id:'dataset-item',src:{id:'real-source',name:'Real source'},ts:'2026-11-04T12:00:00Z',
+  tier:2,centralTier:2,central:.7,base:.6,edge:.5,dbId:17,manual:0,
+  dets:[{cls:'vessel',conf:.8,attrs:{},b:{x:10,y:10,w:40,h:30}}],
+  det:[{s:.7,notes:[]}],directives:[],sent:false,fullRes:false,live:null,
+ };
+ context.$=id=>{
+  if(id==='drawer')return drawer;
+  if(['aUploadNext','aUploadHold','aPull'].includes(id))return null;
+  if(!buttons.has(id))buttons.set(id,{});
+  return buttons.get(id);
+ };
+ context.datasetItem=item;
+ vm.runInContext(`
+  DATASET_MODE=true;items=[datasetItem];state.sel=datasetItem.id;state.model='maritime';state.directives=[];
+  MODELS={maritime:{name:'Maritime'}};CLS={vessel:{lab:'Vessel',g:'vessel'}};ATTR_LAB={};
+  zulu=()=> '12:00';
+  visible=()=>({l:[datasetItem]});buildWhy=()=>[];largeImage=()=>'<img>';processingHTML=()=>'<div></div>';
+  briefing={renderDetections(){}};
+ `,context);
+ assert.doesNotThrow(()=>vm.runInContext('renderDetailContent()',context));
+ for(const id of ['dPrev','dNext','dClose'])assert.equal(typeof buttons.get(id)?.onclick,'function',`${id} handler`);
+ assert.equal(typeof buttons.get('aSim')?.onclick,'function');
+ assert.equal(typeof buttons.get('aDis')?.onclick,'function');
+});
+
 test('unknown contact labels, distinct boxes and persistence explanations',()=>{
  const context=setup();
  vm.runInContext(`
