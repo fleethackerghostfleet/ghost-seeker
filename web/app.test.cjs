@@ -881,7 +881,7 @@ test('live card updates preserve canonical priority labels',()=>{
  vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
  vm.runInContext(`
   badge={};other={setAttribute(){}};
-  card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
+  card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb-meta'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
   gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
   testItem={id:'test',el:card,tier:1,central:.9,base:.8};updateCard(testItem);
  `,context);
@@ -973,7 +973,7 @@ test('feed images and detection planes share an intrinsic-size wrapper',()=>{
  const c=setup();
  vm.runInContext("imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';it={src:{id:'EO'},tier:3,central:.5,ts:new Date(),dets:[],det:[]}",c);
  const markup=vm.runInContext('cardHTML(it,true)',c);
- assert.match(markup,/<div class="thumb-image"><img src="\/frame.jpg" alt=""><div class="bx"><\/div><\/div><span class="tier/);
+ assert.match(markup,/<div class="thumb-image"><img src="\/frame.jpg" alt=""><div class="bx"><\/div><\/div><div class="thumb-meta"><span class="tier/);
 });
 
 test('detail selection rejects removed images and never leaves an empty drawer open',()=>{
