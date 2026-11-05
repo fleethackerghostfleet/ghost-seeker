@@ -1,7 +1,7 @@
 GO ?= go
 BIN := bin
 
-.PHONY: all gen build test sim run-shore run-edge compose clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
+.PHONY: all gen build test sim run-shore run-edge compose compose-demo compose-demo-down compose-demo-logs clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
 
 all: build
 
@@ -87,6 +87,25 @@ demo-edge: build demo-key ## replay the demo clips at 5 fps through the shaped l
 
 compose:
 	docker compose -f deploy/compose/docker-compose.yml up --build
+
+# The live demo (sidecar + shore + operator UI + edge) in Docker, for a laptop
+# with nothing but Docker Desktop: see deploy/compose/demo.compose.yml and
+# docs/DEMO.md. Clips and models are fetched once on the host (gcloud) and
+# mounted read-only; credentials are generated inside the stack.
+DEMO_COMPOSE := deploy/compose/demo.compose.yml
+DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) docker compose -f $(DEMO_COMPOSE)
+
+compose-demo:    ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
+	@test -n "$$(ls $(DEMO)/frames/*/img1 2>/dev/null | head -1)" || { echo "error: demo clips missing in $(DEMO)/frames — run 'make demo-clips' first (needs gcloud signed in as a lab account, see docs/DEMO.md)"; exit 1; }
+	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (needs gcloud; or MODELS=/path/to/D)"; exit 1; }
+	$(DEMO_COMPOSE_CMD) up --build -d
+	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"
+
+compose-demo-logs:
+	$(DEMO_COMPOSE_CMD) logs -f
+
+compose-demo-down: ## stop the Docker demo and delete its data + credentials (next up is a fresh replay)
+	$(DEMO_COMPOSE_CMD) down -v --remove-orphans
 
 images:
 	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .

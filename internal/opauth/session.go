@@ -22,10 +22,11 @@ const CookieName = "gs_session"
 // zero-step. Everything else: /api/* and /blob/* answer 401 JSON, pages
 // redirect to /login.
 type Sessions struct {
-	token string
-	dev   bool
-	ttl   time.Duration
-	now   func() time.Time
+	token   string
+	dev     bool
+	anyPeer bool
+	ttl     time.Duration
+	now     func() time.Time
 
 	mu       sync.Mutex
 	sessions map[string]time.Time
@@ -38,6 +39,27 @@ func NewSessions(token string, dev bool) *Sessions {
 
 // Dev reports whether loopback auto-login is on.
 func (s *Sessions) Dev() bool { return s.dev }
+
+// TrustPeers extends dev auto-login to browsers that address a loopback host
+// from any peer address. For containers only: a port published on the host's
+// 127.0.0.1 reaches the process from the bridge gateway, never from loopback,
+// so Loopback alone would send every demo browser to /login. Forwarded
+// headers still disqualify a request. No-op outside dev mode.
+func (s *Sessions) TrustPeers(on bool) *Sessions {
+	s.anyPeer = on
+	return s
+}
+
+// local reports whether r qualifies for dev auto-login.
+func (s *Sessions) local(r *http.Request) bool {
+	if !s.dev {
+		return false
+	}
+	if s.anyPeer {
+		return !forwarded(r) && isLoopbackHost(r.Host)
+	}
+	return Loopback(r)
+}
 
 // Wrap mounts /login, /logout and /api/auth in front of next and enforces
 // authentication on everything else.
@@ -55,7 +77,7 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			return
 		}
 		authed := s.authenticated(r)
-		if !authed && s.dev && Loopback(r) {
+		if !authed && s.local(r) {
 			s.issue(w, r)
 			authed = true
 		}
@@ -128,7 +150,7 @@ func (s *Sessions) login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	switch r.Method {
 	case http.MethodGet:
-		if s.authenticated(r) || (s.dev && Loopback(r)) {
+		if s.authenticated(r) || s.local(r) {
 			if !s.authenticated(r) {
 				s.issue(w, r)
 			}
