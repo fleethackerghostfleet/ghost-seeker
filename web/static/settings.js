@@ -28,7 +28,7 @@ window.gsSettings=(()=>{
  function load(){
   try{
    const v=JSON.parse(localStorage.getItem(KEY))||{};const d=defaults();
-   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:startFeed(v.feed),textSize:TEXT_SIZES.some(t=>t[0]===v.textSize)?v.textSize:d.textSize};
+   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'||(v.prev===undefined&&v.theme==='day')?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:startFeed(v.feed),textSize:TEXT_SIZES.some(t=>t[0]===v.textSize)?v.textSize:d.textSize};
   }catch{return defaults()}
  }
  function save(){try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}}
