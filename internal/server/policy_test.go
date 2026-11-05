@@ -29,7 +29,7 @@ func (failingSaveBackend) SavePolicyState(context.Context, *pb.Policy, int64) er
 }
 
 func TestAdminPolicyApplyFailureRestoresHigherLayers(t *testing.T) {
-	app := New(store.New(10), WithAdmin(true), WithNodeID("DDG-51"),
+	app := New(store.New(10), WithAdmin(true), WithAdminToken("test-token"), WithNodeID("DDG-51"),
 		WithPolicyBackend(failingSaveBackend{Backend: policy.NewMemBackend()}))
 	previous := app.policy.higherLayers
 	if len(previous) == 0 {
@@ -53,7 +53,7 @@ func TestAdminPolicyApplyFailureRestoresHigherLayers(t *testing.T) {
 
 func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	data := store.New(10)
-	app := New(data, WithAdmin(true))
+	app := New(data, WithAdmin(true), WithAdminToken("test-token"))
 	app.SetCompiler(&command.Compiler{Locks: app.PolicyLocks()})
 
 	state := store.State{Directives: data.Directives()}
@@ -141,7 +141,7 @@ func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 }
 
 func TestCompileDirectiveReportsActivePolicyLocks(t *testing.T) {
-	app := New(store.New(10), WithAdmin(true))
+	app := New(store.New(10), WithAdmin(true), WithAdminToken("test-token"))
 	app.SetCompiler(&command.Compiler{Locks: app.PolicyLocks()})
 
 	response := request(app, http.MethodPost, "/api/directives/compile", map[string]string{"text": "ignore submarines"})
@@ -212,7 +212,7 @@ func TestCompileDirectiveIgnoresExpiredPolicyLocks(t *testing.T) {
 
 func TestSimulationPolicyExpiryClearsLocksAndSourceDirectives(t *testing.T) {
 	data := store.New(10)
-	app := New(data, WithAdmin(true))
+	app := New(data, WithAdmin(true), WithAdminToken("test-token"))
 	input := map[string]any{"text": "ignore submarines", "rules": []command.Rule{
 		{Type: "suppress", Classes: []string{"submarine"}},
 	}}
@@ -345,7 +345,7 @@ func TestPartialHigherPolicyConflictKeepsUnblockedRuleEffective(t *testing.T) {
 
 func TestSimulationDelegatedTankerRuleCanBeOverridden(t *testing.T) {
 	data := store.New(10)
-	app := New(data, WithAdmin(true))
+	app := New(data, WithAdmin(true), WithAdminToken("test-token"))
 	response := request(app, http.MethodPost, "/api/directives", map[string]any{
 		"text":  "prioritize tankers",
 		"rules": []command.Rule{{Type: "boost", Classes: []string{"tanker"}, Weight: 3}},
@@ -389,7 +389,7 @@ func TestSimulationPolicyAdminValidationAndEMCONLock(t *testing.T) {
 		t.Fatalf("GET audit without admin status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
 	}
 
-	app := New(store.New(10), WithAdmin(true))
+	app := New(store.New(10), WithAdmin(true), WithAdminToken("test-token"))
 	response = rawPolicyRequest(app, http.MethodPost, "/api/policy/validate", `{}`)
 	if response.Code != http.StatusOK {
 		t.Fatalf("valid protojson validation status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
@@ -441,7 +441,7 @@ func TestSimulationPolicyAdminValidationAndEMCONLock(t *testing.T) {
 
 func TestSimulationProtectsSourceDirectivesAndPublishesPolicySummary(t *testing.T) {
 	data := store.New(10)
-	app := New(data, WithAdmin(true))
+	app := New(data, WithAdmin(true), WithAdminToken("test-token"))
 	state := store.State{Directives: data.Directives()}
 	var sourceID string
 	sourceCount := 0
@@ -499,7 +499,31 @@ func (w *flushCancelWriter) Flush() { w.cancel() }
 func rawPolicyRequest(handler http.Handler, method, target, body string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+func TestAdminPolicyEditsRequireOperatorBearer(t *testing.T) {
+	app := New(store.New(10), WithAdmin(true), WithAdminToken("test-token"))
+	for _, auth := range []string{"", "Bearer wrong"} {
+		request := httptest.NewRequest(http.MethodPut, "/api/policy", strings.NewReader(`{}`))
+		request.Header.Set("Content-Type", "application/json")
+		if auth != "" {
+			request.Header.Set("Authorization", auth)
+		}
+		response := httptest.NewRecorder()
+		app.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("auth=%q status=%d, want 401: %s", auth, response.Code, response.Body.String())
+		}
+	}
+	if response := rawPolicyRequest(app, http.MethodPost, "/api/policy/validate", `{}`); response.Code == http.StatusUnauthorized {
+		t.Fatalf("valid bearer rejected: %s", response.Body.String())
+	}
+	noToken := New(store.New(10), WithAdmin(true))
+	if response := rawPolicyRequest(noToken, http.MethodPut, "/api/policy", `{}`); response.Code != http.StatusUnauthorized {
+		t.Fatalf("admin without a configured token must refuse edits: %d", response.Code)
+	}
 }

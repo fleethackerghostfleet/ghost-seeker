@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"io"
 	"log"
 	"net/http"
@@ -24,13 +25,22 @@ import (
 type Option func(*serverOptions)
 
 type serverOptions struct {
-	admin   bool
-	backend policy.Backend
-	nodeID  string
+	admin      bool
+	adminToken string
+	backend    policy.Backend
+	nodeID     string
 }
 
 func WithAdmin(enabled bool) Option {
 	return func(options *serverOptions) { options.admin = enabled }
+}
+
+// WithAdminToken sets the operator bearer token that super-admin policy
+// edits must present explicitly (Authorization: Bearer) on each request, in
+// addition to the browser session: a re-authentication step for the
+// privileged raw-policy editor. Empty disables admin edits even with -admin.
+func WithAdminToken(token string) Option {
+	return func(options *serverOptions) { options.adminToken = token }
 }
 
 func WithPolicyBackend(backend policy.Backend) Option {
@@ -47,6 +57,7 @@ type policyRuntime struct {
 	store         *store.Store
 	guard         *policy.Store
 	admin         bool
+	adminToken    string
 	nodeID        string
 	higherLayers  []*pb.PolicyLayer
 	operatorEMCON *pb.EmconSetting
@@ -63,7 +74,7 @@ func newPolicyRuntime(options serverOptions, data *store.Store) *policyRuntime {
 	if options.nodeID == "" {
 		options.nodeID = "DDG-51"
 	}
-	rt := &policyRuntime{admin: options.admin, nodeID: options.nodeID, store: data}
+	rt := &policyRuntime{admin: options.admin, adminToken: options.adminToken, nodeID: options.nodeID, store: data}
 	guard, err := policy.NewStore(context.Background(), options.backend, policy.Options{})
 	if err != nil {
 		rt.err = err
@@ -504,8 +515,7 @@ func (s *Server) setPolicyEMCON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) validatePolicy(w http.ResponseWriter, r *http.Request) {
-	if !s.policy.admin {
-		writeError(w, http.StatusForbidden, "super admin only (start with -admin or GS_ADMIN=1)")
+	if !s.requireAdmin(w, r) {
 		return
 	}
 	p, err := decodeProtoPolicy(r.Body)
@@ -523,8 +533,7 @@ func (s *Server) validatePolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
-	if !s.policy.admin {
-		writeError(w, http.StatusForbidden, "super admin only (start with -admin or GS_ADMIN=1)")
+	if !s.requireAdmin(w, r) {
 		return
 	}
 	if s.policy.guard == nil {
@@ -586,4 +595,19 @@ func conflictSummaries(conflicts []*pb.MergeConflict) []conflictSummary {
 		}
 	}
 	return result
+}
+
+// requireAdmin gates the raw policy editor: -admin must be on and the request
+// must re-present the operator bearer token (the session cookie alone is not
+// enough for a privileged, policy-replacing edit).
+func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	if !s.policy.admin {
+		writeError(w, http.StatusForbidden, "super admin only (start with -admin or GS_ADMIN=1)")
+		return false
+	}
+	if s.policy.adminToken == "" || !opauth.Equal(s.policy.adminToken, opauth.BearerToken(r)) {
+		opauth.Unauthorized(w)
+		return false
+	}
+	return true
 }
