@@ -18,7 +18,6 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/dataset"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
@@ -26,7 +25,7 @@ import (
 type Server struct {
 	syncMu         sync.Mutex
 	proposals      []*reviewProposal
-	reviews        *reviews.Log
+	reviews        reviewLog
 	reviewMu       sync.Mutex
 	store          *store.Store
 	hub            *hub
