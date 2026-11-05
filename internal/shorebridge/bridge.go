@@ -858,6 +858,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	var ruleExpiryUnixMs int64
 	if mode != "" {
 		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 	}
@@ -897,7 +898,11 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				c.Readback = strings.TrimSpace(c.Readback)
 			}
 			if c.DurationMin > 0 {
-				pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+				ruleExpiryUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+				if !b.hasOperatorToken() {
+					pol.ExpiresAtUnixMs = ruleExpiryUnixMs
+					ruleExpiryUnixMs = 0
+				}
 			}
 			compiled = &c
 		}
@@ -929,7 +934,8 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			pol.Layers = cloneLayers(current.Layers)
 			operatorLayer := findOperatorLayer(pol.Layers, in.IssuedBy, b.echelon())
 			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: in.IssuedBy,
-				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...), Text: in.Text}
+				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...),
+				Text: in.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
 			if operatorLayer >= 0 {
 				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
 			} else {
@@ -943,7 +949,8 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	if (current == nil || len(current.Layers) == 0) && b.hasOperatorToken() {
 		rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: in.IssuedBy,
-			BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...), Text: in.Text}
+			BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...),
+			Text: in.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
 		layer := &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: in.IssuedBy, Rules: []*pb.InterestRule{rule}}
 		if mode != "" && !emconLocked {
 			layer.Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: in.IssuedBy, Echelon: b.echelon()}

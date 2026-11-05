@@ -172,3 +172,36 @@ func TestSetPolicyOperatorAuthentication(t *testing.T) {
 			connect.CodeFailedPrecondition)
 	})
 }
+
+func TestShipOperatorCannotShortenPolicyExpiry(t *testing.T) {
+	commandLayer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+		Rules: []*pb.InterestRule{{Id: "command", Locked: true, BoostLabels: []string{"submarine"}}}}
+	previousExpiry := time.Now().Add(time.Hour).UnixMilli()
+	svc, st := makeOperatorService(t, &pb.Policy{
+		ExpiresAtUnixMs: previousExpiry,
+		Layers:          []*pb.PolicyLayer{commandLayer},
+	})
+	requestPolicy := &pb.Policy{
+		ExpiresAtUnixMs: time.Now().Add(time.Minute).UnixMilli(),
+		Layers: []*pb.PolicyLayer{
+			proto.Clone(commandLayer).(*pb.PolicyLayer),
+			{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "spoof",
+				Rules: []*pb.InterestRule{{Id: "ship", BoostLabels: []string{"tanker"}}}},
+		},
+	}
+	request := operatorRequest(t, requestPolicy, "operator", "TAO-DDG51", pb.Echelon_ECHELON_SHIP)
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := response.Msg.Policy.GetExpiresAtUnixMs(); got != previousExpiry {
+		t.Fatalf("response expiry=%d, want prior expiry %d", got, previousExpiry)
+	}
+	stored, err := st.GetPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stored.GetExpiresAtUnixMs(); got != previousExpiry {
+		t.Fatalf("stored expiry=%d, want prior expiry %d", got, previousExpiry)
+	}
+}
