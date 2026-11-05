@@ -5,8 +5,15 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 cd "$REPO_ROOT"
 
+skip() {
+  echo "skipped: $*"
+  if [ "${STRICT_CHECKS:-0}" = "1" ]; then
+    exit 1
+  fi
+}
+
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "skipped: python3 not installed"
+  skip "python3 not installed"
   exit 0
 fi
 python3 "$SCRIPT_DIR/check_manifests.py"
@@ -41,14 +48,14 @@ if command -v kubeconform >/dev/null 2>&1; then
     elif grep -Eiq 'Invalid:[[:space:]]*0([,[:space:]]|$)' "$tmp/kubeconform.log" &&
       grep -Eiq 'failed to fetch|failed to download|no such host|connection refused|TLS handshake timeout|i/o timeout|network is unreachable|temporary failure in name resolution' "$tmp/kubeconform.log"; then
       cat "$tmp/kubeconform.log"
-      echo "skipped: kubeconform schemas could not be fetched (offline)"
+      skip "kubeconform schemas could not be fetched (offline)"
     else
       cat "$tmp/kubeconform.log"
       exit 1
     fi
   fi
 else
-  echo "skipped: kubeconform not installed"
+  skip "kubeconform not installed"
 fi
 
 if command -v zarf >/dev/null 2>&1; then
@@ -58,5 +65,5 @@ if command -v zarf >/dev/null 2>&1; then
     zarf package create deploy/zarf --confirm --output dist
   fi
 else
-  echo "skipped: zarf not installed"
+  skip "zarf not installed"
 fi
