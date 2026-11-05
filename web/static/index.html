@@ -18,6 +18,7 @@
   </div>
   <nav><a href="#feed" id="navFeed" class="on">Imagery Feed</a><a href="#review" id="navRv">Operator Review <span class="bdg" id="rvCount"></span></a><a href="#reprioritize" id="navRp">Collection Priorities <span class="bdg" id="dirCount"></span></a><a href="/cdr.html" target="_blank" rel="noopener">Commander View ↗</a></nav>
   <button type="button" class="live" id="live"><i></i><span>FEED ACTIVE</span></button>
+  <div id="emconControl"></div>
   <button class="btn sm setbtn" id="setBtn" title="Display settings" aria-label="Display settings">⚙</button>
   <div class="spacer"></div>
   <div class="hstats">
@@ -83,9 +84,11 @@
    </main>
   </div>
   <div class="wb-admin">
-   <section class="panel"><div class="wb-row"><h3>Active directives</h3><div class="spacer"></div><button class="btn sm" id="clearDir">Clear all</button></div><div class="dirs" id="directives"></div></section>
+   <section class="panel"><div class="wb-row"><h3>Active directives</h3><div class="spacer"></div><button class="btn sm" id="clearDir">Clear all</button></div><div class="dirs" id="directives"></div><div id="policyConflicts"></div></section>
    <section class="panel sim-only"><h3>Base prioritization model</h3><div class="mrow"><select id="modelSel"></select></div><div class="modeldesc" id="modelDesc"></div></section>
    <section class="panel sim-only"><details><summary>Effective object weights <span id="wNote"></span></summary><div id="weights"></div></details></section>
+   <section class="panel" id="policyAdmin" hidden><h3>Super admin · raw policy (protojson)</h3><textarea id="polRaw" spellcheck="false" rows="14"></textarea><div class="wb-row"><button id="polRawValidate">Validate</button><button id="polRawApply" class="primary">Apply</button><button id="polRawReload">Reload</button></div><div id="polRawMsg" role="status"></div></section>
+   <section class="panel" id="policyAudit"><h3>Policy audit · newest 50</h3><div class="policy-table-wrap"><table class="policy-audit"><thead><tr><th>Time</th><th>Who</th><th>Source</th><th>Version</th><th>Text</th><th>Result</th><th>Reason</th></tr></thead><tbody id="policyAuditRows"></tbody></table></div></section>
   </div>
  </div>
 <dialog id="wbConfirm"><h3>Read back before applying</h3><p id="wbReadback" class="wb-readback"></p><small id="wbPath" class="hint"></small><ul id="wbWarnings" class="wb-warnings" hidden></ul><p id="wbConfirmText"></p><p class="hint">Adds draft rules to active directives and saves pinned exceptions. Other sessions will update.</p><div class="wb-row"><button id="wbConfirmApply" class="primary">Confirm</button><button id="wbEditApply">Edit</button><button id="wbCancelApply">Cancel</button></div></dialog>
@@ -141,6 +144,7 @@
 <script src="/briefing-model.js" defer></script>
 <script src="/briefing.js" defer></script>
 <script src="/learn.js" defer></script>
+<script src="/policy.js" defer></script>
 <script src="/lights.js" defer></script>
 <script src="/app.js" defer></script>
 </body>

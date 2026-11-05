@@ -12,8 +12,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
@@ -22,19 +24,31 @@ type Server struct {
 	store    *store.Store
 	hub      *hub
 	mux      *http.ServeMux
+	policy   *policyRuntime
 	compiler *command.Compiler
 	after    func(time.Duration, func())
 }
 
 const maxStreamClients = 64
 
-func New(data *store.Store) *Server {
+func New(data *store.Store, options ...Option) *Server {
+	opts := serverOptions{}
+	for _, option := range options {
+		option(&opts)
+	}
 	s := &Server{
 		store: data, hub: newHub(), mux: http.NewServeMux(),
 		compiler: &command.Compiler{}, after: func(delay time.Duration, fn func()) { time.AfterFunc(delay, fn) },
 	}
+	s.policy = newPolicyRuntime(opts, data)
+	s.policy.onChange = s.publishSnapshot
 	s.mux.HandleFunc("GET /api/config", s.config)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
+	s.mux.HandleFunc("GET /api/policy", s.getPolicy)
+	s.mux.HandleFunc("POST /api/policy/emcon", s.setPolicyEMCON)
+	s.mux.HandleFunc("GET /api/policy/audit", s.policyAudit)
+	s.mux.HandleFunc("POST /api/policy/validate", s.validatePolicy)
+	s.mux.HandleFunc("PUT /api/policy", s.applyAdminPolicy)
 	s.mux.HandleFunc("POST /api/directives", s.addDirective)
 	s.mux.HandleFunc("POST /api/directives/compile", s.compileDirective)
 	s.mux.HandleFunc("POST /api/directives/preview", s.previewDirectives)
@@ -114,8 +128,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.hub.remove(client)
-	items, stats, cdr, state := s.store.Snapshot()
-	if !writeEvent(w, "snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives)}) {
+	items, stats, cdr, state := s.store.SnapshotWithDirectives()
+	if !writeEvent(w, "snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives), "policy": s.policySummary()}) {
 		return
 	}
 	flusher.Flush()
@@ -143,6 +157,10 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
+	if s.policy.guard == nil {
+		writeError(w, http.StatusInternalServerError, s.policy.err.Error())
+		return
+	}
 	var body struct {
 		Text        string          `json:"text"`
 		Rules       *[]command.Rule `json:"rules"`
@@ -161,6 +179,8 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
+	s.policy.mu.Lock()
+	defer s.policy.mu.Unlock()
 	compiler := s.directiveCompiler()
 	var compiled command.Compiled
 	var rules []command.Rule
@@ -176,10 +196,22 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 			durationMin = compiled.DurationMin
 		}
 	}
-	if compiled.Blocked {
+	lockWarnings := []string{}
+	lockBlocked := false
+	if compiler.Locks != nil {
+		lockWarnings, lockBlocked = compiler.Locks.CheckLocks(rules)
+	}
+	otherBlock := false
+	for _, warning := range compiled.Warnings {
+		if strings.HasPrefix(warning, "Blocked:") {
+			otherBlock = true
+			break
+		}
+	}
+	if compiled.Blocked && (!lockBlocked || otherBlock) {
 		message := ""
 		for _, warning := range compiled.Warnings {
-			if strings.HasPrefix(warning, "Blocked") {
+			if strings.HasPrefix(warning, "Blocked:") {
 				message = warning
 				break
 			}
@@ -205,9 +237,57 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
-	directive, err := s.store.AddDirective(strings.TrimSpace(body.Text), rules)
+	candidate := &pb.Policy{Layers: append([]*pb.PolicyLayer(nil), s.policy.higherLayers...)}
+	operator := s.policy.operatorLayer()
+	for i, rule := range rules {
+		labels := rule.Classes
+		if len(labels) == 0 {
+			labels = rule.Attrs
+		}
+		ir := &pb.InterestRule{Id: fmt.Sprintf("new:%d", i), Author: "TAO", Text: body.Text, Weight: rule.Weight}
+		if rule.Type == "suppress" {
+			ir.SuppressLabels = append([]string(nil), labels...)
+		} else {
+			ir.BoostLabels = append([]string(nil), labels...)
+		}
+		operator.Rules = append(operator.Rules, ir)
+	}
+	candidate.Layers = append(candidate.Layers, operator)
+	_, _, conflicts := policy.MergeRules(candidate.Layers, s.policy.nodeID, time.Now())
+	blocked := make(map[string]bool)
+	for _, conflict := range conflicts {
+		if conflict != nil {
+			id, index, _, ok := parsePolicyRuleID(conflict.RuleId)
+			if ok && id == "new" {
+				blocked[fmt.Sprintf("new:%d", index)] = true
+			}
+		}
+	}
+	kept := make([]command.Rule, 0, len(rules))
+	for i, rule := range rules {
+		if !blocked[fmt.Sprintf("new:%d", i)] {
+			kept = append(kept, rule)
+		}
+	}
+	if len(kept) == 0 {
+		reason := "Policy rule blocked by higher-echelon lock"
+		if lockBlocked && len(lockWarnings) > 0 {
+			reason = lockWarnings[0]
+		} else if len(conflicts) > 0 && conflicts[0] != nil {
+			reason = conflicts[0].Reason
+		}
+		candidate.Id, candidate.IssuedBy, candidate.Text = fmt.Sprintf("sim-%d", time.Now().UnixMilli()), "TAO", strings.TrimSpace(body.Text)
+		s.policy.guard.Reject(r.Context(), candidate, "ui", reason, time.Now())
+		writeJSON(w, http.StatusConflict, map[string]any{"error": reason, "conflicts": conflictSummaries(conflicts)})
+		return
+	}
+	directive, err := s.store.AddDirective(strings.TrimSpace(body.Text), kept)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	if _, err := s.policy.apply("ui", "TAO", directive.Text, time.Now()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	s.publishSnapshot()
@@ -215,12 +295,24 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	if durationMin > 0 {
 		id := directive.ID
 		s.after(time.Duration(durationMin)*time.Minute, func() {
-			if s.store.DeleteDirective(id) {
+			s.policy.mu.Lock()
+			deleted := s.store.DeleteDirective(id)
+			if deleted {
+				if _, err := s.policy.apply("expiry", "TAO", "Directive expired", time.Now()); err != nil {
+					log.Printf("server: expire directive %s: %v", id, err)
+				}
+			}
+			s.policy.mu.Unlock()
+			if deleted {
 				s.publishSnapshot()
 			}
 		})
 	}
-	writeJSON(w, http.StatusCreated, directive)
+	response, _ := json.Marshal(directive)
+	var result map[string]any
+	_ = json.Unmarshal(response, &result)
+	result["conflicts"] = conflictSummaries(conflicts)
+	writeJSON(w, http.StatusCreated, result)
 }
 
 func (s *Server) compileDirective(w http.ResponseWriter, r *http.Request) {
@@ -256,8 +348,18 @@ func (s *Server) compileDirective(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteDirective(w http.ResponseWriter, r *http.Request) {
+	s.policy.mu.Lock()
+	defer s.policy.mu.Unlock()
+	if directive, ok := s.store.Directive(r.PathValue("id")); ok && directive.Source != "" {
+		writeError(w, http.StatusConflict, "Issued by "+directive.Source+" — change it at that echelon")
+		return
+	}
 	if !s.store.DeleteDirective(r.PathValue("id")) {
 		http.NotFound(w, r)
+		return
+	}
+	if _, err := s.policy.apply("ui", "TAO", "Directive removed", time.Now()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	s.publishSnapshot()
@@ -266,7 +368,13 @@ func (s *Server) deleteDirective(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) clearDirectives(w http.ResponseWriter, r *http.Request) {
+	s.policy.mu.Lock()
+	defer s.policy.mu.Unlock()
 	s.store.ClearDirectives()
+	if _, err := s.policy.apply("ui", "TAO", "Directives cleared", time.Now()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.publishSnapshot()
 	audit(r, "directive.clear")
 	w.WriteHeader(http.StatusNoContent)
@@ -384,8 +492,8 @@ func (s *Server) fullRes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) publishSnapshot() {
-	items, stats, cdr, state := s.store.Snapshot()
-	s.hub.publish("snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives)})
+	items, stats, cdr, state := s.store.SnapshotWithDirectives()
+	s.hub.publish("snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives), "policy": s.policySummary()})
 }
 
 func decodeJSON(reader io.Reader, dst any) error {

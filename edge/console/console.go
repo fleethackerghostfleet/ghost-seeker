@@ -3,6 +3,8 @@ package console
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -17,6 +19,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 )
 
 type Service struct {
@@ -116,11 +119,49 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if req.Msg.Policy == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("policy required"))
 	}
-	sup, boost, err := s.Sch.ApplyPolicy(ctx, req.Msg.Policy)
+	sup, boost, err := s.Sch.AcceptPolicy(ctx, req.Msg.Policy, "console")
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		code := connect.CodeInvalidArgument
+		switch {
+		case errors.Is(err, policy.ErrStaleVersion), errors.Is(err, policy.ErrExpired):
+			code = connect.CodeFailedPrecondition
+		case errors.Is(err, policy.ErrUnsigned), errors.Is(err, policy.ErrUnknownKey), errors.Is(err, policy.ErrBadSignature):
+			code = connect.CodePermissionDenied
+		}
+		return nil, connect.NewError(code, err)
 	}
-	return connect.NewResponse(&pb.SetPolicyResponse{Policy: s.Sch.Policy(), SuppressedCount: sup, BoostedCount: boost}), nil
+	applied := s.Sch.Policy()
+	return connect.NewResponse(&pb.SetPolicyResponse{Policy: applied, SuppressedCount: sup, BoostedCount: boost, Conflicts: applied.Conflicts}), nil
+}
+
+func (s *Service) PolicyAuditHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		limit := 100
+		if value := r.URL.Query().Get("limit"); value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed < 0 {
+				http.Error(w, "invalid limit", http.StatusBadRequest)
+				return
+			}
+			if parsed > 1000 {
+				parsed = 1000
+			}
+			if parsed > 0 {
+				limit = parsed
+			}
+		}
+		entries, err := s.Sch.PolicyAudit(r.Context(), limit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"entries": entries})
+	})
 }
 
 func (s *Service) OverrideLabel(ctx context.Context, req *connect.Request[pb.OverrideLabelRequest]) (*connect.Response[pb.OverrideLabelResponse], error) {

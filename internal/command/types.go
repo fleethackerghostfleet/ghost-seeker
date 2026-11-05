@@ -16,12 +16,17 @@ type Rule struct {
 	Sources     []string `json:"sources,omitempty"`
 	WithinMin   int      `json:"withinMin,omitempty"`
 	Edited      bool     `json:"edited,omitempty"`
+	Blocked     string   `json:"blocked,omitempty"`
 }
 
 type Directive struct {
-	ID    string `json:"id"`
-	Text  string `json:"text"`
-	Rules []Rule `json:"rules"`
+	ID       string `json:"id"`
+	Text     string `json:"text"`
+	Rules    []Rule `json:"rules"`
+	Source   string `json:"source,omitempty"`
+	Locked   bool   `json:"locked,omitempty"`
+	LockedBy string `json:"lockedBy,omitempty"`
+	Blocked  string `json:"blocked,omitempty"`
 }
 
 type Box struct {

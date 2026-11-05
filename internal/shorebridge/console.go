@@ -104,6 +104,8 @@ type LivePolicy struct {
 	EMCON     EmconSummary     `json:"emcon"`
 	Locks     []PolicyLock     `json:"locks"`
 	Conflicts []PolicyConflict `json:"conflicts"`
+	// ExpiresAtUnixMs is 0 for an open-ended policy (the sim fills a default TTL; the shore keeps it until cleared).
+	ExpiresAtUnixMs int64 `json:"expiresAtUnixMs"`
 }
 
 type EmconSummary struct {
@@ -111,18 +113,6 @@ type EmconSummary struct {
 	SetBy    string `json:"setBy"`
 	Locked   bool   `json:"locked"`
 	LockedBy string `json:"lockedBy"`
-}
-
-type PolicyLock struct {
-	RuleID   string   `json:"ruleId"`
-	Labels   []string `json:"labels"`
-	LockedBy string   `json:"lockedBy"`
-}
-
-type PolicyConflict struct {
-	RuleID    string `json:"ruleId"`
-	Reason    string `json:"reason"`
-	BlockedBy string `json:"blockedBy"`
 }
 
 // Camera is one entry of the Cameras strip: the edge's per-source heartbeat
@@ -586,28 +576,10 @@ func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
 	if pol == nil {
 		return p
 	}
-	p.Version = pol.GetVersion()
-	p.EMCON.Mode = emconLabel(pol.GetEmcon())
-	if es := pol.GetEmconSetting(); es != nil {
-		if es.GetMode() != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-			p.EMCON.Mode = emconLabel(es.GetMode())
-		}
-		p.EMCON.SetBy = es.GetSetBy()
-		if es.GetLocked() && es.GetEchelon() > pb.Echelon_ECHELON_SHIP {
-			p.EMCON.Locked, p.EMCON.LockedBy = true, es.GetSetBy()
-		}
-	}
-	for _, layer := range pol.GetLayers() {
-		for _, rule := range layer.GetRules() {
-			if rule.GetLocked() {
-				labels := append(append([]string(nil), rule.GetBoostLabels()...), rule.GetSuppressLabels()...)
-				p.Locks = append(p.Locks, PolicyLock{RuleID: rule.GetId(), Labels: labels, LockedBy: layer.GetIssuedBy()})
-			}
-		}
-	}
-	for _, conflict := range pol.GetConflicts() {
-		p.Conflicts = append(p.Conflicts, PolicyConflict{RuleID: conflict.GetRuleId(), Reason: conflict.GetReason(), BlockedBy: conflict.GetBlockedBy()})
-	}
+	info := policyInfo(pol) // same merge/lock view as the F2 strip (#57)
+	p.Version, p.ExpiresAtUnixMs = info.Version, pol.GetExpiresAtUnixMs()
+	p.EMCON = EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy}
+	p.Locks, p.Conflicts = info.Locks, info.Conflicts
 	return p
 }
 
@@ -756,6 +728,12 @@ func (c *Console) Handler() http.Handler {
 		c.mu.Unlock()
 		writeJSON(w, map[string]any{"policy": p})
 	})
+	mux.HandleFunc("POST /api/policy/emcon", c.b.setEMCON)
+	unsupported := func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, http.StatusConflict, "Live shore mode: raw policy editing is done on the shore node (policy-keygen / shore admin), not from the console.")
+	}
+	mux.HandleFunc("POST /api/policy/validate", unsupported)
+	mux.HandleFunc("PUT /api/policy", unsupported)
 	mux.HandleFunc("GET /api/policy/audit", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"entries": []any{}})
 	})
