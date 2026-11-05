@@ -8,36 +8,24 @@ import (
 )
 
 func readback(rules []Rule, durationMin int) string {
-	boost, suppress, targets := make([]string, 0), make([]string, 0), make([]string, 0)
-	focus := false
+	parts := make([]string, 0, len(rules)+1)
 	for _, rule := range rules {
 		phrase := readbackRule(rule)
 		if rule.Tier >= 1 && rule.Tier <= 4 {
-			targets = append(targets, "Set "+phrase)
+			parts = append(parts, "Set "+phrase+".")
 			continue
 		}
 		if rule.Type == "boost" {
-			boost = append(boost, phrase)
-			focus = focus || rule.Only
+			parts = append(parts, "Boost: "+phrase+".")
+			if rule.Only {
+				parts = append(parts, "Focus: other contacts ×0.3.")
+			}
 		} else if rule.Type == "suppress" {
-			suppress = append(suppress, phrase)
+			parts = append(parts, "Suppress: "+phrase+".")
 		}
 	}
-	if len(boost) == 0 && len(suppress) == 0 && len(targets) == 0 {
+	if len(parts) == 0 {
 		return "No rules recognized."
-	}
-	parts := make([]string, 0, 4)
-	if len(targets) > 0 {
-		parts = append(parts, strings.Join(targets, "; ")+".")
-	}
-	if len(boost) > 0 {
-		parts = append(parts, "Boost: "+strings.Join(boost, "; ")+".")
-	}
-	if focus {
-		parts = append(parts, "Focus: other contacts ×0.3.")
-	}
-	if len(suppress) > 0 {
-		parts = append(parts, "Suppress: "+strings.Join(suppress, "; ")+".")
 	}
 	if durationMin == 0 {
 		parts = append(parts, "Until cleared.")
