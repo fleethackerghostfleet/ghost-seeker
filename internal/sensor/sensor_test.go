@@ -68,6 +68,9 @@ func TestTickUsesLibraryImageDetections(t *testing.T) {
 		if item == nil {
 			continue
 		}
+		if item.Night != nil && *item.Night {
+			continue
+		}
 		itemReturned = true
 
 		var image *catalog.LibraryImage

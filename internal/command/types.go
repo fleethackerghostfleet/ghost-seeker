@@ -42,13 +42,16 @@ type Attributes struct {
 }
 
 type Detection struct {
-	Class string     `json:"cls"`
-	Box   Box        `json:"b"`
-	Conf  float64    `json:"conf"`
-	Attrs Attributes `json:"attrs"`
+	Lights []Light      `json:"lights,omitempty"`
+	Signal *LightSignal `json:"sig,omitempty"`
+	Class  string       `json:"cls"`
+	Box    Box          `json:"b"`
+	Conf   float64      `json:"conf"`
+	Attrs  Attributes   `json:"attrs"`
 }
 
 type DetectionScore struct {
+	Light   bool    `json:"light,omitempty"`
 	Score   float64 `json:"s"`
 	Matched bool    `json:"matched"`
 	Sup     bool    `json:"sup"`
@@ -63,6 +66,9 @@ type Latency struct {
 }
 
 type Item struct {
+	Night       *bool      `json:"night,omitempty"`
+	Basis       string     `json:"basis,omitempty"`
+	Lum         float64    `json:"lum,omitempty"`
 	Bands       []string   `json:"bands,omitempty"`
 	ID          string     `json:"id"`
 	Img         string     `json:"img,omitempty"`
