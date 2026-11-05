@@ -227,12 +227,45 @@ func Predict(id string, r *pb.AnalyzeResponse) Prediction {
 func Rank(predictions []Prediction) {
 	objects := make([]*shorebridge.Object, len(predictions))
 	for i, p := range predictions {
-		objects[i] = &shorebridge.Object{Best: &shorebridge.Card{Score: p.EdgePriority}}
+		objects[i] = &shorebridge.Object{Scene: len(p.Detections) == 0, Best: &shorebridge.Card{Score: p.EdgePriority}}
 	}
 	shorebridge.AssignTiers(objects)
 	for i, o := range objects {
 		predictions[i].ModelTier, _ = strconv.Atoi(strings.TrimPrefix(o.Priority, "P"))
 	}
+}
+
+// Rerank updates only model tiers, preserving the stored inference outputs.
+func Rerank(dir string) error {
+	path := filepath.Join(dir, "predictions.jsonl")
+	predictions, err := readRows[Prediction](path)
+	if err != nil {
+		return err
+	}
+	if len(predictions) == 0 {
+		return fmt.Errorf("predictions must be nonempty")
+	}
+	Rank(predictions)
+	f, err := os.CreateTemp(dir, ".predictions-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	encoder := json.NewEncoder(f)
+	for _, p := range predictions {
+		if err = encoder.Encode(p); err != nil {
+			f.Close()
+			return err
+		}
+	}
+	if err = f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
 }
 
 func Build(ctx context.Context, root, out string, an inference.Analyzer) error {

@@ -2,6 +2,8 @@ package rnd
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -59,7 +61,7 @@ func TestSampleNaturalOrder(t *testing.T) {
 }
 func TestRank(t *testing.T) {
 	Rank(nil)
-	one := []Prediction{{EdgePriority: 0}}
+	one := []Prediction{{EdgePriority: 0, Detections: []Detection{{Label: "boat"}}}}
 	Rank(one)
 	if one[0].ModelTier != 1 {
 		t.Fatal(one)
@@ -67,6 +69,7 @@ func TestRank(t *testing.T) {
 	ps := make([]Prediction, 500)
 	for i := range ps {
 		ps[i].EdgePriority = float64(500 - i)
+		ps[i].Detections = []Detection{{Label: "boat"}}
 	}
 	Rank(ps)
 	counts := [4]int{}
@@ -76,10 +79,84 @@ func TestRank(t *testing.T) {
 	if counts != [4]int{50, 125, 175, 150} {
 		t.Fatal(counts)
 	}
-	ties := []Prediction{{EdgePriority: 1}, {EdgePriority: 1}, {EdgePriority: 1}, {EdgePriority: 1}}
+	ties := []Prediction{}
+	for _, id := range []string{"z", "a", "b", "c"} {
+		ties = append(ties, Prediction{ID: id, EdgePriority: 1, Detections: []Detection{{Label: "boat"}}})
+	}
 	Rank(ties)
-	if ties[0].ModelTier != 1 || ties[3].ModelTier != 4 {
-		t.Fatal(ties)
+	for i, tier := range []int{1, 3, 4, 4} {
+		if ties[i].ModelTier != tier {
+			t.Fatal(ties)
+		}
+	}
+	Rank(ties)
+	if ties[0].ID != "z" || ties[0].ModelTier != 1 {
+		t.Fatal("ties must retain input order, not ID order", ties)
+	}
+}
+
+func TestRankScenes(t *testing.T) {
+	scenes := []Prediction{{EdgePriority: 100}, {EdgePriority: .2, Detections: []Detection{}}}
+	Rank(scenes)
+	for _, p := range scenes {
+		if p.ModelTier != 4 {
+			t.Fatal(scenes)
+		}
+	}
+	ps := make([]Prediction, 500)
+	for i := range ps {
+		ps[i].EdgePriority = .2
+		if i < 185 {
+			ps[i].Detections = []Detection{{Label: "boat"}}
+			ps[i].EdgePriority = float64(500 - i)
+		}
+	}
+	Rank(ps)
+	counts := [4]int{}
+	for i, p := range ps {
+		if i >= 185 && p.ModelTier != 4 {
+			t.Fatal("scene ranked", i, p)
+		}
+		counts[p.ModelTier-1]++
+	}
+	if counts != [4]int{18, 46, 65, 371} {
+		t.Fatal(counts)
+	}
+}
+
+func TestRerank(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "predictions.jsonl")
+	rows := []Prediction{{ID: "scene", ModelTier: 1, EdgePriority: .2, ModelScore: .2, ModelID: "real", LatencyMS: 15}, {ID: "contact", ModelTier: 4, EdgePriority: .8, ModelScore: .8, Detections: []Detection{{Label: "boat", Conf: .9}}}}
+	if err := writeJSONL(path, rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rerank(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readRows[Prediction](path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows[0].ModelTier = 4
+	rows[1].ModelTier = 1
+	if !reflect.DeepEqual(got, rows) {
+		t.Fatalf("inference changed: %v", got)
+	}
+	if err = Rerank(t.TempDir()); err == nil {
+		t.Fatal("missing predictions accepted")
+	}
+	if err = os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Rerank(dir); err == nil {
+		t.Fatal("empty predictions accepted")
+	}
+	if err = os.WriteFile(path, []byte("{broken"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = Rerank(dir); err == nil {
+		t.Fatal("corrupt predictions accepted")
 	}
 }
 func TestPrediction(t *testing.T) {
