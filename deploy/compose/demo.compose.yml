@@ -4,7 +4,7 @@
 #   make compose-demo          # build + up, then open http://localhost:8090
 #   make compose-demo-down     # stop and delete data + credentials (fresh replay)
 #
-# Prerequisites on the host (one-time, gcloud signed in as a lab account):
+# Prerequisites on the host (one-time; gh auth login while the repo is private):
 #   make demo-clips            # scenarios/ghostfleet_demo/frames (gitignored)
 #   make demo-models           # ~/models/D (override with MODELS=/path or GS_MODELS)
 #
@@ -67,7 +67,7 @@ services:
     build: { <<: *go-build, target: operator }
     image: ghost-seeker/operator:0.1.0
     command: ["-addr", ":8090", "-shore", "http://shore:8080", "-edge", "http://edge:8081", "-link-listen", ":18080",
-              "-dev-token-file", "/secrets/operator.token", "-dev-trust-peers", "-demo-accept-any-token"]
+              "-dev-token-file", "/secrets/operator.token", "-dev-trust-peers", "-demo-accept-any-token", "-demo-link-control"]
     # 127.0.0.1 only: with -dev-trust-peers a browser on this Mac is signed in
     # automatically (its connection reaches the container from Docker's bridge
     # gateway, not loopback); nothing else can reach the port.
@@ -81,7 +81,7 @@ services:
     build: { <<: *go-build, target: edge }
     image: ghost-seeker/edge:0.1.0
     command: ["-id", "edge-1", "-data", "/data/edge", "-listen", ":8081", "-ui", "/ui",
-              "-shore", "http://ui:18080", "-scenario", "/demo/scenario.json", "-period", "200ms",
+              "-shore", "http://ui:18080", "-scenario", "/demo/${GS_DEMO_SCENARIO:-live.json}", "-period", "200ms",
               "-infer", "http://sidecar:9090", "-dedup", "sightings", "-prioritizer", "edgeml",
               "-dev-token-file", "/secrets/operator.token", "-unit-token-file", "/secrets/edge-1.jwt"]
     environment:

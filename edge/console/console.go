@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/ingest"
 	"net/http"
 	"sort"
 	"strconv"
@@ -33,6 +34,8 @@ type Service struct {
 	Deduped func() int64
 	// Prioritizer is the active scoring backend ("edgeml" | "tomer"), reported in GetStatus.
 	Prioritizer string
+	// Frames is the edge's recent camera-frame log (ship console stream); optional.
+	Frames *ingest.FrameLog
 }
 
 func view(r *store.Row) *pb.ItemView {
@@ -97,7 +100,7 @@ func (s *Service) GetQueue(ctx context.Context, req *connect.Request[pb.GetQueue
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	plan := s.Sch.BuildPlan(rows, s.Sch.Link().State().EstimateBps, s.Clk.Now())
+	plan := s.Sch.PreviewPlan(rows, s.Sch.Link().State().EstimateBps, s.Clk.Now())
 	resp := &pb.GetQueueResponse{}
 	var tb int64
 	for i, e := range plan.Queue {

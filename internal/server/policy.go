@@ -25,12 +25,17 @@ import (
 type Option func(*serverOptions)
 
 type serverOptions struct {
+	demoReset      bool
 	admin          bool
 	adminToken     string
 	backend        policy.Backend
 	nodeID         string
 	datasetDir     string
 	datasetSources []catalog.Source
+}
+
+func WithDemoReset() Option {
+	return func(options *serverOptions) { options.demoReset = true }
 }
 
 func WithAdmin(enabled bool) Option {

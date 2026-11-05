@@ -39,6 +39,7 @@ import (
 
 // Capture is one thing a source produced.
 type Capture struct {
+	SceneEvery *time.Duration
 	Type       pb.ItemType
 	Data       []byte // image bytes, record JSON, telemetry blob
 	CapturedAt time.Time
@@ -159,6 +160,9 @@ type Ingester struct {
 	// kept that frame, so near_duplicate frames can fold into it (bounded ring).
 	tomerItems map[string]string
 	tomerRing  []string
+	// Frames, when set, records every image capture's outcome for the ship console.
+	Frames   *FrameLog
+	lastResp *pb.AnalyzeResponse
 }
 
 func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Scheduler, clk clock.Clock, log *slog.Logger) *Ingester {
@@ -174,6 +178,7 @@ func (g *Ingester) Deduped() int64 { return atomic.LoadInt64(&g.Dups) }
 
 // Run drains a source until done or ctx is cancelled.
 func (g *Ingester) Run(ctx context.Context, src Source) error {
+	seenSources := make(map[string]bool)
 	for {
 		c, done, err := src.Next(ctx)
 		if err != nil {
@@ -184,6 +189,9 @@ func (g *Ingester) Run(ctx context.Context, src Source) error {
 		}
 		if _, err := g.Ingest(ctx, c); err != nil {
 			g.log.Warn("ingest", "err", err)
+		} else if !seenSources[c.Source] {
+			seenSources[c.Source] = true
+			g.log.Info("ingested camera source", "source", c.Source, "frame", c.Tags["frame"])
 		}
 	}
 }
@@ -193,6 +201,17 @@ func (g *Ingester) Run(ctx context.Context, src Source) error {
 // frames are new objects, better key frames, or duplicates (see sightings.go),
 // and a response without sightings behaves like hash mode.
 func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
+	if g.Frames == nil || c.Type != pb.ItemType_ITEM_TYPE_IMAGE {
+		return g.ingest(ctx, c)
+	}
+	dups, count := atomic.LoadInt64(&g.Dups), g.Count
+	g.lastResp = nil
+	row, err := g.ingest(ctx, c)
+	g.logFrame(c, row, err, dups, count)
+	return row, err
+}
+
+func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	sum := sha256.Sum256(c.Data)
 	hash := hex.EncodeToString(sum[:])
 	image := c.Type == pb.ItemType_ITEM_TYPE_IMAGE
@@ -208,6 +227,7 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		if err != nil {
 			return nil, fmt.Errorf("analyze: %w", err)
 		}
+		g.lastResp = resp
 		if resp.Burst != nil && resp.Burst.Fps > 0 && resp.Burst.DurationS > 0 && g.OnBurst != nil {
 			d := time.Duration(resp.Burst.DurationS * float64(time.Second))
 			if d > 0 {
@@ -227,7 +247,7 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 			if len(resp.Sightings) > 0 {
 				return g.applySightings(ctx, c, hash, resp)
 			}
-			if g.cfg.SceneEvery > 0 {
+			if g.sceneEvery(c) > 0 {
 				return g.sceneItem(ctx, c, hash, resp)
 			}
 			if row, err := g.existing(ctx, hash); row != nil || err != nil {

@@ -1,0 +1,44 @@
+{
+  "text": "look for big ships",
+  "revision": 4,
+  "draft": {
+    "rules": [
+      {
+        "concept": "fishing boat",
+        "action": "boost",
+        "weight": 2
+      },
+      {
+        "concept": "submarine",
+        "action": "boost",
+        "weight": 2
+      },
+      {
+        "concept": "big ship",
+        "action": "boost",
+        "weight": 2
+      }
+    ],
+    "vocabulary": [
+      "big ship"
+    ],
+    "readback": "Prioritize fishing boat (2.0\u00d7); Prioritize submarine (2.0\u00d7); Prioritize big ship (2.0\u00d7)",
+    "path": "granite+granite-concepts",
+    "resolutions": [
+      {
+        "input": "big ship",
+        "canonical": "big ship",
+        "reason": "Preserved as a new visual concept."
+      }
+    ]
+  },
+  "queueCount": 45,
+  "warnings": [
+    "No images currently match \"big ship\"; this rule will not change priorities in the current queue.",
+    "No image priorities changed in this preview. The same interests may already be active, no images may match, or existing protections may apply."
+  ],
+  "elapsedMs": 2418,
+  "wallSeconds": 2.427557374991011,
+  "activeStateUnchanged": true,
+  "note": "Single warm preview after the concurrent language probe completed, not a1000-image acceptance benchmark."
+}

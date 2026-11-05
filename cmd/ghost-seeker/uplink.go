@@ -19,28 +19,13 @@ func newSimulationUplink(data *store.Store, fixedBPS int64, sample func() float6
 	u := &simulationUplink{data: data, sample: sample}
 	if fixedBPS >= 0 {
 		data.SetLinkBPS(fixedBPS)
+		data.SetLinkFixed(true)
 		return u
 	}
 	u.distribution = shaper.NewNormal("").Distribution()
-	u.distribution.StdDevBps *= 16_000 / u.distribution.MeanBps
-	u.distribution.MeanBps = 16_000
-	u.distribution.MaxBps = 100_000
 	u.untilSample = time.Duration(u.distribution.IntervalMS) * time.Millisecond
 	data.SetLinkBPS(u.distribution.Rate(sample()))
 	return u
-}
-
-func (u *simulationUplink) canGenerate(items []command.Item) bool {
-	if u.distribution == nil {
-		return true
-	}
-	pending := 0
-	for _, item := range items {
-		if !item.Upload.Done {
-			pending++
-		}
-	}
-	return pending < max(1, min(6, u.data.RetainLimit()-1))
 }
 
 func (u *simulationUplink) advance(elapsed time.Duration) []command.Item {

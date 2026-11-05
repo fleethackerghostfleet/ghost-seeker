@@ -18,15 +18,16 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/dataset"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
 type Server struct {
+	pubMu          sync.Mutex
+	demoReset      bool
 	syncMu         sync.Mutex
 	proposals      []*reviewProposal
-	reviews        *reviews.Log
+	reviews        reviewLog
 	reviewMu       sync.Mutex
 	store          *store.Store
 	hub            *hub
@@ -46,7 +47,8 @@ func New(data *store.Store, options ...Option) *Server {
 		option(&opts)
 	}
 	s := &Server{
-		store: data, hub: newHub(), mux: http.NewServeMux(),
+		demoReset: opts.demoReset,
+		store:     data, hub: newHub(), mux: http.NewServeMux(),
 		compiler: &command.Compiler{}, after: func(delay time.Duration, fn func()) { time.AfterFunc(delay, fn) },
 	}
 	if opts.datasetDir != "" {
@@ -56,6 +58,9 @@ func New(data *store.Store, options ...Option) *Server {
 	}
 	s.policy = newPolicyRuntime(opts, data)
 	s.policy.onChange = s.publishSnapshot
+	if s.demoReset {
+		s.mux.HandleFunc("POST /api/demo/reset", s.resetDemo)
+	}
 	s.mux.HandleFunc("GET /api/config", s.config)
 	s.mux.HandleFunc("GET /api/review-sync", s.reviewSyncList)
 	s.mux.HandleFunc("POST /api/review-sync/proposals", s.reviewSyncCreate)
@@ -102,19 +107,45 @@ func (s *Server) directiveCompiler() *command.Compiler {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/api/demo/reset" {
+		if !s.demoReset {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	}
 	s.mux.ServeHTTP(w, r)
 }
 
 func (s *Server) PublishItem(item command.Item, stats command.Stats) {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	if !s.store.Has(item.ID) {
+		return
+	}
+	stats, _ = s.store.Stats()
 	s.hub.publish("item", map[string]any{"item": item, "stats": stats})
 }
 
 // PublishUpdate broadcasts a review or commander decision on one item.
 func (s *Server) PublishUpdate(item command.Item, cdr int) {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	if !s.store.Has(item.ID) {
+		return
+	}
+	_, cdr = s.store.Stats()
 	s.hub.publish("update", map[string]any{"item": item, "cdr": cdr})
 }
 
 func (s *Server) PublishStats(stats command.Stats) {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	stats, _ = s.store.Stats()
 	s.hub.publish("stats", map[string]any{"stats": stats})
 }
 
@@ -125,6 +156,8 @@ func (s *Server) RescoreTimeScoped(now time.Time) {
 }
 
 func (s *Server) PublishEvict(id string) {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
 	if id != "" {
 		s.hub.publish("evict", map[string]string{"id": id})
 	}
@@ -139,6 +172,7 @@ func (s *Server) config(w http.ResponseWriter, _ *http.Request) {
 		"sources": sources, "classes": catalog.Classes, "models": catalog.Models,
 		"attrLabels": catalog.AttrLabels, "examples": catalog.Examples,
 		"reviewSync": true, "datasetMode": s.datasetMode,
+		"demoReset": s.demoReset,
 	})
 }
 
@@ -151,14 +185,17 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Connection", "keep-alive")
+	s.pubMu.Lock()
 	client, ok := s.hub.add()
 	if !ok {
+		s.pubMu.Unlock()
 		http.Error(w, "too many stream clients", http.StatusServiceUnavailable)
 		return
 	}
 	defer s.hub.remove(client)
-	items, stats, cdr, state := s.store.SnapshotWithDirectives()
-	if !writeEvent(w, "snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives), "policy": s.policySummary()}) {
+	snapshot := s.snapshotEvent()
+	s.pubMu.Unlock()
+	if !writeEvent(w, "snapshot", snapshot) {
 		return
 	}
 	flusher.Flush()
@@ -544,8 +581,39 @@ func (s *Server) fullRes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) publishSnapshot() {
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	s.hub.publish("snapshot", s.snapshotEvent())
+}
+
+func (s *Server) snapshotEvent() map[string]any {
 	items, stats, cdr, state := s.store.SnapshotWithDirectives()
-	s.hub.publish("snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives), "policy": s.policySummary()})
+	return map[string]any{"epoch": s.store.Epoch(), "state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives), "policy": s.policySummary()}
+}
+
+func (s *Server) resetDemo(w http.ResponseWriter, r *http.Request) {
+	if principal, ok := opauth.PrincipalFrom(r.Context()); ok && principal.Role != "operator" {
+		writeError(w, http.StatusForbidden, "operator role required")
+		return
+	}
+	var body struct {
+		Confirm string `json:"confirm"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSON(r.Body, &body); err != nil || body.Confirm != "reset" {
+		writeError(w, http.StatusBadRequest, "confirm must be reset")
+		return
+	}
+	s.reviewMu.Lock()
+	defer s.reviewMu.Unlock()
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+	epoch := s.store.Reset()
+	snapshot := s.snapshotEvent()
+	snapshot["reset"] = true
+	s.hub.publish("snapshot", snapshot)
+	audit(r, "demo.reset", "epoch", epoch)
+	writeJSON(w, http.StatusOK, map[string]any{"epoch": epoch})
 }
 
 func decodeJSON(reader io.Reader, dst any) error {

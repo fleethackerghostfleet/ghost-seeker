@@ -17,6 +17,8 @@ function setup(){
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
   SRC={sensor:{id:'sensor',name:'Sensor'}};
+  feedFilters={sensor:'ALL',tier:'all',review:'all',showDuplicates:true};
+  gsSettings={get:()=>({feed:feedFilters}),setFeed:value=>Object.assign(feedFilters,value)};
   state.page='rv';reviewerName='Reviewer';reviewDataReady=true;
   renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};renderPolicySummary=()=>{};renderAsk=()=>{};renderLive=()=>{};
   buildWhy=()=>[];zulu=()=> '12:00:00Z';largeImage=it=>'<img data-review-id="'+it.id+'" src="'+it.img+'">';
@@ -34,16 +36,34 @@ function active(h,id='active'){
  assert.match(h.context.$('rvMain').innerHTML,new RegExp(`data-review-id="${id}"`));
 }
 
+test('scene arrivals do not replace stable Review selection or become its next item',()=>{
+ const h=setup();h.run(`start();emit('item',{item:{...raw('ocean',4),live:{event:'scene'}},stats:{}})`);active(h);
+ assert.equal(h.run('rvQueue().some(isScene)'),false);
+ h.run("rvAct('skip')");active(h,'next');
+ h.run("rvAct('skip')");assert.equal(h.run('isScene(rv.cur)'),false);
+ h.run("items=items.filter(isScene);rv.cur=null;renderReview()");
+ assert.equal(h.run('rv.cur'),null);
+ assert.match(h.context.$('rvMain').innerHTML,/All caught up/);
+});
+test('a stale pinned or displayed scene cannot be reviewed',()=>{
+ const h=setup();h.run(`start();scene={...findItem('active'),live:{event:'scene'}};rv.cur=scene;rv.displayed=scene;
+  requests=[];submitReview=(...args)=>{requests.push(args);return Promise.resolve()};rvAct('accept')`);
+ assert.equal(h.run('requests.length'),0);
+ h.run('renderReview()');active(h);
+ assert.equal(h.run('isScene(rv.cur)'),false);
+ h.run('rv.displayed=scene;rvAct("accept")');
+ assert.equal(h.run('requests.length'),0);
+});
 test('new high-priority arrivals and score reordering never replace the active image',()=>{
  const h=setup();h.run('start()');active(h);
- h.run("emit('item',{item:raw('urgent',1),stats:{cap:3}});flushFeed()");active(h);
- h.run("emit('update',{item:{...raw('next',1),central:1},cdr:0});flushFeed()");active(h);
+ h.run("emit('item',{item:raw('urgent',1),stats:{cap:3}})");active(h);
+ h.run("emit('update',{item:{...raw('next',1),central:1},cdr:0})");active(h);
  assert.equal(h.run("rvQueue()[0].id"),'next');
  assert.equal(h.run('state.paused'),false);
 });
 test('the default simulated watch officer review update does not advance review',()=>{
  const h=setup();h.run('start()');active(h);
- h.run("emit('update',{item:{...raw('active'),manual:2,reviewed:true,sent:true},cdr:1});flushFeed()");
+ h.run("emit('update',{item:{...raw('active'),manual:2,reviewed:true,sent:true},cdr:1})");
  active(h);
  assert.equal(h.run("findItem('active').reviewed&&findItem('active').sent&&cdr===1"),true);
 });
@@ -51,7 +71,7 @@ test('upload progress refreshes the active record and feed without selecting a n
  const h=setup();h.run('start();feedRenders=0;renderFeed=()=>feedRenders++');
  h.run("emit('update',{item:{...raw('active'),upload:{bytes:100,sent:70}},cdr:0});flushFeed()");
  active(h);assert.equal(h.run('rv.cur.upload.sent'),70);assert.equal(h.run('feedRenders'),1);
- h.run("emit('stats',{stats:{bytes:70}});flushFeed()");active(h);
+ h.run("emit('stats',{stats:{bytes:70}})");active(h);
  assert.equal(h.run('stats.bytes'),70);
 });
 test('full reconnect and time-rescore snapshots preserve selection while replacing objects',()=>{
@@ -70,7 +90,7 @@ for(const removal of ['eviction','snapshot','held reconnect']){
   active(h);assert.match(h.context.$('rvMain').innerHTML,/no longer available/i);
   assert.equal(h.run("$('rvKeys').children.find(b=>b.dataset.a==='accept').disabled"),true);
   assert.equal(h.run("$('rvKeys').children.find(b=>b.dataset.a==='skip').disabled"),false);
-  h.run("emit('item',{item:raw('urgent',1),stats:{}});flushFeed();submitted=[];submitReview=(...args)=>submitted.push(args);rvAct('accept')");
+  h.run("emit('item',{item:raw('urgent',1),stats:{}});submitted=[];submitReview=(...args)=>submitted.push(args);rvAct('accept')");
   active(h);assert.equal(h.run('submitted.length'),0);
   h.run("rvAct('skip')");active(h,'urgent');
  });
@@ -85,9 +105,10 @@ for(const action of ['accept','1','2','3','4','dismiss','cdr']){
   assert.equal(h.run('submitted.length'),1);assert.equal(h.run('submitted[0].id'),'active');
   h.run("applySnapshot(snapshot([raw('urgent',1),{...raw('active'),reviewed:true},raw('next',3)]))");active(h);
   h.run('complete()');await new Promise(setImmediate);
+  assert.match(h.run('rv.last'),/Saved:.*Press Z to undo\./);
   h.run("applySnapshot(snapshot([raw('urgent',1),{...raw('active'),reviewed:true},raw('next',3)]))");active(h);
   h.finish(280);active(h,'urgent');
-  h.run('flushFeed()');active(h,'urgent');assert.equal(h.run('rv.done'),1);
+  active(h,'urgent');assert.equal(h.run('rv.done'),1);
  });
 }
 test('input racing a batched rescore uses the priority that was actually displayed',async()=>{
@@ -101,12 +122,12 @@ test('skip postpones one item, and undo returns to the original image even acros
  await new Promise(setImmediate);h.finish(280);active(h);
  h.run("undoReview=p=>{applyItemUpdate(raw(p.id,3));return Promise.resolve(findItem(p.id))};rvAct('undo')");
  await new Promise(setImmediate);active(h,'next');assert.equal(h.run('rv.done'),0);assert.equal(h.run('rv.undo.length'),0);
- h.run("emit('update',{item:{...raw('next',3),reviewed:true},cdr:0});flushFeed()");active(h,'next');
+ h.run("emit('update',{item:{...raw('next',3),reviewed:true},cdr:0})");active(h,'next');
 });
 test('undo after retention eviction shows the missing original image instead of a different one',async()=>{
  const h=setup();h.run("start();submitReview=(id,action,changes)=>{applyItemUpdate({...raw(id),...changes});return Promise.resolve()};rvAct('accept')");
  await new Promise(setImmediate);h.finish(280);active(h,'next');
- h.run("emit('evict',{id:'active'});flushFeed();undoReview=()=>Promise.resolve(undefined);rvAct('undo')");
+ h.run("emit('evict',{id:'active'});undoReview=()=>Promise.resolve(undefined);rvAct('undo')");
  await new Promise(setImmediate);active(h);assert.match(h.context.$('rvMain').innerHTML,/no longer available/i);
 });
 test('failed review stays on the active image without recording or advancing',async()=>{
@@ -122,7 +143,7 @@ test('explicit review order navigation selects once and is ignored while a save 
  const start=source.indexOf(" $('rvOrder').onclick=");
  assert.ok(start>=0);
  vm.runInContext(source.slice(start,source.indexOf('\n',start)),h.context);
- h.run(`start();emit('item',{item:raw('urgent',1),stats:{}});flushFeed();
+ h.run(`start();emit('item',{item:raw('urgent',1),stats:{}});
   orderButton={dataset:{o:'pri'},classList:{toggle(){}}};$('rvOrder').children=[orderButton];
   orderEvent={target:{closest:()=>orderButton}};
   originalRender=renderReview;orderRenders=0;renderReview=()=>{orderRenders++;originalRender()};
@@ -144,7 +165,7 @@ test('an explicit sensor switch releases the pinned image and reviews only the c
  assert.ok(start>=0);
  vm.runInContext(source.slice(start,source.indexOf('\n',start)),h.context);
  h.run(`start();SRC.other={id:'other',name:'Other sensor'};
-  applyItemUpdate({...raw('other-image',1),src:'other'});flushFeed();
+  applyItemUpdate({...raw('other-image',1),src:'other'});
   state.page='feed';$('srcSel').onchange({target:{value:'other'}});location={hash:'#review'};route()`);
  active(h,'other-image');assert.equal(h.run("rv.cur.src.id===state.src"),true);
  h.run("submitted=[];submitReview=(id,action,changes)=>{submitted.push({id,changes});return Promise.resolve()};rvAct('accept')");
@@ -155,12 +176,12 @@ test('a sensor switch during a save waits, then selects once within the new sour
  const start=source.indexOf(" $('srcSel').onchange=");
  vm.runInContext(source.slice(start,source.indexOf('\n',start)),h.context);
  h.run(`start();SRC.other={id:'other',name:'Other sensor'};
-  applyItemUpdate({...raw('other-image',1),src:'other'});flushFeed();
+  applyItemUpdate({...raw('other-image',1),src:'other'});
   submitReview=(id,action,changes)=>new Promise(resolve=>complete=()=>{applyItemUpdate({...raw(id),...changes});resolve(findItem(id))});rvAct('accept');
   state.page='feed';$('srcSel').onchange({target:{value:'other'}});location={hash:'#review'};route()`);
  assert.equal(h.run('rv.cur'),null);assert.match(h.context.$('rvMain').innerHTML,/Saving review/);
  h.run('complete()');await new Promise(setImmediate);h.finish(280);active(h,'other-image');
- h.run('flushFeed()');active(h,'other-image');assert.equal(h.run('rv.done'),1);
+ active(h,'other-image');assert.equal(h.run('rv.done'),1);
 });
 for(const empty of [false,true]){
  test(`a sensor switch during undo does not restore the previous source (${empty?'empty':'nonempty'} queue)`,async()=>{
@@ -181,11 +202,19 @@ for(const empty of [false,true]){
 }
 test('a stale accept sends the displayed tier, then refreshes the same image on server rejection',async()=>{
  const h=setup();h.run(`start();requests=[];
-  request=(url,method,body)=>{requests.push({url,body});return Promise.reject(new Error('model priority changed'))};
-  emit('update',{item:raw('active',1),cdr:0});rvAct('accept')`);
+  request=(url,method,body)=>{requests.push({url,body});applyItemUpdate(raw('active',1));return Promise.reject(new Error('model priority changed'))};
+  rvAct('accept')`);
  await new Promise(setImmediate);active(h);
  assert.equal(h.run('requests.length'),1);assert.equal(h.run('requests[0].url'),'/api/items/active/review');
  assert.equal(h.run('requests[0].body.tier'),2);assert.equal(h.run('requests[0].body.action'),'accept');
  assert.equal(h.run('rv.displayed.centralTier'),1);assert.equal(h.run('rv.done'),0);assert.equal(h.run('rv.undo.length'),0);
  assert.match(h.context.$('toast').textContent,/model priority changed/);
+});
+test('demo next-step guidance explains saving and unavailable states without replacing the image',()=>{
+ const h=setup();h.run('start();renderNext(rv.cur)');
+ assert.match(h.context.$('rvNext').innerHTML,/Space.*agree with P2 High/);
+ h.run("emit('evict',{id:'active'});renderNext(rv.cur)");active(h);
+ assert.match(h.context.$('rvNext').innerHTML,/unavailable.*<kbd>S<\/kbd>.*<kbd>Z<\/kbd>/);
+ h.run('rv.busy=true;renderNext(rv.cur)');
+ assert.match(h.context.$('rvNext').innerHTML,/Saving review/);
 });

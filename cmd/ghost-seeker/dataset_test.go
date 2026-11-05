@@ -126,39 +126,45 @@ func TestDatasetTickTransfersAndPublishes(t *testing.T) {
 	}
 }
 
-func TestDatasetTickBackpressureAndOverrides(t *testing.T) {
+func TestDatasetTickCapturesDespitePendingUploads(t *testing.T) {
 	for _, rate := range []int64{-1, 8000, 0} {
 		t.Run(fmt.Sprint(rate), func(t *testing.T) {
-			data := store.New(20)
+			data, baseline := store.New(40), store.New(40)
 			uplink := newSimulationUplink(data, rate, func() float64 { return 0 })
+			oldUplink := newSimulationUplink(baseline, rate, func() float64 { return 0 })
 			for i := 0; i < 6; i++ {
-				data.Add(&command.Item{ID: fmt.Sprint(i), KB: 2}, 0)
+				item := command.Item{ID: fmt.Sprint(i), KB: 100000}
+				data.Add(&item, 0)
+				baseline.Add(&item, 0)
 			}
 			app := server.New(data)
 			replay := datasetReplay(t, false)
-			tickDatasetSimulation(data, replay, app, uplink, 1, time.Unix(0, 0), time.Second)
-			items, _, _, _ := data.Snapshot()
-			wantCount, wantSent := 7, int64(1000)
-			if rate < 0 {
-				wantCount, wantSent = 6, 2000
-			} else if rate == 0 {
-				wantSent = 0
+			total := time.Duration(0)
+			for tick := 0; tick < 20; tick++ {
+				elapsed := 700 * time.Millisecond
+				total += elapsed
+				tickDatasetSimulation(data, replay, app, uplink, 1, time.Unix(0, 0).Add(total), elapsed)
+				oldUplink.advance(elapsed)
 			}
-			item, _ := data.GetItem("0")
-			if len(items) != wantCount || item.Upload.Sent != wantSent {
-				t.Fatalf("rate=%d count=%d upload=%+v", rate, len(items), item.Upload)
+			items, stats, _, _ := data.Snapshot()
+			if len(items) != 26 || stats.Cap != 26 {
+				t.Fatalf("capture blocked: items=%d stats=%+v", len(items), stats)
 			}
-			if rate < 0 {
-				tickDatasetSimulation(data, replay, app, uplink, 1, time.Unix(1, 0), time.Minute)
-				items, _, _, _ = data.Snapshot()
-				if len(items) != 7 {
-					t.Fatal("generation did not resume after drain")
-				}
+			sent := func(s *store.Store) int64 {
+				items, _, _, _ := s.Snapshot()
+				var bytes int64
 				for _, item := range items {
-					if strings.HasPrefix(item.ID, "real-") && item.Frame != 1 {
-						t.Fatal("backpressured tick consumed a replay row")
-					}
+					bytes += item.Upload.Sent
 				}
+				return bytes
+			}
+			bps := rate
+			if bps < 0 {
+				bps = int64(uplink.distribution.MeanBps)
+			}
+			want := bps * int64(total/time.Millisecond) / 8000
+			if sent(data) != sent(baseline) || sent(data) != want {
+				t.Fatalf("bytes: captures=%d baseline=%d want=%d", sent(data), sent(baseline), want)
 			}
 		})
 	}
@@ -168,9 +174,8 @@ func TestDatasetHistoricalBackfill(t *testing.T) {
 	data := store.New(260)
 	fillDatasetBacklog(data, datasetReplay(t, false), 200, 1)
 	data.AdvanceUploads(24 * time.Hour)
-	uplink := newSimulationUplink(data, -1, func() float64 { return 0 })
 	items, _, _, _ := data.Snapshot()
-	if len(items) != 200 || !uplink.canGenerate(items) {
+	if len(items) != 200 {
 		t.Fatal("historical backlog blocks generation")
 	}
 	for _, item := range items {

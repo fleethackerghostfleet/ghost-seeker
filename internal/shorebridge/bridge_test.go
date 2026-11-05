@@ -42,6 +42,17 @@ func TestAutomaticLinkStatus(t *testing.T) {
 	if rec.Code != http.StatusMethodNotAllowed || link.Bps() != status.Bps {
 		t.Fatalf("manual rate changes must be rejected: status %d, bps %d", rec.Code, link.Bps())
 	}
+	demo := New("", "", link).WithLinkOverride(true)
+	rec = httptest.NewRecorder()
+	demo.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/link", strings.NewReader(`{"bps":32000}`)))
+	if rec.Code != http.StatusOK || link.Bps() != 32000 || !demo.linkStatus().Fixed {
+		t.Fatalf("demo override: status %d bps %d: %s", rec.Code, link.Bps(), rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	demo.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/link", strings.NewReader(`{"auto":true}`)))
+	if rec.Code != http.StatusOK || demo.linkStatus().Fixed {
+		t.Fatalf("demo auto: status %d: %s", rec.Code, rec.Body.String())
+	}
 	external := New("", "", nil).linkStatus()
 	if external.Controllable || external.Distribution != nil {
 		t.Fatalf("externally shaped link advertised automation: %+v", external)
@@ -62,6 +73,50 @@ func view(id string, ms int64, tags map[string]string, forms map[pb.FormKind]boo
 		v.FormStates = append(v.FormStates, &pb.FormState{Kind: k, Bytes: 100, AckedThrough: 40, Complete: done})
 	}
 	return v
+}
+
+func TestGroupRanksByNewestReportWithoutLosingReceipt(t *testing.T) {
+	old := view("old", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	newer := view("new", 2000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})
+	other := view("other", 1500, nil, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	old.Score.Priority, newer.Score.Priority, other.Score.Priority = .1, .9, .5
+	for _, views := range [][]*pb.ItemView{{old, newer, other}, {newer, other, old}} {
+		objects, _ := Group(views, nil, nil)
+		sighting := objects[0]
+		if sighting.Best.ID != "old" || !cardReceived(sighting.Best) || sighting.Score != .9 || sighting.Priority != "P1" {
+			t.Fatalf("latest score or earlier receipt lost: %+v", sighting)
+		}
+		score := scoreObjects(objects)[sighting]
+		if score.centralTier != 1 || score.edge != 1 {
+			t.Fatalf("console used stale score: %+v", score)
+		}
+	}
+}
+
+func TestGroupKeepsReceivedSummaryWhileNewerSummaryIsPending(t *testing.T) {
+	old := view("old", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	newer := view("new", 2000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})
+	for _, views := range [][]*pb.ItemView{{old, newer}, {newer, old}} {
+		objects, _ := Group(views, nil, nil)
+		if len(objects) != 1 || objects[0].Best.ID != "old" || objects[0].Best.Forms["fact"].State != "received" || objects[0].LastMs != 2000 || objects[0].Reports != 2 {
+			t.Fatalf("new pending summary hid receipt: %+v", objects)
+		}
+	}
+	old.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
+	objects, _ := Group([]*pb.ItemView{old, newer}, nil, nil)
+	if objects[0].Best.ID != "old" {
+		t.Fatal("pending image displaced received record")
+	}
+	old.Item.Type = newer.Item.Type
+	newer.FormStates[0].Complete = true
+	objects, _ = Group([]*pb.ItemView{old, newer}, nil, nil)
+	if objects[0].Best.ID != "new" || objects[0].Best.Forms["fact"].State != "received" {
+		t.Fatalf("new received summary did not replace earlier one: %+v", objects[0].Best)
+	}
+	objects, _ = Group([]*pb.ItemView{view("pending", 3000, nil, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})}, nil, nil)
+	if objects[0].Best.Forms["fact"].State == "received" {
+		t.Fatal("partial-only sighting gained a receipt")
+	}
 }
 
 func TestGroupBySighting(t *testing.T) {

@@ -11,6 +11,7 @@ function learner(){
  vm.runInContext(source,context);
  return vm.runInContext('createLearner()',context);
 }
+const MIN=(()=>{const context=vm.createContext({});vm.runInContext(source,context);return vm.runInContext('SUGGESTION_MIN_RERANKS',context)})();
 function add(l,id,{cls='small boat',dir=1,src=id}={}){
  return l.record({id,src,dets:[{cls}],det:[{s:.9}],sug:3,tier:dir>0?4:dir<0?2:3});
 }
@@ -20,16 +21,38 @@ function addMany(l,count,{cls='small boat',dir=1,sources=['EO-P7','IR-HE']}={}){
  return ids;
 }
 
+test('suggestions need three re-ranked images, set by one constant',()=>{
+ assert.equal(MIN,3);
+ assert.match(source,/const SUGGESTION_MIN_RERANKS=3;/);
+ assert.equal((source.match(/SUGGESTION_MIN_RERANKS/g)||[]).length,2);
+});
+
+test('suggestions report the exact tier change reviewers made',()=>{
+ const l=learner();
+ for(let i=0;i<MIN;i++)l.record({id:'sub'+i,src:i%2?'EO-P7':'IR-HE',dets:[{cls:'submarine'}],det:[{s:.9}],sug:1,tier:2});
+ const result=l.suggestion();
+ assert.equal(result.cls,'submarine');assert.equal(result.dir,'lower');assert.equal(result.from,1);assert.equal(result.to,2);assert.equal(result.highRisk,true);
+});
+
+test('the reported tier change is one that reviewers actually made',()=>{
+ const l=learner();let n=0;
+ const add=(sug,tier)=>l.record({id:'m'+n,src:n++%2?'EO-P7':'IR-HE',dets:[{cls:'small boat'}],det:[{s:.9}],sug,tier});
+ add(2,3);add(2,4);add(1,2);add(2,3);add(1,2);add(2,4);add(1,2);
+ const result=l.suggestion();
+ assert.equal(result.from,1);assert.equal(result.to,2);
+});
+
 test('lowering must recur across two sources and meets the eight-record window thresholds',()=>{
- const across=learner();addMany(across,5);
+ const across=learner();addMany(across,MIN);
  const result=across.suggestion();
- assert.equal(result.cls,'small boat');assert.equal(result.dir,'lower');assert.equal(result.n,5);assert.equal(result.of,5);
+ assert.equal(result.cls,'small boat');assert.equal(result.dir,'lower');assert.equal(result.n,MIN);assert.equal(result.of,MIN);
+ assert.equal(result.from,3);assert.equal(result.to,4);
 
  const oneSource=learner();addMany(oneSource,5,{sources:['EO-P7']});
  assert.equal(oneSource.suggestion(),null);
 
- const four=learner();addMany(four,4);
- assert.equal(four.suggestion(),null);
+ const tooFew=learner();addMany(tooFew,MIN-1);
+ assert.equal(tooFew.suggestion(),null);
 
  const belowRate=learner();addMany(belowRate,5);addMany(belowRate,3,{dir:0});
  assert.equal(belowRate.suggestion(),null);
@@ -40,7 +63,7 @@ test('lowering must recur across two sources and meets the eight-record window t
 });
 
 test('raising is suggested and high-risk classes are identified',()=>{
- const l=learner();addMany(l,5,{cls:'warship',dir:-1});
+ const l=learner();addMany(l,MIN,{cls:'warship',dir:-1});
  const result=l.suggestion();
  assert.equal(result.dir,'raise');assert.equal(result.highRisk,true);
 });
@@ -73,11 +96,11 @@ test('agreement never opens a why prompt even for close scores',()=>{
 test('empty detections are ignored, duplicate ids replace, and the history stays capped',()=>{
  const l=learner();
  assert.equal(l.record({id:'empty',dets:[],det:[],sug:3,tier:4}),null);
- const ids=addMany(l,5);
+ const ids=addMany(l,MIN);
  add(l,ids[0],{dir:0,src:'EO-P7'});
  assert.equal(l.suggestion(),null);
 
- const capped=learner();addMany(capped,5);addMany(capped,196,{cls:'warship',dir:0});
+ const capped=learner();addMany(capped,MIN);addMany(capped,201-MIN,{cls:'warship',dir:0});
  assert.equal(capped.suggestion(),null);
 });
 
@@ -98,7 +121,7 @@ test('no and later cooldowns count new attributed records; yes clears the class 
  const accepted=learner();addMany(accepted,5);
  accepted.resolve(accepted.suggestion(),'yes');
  assert.equal(accepted.suggestion(),null);
- addMany(accepted,4);assert.equal(accepted.suggestion(),null);
- add(accepted,'yes-fifth',{src:'SAR-7'});
- assert.equal(accepted.suggestion().n,5);
+ addMany(accepted,MIN-1);assert.equal(accepted.suggestion(),null);
+ add(accepted,'yes-last',{src:'SAR-7'});
+ assert.equal(accepted.suggestion().n,MIN);
 });

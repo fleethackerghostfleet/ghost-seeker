@@ -111,6 +111,16 @@ test('selection uses cached order and updates only the old and new cards on the 
  h.frame();
  assert.equal(vm.runInContext("state.sel===null&&updated.join(',')==='1'&&details===1",c),true);
 });
+test('reset snapshots remove windowed cards even when the replacement feed is empty',()=>{
+ const h=setup(),c=h.context;
+ vm.runInContext(`populate(3000);renderFeed(true);growFeedWindow();
+  renderAll=()=>renderFeed(true);renderPolicySummary=()=>{};closeZoom=()=>{};closeCardMenu=()=>{};closeDetail=()=>{};
+  applySnapshot({reset:true,epoch:1,items:[],state:{model:'maritime',directives:[]},stats:{},cdr:0});`,c);
+ assert.equal(h.grid.children.length,0);
+ assert.equal(vm.runInContext('feedLimit===FEED_PAGE_SIZE&&feedOrdered.length===0&&dirtyItems.size===0',c),true);
+ vm.runInContext("mergeItem(raw('fresh'));renderFeed(true)",c);
+ assert.deepEqual(h.grid.children.map(el=>el.dataset.id),['fresh']);
+});
 test('selection-only batching still flushes concurrent server updates through the full render path',()=>{
  const h=setup(),c=h.context;
  vm.runInContext("populate(3100);renderFeed(true);state.sel='0';step(1);applyItemUpdate({...raw('2'),central:.6})",c);
@@ -136,10 +146,10 @@ test('sentinel grows one page and keyboard stepping reveals the next off-window 
 });
 test('upload and status counts cover all retained items in one pass, not only the window',()=>{
  const h=setup(),c=h.context;
- vm.runInContext(source.slice(source.indexOf('function renderStats('),source.indexOf('/* ---- live shore strip')),c);
+ vm.runInContext(source.slice(source.indexOf('function renderStats('),source.indexOf('/* ---- details screen:')),c);
  vm.runInContext(`populate(3000);stats={cap:3000,keep:3000,drop:0,bytes:0,db:3000};
   items[0].upload={bytes:100,sent:100,done:true};items[1].upload={bytes:100,sent:20,override:'hold'};
-  items[2].upload={bytes:100,sent:50,bps:8000};items[3].dismissed=true;
+  items[2].upload={bytes:100,sent:50,bps:8000,active:true};items[3].dismissed=true;
   items.filter=items.map=()=>{throw Error('extra array pass')};renderStats();`,c);
  assert.equal(c.$('hsImgs').textContent,3000);
  assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 2996 queued · 1 held · 1 uploaded');

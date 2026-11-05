@@ -17,6 +17,8 @@ type reviewProposal struct {
 	N          int               `json:"n"`
 	Of         int               `json:"of"`
 	HighRisk   bool              `json:"highRisk"`
+	From       int               `json:"from,omitempty"`
+	To         int               `json:"to,omitempty"`
 	ProposedBy string            `json:"proposedBy"`
 	CreatedAt  time.Time         `json:"createdAt"`
 	Votes      map[string]string `json:"votes"`
@@ -50,6 +52,8 @@ func (s *Server) reviewSyncCreate(w http.ResponseWriter, r *http.Request) {
 		N        int    `json:"n"`
 		Of       int    `json:"of"`
 		HighRisk bool   `json:"highRisk"`
+		From     int    `json:"from"`
+		To       int    `json:"to"`
 		Reviewer string `json:"reviewer"`
 	}
 	if err := decodeJSON(http.MaxBytesReader(w, r.Body, 16<<10), &b); err != nil {
@@ -67,6 +71,10 @@ func (s *Server) reviewSyncCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid direction or counts")
 		return
 	}
+	if b.From < 0 || b.From > 4 || b.To < 0 || b.To > 4 {
+		writeError(w, 400, "priority tiers must be 1-4")
+		return
+	}
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 	for _, p := range s.proposals {
@@ -79,7 +87,7 @@ func (s *Server) reviewSyncCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 429, "too many pending proposals")
 		return
 	}
-	p := &reviewProposal{ID: uuid.NewString(), Cls: b.Cls, Dir: b.Dir, N: b.N, Of: b.Of, HighRisk: b.HighRisk, ProposedBy: b.Reviewer, CreatedAt: time.Now().UTC(), Votes: map[string]string{}, Status: "pending"}
+	p := &reviewProposal{ID: uuid.NewString(), Cls: b.Cls, Dir: b.Dir, N: b.N, Of: b.Of, HighRisk: b.HighRisk, From: b.From, To: b.To, ProposedBy: b.Reviewer, CreatedAt: time.Now().UTC(), Votes: map[string]string{}, Status: "pending"}
 	s.proposals = append(s.proposals, p)
 	s.publishReviewProposal(p)
 	writeJSON(w, 201, map[string]any{"proposal": p})

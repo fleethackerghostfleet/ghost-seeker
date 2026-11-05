@@ -9,10 +9,11 @@ const FEED_PAGE_SIZE=120;
 let feedLimit=FEED_PAGE_SIZE,feedOrdered=[],renderedFeedIDs=[],renderedFeedReasons=new Map();
 /* LIVE is the shore block of the snapshot when the console runs on a shore node (-shore); null on the simulation. */
 let LIVE=null;
+let snapshotEpoch=null,resetRevision=0;
 let feedReasons=new Map();
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
-const fmtRate=bps=>bps>=1e6?`${(bps/1e6).toFixed(1)} Mbps`:`${(bps/1000).toFixed(bps<10000?1:0)} kbps`;
+const fmtRate=bps=>bps>0&&bps<8e4?'<0.01 MB/s':`${(Math.max(0,bps)/8e6).toFixed(2)} MB/s`;
 const fmtMs=ms=>ms>=1000?(ms/1000).toFixed(1)+' s':ms+' ms';
 const ago=ms=>{const s=Math.max(0,(Date.now()-ms)/1000);return s<60?`${s|0}s ago`:s<3600?`${(s/60)|0}m ago`:`${(s/3600)|0}h ago`};
 const FORMS=['fact','thumb','crop','full'];
@@ -31,18 +32,31 @@ function uploadState(it){
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
   const f=forms[key]||{};
-  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
+  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(!LIVE||!!(LIVE?.link?.controllable?LIVE.link.bps>0:LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.linkUp!==false&&LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
- const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next',queued=!done&&!held&&sent===0;
+ const full=it.live?.forms?.full;
+ const sceneHeld=isScene(it)&&!['partial','received'].includes(full?.state)&&!(full?.received>0)&&!pulling.has(it.live.itemId);
+ const done=!sceneHeld&&!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
+ const background=sceneHeld||!it.live&&it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
+ const sending=!done&&!held&&!paused&&!background&&!!u?.active;
+ const queued=!done&&!held&&!background&&!sending;
  const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
- const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:queued?'Queued: waiting for bandwidth':paused?transfer:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
- return{bytes,sent,done,queued,label,form,held,next,paused};
+ const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
+ return{bytes,sent,done,queued,label,form,held,next,paused,background,sending};
 }
 function uploadHTML(it){
  const u=uploadState(it);
- return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.paused?'Link outage, paused':(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+ return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+}
+function sendMark(it){
+ const u=uploadState(it);
+ return u.done?{cls:'sendmark done',text:'✓',title:'Sent to shore'}:u.sending?{cls:'sendmark sending',text:'↑',title:'Sending to shore now'}:{cls:'sendmark',text:'',title:''};
+}
+function applySendMark(el,it){
+ const m=el.querySelector('.sendmark');if(!m)return;const k=sendMark(it);m.className=k.cls;m.textContent=k.text;m.title=k.title;
+ el.classList?.toggle('sending',k.cls.endsWith('sending'));el.classList?.toggle('uploaded',k.cls.endsWith('done'));
 }
 function uploadControlsHTML(it){
  const u=uploadState(it),live=!!(LIVE||it.live),viewer=typeof gsAuth!=='undefined'&&gsAuth.viewer();
@@ -60,11 +74,11 @@ function liveSuppressReason(it){const l=it.live;if(!l?.suppressed)return'';retur
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>clsOf(k).lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>clsOf(k).lab).join(' / ')):'Any object';
  const at=r.attrs.length?' · '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):'';
- return(r.type==='boost'?'▲ ':'▼ ')+cl+at;
+ return(r.type==='boost'?'▲ ':'▼ ')+cl+at+(r.tier?` → P${r.tier} ${TNAME[r.tier]}`:'');
 }
 
 /* ---------------- UI ---------------- */
-state.dens='m';state.page='feed';
+state.dens=window.gsSettings?.get().density||'m';state.page='feed';
 const tcol=t=>['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'][t];
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 function shipLine(d){
@@ -197,11 +211,14 @@ function mergeItem(raw,fresh=true){
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
+ const reset=data.reset===true||(snapshotEpoch!==null&&data.epoch!==undefined&&data.epoch!==snapshotEpoch);
+ if(data.epoch!==undefined)snapshotEpoch=data.epoch;
+ if(reset)clearDemoItems();
  data.items=data.items.map(normalizeItem);
  const selection=state.sel;
  for(const item of data.items)dirtyItems.add(item.id);
  const elements=new Map(items.map(item=>[item.id,item.el]));
- if(state.paused){
+ if(state.paused&&!reset){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
   heldSnapshotIDs=new Set(snapshot.keys());
   items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
@@ -222,6 +239,25 @@ function applySnapshot(data){
  rv.cur=rv.cur&&(findItem(rv.cur.id)||rv.cur);
  renderAll();
 }
+function clearDemoItems(){
+ ++resetRevision;items=[];pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
+ dirtyItems.clear();feedOrdered=[];renderedFeedReasons.clear();resetFeedWindow();
+ imageCache.clear();selectedBands.clear();feedReasons.clear();pulling.clear();
+ closeDetail();closeCardMenu();$('drawer').innerHTML='';
+ rv={cur:null,shown:null,displayed:null,navigation:rv.navigation+1,order:rv.order,done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
+ lastReview=null;$('reviewNoteBox').hidden=true;
+ if(typeof workbench!=='undefined')workbench.clearItems();
+}
+function setupDemoReset(enabled){
+ $('resetDemoBtn').hidden=!enabled||(typeof gsAuth!=='undefined'&&gsAuth.viewer());
+ $('resetDemoBtn').onclick=()=>{$('resetDemoDialog').showModal();$('resetDemoCancel').focus()};
+ $('resetDemoCancel').onclick=()=>$('resetDemoDialog').close();
+ $('resetDemoConfirm').onclick=async()=>{
+  const button=$('resetDemoConfirm');button.disabled=true;
+  try{await request('/api/demo/reset','POST',{confirm:'reset'});$('resetDemoDialog').close();toast('Demo reset — new captures keep arriving')}
+  catch(error){toast(error.message)}finally{button.disabled=false}
+ };
+}
 function applyLive(live){
  LIVE=live||null;const cl=document.body?.classList;if(cl?.toggle)cl.toggle('live',!!LIVE);
  if(!LIVE)return;
@@ -239,10 +275,12 @@ function applyItemUpdate(raw){
  mergeItem(raw,false);scheduleFeedFlush();
 }
 async function request(path,method='GET',body){
+ const revision=resetRevision,itemWrite=method!=='GET'&&/^\/api\/(items|reviews)\//.test(path);
  if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method,path);
  const response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const data=response.status===204?null:await response.json();
  if(!response.ok){const error=new Error(data?.message||data?.error||`Request failed (${response.status})`);error.status=response.status;if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
+ if(itemWrite&&(revision!==resetRevision||(data?.item&&!findItem(data.item.id))))throw new Error('Image is no longer available — the feed changed');
  return data;
 }
 async function patchItem(id,changes){
@@ -265,7 +303,8 @@ function openStream(){
  const stream=new EventSource('/api/stream');
  stream.onopen=()=>{state.offline=false;renderLive()};
  stream.onerror=()=>{state.offline=true;renderLive()};
- stream.addEventListener('snapshot',event=>{applySnapshot(JSON.parse(event.data));refreshTeamProposals()});
+ stream.addEventListener('snapshot',event=>{applySnapshot(JSON.parse(event.data));refreshTeamProposals();if(reviewDataReady)refreshReviewData()});
+ stream.addEventListener('review-data',event=>{reviewDataRevision++;renderReviewData(JSON.parse(event.data))});
  stream.addEventListener('review-sync',event=>receiveTeamProposal(JSON.parse(event.data).proposal));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
@@ -292,6 +331,7 @@ function openStream(){
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
  const config=await request('/api/config');
+ setupDemoReset(config.demoReset===true);
  setupTeamSync(!!config.reviewSync);
  DATASET_MODE=!!config.datasetMode;
  SOURCES=[{id:'ALL',name:DATASET_MODE?'All sources (combined)':'All sensors (combined)'},...config.sources];
@@ -303,23 +343,29 @@ async function init(){
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
- $('srcSel').onchange=e=>{state.src=e.target.value;rv.navigation++;rv.cur=null;rv.shown=null;rv.displayed=null;closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp()};
- const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showFiltered').checked=f.showFiltered;$('reviewFilter').value=f.review;closeDetail();resetFeedWindow();renderFeed(true,true)};
- $('showFiltered').onchange=e=>{gsSettings.setFeed({showFiltered:e.target.checked});syncFeedFilters()};
+ $('srcSel').onchange=e=>{gsSettings.setFeed({sensor:e.target.value});syncFeedFilters()};
+ $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
+ $('hideUploaded').onchange=e=>{const on=e.target.checked,n=uploadedCount();gsSettings.setFeed({hideUploaded:on});syncFeedFilters();toast(on?n?`Hid ${n} image${n===1?'':'s'} already uploaded to shore. Queued and uploading images stay.`:'No uploaded images to hide yet. Images leave the feed once they reach shore.':`Showing ${n} uploaded image${n===1?'':'s'} again`)};
+ $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent',tier:'all'});syncFeedFilters();location.hash='#feed'};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
+ $('clearFeedFilters').onclick=resetFeedFilters;
+ $('sentShowAll').onclick=()=>{gsSettings.setFeed({review:'all'});syncFeedFilters()};
  window.addEventListener('gs:feed-filters',syncFeedFilters);syncFeedFilters();
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
  workbench.init();
  briefing.init();
  $('clearDir').onclick=async()=>{if(!state.directives.length)return;try{await request('/api/directives','DELETE');toast('Directives cleared — base model restored')}catch(error){toast(error.message)}};
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));resetFeedWindow();renderFeed(true,true)};
- $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens;renderFeed(true,true)};
- $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;resetFeedWindow();renderFeed(true,true)};
+ $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;gsSettings.density(state.dens);renderFeed(true,true)};
+ $('feedFilters').onclick=toggleFeedFilters;
+ $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;gsSettings.setFeed({tier:b.dataset.t});syncFeedFilters()};
  $('pauseBtn').onclick=toggleHold;$('live').onclick=toggleHold;$('wbResume').onclick=toggleHold;
  $('emconControl').onclick=async e=>{const button=e.target.closest('#emconSeg [data-mode]');if(!button||button.disabled)return;try{const result=await request('/api/policy/emcon','POST',{mode:button.dataset.mode});if(result.conflicts?.length)toast(gsPolicy.conflictToast(result.conflicts))}catch(error){if(!error.policyConflicts)toast(error.message)}};
  $('polRaw').oninput=()=>{policyRawTouched=true};
  $('polRawValidate').onclick=()=>rawPolicyAction('validate');$('polRawApply').onclick=()=>rawPolicyAction('apply');$('polRawReload').onclick=()=>{policyRawTouched=false;loadRawPolicy(true)};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
+ $('grid').oncontextmenu=openCardMenu;$('cmSendNow').onclick=()=>sendNow($('cardMenu').dataset.id);$('cmOpen').onclick=()=>{const id=$('cardMenu').dataset.id;closeCardMenu();openDetail(id)};
+ document.addEventListener('pointerdown',e=>{if(!e.target.closest('#cardMenu'))closeCardMenu()},true);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cardMenu').hidden){e.stopImmediatePropagation();closeCardMenu()}},true);window.addEventListener('blur',closeCardMenu);window.addEventListener('hashchange',closeCardMenu);$('feed').addEventListener('scroll',closeCardMenu);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
@@ -346,33 +392,70 @@ async function init(){
  route();renderFeed(true);renderStats();renderRp();openStream();
 }
 function route(){
- state.page=location.hash==='#briefing'?'brief':location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
+ state.page=location.hash==='#details'?'details':location.hash==='#briefing'?'brief':location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
  $('pgBrief').classList.toggle('on',state.page==='brief');
  $('pgFeed').classList.toggle('on',state.page==='feed');$('pgRp').classList.toggle('on',state.page==='rp');$('pgRv').classList.toggle('on',state.page==='rv');$('navRv').classList.toggle('on',state.page==='rv');
+ $('pgDetails').classList.toggle('on',state.page==='details');
  $('navFeed').classList.toggle('on',state.page==='feed');$('navRp').classList.toggle('on',state.page==='rp');
  if(state.page!=='rv'&&rv.ask){rv.ask=null;rv.askBusy=false;renderAsk()}
- if(state.page==='feed')renderFeed(true);else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
+ if(state.page==='feed')renderFeed(true);else if(state.page==='details'){closeDetail();renderDetails()}else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
-function humanReviewed(it){return !!(it.reviewed||it.manual||it.dismissed)}
-function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup)?'Filtered by directive':''}
-function feedTier(it){return feedReasons.has(it.id)?4:it.tier}
+function syncFeedFilters(){
+ const f=gsSettings.get().feed;
+ const previousSource=state.src;
+ state.src=f.sensor&&SRC[f.sensor]?f.sensor:'ALL';state.tier=f.tier||'all';
+ if(state.src!==previousSource){rv.navigation++;rv.cur=null;rv.shown=null;rv.displayed=null}
+ if(f.sensor&&state.src!==f.sensor)gsSettings.setFeed({sensor:state.src});
+ $('srcSel').value=state.src;$('showDuplicates').checked=f.showDuplicates;$('hideUploaded').checked=f.hideUploaded;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';
+ $('clearFeedFilters').hidden=state.src==='ALL'&&state.tier==='all'&&f.review==='all'&&!f.showDuplicates&&!f.hideUploaded;
+ closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp();
+}
+function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:false,hideUploaded:false});syncFeedFilters()}
+function humanReviewed(it){return !isScene(it)&&!!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed))}
+function humanSent(it){return !isScene(it)&&!!(it.sent&&!it.autoSent||it.fullRes)}
+function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
+const FILTERED_NAME={duplicate:'Repeat of an earlier image','low-value':'Low value'};
+function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':FILTERED_NAME[it.filtered]||(it.tier===4&&(it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup))?'Lowered by directive':'')}
+function feedTier(it){return it.tier}
+function reviewMatch(it,review){return isScene(it)?review==='all':review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
- const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showFiltered:false,review:'all'};
- let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(f.review==='all'||humanReviewed(i)===(f.review==='reviewed')));
- feedReasons=new Map();const originals=new Map();
- for(const it of [...l].sort((a,b)=>a.tier-b.tier||b.central-a.central||b.ts-a.ts||String(a.id).localeCompare(String(b.id)))){
-  const reason=filteredReason(it);if(reason){feedReasons.set(it.id,reason);continue}
-  // Match only actual image paths, never placeholder URLs, seeds or sighting reports.
-  if(!it.img||it.live)continue;
-  const key=JSON.stringify([it.src.id,it.img]);
-  if(originals.has(key)){if(!it.manual&&!it.sent)feedReasons.set(it.id,'Duplicate image')}else originals.set(key,it.id);
- }
- l=l.filter(i=>f.showFiltered||!feedReasons.has(i.id));
+ const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:false,review:'all'};
+ let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&!(f.hideUploaded&&uploadState(i).done));
+ feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
- l.sort(state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
+ l.sort(f.review==='sent'?(a,b)=>sendTime(b)-sendTime(a)||b.ts-a.ts:state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
+ if(state.src==='ALL'&&f.review!=='sent')l=mixSources(l,state.sort==='pri'?i=>feedTier(i)+(feedReasons.has(i.id)?'f':''):i=>Math.floor(i.ts/60000));
+ if(f.showDuplicates&&f.review!=='sent')l=pairRepeats(l);
  return{l,counts};
+}
+function hideableRepeat(it){return !isScene(it)&&it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
+function uploadedCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&uploadState(i).done).length}
+function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)&&!(f.hideUploaded&&uploadState(i).done)).length}
+/* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
+function pairRepeats(l){
+ const ids=new Set(l.map(i=>i.id)),after=new Map();
+ for(const i of l)if(hideableRepeat(i)&&i.dupOf&&ids.has(i.dupOf)){const o=l.find(x=>x.id===i.dupOf);if(o&&!hideableRepeat(o)){if(!after.has(o.id))after.set(o.id,[]);after.get(o.id).push(i)}}
+ if(!after.size)return l;
+ const moved=new Set([...after.values()].flat().map(i=>i.id)),out=[];
+ for(const i of l){if(moved.has(i.id))continue;out.push(i);if(after.has(i.id))out.push(...after.get(i.id))}
+ return out;
+}
+/* Display-only: interleave sensors so the feed shows several camera feeds at once.
+   Items only move within a run sharing the same group key (priority tier, or capture minute when sorted by time)
+   and at most SOURCE_MIX_WINDOW places, so priorities and visible ordering cues are unchanged. */
+const SOURCE_MIX_WINDOW=8;
+function mixSources(l,group){
+ const srcOf=i=>i.src?.id??i.src;
+ if(new Set(l.map(srcOf)).size<2)return l;
+ const rest=l.slice(),out=[],last=new Map();
+ while(rest.length){
+  const g=group(rest[0]);let pick=0,best=Infinity;
+  for(let j=0;j<rest.length&&j<SOURCE_MIX_WINDOW&&group(rest[j])===g;j++){const seen=last.has(srcOf(rest[j]))?last.get(srcOf(rest[j])):-1;if(seen<best){best=seen;pick=j}}
+  const it=rest.splice(pick,1)[0];last.set(srcOf(it),out.length);out.push(it);
+ }
+ return out;
 }
 function renderTierSeg(counts){
  const T=[['all','All'],['1','P1 Critical'],['2','P2 High'],['3','P3 Routine'],['4','P4 Low']];
@@ -382,8 +465,10 @@ function boxesHTML(it,labels){
  return it.dets.map((d,i)=>{const sd=it.det[i];if(!d.b||!(d.b.w>0))return'';const c=sd.sup?'sup':sd.matched?'match':sd.s>=.6?'hi':sd.s>=.3?'md':'lo';const b=d.b;
   return`<div class="box ${c}${d.cls==='unknown'?' unknown':''}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${esc(clsOf(d.cls).lab)} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
+function isScene(it){return it?.live?.event==='scene'}
 function topLine(it){
- const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return'—';
+	if(isScene(it))return 'Empty water · no contacts';
+ const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return it.background?'No contacts · empty water':'—';
  if(it.live){const l=it.live,[d,sd]=r[0];const det=l.label&&l.label.toLowerCase()!==d.cls?` <span style="opacity:.6">· computer label: ${esc(l.label)}</span>`:'';const frames=l.sightingId?(l.framesKnown?` · ${l.frames} frames`:` · ${l.reports} report${l.reports===1?'':'s'}`):'';
   return`<span class="${l.suppressed?'s':sd.matched?'m':l.unknown?'a':''}">${esc(clsOf(d.cls).lab)}${l.unknown?' (unknown)':''}</span>${det}<span style="opacity:.6">${frames}</span>`}
  const[d,sd]=r[0];const tag=d.attrs.dark&&clsOf(d.cls).g!=='other'&&clsOf(d.cls).g!=='clutter'?' · no AIS':d.attrs.approaching?' · inbound':d.attrs.new?' · new':'';
@@ -391,23 +476,47 @@ function topLine(it){
 }
 function detectorNegativeLabel(it){return it?.detectorNegative?'Detector found nothing — check for missed objects':''}
 function detectorNegativeHTML(it){const label=detectorNegativeLabel(it);return label?`<div class="detector-negative">${label}</div>`:''}
-function reviewAcceptLabel(it){return it.detectorNegative?'Nothing here':`Agree with suggested priority · P${it.centralTier} ${TNAME[it.centralTier]}`}
+function reviewAcceptLabel(it){return it.detectorNegative?'Nothing here & next':`Agree (P${it.centralTier} ${TNAME[it.centralTier]}) & next`}
 function reviewKeyAction(key){return RVKEYS[key]}
 function cardHTML(it,mini){
- return`${detectorNegativeHTML(it)}<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+ return`${detectorNegativeHTML(it)}<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
+function sendNowBlocked(it){const u=uploadState(it);return it.live||LIVE?'Not available on the live shore connection':typeof gsAuth!=='undefined'&&gsAuth.viewer()?'Viewer role is read-only':u.done?'Already uploaded to shore':u.next?'Already at the top of the send queue':''}
+function openCardMenu(e){
+ const c=e.target.closest('.card'),it=c&&findItem(c.dataset.id);if(!it)return;
+	if(isScene(it)){e.preventDefault();return}
+ e.preventDefault();
+ const m=$('cardMenu'),blocked=sendNowBlocked(it);
+ m.dataset.id=it.id;$('cmSendNow').disabled=!!blocked;$('cmSendNowSub').textContent=blocked||'Moves this image to the top of the send queue';
+ m.hidden=false;
+ const r=m.getBoundingClientRect();
+ m.style.left=Math.max(4,Math.min(e.clientX,innerWidth-r.width-4))+'px';m.style.top=Math.max(4,Math.min(e.clientY,innerHeight-r.height-4))+'px';
+ $('cmSendNow').focus();
+}
+function closeCardMenu(){const m=$('cardMenu');if(m&&!m.hidden)m.hidden=true}
+async function sendNow(id){
+ closeCardMenu();
+ const it=findItem(id);if(!it)return;
+ const blocked=sendNowBlocked(it);if(blocked){toast(blocked);return}
+ try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:'next'});cdr=result.cdr;applyItemUpdate(result.item);toast(`Sending now: ${it.src.id} image moved to the top of the send queue`)}
+ catch(error){toast(error.message)}
+}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
- const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent?' sent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
+ const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent&&it.autoSent?' sent':''}${humanSent(it)?' hsent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
  const reviewMark=el.querySelector('.rvk');reviewMark.title=humanReviewed(it)?'Human reviewed':'Not reviewed';reviewMark.setAttribute('aria-label',reviewMark.title);
- const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low in this feed only; stored model score and transfer priority are unchanged`:'';
+ const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low`:'';
  el.querySelector('.night-badge')?.remove();if(!DATASET_MODE)el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
  const t=el.querySelector('.tier');t.className='tier t'+tier;t.textContent=`P${tier} ${TNAME[tier]}`;t.title=reason?status.title:it.tier===1?'Notify Commander':'Image priority';
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
- el.querySelector('.cs').textContent=it.central.toFixed(2);
- const upload=el.querySelector('.upload-slot');if(upload)upload.innerHTML=uploadHTML(it);
+ el.querySelector('.cs').textContent=isScene(it)?'':it.central.toFixed(2);
+ const upload=el.querySelector('.upload-slot');if(upload)upload.innerHTML=uploadHTML(it);applySendMark(el,it);
  if(it.live){const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?FORM_NAME[it.live.imageForm]:'Summary only';ft.title=it.live.imageForm?`Image shown is the ${FORM_NAME[it.live.imageForm]} (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the image-version labels below for transfer status.`:'Only the object summary has arrived. Images follow as bandwidth becomes available.';el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
  const dl=it.central-it.base,de=el.querySelector('.delta');de.className='delta '+(dl>.04?'up':dl<-.04?'dn':'');de.textContent=dl>.04?`▲${dl.toFixed(2).slice(1)}`:dl<-.04?`▼${(-dl).toFixed(2).slice(1)}`:'';
+}
+function toggleFeedFilters(){
+ const expanded=$('feedHead').classList.toggle('filters-open');
+ $('feedFilters').setAttribute('aria-expanded',String(expanded));
 }
 function resetFeedWindow(){feedLimit=FEED_PAGE_SIZE;$('feed').scrollTop=0}
 function growFeedWindow(){
@@ -428,7 +537,7 @@ function setupFeedWindow(){
  }
 }
 function renderFeed(noAnim,refreshCards=false){
- const{l,counts}=visible();feedOrdered=l;renderTierSeg(counts);$('empty').style.display=l.length?'none':'block';
+ const{l,counts}=visible();feedOrdered=l;renderTierSeg(counts);const dc=$('dupCount');if(dc)dc.textContent=String(repeatCount());const uc=$('uploadedCount');if(uc)uc.textContent=String(uploadedCount());$('empty').style.display=l.length?'none':'block';
  const windowed=l.slice(0,feedLimit),ids=windowed.map(it=>it.id),grid=$('grid');
  const changed=ids.length!==renderedFeedIDs.length||ids.some((id,i)=>id!==renderedFeedIDs[i]);
  const animate=changed&&!noAnim&&state.page==='feed'&&windowed.length<=60&&dirtyItems.size<=12;
@@ -463,45 +572,76 @@ function renderDirBar(){
  $('dirBar').innerHTML=d.length?`<span>Directives:</span>${d.slice(0,2).map(x=>`<span class="pill" title="${esc(x.text)}">${esc(x.text)}</span>`).join('')}${d.length>2?`<span>+${d.length-2}</span>`:''}<a href="#reprioritize">Edit</a>`:`<span>Base model only</span><a href="#reprioritize">Set priorities →</a>`;
 }
 function renderStats(){
- let total=0,p1=0,allP1=0,unrev=0,uploading=0,done=0,queued=0,held=0;
+ let total=0,p1=0,allP1=0,unrev=0,sending=0,done=0,queued=0,held=0,kept=0,humanSentCount=0;
  for(const it of items){
   if(it.tier===1)allP1++;
   if(state.src!=='ALL'&&it.src.id!==state.src)continue;
-  total++;if(it.tier===1)p1++;if(!it.reviewed&&!it.dismissed)unrev++;
-  if(!it.dismissed){const u=uploadState(it);if(u.done)done++;else if(u.held)held++;else if(u.queued)queued++;else uploading++}
+  total++;if(it.tier===1)p1++;if(!isScene(it)&&!it.reviewed&&!it.dismissed)unrev++;if(humanSent(it))humanSentCount++;
+  if(!it.dismissed){const u=uploadState(it);if(u.done)done++;if(u.queued)queued++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
  }
- const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${uploading} uploading · ${queued} queued · ${held} held · ${done} uploaded`;
- $('hsImgs').textContent=total;$('hsP1').textContent=p1;$('hsCdr').textContent=cdr;
+ const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
+ $('hsImgs').textContent=total;$('rvSentN').textContent=humanSentCount;$('hsP1').textContent=p1;$('hsCdr').textContent=cdr;
  $('rvCount').textContent=unrev||'';if(state.page==='rv')rvProgress();
- if(LIVE){renderLiveStrip();return}
+ if(LIVE){renderLiveStrip();if(state.page==='details')renderDetails();return}
+ renderSimLink();
  $('cCap').textContent=stats.cap.toLocaleString();$('cKeep').textContent=stats.keep;$('cDrop').textContent=stats.drop.toLocaleString();
  $('cKB').textContent=(stats.bytes/1048576).toFixed(1);$('cDb').textContent=stats.db.toLocaleString();$('cP1').textContent=allP1;
  $('cModel').textContent=(MODELS[state.model]?.name||'').replace(' (default)','')+(state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:'');
- $('cSaved').textContent=Math.round(stats.drop/Math.max(1,stats.cap)*100)+'%';
+ if(state.page==='details')renderDetails();
+}
+
+/* ---- details screen: low-level counts and automatically filtered photos ---- */
+const DETAIL_KINDS=[['duplicate','Repeats of earlier images'],['low-value','Low value'],['directive','Lowered by directive']];
+state.detKind='duplicate';
+function filteredKind(it){return it.dismissed||it.manual||it.sent?'':it.filtered||(filteredReason(it)?'directive':'')}
+function renderDetails(){
+ const el=$('detailsBody');if(!el)return;
+ const vis=items.filter(i=>state.src==='ALL'||i.src.id===state.src),groups={duplicate:[],'low-value':[],directive:[]};
+ vis.forEach(i=>groups[filteredKind(i)]?.push(i));
+ const n=v=>Number(v).toLocaleString();
+ const counts=LIVE?`<div class="strip det-strip">${$('liveStrip').innerHTML}</div>`:`<table class="det-counts">${[
+  ['Frames captured by sensors',n(stats.cap)],['Useful images kept',n(stats.keep)],['Frames filtered on ship (cumulative, including unretained frames)',n(stats.drop)],
+  ['Share of captured frames filtered on ship (cumulative)',Math.round(stats.drop/Math.max(1,stats.cap)*100)+'%'],['Image data sent to shore',(stats.bytes/1048576).toFixed(1)+' MB'],['Records in imagery database',n(stats.db+180000)],
+  ['Images in this feed',n(vis.length)],['Sent to Commander by a person',n(vis.filter(i=>i.sent&&!i.autoSent).length)],['Sent to Commander automatically',n(vis.filter(i=>i.sent&&i.autoSent).length)]
+ ].map(([k,v])=>`<tr><td>${k}</td><td class="n">${v}</td></tr>`).join('')}</table>`;
+ const list=groups[state.detKind].sort((a,b)=>b.ts-a.ts).slice(0,60);
+ el.innerHTML=`<section class="panel"><h3>Pipeline counts</h3>${counts}</section>
+ <section class="panel"><h3>Photos filtered automatically</h3><p class="hint">Current feed only. Cumulative counts include frames without retained images and images no longer in this feed. Up to 60 photos shown per category. Select a photo to open it.</p>
+ <div class="seg" id="detKind">${DETAIL_KINDS.map(([k,l])=>`<button data-k="${k}" class="${state.detKind===k?'on':''}">${l} (${groups[k].length})</button>`).join('')}</div>
+ <div class="det-grid">${list.map(it=>{const orig=it.dupOf&&findItem(it.dupOf);return`<button class="det-item" data-id="${esc(it.id)}">${orig?`<span class="det-pair"><img src="${imageFor(orig)}" alt=""><small>Original · P${orig.tier} ${TNAME[orig.tier]}</small></span>`:''}<span class="det-pair"><img src="${imageFor(it)}" alt=""><small>${esc(filteredReason(it))} · P4 Low</small></span><span class="det-meta">${esc(it.src.id)} · ${zulu(it.ts).slice(0,5)}Z</span></button>`}).join('')||'<p class="hint">None right now.</p>'}</div></section>`;
+ el.onclick=e=>{const k=e.target.closest('[data-k]');if(k){state.detKind=k.dataset.k;renderDetails();return}const b=e.target.closest('.det-item');if(b){const id=b.dataset.id;location.hash='#feed';setTimeout(()=>openDetail(id),60)}};
 }
 
 /* ---- live shore strip + cameras ---- */
 function renderLiveStrip(){
  const L=LIVE;if(!L)return;const sim=$('simStrip'),el=$('liveStrip');if(sim)sim.hidden=true;if(!el)return;el.hidden=false;
  const {shore,edge,link,counts,policy,prioritization}=L;
- const rate=link.controllable?link.bps:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
- const est=edge.ok?edge.estimateBps:shore.estimateBps;
- const relearn=edge.ok&&edge.consecutiveFailures>0?` · estimating speed again: ${edge.consecutiveFailures} failed transfer${edge.consecutiveFailures===1?'':'s'}`:'';
+ const shoreDown=!link.controllable&&!edge.ok&&shore.linkUp===false;
+ const rate=link.controllable?link.bps:shoreDown?0:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
  const d=link.distribution;
- const distribution=d?`<span class="hint">Automatic · normal · ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)} · every ${d.intervalMs/1000}s</span>`:'';
- const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds. The ship's measured estimate may take several transfers to catch up.`:'Ship-to-shore speed is controlled outside this console. Showing the measured estimate.';
+ const measuring=!link.controllable&&!rate&&!shoreDown;
+ const linkNote=d?'':measuring?'Measuring link speed…':'Measured by the ship';
+ const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds.`:'Ship-to-shore speed is controlled outside this console.';
  const sightingMode=counts.grouped>0;
  const objsShown=sightingMode?counts.sightings:counts.objects,objsImg=sightingMode?counts.sightingsWithImage:counts.objectsWithImage;
  const preTrack=sightingMode?Math.max(0,counts.objects-counts.sightings):0;
  const dropPct=edge.ok&&(edge.itemsTotal+edge.itemsDeduped)>0?Math.round(100*edge.itemsDeduped/(edge.itemsTotal+edge.itemsDeduped)):0;
  el.innerHTML=`
-  <div class="st link" title="${esc(linkTitle)}">Ship-to-shore connection <b>${fmtRate(rate)}</b>${distribution}${link.controllable&&est?`<span class="hint">ship estimates ${fmtRate(est)}${relearn}</span>`:''}</div><span class="ar">›</span>
-  <div class="st" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
-  <div class="st" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
+  <div class="st link${rate>0||measuring?'':' down'}" title="${esc(linkTitle)}">${linkPanelHTML(rate,linkNote,measuring)}</div><span class="ar">›</span>
+  <div class="st lowlevel" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
+  <div class="st lowlevel" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
   <div class="st" title="Image and summary data sent over the connection${link.controllable?` (shore itself counted ${fmtBytes(shore.bytes||0)})`:''}. Compare with what ${edge.itemsDeduped||0} repeated views would have cost to send.">Data transferred <b>${fmtBytes(link.controllable?link.bytes:shore.bytes||0)}</b></div><span class="ar">›</span>
   <div class="st" title="${esc(policy.text?`Operator wrote: “${policy.text}”. The shore read it back as: ${policy.readback}`:policy.readback||'')}">Directive <b class="rb">${esc(policy.text?policy.readback:'none')}</b>${policy.emcon&&policy.emcon.mode&&policy.emcon.mode!=='NORMAL'?` · Transmission mode <b>${esc(policy.emcon.mode)}</b>`:''}</div><span class="ar">›</span>
   <div class="st" id="prioMode" title="Scoring model used on the ship. P1 Critical, P2 High, P3 Routine and P4 Low divide the current shore feed into priority groups (top 10%, next 25%, next 35%, then the rest). Deprioritized objects are P4 Low.">Scoring model <b>${esc(prioritization?.label||'Ship score')}</b>${prioritization?.source==='edge'?'':' <span class="hint">(built-in)</span>'}</div>
-  <span class="sv" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span>`;
+  <span class="sv lowlevel" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span><a class="btn sm details-link" href="#details">Details: counts &amp; filtered photos ›</a>`;
+}
+function linkPanelHTML(bps,note,measuring){
+ const hint=bps>0||measuring?note:'Link down — sending paused';
+ return`<span class="lk">Ship-to-shore connection</span> <b>${measuring?'—':fmtRate(bps)}</b>${hint?`<span class="hint">${esc(hint)}</span>`:''}`;
+}
+function renderSimLink(){
+ const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
+ el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'');
 }
 const pulling=new Set();
 function renderCameras(){
@@ -575,6 +715,10 @@ function renderDetail(){preserveBandFocus(renderDetailContent)}
 function renderDetailContent(){
  const it=findItem(state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';return}
+	if(isScene(it)){
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
+	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;
+	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
  const why=buildWhy(it,rows);
  const dl=it.central-it.base;
@@ -589,9 +733,14 @@ function renderDetailContent(){
   ${gsLights.section(it,CLS)}
   <div class="dsec" id="briefDetections"></div>
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
-  ${it.live?liveLadderHTML(it):processingHTML(it)}
+  ${it.live?liveLadderHTML(it):DATASET_MODE?processingHTML(it):`<div class="dsec"><h4>Processing chain</h4><ul class="tl">
+   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · ${it.background?'empty water retained locally for demo · no automatic upload':`score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}`}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
+   <li><i></i><div>Shore transfer: ${esc(uploadState(it).label)}<br><small>${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div></li>
+   <li><i></i><div>Stored on ship<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
+   <li><i></i><div>Priority scoring (simulated)<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
+  </ul></div>`}
   ${DATASET_MODE?'':uploadControlsHTML(it)}
-  <div class="actions"><button class="btn cdr ${it.sent?'done':''}" id="aCdr">${it.sent?'✓ Sent to Commander':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
+  <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
@@ -621,17 +770,18 @@ function renderDirectives(){
  $('directives').querySelectorAll('.x').forEach(b=>b.onclick=async()=>{try{await request(`/api/directives/${encodeURIComponent(b.dataset.id)}`,'DELETE');toast('Directive removed')}catch(error){toast(error.message)}});
 }
 async function requestFullRes(it){
+	if(isScene(it))return;
  if(it.fullRes)return;
  const by=prompt('Operator override: send this image at FULL SIZE with NO compression.\nThis uses much more link bandwidth than the usual thumbnail/crop.\n\nEnter your name or operator ID to confirm:');
  if(by===null)return;
  if(!by.trim()){toast('Not sent: enter your name or operator ID in the confirmation box');return}
  try{await request(`/api/items/${encodeURIComponent(it.id)}/full-res`,'POST',{by:by.trim()});toast(`Full-size send requested by ${by.trim()}`)}catch(error){toast(error.message)}
 }
-async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} ${TNAME[t]} — logged as model feedback`)}catch(error){toast(error.message)}}
+async function setManual(id,t){if(!findItem(id)||isScene(findItem(id)))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} ${TNAME[t]} — logged as model feedback`)}catch(error){toast(error.message)}}
 function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
-let rv={cur:null,shown:null,displayed:null,navigation:0,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
+let rv={cur:null,shown:null,displayed:null,navigation:0,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
 const teamSync={available:false,on:false,proposals:[],hidden:new Set(),resolved:new Set(),local:new Map(),accepting:new Map(),revision:0,posting:false};
 function setupTeamSync(available){
  if(typeof gsAuth!=='undefined'&&gsAuth.reviewer())available=false;
@@ -675,7 +825,7 @@ function receiveTeamProposal(p,finish=false){
 }
 async function proposeTeamSuggestion(s){
  teamSync.posting=true;teamSync.local.set(s.cls+':'+s.dir,s);
- try{const data=await request('/api/review-sync/proposals','POST',{cls:s.cls,dir:s.dir,n:s.n,of:s.of,highRisk:!!s.highRisk,reviewer:reviewerName});receiveTeamProposal(data.proposal)}
+ try{const data=await request('/api/review-sync/proposals','POST',{cls:s.cls,dir:s.dir,n:s.n,of:s.of,highRisk:!!s.highRisk,from:s.from||0,to:s.to||0,reviewer:reviewerName});receiveTeamProposal(data.proposal)}
  catch(error){toast('Team sync: '+error.message);if(!rv.ask){rv.ask={kind:'sug',s};renderAsk()}}
  finally{teamSync.posting=false}
 }
@@ -702,11 +852,12 @@ async function answerTeamProposal(answer){
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
  finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
-function rvQueue(){const l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
+function rvQueue(){const l=items.filter(i=>!isScene(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
  if(!rv.ask&&teamSync.on){const p=teamSync.proposals.find(p=>!teamSync.hidden.has(p.id));if(p)rv.ask={kind:'sug',s:p,team:p.id}}
+ renderNext(rv.cur);
  box.classList.toggle('rvask-suggestion',rv.ask?.kind==='sug');
  box.classList.toggle('rvask-team',!!rv.ask?.team);
  if(!rv.ask){box.hidden=true;box.innerHTML='';return}
@@ -717,10 +868,11 @@ function renderAsk(){
   return;
  }
  const s=rv.ask.s,label=CLS[s.cls]?.lab||s.cls,verb=s.dir==='lower'?'lowered':'raised',action=s.dir==='lower'?'Lower':'Raise';
- box.innerHTML=`<div class="rvask-copy"><b>You ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact. ${action} ${esc(label)} priority?</b>${s.highRisk?`<span class="rvask-warning">${esc(label)} is normally high priority — confirm this change.</span>`:''}</div><div class="rvask-actions"><button class="kb rvask-btn" data-ask="sug" data-answer="yes" ${rv.askBusy?'disabled':''}><kbd>Y</kbd>Yes</button><button class="kb rvask-btn" data-ask="sug" data-answer="no" ${rv.askBusy?'disabled':''}><kbd>N</kbd>No</button><button class="kb rvask-btn rvask-skip" data-ask="sug" data-answer="later" ${rv.askBusy?'disabled':''}><kbd>L</kbd>Later</button></div>`;
+ const change=tierChange(s);
+ box.innerHTML=`<div class="rvask-copy"><span class="rvask-kicker">Suggested priority change</span><b class="rvask-change">${change?`${esc(label)}: <span class="tpill t${change.from}">P${change.from} ${TNAME[change.from]}</span> → <span class="tpill t${change.to}">P${change.to} ${TNAME[change.to]}</span>`:`${action} ${esc(label)} priority?`}</b><span>You ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact${change?` from P${change.from} ${TNAME[change.from]} to P${change.to} ${TNAME[change.to]}`:''}. Yes adds a rule that ${s.dir==='lower'?'lowers':'raises'} ${esc(label)} priority for new images.</span>${s.highRisk?`<span class="rvask-warning">${esc(label)} is normally high priority — confirm this change.</span>`:''}</div><div class="rvask-actions"><button class="kb rvask-btn" data-ask="sug" data-answer="yes" ${rv.askBusy?'disabled':''}><kbd>Y</kbd>Yes, apply change</button><button class="kb rvask-btn" data-ask="sug" data-answer="no" ${rv.askBusy?'disabled':''}><kbd>N</kbd>No, keep as is</button><button class="kb rvask-btn rvask-skip" data-ask="sug" data-answer="later" ${rv.askBusy?'disabled':''}><kbd>L</kbd>Ask me later</button></div>`;
  if(rv.ask.team){
   const p=teamSync.proposals.find(p=>p.id===rv.ask.team)||s;
-  box.innerHTML=`<div class="rvask-team-banner">TEAM DISCUSSION — proposed by ${esc(p.proposedBy)}. Discuss with the team before accepting.</div><div class="rvask-copy"><b>${action} ${esc(label)} priority?</b><span>${esc(p.proposedBy)} ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact.</span>${s.highRisk?'<span class="rvask-warning">Normally high priority — confirm this change.</span>':''}</div><ul class="rvask-votes">${Object.entries(p.votes).map(([name,vote])=>`<li class="${name===reviewerName?'own-vote':''}">${esc(name)}: ${esc(vote)}${name===reviewerName?' (you)':''}</li>`).join('')||'<li>No votes yet — discuss with your team.</li>'}</ul><div class="rvask-actions">${[['Y','Agree','agree'],['N','Disagree','disagree'],['A','Accept for team','accepted'],['R','Reject for team','rejected'],['L','Later','later']].map(([key,label,answer])=>`<button class="kb rvask-btn" data-ask="team" data-answer="${answer}" ${rv.askBusy?'disabled':''}><kbd>${key}</kbd>${label}</button>`).join('')}</div>`;
+  box.innerHTML=`<div class="rvask-team-banner">TEAM DISCUSSION — proposed by ${esc(p.proposedBy)}. Discuss with the team before accepting.</div><div class="rvask-copy"><b class="rvask-change">${change?`${esc(label)}: <span class="tpill t${change.from}">P${change.from} ${TNAME[change.from]}</span> → <span class="tpill t${change.to}">P${change.to} ${TNAME[change.to]}</span>`:`${action} ${esc(label)} priority?`}</b><span>${esc(p.proposedBy)} ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact.</span>${s.highRisk?'<span class="rvask-warning">Normally high priority — confirm this change.</span>':''}</div><ul class="rvask-votes">${Object.entries(p.votes).map(([name,vote])=>`<li class="${name===reviewerName?'own-vote':''}">${esc(name)}: ${esc(vote)}${name===reviewerName?' (you)':''}</li>`).join('')||'<li>No votes yet — discuss with your team.</li>'}</ul><div class="rvask-actions">${[['Y','Agree','agree'],['N','Disagree','disagree'],['A','Accept for team','accepted'],['R','Reject for team','rejected'],['L','Later','later']].map(([key,label,answer])=>`<button class="kb rvask-btn" data-ask="team" data-answer="${answer}" ${rv.askBusy?'disabled':''}><kbd>${key}</kbd>${label}</button>`).join('')}</div>`;
  }
 }
 function checkLearningSuggestion(){
@@ -741,7 +893,8 @@ async function answerWhy(choice){
 }
 function addSuggestionDirective(s){
  const label=CLS[s.cls]?.lab||s.cls;
- return request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]});
+ const tier=Number.isInteger(s.to)&&s.to>=1&&s.to<=4?s.to:0;
+ return request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}${tier?` to P${tier} ${TNAME[tier]}`:''}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false,...(tier?{tier}:{})}]});
 }
 function answerSuggestion(answer){
  const ask=rv.ask;if(!ask||ask.kind!=='sug'||rv.askBusy||typeof gsLearn==='undefined')return;
@@ -763,9 +916,24 @@ function reviewAskKey(k){
  }
  if(k==='y')answerSuggestion('yes');else if(k==='n')answerSuggestion('no');else if(k==='l'||k==='escape')answerSuggestion('later');
 }
+function tierChange(s){const from=Number(s?.from),to=Number(s?.to);return from>=1&&from<=4&&to>=1&&to<=4&&from!==to?{from,to}:null}
+function renderNext(it){
+ const box=$('rvNext');if(!box)return;
+ let step;
+ if(!reviewerName)step='Enter your reviewer name above to start reviewing.';
+ else if(rv.busy)step='Saving review… Please wait before reviewing another image.';
+ else if(it&&!findItem(it.id))step='This image is unavailable. Press <kbd>S</kbd> to skip, or <kbd>Z</kbd> to undo your last decision.';
+ else if(rv.ask?.kind==='why')step='Answer the question above to continue: press the number of your choice, or <kbd>Esc</kbd> to skip.';
+ else if(rv.ask)step='Answer the yellow question to continue.';
+ else if(!it)step='No images left to review. New images will appear here.';
+ else step=`${rv.last?'This is the next image. ':''}Press <kbd>Space</kbd> to agree with P${it.centralTier} ${TNAME[it.centralTier]}, or <kbd>1</kbd>–<kbd>4</kbd> to set a different priority. Each choice saves and moves on.`;
+ box.innerHTML=(rv.last?`<span class="rvnext-done">${esc(rv.last)}</span>`:'')+`<span class="rvnext-step"><b>Next:</b> ${step}</span>`;
+}
+function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)return;box.classList.remove('flash');void box.offsetWidth;box.classList.add('flash')}
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
+ if(isScene(rv.cur)){rv.cur=null;rv.shown=null;rv.displayed=null}
  const current=rv.cur?findItem(rv.cur.id):rv.busy?null:rvQueue()[0];
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
@@ -789,31 +957,33 @@ function renderReviewContent(){
 function rvFlash(msg,col){const f=$('rvFlash');if(!f)return;f.textContent=msg;f.style.color=col;f.classList.add('on');setTimeout(()=>f.classList.remove('on'),300)}
 function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)return;b.classList.add('pressed');setTimeout(()=>b.classList.remove('pressed'),140)}
 function rvAct(a){
+ const revision=resetRevision;
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});return}
- if(!rv.cur)return;
- if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;renderReview();return}
- const it=rv.displayed;if(!it||it.id!==rv.cur.id)return;
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{if(revision!==resetRevision)return;rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;setLast(rv.navigation===navigation?'↶ Undone: you are back on that image.':'↶ Undone: previous review was restored.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{if(revision!==resetRevision)return;rv.busy=false;renderReview();toast(error.message)});return}
+ if(!rv.cur||isScene(rv.cur))return;
+ if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
+ const it=rv.displayed;if(!it||isScene(it)||it.id!==rv.cur.id)return;
  if(!findItem(it.id)){renderReview();toast('This image is no longer available. Skip to continue.');return}
  const sug=it.centralTier,p={id:it.id,item:it,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
- let msg,col;
+ let msg,col,receipt;
  let changes={reviewed:true};
- if('1234'.includes(a)){changes.manual=+a;msg=`P${a} ${TNAME[+a]}`;col=tcol(+a);p.agreed=+a===sug}
- else if(a==='accept'){changes.manual=sug;msg=`✓ P${sug} ${TNAME[sug]}`;col=tcol(sug);p.agreed=true}
- else if(a==='dismiss'){changes.manual=4;changes.dismissed=true;msg='✕ Not relevant';col='#9aa7b3'}
- else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--good)'}
+ if('1234'.includes(a)){changes.manual=+a;msg=`P${a} ${TNAME[+a]}`;col=tcol(+a);p.agreed=+a===sug;receipt=p.agreed?`✓ Saved: last image kept at P${a} ${TNAME[+a]}.`:`✓ Saved: last image changed P${sug} ${TNAME[sug]} → P${a} ${TNAME[+a]}.`}
+ else if(a==='accept'){changes.manual=sug;msg=`✓ P${sug} ${TNAME[sug]}`;col=tcol(sug);p.agreed=true;receipt=`✓ Saved: you agreed with P${sug} ${TNAME[sug]} on the last image.`}
+ else if(a==='dismiss'){changes.manual=4;changes.dismissed=true;msg='✕ Not relevant';col='#9aa7b3';receipt='✓ Saved: last image marked not relevant and hidden from the feed.'}
+ else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--human)';receipt='✓ Saved: last image sent to the Commander.'}
  else return;
  rv.busy=true;
- submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(!it.detectorNegative&&typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;if(rv.cur?.id===it.id){rv.cur=null;rv.shown=null}renderReview()},280)}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});
+ submitReview(it.id,a,changes,p).then(updated=>{if(revision!==resetRevision)return;rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(!it.detectorNegative&&typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}setLast(receipt+' Press Z to undo.');rvFlash(msg,col);setTimeout(()=>{if(revision!==resetRevision)return;rv.busy=false;if(rv.cur?.id===it.id){rv.cur=null;rv.shown=null}renderReview()},280)}).catch(error=>{if(revision!==resetRevision)return;rv.busy=false;renderReview();toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').trim().slice(0,80)}catch{}
-let reviewDataReady=false,lastReview=null;
-function refreshReviewData(){if(LIVE){$('reviewData').textContent='Durable review logging is unavailable in live shore mode.';return Promise.resolve()}return request('/api/reviews/summary').then(s=>{$('reviewData').textContent=`${s.count} reviews · ${Math.round(s.agreement*100)}% agreement · `+Object.entries(s.reviewers).map(([n,v])=>`${n}: ${v.count}`).join(', ')}).catch(error=>{$('reviewData').textContent=error.message})}
+let reviewDataReady=false,lastReview=null,reviewDataRevision=0;
+function renderReviewData(s){$('reviewData').textContent=`${s.count} reviews · ${Math.round(s.agreement*100)}% agreement · `+Object.entries(s.reviewers).map(([n,v])=>`${n}: ${v.count}`).join(', ')}
+function refreshReviewData(){const revision=++reviewDataRevision;return request('/api/reviews/summary').then(s=>{if(revision===reviewDataRevision)renderReviewData(s)}).catch(error=>{if(revision===reviewDataRevision)$('reviewData').textContent=error.message})}
 function setupReviewData(){if(reviewDataReady)return;reviewDataReady=true;$('reviewerName').value=reviewerName;$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';$('reviewerSave').onclick=()=>{reviewerName=$('reviewerName').value.trim().slice(0,80);try{localStorage.setItem('gsReviewer',reviewerName)}catch{}$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';renderReview()};$('reviewNoteOpen').onclick=openReviewNote;$('reviewNote').onkeydown=async e=>{e.stopPropagation();if(e.key==='Escape'){$('reviewNoteBox').hidden=true;return}if(e.key!=='Enter')return;e.preventDefault();try{await saveReviewReason(lastReview.id,lastReview.reason||'',$('reviewNote').value);lastReview.note=$('reviewNote').value;$('reviewNoteBox').hidden=true;toast('Note saved')}catch(error){toast(error.message)}};refreshReviewData()}
 function openReviewNote(){if(!lastReview){toast('Review an image first');return}$('reviewNoteBox').hidden=false;$('reviewNote').value=lastReview.note||'';$('reviewNote').focus()}
-async function submitReview(id,action,changes,p){if(LIVE)return patchItem(id,changes);const r=await request(`/api/items/${encodeURIComponent(id)}/review`,'POST',{reviewer:reviewerName,action:'1234'.includes(action)?'tier':action,tier:changes.manual});p.record=r.record.id;lastReview=r.record;cdr=r.cdr;applyItemUpdate(r.item);refreshReviewData();return findItem(id)}
-async function undoReview(p){if(LIVE)return patchItem(p.id,{manual:p.manual,reviewed:p.reviewed,dismissed:p.dismissed,sent:p.sent});const r=await request(`/api/reviews/${encodeURIComponent(p.record)}/undo`,'POST',{reviewer:reviewerName});if(r.item){cdr=r.cdr;applyItemUpdate(r.item)}if(lastReview?.id===p.record)lastReview=null;refreshReviewData();return findItem(p.id)}
+async function submitReview(id,action,changes,p){const r=await request(`/api/items/${encodeURIComponent(id)}/review`,'POST',{reviewer:reviewerName,action:'1234'.includes(action)?'tier':action,tier:changes.manual});p.record=r.record.id;lastReview=r.record;cdr=r.cdr;applyItemUpdate(r.item);refreshReviewData();return findItem(id)}
+async function undoReview(p){const r=await request(`/api/reviews/${encodeURIComponent(p.record)}/undo`,'POST',{reviewer:reviewerName});if(r.item){cdr=r.cdr;applyItemUpdate(r.item)}if(lastReview?.id===p.record)lastReview=null;refreshReviewData();return findItem(p.id)}
 async function saveReviewReason(id,reason,note){if(note===undefined)note=lastReview?.id===id?lastReview.note||'':'';await request(`/api/reviews/${encodeURIComponent(id)}/reason`,'POST',{reviewer:reviewerName,reason,note});if(lastReview?.id===id){lastReview.reason=reason;lastReview.note=note}}
 init();

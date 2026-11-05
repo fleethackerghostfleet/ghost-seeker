@@ -8,13 +8,17 @@ from .base import BaseDetector, xyxy_to_xywh
 
 
 class RFDetector(BaseDetector):
-    def __init__(self, variant: str, name: str, device: str | None = None, **kw):
+    def __init__(self, variant: str, name: str, device: str | None = None,
+                 pretrain_weights: str | None = None, **kw):
         super().__init__(**kw)
         import rfdetr
         from rfdetr.util.coco_classes import COCO_CLASSES
 
         self.device = device or "cpu"
-        self.model = getattr(rfdetr, variant)(device=self.device)
+        model_kwargs = {"device": self.device}
+        if pretrain_weights is not None:
+            model_kwargs["pretrain_weights"] = pretrain_weights
+        self.model = getattr(rfdetr, variant)(**model_kwargs)
         self.names = COCO_CLASSES
         self.name = name
         self.imgsz = self.model.model.resolution
