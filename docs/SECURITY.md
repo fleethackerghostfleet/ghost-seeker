@@ -121,12 +121,40 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 |---|---|---|---|---|
 | Baseline ([scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@548487e` | 4 | 4 | 10 |
 | After PR #60, branch ([scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | branch `655e371` | 1 | 3 | 6 |
-| **Final: after PR #60 merged** (incremental re-run of the baseline [scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@a9bd43e` | 3 | 0 | 5 |
+| After PR #60 merged (incremental re-run of the baseline [scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@a9bd43e` | 3 | 0 | 5 |
+| **Current: after PR #75 (unit auth on by default) + #61–#74** (incremental re-run of the [post-#60 scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | `main@1a6382e` | **0** | 5 | 10 |
 
-The final run re-validated the 18 baseline findings on `main@a9bd43e`: 13 are resolved, 2 new
-medium findings (per-unit item ownership) were auto-dismissed as duplicates of the open highs,
-and 8 remain open. All open highs are the same root cause — the unit-auth default on the
-ship-to-shore link — and none of them is reachable through the operator console any more.
+The post-#60 run re-validated the 18 baseline findings on `main@a9bd43e`: 13 resolved, 3 highs
+open (one root cause — the unit-auth default on the ship-to-shore link), 5 lows.
+
+The current run (after PR #75) covers every commit merged since (#61–#75: Patrick's console on
+live shore data, policy layers / locks / signing, per-directive expiry, frame ring buffer). All
+3 highs are resolved (the three duplicates were dismissed). The 5 mediums and 10 lows below are
+what remains open; none is reachable without either an enrolled unit token or the operator token.
+
+* **Medium — edge-supplied `Source` name rendered as raw HTML in the live feed**
+  (`web/static/app.js` `cardHTML` / source dropdown); the same unescaped-ID pattern appears in the
+  Commander View `data-id` (`web/static/cdr.js`, low) and the workbench tiles (low). CSP blocks
+  inline script, so the impact is hiding or faking tiles. Fix: `esc()` at every interpolation and
+  an `ids.Valid`-style allowlist for `Source` / `sighting_id` on the shore bridge.
+* **Medium ×2 — caller-chosen policy `Version`** on shore `SetPolicy` and the edge console: one
+  max-version policy from an operator-token holder makes the edge reject every later policy,
+  including signed command policies, until its DB is wiped. Fix: the server assigns
+  `max(now, prev+1)`; console policies must not move the high-water mark that guards downlinks.
+* **Medium — shore items have no owning edge** (`UpsertManifest` / `WriteChunk`): one compromised
+  unit token can overwrite other ships' contacts. Fix: bind items to the JWT `sub` and reject
+  writes from a different unit (operator overrides stay allowed).
+* **Medium — `CORSAllow` trusts `Host`** (DNS rebinding against SyncService); only exploitable
+  with `-require-auth=false`, so effectively mitigated by PR #75. Fix: a `-public-hosts`
+  allowlist checked before CORS.
+* **Low ×10** — SSE stream has no subscriber cap / stalled-client eviction; EMCON SILENT still
+  sends a heartbeat every tick; an attribute-only suppress directive can defeat a command-locked
+  priority rule; 1-byte chunks make the shore re-read and re-hash a 256 MiB blob per chunk;
+  full-res request handler reads an unbounded body; login `next=` check bypassed by a tab/newline;
+  JPEG fill bytes skip the sidecar's 50-megapixel cap; chunk uploads have no item-count / disk
+  cap; the two HTML-escape siblings above.
+
+Earlier residuals (post-#60 run), kept for history:
 
 * **High ×3 (one root cause: unit auth was opt-in in the Go default)** — `SyncService` accepted
   any caller as any edge (`shore/sync/sync.go`), so an unauthenticated uplink sender could rewrite
