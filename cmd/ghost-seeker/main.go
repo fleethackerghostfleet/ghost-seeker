@@ -151,7 +151,6 @@ func main() {
 	data := store.New(*retain)
 	var generator *sensor.Generator
 	var replay *reviewdataset.Replay
-	var uplink *simulationUplink
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
 	if *datasetManifest != "" {
 		images, err := reviewdataset.LoadManifest(*datasetManifest)
@@ -179,11 +178,11 @@ func main() {
 	} else {
 		generator = sensor.NewGenerator()
 		fillBacklog(data, generator, *backfill)
-		if *simLinkBps < 0 {
-			data.AdvanceUploads(24 * time.Hour)
-		}
-		uplink = newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	}
+	if *simLinkBps < 0 {
+		data.AdvanceUploads(24 * time.Hour)
+	}
+	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
 		if err != nil {
@@ -203,7 +202,7 @@ func main() {
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
 	if replay != nil {
-		go runDatasetSimulation(data, replay, app, *negativesRate)
+		go runDatasetSimulation(data, replay, app, uplink, *negativesRate)
 	} else {
 		go runSimulation(data, generator, app, uplink)
 	}
@@ -272,25 +271,43 @@ func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count i
 	}
 }
 
-func runDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app *server.Server, negativesRate float64) {
+func runDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app *server.Server, uplink *simulationUplink, negativesRate float64) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	last := time.Now()
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
-		_, _, _, state := data.Snapshot()
-		item := replay.Next(time.Now())
-		item.DetectorNegative = item.Edge < sensor.EdgeKeep
-		if item.DetectorNegative && !reviewdataset.SampleNegative(item.ImageID, negativesRate) {
-			data.Add(nil, 0)
-			stats, _ := data.Stats()
-			app.PublishStats(stats)
-			continue
-		}
-		command.Rescore(&item, state.Model, data.Directives())
-		stored, evicted := data.Add(&item, 0)
-		app.PublishEvict(evicted)
-		stats, _ := data.Stats()
-		app.PublishItem(stored, stats)
+		now := time.Now()
+		tickDatasetSimulation(data, replay, app, uplink, negativesRate, now, now.Sub(last))
+		last = now
 	}
+}
+
+func tickDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app *server.Server, uplink *simulationUplink, negativesRate float64, now time.Time, elapsed time.Duration) {
+	updates := uplink.advance(elapsed)
+	if len(updates) > 0 {
+		stats, cdr := data.Stats()
+		for _, updated := range updates {
+			app.PublishUpdate(updated, cdr)
+		}
+		app.PublishStats(stats)
+	}
+	items, _, _, state := data.Snapshot()
+	if !uplink.canGenerate(items) {
+		return
+	}
+	item := replay.Next(now)
+	item.DetectorNegative = item.Edge < sensor.EdgeKeep
+	if item.DetectorNegative && !reviewdataset.SampleNegative(item.ImageID, negativesRate) {
+		data.Add(nil, 0)
+		stats, _ := data.Stats()
+		app.PublishStats(stats)
+		return
+	}
+	command.Rescore(&item, state.Model, data.Directives())
+	stored, evicted := data.Add(&item, 0)
+	app.PublishEvict(evicted)
+	stats, _ := data.Stats()
+	app.PublishItem(stored, stats)
 }
 
 func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration) {
