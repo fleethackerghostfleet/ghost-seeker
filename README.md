@@ -90,7 +90,7 @@ sync auth is off, and edge storage is unlimited (no age/staleness deletion).
 | shore / mint tool | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset |
 | edge | `-unit-token` | `GS_UNIT_TOKEN` | unset |
 | edge | `-unit-token-file` | `GS_UNIT_TOKEN_FILE` | unset |
-| edge | `-max-bytes` | `GS_EDGE_MAX_BYTES` | `0` (unlimited) |
+| edge | `-max-bytes` (form payloads plus originals kept for full-size overrides) | `GS_EDGE_MAX_BYTES` | `0` (unlimited) |
 | edge | `-max-items` | `GS_EDGE_MAX_ITEMS` | `0` (unlimited) |
 
 File credentials take precedence over literal/env credentials. Shore requires a
