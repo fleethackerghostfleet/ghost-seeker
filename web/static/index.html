@@ -19,15 +19,15 @@
   <nav><a href="#feed" id="navFeed" class="on">Imagery Feed</a><a href="#review" id="navRv">Operator Review <span class="bdg" id="rvCount"></span></a><a href="#reprioritize" id="navRp">Collection Priorities <span class="bdg" id="dirCount"></span></a><a href="/cdr.html" target="_blank" rel="noopener">Commander View ↗</a></nav>
   <button type="button" class="live" id="live"><i></i><span>FEED ACTIVE</span></button>
   <div id="emconControl"></div>
-  <button class="btn sm setbtn" id="setBtn" title="Display settings" aria-label="Display settings">⚙</button>
+  <button class="btn sm setbtn" id="setBtn" title="Display settings" aria-label="Display settings">⚙ Settings</button>
   <div class="spacer"></div>
   <div class="hstats">
-    <div class="hstat"><b id="hsImgs">0</b><span>Images held</span></div>
-    <div class="hstat"><b id="hsP1" style="color:var(--p1)">0</b><span>Flash</span></div>
-    <div class="hstat"><b id="hsCdr" style="color:var(--good)">0</b><span>Fwd to CO</span></div>
+    <div class="hstat"><b id="hsImgs">0</b><span>Images stored</span></div>
+    <div class="hstat"><b id="hsP1" style="color:var(--p1)">0</b><span>P1 Critical</span></div>
+    <div class="hstat"><b id="hsCdr" style="color:var(--good)">0</b><span>Sent to Commander</span></div>
   </div>
   <div class="clock mono" id="clock">--:--:--Z</div>
-  <div class="user"><div class="avatar">TAO</div><div>Tactical Action Officer<br><span style="font-size:11px">CIC Watch</span></div></div>
+  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer ·<br><span style="font-size:11px">Watch officer</span></div></div>
 </header>
 
 <section class="page on" id="pgFeed">
@@ -36,22 +36,22 @@
     <span class="lbl">Sensor</span>
     <select id="srcSel"></select>
     <div class="seg" id="tierSeg"></div>
-    <div class="seg" id="sortSeg"><button data-s="pri" class="on">Precedence</button><button data-s="new">DTG</button></div>
-    <div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button></div>
-    <button class="btn sm" id="pauseBtn">Hold</button>
+    <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
+    <span class="lbl">Size</span><div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button></div>
+    <button class="btn sm" id="pauseBtn">Pause feed</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
-    <button class="btn sm" id="briefCreate" disabled>Create J2 brief (0)</button>
-    <a class="btn sm" href="#briefing">J2 briefing</a>
+    <button class="btn sm" id="briefCreate" title="Select ships in image details before creating a briefing" disabled>Create briefing (0)</button>
+    <a class="btn sm" href="#briefing">Open briefing</a>
     <div class="spacer"></div>
     <div class="dirbar" id="dirBar"></div>
   </div>
   <div class="strip">
-    <div class="st" id="st1">Sensor capture <b id="cCap">0</b></div><span class="ar">›</span>
-    <div class="st" id="st2">Edge triage: retained <b id="cKeep">0</b> · dropped <b id="cDrop">0</b></div><span class="ar">›</span>
-    <div class="st" id="st3">Uplink <b id="cKB">0</b> MB</div><span class="ar">›</span>
-    <div class="st" id="st4">Imagery DB <b id="cDb">0</b></div><span class="ar">›</span>
-    <div class="st" id="st5">Command model: <b id="cModel"></b> · <b id="cP1">0</b> P1</div>
-    <span class="sv"><span id="cSaved">0%</span> of frames filtered at the edge</span>
+    <div class="st" id="st1" title="Images captured by sensors">Captured <b id="cCap">0</b></div><span class="ar">›</span>
+    <div class="st" id="st2" title="Ship-side filtering keeps useful images and filters out low-value frames">Kept on ship <b id="cKeep">0</b> · filtered out <b id="cDrop">0</b></div><span class="ar">›</span>
+    <div class="st" id="st3" title="Image data transmitted from ship to shore">Sent to shore <b id="cKB">0</b> MB</div><span class="ar">›</span>
+    <div class="st" id="st4" title="Images saved in storage">Stored <b id="cDb">0</b></div><span class="ar">›</span>
+    <div class="st" id="st5" title="The scoring model ranks images using the base model and active directives">Scoring model: <b id="cModel"></b> · <b id="cP1">0</b> P1 Critical</div>
+    <span class="sv"><span id="cSaved">0%</span> of low-value frames filtered on the ship to save bandwidth</span>
   </div>
  </div>
  <div class="fbody">
@@ -63,30 +63,32 @@
 
 <section class="page" id="pgRp">
  <div class="rp wb">
-  <div class="wb-heading wb-row"><div><div class="wb-eyebrow">Human intent → visible impact</div><h2>Refine. Preview. Correct.</h2><p class="sub">Preview changes on top of active directives. The live feed keeps streaming.</p></div><div class="spacer"></div><button id="wbReset">Reset draft</button><button class="primary" id="wbApply">Apply to live feed →</button></div>
+  <div class="wb-heading wb-row"><div><h2>Collection Priorities</h2><p class="sub">Tell the system what matters, preview the results, then apply your changes. The live feed keeps streaming.</p></div><div class="spacer"></div><button id="wbReset">Reset draft</button><button class="primary" id="wbApply">Apply to live feed →</button></div>
   <div id="wbStatus" role="status" class="hint">Waiting for feed…</div>
-  <div id="wbHeld" class="wb-held" hidden>Feed held — previewing the images on screen; new arrivals are queued. <button id="wbResume" class="btn sm">Resume feed</button></div>
+  <div id="wbHeld" class="wb-held" hidden>Feed paused — previewing the images on screen; new arrivals are queued. <button id="wbResume" class="btn sm">Resume feed</button></div>
   <div class="wb-layout">
    <aside>
-    <section class="panel"><h3>01 / Your directive</h3><label class="hint" for="nlIn">Plain language · updates after 250ms</label><textarea id="nlIn" maxlength="500" placeholder="Prioritize boats; suppress birds"></textarea><div id="wbUnknown" class="hint"></div><p class="hint">Typing reparses chips. Edited chips override the text until your next text edit.</p><div class="examples" id="examples"></div><div class="wb-row"><h3>Effective draft rules</h3><div class="spacer"></div><button id="wbAdd">+ Add rule</button></div><div id="wbChips"></div></section>
-    <section class="panel"><h3>02 / Make it specific</h3><p class="hint">Predicted rule effects are scored by the server (before pending pins).</p><div id="wbSuggestions"></div></section>
-    <section class="panel"><div class="wb-row"><h3>Iteration history</h3><div class="spacer"></div><button id="wbUndo" title="Ctrl+Z outside text fields">↶</button><button id="wbRedo" title="Ctrl+Shift+Z outside text fields">↷</button></div><p class="hint">Compare a version's recorded results with now, or restore its draft.</p><div id="wbHistory"></div></section>
+    <section class="panel"><h3>01 / Your directive</h3><label class="hint" for="nlIn">Describe what to prioritize or ignore</label><textarea id="nlIn" maxlength="500" placeholder="Prioritize boats; ignore birds"></textarea><div id="wbUnknown" class="hint"></div><p class="hint">Your words become rules below. You can edit those rules; typing again replaces your edits.</p><div class="examples" id="examples"></div><div class="wb-row"><h3>Your rules (draft)</h3><div class="spacer"></div><button id="wbAdd">+ Add rule</button></div><div id="wbChips"></div></section>
+    <section class="panel"><h3>02 / Make it specific</h3><p class="hint">Suggestions show how a rule could change priorities, before any image-specific exceptions you have selected.</p><div id="wbSuggestions"></div></section>
+    <section class="panel"><div class="wb-row"><h3>Draft history</h3><div class="spacer"></div><button id="wbUndo" title="Ctrl+Z outside text fields">↶ Undo</button><button id="wbRedo" title="Ctrl+Shift+Z outside text fields">↷ Redo</button></div><p class="hint">Compare a version's recorded results with now, or restore its draft.</p><div id="wbHistory"></div></section>
    </aside>
    <main>
-    <section class="panel"><div class="wb-row"><h3>Live result preview</h3><div class="spacer"></div><button id="wbBaseline">Compare with live baseline</button></div><p class="hint" id="wbCompareLabel"></p><div id="wbCounts" class="wb-counts"></div></section>
+    <section class="panel"><div class="wb-row"><h3>Live result preview</h3><div class="spacer"></div><button id="wbBaseline">Compare with current feed</button></div><p class="hint" id="wbCompareLabel"></p><div id="wbCounts" class="wb-counts"></div></section>
     <section id="wbProposal" class="panel" aria-live="polite" hidden></section>
-    <section id="wbWhy" class="panel"><h3>Why this image?</h3><p class="hint">Hover, focus or click an image for rule contributions.</p></section>
-    <div class="wb-row wb-toolbar"><div><strong id="wbResultLabel">After · Top 16</strong><div class="hint">J/K or ←/→ focus · ↑ higher · ↓ lower · X not relevant</div></div><div class="spacer"></div><label><input id="wbDiff" type="checkbox"> Diff only · tier changed</label></div>
+    <section id="wbWhy" class="panel"><h3>Why this image?</h3><p class="hint">Point to or select an image to see how your rules affect its priority.</p></section>
+    <div class="wb-row wb-toolbar"><div><strong id="wbResultLabel">After · Top 16 images</strong><div class="hint">J/K or Left/Right arrows: select image · Up: higher priority · Down: lower priority · X: not relevant</div></div><div class="spacer"></div><label><input id="wbDiff" type="checkbox"> Show only images whose priority changed</label></div>
     <div id="wbGrid" class="wb-grid"></div>
-    <section class="panel"><h3 id="wbDropLabel">Dropped out of top 16</h3><div id="wbDropped"></div></section>
+    <section class="panel"><h3 id="wbDropLabel">No longer in the top 16 images</h3><div id="wbDropped"></div></section>
    </main>
   </div>
   <div class="wb-admin">
-   <section class="panel"><div class="wb-row"><h3>Active directives</h3><div class="spacer"></div><button class="btn sm" id="clearDir">Clear all</button></div><div class="dirs" id="directives"></div><div id="policyConflicts"></div></section>
-   <section class="panel"><h3>Base prioritization model</h3><div class="mrow"><select id="modelSel"></select></div><div class="modeldesc" id="modelDesc"></div></section>
-   <section class="panel"><details><summary>Effective object weights <span id="wNote"></span></summary><div id="weights"></div></details></section>
+   <section class="panel"><div class="wb-row"><h3>Active directives</h3><div class="spacer"></div><button class="btn sm" id="clearDir">Clear all</button></div><p class="hint">The base model sets starting scores. These directives adjust them to reflect what matters to you.</p><div class="dirs" id="directives"></div><div id="policyConflicts"></div></section>
+   <details class="panel"><summary>Advanced settings</summary>
+   <section class="panel"><h3>Base prioritization model</h3><p class="hint">The base model gives each object a starting score. Active directives adjust those scores to reflect your priorities; image-specific exceptions override the resulting priority.</p><div class="mrow"><select id="modelSel"></select></div><div class="modeldesc" id="modelDesc"></div></section>
+   <section class="panel"><h3>Effective object weights <span id="wNote"></span></h3><div id="weights"></div></section>
    <section class="panel" id="policyAdmin" hidden><h3>Super admin · raw policy (protojson)</h3><textarea id="polRaw" spellcheck="false" rows="14"></textarea><div class="wb-row"><button id="polRawValidate">Validate</button><button id="polRawApply" class="primary">Apply</button><button id="polRawReload">Reload</button></div><div id="polRawMsg" role="status"></div></section>
    <section class="panel" id="policyAudit"><h3>Policy audit · newest 50</h3><div class="policy-table-wrap"><table class="policy-audit"><thead><tr><th>Time</th><th>Who</th><th>Source</th><th>Version</th><th>Text</th><th>Result</th><th>Reason</th></tr></thead><tbody id="policyAuditRows"></tbody></table></div></section>
+   </details>
   </div>
  </div>
 <dialog id="wbConfirm"><h3>Read back before applying</h3><p id="wbReadback" class="wb-readback"></p><small id="wbPath" class="hint"></small><ul id="wbWarnings" class="wb-warnings" hidden></ul><p id="wbConfirmText"></p><p class="hint">Adds draft rules to active directives and saves pinned exceptions. Other sessions will update.</p><div class="wb-row"><button id="wbConfirmApply" class="primary">Confirm</button><button id="wbEditApply">Edit</button><button id="wbCancelApply">Cancel</button></div></dialog>
@@ -108,17 +110,17 @@
     <button class="kb k3" data-a="3"><kbd>3</kbd>P3 Routine</button>
     <button class="kb k4" data-a="4"><kbd>4</kbd>P4 Low</button>
     <div class="kgap"></div>
-    <button class="kb acc" data-a="accept"><kbd>Space</kbd><span id="accLbl">Agree with model</span></button>
-    <button class="kb" data-a="dismiss"><kbd>X</kbd>Not relevant</button>
-    <button class="kb cdrb" data-a="cdr"><kbd>C</kbd>Forward to CO</button>
+    <button class="kb acc" data-a="accept"><kbd>Space</kbd><span id="accLbl">Agree with suggested priority</span></button>
+    <button class="kb" title="Hide this image from the feed and mark it reviewed at P4 Low. The image remains stored." data-a="dismiss"><kbd>X</kbd>Not relevant</button>
+    <button class="kb cdrb" data-a="cdr"><kbd>C</kbd>Send to Commander</button>
     <div class="kgap"></div>
     <button class="kb" data-a="skip" style="flex:.7"><kbd>→</kbd>Skip</button>
     <button class="kb" data-a="undo" style="flex:.7"><kbd>Z</kbd>Undo</button>
   </div>
 </section>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
-<section class="page" id="pgBrief" aria-label="J2 briefing workspace">
- <div class="toolbar"><div><b>J2 briefing studio</b><div class="hint">Local evidence snapshot · no changes to review or command decisions</div></div><div class="spacer"></div><a class="btn" href="#feed">Back to imagery</a><button class="btn" id="briefRebuild">New snapshot from selection</button><button class="btn" id="briefPDF">Print / Save PDF</button><button class="btn primary" id="briefPPTX">Export PowerPoint</button></div>
+<section class="page" id="pgBrief" aria-label="Open briefing workspace">
+ <div class="toolbar"><div><b>Briefing builder</b><div class="hint">Local evidence snapshot · no changes to review or command decisions</div></div><div class="spacer"></div><a class="btn" href="#feed">Back to imagery</a><button class="btn" id="briefRebuild">New snapshot from selection</button><button class="btn" id="briefPDF">Print / Save PDF</button><button class="btn primary" id="briefPPTX">Export PowerPoint</button></div>
  <div id="briefStatus" role="status" aria-live="polite"></div>
  <div class="brief-workspace">
   <aside class="brief-controls">

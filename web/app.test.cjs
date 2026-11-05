@@ -149,6 +149,33 @@ test('consecutive Space and Enter and live renders retain band focus without rev
  vm.runInContext("press('Enter')",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&!!document.activeElement.closest('.band-controls button')",context),true);
 });
+test('live card updates preserve canonical priority labels',()=>{
+ const context=setup();
+ vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
+ vm.runInContext(`
+  badge={};other={};
+  card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
+  gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
+  testItem={id:'test',el:card,tier:1,central:.9,base:.8};updateCard(testItem);
+ `,context);
+ assert.equal(vm.runInContext('badge.textContent',context),'P1 Critical');
+ assert.equal(vm.runInContext('badge.title',context),'Notify Commander');
+ vm.runInContext('testItem.tier=4;updateCard(testItem)',context);
+ assert.equal(vm.runInContext('badge.textContent',context),'P4 Low');
+ assert.equal(vm.runInContext('badge.title',context),'Image priority');
+});
+test('feed state uses clear active, paused and reconnecting labels',()=>{
+ const context=setup();
+ vm.runInContext("indicator={};$('live').querySelector=()=>indicator;renderLive()",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED ACTIVE');
+ assert.equal(vm.runInContext("$('pauseBtn').textContent",context),'Pause feed');
+ vm.runInContext('state.paused=true;renderLive()',context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED PAUSED');
+ assert.equal(vm.runInContext("$('pauseBtn').textContent",context),'Resume feed');
+ vm.runInContext('state.offline=true;renderLive()',context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'RECONNECTING');
+ assert.equal(vm.runInContext("$('live').title",context),'Reconnecting — click to resume feed');
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({

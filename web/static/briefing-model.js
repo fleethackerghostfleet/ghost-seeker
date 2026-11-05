@@ -28,7 +28,7 @@
    const rect=(x,y,w,h,color)=>elements.push({type:'rect',x,y,w,h,color});
    rect(0,0,1280,32,'007A33');text(marking,30,7,1210,22,14,'FFFFFF',true);
    text(draft.title||'Maritime intelligence briefing',32,48,1216,72,30,'172E40',true);
-   text(`J2 / MARITIME  |  SNAPSHOT ${draft.created}  |  ANALYST DRAFT`,32,124,1216,28,13,'526672');
+   text(`MARITIME BRIEFING  |  SNAPSHOT ${draft.created}  |  ANALYST DRAFT`,32,124,1216,28,13,'526672');
    const gap=20,width=(1216-gap*(records.length-1))/records.length;
    records.forEach((r,i)=>{
     const x=32+i*(width+gap),imageH=records.length===1?260:190;
@@ -37,7 +37,7 @@
     if(r.image)elements.push({type:'image',data:r.image,x,y:166,w:imageW,h:imageH});
     else text('Image unavailable at snapshot',x+12,220,imageW-24,50,16,'526672');
     const tx=records.length===1?710:x,ty=records.length===1?170:368,tw=records.length===1?538:width;
-    text(`${i+1}. ${r.label} / P${r.priority}`,tx,ty,tw,50,records.length>2?18:22,'172E40',true);
+    text(`${i+1}. ${r.label} / P${r.priority} ${['','Critical','High','Routine','Low'][r.priority]}`,tx,ty,tw,50,records.length>2?18:22,'172E40',true);
     text(`${r.source} | ${r.time}\nImage ${r.id} / detection ${r.index+1}`,tx,ty+56,tw,57,12,'526672');
     text(`Model confidence: ${Math.round(r.confidence*100)}%\nIdentity / affiliation: unknown`,tx,ty+117,tw,50,14);
     if(records.length===1)text('Position / course / speed: unavailable\nBox highlights the selected detection.\nModel attributes: '+(r.observations.join(', ')||'none'),tx,ty+174,tw,80,14,'526672');

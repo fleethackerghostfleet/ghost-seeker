@@ -5,7 +5,7 @@ const briefing=(()=>{
  function status(message){$('briefStatus').textContent=message}
  function renderDetections(item){
   const area=$('briefDetections');area.replaceChildren();
-  const heading=document.createElement('h4');heading.textContent='Select ships for a J2 brief';area.append(heading);
+  const heading=document.createElement('h4');heading.textContent='Select ships for a briefing';area.append(heading);
   item.dets.forEach((d,index)=>{
    if(CLS[d.cls]?.g!=='vessel')return;
    const key=JSON.stringify([item.id,index]),button=document.createElement('button');
@@ -18,11 +18,12 @@ const briefing=(()=>{
    };area.append(button);
   });
   if(!area.querySelector('button')){const p=document.createElement('p');p.className='hint';p.textContent='No vessel detections in this image.';area.append(p)}
-  const link=document.createElement('a');link.className='btn';link.href='#briefing';link.textContent='Open J2 briefing';area.append(link);
+  const link=document.createElement('a');link.className='btn';link.href='#briefing';link.textContent='Open briefing';area.append(link);
  }
  function renderSelection(){
   $('briefCount').textContent=selected.size;
-  $('briefCreate').textContent=`Create J2 brief (${selected.size})`;
+  $('briefCreate').textContent=`Create briefing (${selected.size})`;
+  $('briefCreate').title=selected.size?'Build a briefing from the selected ship images':'Select ships in image details first';
   $('briefCreate').disabled=busy||!selected.size;$('briefRebuild').disabled=busy||!selected.size;
   $('briefClear').disabled=busy||!selected.size;
   const area=$('briefSelection');area.replaceChildren();
@@ -74,7 +75,7 @@ const briefing=(()=>{
  function render(){
   const area=$('briefPreview');area.replaceChildren();
   $('briefPPTX').disabled=busy||!draft;$('briefPDF').disabled=busy||!draft;
-  if(!draft){const empty=document.createElement('div');empty.className='brief-empty';empty.textContent='Select vessel detections in the imagery feed, then choose Create J2 brief. No briefing snapshot yet.';area.append(empty);return}
+  if(!draft){const empty=document.createElement('div');empty.className='brief-empty';empty.textContent='Select vessel detections in the imagery feed, then choose Create briefing. No briefing snapshot yet.';area.append(empty);return}
   B.scenes(draft).forEach((scene,i)=>{const label=document.createElement('p');label.className='hint';label.textContent=`Slide ${i+1} / ${B.pages(draft.records,draft.layout).length} · 16:9 · Analyst draft`;const wrap=document.createElement('div');wrap.className='brief-slide-wrap';wrap.append(slideDOM(scene));area.append(label,wrap)});resize();
  }
  async function powerpoint(){
@@ -96,7 +97,7 @@ const briefing=(()=>{
  function print(){
   if(!draft||busy)return;
   const popup=window.open('','_blank');if(!popup){status('Allow popups for this site to print / save PDF.');return}
-  const doc=popup.document;doc.title='Ghost Seeker J2 briefing';
+  const doc=popup.document;doc.title='Ghost Seeker Open briefing';
   const style=doc.createElement('style');style.textContent='@page{size:13.333333in 7.5in;margin:0}body{margin:0;font-family:Arial,sans-serif}.brief-slide{position:relative;width:1280px;height:720px;background:white;break-after:page;page-break-after:always}.brief-slide:last-child{break-after:auto}.brief-element{position:absolute;white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;line-height:1.15}.brief-element img{width:100%;height:100%;object-fit:contain}*{box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact}@media print{.print-actions{display:none}}';doc.head.append(style);
   const actions=doc.createElement('div');actions.className='print-actions';const button=doc.createElement('button');button.textContent='Print / Save as PDF';button.onclick=()=>popup.print();actions.append(button);doc.body.append(actions);
   B.scenes(draft).forEach(scene=>doc.body.append(slideDOM(scene,doc)));

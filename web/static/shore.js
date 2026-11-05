@@ -57,19 +57,19 @@
     }
     for (const b of pr.children) b.classList.toggle('on', link.controllable && +b.dataset.bps === link.bps);
     $('#items-shore').textContent = shore.ok ? shore.itemsTotal : '—';
-    $('#items-edge').textContent = edge.ok ? edge.itemsTotal : (edge.error ? 'n/a' : '—');
-    $('#edge-queue').textContent = edge.ok ? `prioritization: ${edge.prioritizer || 'edgeml'} · ${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)} · ${edge.itemsEvicted || 0} delivered items evicted${edge.itemsDeduped ? ` · ${edge.itemsDeduped} duplicate frames folded on the edge` : ''}` : '';
+    $('#items-edge').textContent = edge.ok ? edge.itemsTotal : (edge.error ? 'Unavailable' : '—');
+    $('#edge-queue').textContent = edge.ok ? `prioritization: ${edge.prioritizer || 'edgeml'} · ${edge.queuedItems} queued, ${fmtBytes(edge.queuedBytes)} · ${edge.itemsEvicted || 0} delivered images removed from ship storage${edge.itemsDeduped ? ` · ${edge.itemsDeduped} duplicate images combined on the ship` : ''}` : '';
     const sightingMode = counts.grouped > 0;
     $('#obj-img').textContent = sightingMode ? counts.sightingsWithImage : counts.objectsWithImage;
     $('#obj-all').textContent = sightingMode ? counts.sightings : counts.objects;
-    $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
+    $('#obj-note').textContent = sightingMode ? `detected objects grouped across images${counts.scenes ? ` · ${counts.scenes} background camera images not counted` : ''}` : `(not grouped yet: ${counts.items} images, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
-    $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
+    $('#bytes-src').textContent = link.controllable ? `connection total · shore received ${fmtBytes(shore.bytes)}` : 'received by shore';
     $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (!snap.policyInfo && snap.emcon ? ` · EMCON ${snap.emcon}` : '');
     const focusedMode = document.activeElement?.closest?.('#shore-emcon button')?.dataset.mode;
     const mode = String(policyInfo.emcon || snap.emcon || 'NORMAL').toUpperCase();
     const lockTitle = policyInfo.emconLocked ? `EMCON locked by ${policyInfo.emconLockedBy || policyInfo.emconSetBy || 'higher echelon'}` : '';
-    $('#shore-emcon').innerHTML = `<div class="shore-emcon" role="group" aria-label="Go quiet (EMCON)" tabindex="-1" ${lockTitle ? `title="${esc(lockTitle)}"` : ''}><b>EMCON</b>${['NORMAL', 'BURST', 'SILENT'].map(value => `<button type="button" data-mode="${value}" aria-pressed="${mode === value}" class="${mode === value ? 'on' : ''}" ${policyInfo.emconLocked ? 'disabled' : ''} ${lockTitle ? `title="${esc(lockTitle)}"` : ''}>${value[0] + value.slice(1).toLowerCase()}</button>`).join('')}</div>`;
+    $('#shore-emcon').innerHTML = `<div class="shore-emcon" role="group" aria-label="Go quiet (EMCON)" tabindex="-1" ${lockTitle ? `title="${esc(lockTitle)}"` : ''}><b title="EMCON: transmission control. Silent stops ship-to-shore transfers; stored images remain on the ship.">Go quiet</b>${['NORMAL', 'BURST', 'SILENT'].map(value => `<button type="button" data-mode="${value}" aria-pressed="${mode === value}" class="${mode === value ? 'on' : ''}" ${policyInfo.emconLocked ? 'disabled' : ''} ${lockTitle ? `title="${esc(lockTitle)}"` : ''}>${value[0] + value.slice(1).toLowerCase()}</button>`).join('')}</div>`;
     if (focusedMode) {
       const button = $('#shore-emcon').querySelector(`[data-mode="${focusedMode}"]`);
       (button && !button.disabled ? button : $('#shore-emcon').querySelector('.shore-emcon'))?.focus({ preventScroll: true });
@@ -134,7 +134,7 @@
       const b = v?.best;
       const img = b?.image ? `<img src="${b.image}?v=${b.forms[b.imageForm]?.bytes || 0}" alt="">` : '<div class="noimg">no view yet</div>';
       const full = b?.forms.full?.state;
-      const pull = b ? `<button class="btn mini" data-act="pull" data-id="${esc(b.id)}" ${pulling.has(b.id) || full === 'received' ? 'disabled' : ''}>${full === 'received' ? 'full frame received' : full === 'partial' ? 'full frame…' : pulling.has(b.id) ? 'requested…' : 'Pull full frame'}</button>` : '';
+      const pull = b ? `<button class="btn mini" title="Request the full-resolution image from the ship over the connection." data-act="pull" data-id="${esc(b.id)}" ${pulling.has(b.id) || full === 'received' ? 'disabled' : ''}>${full === 'received' ? 'full frame received' : full === 'partial' ? 'full frame…' : pulling.has(b.id) ? 'requested…' : 'Request full image'}</button>` : '';
       return `<div class="cam" title="${c.scene ? 'Latest object-free context frame from this camera (edge heartbeat, ~2 KB/min). Not a contact.' : 'Latest contact image from this camera (no heartbeat frame received yet).'}">
         ${img}
         <div class="meta"><div class="k">${esc(c.src)}</div><div class="u">seen ${ago(c.lastMs)} · ${c.contacts} contact${c.contacts === 1 ? '' : 's'}${v ? ` · view ${ago(v.lastMs)}` : ''}</div>${pull}</div>
@@ -152,13 +152,13 @@
     return `<div class="card ${o.priority} ${o.suppressed ? 'suppressed' : ''}" data-key="${esc(o.key)}">
       ${imageBlock(b)}
       <div class="body">
-        <div class="title"><span class="label">${esc(label)}${o.unknown ? ' <span class="muted">(unknown)</span>' : ''}</span><span class="tier ${o.priority}">${o.priority}${o.suppressed ? ' · suppressed' : ''}</span></div>
+        <div class="title"><span class="label">${esc(label)}${o.unknown ? ' <span class="muted">(unknown)</span>' : ''}</span><span class="tier ${o.priority}">${({P1:'P1 Critical',P2:'P2 High',P3:'P3 Routine',P4:'P4 Low'})[o.priority]||esc(o.priority)}${o.suppressed ? ' · deprioritized' : ''}</span></div>
         <div class="meta">${b.conf ? `${Math.round(b.conf * 100)}% · ` : ''}${frames}${sub}${o.event ? ` · ${esc(o.event)}` : ''} · ${ago(o.lastMs)} · ${esc(b.source)}</div>
         <div class="meta">${o.sightingId ? `sighting ${esc(o.sightingId)}` : `item ${esc(b.id.slice(-8))}`}</div>
         <div class="forms">${formChips(b)}</div>
         <div class="actions">
-          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${canPull ? '' : 'disabled'}>${b.forms.full?.state === 'received' ? 'full received' : b.forms.full?.state === 'pending' || b.forms.full?.state === 'partial' ? 'full pending…' : 'Pull full image'}</button>${b.forms.full ? `<button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>` : ''}
-          <button class="btn" data-act="escalate" data-key="${esc(o.key)}">${escalated.has(o.key) ? 'Escalated ✓' : 'Escalate to CDR'}</button>
+          <button class="btn" title="Request the full-resolution image from the ship over the connection." data-act="pull" data-id="${esc(b.id)}" ${canPull ? '' : 'disabled'}>${b.forms.full?.state === 'received' ? 'full received' : b.forms.full?.state === 'pending' || b.forms.full?.state === 'partial' ? 'full pending…' : 'Request full image'}</button>${b.forms.full ? `<button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>` : ''}
+          <button class="btn" data-act="escalate" data-key="${esc(o.key)}">${escalated.has(o.key) ? 'Sent to Commander ✓' : 'Send to Commander'}</button>
         </div>
       </div></div>`;
   }
@@ -167,15 +167,15 @@
     return `<div class="row ${o.priority} ${d ? 'done' : ''}" data-key="${esc(o.key)}">
       ${imageBlock(b)}
       <div>
-        <div class="title"><span class="label">${esc(b.override || o.subtype || o.label || 'unknown')}</span> <span class="tier ${o.priority}">${o.priority}</span> ${d ? `<span class="muted">· ${esc(d)}</span>` : ''}</div>
+        <div class="title"><span class="label">${esc(b.override || o.subtype || o.label || 'unknown')}</span> <span class="tier ${o.priority}">${({P1:'P1 Critical',P2:'P2 High',P3:'P3 Routine',P4:'P4 Low'})[o.priority]||esc(o.priority)}</span> ${d ? `<span class="muted">· ${esc(d)}</span>` : ''}</div>
         <div class="meta">${o.sightingId ? `sighting ${esc(o.sightingId)} · ${o.framesKnown ? `${o.frames} frames` : `${o.reports} reports`}` : `item ${esc(b.id)}`}${o.subtype ? ` · ${esc(o.subtype)}` : ''} · unknownness ${b.unknownness.toFixed(2)} · ${ago(o.lastMs)}</div>
         <div class="forms">${formChips(b)}</div>
         <div class="actions">
           <button class="btn primary" data-act="confirm" data-key="${esc(o.key)}">Confirm ${esc(b.override || o.subtype || o.label || '')}</button>
-          <button class="btn" data-act="relabel" data-key="${esc(o.key)}" data-id="${esc(b.id)}">Relabel…</button>
-          <button class="btn" data-act="pull" data-id="${esc(b.id)}" ${b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full image</button>${b.forms.full ? `<button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>` : ''}
-          <button class="btn" data-act="escalate" data-key="${esc(o.key)}">Escalate to CDR</button>
-          <button class="btn" data-act="dismiss" data-key="${esc(o.key)}">Dismiss</button>
+          <button class="btn" data-act="relabel" data-key="${esc(o.key)}" data-id="${esc(b.id)}" title="Send a corrected object name to shore">Change label…</button>
+          <button class="btn" title="Request the full-resolution image from the ship over the connection." data-act="pull" data-id="${esc(b.id)}" ${b.forms.full?.state === 'received' ? 'disabled' : ''}>Request full image</button>${b.forms.full ? `<button class="btn" data-act="fullsize" data-id="${esc(b.id)}" title="Operator override: send the original image at full size, no compression">Send full size</button>` : ''}
+          <button class="btn" data-act="escalate" data-key="${esc(o.key)}">Send to Commander</button>
+          <button class="btn" title="Mark this object as not relevant in this browser’s review queue. It remains stored on shore." data-act="dismiss" data-key="${esc(o.key)}">Not relevant</button>
         </div>
       </div></div>`;
   }
@@ -202,7 +202,7 @@
       $('#review').innerHTML = list.length ? list.map(reviewRow).join('') : '<div class="empty">Queue empty.</div>';
     } else {
       const list = objs.filter(o => !o.scene && (escalated.has(o.key) || o.priority === 'P1')).sort((a, b) => escalated.has(b.key) - escalated.has(a.key) || b.lastMs - a.lastMs);
-      $('#cdr').innerHTML = list.length ? list.map(objectCard).join('') : '<div class="empty">Nothing escalated. Use “Escalate to CDR” on a card.</div>';
+      $('#cdr').innerHTML = list.length ? list.map(objectCard).join('') : '<div class="empty">Nothing sent to Commander. Use “Send to Commander” on a card.</div>';
     }
   }
 
@@ -215,11 +215,11 @@
       if (act === 'pull') {
         pulling.add(id); b.disabled = true; b.textContent = 'requesting…';
         await post('/api/shore/pull', { itemId: id, form: 'full' });
-        toast('full image requested from edge');
+        toast('Full image requested from ship');
       } else if (act === 'fullsize') {
         const by = prompt('Operator override: send this image at FULL SIZE with NO compression.\nThis uses much more link bandwidth than the usual thumbnail/crop.\n\nEnter your name or operator ID to confirm:');
         if (by === null) return;
-        if (!by.trim()) { toast('not sent: operator name is required', true); return; }
+        if (!by.trim()) { toast('Not sent: enter your name or operator ID in the confirmation box', true); return; }
         await post('/api/shore/pull', { itemId: id, form: 'full', original: true, by: by.trim() });
         toast(`full-size original requested by ${by.trim()}`);
       } else if (act === 'escalate') {

@@ -14,50 +14,50 @@
   <nav class="tabs">
     <button class="tab active" data-view="feed">Imagery feed</button>
     <button class="tab" data-view="review">Review queue <span id="review-n" class="pill">0</span></button>
-    <button class="tab" data-view="cdr">Commander view</button>
+    <button class="tab" data-view="cdr">Commander View</button>
   </nav>
   <div id="conn" class="conn">connecting…</div>
 </header>
 
 <section class="strip" id="strip">
   <div class="st link">
-    <div class="k">Ship → shore link</div>
+    <div class="k">Connection from ship to shore</div>
     <div class="v"><span id="kbps">—</span></div><div class="u" id="link-src"></div>
     <div class="presets" id="presets"></div>
   </div>
-  <div class="st"><div class="k">Items on shore / on edge</div><div class="v"><span id="items-shore">—</span> <span class="u">/</span> <span id="items-edge">—</span></div><div class="u" id="edge-queue"></div></div>
+  <div class="st"><div class="k">Images on shore / on ship</div><div class="v"><span id="items-shore">—</span> <span class="u">/</span> <span id="items-edge">—</span></div><div class="u" id="edge-queue"></div></div>
   <div class="st"><div class="k">Unique objects with image on shore</div><div class="v"><span id="obj-img">—</span> <span class="u">/</span> <span id="obj-all">—</span></div><div class="u" id="obj-note"></div></div>
-  <div class="st"><div class="k">Bytes over the link</div><div class="v"><span id="bytes">—</span></div><div class="u" id="bytes-src"></div></div>
+  <div class="st"><div class="k">Data sent over the connection</div><div class="v"><span id="bytes">—</span></div><div class="u" id="bytes-src"></div></div>
   <div class="st policy">
-    <div class="k">Standing directive (shore policy)</div>
+    <div class="k">Collection priority (shore instruction)</div>
     <form id="directive-form" class="directive">
       <input id="directive" placeholder='e.g. "ignore cargo ships; prioritize submarines"' autocomplete="off">
       <button class="btn primary" type="submit">Set</button>
     </form>
     <div id="shore-emcon"></div>
     <div class="v small" id="policy">—</div>
-    <div class="v small" id="readback" title="NL compiler readback"></div>
+    <div class="v small" id="readback" title="Natural-language compiler readback: how the assistant understood your directive. Check this before relying on it."></div>
     <div class="u" id="policy-info"></div>
   </div>
 </section>
 
 <main>
   <section id="view-feed" class="view active">
-    <div class="cameras" id="cameras" title="One entry per edge camera: the edge sends one tiny object-free context frame per camera per minute as a heartbeat. Not contacts."></div>
+    <div class="cameras" id="cameras" title="One background image per ship camera per minute shows the camera is working. These are not detected objects."></div>
     <div class="toolbar">
-      <label title="Hide per-frame items that carry no sighting_id (object-free frames the edge still forwards)"><input type="checkbox" id="only-sightings" checked> sightings only</label>
-      <label><input type="checkbox" id="hide-suppressed"> hide suppressed</label>
+      <label title="Show detected objects only; hide background images with no detected object"><input type="checkbox" id="only-sightings" checked> Detected objects only</label>
+      <label title="Hide objects whose priority was reduced by a collection rule"><input type="checkbox" id="hide-suppressed"> Hide deprioritized objects</label>
       <label><input type="checkbox" id="only-image"> only with image</label>
       <span class="muted" id="feed-note"></span>
     </div>
     <div id="feed" class="grid"></div>
   </section>
   <section id="view-review" class="view">
-    <p class="muted">Highest priority and unknown objects first. <b>Confirm</b> keeps the detector label, <b>Relabel</b> sends an operator label override to shore, <b>Pull full</b> asks the edge for the full-resolution frame over the link.</p>
+    <p class="muted">Highest priority and unknown objects first. <b>Confirm</b> keeps the detector label, <b>Change label</b> sends your corrected object name to shore. <b>Request full image</b> asks the ship to send the full-resolution image over the connection.</p>
     <div id="review" class="list"></div>
   </section>
   <section id="view-cdr" class="view">
-    <p class="muted">Objects escalated by the watch officer, plus every P1 on shore. Images are the best form received so far.</p>
+    <p class="muted">Objects sent to Commander by the watch officer, plus every P1 Critical on shore. Images are the best form received so far.</p>
     <div id="cdr" class="grid big"></div>
   </section>
 </main>

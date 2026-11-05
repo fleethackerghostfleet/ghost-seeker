@@ -10,7 +10,7 @@
     const buttons = ['NORMAL', 'BURST', 'SILENT'].map(value =>
       `<button type="button" data-mode="${value}" class="${mode === value ? 'on' : ''}" aria-pressed="${mode === value}" ${emcon.locked ? 'disabled' : ''} ${lockedBy ? `title="${esc(lockedBy)}"` : ''}>${value[0] + value.slice(1).toLowerCase()}</button>`
     ).join('');
-    return `<div class="seg emcon" id="emconSeg" role="group" aria-label="Go quiet (EMCON)" tabindex="-1" ${lockedBy ? `title="${esc(lockedBy)}"` : ''}><span class="emcon-label">EMCON</span>${buttons}</div>`;
+    return `<div class="seg emcon" id="emconSeg" role="group" aria-label="Go quiet (EMCON)" tabindex="-1" ${lockedBy ? `title="${esc(lockedBy)}"` : ''}><span class="emcon-label" title="EMCON: transmission control. In live operation, Silent stops ship-to-shore transfers; stored images remain on the ship. Normal resumes transfers; Burst limits them. The demonstration feed continues.">Go quiet</span>${buttons}</div>`;
   }
 
   function directiveBadge(directive = {}) {

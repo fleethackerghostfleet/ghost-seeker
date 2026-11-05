@@ -1,11 +1,11 @@
-/* Commander's Board: final decisions on imagery the watch floor escalated. */
+/* Commander View: final decisions on imagery the watch floor escalated. */
 let SRC={},CLS={},MODELS={},ATTR_LAB={},model='maritime';
 let items=new Map(),view={tab:'pending',sel:null,busy:false,undo:[]};
 const DEC={
  action:{k:'1',lab:'Take action',sub:'Task an asset · intercept / investigate',c:'#ff4d5e'},
- track:{k:'2',lab:'Track',sub:'Maintain custody, keep monitoring',c:'#ff9a3c'},
- intel:{k:'3',lab:'Forward to intel',sub:'Exploit and report',c:'#5fb4ff'},
- close:{k:'4',lab:'No further action',sub:'Close out',c:'#8a99a8'},
+ track:{k:'2',lab:'Track',sub:'Keep following this object',c:'#ff9a3c'},
+ intel:{k:'3',lab:'Forward to intel',sub:'Analyze the image and prepare a report',c:'#5fb4ff'},
+ close:{k:'4',lab:'No further action',sub:'Record a final decision; keep the image stored',c:'#8a99a8'},
  return:{k:'b',lab:'Return to watch floor',sub:'Needs another look',c:'#b48cff'}};
 const KEYDEC=Object.fromEntries(Object.entries(DEC).map(([d,v])=>[v.k,d]));
 const TN=['','Critical','High','Routine','Low'];
@@ -39,7 +39,7 @@ function flags(it){
   if(d.attrs.approaching)f.push(['al',`${l}: track inbound toward the sensor`]);
   if(d.attrs.loitering)f.push(['',`${l}: loitering`]);
   if(d.attrs.new)f.push(['',`${l}: not present in previous pass`])});
- if(it.edge<it.central-.15)f.push(['up',`Command model raised the edge score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`]);
+ if(it.edge<it.central-.15)f.push(['up',`Shore model raised the ship score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`]);
  return[...new Map(f.map(x=>[x[1],x])).values()];
 }
 function boxes(it){
@@ -62,7 +62,7 @@ function renderQueue(){
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here as the watch floor sends them up.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${it.id}">
-  <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier}</span></div>
+  <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
   <span class="mono">${it.decision?`<i class="dc" style="color:${DEC[it.decision].c}">${DEC[it.decision].lab}</i> · ${ago(it.decidedAt)} ago`:`sent ${ago(it.sentAt)} ago · ${it.central.toFixed(2)}`}</span></div></div>`).join('');
  $('qlist').querySelector('.row.on')?.scrollIntoView({block:'nearest'});
@@ -82,16 +82,16 @@ function renderStage(){
 function renderBrief(it){
  const sug=tierFor(it.central),f=flags(it),d=it.decision&&DEC[it.decision];
  const steps=[['Captured',`${esc(it.src.id)} · ${zulu(it.ts)}`],['Edge triage kept',`score ${it.edge.toFixed(2)} · ${esc(it.src.em||'')}`],['Uplinked',esc(it.src.link||'—')],
-  ['Command model',`${esc(MODELS[model]?.name||model)} · ${it.central.toFixed(2)} → P${sug}`],
-  ['Watch officer',it.sentAt?`escalated as P${it.tier} · ${zulu(it.sentAt)}`:'returned for another look'],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])];
- $('brief').innerHTML=`<div class="pri" style="--c:${tcol(it.tier)}"><span class="big">P${it.tier}</span><div><b>${TN[it.tier]}</b><span>Watch-officer priority${it.manual&&it.manual!==sug?` · model suggested P${sug}`:''}</span></div></div>
- <div class="meter"><span>Command score</span><div class="bar"><i style="width:${it.central*100}%;background:${tcol(sug)}"></i></div><b class="mono">${it.central.toFixed(2)}</b></div>
- <div class="meter"><span>Edge score</span><div class="bar"><i style="width:${it.edge*100}%"></i></div><b class="mono">${it.edge.toFixed(2)}</b></div>
+  ['Shore model',`${esc(MODELS[model]?.name||model)} · ${it.central.toFixed(2)} → P${sug} ${TN[sug]}`],
+  ['Watch officer',it.sentAt?`sent to Commander as P${it.tier} ${TN[it.tier]} · ${zulu(it.sentAt)}`:'returned for another look'],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])];
+ $('brief').innerHTML=`<div class="pri" style="--c:${tcol(it.tier)}"><span class="big">P${it.tier}</span><div><b>${TN[it.tier]}</b><span>Watch-officer priority${it.manual&&it.manual!==sug?` · model suggested P${sug} ${TN[sug]}`:''}</span></div></div>
+ <div class="meter"><span title="Command score: importance after shore-side scoring">Shore score</span><div class="bar"><i style="width:${it.central*100}%;background:${tcol(sug)}"></i></div><b class="mono">${it.central.toFixed(2)}</b></div>
+ <div class="meter"><span title="Edge score: the initial importance assigned on the ship">Ship score</span><div class="bar"><i style="width:${it.edge*100}%"></i></div><b class="mono">${it.edge.toFixed(2)}</b></div>
  <h4>Why it reached you</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||'<li>High command-model score</li>'}</ul>
- <h4>Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
+ <h4 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
  <h4>Decision</h4>${d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
  `<textarea id="note" data-id="${it.id}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
- <div class="decs">${Object.entries(DEC).map(([k,v])=>`<button class="dec" data-d="${k}" style="--c:${v.c}"><kbd>${v.k.toUpperCase()}</kbd><b>${v.lab}</b><span>${v.sub}</span></button>`).join('')}</div>`}`;
+ <div class="decs">${Object.entries(DEC).map(([k,v])=>`<button class="dec" title="${k==='close'?'Record a final decision to take no further action. The image remains stored in Decided.':v.sub}" data-d="${k}" style="--c:${v.c}"><kbd>${v.k.toUpperCase()}</kbd><b>${v.lab}</b><span>${v.sub}</span></button>`).join('')}</div>`}`;
 }
 function render(){ensureSel();renderKpis();renderQueue();renderStage()}
 
@@ -107,7 +107,7 @@ async function decide(decision,id=view.sel){
   const r=await api(`/api/items/${encodeURIComponent(id)}/decision`,'POST',{decision,note});
   if($('note'))$('note').value='';
   upsert(r.item);
-  if(decision){view.undo.push(id);if(view.tab==='pending')view.sel=next?.id||null;toast(`${DEC[decision].lab} · P${it.tier} ${title(it)}`)}
+  if(decision){view.undo.push(id);if(view.tab==='pending')view.sel=next?.id||null;toast(`${DEC[decision].lab} · P${it.tier} ${TN[it.tier]} ${title(it)}`)}
   else{setTab('pending');view.sel=id;toast('Decision reopened')}
   render();return true;
  }catch(e){toast(e.message);return false}finally{view.busy=false}
@@ -129,7 +129,7 @@ function connect(){
  es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
  es.addEventListener('update',e=>{
   const m=JSON.parse(e.data),prev=view.sel,{it,isNew}=upsert(m.item);
-  if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}
+  if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${TN[it.tier]} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}
   ensureSel();renderKpis();renderQueue();if(view.sel!==prev||it.id===view.sel)renderStage();
  });
  es.addEventListener('evict',e=>{const{id}=JSON.parse(e.data);if(items.delete(id))render()});
