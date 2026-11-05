@@ -87,6 +87,14 @@ test('externally shaped links without a measurement yet say measuring, not link 
  assert.match(html,/class="st link".*<b>—<\/b>.*Measuring link speed…/);
  assert.doesNotMatch(html,/Link down|st link down/);
 });
+
+test('edge offline and shore reports the link down: stale shore estimate is not shown as a working link',()=>{
+ const c=setup();
+ c.LIVE.edge={ok:false};c.LIVE.shore.estimateBps=64000;c.LIVE.shore.linkUp=false;
+ vm.runInContext('renderLiveStrip()',c);
+ const html=vm.runInContext("$('liveStrip').innerHTML",c);
+ assert.match(html,/class="st link down".*Link down — sending paused/);
+});
 test('live errors stay visible and escaped, and failed image requests retain their error',async()=>{
  const c=setup();
  vm.runInContext("LIVE.shore={ok:false,error:'<offline>'};renderLiveStrip()",c);

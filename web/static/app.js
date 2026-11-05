@@ -23,7 +23,7 @@ function uploadState(it){
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
   const f=forms[key]||{};
-  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(LIVE?.link?.controllable?LIVE.link.bps>0:!!(LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
+  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(LIVE?.link?.controllable?LIVE.link.bps>0:!!(LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.linkUp!==false&&LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
  const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next',queued=!done&&!held&&sent===0;
@@ -384,9 +384,10 @@ function renderStats(){
 function renderLiveStrip(){
  const L=LIVE;if(!L)return;const sim=$('simStrip'),el=$('liveStrip');if(sim)sim.hidden=true;if(!el)return;el.hidden=false;
  const {shore,edge,link,counts,policy,prioritization}=L;
- const rate=link.controllable?link.bps:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
+ const shoreDown=!link.controllable&&!edge.ok&&shore.linkUp===false;
+ const rate=link.controllable?link.bps:shoreDown?0:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
  const d=link.distribution;
- const measuring=!link.controllable&&!rate;
+ const measuring=!link.controllable&&!rate&&!shoreDown;
  const linkNote=d?`Simulated · changes every ${d.intervalMs/1000} s`:measuring?'Measuring link speed…':'Measured by the ship';
  const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds.`:'Ship-to-shore speed is controlled outside this console.';
  const sightingMode=counts.grouped>0;
