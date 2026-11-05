@@ -89,6 +89,19 @@ func TestUploadEvictionAndFullSize(t *testing.T) {
 	}
 }
 
+func TestFullSizeRequestJumpsPriorityQueue(t *testing.T) {
+	s := New(3)
+	s.Add(&command.Item{ID: "critical", KB: 10, Manual: 1}, 0)
+	s.Add(&command.Item{ID: "low", KB: 10, Manual: 4}, 0)
+	if _, _, err := s.RequestFullRes("low", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	changed := s.AdvanceUploads(time.Second)
+	if len(changed) != 1 || changed[0].ID != "low" || changed[0].Upload.Sent != 32_000 || changed[0].Upload.Override != "next" {
+		t.Fatalf("full-size queue precedence: %+v", changed)
+	}
+}
+
 func TestUploadStatisticsCountTransferredBytesAndShipStorage(t *testing.T) {
 	s := New(1)
 	s.SetLinkBPS(0)
