@@ -569,7 +569,7 @@ body.drawer-open .drawer{visibility:visible}
 .card.hsent .hsenttag{display:block}.card.hsent{border-color:var(--human)}.card.rev .ov .rvk{color:var(--human)}
 .btn.cdr.done.human{color:var(--human);border-color:var(--human)}
 .kb.cdrb{border-color:#5a46b8;color:var(--human);background:#1b1536}
-.human-btn{color:var(--human);border-color:#5a46b8;white-space:nowrap}.feed-note{font-size:12px;font-weight:700;color:var(--human)}
+.human-btn{color:var(--human);border-color:#5a46b8}.feed-note{font-size:12px;font-weight:700;color:var(--human)}
 #simStrip :is(#st2,#st4),#simStrip :is(#st2,#st4)+.ar,#liveStrip .lowlevel,#liveStrip .lowlevel+.ar{display:none}
 .strip .details-link{margin-left:auto;flex:none}
 #pgDetails{overflow:auto;padding:14px 18px}

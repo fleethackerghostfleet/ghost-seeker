@@ -3,6 +3,7 @@ button,a,select,input,textarea{max-width:100%}
 input,select,textarea{font:inherit}
 button,.btn,.seg,nav,.dirbar,.setfoot{flex-wrap:wrap}
 button,.btn,.policy-badge,.banner{white-space:normal;overflow-wrap:anywhere}
+.human-btn{white-space:nowrap}
 .seg{overflow:visible;max-width:100%}
 .seg button{min-width:0;overflow-wrap:normal;flex-shrink:0}
 .setsec .seg button{flex:1 0 auto}
