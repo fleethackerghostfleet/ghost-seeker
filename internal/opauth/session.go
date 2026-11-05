@@ -29,6 +29,7 @@ type Sessions struct {
 	token               string
 	dev                 bool
 	anyPeer             bool
+	demoAcceptAnyToken  bool
 	ttl                 time.Duration
 	now                 func() time.Time
 	certs               *pivauth.Authenticator
@@ -47,6 +48,13 @@ func NewSessions(token string, dev bool) *Sessions {
 
 // Dev reports whether loopback auto-login is on.
 func (s *Sessions) Dev() bool { return s.dev }
+
+// DemoAcceptAnyToken permits any non-empty login token for demos only.
+// Certificate authentication does not use token login.
+func (s *Sessions) DemoAcceptAnyToken(on bool) *Sessions {
+	s.demoAcceptAnyToken = on
+	return s
+}
 
 // TrustPeers extends dev auto-login to browsers that address a loopback host
 // from any peer address. For containers only: a port published on the host's
@@ -185,7 +193,8 @@ func (s *Sessions) login(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad form", http.StatusBadRequest)
 			return
 		}
-		if !Equal(s.token, strings.TrimSpace(r.PostForm.Get("token"))) {
+		token := strings.TrimSpace(r.PostForm.Get("token"))
+		if token == "" || (!s.demoAcceptAnyToken && !Equal(s.token, token)) {
 			w.WriteHeader(http.StatusUnauthorized)
 			s.page(w, "invalid operator token", r.PostForm.Get("next"))
 			return
@@ -231,7 +240,12 @@ func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 		`form{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{font-size:18px;margin:0 0 4px}p{margin:4px 0 16px;color:#8aa0b6}` +
 		`input{width:100%;box-sizing:border-box;padding:9px;border-radius:6px;border:1px solid #2d4258;background:#0b1118;color:#fff;font-size:14px}` +
 		`button{margin-top:14px;width:100%;padding:9px;border:0;border-radius:6px;background:#1e88e5;color:#fff;font-weight:600;cursor:pointer}.err{color:#ff7b72}</style></head><body>` +
-		`<form method="post" action="/login"><h1>Ghost Seeker</h1><p>Enter the operator token (GS_OPERATOR_TOKEN) to open the shore console.</p>`)
+		`<form method="post" action="/login"><h1>Ghost Seeker</h1>`)
+	if s.demoAcceptAnyToken {
+		b.WriteString(`<p>DEMO MODE: any non-empty token grants operator access.</p>`)
+	} else {
+		b.WriteString(`<p>Enter the operator token (GS_OPERATOR_TOKEN) to open the shore console.</p>`)
+	}
 	if msg != "" {
 		b.WriteString(`<p class="err">` + html.EscapeString(msg) + `</p>`)
 	}

@@ -40,6 +40,18 @@ link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, product
 
 ## 0. One-time setup
 
+### Demo-only login fallback
+
+`make demo-ui` and `make compose-demo` explicitly enable `-demo-accept-any-token`.
+If automatic sign-in fails, enter **any non-empty token** on the login screen
+to get **operator** access. Empty or whitespace-only tokens are rejected.
+This deliberately insecure mode is off by default, emits a loud startup warning,
+and must never be used in production or on an untrusted network. It cannot be
+combined with `-auth-mode piv` (startup fails). For a manual demo launch, add
+`-demo-accept-any-token` to the `ghost-seeker` command; omit it for normal token
+validation. The real operator token is still required for shore/edge bearer
+authentication; only the UI's login form accepts arbitrary tokens.
+
 ```sh
 # toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
 make build
@@ -90,7 +102,7 @@ shore store regardless of mode.
 ```sh
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
-make demo-ui           # bin/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
+make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
 make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
 open http://localhost:8090
 ```
@@ -100,8 +112,10 @@ link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/un
 `make demo-edge` mints a 24 h edge token from it into `data/edge.jwt` on every start). With no
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
 (0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
-SameSite=Strict session cookie). From another machine the UI asks for the token at `/login`
-(`cat data/operator.token`). For `curl` against the shore/edge API use
+SameSite=Strict session cookie). `make demo-ui` binds the UI to `127.0.0.1` only (it runs with
+`-demo-accept-any-token`); for a browser on another machine, run the same `make demo-ui` command line
+(all live flags: `-shore`, `-edge`, `-link-listen`, `-dev-token-file`) but with `-addr :8090` and
+without `-demo-accept-any-token`, then enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
 `-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
