@@ -27,6 +27,8 @@ type Service struct {
 	Clk    clock.Clock
 	// Deduped reports captures folded into existing items (ingest.Ingester.Deduped); optional.
 	Deduped func() int64
+	// Prioritizer is the active scoring backend ("edgeml" | "tomer"), reported in GetStatus.
+	Prioritizer string
 }
 
 func view(r *store.Row) *pb.ItemView {
@@ -158,6 +160,10 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 	}
 	if s.Deduped != nil {
 		resp.ItemsDeduped = s.Deduped()
+	}
+	resp.Prioritizer = s.Prioritizer
+	if resp.Prioritizer == "" {
+		resp.Prioritizer = scoring.PrioritizerEdgeml
 	}
 	var queued, qb int64
 	for _, r := range rows {

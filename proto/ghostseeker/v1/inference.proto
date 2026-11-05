@@ -40,12 +40,34 @@ message AnalyzeResponse {
   repeated Sighting sightings = 6;
   // Temporary higher capture rate requested by the night-lights analysis; edge decays back to its base period.
   NightBurst burst = 7;
+  // Image-level prioritization from the "tomer" backend
+  // (algorithm/ghost_priority); unset unless the sidecar runs
+  // --prioritizer tomer|both. Additive; edgeml fields above are unchanged.
+  ImagePriority image_priority = 8;
 }
 
 message NightBurst {
   double fps = 1;
   double duration_s = 2;
   string reason = 3;
+}
+
+// ImagePriority is one whole-frame score plus near-duplicate evidence, computed
+// by algorithm/ghost_priority (policy.score_record + color/pHash similarity
+// against the source's recent kept frames). score == base_score *
+// (1 - duplicate_strength * max_similarity), exactly the rank_records term.
+message ImagePriority {
+  string engine = 1;            // e.g. "ghost_priority/provider-pipeline-v1"
+  float score = 2;              // final priority in [0,1]
+  float base_score = 3;         // before duplicate suppression
+  float max_similarity = 4;     // combined color+pHash similarity to nearest prior kept frame
+  string nearest_prior_id = 5;  // item id of that frame ("" if none)
+  bool near_duplicate = 6;      // max_similarity >= sidecar --tomer-dup-threshold
+  float visual_interest = 7;
+  float quality = 8;
+  float object_relevance = 9;   // -1 when the object provider is NoObjects
+  int64 latency_ms = 10;
+  string frame_id = 11;         // sidecar-side id of this frame; nearest_prior_id refers to an earlier frame_id
 }
 
 // Sighting is a frame's contribution to one tracked object.

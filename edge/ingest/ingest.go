@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/rand"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -101,6 +102,11 @@ type Config struct {
 	SceneEvery time.Duration
 	// WaitForSpace pauses intake on a full store instead of consuming the next capture.
 	WaitForSpace bool
+	// Prioritizer names the score that drives the scheduler (scoring.PrioritizerEdgeml
+	// | scoring.PrioritizerTomer). In tomer mode with Dedup == DedupHash a frame the
+	// sidecar flags near_duplicate folds into its nearest prior item (counted in
+	// Deduped); in naive mode it is stored with the penalized score instead.
+	Prioritizer string
 }
 
 // unknown reports whether an analyzer unknownness score marks the item
@@ -141,6 +147,10 @@ type Ingester struct {
 	sightings map[string]string
 	lastScene map[string]time.Time // source -> captured-at of the last stored scene item
 	stateful  map[string]bool      // source -> the engine has reported sightings for it
+	// tomerItems maps the sidecar's ImagePriority.frame_id to the item that
+	// kept that frame, so near_duplicate frames can fold into it (bounded ring).
+	tomerItems map[string]string
+	tomerRing  []string
 }
 
 func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Scheduler, clk clock.Clock, log *slog.Logger) *Ingester {
@@ -196,6 +206,14 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 				g.OnBurst(c.Source, resp.Burst.Fps, d, resp.Burst.Reason)
 			}
 		}
+		if ip := resp.GetImagePriority(); ip != nil && g.cfg.Prioritizer == scoring.PrioritizerTomer && g.cfg.Dedup == DedupHash && ip.NearDuplicate {
+			if id, ok := g.tomerItems[ip.NearestPriorId]; ok {
+				if row, err := g.st.Get(ctx, id); row != nil && err == nil {
+					atomic.AddInt64(&g.Dups, 1)
+					return row, nil
+				}
+			}
+		}
 		if g.cfg.Dedup == DedupSightings {
 			if len(resp.Sightings) > 0 {
 				return g.applySightings(ctx, c, hash, resp)
@@ -208,7 +226,30 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 			}
 		}
 	}
-	return g.newItem(ctx, c, hash, resp, nil)
+	row, err := g.newItem(ctx, c, hash, resp, nil)
+	if row != nil && err == nil {
+		g.rememberTomer(resp, row.Item.Id)
+	}
+	return row, err
+}
+
+const tomerRingSize = 512
+
+// rememberTomer links the sidecar's frame id to the item that kept it.
+func (g *Ingester) rememberTomer(resp *pb.AnalyzeResponse, itemID string) {
+	ip := resp.GetImagePriority()
+	if ip == nil || ip.FrameId == "" {
+		return
+	}
+	if g.tomerItems == nil {
+		g.tomerItems = map[string]string{}
+	}
+	if len(g.tomerRing) >= tomerRingSize {
+		delete(g.tomerItems, g.tomerRing[0])
+		g.tomerRing = g.tomerRing[1:]
+	}
+	g.tomerItems[ip.FrameId] = itemID
+	g.tomerRing = append(g.tomerRing, ip.FrameId)
 }
 
 // existing returns the item already holding this exact content, if any.
@@ -296,6 +337,20 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Sighting) {
 	f := it.Features
 	f.Detections, f.Embedding, f.Unknownness, f.ModelId = resp.Detections, resp.Embedding, resp.Unknownness, resp.ModelId
+	if ip := resp.GetImagePriority(); ip != nil {
+		if f.Tags == nil {
+			f.Tags = map[string]string{}
+		}
+		f.Tags[scoring.TagTomerScore] = strconv.FormatFloat(float64(ip.Score), 'f', 3, 64)
+		f.Tags[scoring.TagTomerBase] = strconv.FormatFloat(float64(ip.BaseScore), 'f', 3, 64)
+		f.Tags[scoring.TagTomerSim] = strconv.FormatFloat(float64(ip.MaxSimilarity), 'f', 3, 64)
+		if ip.NearDuplicate {
+			f.Tags[scoring.TagTomerDup] = "1"
+		}
+		if id, ok := g.tomerItems[ip.NearestPriorId]; ok {
+			f.Tags[scoring.TagTomerNear] = id
+		}
+	}
 	if f.Tags == nil {
 		f.Tags = map[string]string{}
 	}

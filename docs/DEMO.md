@@ -43,6 +43,7 @@ the clips at 5 fps through a flat link at each preset. `-dedup`:
 | `naive` | every frame (byte-identical frames still dropped by `edge/ingest`) | – |
 | `hash` | frames whose dHash differs from the last 64 kept by > 10 bits (image-level dedup) | – |
 | `sightings` | one item when an object appears + a refresh ≤ every `-sighting-update` (30 s) | **MOT ground truth** (`gt/gt.txt` + `qa/corrections.yaml` merges) — an oracle stand-in until F1's sidecar lands; then `make demo-edge` with `-infer http://sidecar` + `-dedup sightings` is the same scenario on a real tracker |
+| `tomer` | Tomer's `algorithm/ghost_priority` image-level ranking through the sidecar (`--prioritizer tomer|both`, started by `compare.sh` on :9093): priority = his whole-frame score, color+pHash near-duplicates folded like `hash` ([report](reports/TOMER_INTEGRATION.md)) | – |
 
 Metrics (`compare.json` / `compare.md`): unique GT objects with an image (thumb/crop/full)
 on shore at each sample time, time until all objects have an image, bytes on air, and bytes
@@ -61,7 +62,7 @@ open http://localhost:8090
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
 models (log line `sidecar listening on :9090`). Without the sidecar: `make demo-edge INFER=mock
-DEDUP=hash` (one item per distinct frame, no sightings).
+DEDUP=hash` (one item per distinct frame, no sightings). `make demo-edge PRIORITIZER=tomer DEDUP=hash` (sidecar in `--prioritizer both`, the `make demo-sidecar` default) ranks the queue by Tomer's image-level score instead; the strip shows `prioritization: tomer`.
 
 With the sidecar, items arrive with `tags.sighting_id` (`<clip>:<track>`), `subtype` (zero-shot
 MobileCLIP: cargo ship / submarine / marine mammal …), `event` (open / update) and a CROP form;

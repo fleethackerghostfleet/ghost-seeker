@@ -309,6 +309,21 @@ class MockSchedule:
     box: tuple = (0.3, 0.3, 0.4, 0.4)
 
 
+class NoopEngine:
+    """No detector: used when the sidecar runs --prioritizer tomer without a model."""
+
+    model_id = "none"
+
+    def analyze(self, source, img, captured_at_ms, known_labels, want_embedding):
+        return {"detections": [], "unknownness": 0.0, "modelId": self.model_id, "latencyMs": "0", "sightings": []}
+
+    def embed_text(self, texts):
+        raise RpcError("unimplemented", "no text tower in prioritizer-only mode")
+
+    def capabilities(self):
+        return {"modelId": self.model_id, "openVocabulary": False, "fixedLabels": [], "embeddingDim": 0}
+
+
 class MockEngine:
     """Deterministic engine for Go tests / CI: no models, no downloads. Embeddings hash words like the Go mock."""
 
@@ -389,8 +404,15 @@ class InferenceService:
 
     SERVICE = "ghostseeker.v1.InferenceService"
 
-    def __init__(self, engine):
+    def __init__(self, engine, prioritizer=None, mode: str = "edgeml"):
+        """mode: edgeml (engine only) | tomer (prioritizer only; engine is a no-op) | both."""
+        if mode not in ("edgeml", "tomer", "both"):
+            raise ValueError(f"unknown prioritizer mode {mode!r}")
+        if mode != "edgeml" and prioritizer is None:
+            raise ValueError(f"prioritizer mode {mode!r} needs a prioritizer")
         self.engine = engine
+        self.prioritizer = prioritizer
+        self.mode = mode
 
     def Analyze(self, req: dict) -> dict:
         import base64
@@ -406,15 +428,24 @@ class InferenceService:
             raise RpcError("invalid_argument", "image could not be decoded")
         captured = _get(req, "capturedAtUnixMs", "captured_at_unix_ms")
         captured = int(captured) if captured not in (None, "", 0, "0") else None
-        return self.engine.analyze(str(_get(req, "source", "source", "") or ""), img, captured,
-                                   list(_get(req, "knownLabels", "known_labels", []) or []), bool(_get(req, "wantEmbedding", "want_embedding", False)))
+        source = str(_get(req, "source", "source", "") or "")
+        if self.mode == "tomer":
+            resp = {"detections": [], "unknownness": 0.0, "modelId": "none", "latencyMs": "0", "sightings": []}
+        else:
+            resp = self.engine.analyze(source, img, captured, list(_get(req, "knownLabels", "known_labels", []) or []),
+                                       bool(_get(req, "wantEmbedding", "want_embedding", False)))
+        if self.prioritizer is not None:
+            resp["imagePriority"] = self.prioritizer.score(source, img)
+        return resp
 
     def EmbedText(self, req: dict) -> dict:
         texts = [str(t) for t in (req.get("texts") or [])]
         return {"embeddings": [{"values": v} for v in self.engine.embed_text(texts)], "modelId": getattr(self.engine, "model_id", "")}
 
     def Capabilities(self, req: dict) -> dict:
-        return self.engine.capabilities()
+        caps = dict(self.engine.capabilities())
+        caps["prioritizer"] = self.mode
+        return caps
 
     def dispatch(self, method: str, req: dict) -> dict:
         fn = getattr(self, method, None) if method in ("Analyze", "EmbedText", "Capabilities") else None
