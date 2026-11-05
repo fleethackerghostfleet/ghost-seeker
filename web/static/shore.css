@@ -11,7 +11,8 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 "Inter",system-
 .pill{background:var(--line);border-radius:10px;padding:0 7px;font-size:11px;margin-left:4px}
 .conn{margin-left:auto;font-size:12px;color:var(--muted)}
 .conn.ok{color:var(--good)}.conn.bad{color:var(--bad)}
-.strip{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 2fr;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.st.policy{grid-column:span 2}
 .st{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
 .st .k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .st .v{font-size:22px;font-weight:600;margin-top:2px}
@@ -63,3 +64,5 @@ main{padding:14px 18px}
 .toast{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--accent);padding:8px 12px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 .empty{color:var(--muted);padding:30px;text-align:center;grid-column:1/-1}
+.card.scene{opacity:.55;border-top-color:var(--line)}
+.card.scene:hover{opacity:.9}

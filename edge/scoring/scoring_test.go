@@ -65,3 +65,32 @@ func TestFreshnessFloor(t *testing.T) {
 		t.Fatalf("freshness floor: %v", f)
 	}
 }
+
+func TestInterestMatchesSubtypeTag(t *testing.T) {
+	// The sighting pipeline labels the detection "boat" and puts the zero-shot subtype in tags; an operator
+	// directive names the subtype. Unknowns stay exempt from suppression, and an override wins over the tag.
+	p := &pb.Policy{Interest: &pb.Interest{SuppressLabels: []string{"cargo ship"}, BoostLabels: []string{"submarine"}}}
+	ctx := &Context{Policy: p, Now: time.Now()}
+	mk := func(subtype string, unk float32) *pb.Item {
+		return &pb.Item{Type: pb.ItemType_ITEM_TYPE_IMAGE, Features: &pb.Features{Unknownness: unk,
+			Detections: []*pb.Detection{{Label: "boat", Confidence: 0.9}},
+			Tags:       map[string]string{"sighting_id": "s1", "subtype": subtype}}}
+	}
+	if r := (Interest{}).Score(mk("cargo ship", 0), ctx); !r.Suppressed {
+		t.Fatalf("subtype cargo ship should be suppressed: %+v", r)
+	}
+	if r := (Interest{}).Score(mk("submarine", 0), ctx); r.Multiplier <= 1 {
+		t.Fatalf("subtype submarine should be boosted: %+v", r)
+	}
+	if r := (Interest{}).Score(mk("cargo ship", 0.9), ctx); r.Suppressed {
+		t.Fatalf("unknown items are exempt from suppression: %+v", r)
+	}
+	over := mk("cargo ship", 0)
+	over.Features.LabelOverride = "tanker"
+	if r := (Interest{}).Score(over, ctx); r.Suppressed {
+		t.Fatalf("operator override replaces the subtype: %+v", r)
+	}
+	if r := (Interest{}).Score(mk("", 0), ctx); r.Suppressed || r.Multiplier > 1 {
+		t.Fatalf("no subtype, detector label boat: neutral, got %+v", r)
+	}
+}
