@@ -3,10 +3,49 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 )
+
+func TestFullStoreRetainsDownlinkCursor(t *testing.T) {
+	ctx := context.Background()
+	s, st, _, clk := setup(t, Prioritized)
+	row := addImage(t, s, st, clk, "boat", 0.9, 0, 30000)
+	var bytes int64
+	for _, f := range row.Forms {
+		bytes += f.Bytes
+	}
+	if err := st.SetLimits(ctx, store.Limits{MaxBytes: bytes}); err != nil {
+		t.Fatal(err)
+	}
+	response := &pb.ExchangeResponse{Downlink: []*pb.Downlink{
+		{Seq: 1, Msg: &pb.Downlink_LabelOverride{LabelOverride: &pb.LabelOverride{ItemId: row.Item.Id, Label: strings.Repeat("long-label", 100), By: "shore"}}},
+		{Seq: 2, Msg: &pb.Downlink_Pull{Pull: &pb.Pull{ItemId: row.Item.Id}}},
+	}}
+	if err := s.applyResponse(ctx, response); !errors.Is(err, store.ErrFull) {
+		t.Fatalf("want backpressure: %v", err)
+	}
+	if cursor, err := st.GetCursor(ctx); err != nil || cursor != 0 {
+		t.Fatalf("lost retry: cursor=%d err=%v", cursor, err)
+	}
+	if err := st.SetLimits(ctx, store.Limits{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.applyResponse(ctx, response); err != nil {
+		t.Fatal(err)
+	}
+	if cursor, err := st.GetCursor(ctx); err != nil || cursor != 2 {
+		t.Fatalf("cursor=%d err=%v", cursor, err)
+	}
+	updated, err := st.Get(ctx, row.Item.Id)
+	if err != nil || updated.Item.GetFeatures().GetLabelOverride() != strings.Repeat("long-label", 100) {
+		t.Fatalf("correction not retried: %v %v", updated, err)
+	}
+}
 
 func TestEdgeOverrideResendsFact(t *testing.T) {
 	ctx := context.Background()

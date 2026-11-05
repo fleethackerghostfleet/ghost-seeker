@@ -654,6 +654,9 @@ func (s *Scheduler) applyResponse(ctx context.Context, resp *pb.ExchangeResponse
 		}
 		if err != nil {
 			s.log.Warn("apply downlink", "seq", d.Seq, "err", err)
+			if errors.Is(err, store.ErrFull) {
+				return err // Leave the cursor unchanged so shore retries the correction.
+			}
 		} else if s.OnDownlink != nil {
 			s.OnDownlink(d)
 		}
