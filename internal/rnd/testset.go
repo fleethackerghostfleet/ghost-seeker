@@ -268,6 +268,32 @@ func Rerank(dir string) error {
 	return os.Rename(f.Name(), path)
 }
 
+func selectUnique(frames []frame, target int, seen map[[32]byte]bool) (frame, []byte, [32]byte, error) {
+	for distance := 0; distance < len(frames); distance++ {
+		candidates := []int{target + distance}
+		if distance > 0 {
+			candidates = append(candidates, target-distance)
+		}
+		for _, index := range candidates {
+			if index < 0 || index >= len(frames) {
+				continue
+			}
+			f := frames[index]
+			data, err := f.read()
+			if err != nil {
+				return frame{}, nil, [32]byte{}, err
+			}
+			digest := sha256.Sum256(data)
+			if seen[digest] {
+				continue
+			}
+			seen[digest] = true
+			return f, data, digest, nil
+		}
+	}
+	return frame{}, nil, [32]byte{}, fmt.Errorf("no byte-unique frame available near index %d", target)
+}
+
 func Build(ctx context.Context, root, out string, an inference.Analyzer) error {
 	clips, err := discover(root)
 	if err != nil {
@@ -289,19 +315,18 @@ func Build(ctx context.Context, root, out string, an inference.Analyzer) error {
 	}
 	manifest, predictions := []Image{}, []Prediction{}
 	run := time.Now().UTC().Format("20060102T150405.000000000")
+	seen := map[[32]byte]bool{}
 	for ci, c := range clips {
 		for i := 0; i < counts[ci]; i++ {
-			f := c.frames[SampleIndex(i, len(c.frames), counts[ci])]
-			data, err := f.read()
+			f, data, digest, err := selectUnique(c.frames, SampleIndex(i, len(c.frames), counts[ci]), seen)
 			if err != nil {
-				return err
+				return fmt.Errorf("source %s: %w", c.name, err)
 			}
 			cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("%s: %w", f.path, err)
 			}
 			id := fmt.Sprintf("rnd-%04d", len(manifest)+1)
-			digest := sha256.Sum256(data)
 			file := id + strings.ToLower(filepath.Ext(f.path))
 			if err = os.WriteFile(filepath.Join(out, "images", file), data, 0600); err != nil {
 				return err
