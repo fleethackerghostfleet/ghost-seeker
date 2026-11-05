@@ -236,6 +236,16 @@ test('human review filters separate people from automatic escalation and list ne
  assert.ok(vm.runInContext('ids().split(",").includes("auto")',context));
  assert.equal(vm.runInContext('humanSent(items[4])',context),false);
 });
+test('What I sent navigates from review to the filtered imagery feed',()=>{
+ const context=feedContext();
+ vm.runInContext("location={hash:'#review'};state.page='rv';state.tier='1';gsSettings.setFeed=f=>Object.assign(filters,f);syncFeedFilters=()=>{}",context);
+ const start=source.indexOf(" $('rvSent').onclick="),end=source.indexOf('\n',start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext("$('rvSent').onclick()",context);
+ assert.equal(vm.runInContext('location.hash',context),'#feed');
+ assert.equal(vm.runInContext('filters.review',context),'sent');
+ assert.equal(vm.runInContext('state.tier',context),'all');
+});
 test('cards mark human sends purple and automatic sends green',()=>{
  assert.match(source,/<span class="cdrtag">✓ Auto-sent to Commander<\/span><span class="hsenttag">➤ Sent by operator<\/span>/);
  assert.match(source,/\$\{it\.sent&&it\.autoSent\?' sent':''\}\$\{humanSent\(it\)\?' hsent':''\}/);
