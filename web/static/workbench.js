@@ -34,6 +34,7 @@ const workbench=(()=>{
   if(proposal)candidates.push({key:'correction',label:proposal.label,rules:proposal.rules});
  }
  async function preview({parse=false,label=null,background=false}={}){
+  if(typeof gsAuth!=='undefined'&&gsAuth.viewer()){$('wbStatus').textContent='Read-only · collection priority editing is unavailable';return false}
   if(document.querySelector('dialog[open]'))return false;
   clearTimeout(liveTimer);liveTimer=null;
   const token=++sequence;lastPreview=Date.now();
@@ -141,6 +142,7 @@ const workbench=(()=>{
   $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;unknown=[];renderChips();await preview({label:'Version restored'})}};
   $('wbUndo').onclick=()=>travel(-1);$('wbRedo').onclick=()=>travel(1);$('wbReset').onclick=()=>reset();
   document.addEventListener('keydown',e=>{
+   if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;
    if(document.querySelector('dialog[open]')||gsPolicy.isPolicyHotkeyTarget(e.target)||state.page!=='rp'||busy||$('settings').open||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
    const k=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();travel(e.shiftKey?1:-1);return}if(e.ctrlKey||e.metaKey)return;
    if(e.target.closest('select,input,button'))return;

@@ -84,24 +84,25 @@ async function loadRawPolicy(force){
  if(policyRawTouched&&!force)return;
  try{
   const response=await fetch('/api/policy'),data=await response.json();
-  if(!response.ok)throw new Error(data.error||`Request failed (${response.status})`);
+  if(!response.ok)throw new Error(data.message||data.error||`Request failed (${response.status})`);
   if(force||!policyRawTouched)$('polRaw').value=JSON.stringify(data.policy,null,2);
   $('polRawMsg').textContent='';$('polRawMsg').className='';
  }catch(error){$('polRawMsg').textContent=error.message;$('polRawMsg').className='policy-error'}
 }
 let adminToken='';// super-admin re-auth: operator token, kept in memory only (never stored)
 async function rawPolicyAction(action){
+ if(typeof gsAuth!=='undefined'&&gsAuth.viewer()){toast('read-only role');return}
  const msg=$('polRawMsg');msg.textContent='';msg.className='';
  try{
   if(!adminToken){adminToken=(window.prompt('Super admin: paste the operator token to authorize this policy edit')||'').trim();if(!adminToken)throw new Error('Operator token required for super admin edits')}
   const response=await fetch(`/api/policy${action==='validate'?'/validate':''}`,{method:action==='validate'?'POST':'PUT',headers:{'Content-Type':'application/json',Authorization:`Bearer ${adminToken}`},body:$('polRaw').value});
   const data=await response.json();
   if(response.status===401){adminToken='';throw new Error('Operator token rejected; try again')}
-  if(!response.ok)throw new Error(data.error||`Request failed (${response.status})`);
+  if(!response.ok)throw new Error(data.message||data.error||`Request failed (${response.status})`);
   msg.className='policy-valid';msg.textContent=`Valid · ${(data.conflicts||[]).length} conflicts`;
   msg.insertAdjacentHTML('beforeend',gsPolicy.conflictsHTML(data.conflicts||[]));
   if(action==='apply')policyRawTouched=false;
- }catch(error){msg.textContent=error.message;msg.className='policy-error'}
+ }catch(error){msg.textContent=error.message;msg.className='policy-error';toast(error.message)}
 }
 function selectBand(it,band){
  const bands=it?bandsFor(it):[];if(bands.length<2||!bands.includes(band))return;
@@ -171,9 +172,10 @@ function applyItemUpdate(raw){
  renderFeed();renderStats();renderRp(true);if(state.page==='rv'&&!rv.busy)renderReview();
 }
 async function request(path,method='GET',body){
+ if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
  const response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const data=response.status===204?null:await response.json();
- if(!response.ok){const error=new Error(data?.error||`Request failed (${response.status})`);if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
+ if(!response.ok){const error=new Error(data?.message||data?.error||`Request failed (${response.status})`);if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
  return data;
 }
 async function patchItem(id,changes){
@@ -219,6 +221,7 @@ function openStream(){
  });
 }
 async function init(){
+ if(typeof gsAuth!=='undefined')await gsAuth.init();
  const config=await request('/api/config');
  SOURCES=[{id:'ALL',name:'All sensors (combined)'},...config.sources];
  SRC=Object.fromEntries(SOURCES.map(source=>[source.id,source]));
@@ -242,7 +245,7 @@ async function init(){
  $('polRawValidate').onclick=()=>rawPolicyAction('validate');$('polRawApply').onclick=()=>rawPolicyAction('apply');$('polRawReload').onclick=()=>{policyRawTouched=false;loadRawPolicy(true)};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
- document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
   if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}

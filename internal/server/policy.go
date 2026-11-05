@@ -504,8 +504,8 @@ func (s *Server) setPolicyEMCON(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": reason, "conflicts": conflictSummaries([]*pb.MergeConflict{{RuleId: "emcon", Reason: reason, BlockedBy: "emcon"}})})
 		return
 	}
-	s.policy.operatorEMCON = &pb.EmconSetting{Mode: mode, SetBy: "TAO", Echelon: pb.Echelon_ECHELON_SHIP}
-	accepted, err := s.policy.apply("ui", "TAO", "EMCON "+emconModeName(mode), time.Now())
+	s.policy.operatorEMCON = &pb.EmconSetting{Mode: mode, SetBy: opauth.Actor(r.Context(), "TAO"), Echelon: pb.Echelon_ECHELON_SHIP}
+	accepted, err := s.policy.apply("ui", opauth.Actor(r.Context(), "TAO"), "EMCON "+emconModeName(mode), time.Now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -546,6 +546,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	p.IssuedBy = opauth.Actor(r.Context(), p.IssuedBy)
 	now := time.Now()
 	s.policy.mu.Lock()
 	defer s.policy.mu.Unlock()
@@ -557,7 +558,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		s.policy.higherLayers = append(s.policy.higherLayers, proto.Clone(layer).(*pb.PolicyLayer))
 	}
-	accepted, err := s.policy.apply("admin", "super-admin", fallback(p.Text, "raw policy edit"), now)
+	accepted, err := s.policy.apply("admin", opauth.Actor(r.Context(), "super-admin"), fallback(p.Text, "raw policy edit"), now)
 	if err != nil {
 		s.policy.higherLayers = prev
 		s.policy.guard.Reject(r.Context(), p, "admin", err.Error(), now)

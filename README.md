@@ -86,6 +86,10 @@ deploy/compose/degrade.sh satcom   # 64 kbps / 600 ms; also trickle | starlink |
 
 ## Configuration: operator authentication
 
+The operator web app also supports optional **offline CAC/PIV mutual-TLS login** with
+operator/viewer roles. See [CAC/PIV mode (offline)](docs/SECURITY.md#1a-cacpiv-mode-offline)
+for deployment, air-gap trust/CRL loading, and a synthetic demo PKI generator. Token mode remains the default.
+
 Shore ConsoleService, the edge console, `/blob/` on both and the operator web app share one
 **operator bearer token**: `-operator-token` / `GS_OPERATOR_TOKEN` or `-operator-token-file` /
 `GS_OPERATOR_TOKEN_FILE` (production, required), or `-dev-token-file` / `GS_DEV_TOKEN_FILE`

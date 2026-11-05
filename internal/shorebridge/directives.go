@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/proto"
 )
@@ -29,7 +30,7 @@ var errDirectiveNotFound = errors.New("directive not found")
 // taken out of the operator's older rules (newest wins) and older rules left
 // without labels are dropped. Returns warnings for the readback.
 func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string, replace bool) (warnings []string, err error) {
-	pol.IssuedBy = b.issuer()
+	pol.IssuedBy = opauth.Actor(ctx, b.issuer())
 	echelon := b.echelon()
 	now := time.Now()
 	ruleExpiryUnixMs := pol.GetExpiresAtUnixMs()
@@ -131,7 +132,7 @@ func (b *Bridge) removeDirectives(ctx context.Context, ids []string) (*pb.SetPol
 	if err != nil {
 		return nil, err
 	}
-	issuedBy, echelon, now := b.issuer(), b.echelon(), time.Now()
+	issuedBy, echelon, now := opauth.Actor(ctx, b.issuer()), b.echelon(), time.Now()
 	if current == nil || len(current.Layers) == 0 {
 		// Legacy flat policy: the console listed it as the single "policy" entry.
 		for _, id := range ids {
