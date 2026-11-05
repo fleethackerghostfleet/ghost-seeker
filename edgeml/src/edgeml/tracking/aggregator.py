@@ -164,8 +164,9 @@ class SightingAggregator:
         seen: set[str] = set()
 
         # pass 1: tracks already mapped to a sighting; pass 2: new track ids (re-link / merge / open)
-        known = [tr for tr in tracks if tr.track_id in self.track_to_sid]
-        fresh = [tr for tr in tracks if tr.track_id not in self.track_to_sid]
+        # best score first within each group, so when two live tracks land on one sighting the better one is observed
+        known = sorted((tr for tr in tracks if tr.track_id in self.track_to_sid), key=lambda tr: -tr.score)
+        fresh = sorted((tr for tr in tracks if tr.track_id not in self.track_to_sid), key=lambda tr: -tr.score)
         for tr in known + fresh:
             sid = self.track_to_sid.get(tr.track_id)
             if sid is None:
@@ -189,7 +190,7 @@ class SightingAggregator:
                         seen.add(sid)
                         continue
             st = self.states[sid]
-            if sid in seen and tr.score <= st.s.best_score:   # two live tracks on one sighting: keep the better one
+            if sid in seen:        # two live tracks on one sighting this frame: one observation per frame
                 continue
             self._observe(st, tr, image_bgr, frame_idx, t_s)
             seen.add(sid)
