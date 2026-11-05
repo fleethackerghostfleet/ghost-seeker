@@ -1,6 +1,10 @@
 package command
 
-import "time"
+import (
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+)
 
 type Rule struct {
 	Type        string   `json:"type"`
@@ -34,6 +38,7 @@ type Box struct {
 }
 
 type Attributes struct {
+	Transient   bool `json:"transient,omitempty"`
 	Approaching bool `json:"approaching"`
 	New         bool `json:"new"`
 	Dark        bool `json:"dark"`
@@ -42,12 +47,13 @@ type Attributes struct {
 }
 
 type Detection struct {
-	Lights []Light      `json:"lights,omitempty"`
-	Signal *LightSignal `json:"sig,omitempty"`
-	Class  string       `json:"cls"`
-	Box    Box          `json:"b"`
-	Conf   float64      `json:"conf"`
-	Attrs  Attributes   `json:"attrs"`
+	Lights []Light            `json:"lights,omitempty"`
+	Signal *LightSignal       `json:"sig,omitempty"`
+	Class  string             `json:"cls"`
+	Box    Box                `json:"b"`
+	Conf   float64            `json:"conf"`
+	Attrs  Attributes         `json:"attrs"`
+	Ship   *catalog.ShipClass `json:"ship,omitempty"`
 }
 
 type DetectionScore struct {

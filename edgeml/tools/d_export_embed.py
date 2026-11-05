@@ -26,10 +26,11 @@ def main():
     import cv2
 
     from edgeml.embed.clip_embedder import ClipEmbedder
+    from edgeml.embed.shiptype import prompt_texts
     from edgeml.embed.zeroshot import SUBTYPES, UNKNOWN_PROMPTS
     from edgeml.forms import crop_with_context
 
-    prompts = [p for c in SUBTYPES.values() for p in c] + UNKNOWN_PROMPTS
+    prompts = list(dict.fromkeys([p for c in SUBTYPES.values() for p in c] + UNKNOWN_PROMPTS + prompt_texts()))
     crops = []
     if args.calib_ann:
         ids = set(Path(args.calib_ids).read_text().split()) if args.calib_ids else None

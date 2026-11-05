@@ -44,9 +44,22 @@ type LibraryImage struct {
 	Dets []LibraryDet `json:"dets"`
 }
 
+// ShipClass is an imagery-derived ship-type classification of one detection (edgeml/src/edgeml/embed/shiptype.py).
+type ShipClass struct {
+	Type     string   `json:"type"`               // cargo|container|tanker|passenger|fishing|tug|sailboat|small_boat|warship|submarine|coast_guard|unknown
+	Label    string   `json:"label"`              // display label, e.g. "Tanker"
+	Conf     float64  `json:"conf"`               // 0..1 top-1 probability
+	Aspect   string   `json:"aspect,omitempty"`   // bow|stern|beam|quarter
+	Size     string   `json:"size,omitempty"`     // small|medium|large
+	Features []string `json:"features,omitempty"` // e.g. "radar mast", "cranes", "helicopter deck", "gun mount"
+	Markings string   `json:"markings,omitempty"` // "visible" | "not visible" (never a name/hull number)
+	Model    string   `json:"model,omitempty"`    // which model produced it
+}
+
 type LibraryDet struct {
-	Cls string `json:"cls"`
-	B   Rect   `json:"b"`
+	Cls  string     `json:"cls"`
+	B    Rect       `json:"b"`
+	Ship *ShipClass `json:"ship,omitempty"`
 }
 
 type Rect struct {
@@ -59,6 +72,9 @@ type Rect struct {
 var Library map[string][]LibraryImage
 
 func init() {
+	for _, model := range Models {
+		model.W["unknown"] = .7
+	}
 	var images []LibraryImage
 	if err := json.Unmarshal(imageryJSON, &images); err != nil {
 		panic(err)
@@ -79,6 +95,7 @@ var Sources = []Source{
 }
 
 var Classes = map[string]Class{
+	"unknown":           {Group: "unknown", Length: .08, Aspect: .6, Label: "UNKNOWN — not classified"},
 	"warship":           {Group: "vessel", Length: .34, Aspect: .3, Label: "Warship"},
 	"cargo ship":        {Group: "vessel", Length: .4, Aspect: .3, Label: "Cargo ship"},
 	"tanker":            {Group: "vessel", Length: .42, Aspect: .22, Label: "Tanker"},
@@ -126,9 +143,9 @@ var Models = map[string]Model{
 	},
 }
 
-var EdgeW = map[string]float64{"vessel": .6, "aircraft": .65, "other": .45, "clutter": .12}
+var EdgeW = map[string]float64{"vessel": .6, "aircraft": .65, "other": .45, "clutter": .12, "unknown": .65}
 
-var AttrLabels = map[string]string{"approaching": "approaching", "new": "new / changed", "dark": "no AIS", "moving": "moving fast", "loitering": "loitering"}
+var AttrLabels = map[string]string{"approaching": "approaching", "new": "new / changed", "dark": "no AIS", "moving": "moving fast", "loitering": "loitering", "transient": "single-frame / noise-like"}
 
 var Examples = []string{
 	"Small boats approaching the pier at speed; ignore birds",

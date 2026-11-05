@@ -61,6 +61,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 				},
 				Conf:  math.Round(randBetween(rng, .55, .98)*100) / 100,
 				Attrs: makeAttributes(rng, detection.Cls),
+				Ship:  detection.Ship,
 			})
 		}
 	} else {
@@ -78,6 +79,14 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 				Attrs: makeAttributes(rng, class),
 			})
 		}
+	}
+	if rng.Float64() < .12 {
+		boxes := make([]command.Box, 0, len(detections))
+		for _, d := range detections {
+			boxes = append(boxes, d.Box)
+		}
+		detections = append(detections, command.Detection{Class: "unknown", Conf: .65,
+			Box: placeDetection(rng, "unknown", source.Scene, hz, boxes), Attrs: Attributes(rng, "unknown")})
 	}
 	edge := 0.0
 	if len(detections) == 0 {
@@ -144,6 +153,13 @@ func makeAttributes(rng *rand.Rand, class string) command.Attributes {
 	group := catalog.Classes[class].Group
 	attrs := command.Attributes{}
 	switch {
+	case class == "unknown":
+		switch rng.Intn(3) {
+		case 1:
+			attrs.Approaching, attrs.Moving = true, true
+		case 2:
+			attrs.Transient = true
+		}
 	case group == "vessel":
 		attrs.Moving = rng.Float64() < .5
 		attrs.Approaching = attrs.Moving && rng.Float64() < .45
@@ -212,7 +228,15 @@ func edgeScore(rng *rand.Rand, detections []command.Detection) float64 {
 	remaining := 1.0
 	for _, detection := range detections {
 		weight := catalog.EdgeW[catalog.Classes[detection.Class].Group]
-		remaining *= 1 - weight*detection.Conf*randBetween(rng, .75, 1)
+		conf := detection.Conf
+		if detection.Class == "unknown" {
+			if detection.Attrs.Transient && weight > 0 {
+				weight = .05
+			} else {
+				conf = max(conf, .7)
+			}
+		}
+		remaining *= 1 - weight*conf*randBetween(rng, .75, 1)
 	}
 	return 1 - remaining
 }

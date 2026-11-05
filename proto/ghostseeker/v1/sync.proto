@@ -67,6 +67,9 @@ message Heartbeat {
   int64 unmanifested_items = 4;
   string policy_id = 5; // policy the edge is currently applying
   double link_estimate_bps = 6;
+  string model_id = 7; // edge analyzer capabilities, so shore can lint rules
+  bool open_vocabulary = 8;
+  repeated string fixed_labels = 9;
 }
 
 message Ack {

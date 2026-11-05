@@ -1,0 +1,7 @@
+The first image is a full frame from a maritime camera. The second image is an enlarged crop around one proposed bounding box; the proposed box is drawn in red on the crop.
+Decide whether the red box contains a real, separate object on or above the water that a ship's lookout would report.
+Answer reject if the box mainly contains any of: part of the camera's own ship or boat (bow, deck, deck cargo or containers, cranes, masts, railings, lifeboats), land, buildings, quay or port infrastructure, cranes ashore, clouds, sky, stars, waves, a wake on its own, sun glare, reflections, on-screen text, or a large region with no single distinct object.
+Answer real_object if the box contains a vessel (moored vessels in a harbour count), a buoy, an aircraft, a person in the water or on a small craft, a marine animal at the surface, or a distinct unidentified object or light on the water.
+If real_object, give the best label, exactly one of: cargo, tanker, container, fishing, sailboat, small_boat, warship, submarine, ferry_passenger, tug, buoy, aircraft, person, marine_animal, unknown. cargo = bulk carrier or general cargo ship; container = container ship; ferry_passenger = ferries and cruise ships; small_boat = motorboats, RIBs, tenders, pilot boats, jet skis, kayaks, dinghies; warship = naval combatants and coast-guard cutters. Prefer unknown over guessing a subtype.
+Also give box_ok: true if the red box is reasonably tight around that object (roughly the whole object, not much larger), false otherwise.
+Give reason: a few words.
