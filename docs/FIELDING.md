@@ -106,7 +106,6 @@ the environment variables shown in the table.
 | `-listen` | `LISTEN` | `:8080` | Shore HTTP listener |
 | `-infer` | `INFER_URL` | `mock` | Inference URL for text embedding, or `mock` |
 | `-require-auth` | `GS_REQUIRE_AUTH` | `true` | Require unit JWTs on SyncService; `false` is for isolated lab links only |
-| `-require-operator-auth` | `GS_REQUIRE_OPERATOR_AUTH` | `false` | Require operator JWTs on SetPolicy |
 | `-signing-key` | `GS_SIGNING_KEY` | unset | HS256 signing key; also accepted by mint tool |
 | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset | Signing-key file; takes precedence over literal key |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
@@ -127,8 +126,7 @@ the environment variables shown in the table.
 | `-poll` | — | `1s` | Live shore polling interval |
 | `-operator-token` | `GS_OPERATOR_TOKEN` | unset | Opaque bearer token for the shore/edge ConsoleService transport gate |
 | `-operator-token-file` | `GS_OPERATOR_TOKEN_FILE` | unset | Read the opaque token from a file; takes precedence over the literal token |
-| `-operator-jwt` | `GS_OPERATOR_JWT` | unset | Echelon JWT for shore policy and EMCON writes |
-| `-operator-jwt-file` | `GS_OPERATOR_JWT_FILE` | unset | Read the echelon JWT from a file; takes precedence over the literal token |
+| `-operator-id` | — | `operator-ui` | Issuer recorded on policy edits |
 
 ## State and ports
 
@@ -149,9 +147,8 @@ database. Edge storage caps are opt-in; see [Edge storage caps](#edge-storage-ca
 | Toxiproxy admin API | 8474 | Compose demo only |
 
 SyncService unit JWT authentication is opt-in. The opaque operator bearer
-token gates every ConsoleService RPC and `/blob/` request; when operator JWT
-authentication is enabled, `SetPolicy` writes also require an echelon JWT.
-Neither service provides TLS. Do not expose them to an untrusted network.
+token gates every ConsoleService RPC and `/blob/` request. Neither service
+provides TLS. Do not expose them to an untrusted network.
 
 ## Compose demonstration
 
@@ -276,9 +273,8 @@ HS256 tokens with `sub` (edge ID), `role: "unit"`, and `exp` claims. The signing
 key must be non-default and at least 32 bytes. Missing, invalid, or expired
 tokens return `Unauthenticated`; an `ExchangeRequest.edge_id` that differs
 from `sub` returns `PermissionDenied`. Unit authentication protects
-SyncService. ConsoleService reads remain unauthenticated; `SetPolicy` requires
-an operator token only when operator authentication is enabled. Neither
-service has TLS.
+SyncService. The opaque operator bearer token gates ConsoleService and
+`/blob/` requests. Neither service has TLS.
 
 `*_FILE` credentials take precedence over literal environment values. A
 nonempty file path is read at startup and a missing file is an error. Shore
@@ -296,15 +292,13 @@ workload needs its shared opaque operator bearer token: the manifests reference 
 `operator-token` keys as *required*, so the pods stay Pending until they exist. Create
 the Secrets in the `ghost-seeker` namespace before `zarf package deploy` (each cluster
 needs its own copy if shore and edge are deployed separately). Credentials are passed
-through Secret references, never ConfigMaps. The operator JWT key is optional unless
-shore operator authentication is enabled; create `operator-auth` with the keys
-shown under [Operator authentication](#operator-authentication) before deployment.
+through Secret references, never ConfigMaps.
 
 | Secret | Keys | Used by |
 | --- | --- | --- |
 | `shore-auth` | `signing-key`, `operator-token` | shore |
 | `edge-auth` | `unit-token`, `operator-token` | edge |
-| `operator-auth` | `operator-token` (required), `operator-jwt` (optional) | operator web app |
+| `operator-auth` | `operator-token` | operator web app |
 
 ```sh
 # One operator token shared by shore, edge and the operator web app (>= 16 bytes); owner-only file
@@ -313,6 +307,8 @@ shown under [Operator authentication](#operator-authentication) before deploymen
 # In the shore cluster
 kubectl -n ghost-seeker create secret generic shore-auth \
   --from-file=signing-key=./signing.key --from-file=operator-token=./operator.token
+kubectl -n ghost-seeker create secret generic operator-auth \
+  --from-file=operator-token=./operator.token
 
 # On a trusted workstation with the same signing key
 GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
@@ -341,39 +337,10 @@ kubectl -n ghost-seeker rollout restart statefulset/edge
 
 The opaque `opauth` bearer token means “may talk to the console”: it is the
 transport gate for every ConsoleService RPC and `/blob/` request. The operator
-JWT means “who you are and your echelon” for policy and EMCON writes. Shore
-checks that JWT on `SetPolicy` writes only when
-`GS_REQUIRE_OPERATOR_AUTH=true`, using the existing `GS_SIGNING_KEY`. Reads,
-`OverrideLabel`, and `RequestPull` are not gated by the JWT. With operator auth
-enabled, a write must pass both the bearer-token transport gate and the JWT
-authorization check.
-
-Operator JWT authentication is off by default. Shore's Zarf ConfigMap keeps
-`GS_REQUIRE_OPERATOR_AUTH: "false"`; set it to `"true"` before deploying or
-restarting shore to enable JWT checks. Use the same signing key configured on
-shore to mint an operator JWT and store it alongside the required bearer token:
-
-```sh
-(
-  umask 077
-  GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
-    -role operator -echelon ship -id TAO-DDG51 -ttl 720h > operator.jwt
-)
-
-kubectl -n ghost-seeker create secret generic operator-auth \
-  --from-file=operator-token=./operator.token \
-  --from-file=operator-jwt=./operator.jwt \
-  --dry-run=client -o yaml | kubectl apply -f - && rm operator.token operator.jwt
-```
-
-The operator workload reads the required `operator-token` key as
-`GS_OPERATOR_TOKEN` and the optional `operator-jwt` key as `GS_OPERATOR_JWT`.
-The app sends the JWT only to shore. Shore derives `issuedBy` and echelon from
-the verified JWT, not from the request. An operator cannot add, change, or drop
-policy layers above their echelon, so higher-echelon layers are refused.
-With a JWT, the recorded issuer is its subject, overriding `-operator-id`.
-Command-layer edits still require a trusted policy signature in addition to a
-command-echelon JWT.
+app reads it from `-operator-token` or `-operator-token-file`. Shore and edge
+use the shared token as their ConsoleService transport gate. Policy edits record
+the configured `-operator-id` (default `operator-ui`) as their issuer.
+Command-layer edits still need a trusted policy signature.
 
 ## Edge storage caps
 

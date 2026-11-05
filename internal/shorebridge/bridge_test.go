@@ -3,6 +3,7 @@ package shorebridge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -381,5 +382,240 @@ func TestPolicyInfoDoesNotShowExpiredLayeredEMCON(t *testing.T) {
 	info := policyInfo(current, pb.Echelon_ECHELON_SHIP)
 	if info.Emcon != "NORMAL" || info.EmconSetBy != "" || info.EmconLocked {
 		t.Fatalf("policy info should show default NORMAL after EMCON expiry: %+v", info)
+	}
+}
+
+func writeProtoResponse(t *testing.T, w http.ResponseWriter, response proto.Message) {
+	t.Helper()
+	raw, err := protojson.Marshal(response)
+	if err != nil {
+		t.Errorf("marshal response: %v", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(raw)
+}
+
+func shorePolicyTestServer(t *testing.T, current *pb.Policy, setStatus int, onSet func(*pb.Policy)) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetPolicy":
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: current})
+		case consolePath + "SetPolicy":
+			if setStatus != 0 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(setStatus)
+				_, _ = w.Write([]byte(`{"code":"permission_denied","message":"opauth rejected"}`))
+				return
+			}
+			var request pb.SetPolicyRequest
+			if err := protojson.Unmarshal(readBody(t, r), &request); err != nil {
+				t.Errorf("decode SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if onSet != nil {
+				onSet(proto.Clone(request.Policy).(*pb.Policy))
+			}
+			writeProtoResponse(t, w, &pb.SetPolicyResponse{Policy: request.Policy})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+func submitTimedDirectiveWithoutJWT(t *testing.T, current *pb.Policy) (*pb.Policy, string, []string) {
+	t.Helper()
+	var submitted *pb.Policy
+	shore := shorePolicyTestServer(t, current, 0, func(p *pb.Policy) { submitted = p })
+	defer shore.Close()
+	bridge := New(shore.URL, "", nil).WithOperator("operator-ui")
+	rec := httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy",
+		strings.NewReader(`{"text":"prioritize tankers and go quiet for 30 minutes","boost":["tanker"]}`)))
+	if rec.Code != http.StatusOK || submitted == nil {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Readback string   `json:"readback"`
+		Warnings []string `json:"warnings"`
+		Compiled struct {
+			Warnings []string `json:"warnings"`
+		} `json:"compiled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
+	}
+	return submitted, response.Readback, append(response.Warnings, response.Compiled.Warnings...)
+}
+
+func TestConfiguredOperatorUsedWithoutJWT(t *testing.T) {
+	const operator = "configured-operator"
+	stored := &pb.Policy{Interest: &pb.Interest{}, Layers: []*pb.PolicyLayer{{
+		Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: operator,
+		Rules: []*pb.InterestRule{{Id: "existing"}},
+	}}}
+	var requests []*pb.Policy
+	shore := shorePolicyTestServer(t, stored, 0, func(p *pb.Policy) { requests = append(requests, p) })
+	defer shore.Close()
+	handler := New(shore.URL, "", nil).WithOperator(operator).Handler()
+	for _, tc := range []struct{ path, body string }{
+		{"/api/shore/policy", `{"text":"prioritize tankers","boost":["tanker"]}`},
+		{"/api/shore/emcon", `{"mode":"SILENT"}`},
+	} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST %s: status=%d body=%s", tc.path, rec.Code, rec.Body.String())
+		}
+	}
+	if len(requests) != 2 {
+		t.Fatalf("SetPolicy calls=%d, want 2", len(requests))
+	}
+	for _, request := range requests {
+		if request.IssuedBy != operator || len(request.Layers) != 1 || request.Layers[0].IssuedBy != operator {
+			t.Fatalf("configured issuer policy=%+v", request)
+		}
+	}
+	if requests[0].Layers[0].Rules[0].Author != operator ||
+		requests[1].Layers[0].GetEmcon().GetSetBy() != operator {
+		t.Fatalf("configured issuer attribution: policy=%+v emcon=%+v", requests[0], requests[1])
+	}
+}
+
+func TestTimedLayeredNonJWTEMCONUsesPerLayerExpiryWithoutCompiler(t *testing.T) {
+	current := &pb.Policy{Interest: &pb.Interest{}, Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72"},
+		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "operator-ui"},
+	}}
+	policy, readback, warnings := submitTimedDirectiveWithoutJWT(t, current)
+	if policy.GetExpiresAtUnixMs() != 0 || len(policy.Layers) != 2 {
+		t.Fatalf("layered policy expiry/layers=%d/%+v", policy.GetExpiresAtUnixMs(), policy.Layers)
+	}
+	wantAfter, wantBefore := time.Now().Add(29*time.Minute).UnixMilli(), time.Now().Add(31*time.Minute).UnixMilli()
+	ship := policy.Layers[1]
+	if ship.GetEmcon().GetExpiresAtUnixMs() < wantAfter || ship.GetEmcon().GetExpiresAtUnixMs() > wantBefore ||
+		len(ship.Rules) != 1 || ship.Rules[0].GetExpiresAtUnixMs() < wantAfter ||
+		ship.Rules[0].GetExpiresAtUnixMs() > wantBefore {
+		t.Fatalf("layered timed policy=%+v", policy)
+	}
+	if len(warnings) != 0 || !strings.Contains(readback, "EMCON SILENT for 30 min.") {
+		t.Fatalf("readback=%q warnings=%q", readback, warnings)
+	}
+}
+
+func TestTimedFlatNonJWTUsesPerDirectiveExpiry(t *testing.T) {
+	policy, _, _ := submitTimedDirectiveWithoutJWT(t, &pb.Policy{Interest: &pb.Interest{}})
+	if policy.GetExpiresAtUnixMs() != 0 {
+		t.Fatalf("flat policy expiry=%d, want 0", policy.GetExpiresAtUnixMs())
+	}
+	wantAfter, wantBefore := time.Now().Add(29*time.Minute).UnixMilli(), time.Now().Add(31*time.Minute).UnixMilli()
+	if len(policy.Layers) != 1 || policy.Layers[0].IssuedBy != DefaultOperator ||
+		policy.Layers[0].Echelon != pb.Echelon_ECHELON_SHIP || len(policy.Layers[0].Rules) != 1 ||
+		policy.Layers[0].GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT ||
+		policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() < wantAfter ||
+		policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() > wantBefore ||
+		policy.Layers[0].Rules[0].GetExpiresAtUnixMs() < wantAfter ||
+		policy.Layers[0].Rules[0].GetExpiresAtUnixMs() > wantBefore {
+		t.Fatalf("flat non-JWT timed policy=%+v", policy)
+	}
+}
+
+func TestEMCONWithConfiguredIssuerReusesSameEchelonLayer(t *testing.T) {
+	otherLayer := &pb.PolicyLayer{
+		Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ops-2",
+		Rules: []*pb.InterestRule{{Id: "ops-2-rule", Author: "ops-2", BoostLabels: []string{"tanker"}}},
+		Emcon: &pb.EmconSetting{
+			Mode: pb.EmconMode_EMCON_MODE_NORMAL, Locked: true,
+			SetBy: "ops-2", Echelon: pb.Echelon_ECHELON_SHIP,
+		},
+	}
+	var submitted *pb.Policy
+	shore := shorePolicyTestServer(t, &pb.Policy{Interest: &pb.Interest{}, Layers: []*pb.PolicyLayer{otherLayer}},
+		0, func(p *pb.Policy) { submitted = p })
+	defer shore.Close()
+	rec := httptest.NewRecorder()
+	New(shore.URL, "", nil).WithOperator("ops-1").Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodPost, "/api/shore/emcon", strings.NewReader(`{"mode":"SILENT"}`)))
+	if rec.Code != http.StatusOK || submitted == nil {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(submitted.Layers) != 1 {
+		t.Fatalf("layers=%+v, want the existing ship layer to be reused", submitted.Layers)
+	}
+	reused := submitted.Layers[0]
+	if reused.Echelon != pb.Echelon_ECHELON_SHIP || reused.IssuedBy != "ops-2" ||
+		len(reused.Rules) != 1 || !proto.Equal(reused.Rules[0], otherLayer.Rules[0]) ||
+		reused.GetEmcon().GetSetBy() != "ops-1" ||
+		reused.GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT || reused.GetEmcon().GetLocked() {
+		t.Fatalf("reused ship layer=%+v", reused)
+	}
+}
+
+func TestFlatEMCONWrapsBoostFactorAsDirectiveWithoutJWT(t *testing.T) {
+	current := &pb.Policy{Interest: &pb.Interest{BoostFactor: 3, BoostLabels: []string{"tanker"}}}
+	var submitted *pb.Policy
+	shore := shorePolicyTestServer(t, current, 0, func(p *pb.Policy) { submitted = p })
+	defer shore.Close()
+	rec := httptest.NewRecorder()
+	New(shore.URL, "", nil).Handler().ServeHTTP(rec,
+		httptest.NewRequest(http.MethodPost, "/api/shore/emcon", strings.NewReader(`{"mode":"SILENT"}`)))
+	if rec.Code != http.StatusOK || submitted == nil {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(submitted.Layers) != 1 {
+		t.Fatalf("flat policy was not wrapped in a layer: %+v", submitted)
+	}
+	layer := submitted.Layers[0]
+	if layer.Echelon != pb.Echelon_ECHELON_SHIP || layer.IssuedBy != DefaultOperator ||
+		layer.GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT ||
+		len(layer.Rules) != 1 || layer.Rules[0].GetWeight() != 3 ||
+		len(layer.Rules[0].GetBoostLabels()) != 1 || layer.Rules[0].GetBoostLabels()[0] != "tanker" {
+		t.Fatalf("flat policy boost/EMCON was not preserved in the new layer: %+v", layer)
+	}
+}
+
+func TestShoreAuthorizationFailureIsReturnedAsJSON(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		for _, tc := range []struct{ path, body string }{
+			{"/api/shore/policy", `{"text":"ignore submarines"}`},
+			{"/api/shore/emcon", `{"mode":"SILENT"}`},
+		} {
+			t.Run(fmt.Sprintf("%d%s", status, tc.path), func(t *testing.T) {
+				shore := shorePolicyTestServer(t, &pb.Policy{Interest: &pb.Interest{}}, status, nil)
+				defer shore.Close()
+				rec := httptest.NewRecorder()
+				New(shore.URL, "", nil).Handler().ServeHTTP(rec,
+					httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body)))
+				var response struct {
+					Error string `json:"error"`
+				}
+				if rec.Code != status || !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") ||
+					json.Unmarshal(rec.Body.Bytes(), &response) != nil || response.Error != "opauth rejected" {
+					t.Fatalf("status=%d content-type=%q body=%s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+				}
+			})
+		}
+	}
+}
+
+func TestConsoleDirectiveSurfacesShoreAuthorizationFailure(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			shore := shorePolicyTestServer(t, &pb.Policy{Interest: &pb.Interest{}}, status, nil)
+			defer shore.Close()
+			rec := httptest.NewRecorder()
+			NewConsole(New(shore.URL, "", nil)).Handler().ServeHTTP(rec,
+				httptest.NewRequest(http.MethodPost, "/api/directives",
+					strings.NewReader(`{"text":"ignore submarines","rules":[{"type":"suppress","classes":["submarine"]}]}`)))
+			var response struct {
+				Error string `json:"error"`
+			}
+			if rec.Code != status || json.Unmarshal(rec.Body.Bytes(), &response) != nil ||
+				response.Error != "opauth rejected" {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }

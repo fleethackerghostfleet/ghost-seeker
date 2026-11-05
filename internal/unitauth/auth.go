@@ -15,43 +15,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const OperatorJWTHeader = "X-GS-Operator-JWT"
-
 type claims struct {
-	Role    string `json:"role"`
-	Echelon string `json:"echelon,omitempty"`
+	Role string `json:"role"`
 	jwt.RegisteredClaims
-}
-
-type Operator struct {
-	ID      string
-	Echelon pb.Echelon
-}
-
-func EchelonFromString(value string) (pb.Echelon, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "unit":
-		return pb.Echelon_ECHELON_UNIT, nil
-	case "ship":
-		return pb.Echelon_ECHELON_SHIP, nil
-	case "command":
-		return pb.Echelon_ECHELON_COMMAND, nil
-	default:
-		return pb.Echelon_ECHELON_UNSPECIFIED, fmt.Errorf("unknown echelon %q", value)
-	}
-}
-
-func EchelonString(echelon pb.Echelon) string {
-	switch echelon {
-	case pb.Echelon_ECHELON_UNIT:
-		return "unit"
-	case pb.Echelon_ECHELON_SHIP:
-		return "ship"
-	case pb.Echelon_ECHELON_COMMAND:
-		return "command"
-	default:
-		return ""
-	}
 }
 
 // Credential reads a mounted credential when provided, otherwise the flag/env value.
@@ -90,20 +56,6 @@ func Mint(node, key string, ttl time.Duration) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(key))
 }
 
-func MintOperator(operator string, echelon pb.Echelon, key string, ttl time.Duration) (string, error) {
-	if err := validateKey(key); err != nil {
-		return "", err
-	}
-	echelonName := EchelonString(echelon)
-	if strings.TrimSpace(operator) == "" || ttl < time.Second || echelonName == "" {
-		return "", errors.New("operator id, valid echelon, and TTL of at least one second are required")
-	}
-	c := claims{Role: "operator", Echelon: echelonName, RegisteredClaims: jwt.RegisteredClaims{
-		Subject: operator, ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
-	}}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(key))
-}
-
 type Interceptor struct {
 	required bool
 	key      []byte
@@ -130,39 +82,6 @@ func (i *Interceptor) authenticate(h http.Header) (string, error) {
 		return "", connect.NewError(connect.CodeUnauthenticated, errors.New("invalid unit token"))
 	}
 	return c.Subject, nil
-}
-
-func (i *Interceptor) OperatorFromHeader(h http.Header) (Operator, error) {
-	token := strings.TrimSpace(h.Get(OperatorJWTHeader))
-	if token == "" {
-		return Operator{}, connect.NewError(connect.CodeUnauthenticated, errors.New("operator JWT required"))
-	}
-	c := &claims{}
-	_, err := jwt.ParseWithClaims(token, c, func(*jwt.Token) (any, error) { return i.key, nil },
-		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
-	if err != nil || c.Role != "operator" || strings.TrimSpace(c.Subject) == "" {
-		return Operator{}, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid operator token"))
-	}
-	echelon, err := EchelonFromString(c.Echelon)
-	if err != nil {
-		return Operator{}, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid operator token"))
-	}
-	return Operator{ID: c.Subject, Echelon: echelon}, nil
-}
-
-func UnverifiedOperator(raw string) (Operator, error) {
-	c := &claims{}
-	if _, _, err := jwt.NewParser().ParseUnverified(raw, c); err != nil {
-		return Operator{}, fmt.Errorf("decode operator token: %w", err)
-	}
-	if c.Role != "operator" || strings.TrimSpace(c.Subject) == "" {
-		return Operator{}, errors.New("invalid operator token claims")
-	}
-	echelon, err := EchelonFromString(c.Echelon)
-	if err != nil {
-		return Operator{}, err
-	}
-	return Operator{ID: c.Subject, Echelon: echelon}, nil
 }
 
 func matchNode(node string, msg any) error {

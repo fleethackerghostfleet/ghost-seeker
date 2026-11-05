@@ -30,7 +30,6 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
 
 const consolePath = "/ghostseeker.v1.ConsoleService/"
@@ -65,10 +64,6 @@ type Bridge struct {
 	operator   string
 	edgeNodeID string
 
-	operatorJWT     string
-	operatorJWTSub  string
-	operatorEchelon pb.Echelon
-
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
 	nextExpiry time.Time                   // earliest timed rule/EMCON/policy deadline seen by the poller
 	onSnapshot func(*Snapshot, *pb.Policy) // Console hook, called with every fresh snapshot and the policy it was built from
@@ -95,46 +90,14 @@ func (b *Bridge) Poke() {
 	}
 }
 
-func (b *Bridge) SetOperatorJWT(token string) error {
-	token = strings.TrimSpace(token)
-	var operator unitauth.Operator
-	var err error
-	if token != "" {
-		operator, err = unitauth.UnverifiedOperator(token)
-		if err != nil {
-			return err
-		}
-	}
-	b.mu.Lock()
-	b.operatorJWT = token
-	b.operatorJWTSub = operator.ID
-	b.operatorEchelon = operator.Echelon
-	b.mu.Unlock()
-	return nil
-}
-
 func (b *Bridge) issuer() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.operatorJWT != "" {
-		return b.operatorJWTSub
-	}
 	return b.operator
 }
 
 func (b *Bridge) echelon() pb.Echelon {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.operatorJWT == "" {
-		return pb.Echelon_ECHELON_SHIP
-	}
-	return b.operatorEchelon
-}
-
-func (b *Bridge) hasOperatorJWT() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.operatorJWT != ""
+	return pb.Echelon_ECHELON_SHIP
 }
 
 // DefaultOperator is the issuer recorded on policies this console edits when
@@ -301,12 +264,6 @@ func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.
 		return err
 	}
 	hr.Header.Set("Content-Type", "application/json")
-	b.mu.Lock()
-	operatorJWT := b.operatorJWT
-	b.mu.Unlock()
-	if base == b.shore && operatorJWT != "" {
-		hr.Header.Set(unitauth.OperatorJWTHeader, operatorJWT)
-	}
 	b.authorize(hr)
 	res, err := b.client.Do(hr)
 	if err != nil {
@@ -1245,12 +1202,10 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		pol.Layers = cloneLayers(pol.Layers)
 		operatorLayer := findOperatorLayer(pol.Layers, issuedBy, b.echelon())
 		if operatorLayer < 0 {
-			if !b.hasOperatorJWT() {
-				for i, layer := range pol.Layers {
-					if layer.Echelon == b.echelon() {
-						operatorLayer = i
-						break
-					}
+			for i, layer := range pol.Layers {
+				if layer != nil && layer.Echelon == b.echelon() {
+					operatorLayer = i
+					break
 				}
 			}
 			if operatorLayer < 0 {
