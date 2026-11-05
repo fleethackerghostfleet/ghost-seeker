@@ -2,7 +2,7 @@
 // it polls the shore ConsoleService (ListItems/GetStatus/GetPolicy), groups
 // items into objects by features.tags.sighting_id, and publishes snapshots
 // over SSE. Operator actions are forwarded to shore (SetPolicy, RequestPull)
-// and the link rate to the in-process shaper.
+// while link status comes from the in-process shaper.
 package shorebridge
 
 import (
@@ -40,12 +40,12 @@ const consolePath = "/ghostseeker.v1.ConsoleService/"
 // stall the snapshot.
 const maxRecordFetchesPerRefresh = 25
 
-// LinkControl is what the UI needs from a link: the current rate and a way
-// to change it. *shaper.Shaper satisfies it; nil means "read-only".
+// LinkControl exposes the current link rate and its automatic distribution.
+// *shaper.Shaper satisfies it; nil means the link is controlled externally.
 type LinkControl interface {
 	Bps() int64
 	Bytes() int64
-	SetBps(int64)
+	Distribution() *shaper.NormalDistribution
 }
 
 type Bridge struct {
@@ -223,10 +223,10 @@ type PolicyConflict struct {
 }
 
 type LinkStatus struct {
-	Controllable bool    `json:"controllable"`
-	Bps          int64   `json:"bps"`
-	Bytes        int64   `json:"bytes"`
-	Presets      []int64 `json:"presets"`
+	Controllable bool                       `json:"controllable"`
+	Bps          int64                      `json:"bps"`
+	Bytes        int64                      `json:"bytes"`
+	Distribution *shaper.NormalDistribution `json:"distribution,omitempty"`
 }
 
 type Counts struct {
@@ -363,10 +363,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	snap := &Snapshot{TS: time.Now().UnixMilli()}
-	snap.Link.Presets = shaper.Presets
-	if b.link != nil {
-		snap.Link = LinkStatus{Controllable: true, Bps: b.link.Bps(), Bytes: b.link.Bytes(), Presets: shaper.Presets}
-	}
+	snap.Link = b.linkStatus()
 
 	var st pb.GetStatusResponse
 	if err := b.call(ctx, b.shore, "GetStatus", &pb.GetStatusRequest{}, &st); err != nil {
@@ -849,7 +846,6 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
-	mux.HandleFunc("POST /api/shore/link", b.setLink)
 	if u, err := url.Parse(b.shore); err == nil {
 		rp := httputil.NewSingleHostReverseProxy(u)
 		director := rp.Director
@@ -879,9 +875,10 @@ func (b *Bridge) Handler() http.Handler {
 }
 
 func (b *Bridge) linkStatus() LinkStatus {
-	ls := LinkStatus{Presets: shaper.Presets}
+	ls := LinkStatus{}
 	if b.link != nil {
 		ls.Controllable, ls.Bps, ls.Bytes = true, b.link.Bps(), b.link.Bytes()
+		ls.Distribution = b.link.Distribution()
 	}
 	return ls
 }
@@ -1408,24 +1405,6 @@ func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
-}
-
-func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
-	if b.link == nil {
-		http.Error(w, "link is not controllable from this process (use deploy/compose/degrade.sh)", http.StatusNotImplemented)
-		return
-	}
-	var in struct {
-		Bps int64 `json:"bps"`
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	if err := decodeJSONBody(r.Body, &in); err != nil {
-		log.Printf("shorebridge: link request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return
-	}
-	b.link.SetBps(in.Bps)
-	writeJSON(w, b.linkStatus())
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
