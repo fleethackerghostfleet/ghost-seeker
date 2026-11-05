@@ -37,6 +37,7 @@ shore/                  store, sync receiver, console
 internal/               fact format, virtual clock, scenario loader, http helpers
 cmd/edge cmd/shore      the two services
 cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JSON metrics
+algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
 inference/              Python sidecar contract + stub (no model yet)
 deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
 frames/                 demo imagery (Git LFS zips)
@@ -170,6 +171,16 @@ anything shore hasn't seen; ranks every item's *next* form by
 order, promoting an item's next rung when a form fits entirely; suppressed or
 below-threshold images sort in a lower tier and drain only when nothing
 better is waiting ("if we have bandwidth, use it").
+
+## Offline image prioritization baseline
+
+[`algorithm/`](algorithm/README.md) provides the standalone CPU workflow **analyze once → rank every eligible image → select whole JPEGs within an absolute byte allowance**. Object, visual-interest and quality providers are interchangeable. The default image-redundancy comparison combines color layout with pHash. Operator policy can rerank cached evidence; changing bandwidth reuses that order.
+
+- [Provider contracts and adapters](algorithm/PROVIDERS.md)
+- [Ranking, byte accounting and CLI examples](algorithm/RANKING_AND_SELECTION.md)
+- [Color + pHash defaults, cache migration and pair evaluation](algorithm/SIMILARITY.md)
+
+This package is an offline image-level baseline. It is independent of `edgeml/` sighting aggregation and the live Go scheduler's manifest/fidelity/chunk planning. It does not implement the `InferenceService` RPCs or wire itself into the operator app. Its full-image selection metrics are distinct from unique-object delivery metrics in `edgeml/`.
 
 ## Simulator results (satcom_contested, 60 min, mock analyzer)
 
