@@ -30,11 +30,11 @@ func mintBridgeOperator(t *testing.T, id string, echelon pb.Echelon) string {
 	return token
 }
 
-func TestSetOperatorTokenRejectsInvalidClaims(t *testing.T) {
+func TestSetOperatorJWTRejectsInvalidClaims(t *testing.T) {
 	unknownEchelon := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"TAO-DDG51","role":"operator","echelon":"admiral"}`))
 	invalid := []string{"not-a-jwt", "eyJhbGciOiJub25lIn0." + unknownEchelon + ".x"}
 	for _, token := range invalid {
-		if err := New("", "", nil).SetOperatorToken(token); err == nil {
+		if err := New("", "", nil).SetOperatorJWT(token); err == nil {
 			t.Fatalf("accepted invalid operator token %q", token)
 		}
 	}
@@ -52,14 +52,16 @@ func writeProtoResponse(t *testing.T, w http.ResponseWriter, message proto.Messa
 	_, _ = w.Write(raw)
 }
 
-func TestOperatorTokenOnlySentToShore(t *testing.T) {
-	token := mintBridgeOperator(t, "TAO-DDG51", pb.Echelon_ECHELON_SHIP)
+func TestOperatorJWTReachesShoreAndBearerReachesBoth(t *testing.T) {
+	jwtToken := mintBridgeOperator(t, "TAO-DDG51", pb.Echelon_ECHELON_SHIP)
+	bearerToken := "opaque-operator-token-123"
 	var mu sync.Mutex
-	var shoreHeaders []string
-	var edgeHeader string
+	var shoreAuthorizations, shoreJWTs []string
+	var edgeAuthorization, edgeJWT string
 	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		shoreHeaders = append(shoreHeaders, r.Header.Get("Authorization"))
+		shoreAuthorizations = append(shoreAuthorizations, r.Header.Get("Authorization"))
+		shoreJWTs = append(shoreJWTs, r.Header.Get(unitauth.OperatorJWTHeader))
 		mu.Unlock()
 		switch r.URL.Path {
 		case consolePath + "GetStatus":
@@ -75,7 +77,8 @@ func TestOperatorTokenOnlySentToShore(t *testing.T) {
 	defer shore.Close()
 	edge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		edgeHeader = r.Header.Get("Authorization")
+		edgeAuthorization = r.Header.Get("Authorization")
+		edgeJWT = r.Header.Get(unitauth.OperatorJWTHeader)
 		mu.Unlock()
 		if r.URL.Path != consolePath+"GetStatus" {
 			http.NotFound(w, r)
@@ -85,24 +88,30 @@ func TestOperatorTokenOnlySentToShore(t *testing.T) {
 	}))
 	defer edge.Close()
 
-	bridge := New(shore.URL, edge.URL, nil)
-	if err := bridge.SetOperatorToken(token); err != nil {
+	bridge := New(shore.URL, edge.URL, nil).WithToken(bearerToken)
+	if err := bridge.SetOperatorJWT(jwtToken); err != nil {
 		t.Fatal(err)
 	}
 	bridge.refresh(context.Background())
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(shoreHeaders) == 0 {
+	if len(shoreAuthorizations) == 0 {
 		t.Fatal("bridge made no shore ConsoleService calls")
 	}
-	for _, header := range shoreHeaders {
-		if header != "Bearer "+token {
-			t.Fatalf("shore Authorization=%q, want operator bearer", header)
+	for i, header := range shoreAuthorizations {
+		if header != "Bearer "+bearerToken {
+			t.Fatalf("shore Authorization=%q, want opaque operator bearer", header)
+		}
+		if shoreJWTs[i] != jwtToken {
+			t.Fatalf("shore %s=%q, want raw operator JWT", unitauth.OperatorJWTHeader, shoreJWTs[i])
 		}
 	}
-	if edgeHeader != "" {
-		t.Fatalf("edge Authorization=%q, want no operator token", edgeHeader)
+	if edgeAuthorization != "Bearer "+bearerToken {
+		t.Fatalf("edge Authorization=%q, want opaque operator bearer", edgeAuthorization)
+	}
+	if edgeJWT != "" {
+		t.Fatalf("edge %s=%q, want no operator JWT", unitauth.OperatorJWTHeader, edgeJWT)
 	}
 }
 
@@ -127,7 +136,7 @@ func TestShoreLockCheckerUsesOperatorEchelon(t *testing.T) {
 	}
 
 	commandBridge := New(shore.URL, "", nil)
-	if err := commandBridge.SetOperatorToken(mintBridgeOperator(t, "CTF-72", pb.Echelon_ECHELON_COMMAND)); err != nil {
+	if err := commandBridge.SetOperatorJWT(mintBridgeOperator(t, "CTF-72", pb.Echelon_ECHELON_COMMAND)); err != nil {
 		t.Fatal(err)
 	}
 	warnings, blocked := commandBridge.PolicyLocks().CheckLocks(rules)
@@ -165,7 +174,7 @@ func TestSetPolicyBuildsOperatorLayerAtTokenEchelon(t *testing.T) {
 	defer shore.Close()
 
 	bridge := New(shore.URL, "", nil)
-	if err := bridge.SetOperatorToken(mintBridgeOperator(t, "TAO-DDG51", pb.Echelon_ECHELON_COMMAND)); err != nil {
+	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "TAO-DDG51", pb.Echelon_ECHELON_COMMAND)); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
@@ -227,7 +236,7 @@ func TestOperatorSubjectOverridesIssuedByForPolicyAndEMCON(t *testing.T) {
 	defer shore.Close()
 
 	bridge := New(shore.URL, "", nil)
-	if err := bridge.SetOperatorToken(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
 		t.Fatal(err)
 	}
 	handler := bridge.Handler()
@@ -305,7 +314,7 @@ func TestTimedOperatorDirectiveExpiresItsRule(t *testing.T) {
 
 	bridge := New(shore.URL, "", nil)
 	bridge.Compiler = &command.Compiler{}
-	if err := bridge.SetOperatorToken(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
@@ -362,7 +371,7 @@ func TestOperatorEMCONWrapPreservesFlatBoostFactor(t *testing.T) {
 	defer shore.Close()
 
 	bridge := New(shore.URL, "", nil)
-	if err := bridge.SetOperatorToken(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
@@ -407,7 +416,7 @@ func TestShoreAuthorizationFailureIsReturnedAsJSON(t *testing.T) {
 			defer shore.Close()
 
 			bridge := New(shore.URL, "", nil)
-			if err := bridge.SetOperatorToken(mintBridgeOperator(t, "TAO-DDG51", pb.Echelon_ECHELON_SHIP)); err != nil {
+			if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "TAO-DDG51", pb.Echelon_ECHELON_SHIP)); err != nil {
 				t.Fatal(err)
 			}
 			rec := httptest.NewRecorder()

@@ -15,6 +15,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const OperatorJWTHeader = "X-GS-Operator-JWT"
+
 type claims struct {
 	Role    string `json:"role"`
 	Echelon string `json:"echelon,omitempty"`
@@ -131,12 +133,12 @@ func (i *Interceptor) authenticate(h http.Header) (string, error) {
 }
 
 func (i *Interceptor) OperatorFromHeader(h http.Header) (Operator, error) {
-	parts := strings.Fields(h.Get("Authorization"))
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-		return Operator{}, connect.NewError(connect.CodeUnauthenticated, errors.New("bearer token required"))
+	token := strings.TrimSpace(h.Get(OperatorJWTHeader))
+	if token == "" {
+		return Operator{}, connect.NewError(connect.CodeUnauthenticated, errors.New("operator JWT required"))
 	}
 	c := &claims{}
-	_, err := jwt.ParseWithClaims(parts[1], c, func(*jwt.Token) (any, error) { return i.key, nil },
+	_, err := jwt.ParseWithClaims(token, c, func(*jwt.Token) (any, error) { return i.key, nil },
 		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 	if err != nil || c.Role != "operator" || strings.TrimSpace(c.Subject) == "" {
 		return Operator{}, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid operator token"))

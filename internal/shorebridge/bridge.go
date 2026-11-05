@@ -63,7 +63,7 @@ type Bridge struct {
 	subs            map[chan []byte]struct{}
 	records         map[string]int // RECORD item id -> n_frames
 	edgeNodeID      string
-	operatorToken   string
+	operatorJWT     string
 	operatorID      string
 	operatorEchelon pb.Echelon
 }
@@ -79,7 +79,7 @@ func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	}
 }
 
-func (b *Bridge) SetOperatorToken(token string) error {
+func (b *Bridge) SetOperatorJWT(token string) error {
 	token = strings.TrimSpace(token)
 	var operator unitauth.Operator
 	var err error
@@ -90,7 +90,7 @@ func (b *Bridge) SetOperatorToken(token string) error {
 		}
 	}
 	b.mu.Lock()
-	b.operatorToken = token
+	b.operatorJWT = token
 	b.operatorID = operator.ID
 	b.operatorEchelon = operator.Echelon
 	b.mu.Unlock()
@@ -106,16 +106,16 @@ func (b *Bridge) operatorSub() string {
 func (b *Bridge) echelon() pb.Echelon {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.operatorToken == "" {
+	if b.operatorJWT == "" {
 		return pb.Echelon_ECHELON_SHIP
 	}
 	return b.operatorEchelon
 }
 
-func (b *Bridge) hasOperatorToken() bool {
+func (b *Bridge) hasOperatorJWT() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.operatorToken != ""
+	return b.operatorJWT != ""
 }
 
 // ---- wire model (what the browser sees) ----
@@ -262,6 +262,12 @@ func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.
 		return err
 	}
 	hr.Header.Set("Content-Type", "application/json")
+	b.mu.Lock()
+	operatorJWT := b.operatorJWT
+	b.mu.Unlock()
+	if base == b.shore && operatorJWT != "" {
+		hr.Header.Set(unitauth.OperatorJWTHeader, operatorJWT)
+	}
 	b.authorize(hr)
 	res, err := b.client.Do(hr)
 	if err != nil {
@@ -930,7 +936,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 			if c.DurationMin > 0 {
 				ruleExpiryUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
-				if !b.hasOperatorToken() {
+				if !b.hasOperatorJWT() {
 					pol.ExpiresAtUnixMs = ruleExpiryUnixMs
 					ruleExpiryUnixMs = 0
 				}
@@ -978,7 +984,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if (current == nil || len(current.Layers) == 0) && b.hasOperatorToken() {
+	if (current == nil || len(current.Layers) == 0) && b.hasOperatorJWT() {
 		rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: in.IssuedBy,
 			BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...),
 			Text: in.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
@@ -1108,7 +1114,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: b.echelon()}
-	} else if b.hasOperatorToken() {
+	} else if b.hasOperatorJWT() {
 		rules := make([]*pb.InterestRule, 0, 2)
 		if pol.Interest != nil && len(pol.Interest.BoostLabels) > 0 {
 			var weight float64

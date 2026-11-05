@@ -42,7 +42,7 @@ func operatorRequest(t *testing.T, policy *pb.Policy, role, id string, echelon p
 		if err != nil {
 			t.Fatal(err)
 		}
-		request.Header().Set("Authorization", "Bearer "+token)
+		request.Header().Set(unitauth.OperatorJWTHeader, token)
 	} else if role == "unit" {
 		token, err := unitauth.Mint(id, operatorTestKey, time.Hour)
 		if err != nil {

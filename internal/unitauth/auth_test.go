@@ -137,7 +137,7 @@ func TestOperatorFromHeader(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			header := make(http.Header)
 			if tc.bearer != "" {
-				header.Set("Authorization", "Bearer "+tc.bearer)
+				header.Set(OperatorJWTHeader, tc.bearer)
 			}
 			operator, err := auth.OperatorFromHeader(header)
 			if tc.want != 0 {
