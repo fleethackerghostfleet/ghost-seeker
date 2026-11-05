@@ -14,6 +14,8 @@ test('directive badges and conflicts escape policy text',()=>{
  assert.match(policy.directiveBadge({source:'CTF-72',locked:true,lockedBy:'CTF-72'}),/Locked by CTF-72/);
  assert.match(policy.directiveBadge({source:'CTF-72'}),/From CTF-72 · delegated/);
  assert.match(policy.directiveBadge({blocked:'Locked by <CTF>'}),/Locked by &lt;CTF&gt;/);
+ assert.match(policy.directiveBadge({expiresAtUnixMs:Date.UTC(2026,0,1,5,17)}),/Until 05:17Z/);
+ assert.equal(policy.directiveBadge({}),'');
  assert.match(policy.conflictsHTML([{ruleId:'rule-1',reason:'Locked by <CTF>',blockedBy:'lock'}]),/&lt;CTF&gt;/);
  assert.equal(policy.conflictToast([{reason:'Locked by CTF-72'}]),'1 rule dropped — Locked by CTF-72');
 });

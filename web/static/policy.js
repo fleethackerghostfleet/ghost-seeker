@@ -19,9 +19,16 @@
         ? `<span class="policy-badge locked">🔒 Locked by ${esc(directive.lockedBy || directive.source)}</span>`
         : `<span class="policy-badge delegated">From ${esc(directive.source)} · delegated</span>`;
     }
+    const until = directive.expiresAtUnixMs > 0 ? `<span class="policy-badge" title="This directive lapses on its own; the others stay in force.">Until ${untilLabel(directive.expiresAtUnixMs)}</span>` : '';
     return directive.blocked
       ? `<span class="policy-badge blocked">Blocked — ${esc(directive.blocked)}</span>`
-      : '';
+      : until;
+  }
+
+  function untilLabel(unixMs) {
+    const d = new Date(unixMs);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}Z`;
   }
 
   function conflictsHTML(conflicts = []) {
