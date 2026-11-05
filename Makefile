@@ -70,7 +70,7 @@ demo-shore: build demo-key
 demo-ui: build   ## Patrick's operator console (index.html / cdr.html) on live shore data + the shaped link the edge talks through (:18080)
 	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN)
 
-MODELS ?= $(HOME)/models/D
+MODELS ?= $(or $(GS_MODELS),$(HOME)/models/D)
 PY ?= python
 
 demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unknown_calib.npz for the sidecar
@@ -96,7 +96,7 @@ DEMO_COMPOSE := deploy/compose/demo.compose.yml
 DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) docker compose -f $(DEMO_COMPOSE)
 
 compose-demo:    ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
-	@test -n "$$(ls $(DEMO)/frames/*/img1 2>/dev/null | head -1)" || { echo "error: demo clips missing in $(DEMO)/frames — run 'make demo-clips' first (needs gcloud signed in as a lab account, see docs/DEMO.md)"; exit 1; }
+	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO)/scenario.json); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (needs gcloud signed in as a lab account, see docs/DEMO.md)"; exit 1; }; done
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (needs gcloud; or MODELS=/path/to/D)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d
 	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"
