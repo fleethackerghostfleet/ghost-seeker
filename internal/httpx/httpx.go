@@ -30,7 +30,7 @@ func CORSAllow(origins []string, next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		ok := origin == "" || allow[strings.ToLower(origin)] || sameHost(origin, r.Host)
+		ok := origin == "" || allow[strings.ToLower(origin)] || sameOrigin(origin, r)
 		site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
 		if site == "cross-site" && !allow[strings.ToLower(origin)] {
 			ok = false
@@ -59,9 +59,25 @@ func CORSAllow(origins []string, next http.Handler) http.Handler {
 	})
 }
 
-func sameHost(origin, host string) bool {
+// sameOrigin requires scheme and host to match the request's own origin;
+// the scheme comes from the connection (or X-Forwarded-Proto behind TLS
+// termination).
+func sameOrigin(origin string, r *http.Request) bool {
 	u, err := url.Parse(origin)
-	return err == nil && u.Host != "" && strings.EqualFold(u.Host, host)
+	if err != nil || u.Host == "" || !strings.EqualFold(u.Host, r.Host) {
+		return false
+	}
+	return strings.EqualFold(u.Scheme, requestScheme(r))
+}
+
+func requestScheme(r *http.Request) string {
+	if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
+		return strings.ToLower(strings.TrimSpace(strings.Split(p, ",")[0]))
+	}
+	if r.TLS != nil {
+		return "https"
+	}
+	return "http"
 }
 
 // SplitList parses a comma/space separated flag value.

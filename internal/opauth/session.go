@@ -135,7 +135,7 @@ func (s *Sessions) login(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, safeNext(r.URL.Query().Get("next")), http.StatusFound)
 			return
 		}
-		s.page(w, "")
+		s.page(w, "", r.URL.Query().Get("next"))
 	case http.MethodPost:
 		r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 		if err := r.ParseForm(); err != nil {
@@ -144,7 +144,7 @@ func (s *Sessions) login(w http.ResponseWriter, r *http.Request) {
 		}
 		if !Equal(s.token, strings.TrimSpace(r.PostForm.Get("token"))) {
 			w.WriteHeader(http.StatusUnauthorized)
-			s.page(w, "invalid operator token")
+			s.page(w, "invalid operator token", r.PostForm.Get("next"))
 			return
 		}
 		s.issue(w, r)
@@ -173,7 +173,7 @@ func safeNext(next string) string {
 	return next
 }
 
-func (s *Sessions) page(w http.ResponseWriter, msg string) {
+func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Referrer-Policy", "same-origin") // so the form post carries a real Origin, not "null"
@@ -186,6 +186,9 @@ func (s *Sessions) page(w http.ResponseWriter, msg string) {
 		`<form method="post" action="/login"><h1>Ghost Seeker</h1><p>Enter the operator token (GS_OPERATOR_TOKEN) to open the shore console.</p>`)
 	if msg != "" {
 		b.WriteString(`<p class="err">` + html.EscapeString(msg) + `</p>`)
+	}
+	if next = safeNext(next); next != "/" {
+		b.WriteString(`<input type="hidden" name="next" value="` + html.EscapeString(next) + `">`)
 	}
 	b.WriteString(`<input type="password" name="token" placeholder="operator token" autocomplete="current-password" autofocus required>` +
 		`<button type="submit">Sign in</button></form></body></html>`)

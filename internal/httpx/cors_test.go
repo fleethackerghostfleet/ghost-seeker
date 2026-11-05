@@ -48,6 +48,18 @@ func TestCORSAllowlist(t *testing.T) {
 	if w := corsReq(h, http.MethodOptions, "http://localhost:8090", ""); w.Code != http.StatusNoContent || w.Header().Get("Access-Control-Allow-Headers") == "" {
 		t.Fatalf("allowed preflight: %d %v", w.Code, w.Header())
 	}
+	// Same host but a different scheme is a different origin.
+	if w := corsReq(h, http.MethodPost, "https://shore.local:8080", "cross-site"); w.Code != http.StatusForbidden {
+		t.Fatalf("different-scheme origin must be 403: %d", w.Code)
+	}
+	tlsReq := httptest.NewRequest(http.MethodPost, "http://shore.local:8080/x", nil)
+	tlsReq.Header.Set("Origin", "https://shore.local:8080")
+	tlsReq.Header.Set("X-Forwarded-Proto", "https")
+	tw := httptest.NewRecorder()
+	h.ServeHTTP(tw, tlsReq)
+	if tw.Code != http.StatusNoContent {
+		t.Fatalf("https origin behind TLS termination: %d", tw.Code)
+	}
 	// Default: same-origin only, never a wildcard.
 	if w := corsReq(CORS(ok), http.MethodPost, "http://localhost:8090", ""); w.Code != http.StatusForbidden {
 		t.Fatalf("default CORS must not allow other origins: %d", w.Code)

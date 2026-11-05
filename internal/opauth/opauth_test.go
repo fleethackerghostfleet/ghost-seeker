@@ -39,6 +39,35 @@ func TestLoadExplicitDevAndProduction(t *testing.T) {
 	}
 }
 
+func TestLoadConcurrentDevStart(t *testing.T) {
+	devFile := filepath.Join(t.TempDir(), "operator.token")
+	const n = 8
+	toks := make(chan string, n)
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			tok, _, err := Load("", "", devFile)
+			toks <- tok
+			errs <- err
+		}()
+	}
+	first := ""
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+		tok := <-toks
+		if len(tok) != 64 {
+			t.Fatalf("partial token %q", tok)
+		}
+		if first == "" {
+			first = tok
+		} else if tok != first {
+			t.Fatalf("processes disagree: %q vs %q", tok, first)
+		}
+	}
+}
+
 func TestRequireBearer(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	h := RequireBearer("secret-token-12345", ok)
@@ -85,6 +114,7 @@ func do(h http.Handler, method, target, remote string, hdr map[string]string, co
 		body = strings.NewReader("")
 	}
 	r := httptest.NewRequest(method, target, body)
+	r.Host = "localhost:8090"
 	r.RemoteAddr = remote
 	for k, v := range hdr {
 		if k != "form" {
@@ -118,6 +148,12 @@ func TestSessionsProductionFlow(t *testing.T) {
 	if w := do(h, http.MethodGet, "/login", "10.0.0.9:5", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `name="token"`) || !strings.Contains(w.Header().Get("Content-Security-Policy"), "form-action 'self'") {
 		t.Fatalf("login page: %d", w.Code)
 	}
+	if w := do(h, http.MethodGet, "/login?next=%2Fcdr", "10.0.0.9:5", nil); !strings.Contains(w.Body.String(), `name="next" value="/cdr"`) {
+		t.Fatalf("login page must carry next: %s", w.Body.String())
+	}
+	if w := do(h, http.MethodGet, "/login?next=//evil", "10.0.0.9:5", nil); strings.Contains(w.Body.String(), `name="next"`) {
+		t.Fatalf("unsafe next must be dropped")
+	}
 	if w := do(h, http.MethodGet, "/api/auth", "10.0.0.9:5", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"authenticated":false`) {
 		t.Fatalf("auth status: %d %s", w.Code, w.Body.String())
 	}
@@ -132,6 +168,15 @@ func TestSessionsProductionFlow(t *testing.T) {
 	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/" {
 		t.Fatalf("login: %d %q", w.Code, w.Header().Get("Location"))
 	}
+	form["form"] = url.Values{"token": {"secret-token-12345"}, "next": {"/cdr"}}.Encode()
+	if w := do(h, http.MethodPost, "/login", "10.0.0.9:5", form); w.Header().Get("Location") != "/cdr" {
+		t.Fatalf("login must honor next: %q", w.Header().Get("Location"))
+	}
+	form["form"] = url.Values{"token": {"wrong"}, "next": {"/cdr"}}.Encode()
+	if w := do(h, http.MethodPost, "/login", "10.0.0.9:5", form); w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), `name="next" value="/cdr"`) {
+		t.Fatalf("failed login must keep next: %d", w.Code)
+	}
+	form["form"] = url.Values{"token": {"secret-token-12345"}, "next": {"//evil.example/x"}}.Encode()
 	cs := w.Result().Cookies()
 	if len(cs) != 1 || cs[0].Name != CookieName || !cs[0].HttpOnly || cs[0].SameSite != http.SameSiteStrictMode || cs[0].Path != "/" || cs[0].Secure {
 		t.Fatalf("cookie attrs: %+v", cs)
@@ -179,6 +224,23 @@ func TestSessionsDevLoopbackAutoLogin(t *testing.T) {
 	}
 	if w := do(h, http.MethodGet, "/api/shore/snapshot", "127.0.0.1:4242", map[string]string{"X-Forwarded-For": "192.168.1.20"}); w.Code != http.StatusUnauthorized {
 		t.Fatalf("proxied dev: %d", w.Code)
+	}
+	// A same-box reverse proxy serving a public name is not loopback either.
+	r := httptest.NewRequest(http.MethodGet, "http://ops.ship.mil/api/shore/snapshot", nil)
+	r.RemoteAddr = "127.0.0.1:4242"
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("public Host via loopback proxy: %d", w.Code)
+	}
+	for _, host := range []string{"localhost:8090", "127.0.0.1:8090", "[::1]:8090", "app.localhost"} {
+		r := httptest.NewRequest(http.MethodGet, "http://"+host+"/api/shore/snapshot", nil)
+		r.RemoteAddr = "[::1]:7"
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("host %s: %d", host, w.Code)
+		}
 	}
 	if w := do(h, http.MethodGet, "/login", "127.0.0.1:1", nil); w.Code != http.StatusFound || w.Header().Get("Location") != "/" {
 		t.Fatalf("dev /login should bounce home: %d %q", w.Code, w.Header().Get("Location"))

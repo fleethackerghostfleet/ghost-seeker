@@ -66,20 +66,37 @@ func loadOrCreate(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
+	// Write a private temp file, then link it into place: readers only ever
+	// see a complete token, and the first of concurrently starting demo
+	// processes wins while the others read its token.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".operator.token.*")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return "", err
+	}
+	if _, err := tmp.WriteString(tok + "\n"); err != nil {
+		tmp.Close()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+	if err := os.Link(tmp.Name(), path); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return "", err
+		}
 		raw, rerr := os.ReadFile(path)
 		if rerr != nil {
 			return "", rerr
 		}
-		return strings.TrimSpace(string(raw)), nil
-	}
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	if _, err := f.WriteString(tok + "\n"); err != nil {
-		return "", err
+		if t := strings.TrimSpace(string(raw)); len(t) >= minTokenBytes {
+			return t, nil
+		}
+		return "", fmt.Errorf("%s: token shorter than %d bytes; delete it to regenerate", path, minTokenBytes)
 	}
 	return tok, nil
 }
@@ -134,15 +151,36 @@ func Unauthorized(w http.ResponseWriter) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"code": "unauthenticated", "message": "operator token required"})
 }
 
-// Loopback reports whether the request came straight from this machine
-// (no proxy hop recorded), the only case dev auto-login trusts.
+// Loopback reports whether the request came straight from this machine,
+// the only case dev auto-login trusts: the peer is a loopback address, no
+// proxy hop is recorded, and the browser addressed a loopback host (so a
+// reverse proxy on the same box serving a public name does not qualify).
 func Loopback(r *http.Request) bool {
-	if r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" {
-		return false
+	for _, h := range []string{"X-Forwarded-For", "Forwarded", "X-Forwarded-Host", "X-Real-IP", "Via"} {
+		if r.Header.Get(h) != "" {
+			return false
+		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	return isLoopbackAddr(r.RemoteAddr) && isLoopbackHost(r.Host)
+}
+
+func isLoopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		host = r.RemoteAddr
+		host = addr
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
+}
+
+func isLoopbackHost(hostport string) bool {
+	host, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		host = hostport
+	}
+	host = strings.ToLower(strings.Trim(host, "[]"))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()

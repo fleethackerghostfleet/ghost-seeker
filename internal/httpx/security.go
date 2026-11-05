@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -45,8 +44,7 @@ func SameOrigin(next http.Handler) http.Handler {
 					next.ServeHTTP(w, r)
 					return
 				}
-				u, err := url.Parse(origin)
-				if err != nil || u.Host == "" || !strings.EqualFold(u.Host, r.Host) {
+				if !sameOrigin(origin, r) {
 					http.Error(w, "cross-origin request rejected", http.StatusForbidden)
 					return
 				}
