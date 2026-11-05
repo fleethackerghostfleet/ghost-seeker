@@ -10,6 +10,7 @@
 package scoring
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -231,6 +232,20 @@ func (Interest) Score(it *pb.Item, ctx *Context) Result {
 		sup = DefaultSuppressFactor
 	}
 	labels := allLabels(it, detMin)
+	pinned := int32(0)
+	for label, tier := range in.TierLabels {
+		if tier >= 1 && tier <= 4 && hasLabel(labels, label) && (pinned == 0 || tier < pinned) {
+			pinned = tier
+		}
+	}
+	switch pinned {
+	case 1:
+		return Result{Value: 1, Multiplier: boost, Note: "pinned: P1"}
+	case 2, 3:
+		return Result{Multiplier: 1, Note: fmt.Sprintf("pinned: P%d", pinned)}
+	case 4:
+		return Result{Multiplier: sup, Suppressed: true, Note: "pinned: P4"}
+	}
 	for _, l := range in.SuppressLabels {
 		if hasLabel(labels, l) && !isUnknown(it, ctx) {
 			return Result{Multiplier: sup, Suppressed: true, Note: "suppressed: " + l}
