@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/pivauth"
 )
 
@@ -239,8 +240,8 @@ func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 		`<style>body{font:15px system-ui,sans-serif;background:#0b1118;color:#d6e2ee;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}` +
 		`form{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{font-size:18px;margin:0 0 4px}p{margin:4px 0 16px;color:#8aa0b6}` +
 		`input{width:100%;box-sizing:border-box;padding:9px;border-radius:6px;border:1px solid #2d4258;background:#0b1118;color:#fff;font-size:14px}` +
-		`button{margin-top:14px;width:100%;padding:9px;border:0;border-radius:6px;background:#1e88e5;color:#fff;font-weight:600;cursor:pointer}.err{color:#ff7b72}</style></head><body>` +
-		`<form method="post" action="/login"><h1>Ghost Seeker</h1>`)
+		`button{margin-top:14px;width:100%;padding:9px;border:0;border-radius:6px;background:#1e88e5;color:#fff;font-weight:600;cursor:pointer}.err{color:#ff7b72}header{display:flex;align-items:center;gap:16px;margin-bottom:8px}` + httpx.DocsLinkCSS + `</style></head><body>` +
+		`<form method="post" action="/login"><header><h1>Ghost Seeker</h1>` + httpx.DocsLinkHTML + `</header>`)
 	if s.demoAcceptAnyToken {
 		b.WriteString(`<p>DEMO MODE: any non-empty token grants operator access.</p>`)
 	} else {
