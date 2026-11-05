@@ -55,6 +55,20 @@ func onlyLocalLayers(layers []*pb.PolicyLayer) bool {
 	return len(layers) > 0
 }
 
+func withoutLabels(labels, drop []string) []string {
+	skip := map[string]bool{}
+	for _, l := range drop {
+		skip[normalizeLabel(l)] = true
+	}
+	var out []string
+	for _, l := range labels {
+		if !skip[normalizeLabel(l)] {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 func unionLabels(a, b []string) []string {
 	seen := map[string]bool{}
 	var out []string
