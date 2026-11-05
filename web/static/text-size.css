@@ -2,7 +2,8 @@ html{font-size:calc(16px * var(--text-scale,1.12));-webkit-text-size-adjust:100%
 button,a,select,input,textarea{max-width:100%}
 input,select,textarea{font:inherit}
 button,.btn,.seg,nav,.dirbar,.setfoot{flex-wrap:wrap}
-button,.btn,.policy-badge,.banner{white-space:normal;overflow-wrap:anywhere}
+button,.btn{white-space:normal;overflow-wrap:normal;word-break:normal;min-width:min-content}
+.policy-badge,.banner{white-space:normal;overflow-wrap:anywhere}
 .seg{overflow:visible;max-width:100%}
 .seg button{min-width:0;overflow-wrap:normal;flex-shrink:0}
 .setsec .seg button{flex:1 0 auto}
@@ -50,6 +51,9 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 #pgFeed:has(#feedHead.filters-open){overflow-y:auto}
 #pgFeed:has(#feedHead.filters-open) .feed{min-height:12rem;flex-shrink:0}
 .box em{white-space:normal;overflow-wrap:anywhere}
+.detection-labels{position:absolute;inset:4px;z-index:3;display:flex;flex-wrap:wrap;align-content:start;gap:4px;overflow:auto;background:var(--panel)}
+.detection-labels em{font:700 .75rem var(--sans);padding:1px 4px;max-width:100%;overflow-wrap:anywhere}
+.rvkeys .kb{min-width:min-content;overflow-wrap:normal;word-break:normal}
 .rvmain{flex:none;min-height:24rem;height:max(24rem,calc(100dvh - 24rem))}
 .rvimg{min-height:16rem}
 #pgRv,#pgBrief{flex:1 0 auto}

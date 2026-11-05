@@ -487,17 +487,48 @@ test('text size defaults, validates, persists and reloads all sizes',()=>{
 test('text layout keeps enlarged image labels in frame without collisions and handles empty frames',()=>{
  const source=fs.readFileSync(path.join(__dirname,'static/text-layout.js'),'utf8');
  const labels=Array.from({length:2},()=>({style:{},offsetWidth:100,offsetHeight:20,parentElement:{getBoundingClientRect:()=>({left:190,top:3})}}));
- const frame={clientWidth:200,clientHeight:150,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:200,height:150}),querySelectorAll:selector=>selector==='.box em'?labels:[]};
- const context=vm.createContext({window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
+ const frame={clientWidth:200,clientHeight:150,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:200,height:150}),querySelector:()=>null,querySelectorAll:selector=>selector==='.box em'?labels:[]};
+ const context=vm.createContext({getComputedStyle:()=>({fontSize:'16px'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
  vm.runInContext(source,context);
  assert.equal(labels[0].style.maxWidth,'192px');
  assert.equal(labels[0].style.left,'-94px');
  assert.equal(labels[0].style.top,'1px');
- assert.equal(labels[1].style.top,'25px');
+ assert.equal(labels[1].style.top,'24px');
  labels.length=0;
  assert.doesNotThrow(()=>context.window.gsTextLayout());
  frame.getBoundingClientRect=()=>({width:0,height:0});
  assert.doesNotThrow(()=>context.window.gsTextLayout());
+});
+test('dense labels repack around controls and use a readable scroll legend rather than collide when full',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'static/text-layout.js'),'utf8');
+ const labels=[190,200,160,170,150,160,380].map((width,i)=>({
+  textContent:'Detection '+i,style:{},parentElement:{getBoundingClientRect:()=>({left:120,top:80})},
+  get offsetWidth(){return Math.min(width*parseFloat(this.style.fontSize)/18,parseFloat(this.style.maxWidth))},
+  get offsetHeight(){return 26*parseFloat(this.style.fontSize)/18*Math.ceil(width*parseFloat(this.style.fontSize)/18/parseFloat(this.style.maxWidth))}
+ }));
+ const controls={getBoundingClientRect:()=>({left:4,top:4,width:230,height:36})};
+ let legend=null;
+ const frame={clientWidth:334,clientHeight:206,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:334,height:206}),querySelector:()=>legend,querySelectorAll:s=>s==='.box em'?labels:[controls],append:el=>legend=el};
+ const context=vm.createContext({getComputedStyle:()=>({fontSize:'18px',color:'black',backgroundColor:'orange'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:s=>s==='body>.banner'?[]:[frame],createElement:()=>({style:{},dataset:{},setAttribute(){},replaceChildren(...children){this.children=children},remove(){legend=null}})}});
+ vm.runInContext(source,context);
+ assert.equal(legend,null);
+ const rects=[{x:4,y:4,w:230,h:36}];
+ for(const label of labels){
+  const r={x:120+parseFloat(label.style.left),y:80+parseFloat(label.style.top),w:label.offsetWidth,h:label.offsetHeight};
+  assert.ok(r.x>=4&&r.y>=4&&r.x+r.w<=330&&r.y+r.h<=202);
+  assert.ok(rects.every(b=>r.x+r.w<=b.x||r.x>=b.x+b.w||r.y+r.h<=b.y||r.y>=b.y+b.h));
+  assert.ok(parseFloat(label.style.fontSize)>=12);rects.push(r);
+ }
+ frame.clientHeight=60;
+ context.window.gsTextLayout();
+ assert.equal(legend.children.length,labels.length);
+ assert.ok(labels.every(label=>label.style.display==='none'));
+ context.window.gsTextLayout();
+ assert.equal(legend.children.length,labels.length);
+ frame.clientHeight=206;
+ context.window.gsTextLayout();
+ assert.equal(legend,null);
+ assert.ok(labels.every(label=>label.style.display===''));
 });
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();
