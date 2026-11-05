@@ -38,9 +38,9 @@ func main() {
 	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference URL for text embedding, or 'mock'")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	edgeID := flag.String("edge", env("EDGE_ID", ""), "edge id to address downlink to ('' = all)")
-	requireDefault, err := strconv.ParseBool(env("GS_REQUIRE_AUTH", "false"))
+	requireDefault, err := strconv.ParseBool(env("GS_REQUIRE_AUTH", "true"))
 	fatal(err)
-	requireAuth := flag.Bool("require-auth", requireDefault, "require per-unit JWTs on SyncService")
+	requireAuth := flag.Bool("require-auth", requireDefault, "require per-unit JWTs on SyncService (on by default; -require-auth=false is for isolated lab links only)")
 	key := flag.String("signing-key", env("GS_SIGNING_KEY", ""), "HS256 signing key (prefer env or file)")
 	keyFile := flag.String("signing-key-file", env("GS_SIGNING_KEY_FILE", ""), "signing key file")
 	signingKey := flag.String("policy-signing-key", env("GS_POLICY_SIGNING_KEY", ""), "JSON Ed25519 policy signing key")
@@ -54,6 +54,9 @@ func main() {
 	slog.SetDefault(log)
 	secret, err := unitauth.Credential(*key, *keyFile)
 	fatal(err)
+	if *requireAuth && secret == "" {
+		fatal(fmt.Errorf("unit auth is on by default and needs an HS256 signing key: set -signing-key-file / GS_SIGNING_KEY_FILE (or GS_SIGNING_KEY); 'make demo-shore' generates data/unit.key for the local demo; -require-auth=false turns unit auth off for an isolated lab link"))
+	}
 	auth, err := unitauth.New(*requireAuth, secret)
 	fatal(err)
 	operator, devMode, err := opauth.Load(*opToken, *opTokenFile, *devTokenFile)

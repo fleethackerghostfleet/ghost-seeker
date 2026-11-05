@@ -23,8 +23,9 @@ way as the unit sync credential (`internal/unitauth.Credential`):
   `opauth.RequireBearer`: every RPC — including ones added later, e.g. by policy signing — and
   every downlinked image needs `Authorization: Bearer <token>` or gets `401
   {"code":"unauthenticated"}` (constant-time compare). `/healthz` and the static UI stay public.
-  SyncService keeps its own per-unit JWT (`-require-auth`, PR #53); shore logs a warning when it
-  is off.
+  SyncService keeps its own per-unit JWT (`-require-auth`, PR #53), **on by default**: shore
+  refuses to start without a ≥ 32-byte signing key, and `-require-auth=false` (isolated lab links
+  only) logs a warning.
 * **Web app**: `opauth.Sessions` wraps the entire mux. The token stays server-side; the bridge
   (`internal/shorebridge`) adds the bearer to every shore/edge call and to the `/blob/` reverse
   proxy (browser cookies and `Authorization` headers are stripped before forwarding). The
@@ -127,12 +128,15 @@ medium findings (per-unit item ownership) were auto-dismissed as duplicates of t
 and 8 remain open. All open highs are the same root cause — the unit-auth default on the
 ship-to-shore link — and none of them is reachable through the operator console any more.
 
-* **High ×3 (one root cause: unit auth is opt-in in the Go default)** — `SyncService` accepts any
-  caller as any edge (`shore/sync/sync.go`), so an unauthenticated uplink sender can rewrite or
-  relabel items, replace delivered FULL/FACT forms, and read queued operator orders; the third
-  high is the downlink side of the same link (an edge applies an unsigned shore policy). Decision
-  (owner): the Go default stays opt-in so `make demo-*` needs no credentials; **production
-  enforces it** — `deploy/compose` sets `GS_REQUIRE_AUTH=true` with `${GS_SIGNING_KEY:?}` /
+* **High ×3 (one root cause: unit auth was opt-in in the Go default)** — `SyncService` accepted
+  any caller as any edge (`shore/sync/sync.go`), so an unauthenticated uplink sender could rewrite
+  or relabel items, replace delivered FULL/FACT forms, and read queued operator orders; the third
+  high is the downlink side of the same link (an edge applies an unsigned shore policy). **Fixed
+  after the re-run**: `cmd/shore` now defaults to `GS_REQUIRE_AUTH=true` and refuses to start
+  without a signing key; `-require-auth=false` is an explicit, logged opt-out for isolated lab
+  links. `make demo-shore` / `make demo-edge` (and `run-shore` / `run-edge`) share a generated
+  `data/unit.key` and mint a 24 h edge token per start (`data/edge.jwt`), so the demo stays
+  zero-config. Production was already enforcing it — `deploy/compose` sets `GS_REQUIRE_AUTH=true` with `${GS_SIGNING_KEY:?}` /
   `${GS_UNIT_TOKEN:?}` and Zarf defaults `SHORE_REQUIRE_AUTH=true` with required
   `shore-auth`/`edge-auth` Secrets, so they refuse to start without credentials; shore logs a WARN
   at startup when unit auth is off. PR #57 added Ed25519 policy signing, but it is **opt-in**:

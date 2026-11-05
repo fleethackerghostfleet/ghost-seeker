@@ -1,7 +1,7 @@
 GO ?= go
 BIN := bin
 
-.PHONY: all gen build test sim run-shore run-edge compose clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token
+.PHONY: all gen build test sim run-shore run-edge compose clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
 
 all: build
 
@@ -28,11 +28,12 @@ test:
 sim: build      ## FIFO vs prioritized on a contested SATCOM trace, 90 simulated minutes
 	$(BIN)/sim -trace satcom_contested -duration 90m -out sim-results.json
 
-run-shore: build
-	$(BIN)/shore -data data/shore -listen :8080
+run-shore: build demo-key
+	$(BIN)/shore -data data/shore -listen :8080 -signing-key-file $(DEV_KEY)
 
-run-edge: build ## replay the frame zips through the mock analyzer, 1 frame / 2 s
-	$(BIN)/edge -data data/edge -listen :8081 -shore http://localhost:8080 -frames frames -period 2s
+run-edge: build demo-key ## replay the frame zips through the mock analyzer, 1 frame / 2 s
+	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
+	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:8080 -frames frames -period 2s -unit-token-file $(DEV_UNIT_TOKEN)
 
 DEMO := scenarios/ghostfleet_demo
 
@@ -47,15 +48,24 @@ demo-compare: build
 
 # Local demo auth: the first of shore/edge/ghost-seeker to start writes a random
 # operator token to data/operator.token (0600); the others read it, and a
-# browser on localhost is signed in automatically. See docs/SECURITY.md.
+# browser on localhost is signed in automatically. The edge<->shore SyncService
+# requires a unit JWT by default: demo-key writes a random HS256 key to
+# data/unit.key, demo-shore verifies with it and demo-edge mints its own 24 h
+# token from it on every start. See docs/SECURITY.md.
 DEV_TOKEN ?= data/operator.token
+DEV_KEY ?= data/unit.key
+DEV_UNIT_TOKEN ?= data/edge.jwt
+EDGE_ID ?= edge-1
+
+demo-key:        ## create the local demo HS256 unit signing key shared by demo-shore / demo-edge
+	@test -s $(DEV_KEY) || { mkdir -p $(dir $(DEV_KEY)) && umask 077 && head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > $(DEV_KEY); }
 
 demo-token:      ## print the local demo operator token (for curl: -H "Authorization: Bearer $$(make -s demo-token)")
 	@test -s $(DEV_TOKEN) || { mkdir -p $(dir $(DEV_TOKEN)) && umask 077 && head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > $(DEV_TOKEN); }
 	@cat $(DEV_TOKEN)
 
-demo-shore: build
-	$(BIN)/shore -data data/shore -listen :8080 -dev-token-file $(DEV_TOKEN)
+demo-shore: build demo-key
+	$(BIN)/shore -data data/shore -listen :8080 -dev-token-file $(DEV_TOKEN) -signing-key-file $(DEV_KEY)
 
 demo-ui: build   ## Patrick's operator console (index.html / cdr.html) on live shore data + the shaped link the edge talks through (:18080)
 	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN)
@@ -71,8 +81,9 @@ demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unkno
 demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
 	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
 
-demo-edge: build ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
-	$(BIN)/edge -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN)
+demo-edge: build demo-key ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
+	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
+	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
 
 compose:
 	docker compose -f deploy/compose/docker-compose.yml up --build
