@@ -95,8 +95,16 @@ func TestParseDirectiveNearShoreScopesHarborCameras(t *testing.T) {
 			t.Fatalf("%q: rules=%+v unknown=%v", text, rules, unknown)
 		}
 	}
-	rules, _ := ParseDirectiveDetailed("small boats from EO-P7 near shore")
-	if len(rules) != 1 || !reflect.DeepEqual(rules[0].Sources, harbor) {
-		t.Fatalf("explicit harbor camera duplicated: %+v", rules)
+	for _, source := range []string{"EO-P7", "BY-12"} {
+		rules, _ := ParseDirectiveDetailed("small boats from " + source + " near shore")
+		if len(rules) != 1 || !reflect.DeepEqual(rules[0].Sources, []string{source}) {
+			t.Fatalf("named camera %s widened: %+v", source, rules)
+		}
+	}
+	for _, text := range []string{"prioritize small boats not near shore", "small boats away from shore", "small boats far from the shore"} {
+		rules, unknown := ParseDirectiveDetailed(text)
+		if len(rules) != 1 || len(rules[0].Sources) != 0 || len(unknown) == 0 {
+			t.Fatalf("%q: rules=%+v unknown=%v", text, rules, unknown)
+		}
 	}
 }
