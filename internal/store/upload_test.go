@@ -1,11 +1,31 @@
 package store
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
+
+func TestUploadHighRateBudget(t *testing.T) {
+	for _, tc := range []struct {
+		bps     int64
+		elapsed time.Duration
+		want    int64
+	}{
+		{5_000_000_000, 2 * time.Second, 1_250_000_000},
+		{math.MaxInt64, time.Duration(math.MaxInt64), math.MaxInt64},
+	} {
+		s := New(1)
+		s.SetLinkBPS(tc.bps)
+		s.items = []command.Item{{Upload: command.Upload{Bytes: math.MaxInt64}}}
+		s.AdvanceUploads(tc.elapsed)
+		if got := s.items[0].Upload.Sent; got != tc.want {
+			t.Fatalf("rate %d: sent %d, want %d", tc.bps, got, tc.want)
+		}
+	}
+}
 
 func TestUploadBudgetAndPriority(t *testing.T) {
 	s := New(10)

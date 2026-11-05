@@ -1,6 +1,8 @@
 package store
 
 import (
+	"math"
+	"math/big"
 	"sort"
 	"time"
 
@@ -24,9 +26,15 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 	if elapsed <= 0 || s.linkBPS == 0 {
 		return nil
 	}
-	numerator := s.linkBPS*int64(elapsed) + s.uploadRemainder
-	budget := numerator / (8 * int64(time.Second))
-	s.uploadRemainder = numerator % (8 * int64(time.Second))
+	var numerator, quotient, remainder big.Int
+	numerator.Mul(big.NewInt(s.linkBPS), big.NewInt(int64(elapsed)))
+	numerator.Add(&numerator, big.NewInt(s.uploadRemainder))
+	quotient.QuoRem(&numerator, big.NewInt(8*int64(time.Second)), &remainder)
+	s.uploadRemainder = remainder.Int64()
+	budget := int64(math.MaxInt64)
+	if quotient.IsInt64() {
+		budget = quotient.Int64()
+	}
 	queue := make([]int, 0, len(s.items))
 	for i := range s.items {
 		if !s.items[i].Upload.Done {
