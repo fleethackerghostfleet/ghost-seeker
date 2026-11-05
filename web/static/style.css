@@ -401,7 +401,7 @@ header{min-width:0;overflow:hidden}
  #pgFeed #feedFilters{display:inline-flex;order:-1}
  #pgFeed .toolbar button,#pgFeed .toolbar .btn{min-height:44px;min-width:44px}
  #pgFeed .fhead:not(.filters-open) .toolbar>:not(#densSeg):not(#feedFilters),
- #pgFeed .fhead:not(.filters-open)>:not(.toolbar){display:none}
+ #pgFeed .fhead:not(.filters-open)>:not(.toolbar):not(#cameras){display:none}
  #pgFeed .density-label{display:none}
  #pgFeed .feed{padding:8px 10px}
  body:has(#pgFeed.on) header{height:32px;gap:6px;padding:0 6px}
