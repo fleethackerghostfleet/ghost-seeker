@@ -1,6 +1,7 @@
 package command
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -25,11 +26,25 @@ func TestParseEmcon(t *testing.T) {
 }
 
 func TestSplitEmcon(t *testing.T) {
-	mode, rest := SplitEmcon("Ⱥ prioritize submarines and go quiet")
-	if mode != "SILENT" {
-		t.Fatalf("mode = %q, want SILENT", mode)
+	tests := []struct {
+		text, wantMode, wantRest string
+	}{
+		{"Ⱥ prioritize submarines and go quiet", "SILENT", "Ⱥ prioritize submarines and"},
+		{"prioritize ships going dark", "", "prioritize ships going dark"},
+		{"prioritize submarines and go dark", "SILENT", "prioritize submarines and"},
+		{"Go quiet", "SILENT", ""},
+		{"we are going dark", "SILENT", "we are"},
+		{"prioritize ships\n  go dark", "SILENT", "prioritize ships"},
+		{"go quiet for 20 minutes then resume normal", "NORMAL", "for 20 minutes then"},
 	}
-	if rest != "Ⱥ prioritize submarines and" {
-		t.Fatalf("rest = %q", rest)
+	for _, test := range tests {
+		mode, rest := SplitEmcon(test.text)
+		if mode != test.wantMode || rest != test.wantRest {
+			t.Errorf("SplitEmcon(%q) = (%q, %q), want (%q, %q)",
+				test.text, mode, rest, test.wantMode, test.wantRest)
+		}
+		if mode != "" && strings.Contains(strings.ToLower(rest), "go dark") {
+			t.Errorf("rest still contains EMCON phrase: %q", rest)
+		}
 	}
 }

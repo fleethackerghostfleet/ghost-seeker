@@ -20,8 +20,8 @@ var emconPhrases = map[string][]string{
 }
 
 var emconMatchers = func() []struct {
-	mode string
-	re   *regexp.Regexp
+	mode, phrase string
+	re           *regexp.Regexp
 } {
 	type entry struct {
 		mode, phrase string
@@ -41,17 +41,19 @@ var emconMatchers = func() []struct {
 		return entries[i].phrase < entries[j].phrase
 	})
 	out := make([]struct {
-		mode string
-		re   *regexp.Regexp
+		mode, phrase string
+		re           *regexp.Regexp
 	}, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, struct {
-			mode string
-			re   *regexp.Regexp
-		}{e.mode, regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(e.phrase) + `\b`)})
+			mode, phrase string
+			re           *regexp.Regexp
+		}{e.mode, e.phrase, regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(e.phrase) + `\b`)})
 	}
 	return out
 }()
+
+var emconIntentSuffix = regexp.MustCompile(`(?i)\b(?:and|then|now|please|we are|we're|all units)$`)
 
 // ParseEmcon returns the EMCON mode ("SILENT", "BURST" or "NORMAL") a
 // directive asks for, or "" when it says nothing about transmit posture.
@@ -68,6 +70,10 @@ func SplitEmcon(text string) (mode, rest string) {
 	spans := make([][2]int, 0)
 	for _, m := range emconMatchers {
 		for _, loc := range m.re.FindAllStringIndex(text, -1) {
+			if (strings.HasPrefix(m.phrase, "go ") || strings.HasPrefix(m.phrase, "going ")) &&
+				!emconPostureHasContext(text, loc[0]) {
+				continue
+			}
 			if loc[0] > bestPos {
 				best, bestPos = m.mode, loc[0]
 			}
@@ -92,4 +98,20 @@ func SplitEmcon(text string) (mode, rest string) {
 	}
 	out.WriteString(text[cursor:])
 	return best, strings.TrimSpace(out.String())
+}
+
+func emconPostureHasContext(text string, start int) bool {
+	rawPrefix := text[:start]
+	if lineBreak := strings.LastIndexByte(rawPrefix, '\n'); lineBreak >= 0 &&
+		strings.TrimSpace(rawPrefix[lineBreak+1:]) == "" {
+		return true
+	}
+	prefix := strings.TrimSpace(rawPrefix)
+	if prefix == "" {
+		return true
+	}
+	if strings.ContainsRune(";,.:!", rune(prefix[len(prefix)-1])) {
+		return true
+	}
+	return emconIntentSuffix.MatchString(prefix)
 }
