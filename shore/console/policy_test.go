@@ -141,3 +141,41 @@ func TestSetPolicyConcurrentVersionsAreDistinct(t *testing.T) {
 		t.Fatalf("got %d unique versions, want %d", len(seen), count)
 	}
 }
+
+func TestSetPolicyPreservesLayerEMCONExpiryWithoutOperatorAuth(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	svc := &Service{St: st, Clk: clock.Real{}}
+	now := time.Now()
+	policyExpiry := now.Add(2 * time.Hour).UnixMilli()
+	emconExpiry := now.Add(30 * time.Minute).UnixMilli()
+	request := connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+		ExpiresAtUnixMs: policyExpiry,
+		Layers: []*pb.PolicyLayer{{
+			Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO-DDG51",
+			Emcon: &pb.EmconSetting{
+				Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO-DDG51",
+				Echelon: pb.Echelon_ECHELON_SHIP, ExpiresAtUnixMs: emconExpiry,
+			},
+		}},
+	}})
+	response, err := svc.SetPolicy(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.GetPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, policy := range []*pb.Policy{response.Msg.Policy, stored} {
+		if len(policy.Layers) != 1 || policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() != emconExpiry {
+			t.Fatalf("layer EMCON expiry changed: %+v", policy.Layers)
+		}
+		if policy.GetExpiresAtUnixMs() != policyExpiry {
+			t.Fatalf("policy expiry=%d, want requested %d", policy.GetExpiresAtUnixMs(), policyExpiry)
+		}
+	}
+}

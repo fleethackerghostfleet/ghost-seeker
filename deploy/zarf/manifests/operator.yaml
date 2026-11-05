@@ -37,12 +37,6 @@ spec:
                 secretKeyRef:
                   name: operator-auth
                   key: operator-token
-            - name: GS_OPERATOR_JWT
-              valueFrom:
-                secretKeyRef:
-                  name: operator-auth
-                  key: operator-jwt
-                  optional: true
           ports:
             - name: http
               containerPort: 8090
