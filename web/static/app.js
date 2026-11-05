@@ -272,11 +272,11 @@ async function init(){
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
- $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
- const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showDuplicates').checked=f.showDuplicates;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';closeDetail();renderFeed(true)};
+ $('srcSel').onchange=e=>{gsSettings.setFeed({sensor:e.target.value});syncFeedFilters()};
  $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
- $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent'});state.tier='all';syncFeedFilters();location.hash='#feed'};
+ $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent',tier:'all'});syncFeedFilters();location.hash='#feed'};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
+ $('clearFeedFilters').onclick=resetFeedFilters;
  window.addEventListener('gs:feed-filters',syncFeedFilters);syncFeedFilters();
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
  workbench.init();
@@ -285,7 +285,7 @@ async function init(){
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderFeed()};
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;gsSettings.density(state.dens)};
  $('feedFilters').onclick=toggleFeedFilters;
- $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
+ $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;gsSettings.setFeed({tier:b.dataset.t});syncFeedFilters()};
  $('pauseBtn').onclick=toggleHold;$('live').onclick=toggleHold;$('wbResume').onclick=toggleHold;
  $('emconControl').onclick=async e=>{const button=e.target.closest('#emconSeg [data-mode]');if(!button||button.disabled)return;try{const result=await request('/api/policy/emcon','POST',{mode:button.dataset.mode});if(result.conflicts?.length)toast(gsPolicy.conflictToast(result.conflicts))}catch(error){if(!error.policyConflicts)toast(error.message)}};
  $('polRaw').oninput=()=>{policyRawTouched=true};
@@ -326,6 +326,15 @@ function route(){
  if(state.page==='feed')renderFeed(true);else if(state.page==='details'){closeDetail();renderDetails()}else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
+function syncFeedFilters(){
+ const f=gsSettings.get().feed;
+ state.src=f.sensor&&SRC[f.sensor]?f.sensor:'ALL';state.tier=f.tier||'all';
+ if(f.sensor&&state.src!==f.sensor)gsSettings.setFeed({sensor:state.src});
+ $('srcSel').value=state.src;$('showDuplicates').checked=f.showDuplicates;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';
+ $('clearFeedFilters').hidden=state.src==='ALL'&&state.tier==='all'&&f.review==='all'&&f.showDuplicates;
+ closeDetail();renderFeed(true);renderStats();renderRp();
+}
+function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:true});syncFeedFilters()}
 function humanReviewed(it){return !!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed)||humanSent(it))}
 function humanSent(it){return !!(it.sent&&!it.autoSent||it.fullRes)}
 function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}

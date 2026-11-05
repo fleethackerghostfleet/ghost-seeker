@@ -221,16 +221,42 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
 });
 test('feed filters default to showing duplicates, persist, validate, and return defensive copies',()=>{
  for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
-  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all"}');
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all","sensor":"ALL","tier":"all"}');
  }
  const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
  settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
  settings.setFeed({review:'sent'});
- assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all'});
  assert.equal(saved().bar,'right');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'sent');
  settings.setFeed({showDuplicates:true,review:'bad'});
- assert.deepEqual(saved().feed,{showDuplicates:true,review:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+});
+test('sensor and priority filters persist, validate, and clear with all feed filters',()=>{
+ const stored=settingsContext('{}');
+ stored.settings.setFeed({sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
+ const reloaded=settingsContext(JSON.stringify(stored.saved()));
+ assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
+ const context=setup();context.gsSettings=reloaded.settings;
+ vm.runInContext("SRC={ALL:{id:'ALL'},'EO-P7':{id:'EO-P7'}};closeDetail=()=>{};syncFeedFilters()",context);
+ assert.equal(vm.runInContext('state.src',context),'EO-P7');
+ assert.equal(vm.runInContext('state.tier',context),'2');
+ assert.equal(context.$('clearFeedFilters').hidden,false);
+ vm.runInContext('resetFeedFilters()',context);
+ assert.equal(vm.runInContext('state.src',context),'ALL');
+ assert.equal(vm.runInContext('state.tier',context),'all');
+ assert.equal(context.$('clearFeedFilters').hidden,true);
+ assert.deepEqual(reloaded.saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ reloaded.settings.setFeed({sensor:'missing',tier:'1'});
+ vm.runInContext('syncFeedFilters()',context);
+ assert.equal(vm.runInContext('state.src',context),'ALL');
+ assert.equal(reloaded.saved().feed.sensor,'ALL');
+ for(const invalid of [{sensor:42,tier:2},{sensor:'<bad>',tier:'5'},{sensor:'',tier:null}]){
+  reloaded.settings.setFeed(invalid);
+  assert.equal(reloaded.settings.get().feed.sensor,'ALL');
+  assert.equal(reloaded.settings.get().feed.tier,'all');
+ }
+ assert.match(html,/id="clearFeedFilters"[^>]*>Clear filters/);
 });
 function feedContext(){
  const context=setup();
@@ -326,7 +352,7 @@ test('human review filters separate people from automatic escalation and list ne
 });
 test('What I sent navigates from review to the filtered imagery feed',()=>{
  const context=feedContext();
- vm.runInContext("location={hash:'#review'};state.page='rv';state.tier='1';gsSettings.setFeed=f=>Object.assign(filters,f);syncFeedFilters=()=>{}",context);
+ vm.runInContext("location={hash:'#review'};state.page='rv';state.tier='1';gsSettings.setFeed=f=>Object.assign(filters,f);syncFeedFilters=()=>{state.tier=filters.tier}",context);
  const start=source.indexOf(" $('rvSent').onclick="),end=source.indexOf('\n',start);
  vm.runInContext(source.slice(start,end),context);
  vm.runInContext("$('rvSent').onclick()",context);

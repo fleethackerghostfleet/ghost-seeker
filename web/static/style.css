@@ -460,6 +460,7 @@ header{min-width:0;overflow:hidden}
 .theme-day .wb textarea,.theme-day .wb input[type=text]{background:#fff;color:var(--text);border-color:#b6c5d1}
 #pgFeed{overflow:hidden;min-height:0}
 #feedFilters{display:none}
+#pgFeed #clearFeedFilters[hidden]{display:none}
 @media(max-width:900px){
  #pgFeed .strip .st{flex-shrink:0}
 }
@@ -484,8 +485,9 @@ header{min-width:0;overflow:hidden}
  #pgFeed .toolbar>*{order:1}
  #pgFeed #densSeg{order:-2;flex-wrap:nowrap}
  #pgFeed #feedFilters{display:inline-flex;order:-1}
+ #pgFeed #clearFeedFilters{order:-1}
  #pgFeed .toolbar button,#pgFeed .toolbar .btn{min-height:44px;min-width:44px}
- #pgFeed .fhead:not(.filters-open) .toolbar>:not(#densSeg):not(#feedFilters),
+ #pgFeed .fhead:not(.filters-open) .toolbar>:not(#densSeg):not(#feedFilters):not(#clearFeedFilters),
  #pgFeed .fhead:not(.filters-open)>:not(.toolbar):not(#cameras){display:none}
  #pgFeed .density-label{display:none}
  #pgFeed .feed{padding:8px 10px}
