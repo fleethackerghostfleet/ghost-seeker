@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 
 def test_day_and_twilight_counts_are_disjoint(tmp_path, monkeypatch):
     scripts = Path(__file__).resolve().parents[1]/"scripts"
@@ -32,3 +34,25 @@ def test_day_and_twilight_counts_are_disjoint(tmp_path, monkeypatch):
     assert metrics["gate_images"] == metrics["night_contacts"] + metrics["day_images"] + metrics["twilight_images"]
     assert "contacts" not in summary
     assert len(json.loads((tmp_path/"reports"/"hard_dev.json").read_text())["contacts"]) == len(labels)
+
+
+def test_boost_evaluation_versioned_dump(tmp_path, monkeypatch):
+    scripts = Path(__file__).resolve().parents[1]/"scripts"
+    spec = importlib.util.spec_from_file_location("boost_evaluation", scripts/"nightlights_boost_eval.py")
+    evaluation = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(evaluation)
+    monkeypatch.setattr(evaluation, "ROOT", tmp_path)
+    with pytest.raises(FileNotFoundError):
+        evaluation.evaluate("dev", "missing")
+    observations = tmp_path/"data/nightlights/reports"
+    observations.mkdir(parents=True)
+    summaries = tmp_path/"edgeml/reports/nightlights"
+    summaries.mkdir(parents=True)
+    legacy = summaries/"boost_gate_dev.json"
+    legacy.write_text("unchanged")
+    (observations/"easy_dev_baseline.json").write_text(json.dumps(dict(contacts=[])))
+    evaluation.evaluate("dev", "baseline", "easy")
+    output = json.loads((summaries/"boost_gate_easy_dev_baseline.json").read_text())
+    assert output["metrics"]["with_gate"]["all"]["contacts"] == 0
+    assert output["observations"] == "data/nightlights/reports/easy_dev_baseline.json"
+    assert legacy.read_text() == "unchanged"

@@ -87,7 +87,16 @@ def detect_lights(image, box, pad=0.2, max_candidates=8):
     v = hsv[:, :, 2]
     local_background = cv2.GaussianBlur(v.astype(np.float32), (0, 0), 4)
     top = cv2.morphologyEx(v, cv2.MORPH_TOPHAT, np.ones((15, 15), np.uint8))
-    mask = ((v >= 100) & (top >= 65) & (v-local_background >= 65)).astype(np.uint8)
+    sharp_mask = ((v >= 100) & (top >= 65) & (v-local_background >= 65)).astype(np.uint8)
+    _, sharp_labels, sharp_stats, sharp_centers = cv2.connectedComponentsWithStats(sharp_mask)
+    response = cv2.GaussianBlur(v.astype(np.float32), (0, 0), .7)-local_background
+    maxima = (response == cv2.dilate(response, np.ones((5, 5), np.uint8))) & (response > 8) & (v > 45)
+    for index, (stat, center) in enumerate(zip(sharp_stats[1:], sharp_centers[1:]), 1):
+        if stat[4] <= 70 and max(stat[2:4]) <= 13:
+            maxima[sharp_labels == index] = False
+            sx, sy = np.rint(center).astype(int)
+            maxima[sy, sx] = True
+    mask = maxima.astype(np.uint8)
     n, labels, stats, centers = cv2.connectedComponentsWithStats(mask)
     lights = []
     for i in range(1, n):
@@ -104,25 +113,69 @@ def detect_lights(image, box, pad=0.2, max_candidates=8):
         ring = (labels[ly:ry, lx:rx] != i)
         background = patch[ring]
         peak = float(v[labels == i].max())
-        if not len(background) or peak-float(np.median(background)) < 70 or float(np.mean(background > peak*.55)) > .25:
+        if not len(background) or peak-float(np.median(background)) < 30:
             continue
-        if float(background.std()) > 45:
-            continue
+        sharp_id = sharp_labels[cy0, cx0]
+        sharp = False
+        if sharp_id:
+            _, _, sw, sh, sa = sharp_stats[sharp_id]
+            sharp_background = patch[sharp_labels[ly:ry, lx:rx] != sharp_id]
+            sharp = (sa <= 70 and max(sw, sh) <= 13 and max(sw, sh)/max(1, min(sw, sh)) <= 3
+                     and sa/(sw*sh) >= .5 and len(sharp_background) > 0
+                     and float(sharp_background.std()) < 15
+                     and peak-float(np.median(sharp_background)) >= 200)
         component = (labels == i).astype(np.uint8)
-        halo = cv2.dilate(component, np.ones((5, 5), np.uint8)).astype(bool)
-        pixels = hsv[halo & (v >= max(45, peak*.2))]
-        chromatic = pixels[(pixels[:, 1] >= 85) & (pixels[:, 2] >= max(50, peak*.25))]
+        halo = cv2.dilate(component, np.ones((7, 7), np.uint8)).astype(bool)
+        pixels = hsv[halo & (v >= max(30, peak*.15))]
+        chromatic = pixels[(pixels[:, 1] >= 85) & (pixels[:, 2] >= max(35, peak*.15))]
+        chromatic_fraction = len(chromatic)/max(1, len(pixels))
         if len(chromatic) >= max(1, len(pixels)*.15):
             pixels = chromatic
         hue, sat = np.median(pixels[:, 0]), np.median(pixels[:, 1])
         # Red wraps around the hue origin.
         if np.mean((pixels[:, 0] < 18) | (pixels[:, 0] >= 170)) > 0.5:
-            hue = 0
+            hue = float(np.median((pixels[:, 0].astype(float)+90) % 180-90)) % 180
         cx, cy = centers[i] + [x0, y0]
         if cy > y+h*.85:
             continue
-        lights.append(dict(colour=colour(hue, sat), x=float(cx), y=float(cy),
+        core_sat = float(hsv[cy0, cx0, 1])
+        yy, xx = np.indices(v.shape)
+        annulus = ((xx-cx0)**2+(yy-cy0)**2 > 4) & ((xx-cx0)**2+(yy-cy0)**2 <= 16) & (v > max(30, peak*.15))
+        local_sat = float(np.median(hsv[:, :, 1][annulus])) if annulus.any() else core_sat
+        if core_sat < 70 and local_sat < 100 and chromatic_fraction < .4:
+            classified, margin = 'white', 1-local_sat/160
+        elif hue < 24 or hue >= 170:
+            classified = 'red'
+            margin = max(.1, 1-min(hue, 180-hue)/40)
+        elif hue < 29:
+            classified, margin = 'ambiguous_orange', .1
+        else:
+            classified, margin = colour(hue, sat), .9
+        # Water reflections support vessel association. The synthetic benchmark
+        # draws these only for vessel lights, so its discrimination is optimistic.
+        bx = int(round(cx))
+        by = max(0, int(y+h))
+        end = min(ih, by+max(5, int(h*.5)))
+        strip = image[by:end, max(0, bx-2):min(iw, bx+3)].astype(float)
+        sides = image[by:end, max(0, bx-12):min(iw, bx+13)].astype(float)
+        if strip.size and sides.size:
+            excess = strip-np.median(sides, axis=1)[:, None, :]
+            b, g, r = np.moveaxis(excess, -1, 0)
+            compatible = {'red': (r > b*1.3) & (r > g*1.1),
+                          'green': (g > r*1.3) & (g > b*1.1),
+                          'blue': (b > r*1.3) & (b > g*1.1),
+                          'yellow': (r > b*1.5) & (g > b*1.5),
+                          'white': excess.min(axis=2) > excess.max(axis=2)*.5}.get(classified, np.zeros_like(r, dtype=bool))
+            strength = np.where(compatible, excess.max(axis=2), 0).max(axis=1)
+            support = max(0., float(np.mean(np.sort(strength)[-max(3, int(h*.08)):]))-12)
+        else:
+            support = 0.
+        lights.append(dict(colour=classified, x=float(cx), y=float(cy),
                            relative=[float((cx-x)/w), float((cy-y)/h)], flashing=False,
+                           reflection=support,
+                           sharp=bool(sharp),
+                           colour_margin=float(margin),
+                           conf=float(np.clip(min((peak-float(np.median(background)))/160, margin), 0, 1)),
                            sodium_ambiguous=bool(sat >= 85 and 10 <= np.median(pixels[:, 0]) < 27),
                            contrast=peak-float(np.median(background))))
     full_v = image.max(axis=2)
@@ -132,10 +185,29 @@ def detect_lights(image, box, pad=0.2, max_candidates=8):
     def pier_row(light):
         xs = sorted(c[0] for c in row_centers if abs(c[1]-light["y"]) <= 9)
         gaps = np.diff(xs)
-        return light["colour"] in {"white", "yellow"} and len(xs) >= 6 and len(gaps) and np.median(gaps) > 3 and float(np.mean(abs(gaps-np.median(gaps)) < np.median(gaps)*.45)) >= .7
-    lights = [p for p in lights if not pier_row(p) and sum(abs(p["y"]-q["y"]) < 4 for q in lights) < 4
-              and (not p["sodium_ambiguous"] or any(q is not p and abs(q["relative"][0]-p["relative"][0]) < .09
-                                                    and 4 < abs(q["y"]-p["y"]) < h*.6 for q in lights))]
+        return light["colour"] in {"white", "yellow"} and len(xs) >= 6 and len(gaps) and np.median(gaps) > 3
+    # Co-column emitters can share a water streak when their reflections overlap.
+    for p in lights:
+        p['reflection'] = max(q['reflection'] for q in lights if abs(q['x']-p['x']) <= 2)
+    associated = [p for p in lights if not pier_row(p) and (p['reflection'] >= 12 or
+                  p['reflection'] >= 5 and any(q is not p and q['colour'] == p['colour']
+                                              and abs(q['x']-p['x']) <= 2
+                                              and abs(q['y']-p['y']) >= 3 for q in lights))]
+    lights = associated or [p for p in lights if p['sharp'] and not p['sodium_ambiguous'] and not pier_row(p)
+                            and sum(abs(p['y']-q['y']) < 4 for q in lights) < 4]
+    for p in lights:
+        column = [q for q in lights if abs(q['x']-p['x']) <= max(2, w*.04)]
+        stack = min(1., len(column)/3)
+        association = min(1., p['reflection']/40) if associated else float(p['sharp'])
+        p['conf'] = float(np.clip(.25*p['colour_margin'] + .25*min(1., p['contrast']/180)
+                                 + .15*association + .35*stack, 0, 1))
+        # A resolved, bright, colour-pure pair is not weaker merely because it
+        # contains two emitters rather than three, or has a faint water streak.
+        aligned = [q for q in column if q is not p and abs(q['y']-p['y']) >= 3]
+        if aligned:
+            purity = float(np.clip((p['colour_margin']-.4)/.45, 0, 1))
+            clarity = min(purity, p['contrast']/160)
+            p['conf'] = max(p['conf'], float(np.clip(.95*clarity, 0, 1)))
     lights = sorted(lights, key=lambda light: -light["contrast"])[:max_candidates]
     return sorted(lights, key=lambda light: (light["y"], light["x"]))
 
@@ -157,6 +229,8 @@ def aspect(lights):
 
 def interpret(lights, night, modality="EO", rules=None, signal=None):
     result = dict(rule_id=None, aspect="unknown", line="No recognized light pattern", boost=0.0)
+    pattern_conf = min((p.get('conf', 1.) for p in lights), default=0.)
+    result['pattern_conf'] = pattern_conf
     if modality.upper() in {"IR", "SAR", "THERMAL", "RADAR"}:
         return dict(result, line="Colour not observable in IR/SAR imagery; colour rules skipped")
     if not night:
@@ -192,11 +266,13 @@ def interpret(lights, night, modality="EO", rules=None, signal=None):
         if matches and (flashing is None or any(p["flashing"] == flashing for p in lights)):
             assisted = "signal" in pattern and signal == pattern["signal"]
             low_confidence = not assisted and colours != sorted(pattern["colours"])
+            uncertain = not assisted and pattern_conf < load_config()['lights']['pattern_conf_threshold']
             return dict(result, rule_id=rule["id"], line=rule["line"],
-                        boost=0.0 if low_confidence else rule["priority_boost"],
+                        boost=0.0 if low_confidence or uncertain else rule["priority_boost"],
                         ref=rule["ref"], severity=rule["severity"], assisted=assisted,
-                        low_confidence=low_confidence,
-                        confidence_note="extra unexplained lights — verify, no priority boost" if low_confidence else "")
+                        low_confidence=low_confidence or uncertain,
+                        confidence_note="extra unexplained lights — verify, no priority boost" if low_confidence else
+                        "uncertain light evidence — verify, no priority boost" if uncertain else "")
     return result
 
 
@@ -216,6 +292,9 @@ def analyze(frames, box, modality="EO", timestamp=None, lat=None, lon=None, rule
     for light in lights:
         present = [any(p["colour"] == light["colour"] and math.hypot(p["x"]-light["x"], p["y"]-light["y"]) < 6 for p in obs) for obs in observations]
         light["flashing"] = any(present) and not all(present)
+        light['persistence'] = sum(present)
+    if len(frames) == 4:
+        lights = [p for p in lights if p['persistence'] >= 2]
     lights = sorted(lights, key=lambda light: -light["contrast"])[:8]
     result = dict(decision, lights=lights, interpretation=interpret(lights, decision["night"], modality, rules, signal))
     cfg = config or load_config()

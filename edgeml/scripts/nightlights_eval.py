@@ -14,7 +14,7 @@ from nightlights_synth import observability
 
 
 ROOT = Path(__file__).resolve().parents[2]
-COLOURS = ["red", "green", "white", "yellow", "blue"]
+COLOURS = ["red", "green", "white", "yellow", "blue", "ambiguous_orange"]
 
 
 def evaluate(data, split, report, tier="easy", version=""):
@@ -99,7 +99,7 @@ def evaluate(data, split, report, tier="easy", version=""):
         lines.append(f"- {key}: {metrics[key]:.4f}")
     lines += ["", "| Rule | Correct / total | Accuracy |", "|---|---:|---:|"]
     lines += [f"| {r} | {v['correct']} / {v['total']} | {v['accuracy']:.4f} |" for r, v in metrics["per_rule"].items()]
-    lines += ["", "## Colour confusion (position-matched)", "", "| GT \\ predicted | " + " | ".join(COLOURS+["miss"]) + " |", "|---|"+"---:|"*6]
+    lines += ["", "## Colour confusion (position-matched)", "", "| GT \\ predicted | " + " | ".join(COLOURS+["miss"]) + " |", "|---|"+"---:|"*(len(COLOURS)+1)]
     lines += [f"| {c} | " + " | ".join(str(confusion[c][p]) for p in COLOURS+["miss"]) + " |" for c in COLOURS+["background"]]
     lines += ["", "Unmatched predictions: " + json.dumps(dict(false_positives)), "", "False-positive sources: " + json.dumps(dict(fp_sources)), ""] + metrics["notes"]
     lines += ["", "Observability strata (all remain in overall scores): " + json.dumps(metrics["observability"])]
@@ -141,7 +141,7 @@ def library(report):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", default="data/nightlights")
-    p.add_argument("--split", choices=["dev", "test", "test2"])
+    p.add_argument("--split", choices=["dev", "test", "test2", "test3"])
     p.add_argument("--version", default="")
     p.add_argument("--tier", choices=["easy", "hard"], default="easy")
     p.add_argument("--library", action="store_true")

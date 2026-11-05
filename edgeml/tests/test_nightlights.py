@@ -47,6 +47,46 @@ def test_boost_requires_complete_pattern():
     assert interpret(stack, True, signal="invalid")["boost"] == 0
 
 
+def test_pattern_confidence_preserves_rule_and_strict_coverage(monkeypatch):
+    from edgeml.nightlights import core
+    monkeypatch.setattr(core, 'load_config', lambda: {'lights': {'pattern_conf_threshold': .85}})
+    stack = [dict(point('red', y=30), conf=.9), dict(point('red', y=60), conf=.8)]
+    result = interpret(stack, True)
+    assert result['rule_id'] == 'nuc' and result['boost'] == 0
+    assert result['pattern_conf'] == .8
+    stack[1]['conf'] = .95
+    assert interpret(stack, True)['boost'] == .9
+    assert interpret(stack+[dict(point('white', x=180), conf=1)], True)['boost'] == 0
+    assert interpret([], True)['pattern_conf'] == 0
+
+
+def test_four_frame_persistence_keeps_flashing_not_singletons(monkeypatch):
+    from edgeml.nightlights import core
+    red = dict(point('red'), contrast=200., conf=.9)
+    white = dict(point('white', x=180), contrast=200., conf=.9)
+    observations = iter([[red, white], [], [red], []])
+    monkeypatch.setattr(core, 'detect_lights', lambda *args, **kwargs: next(observations) if not kwargs else [])
+    image = np.zeros((100, 200, 3), np.uint8)
+    result = analyze([image]*4, [0, 0, 200, 100])
+    assert len(result['lights']) == 1
+    assert result['lights'][0]['colour'] == 'red'
+    assert result['lights'][0]['persistence'] == 2 and result['lights'][0]['flashing']
+
+
+def test_bright_resolved_pair_confidence_with_faint_reflection():
+    image = np.zeros((160, 200, 3), np.uint8)
+    for y in (35, 60):
+        cv2.circle(image, (105, y), 3, (0, 0, 255), -1)
+    cv2.line(image, (105, 103), (105, 120), (0, 0, 80), 1)
+    image = cv2.GaussianBlur(image, (3, 3), .7)
+    result = analyze([image]*4, [40, 20, 80, 80])
+    assert len(result['lights']) == 2
+    assert all(0 <= light['conf'] <= 1 for light in result['lights'])
+    assert result['interpretation']['pattern_conf'] >= .9
+    assert result['interpretation']['rule_id'] == 'nuc'
+    assert result['interpretation']['boost'] == .9
+
+
 def test_boost_metric_denominators():
     module = runpy.run_path(str(Path(__file__).parents[1]/"scripts/nightlights_boost_eval.py"))
     rules = {r["id"]: r for r in load_rules()}
@@ -56,6 +96,20 @@ def test_boost_metric_denominators():
     assert result["false_boost_rate"] == 1 and result["false_boost_per_contact"] == .5
     assert result["missed_boost_rate"] == 1
     assert summarize([], rules)["false_boost_rate"] is None
+
+
+def test_urgent_boost_metrics_include_background_and_confusions():
+    module = runpy.run_path(str(Path(__file__).parents[1]/"scripts/nightlights_boost_eval.py"))
+    rules = {r["id"]: r for r in load_rules()}
+    summarize = module["summarize"]
+    result = summarize([dict(truth="ram", rule_id="ram", boost=.9),
+                        dict(truth="nuc", rule_id="ram", boost=.9),
+                        dict(truth=None, rule_id="nuc", boost=.9),
+                        dict(truth="port", rule_id="port", boost=0)], rules)
+    assert result["urgent_rules"]["ram"] == dict(true_urgent_boosts=1, false_urgent_boosts=1)
+    assert result["urgent_rules"]["nuc"] == dict(true_urgent_boosts=0, false_urgent_boosts=1)
+    assert result["false_boosts"] == 2
+    assert summarize([], rules)["urgent_rules"]["ram"]["true_urgent_boosts"] == 0
 
 
 def test_gate_image_and_solar():
