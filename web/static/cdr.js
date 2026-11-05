@@ -65,15 +65,19 @@ function renderLearned(directives){
  root.hidden=!learned.length;
  root.innerHTML=learned.length?`<b>Learned from operator</b><ul>${learned.map(d=>`<li>${esc(d.text.slice(prefix.length).trim())}</li>`).join('')}</ul>`:'';
 }
+let queueTab,queueSelection;
 function renderQueue(follow=false){
  const queue=$('qlist'),scroll=queue.scrollTop;
+ const tabChanged=queueTab!==view.tab;
+ follow=follow||tabChanged||queueSelection!==view.sel;
+ queueTab=view.tab;queueSelection=view.sel;
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
   <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
   <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
- queue.scrollTop=scroll;
+ queue.scrollTop=tabChanged?0:scroll;
  if(follow){
   const selected=queue.querySelector('.row.on');
   if(selected){
