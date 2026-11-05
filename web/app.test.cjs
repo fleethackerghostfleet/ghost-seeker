@@ -9,6 +9,10 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('mobile review scrolls the whole page without shrinking its image track',()=>{
+ assert.match(css,/#pgRv\{overflow-y:auto\}/);
+ assert.match(css,/#pgRv \.rvmain\{flex:none;grid-template-rows:minmax\(220px,38vh\) auto;overflow:visible\}/);
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
