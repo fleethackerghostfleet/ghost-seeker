@@ -3,31 +3,34 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {test}=require('node:test');
 const read=file=>fs.readFileSync(path.join(__dirname,'static',file),'utf8');
-const css=read('contrast.css'),svg=read('red-light.svg');
+const css=read('themes.css'),svg=read('red-light.svg');
 const matrix=svg.match(/values="([^"]+)"/)[1].trim().split(/\s+/).map(Number);
 const rgb=hex=>hex.length===4?[...hex.slice(1)].map(c=>parseInt(c+c,16)):hex.slice(1).match(/../g).map(c=>parseInt(c,16));
 const red=c=>[0,1,2].map(row=>matrix[row*5]*c[0]+matrix[row*5+1]*c[1]+matrix[row*5+2]*c[2]+matrix[row*5+4]*255);
 const luminance=c=>c.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
 const contrast=(a,b)=>(Math.max(luminance(a),luminance(b))+.05)/(Math.min(luminance(a),luminance(b))+.05);
-function palette(selector){return Object.fromEntries([...css.match(new RegExp(selector+'\\{([^}]+)'))[1].matchAll(/--([\w]+):(#[\da-f]+);?/g)].map(([,key,value])=>[key,rgb(value)]))}
-test('both consoles load contrast rules and the red filter also covers top-layer dialogs',()=>{
- for(const file of ['index.html','cdr.html'])assert.match(read(file),/href="\/contrast.css"/);
+function palette(selector){return Object.fromEntries([...css.match(new RegExp(selector+'(?:,[^{]+)?\\{([^}]+)'))[1].matchAll(/--([\w]+):(#[\da-f]+);?/g)].map(([,key,value])=>[key,rgb(value)]))}
+test('both consoles share red UI tokens and one imagery filter without double filtering dialogs',()=>{
+ for(const file of ['index.html','cdr.html'])assert.match(read(file),/href="\/themes.css"/);
  assert.match(read('cdr.html'),/<body class="commander">/);
- assert.match(css,/body\.night,body\.night dialog\{filter:url\('\/red-light.svg#red'\)\}/);
+ assert.match(css,/body\{--night-filter:url\('\/red-light.svg#red'\)\}/);
+ assert.match(css,/body\.night,body\.night dialog\{filter:none\}/);
+ assert.match(css,/body\.night :is\(img,canvas,svg\)\{filter:var\(--night-filter\)!important\}/);
+ assert.match(css,/\.theme-red \.strip\{background:var\(--panel2\)\}/);
  assert.doesNotMatch(read('style.css'),/body\.night\{filter:/);
  assert.match(svg,/color-interpolation-filters="sRGB"/);
  assert.equal(matrix.length,20);
  assert.deepEqual(matrix.slice(15),[0,0,0,1,0]);
 });
-test('red UI tokens pass AA after the actual sRGB filter matrix, with no green or blue light',()=>{
+test('direct red UI tokens pass AA and the imagery matrix emits no green or blue light',()=>{
  const p=palette('body\\.theme-red');
  for(const name of ['text','muted','accent','gold','good','p1','p2','p3','p4','human']){
-  const fg=red(p[name]);
+  const fg=p[name];
   assert.ok(fg[0]>0);assert.equal(fg[1],0);assert.equal(fg[2],0);
   assert.ok(luminance(fg)<=.2126+.00001,'red cannot emit white-level luminance');
-  for(const bg of ['bg','panel','panel2','panel3'])assert.ok(contrast(fg,red(p[bg]))>=4.5,`${name} on ${bg}`);
+  for(const bg of ['bg','panel','panel2','panel3'])assert.ok(contrast(fg,p[bg])>=4.5,`${name} on ${bg}`);
  }
- assert.ok(contrast(red(p.text),[0,0,0])>=4.5,'solid red image labels need black ink');
+ assert.ok(contrast(p.text,[0,0,0])>=4.5,'solid red image labels need black ink');
  assert.deepEqual(red([0,0,0]),[0,0,0]);
  assert.deepEqual(red([255,0,0]).map(Math.round),[54,0,0]);
  assert.deepEqual(red([0,255,0]).map(Math.round),[182,0,0]);

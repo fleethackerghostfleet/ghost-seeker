@@ -33,24 +33,24 @@ test('theme changes persist across Commander reloads and remove stale theme clas
  assert.equal(result.classes.has('night'),false);
  assert.ok(commanderSettings(result.saved()).classes.has('theme-day'));
 });
-test('both consoles load shared night filtering, including top-layer dialogs and imagery',()=>{
+test('both consoles share red UI styling and the same imagery filter',()=>{
  for(const name of ['index.html','cdr.html'])assert.match(read(name),/<link rel="stylesheet" href="\/themes.css">/);
  assert.match(read('cdr.html'),/<body class="commander">/);
  const css=read('themes.css');
- assert.match(css,/body\.night,body\.night dialog\{filter:var\(--night-filter\)\}/);
- assert.match(css,/--night-filter:grayscale\(1\)/);
- assert.match(css,/\.commander\.night img\{filter:var\(--night-filter\)\}/);
- assert.match(css,/\.commander\.night,\.theme-red #settings\{filter:none\}/);
+ assert.match(css,/body\.night,body\.night dialog\{filter:none\}/);
+ assert.match(css,/--night-filter:url\('\/red-light.svg#red'\)/);
+ assert.match(css,/body\.night :is\(img,canvas,svg\)\{filter:var\(--night-filter\)!important\}/);
  assert.match(css,/body\.commander\.theme-day\{[^}]*--panel:#fff/);
  assert.doesNotMatch(read('style.css'),/body\.night\{filter:/);
 });
 test('red Commander and Settings use a red-only palette and override bright controls',()=>{
  const css=read('themes.css');
- const palette=css.match(/\.commander\.theme-red,\.theme-red #settings\{([^}]+)\}/)[1];
+ const palette=css.match(/body\.theme-red,\.theme-red #settings\{([^}]+)\}/)[1];
  for(const color of palette.matchAll(/#[0-9a-f]{6}/g))assert.match(color[0],/^#[0-9a-f]{2}0000$/);
  assert.match(css,/\.theme-red #settings \.btn\.primary\{color:var\(--text\)\}/);
  assert.match(css,/\.theme-red #settings input\{appearance:none/);
  assert.match(css,/\.commander\.theme-red \[style\*="--c:"\]\{--c:var\(--accent\)!important\}/);
  assert.match(css,/\.commander\.theme-red :is\(\.live i,\.row\.fresh\)\{animation:none/);
  assert.match(css,/\.commander\.theme-red \.toast\{transition-property:opacity,transform\}/);
+ assert.match(css,/\.commander\.theme-red \.read-only-badge\{color:var\(--text\);border-color:var\(--line\)\}/);
 });

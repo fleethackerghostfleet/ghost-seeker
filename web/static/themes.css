@@ -21,6 +21,7 @@ body.commander.theme-day{--bg:#e9eef2;--panel:#fff;--panel2:#f2f5f8;--line:#c3ce
 .commander.theme-day .decided b{color:var(--text)}
 body.theme-red,.theme-red #settings{--bg:#000000;--panel:#030000;--panel2:#080000;--panel3:#100000;--line:#660000;--text:#ff0000;--muted:#ff0000;--accent:#ff0000;--accent2:#110000;--gold:#ff0000;--good:#ff0000;--p1:#ff0000;--p2:#ff0000;--p3:#ff0000;--p4:#ff0000;--human:#ff0000;color-scheme:dark;accent-color:var(--accent)}
 .theme-red *{color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important}
+.theme-red .strip{background:var(--panel2)}
 .theme-red :is(header,.banner,.badge,.avatar,.av,.live,.row.on,#learned,kbd,.bar,.toast,.btn,button,input,textarea,select,.tier,.tg,.cdrtag,.hsenttag,.newtag,.pri .big,.dir,.pill,.rule,.st,.sv,.kb,.emcon,.formtag,.band-badge,.night-badge,.upload-info,.feed-check .c){background:var(--panel2)!important}
 .theme-red :is(.seg .c,.feed-check .c,.tabs span){opacity:1}
 .theme-red :is(.box em,.sendmark){color:#000!important}
