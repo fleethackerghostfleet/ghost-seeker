@@ -155,6 +155,7 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 	groups := map[string][]reviews.Record{}
 	r.Reviewers = map[string]int{}
 	latestRecords := map[string]reviews.Record{}
+	latestNegatives := map[string]reviews.Record{}
 	for _, v := range rs {
 		r.Reviewers[v.Reviewer]++
 		key := ModelKey(v)
@@ -166,19 +167,22 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 			return nil, fmt.Errorf("record %s: invalid item or unknown mission model", v.ID)
 		}
 		pair := key + "\x00" + reviewExampleID(v) + "\x00" + v.Reviewer
-		old, ok := latestRecords[pair]
+		latest := latestRecords
+		if v.DetectorNegative {
+			latest = latestNegatives
+		}
+		old, ok := latest[pair]
 		if !ok || v.ReviewedAt.After(old.ReviewedAt) || (v.ReviewedAt.Equal(old.ReviewedAt) && v.ID > old.ID) {
-			latestRecords[pair] = v
+			latest[pair] = v
+		}
+	}
+	for _, v := range latestNegatives {
+		r.DetectorNegatives++
+		if v.HumanTier >= 1 && v.HumanTier <= 3 {
+			r.MissedDetections++
 		}
 	}
 	for _, v := range latestRecords {
-		if v.DetectorNegative {
-			r.DetectorNegatives++
-			if v.HumanTier >= 1 && v.HumanTier <= 3 {
-				r.MissedDetections++
-			}
-			continue
-		}
 		if v.Reason == "wrong_detection" || v.HumanTier == 0 {
 			r.Excluded++
 			continue
