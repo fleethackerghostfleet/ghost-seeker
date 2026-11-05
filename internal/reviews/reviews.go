@@ -19,6 +19,7 @@ import (
 )
 
 type Record struct {
+	Live             *LiveProvenance          `json:"live,omitempty"`
 	DetectorNegative bool                     `json:"detector_negative,omitempty"`
 	ID               string                   `json:"id"`
 	Ref              string                   `json:"ref,omitempty"`
@@ -47,6 +48,16 @@ type Record struct {
 	Reason           string                   `json:"reason,omitempty"`
 	Note             string                   `json:"note,omitempty"`
 	Before           command.Item             `json:"before"`
+}
+type LiveProvenance struct {
+	ShoreItemID string  `json:"shore_item_id"`
+	SightingID  string  `json:"sighting_id,omitempty"`
+	Source      string  `json:"source"`
+	Camera      string  `json:"camera"`
+	Label       string  `json:"label"`
+	Subtype     string  `json:"subtype,omitempty"`
+	Unknownness float64 `json:"unknownness"`
+	ImageForm   string  `json:"image_form"`
 }
 type Log struct {
 	mu     sync.Mutex

@@ -27,10 +27,18 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 		if !u.Done && u.Override != override {
 			now := time.Now()
 			u.Override, u.OverrideBy, u.OverrideAt = override, by, &now
+			if override == "hold" {
+				u.Active = false
+			}
 			u.NextOrder = 0
 			if override == "next" {
 				s.uploadOrder++
 				u.NextOrder = s.uploadOrder
+				if !item.Sent {
+					s.cdr++
+				}
+				item.Sent, item.AutoSent = true, false
+				item.SentAt = &now
 			}
 		}
 		return cloneItem(*item), s.cdr, nil
@@ -38,16 +46,53 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 	return command.Item{}, s.cdr, ErrNotFound
 }
 
+// SeedUploaded marks n images as already on shore (Commander sends first, then
+// the highest-scoring P1s), so a fresh simulation opens with a queue instead of
+// a fully sent backlog.
+func (s *Store) SeedUploaded(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var top []int
+	for i, item := range s.items {
+		if (item.Tier == 1 || item.Sent) && item.Filtered == "" && !item.Background {
+			top = append(top, i)
+		}
+	}
+	sort.SliceStable(top, func(i, j int) bool {
+		a, b := s.items[top[i]], s.items[top[j]]
+		if a.Sent != b.Sent {
+			return a.Sent
+		}
+		return a.Central > b.Central
+	})
+	for _, i := range top[:min(n, len(top))] {
+		u := &s.items[i].Upload
+		s.stats.Bytes += int(u.Bytes - u.Sent)
+		u.Sent, u.Done, u.Received, u.Active = u.Bytes, true, true, false
+	}
+}
+
+// SetLinkFixed records that the simulated rate is pinned and never resampled.
+func (s *Store) SetLinkFixed(fixed bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stats.LinkFixed = fixed
+}
+
 func (s *Store) SetLinkBPS(bps int64) []command.Item {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.linkBPS = max(0, bps)
+	s.stats.LinkBPS = s.linkBPS
 	s.uploadRemainder = 0
 	var changed []command.Item
 	for i := range s.items {
 		u := &s.items[i].Upload
 		previous := u.BPS
 		u.BPS = s.linkBPS
+		if s.linkBPS == 0 {
+			u.Active = false
+		}
 		if previous != u.BPS && u.Sent > 0 && !u.Done && u.Override != "hold" {
 			changed = append(changed, cloneItem(s.items[i]))
 		}
@@ -56,7 +101,7 @@ func (s *Store) SetLinkBPS(bps int64) []command.Item {
 }
 
 // AdvanceUploads spends one shared link budget in priority order.
-func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
+func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if elapsed <= 0 || s.linkBPS == 0 {
@@ -71,9 +116,16 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 	if quotient.IsInt64() {
 		budget = quotient.Int64()
 	}
+	if budget == 0 {
+		return nil // sub-byte tick: keep Active so the UI does not flicker
+	}
 	queue := make([]int, 0, len(s.items))
 	for i := range s.items {
-		if !s.items[i].Upload.Done && s.items[i].Upload.Override != "hold" {
+		item := s.items[i]
+		if item.Background && item.Manual == 0 && !item.Sent && !item.FullRes && item.Upload.Override != "next" {
+			continue
+		}
+		if !item.Upload.Done && item.Upload.Override != "hold" {
 			queue = append(queue, i)
 		}
 	}
@@ -90,18 +142,34 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 		}
 		return a.Central > b.Central
 	})
-	var changed []command.Item
+	wasActive := map[int]bool{}
+	for i := range s.items {
+		if s.items[i].Upload.Active {
+			wasActive[i] = true
+			s.items[i].Upload.Active = false
+		}
+	}
+	defer func() {
+		for i := range s.items {
+			if wasActive[i] {
+				changed = append(changed, cloneItem(s.items[i]))
+			}
+		}
+	}()
 	for _, i := range queue {
 		if budget == 0 {
 			break
 		}
+		delete(wasActive, i)
 		u := &s.items[i].Upload
 		n := min(budget, u.Bytes-u.Sent)
 		u.Sent += n
 		s.stats.Bytes += int(n)
 		budget -= n
 		u.Done = u.Sent == u.Bytes
+		u.Active = !u.Done
 		if u.Done {
+			u.Received = true
 			u.Override = ""
 			u.NextOrder = 0
 		}

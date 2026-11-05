@@ -52,39 +52,22 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	tier := b.Tier
-	var dismissed, sent *bool
-	yes := true
-	switch b.Action {
-	case "tier":
-		if tier < 1 || tier > 4 {
-			writeError(w, 400, "tier must be 1–4")
-			return
-		}
-	case "accept":
-		if tier != 0 && tier != old.CentralTier {
-			writeError(w, 409, "model priority changed — review the updated suggestion before accepting")
-			return
-		}
-		tier = old.CentralTier
-	case "dismiss":
-		tier = 4
-		dismissed = &yes
-	case "cdr":
-		tier = 1
-		sent = &yes
-	default:
-		writeError(w, 400, "unknown review action")
+	if b.Action == "accept" && b.Tier != 0 && b.Tier != old.CentralTier {
+		writeError(w, 409, "model priority changed — review the updated suggestion before accepting")
 		return
 	}
+	effect, err := reviews.ReviewEffect(b.Action, b.Tier, old.CentralTier)
+	if err != nil {
+		writeError(w, 400, err.Error())
+		return
+	}
+	tier, dismissed, sent := effect.Tier, effect.Dismissed, effect.Sent
+	yes := true
 	texts := []string{}
 	for _, d := range state.Directives {
 		texts = append(texts, d.Text)
 	}
-	human := tier
-	if b.Action == "dismiss" {
-		human = 0
-	}
+	human := effect.HumanTier
 	reason := ""
 	if old.DetectorNegative && human >= 1 && human <= 3 {
 		reason = "missed_detection"
@@ -94,7 +77,8 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "cannot persist review")
 		return
 	}
-	item, cdr, ok := s.store.PatchItem(old.ID, &tier, &yes, dismissed, sent)
+	s.hub.publish("review-data", s.reviews.Summary())
+	item, cdr, ok := s.store.ApplyReview(old.ID, &tier, &yes, dismissed, sent, rec.ReviewedAt)
 	if !ok {
 		writeError(w, 409, "item evicted after review was logged")
 		return
@@ -165,10 +149,11 @@ func (s *Server) correctReview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, err.Error())
 		return
 	}
+	s.hub.publish("review-data", s.reviews.Summary())
 	audit(r, "review."+action, "record", original.ID, "reviewer", b.Reviewer)
 	if action == "undo" {
 		o := original.Before
-		item, cdr, ok := s.store.PatchItem(o.ID, &o.Manual, &o.Reviewed, &o.Dismissed, &o.Sent)
+		item, cdr, ok := s.store.RestoreReview(o, original.ReviewedAt)
 		if ok {
 			s.PublishUpdate(item, cdr)
 			writeJSON(w, 200, map[string]any{"record": rec, "item": item, "cdr": cdr})

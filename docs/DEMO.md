@@ -14,11 +14,18 @@ shore gets an image of 10/10 dev objects vs 2/10 naive.
 ## Run it in Docker (Mac or Linux laptop, one command)
 
 Prerequisites: **Docker Desktop** (Apple silicon or Intel; ~6 GB free for the images) and,
-once, **gcloud** signed in as a lab student account to pull the clips and models
-(the bucket is not public). No Go, Python or venv needed.
+while the repo is private, the **GitHub CLI** signed in once (`brew install gh && gh auth login`)
+so `make demo-clips demo-models` can pull the ~225 MB of clips + models from the
+[`demo-data-v1` release](https://github.com/fleethackerghostfleet/ghost-seeker/releases/tag/demo-data-v1)
+(`deploy/demo-data.sh`; it falls back to the lab GCS bucket via gcloud). No Go needed.
+Generating the live ocean crops once also requires Python + Pillow (see below) and the
+existing LFS source: `git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'`.
 
 ```sh
-make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (gcloud)
+python3 -m venv ~/edgeml-venv
+~/edgeml-venv/bin/pip install Pillow==12.3.0
+export PY=~/edgeml-venv/bin/python
+make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (GitHub release; gh auth)
 make compose-demo             # builds the four images (first time ~5-10 min), starts the stack
 open http://localhost:8090    # signed in automatically; the edge starts replaying once the sidecar is healthy (~30 s)
 make compose-demo-down        # stop + delete data and credentials -> next `make compose-demo` is a fresh replay
@@ -38,6 +45,12 @@ ghost-seeker-demo_demo-secrets:/s:ro alpine cat /s/operator.token`).
 This is a laptop demo, not the fielding topology — `deploy/compose/docker-compose.yml` (Toxiproxy
 link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, production posture) is unchanged.
 
+## Optional local-language research integration
+
+`./research/nl-priority/demo.sh` adds the isolated IBM Granite compiler to the
+demo. See [the integration runbook](../research/nl-priority/DEMO_INTEGRATION.md)
+for supported classes, native startup, and validation limits.
+
 ## 0. One-time setup
 
 ### Demo-only login fallback
@@ -53,23 +66,43 @@ validation. The real operator token is still required for shore/edge bearer
 authentication; only the UI's login form accepts arbitrary tokens.
 
 ```sh
-# toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
+# toolchain: Go 1.26.10, Python >= 3.10, GitHub CLI signed in (gh auth login) for the demo data
 make build
-make demo-clips        # -> scenarios/ghostfleet_demo/frames/<clip>/{img1,gt,seqinfo.ini}  (gitignored)
-make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB) + mobileclip-s1/unknown_calib.npz (H: dev-fitted unknownness calibration + kNN bank, auto-loaded by the sidecar)
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
 pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
+pip install Pillow==12.3.0
+git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'
+make demo-clips        # three released ship clips + generated Open_ocean_watch/img1 (all gitignored)
+make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports + H's unknown_calib.npz)
 ```
 
 Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/ghost_fleet_5fps/`):
 `Submarine_surfacing` (372 f, 2 GT objects), `Cruise_ship_Mediterranean_sunset_off_Italy`
 (153 f, 3), `Spotted_A_Submarine` (745 f, 1). Change `CLIPS=` in `download.sh` / the
-`sets` in `scenarios/ghostfleet_demo/scenario.json` to use others.
+`sets` in `scenarios/ghostfleet_demo/live.json` to use others in the live demo.
+`scenario.json` remains the unchanged three-ship input to the headless comparison.
+
+`make demo-clips` prepares all live inputs via `demo-ship-clips` and `demo-ocean`.
+The live `demo-edge` and `compose-demo` targets also depend on `demo-ocean`.
+Only live setup requires the LFS ocean ZIP and Pillow; headless `make demo` fetches
+the three ship clips via `demo-ship-clips`, and `demo-compare` uses those clips directly.
+`demo-ocean` runs `ocean.py`: 32 manually inspected, real-sidecar-screened
+688×516 side-region crops of the existing `30_Days_at_Sea_Timelapse_frames.zip`.
+Clear, overcast, glare and dusk views contain no external contacts or camera-ship
+structure. `ocean-manifest.json` records source ZIP/GCS generation, crop coordinates,
+source/output SHA-256 and licence/usage provenance. Only crops returning **zero
+detections and zero sightings** were selected; ingestion still runs real inference
+and never bypasses detections. Crops are generated deterministically (Pillow 12.3.0,
+fixed JPEG parameters; checksum mismatch fails closed), not bundled as new imagery.
+The 32 crops cycle through 420 MOT-style frames, names 000001–001258, proportionally
+spread over the entire replay (one ocean input per ~3 ship inputs). The four-set live
+replay has 1690 inputs at 200 ms (~338 s before processing); ship clips and their
+relative interleaving are unchanged. The released three-clip archive is unchanged.
 
 ## 1. Headless comparison (`make demo`)
 
 ```sh
-make demo              # = make demo-clips demo-compare
+make demo              # = make demo-ship-clips demo-compare (no ocean ZIP or Pillow needed)
 # or directly, for the three modes that do not need a sidecar:
 ./bin/sim -scenario scenarios/ghostfleet_demo/scenario.json -dedup naive,hash,sightings \
           -bps 9600,64000,256000,2000000 -strategies prioritized -duration 6m -sample 1m \
@@ -103,7 +136,7 @@ shore store regardless of mode.
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
 make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
-make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
+make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/live.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
 open http://localhost:8090
 ```
 
@@ -130,26 +163,94 @@ the UI shows one card per sighting with the crop, and the strip's "N duplicate f
 the edge" is `GetStatus.items_deduped`. When a sighting closes, the edge sends a ~200 B contact
 report (RECORD item); the card then shows "n frames seen" from it.
 
-**Object-free frames.** In `-dedup sightings` mode the edge folds frames with no tracked object
-into one **scene** item per source per `-scene-every` (default 60 s; `tags.event: "scene"`).
-Only FACT+THUMB ship; the FULL frame stays on the edge and is pull-only. The UI does not show
-them in the feed: they feed the **Cameras** strip above it (one entry per camera: latest view,
-last seen, contact count, "Pull full frame" for the current view). They are not objects, so they
-are excluded from the unique-object count, the review queue and the commander view (the strip
-says "N camera heartbeats not counted"). Any per-frame leftovers
-(`-scene-every 0`) are hidden by the "sightings only" toggle.
+**Object-free frames.** In `-dedup sightings` mode, only responses with neither detections
+nor sightings produce **scene** items (`tags.event: "scene"`). Detections without a tracked
+object are not empty-water scenes. Scene cadence is per source: global `-scene-every`
+stays at 60 s for ship cameras; the live-only `Open_ocean_watch` set overrides it with
+`"scene_every_s": 4`. An omitted override inherits the global setting; 0 disables scene
+handling for that source (ordinary hash/new-item behavior), negative intervals are rejected.
+FACT+THUMB ship only after contact traffic; FULL stays on the edge, pull-only. Scenes
+automatically score below contacts, including suppressed contacts, and directives do not
+boost them. An explicit operator pull overrides that background priority using the normal
+pull boost, so requested scene FULLs can precede pending contact forms. The Imagery Feed includes **P4 Low / Empty water · no contacts**
+scene cards, interleaved with other cameras within the same tier. They carry empty
+detection arrays and do not change contact scoring, normalization, object counts, review,
+Commander, escalation or alerts. No contact actions appear on their drawer. The **Cameras**
+strip remains unchanged (latest view, last seen, contact count, "Pull full frame").
 
 **Send full size.** The operator override in the image drawer asks for a name,
 then calls `/api/items/{id}/full-res`. In live mode the bridge calls shore
 `RequestPull` with `original: true`, so the edge sends the capture's original
 bytes as FULL with no re-encoding.
 
+## Transmit queue: what is sent next
+
+Bandwidth is simulated, not set by the operator: every 5 s a new rate is drawn from a normal
+distribution (mean 0.5 MB/s, clipped to 0–2 MB/s, ~5% of draws are 0 = link outage). The
+operator console shows that one rate in the connection panel. The rate is the only thing that
+decides *how fast* bytes leave the ship (`go test -run 'Throughput|GovernsSendTime' -v
+./internal/shaper ./cmd/ghost-seeker` measures it). The queue decides *what* goes next.
+
+**Simulation console (`go run ./cmd/ghost-seeker`, `internal/store/upload.go`).** On every tick
+the link budget (rate × elapsed time) is spent top-down on one ordered queue:
+
+1. Images the operator marked **Upload next**, in the order they were marked.
+2. Everything else by priority tier, P1 Critical → P4 Low.
+3. Within a tier, by shore score, highest first.
+
+Images marked **Hold upload** and images already on shore are skipped. The first image in the
+queue gets the whole budget until it is done; leftover bytes in the same tick go to the next
+one. A new higher-priority image pre-empts a partly sent one, which keeps its progress and
+resumes later. During an outage nothing moves and partly sent cards say "Link outage, paused".
+A card being sent has a blue ↑ badge in its top-right corner; a sent card has a green ✓ there.
+
+**Live stack (`edge/scheduler`).** The edge rebuilds its plan before every exchange: manifest
+entries (FACT summaries) for new items first, then payload forms ranked by priority × ladder
+weight ÷ remaining bytes, keeping each item's FACT → THUMB → CROP → FULL order. Operator pulls
+multiply an item's score by 100, so it goes next. Items below the image threshold or suppressed
+by a directive only send FACT until nothing better is waiting. The edge sizes each exchange from its own measured link
+estimate, which is internal to the scheduler; the operator only sees the shaped link rate.
+
+## Demo talking points
+
+- **Open integration:** It's an open system with an API, so any third-party system can pull the data (with authorized access).
+- **Adaptability during war:** Present the boss's mid-demo requests as proof of "adaptability during war": change collection priorities, review a contact, then show the updated report at command without rebuilding the system.
+- **Future work:** Granular audit logging of operator actions is a placeholder for later work; do not claim a complete operator-action audit trail exists today.
+
+### Empty water and shore receipts
+
+The standalone operator demo (`go run ./cmd/ghost-seeker -addr :8090`) includes
+two native-resolution, manually inspected empty-water frames from the team's
+`frames/Cruise_Ship_POV_frames/` GCS dataset. They show water, shoreline and the
+camera ship's wake, with no external contacts. No detections are invented for
+these frames. They appear under **BY-12** as **P4 Low / No contacts · empty water**
+and remain on ship, even when bandwidth is available. Interesting contacts use
+the link instead. An explicit **Upload next**, manual priority override,
+**Send to Commander**, or **Send full size** can release one for demonstration.
+The LFS archive `web/static/imagery/empty-ocean.zip` contains the original bytes
+and `provenance.json` with source, internal-use license restriction, GCS object
+generations and SHA-256 checksums. Run `git lfs pull` before building.
+
+Open **Commander View → Received** beside the ship feed: only completed demo
+uploads appear, independently of whether the operator has sent a command report.
+**Awaiting decision** contains received, escalated reports; **Decided** preserves
+the command outcome and note. Walk through sensor capture → ship scoring → shore
+receipt → operator report → command decision in the right-hand chain of custody.
+The Received count is the current retained picture, not a lifetime delivery total.
+
+In the live stack, Received reflects actual shore form states: a received summary
+can appear before an image, and Summary / Preview / Object close-up / Full image
+are listed separately. Pending or partial-only items do not count as received.
+The live object-free camera heartbeat behavior described above is unchanged;
+the empty-water backlog example is the standalone simulation, not a change to
+the sidecar or live edge scheduler. Commander View is a UI projection of the
+console feed, not a separate authorization boundary or a new audit log.
 ## 3. Three-minute presenter script
 
 | t | do | say |
 |---|---|---|
-| 0:00 | Stack already running, feed tab. Point to the automatic connection rate. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." The strip shows the applied link rate and the ship's measured estimate. |
-| 0:30 | Watch the rate change without touching any controls. | "Bandwidth is sampled every five seconds from a normal distribution centered on 8 Mbps, with a 4.86 Mbps standard deviation, clipped to 0–50 Mbps. About 5% of intervals drop the link." Watch the estimator adapt and the form chips advance. FACT and thumbnail precede larger images; actual delivery time depends on image sizes, backlog, and link overhead. FULL contains the complete capture. |
+| 0:00 | Stack already running, feed tab. Point to the automatic connection rate. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." The connection panel shows one number: the current ship-to-shore bandwidth in MB/s. |
+| 0:30 | Watch the rate change without touching any controls. | "Bandwidth is sampled every five seconds from a normal distribution centered on 0.5 MB/s, with a 0.30 MB/s standard deviation, clipped to 0–2 MB/s. About 5% of intervals drop the link." Watch the card being sent (blue ↑ badge and progress bar) and the green ✓ appear on each image once it is on shore. FACT and thumbnail precede larger images; actual delivery time depends on image sizes, backlog, and link overhead. FULL contains the complete capture. |
 | 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card with its crop, the zero-shot subtype, and we know exactly which forms have landed; 'duplicate frames folded on the edge' in the strip is what we did *not* send. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
 | 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed; matched on the sidecar subtype, the detector class or an operator override), submarines keep arriving. Policy text shows in the strip. Cards the edge flagged *unknown* are never suppressed (same rule as `edge/scoring`), so a low-confidence "Cargo Ship (Unknown)" stays — say so, it is the point of the unknown gate. |
 | 2:15 | On a card whose FULL chip is still pending click **Pull full image**, or use **Pull full frame** in the Cameras strip. | "A pull gives this image priority." Ordinary contact FULL forms can drain automatically after the smaller forms; camera-overview FULL forms are pull-only. Watch pending → partial → received on the form chip. Use **Send full size** in the image drawer to request the original bytes. |

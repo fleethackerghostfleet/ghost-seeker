@@ -23,6 +23,7 @@ import (
 type statefulShore struct {
 	mu     sync.Mutex
 	policy *pb.Policy
+	items  []*pb.ItemView
 	server *httptest.Server
 }
 
@@ -60,7 +61,10 @@ func newStatefulShore(t *testing.T, initial *pb.Policy) *statefulShore {
 		case consolePath + "GetStatus":
 			writeProtoResponse(t, w, &pb.GetStatusResponse{NodeId: "SHORE-1"})
 		case consolePath + "ListItems":
-			writeProtoResponse(t, w, &pb.ListItemsResponse{})
+			s.mu.Lock()
+			items := s.items
+			s.mu.Unlock()
+			writeProtoResponse(t, w, &pb.ListItemsResponse{Items: items})
 		default:
 			http.NotFound(w, r)
 		}

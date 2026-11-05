@@ -157,6 +157,16 @@ func (s *Scheduler) Policy() *pb.Policy {
 	return s.policy
 }
 
+// RawPolicy is the last accepted policy before its layers are merged, or nil
+// while the built-in default applies.
+func (s *Scheduler) RawPolicy() *pb.Policy {
+	p, expired := s.guard.Active(s.clk.Now())
+	if expired {
+		return nil
+	}
+	return p
+}
+
 func (s *Scheduler) Stats() Stats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -526,6 +536,9 @@ func (s *Scheduler) mkCand(r *store.Row, f *store.FormState, minImg float64) *ca
 			(r.Score.Suppressed || r.Score.Priority < minImg) {
 			c.tier = 1
 		}
+		if r.Item.GetFeatures().GetTags()["event"] == "scene" && r.PullBoost == 0 {
+			c.tier = 2
+		}
 	}
 	return c
 }
@@ -542,12 +555,22 @@ func sortCands(cands []*cand) {
 // BuildPlan ranks the backlog and fills the byte budget. Pure function of
 // (rows, link estimate, policy); no side effects.
 func (s *Scheduler) BuildPlan(rows []*store.Row, bps float64, now time.Time) *Plan {
+	return s.buildPlan(rows, bps, now, false)
+}
+
+// PreviewPlan is BuildPlan for display: under EMCON SILENT it returns the
+// order the held backlog would go in once transmission resumes.
+func (s *Scheduler) PreviewPlan(rows []*store.Row, bps float64, now time.Time) *Plan {
+	return s.buildPlan(rows, bps, now, true)
+}
+
+func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, preview bool) *Plan {
 	s.mu.Lock()
 	policy := s.policy
 	s.mu.Unlock()
 	emcon := policy.GetEmcon()
 	plan := &Plan{}
-	if emcon == pb.EmconMode_EMCON_MODE_SILENT {
+	if emcon == pb.EmconMode_EMCON_MODE_SILENT && !preview {
 		return plan
 	}
 	budget := int64(bps / 8 * s.cfg.Tick.Seconds())
@@ -595,7 +618,7 @@ func (s *Scheduler) BuildPlan(rows []*store.Row, bps float64, now time.Time) *Pl
 		if f == nil {
 			continue
 		}
-		if s.cfg.Strategy == Prioritized && !r.ManifestAcked && !containsManifest(plan.Manifest, r.Item.Id) {
+		if s.cfg.Strategy == Prioritized && !(preview && emcon == pb.EmconMode_EMCON_MODE_SILENT) && !r.ManifestAcked && !containsManifest(plan.Manifest, r.Item.Id) {
 			// Don't send payload for an item shore doesn't know about yet,
 			// unless it's a pull (shore knows, we just lost the ack).
 			if r.PullBoost == 0 {

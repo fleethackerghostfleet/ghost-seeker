@@ -53,13 +53,15 @@ func main() {
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
-	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–50 Mbps ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
-	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic, mean 16 kbps with ~5% outages, 0 = outage)")
+	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–2 MB/s ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
+	demoLinkControl := flag.Bool("demo-link-control", false, "live mode: allow POST /api/shore/link to pin the shaper rate ({\"bps\":N} or {\"auto\":true}) so a presenter can build a backlog")
+	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
 	policyState := flag.String("policy-state", "", "persist simulation policy state at this path")
 	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
+	researchCompilerURL := flag.String("research-compiler-url", os.Getenv("GS_RESEARCH_COMPILER_URL"), "opt-in local research language compiler origin (e.g. http://localhost:8097)")
 	llmModel := flag.String("llm-model", os.Getenv("GS_LLM_MODEL"), "local LLM model name")
 	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
 	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
@@ -102,8 +104,14 @@ func main() {
 	}
 	var transport *tls.Config
 
-	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
-	if *llmURL == "" {
+	researchCompiler, err := command.NewResearchClient(*researchCompilerURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout), Research: researchCompiler}
+	if researchCompiler != nil {
+		log.Printf("NL compiler: research interpreter at %s (existing demo classes; failures block Apply)", *researchCompilerURL)
+	} else if *llmURL == "" {
 		log.Printf("NL compiler: rules parser (set GS_LLM_URL to enable LLM)")
 	} else {
 		log.Printf("NL compiler: local LLM at %s", *llmURL)
@@ -156,7 +164,7 @@ func main() {
 		if *datasetManifest != "" {
 			log.Fatal("-dataset cannot be used with -shore")
 		}
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath, *demoLinkControl)
 		return
 	}
 
@@ -216,13 +224,16 @@ func main() {
 	if replay != nil {
 		go runDatasetSimulation(data, replay, app, uplink, *negativesRate)
 	} else {
+		if *autoCDR > 0 {
+			for i := 0; i < startSent; i++ {
+				data.AutoEscalate()
+			}
+		}
+		data.SeedUploaded(startSent)
 		go runSimulation(data, generator, app, uplink)
 	}
 	go refreshTimeScopes(app)
 	if replay == nil && *autoCDR > 0 {
-		for i := 0; i < 4; i++ {
-			data.AutoEscalate()
-		}
 		go runWatchOfficer(data, app, *autoCDR)
 	}
 
@@ -254,6 +265,10 @@ func refreshTimeScopes(app *server.Server) {
 	}
 }
 
+// startSent is how many top P1 backlog images open already uploaded and
+// auto-sent to the Commander; everything else starts queued.
+const startSent = 2
+
 func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	ts := time.Now().Add(-45 * time.Minute)
@@ -261,11 +276,9 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 		ts = ts.Add(time.Duration(rng.Intn(14)+8) * time.Second)
 		source := catalog.Sources[rng.Intn(len(catalog.Sources))]
 		item, extra := generator.Tick(&source, ts, "maritime", nil)
-		if item != nil {
-			data.Add(item, extra)
+		addCapture(data, generator, rng, item, extra, "maritime", nil)
+		if item != nil && item.Filtered == "" {
 			kept++
-		} else {
-			data.Add(nil, extra)
 		}
 	}
 }
@@ -322,6 +335,29 @@ func tickDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app 
 	app.PublishItem(stored, stats)
 }
 
+// addCapture stores one capture and, for about half of the bursts with
+// repeated frames, one near-duplicate view so the feed can show it at P4.
+func addCapture(data *store.Store, generator *sensor.Generator, rng *rand.Rand, item *command.Item, extra int, model string, directives []command.Directive) (stored []command.Item, evicted []string) {
+	if item == nil {
+		data.Add(nil, extra)
+		return nil, nil
+	}
+	captures := []*command.Item{item}
+	if extra > 0 && item.Filtered == "" && rng.Intn(2) == 0 {
+		captures = append(captures, generator.Repeat(item, model, directives))
+		extra--
+	}
+	for _, capture := range captures {
+		kept, gone := data.Add(capture, extra)
+		extra = 0
+		stored = append(stored, kept)
+		if gone != "" {
+			evicted = append(evicted, gone)
+		}
+	}
+	return stored, evicted
+}
+
 func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
@@ -335,7 +371,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through, with an automatically varying normal rate.
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string, demoLinkControl bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -350,13 +386,21 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 				log.Fatalf("shaper: %v", err)
 			}
 		}()
-		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–50 Mbps, mean 8 Mbps, stddev 4.86 Mbps, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
 		link = sh
 	}
-	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)
+	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID).WithLinkOverride(demoLinkControl)
 	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
 	console := shorebridge.NewConsole(bridge)
+	if reviewPath != "" {
+		l, err := reviews.Open(reviewPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer l.Close()
+		console.SetReviewLog(l)
+	}
 	go bridge.Run(ctx, poll)
 
 	// One site: Patrick's operator console (index.html / cdr.html) on live
@@ -414,18 +458,18 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 		for _, updated := range updates {
 			app.PublishUpdate(updated, cdr)
 		}
-		items, _, _, state := data.Snapshot()
-		if !uplink.canGenerate(items) {
-			continue
+		_, _, _, state := data.Snapshot()
+		directives := data.Directives()
+		item, extra := generator.Tick(nil, time.Now(), state.Model, directives)
+		stored, evicted := addCapture(data, generator, rng, item, extra, state.Model, directives)
+		for _, id := range evicted {
+			app.PublishEvict(id)
 		}
-		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
-		stored, evicted := data.Add(item, extra)
-		app.PublishEvict(evicted)
-		if item != nil {
-			stats, _ := data.Stats()
-			app.PublishItem(stored, stats)
-		} else {
-			stats, _ := data.Stats()
+		stats, _ := data.Stats()
+		for _, capture := range stored {
+			app.PublishItem(capture, stats)
+		}
+		if len(stored) == 0 {
 			app.PublishStats(stats)
 		}
 	}

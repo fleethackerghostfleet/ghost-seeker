@@ -39,6 +39,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		hz = .9
 	}
 	var imageFile string
+	var background bool
 	var detections []command.Detection
 	var night *catalog.NightImage
 	if images := catalog.NightLibrary[source.ID]; source.Mode == "eo" && len(images) > 0 && rng.Float64() < .2 {
@@ -50,6 +51,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		image := images[rng.Intn(len(images))]
 		imageFile = image.File
 		detections = make([]command.Detection, 0, len(image.Dets))
+		background = image.Background && len(image.Dets) == 0
 		for _, detection := range image.Dets {
 			detections = append(detections, command.Detection{
 				Class: detection.Cls,
@@ -80,7 +82,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 			})
 		}
 	}
-	if rng.Float64() < .12 {
+	if !background && rng.Float64() < .12 {
 		boxes := make([]command.Box, 0, len(detections))
 		for _, d := range detections {
 			boxes = append(boxes, d.Box)
@@ -96,9 +98,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	frame := int(g.frame.Add(int64(rng.Intn(37) + 3)))
 	seed := rng.Uint32()
-	if edge < EdgeKeep {
-		return nil, extra
-	}
+
 	up := 0
 	switch {
 	case contains(source.Link, "Iridium"):
@@ -111,16 +111,17 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		up = int(math.Round(randBetween(rng, 40, 160)))
 	}
 	item := &command.Item{
-		Bands:    append([]string(nil), source.Bands...),
-		ID:       fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
-		Img:      imageFile,
-		Frame:    frame,
-		SourceID: source.ID,
-		TS:       ts.Truncate(time.Millisecond),
-		Seed:     seed,
-		HZ:       hz,
-		KB:       rng.Intn(28) + 18,
-		Edge:     edge,
+		Background: background,
+		Bands:      append([]string(nil), source.Bands...),
+		ID:         fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
+		Img:        imageFile,
+		Frame:      frame,
+		SourceID:   source.ID,
+		TS:         ts.Truncate(time.Millisecond),
+		Seed:       seed,
+		HZ:         hz,
+		KB:         rng.Intn(1600) + 800, // full camera JPEG, so the 0.5 MB/s sim link queues P3/P4
+		Edge:       edge,
 		Lat: command.Latency{
 			Edge: int(math.Round(randBetween(rng, 14, 60))),
 			Up:   up,
@@ -134,11 +135,31 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		item.Basis = night.Basis
 		item.Lum = night.Lum
 	}
+	if edge < EdgeKeep {
+		item.Filtered = command.FilteredLowValue
+	}
+	if item.Dets == nil {
+		item.Dets = []command.Detection{}
+	}
 	command.Rescore(item, model, directives)
 	return item, extra
 }
 
-// EdgeKeep is the on-sensor triage threshold; frames scoring below it are dropped before uplink.
+// Repeat returns a near-duplicate view of item from the same capture burst.
+func (g *Generator) Repeat(item *command.Item, model string, directives []command.Directive) *command.Item {
+	repeat := *item
+	repeat.ID = fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1))
+	repeat.Frame++
+	repeat.TS = item.TS.Add(250 * time.Millisecond)
+	repeat.Bands = append([]string(nil), item.Bands...)
+	repeat.Dets = append([]command.Detection{}, item.Dets...)
+	repeat.Det = nil
+	repeat.Filtered, repeat.DupOf = command.FilteredDuplicate, item.ID
+	command.Rescore(&repeat, model, directives)
+	return &repeat
+}
+
+// EdgeKeep is the on-sensor triage threshold; frames scoring below it are kept on the ship as P4 low-value images.
 const EdgeKeep = .2
 
 // Attributes draws simulated track attributes for a detection of the given class.

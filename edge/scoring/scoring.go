@@ -10,6 +10,7 @@
 package scoring
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -76,6 +77,15 @@ func (e *Engine) weight(name string, p *pb.Policy) float64 {
 // boost (0 if none).
 func (e *Engine) Score(it *pb.Item, ctx *Context, pullBoost float64) *pb.Score {
 	out := &pb.Score{ComputedAtUnixMs: ctx.Now.UnixMilli()}
+	if it.GetFeatures().GetTags()["event"] == "scene" {
+		out.Priority = 0.0001
+		out.Reasons = []*pb.Reason{{Scorer: "scene", Value: out.Priority, Note: "object-free camera overview"}}
+		if pullBoost > 0 {
+			out.Priority += pullBoost
+			out.Reasons = append(out.Reasons, &pb.Reason{Scorer: "pull", Value: pullBoost, Note: "requested by shore"})
+		}
+		return out
+	}
 	sum, mult := 0.0, 1.0
 	for _, s := range e.Scorers {
 		r := s.Score(it, ctx)
@@ -231,6 +241,15 @@ func (Interest) Score(it *pb.Item, ctx *Context) Result {
 		sup = DefaultSuppressFactor
 	}
 	labels := allLabels(it, detMin)
+	_, pinned := TierPin(it, ctx.Policy)
+	switch pinned {
+	case 1:
+		return Result{Value: 1, Multiplier: boost, Note: "pinned: P1"}
+	case 2, 3:
+		return Result{Multiplier: 1, Note: fmt.Sprintf("pinned: P%d", pinned)}
+	case 4:
+		return Result{Multiplier: sup, Suppressed: true, Note: "pinned: P4"}
+	}
 	for _, l := range in.SuppressLabels {
 		if hasLabel(labels, l) && !isUnknown(it, ctx) {
 			return Result{Multiplier: sup, Suppressed: true, Note: "suppressed: " + l}
@@ -305,6 +324,19 @@ func allLabels(it *pb.Item, minConf float32) []string {
 		out = append(out, sub)
 	}
 	return out
+}
+
+// TierPin returns the matching policy label and most urgent valid tier, using
+// the same authoritative override, confidence threshold and subtype as Interest.
+func TierPin(it *pb.Item, p *pb.Policy) (label string, tier int32) {
+	_, minConf := thresholds(p)
+	labels := allLabels(it, minConf)
+	for candidate, target := range p.GetInterest().GetTierLabels() {
+		if target >= 1 && target <= 4 && hasLabel(labels, candidate) && (tier == 0 || target < tier || target == tier && candidate < label) {
+			label, tier = candidate, target
+		}
+	}
+	return
 }
 
 func hasLabel(labels []string, want string) bool {

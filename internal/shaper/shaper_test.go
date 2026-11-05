@@ -15,7 +15,7 @@ import (
 func TestNormalDistributionBounds(t *testing.T) {
 	s := NewNormal("unused")
 	d := s.Distribution()
-	if d.MinBps != 0 || d.MaxBps != 50_000_000 || d.MeanBps != 8_000_000 || d.IntervalMS != 5000 {
+	if d.MinBps != 0 || d.MaxBps != 16_000_000 || d.MeanBps != 4_000_000 || d.IntervalMS != 5000 {
 		t.Fatalf("unexpected distribution: %+v", d)
 	}
 	if p := math.Erfc(d.MeanBps/(d.StdDevBps*math.Sqrt2)) / 2; math.Abs(p-0.05) > 1e-12 {
@@ -27,13 +27,13 @@ func TestNormalDistributionBounds(t *testing.T) {
 	for _, tc := range []struct {
 		z    float64
 		want int64
-	}{{-20, 0}, {-3, 0}, {0, 8_000_000}, {20, 50_000_000}} {
+	}{{-20, 0}, {-3, 0}, {0, 4_000_000}, {20, 16_000_000}} {
 		if got := d.rate(tc.z); got != tc.want {
 			t.Errorf("rate(%v) = %d, want %d", tc.z, got, tc.want)
 		}
 	}
 	d.MaxBps = 1
-	if s.Distribution().MaxBps != 50_000_000 {
+	if s.Distribution().MaxBps != 16_000_000 {
 		t.Fatal("caller mutated the active distribution")
 	}
 	if New("unused", 64_000).Distribution() != nil {
@@ -59,11 +59,11 @@ func TestNormalDistributionShape(t *testing.T) {
 		sum += x
 		squared += x * x
 		switch {
-		case rate >= 1_000_000 && rate < 3_000_000:
+		case rate >= 500_000 && rate < 1_500_000:
 			low++
-		case rate >= 6_000_000 && rate <= 10_000_000:
+		case rate >= 3_000_000 && rate <= 5_000_000:
 			center++
-		case rate > 13_000_000 && rate <= 15_000_000:
+		case rate > 6_500_000 && rate <= 7_500_000:
 			high++
 		}
 	}
@@ -84,7 +84,7 @@ func TestNormalDistributionShape(t *testing.T) {
 	wantSquared := lo*lo*cdf(a) + (d.MeanBps*d.MeanBps+d.StdDevBps*d.StdDevBps)*p +
 		2*d.MeanBps*d.StdDevBps*(pdf(a)-pdf(b)) + d.StdDevBps*d.StdDevBps*(a*pdf(a)-b*pdf(b)) + hi*hi*(1-cdf(b))
 	wantStddev := math.Sqrt(wantSquared - wantMean*wantMean)
-	if math.Abs(mean-wantMean) > 100_000 || math.Abs(stddev-wantStddev) > 150_000 || center <= low+high {
+	if math.Abs(mean-wantMean) > 50_000 || math.Abs(stddev-wantStddev) > 75_000 || center <= low+high {
 		t.Fatalf("not the expected bell curve: mean %.0f, stddev %.0f, bins %d/%d/%d", mean, stddev, low, center, high)
 	}
 }
@@ -113,7 +113,7 @@ func TestNormalRateUpdatesAndCancellation(t *testing.T) {
 		if s.Bps() != 0 {
 			t.Fatalf("expected clipped outage, got %d", s.Bps())
 		}
-		for _, want := range []int64{8_000_000, 50_000_000} {
+		for _, want := range []int64{4_000_000, 16_000_000} {
 			time.Sleep(5 * time.Second)
 			synctest.Wait()
 			if s.Bps() != want {
@@ -124,7 +124,7 @@ func TestNormalRateUpdatesAndCancellation(t *testing.T) {
 		synctest.Wait()
 		time.Sleep(15 * time.Second)
 		synctest.Wait()
-		if n != 3 || s.Bps() != 50_000_000 {
+		if n != 3 || s.Bps() != 16_000_000 {
 			t.Fatal("automatic updates continued after cancellation")
 		}
 	})
@@ -215,5 +215,105 @@ func TestShaperRateAndDown(t *testing.T) {
 			t.Fatal("expected closed connection while link is down")
 		}
 		c2.Close()
+	}
+}
+
+// TestShaperThroughputMatchesSimulatedBandwidth pushes two seconds' worth of
+// image bytes through the real TCP shaper at the simulated mean (0.5 MB/s)
+// and cap (2 MB/s) and checks the measured goodput follows the set rate.
+func TestShaperThroughputMatchesSimulatedBandwidth(t *testing.T) {
+	up, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer up.Close()
+	go func() {
+		for {
+			c, err := up.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				var size [8]byte
+				if _, err := io.ReadFull(c, size[:]); err != nil {
+					return
+				}
+				n := int64(0)
+				for i := range size {
+					n = n<<8 | int64(size[i])
+				}
+				if _, err := io.CopyN(io.Discard, c, n); err == nil {
+					c.Write([]byte{1})
+				}
+			}()
+		}
+	}()
+	for _, tc := range []struct {
+		name string
+		bps  int64
+	}{{"mean 0.5 MB/s", MeanBps}, {"cap 2 MB/s", MaxBps}} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := New(up.Addr().String(), tc.bps)
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			addr := ln.Addr().String()
+			ln.Close()
+			go s.ListenAndServe(ctx, addr)
+			var c net.Conn
+			for range 50 {
+				if c, err = net.Dial("tcp", addr); err == nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close()
+			n := tc.bps / 8 * 2 // two seconds of airtime
+			header := make([]byte, 8)
+			for i := range header {
+				header[i] = byte(n >> (8 * (7 - i)))
+			}
+			start := time.Now()
+			go func() { c.Write(header); c.Write(make([]byte, n)) }()
+			if _, err := io.ReadFull(c, make([]byte, 1)); err != nil {
+				t.Fatal(err)
+			}
+			elapsed := time.Since(start)
+			got := float64(n) / elapsed.Seconds() / 1e6
+			want := float64(tc.bps) / 8 / 1e6
+			t.Logf("sent %.1f MB in %v: measured %.3f MB/s, simulated %.3f MB/s", float64(n)/1e6, elapsed.Round(time.Millisecond), got, want)
+			// The pacer releases the final ~100 ms chunk without waiting, so
+			// expect ~1.9 s; anything far off means the link is not governed.
+			if elapsed < 1700*time.Millisecond || elapsed > 2600*time.Millisecond {
+				t.Fatalf("2 s of data at %.2f MB/s took %v", want, elapsed)
+			}
+		})
+	}
+}
+
+func TestFixedPausesAutomaticRate(t *testing.T) {
+	s := NewNormal("127.0.0.1:1")
+	s.SetFixed(32000)
+	if !s.Fixed() || s.Bps() != 32000 {
+		t.Fatalf("fixed=%v bps=%d", s.Fixed(), s.Bps())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.normal.IntervalMS = 1
+	go s.varyRate(ctx, func() float64 { return 3 })
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	if s.Bps() != 32000 {
+		t.Fatalf("automatic rate overrode the pin: %d", s.Bps())
+	}
+	s.SetAuto()
+	if s.Fixed() {
+		t.Fatal("still fixed after SetAuto")
 	}
 }

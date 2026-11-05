@@ -24,6 +24,26 @@ func TestReviews(t *testing.T) {
 	stored, _ := d.GetItem("i")
 	s := New(d)
 	s.SetReviewLog(l)
+	peer, _ := s.hub.add()
+	defer s.hub.remove(peer)
+	assertSummary := func(count int) {
+		t.Helper()
+		for len(peer.events) > 0 {
+			event := <-peer.events
+			if event.name != "review-data" {
+				continue
+			}
+			var summary struct {
+				Count int `json:"count"`
+			}
+			data, _ := json.Marshal(event.data)
+			if err := json.Unmarshal(data, &summary); err != nil || summary.Count != count {
+				t.Fatalf("peer summary: %s, err=%v", event.data, err)
+			}
+			return
+		}
+		t.Fatal("no peer review summary event")
+	}
 	post := func(path, body string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		s.ServeHTTP(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
@@ -36,6 +56,7 @@ func TestReviews(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
+	assertSummary(1)
 	var v struct {
 		Record reviews.Record `json:"record"`
 	}
@@ -61,41 +82,47 @@ func TestReviews(t *testing.T) {
 	if w.Code != 200 || l.Summary().Count != 0 {
 		t.Fatal(w.Body.String())
 	}
+	assertSummary(0)
 	it, _ := d.GetItem("i")
-	if it.Reviewed || it.Manual != 0 {
+	if it.Reviewed || it.Manual != 0 || it.HumanReviewed {
 		t.Fatal("undo did not restore")
 	}
 }
 
-func TestReviewPreservesEscalation(t *testing.T) {
-	for _, action := range []string{"tier", "accept", "dismiss"} {
-		t.Run(action, func(t *testing.T) {
-			l, err := reviews.Open(filepath.Join(t.TempDir(), "log"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer l.Close()
-			d := store.New(10)
-			d.Add(&command.Item{ID: "i"}, 0)
-			yes := true
-			d.PatchItem("i", nil, nil, nil, &yes)
-			s := New(d)
-			s.SetReviewLog(l)
-			w := httptest.NewRecorder()
+func TestAutoSentReviewUndoRestoresHumanProvenance(t *testing.T) {
+	for _, priorHuman := range []bool{false, true} {
+		l, err := reviews.Open(filepath.Join(t.TempDir(), "log"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+		d := store.New(10)
+		d.Add(&command.Item{ID: "i", Manual: 1}, 0)
+		d.AutoEscalate()
+		if priorHuman {
 			tier := 2
-			if action == "accept" {
-				item, _ := d.GetItem("i")
-				tier = item.CentralTier
-			}
-			s.ServeHTTP(w, httptest.NewRequest("POST", "/api/items/i/review", strings.NewReader(fmt.Sprintf(`{"reviewer":"A","action":%q,"tier":%d}`, action, tier))))
-			if w.Code != 200 {
-				t.Fatal(w.Body.String())
-			}
-			item, _ := d.GetItem("i")
-			if !item.Sent || !item.Reviewed {
-				t.Fatalf("review lost escalation: %+v", item)
-			}
-		})
+			d.PatchItem("i", &tier, nil, nil, nil)
+		}
+		s := New(d)
+		s.SetReviewLog(l)
+		post := func(path, body string) *httptest.ResponseRecorder {
+			w := httptest.NewRecorder()
+			s.ServeHTTP(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
+			return w
+		}
+		w := post("/api/items/i/review", `{"reviewer":"A","action":"tier","tier":3}`)
+		if w.Code != 200 {
+			t.Fatal(w.Body.String())
+		}
+		var result struct{ Record reviews.Record }
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		w = post("/api/reviews/"+result.Record.ID+"/undo", `{"reviewer":"A"}`)
+		item, _ := d.GetItem("i")
+		if w.Code != 200 || item.HumanReviewed != priorHuman || !item.AutoSent || !item.Sent {
+			t.Fatalf("undo priorHuman=%v: item=%+v response=%s", priorHuman, item, w.Body.String())
+		}
 	}
 }
 
@@ -136,3 +163,36 @@ func TestAcceptRejectsChangedDisplayedPriority(t *testing.T) {
 		t.Fatalf("legacy accept without tier: %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestReviewPreservesEscalation(t *testing.T) {
+	for _, action := range []string{"tier", "accept", "dismiss"} {
+		t.Run(action, func(t *testing.T) {
+			l, err := reviews.Open(filepath.Join(t.TempDir(), "log"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer l.Close()
+			d := store.New(10)
+			d.Add(&command.Item{ID: "i"}, 0)
+			yes := true
+			d.PatchItem("i", nil, nil, nil, &yes)
+			s := New(d)
+			s.SetReviewLog(l)
+			w := httptest.NewRecorder()
+			tier := 2
+			if action == "accept" {
+				item, _ := d.GetItem("i")
+				tier = item.CentralTier
+			}
+			s.ServeHTTP(w, httptest.NewRequest("POST", "/api/items/i/review", strings.NewReader(fmt.Sprintf(`{"reviewer":"A","action":%q,"tier":%d}`, action, tier))))
+			if w.Code != 200 {
+				t.Fatal(w.Body.String())
+			}
+			item, _ := d.GetItem("i")
+			if !item.Sent || !item.Reviewed {
+				t.Fatalf("review lost escalation: %+v", item)
+			}
+		})
+	}
+}
+

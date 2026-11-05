@@ -12,9 +12,10 @@
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA · COMMANDER'S FINAL REVIEW</div>
 <header>
   <div class="crest">★</div>
-  <div class="ttl"><b>Commander View</b><small>Ghost Seeker · final review of watch-floor escalations</small></div>
+  <div class="ttl"><b>Commander View</b><small>Received on shore · watch-floor reports · command decisions</small></div>
   <div class="live off" id="live"><i></i><span>CONNECTING</span></div>
   <div class="kpis">
+    <div><b id="kReceived">0</b><span>Received on shore</span></div>
     <div><b id="kPend">0</b><span>Awaiting decision</span></div>
     <div><b id="kP1" class="p1">0</b><span>P1 Critical awaiting</span></div>
     <div><b id="kOld">—</b><span>Oldest waiting</span></div>
@@ -25,13 +26,15 @@
   <div class="who"><div class="av" title="Commander">CDR</div><div>Commander<br><small>CTF Maritime Ops</small></div></div>
   <span id="readOnlyBadge" class="read-only-badge" hidden>Read-only</span>
   <form id="authLogout" class="auth-logout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
+  <a class="docs-link" href="https://ghostfleet-docs.vercel.app" target="_blank" rel="noopener noreferrer" aria-label="Open documentation (new tab)" title="Open documentation (new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg></a>
 </header>
 <main>
   <aside class="queue">
     <div id="learned" hidden></div>
-    <div class="tabs" id="tabs"><button data-t="pending" class="on">Awaiting <span id="tPend"></span></button><button data-t="decided">Decided <span id="tDone"></span></button></div>
+    <div class="tabs" id="tabs"><button data-t="received" class="on">Received <span id="tReceived"></span></button><button data-t="pending">Awaiting decision <span id="tPend"></span></button><button data-t="decided">Decided <span id="tDone"></span></button></div>
+    <div class="receipt-help">Only data received on shore appears here. Ship backlog stays on the watch floor.</div>
     <div class="qlist" id="qlist"></div>
-    <div class="qfoot">Up/Down arrows: select · Tab: switch list · /: note · Z: undo</div>
+    <div class="qfoot">Up/Down: select · /: note · Z: undo</div>
   </aside>
   <section class="stage" id="stage"></section>
   <aside class="brief" id="brief"></aside>

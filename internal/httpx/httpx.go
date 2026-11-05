@@ -179,6 +179,6 @@ func StaticUI(mux *http.ServeMux, dir string, apiHint string) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
-		_, _ = w.Write([]byte("<pre>ghost-seeker " + apiHint + "\nAPI: POST /ghostseeker.v1.ConsoleService/&lt;Method&gt; (JSON, Authorization: Bearer &lt;operator token&gt;)\nBlobs: GET /blob/{item_id}/{form}\n</pre>"))
+		_, _ = w.Write([]byte(`<style>header{display:flex}` + DocsLinkCSS + `</style><header>` + DocsLinkHTML + `</header><pre>ghost-seeker ` + apiHint + "\nAPI: POST /ghostseeker.v1.ConsoleService/&lt;Method&gt; (JSON, Authorization: Bearer &lt;operator token&gt;)\nBlobs: GET /blob/{item_id}/{form}\n</pre>"))
 	})
 }

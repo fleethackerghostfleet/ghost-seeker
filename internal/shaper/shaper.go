@@ -19,6 +19,12 @@ import (
 	"time"
 )
 
+// Simulated ship-to-shore bandwidth: mean 0.5 MB/s, clipped to 0–2 MB/s.
+const (
+	MeanBps = 4_000_000
+	MaxBps  = 16_000_000
+)
+
 type NormalDistribution struct {
 	MinBps     int64   `json:"minBps"`
 	MaxBps     int64   `json:"maxBps"`
@@ -43,6 +49,7 @@ type Shaper struct {
 	ln     net.Listener
 	pacers [2]pacer // 0 = ship->shore, 1 = shore->ship; shared by all connections
 	normal *NormalDistribution
+	fixed  atomic.Bool // a demo override pins the rate; the automatic distribution pauses
 }
 
 // pacer is a per-direction leaky bucket: every chunk books its airtime at
@@ -75,13 +82,13 @@ func New(target string, bps int64) *Shaper {
 }
 
 // NewNormal samples a normal rate immediately, then every five seconds while
-// serving. The distribution is centered on 8 Mbps with 5% of samples at zero;
-// samples outside 0–50 Mbps are clipped (zero means a real link outage).
+// serving. The distribution is centered on 0.5 MB/s with 5% of samples at
+// zero; samples outside 0–2 MB/s are clipped (zero means a real link outage).
+// Rates stay in bits/s internally (1 MB/s = 8,000,000 bit/s).
 func NewNormal(target string) *Shaper {
-	const meanBps = 8_000_000
 	const outageProbability = 0.05
-	stddev := meanBps / (math.Sqrt2 * math.Erfcinv(2*outageProbability))
-	d := NormalDistribution{MinBps: 0, MaxBps: 50_000_000, MeanBps: meanBps, StdDevBps: stddev, IntervalMS: 5000}
+	stddev := MeanBps / (math.Sqrt2 * math.Erfcinv(2*outageProbability))
+	d := NormalDistribution{MinBps: 0, MaxBps: MaxBps, MeanBps: MeanBps, StdDevBps: stddev, IntervalMS: 5000}
 	s := New(target, d.rate(rand.NormFloat64()))
 	s.normal = &d
 	return s
@@ -106,10 +113,28 @@ func (s *Shaper) varyRate(ctx context.Context, sample func() float64) {
 			if ctx.Err() != nil {
 				return
 			}
-			s.SetBps(s.normal.rate(sample()))
+			if !s.fixed.Load() {
+				s.SetBps(s.normal.rate(sample()))
+			}
 		}
 	}
 }
+
+// SetFixed pins the rate at bps until SetAuto, pausing the automatic distribution.
+func (s *Shaper) SetFixed(bps int64) {
+	s.fixed.Store(true)
+	s.SetBps(bps)
+}
+
+// SetAuto returns a SetFixed shaper to its automatic distribution (no-op without one).
+func (s *Shaper) SetAuto() {
+	s.fixed.Store(false)
+	if s.normal != nil {
+		s.SetBps(s.normal.rate(rand.NormFloat64()))
+	}
+}
+
+func (s *Shaper) Fixed() bool { return s.fixed.Load() }
 
 func (s *Shaper) Bps() int64   { return s.bps.Load() }
 func (s *Shaper) Bytes() int64 { return s.bytes.Load() }

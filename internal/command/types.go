@@ -13,6 +13,7 @@ type Rule struct {
 	Only        bool     `json:"only"`
 	DirectiveID string   `json:"directiveId,omitempty"`
 	Weight      float64  `json:"weight,omitempty"`
+	Tier        int      `json:"tier,omitempty"`
 	Sources     []string `json:"sources,omitempty"`
 	WithinMin   int      `json:"withinMin,omitempty"`
 	Edited      bool     `json:"edited,omitempty"`
@@ -78,7 +79,14 @@ type Latency struct {
 	Cen  int `json:"cen"`
 }
 
+// Ship-side filter reasons for Item.Filtered.
+const (
+	FilteredLowValue  = "low-value"
+	FilteredDuplicate = "duplicate"
+)
+
 type Item struct {
+	Background       bool       `json:"background,omitempty"`
 	DetectorNegative bool       `json:"detectorNegative,omitempty"`
 	Upload           Upload     `json:"upload"`
 	Night            *bool      `json:"night,omitempty"`
@@ -123,6 +131,13 @@ type Item struct {
 	// Live is set only when the item comes from a shore node (ghost-seeker
 	// -shore); the simulation leaves it nil.
 	Live *LiveMeta `json:"live,omitempty"`
+	// Filtered marks a ship-side low-value or repeat image. It stays in the
+	// feed at P4 Low instead of being dropped; DupOf names the original.
+	Filtered string `json:"filtered,omitempty"`
+	DupOf    string `json:"dupOf,omitempty"`
+	// AutoSent marks a commander send chosen by automatic escalation.
+	AutoSent      bool `json:"autoSent,omitempty"`
+	HumanReviewed bool `json:"humanReviewed,omitempty"`
 }
 
 type Upload struct {
@@ -133,6 +148,8 @@ type Upload struct {
 	Bytes      int64      `json:"bytes"`
 	Sent       int64      `json:"sent"`
 	Done       bool       `json:"done"`
+	Active     bool       `json:"active"` // received bytes in the latest link tick
+	Received   bool       `json:"received,omitempty"`
 	BPS        int64      `json:"bps"`
 }
 
@@ -184,4 +201,8 @@ type Stats struct {
 	Drop              int `json:"drop"`
 	Bytes             int `json:"bytes"`
 	DB                int `json:"db"`
+	// LinkBPS is the simulated ship-to-shore rate in bits/s (0 = outage).
+	LinkBPS int64 `json:"linkBps"`
+	// LinkFixed is true when -sim-link-bps pins the rate (no resampling).
+	LinkFixed bool `json:"linkFixed,omitempty"`
 }

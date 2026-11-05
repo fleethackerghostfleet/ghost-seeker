@@ -11,7 +11,9 @@ func TestNightFramesSeparateFromBenchLibrary(t *testing.T) {
 	count := 0
 	for _, images := range catalog.Library {
 		for _, image := range images {
-			count++
+			if !image.Background {
+				count++
+			}
 			for _, nights := range catalog.NightLibrary {
 				for _, night := range nights {
 					if image.File == night.File {
