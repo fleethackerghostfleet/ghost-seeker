@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
@@ -269,5 +270,25 @@ func TestDirectiveEmconPhraseUpdatesShipLayer(t *testing.T) {
 	if rec.Code != http.StatusOK || setPolicy.Emcon != pb.EmconMode_EMCON_MODE_NORMAL ||
 		setPolicy.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_NORMAL || setPolicy.Layers[1].Emcon != nil {
 		t.Fatalf("explicit-label locked EMCON must keep current mode: status=%d body=%s policy=%+v", rec.Code, rec.Body.String(), setPolicy)
+	}
+}
+
+func TestPolicyInfoDoesNotShowExpiredLayeredEMCON(t *testing.T) {
+	expired := time.Now().Add(-time.Minute).UnixMilli()
+	info := policyInfo(&pb.Policy{
+		Emcon: pb.EmconMode_EMCON_MODE_SILENT,
+		EmconSetting: &pb.EmconSetting{
+			Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO", Echelon: pb.Echelon_ECHELON_SHIP,
+		},
+		Layers: []*pb.PolicyLayer{{
+			Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO",
+			Emcon: &pb.EmconSetting{
+				Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "TAO",
+				Echelon: pb.Echelon_ECHELON_SHIP, ExpiresAtUnixMs: expired,
+			},
+		}},
+	}, pb.Echelon_ECHELON_SHIP)
+	if info.Emcon != "NORMAL" || info.EmconSetBy != "" || info.EmconLocked {
+		t.Fatalf("policy info should show default NORMAL after EMCON expiry: %+v", info)
 	}
 }
