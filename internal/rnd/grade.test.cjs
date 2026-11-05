@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-test('grader shortcuts leave interactive controls and their children alone', () => {
+test('grader shortcuts leave interactive controls alone and ignore held-key repeats', () => {
   const handlers = {};
   const elements = new Map();
   const document = {
@@ -40,6 +40,11 @@ test('grader shortcuts leave interactive controls and their children alone', () 
     let prevented = false;
     handlers.keydown({key, target: {closest() { return null; }}, preventDefault() { prevented = true; }});
     assert.equal(prevented, true);
+  }
+  for (const key of ['Enter', ' ', '1', 'z', 'ArrowRight']) {
+    let prevented = false;
+    handlers.keydown({key, repeat: true, target: {closest() { return null; }}, preventDefault() { prevented = true; }});
+    assert.equal(prevented, false, 'held ' + key);
   }
   assert.deepEqual(JSON.parse(JSON.stringify(context.calls)), [
     ['grade', 2], ['grade', 2], ['grade', 1], ['grade', 4],
