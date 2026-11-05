@@ -27,6 +27,10 @@ DEFAULT_DETECTOR = Path("~/models/D/yolo11n-640/model.onnx")
 DEFAULT_EMBED = Path("~/models/D/mobileclip-s1")
 EDGE_SCORE_THRESHOLD = 0.35
 UI_WIDTH, UI_HEIGHT = 480, 300
+EXCLUDED_IMAGE_IDS = frozenset(
+    f"video_sailing_drone_inside_a_hurricane/all/sec_{second:04d}"
+    for second in range(1, 12)
+)
 
 DETECTOR_CLASS_MAP = {
     "boat": "vessel",
@@ -69,6 +73,8 @@ def selection_guard(rows: list[dict], splits: dict) -> None:
     for row in rows:
         image_id = str(row.get("image_id") or "")
         dataset_id = str(row.get("dataset_id") or "")
+        if image_id in EXCLUDED_IMAGE_IDS:
+            violations.append(f"{image_id}: non-maritime studio/title frame is excluded")
         if row.get("eval_split") != "dev":
             violations.append(f"{image_id}: eval_split is not 'dev'")
         if dataset_id.lower() == "singapore_maritime":
