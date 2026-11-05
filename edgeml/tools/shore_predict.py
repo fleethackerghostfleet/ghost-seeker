@@ -100,6 +100,8 @@ def main():
     else:
         if args.resolution != 512:
             ap.error("Reference must be the frozen native 512 baseline")
+        if digest(Path("rf-detr-small.pth")) != weights_sha:
+            raise ValueError("Reference COCO checkpoint hash changed")
         detector = RFDetector("RFDETRSmall", "rfdetr-small", device="cuda", score_thr=.001)
         configuration = {"model": "RFDETRSmall", "rfdetr": "1.3.0", "weights": "COCO pretrained", "resolution": 512,
                          "mode": "native", "candidate_score_floor": .001, "tile": None, "overlap": None,
