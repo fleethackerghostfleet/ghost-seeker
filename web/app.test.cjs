@@ -1679,3 +1679,10 @@ test('empty water processing chain explains local retention without claiming sho
  assert.match(html,/Priority scoring \(simulated\)/);
  assert.doesNotMatch(html,/0\.02 ≥ 0\.20|Sent to shore:/);
 });
+
+test('legacy Day settings without prev return to Day after red-light toggles',()=>{
+ const {settings}=settingsContext(JSON.stringify({bar:'left',theme:'day',density:'xl',feed:{showDuplicates:true,review:'sent'}}));
+ settings.toggleRed();assert.equal(settings.get().theme,'red');
+ settings.toggleRed();assert.equal(settings.get().theme,'day');
+ assert.equal(settingsContext(JSON.stringify({theme:'red'})).settings.get().prev,'cic');
+});

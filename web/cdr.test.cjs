@@ -177,3 +177,18 @@ test('full-size transfer preserves previous receipts and decisions across snapsh
  vm.runInContext('upsert(unreceived);renderKpis()',context);
  assert.equal(elements.get('kReceived').textContent,3);
 });
+
+test('manual operator escalation is explained instead of claiming a high model score',()=>{
+ const {elements,context}=setup();
+ context.row={id:'manual',src:{id:'camera',name:'Camera'},ts:new Date(),tier:1,manual:1,central:0,edge:0,dets:[],det:[],sent:true,sentAt:new Date(),upload:{done:true}};
+ vm.runInContext('datasetMode=true;renderBrief(row)',context);
+ const html=elements.get('brief').innerHTML;
+ assert.match(html,/Operator set priority P1/);
+ assert.doesNotMatch(html,/High command-model score/);
+ context.row={...context.row,id:'model',manual:0,central:.9,edge:.9};
+ vm.runInContext('renderBrief(row)',context);
+ assert.match(elements.get('brief').innerHTML,/High command-model score/);
+ context.row={...context.row,id:'auto',manual:1,autoSent:true};
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ assert.doesNotMatch(elements.get('brief').innerHTML,/set priority P1/);
+});
