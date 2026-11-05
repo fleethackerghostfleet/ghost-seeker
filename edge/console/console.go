@@ -97,7 +97,7 @@ func (s *Service) GetQueue(ctx context.Context, req *connect.Request[pb.GetQueue
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	plan := s.Sch.BuildPlan(rows, s.Sch.Link().State().EstimateBps, s.Clk.Now())
+	plan := s.Sch.PreviewPlan(rows, s.Sch.Link().State().EstimateBps, s.Clk.Now())
 	resp := &pb.GetQueueResponse{}
 	var tb int64
 	for i, e := range plan.Queue {

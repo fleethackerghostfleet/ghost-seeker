@@ -157,6 +157,7 @@ func main() {
 	mux.Handle(path, opauth.RequireBearer(operator, h))
 	mux.Handle("/blob/", opauth.RequireBearer(operator, svc.BlobHandler()))
 	mux.Handle("GET /policy/audit", opauth.RequireBearer(operator, svc.PolicyAuditHandler()))
+	mux.Handle("/ship/policy", opauth.RequireBearer(operator, svc.ShipPolicyHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	httpx.StaticUI(mux, *uiDir, "edge "+*id)
 	srv := httpx.Server(*listen, h2c.NewHandler(httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux), &http2.Server{}))
