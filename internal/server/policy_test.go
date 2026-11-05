@@ -7,6 +7,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -177,6 +179,57 @@ func TestRestoreOperatorLayerSkipsScopedRules(t *testing.T) {
 	if len(directives) != 1 || len(directives[0].Rules) != 1 ||
 		len(directives[0].Rules[0].Classes) != 1 || directives[0].Rules[0].Classes[0] != "tanker" {
 		t.Fatalf("restored directives=%+v", directives)
+	}
+}
+
+func TestRestoreSyncsConflictsAgainstRebuiltOperatorRules(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+	backend, err := policy.NewFileBackend(filepath.Join(t.TempDir(), "policy.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard, err := policy.NewStore(ctx, backend, policy.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = guard.Accept(ctx, &pb.Policy{
+		Id: "persisted", Version: 1, IssuedAtUnixMs: now.UnixMilli(),
+		Layers: []*pb.PolicyLayer{
+			{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
+				{Id: "ctf72-submarine", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
+			}},
+			{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO", Rules: []*pb.InterestRule{
+				{Id: "directive:0:scoped", BoostLabels: []string{"tanker"}},
+				{Id: "directive:1", SuppressLabels: []string{"submarine"}},
+			}},
+		},
+	}, "console", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data := store.New(10)
+	rt := newPolicyRuntime(serverOptions{backend: backend}, data)
+	if rt.err != nil {
+		t.Fatal(rt.err)
+	}
+	directives := data.Directives()
+	var operator *command.Directive
+	var sourceDirectives []command.Directive
+	for i := range directives {
+		if directives[i].ID == "directive" {
+			operator = &directives[i]
+		}
+		if directives[i].Source != "" {
+			sourceDirectives = append(sourceDirectives, directives[i])
+		}
+	}
+	if operator == nil || len(operator.Rules) != 1 || operator.Blocked == "" {
+		t.Fatalf("restored operator directive=%+v", operator)
+	}
+	if got, want := command.EffectiveWeights("maritime", directives), command.EffectiveWeights("maritime", sourceDirectives); !reflect.DeepEqual(got, want) {
+		t.Fatalf("blocked restored rule changed effective weights: got=%v want=%v", got, want)
 	}
 }
 

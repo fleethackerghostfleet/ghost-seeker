@@ -79,7 +79,12 @@ func newPolicyRuntime(options serverOptions, data *store.Store) *policyRuntime {
 				rt.higherLayers = append(rt.higherLayers, proto.Clone(layer).(*pb.PolicyLayer))
 			}
 		}
-		rt.syncStore(active, time.Now())
+		layers := make([]*pb.PolicyLayer, 0, len(rt.higherLayers)+1)
+		for _, layer := range rt.higherLayers {
+			layers = append(layers, proto.Clone(layer).(*pb.PolicyLayer))
+		}
+		layers = append(layers, rt.operatorLayer())
+		rt.syncStore(&pb.Policy{Layers: layers}, time.Now())
 		rt.armExpiry(active)
 		return rt
 	}
