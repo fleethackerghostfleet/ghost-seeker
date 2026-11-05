@@ -78,6 +78,22 @@ def auroc(pos: np.ndarray, neg: np.ndarray) -> float:
     return float(roc_auc_score(np.r_[np.ones(len(pos)), np.zeros(len(neg))], np.r_[pos, neg]))
 
 
+class _SidecarView:
+    """The all-label YOLO cache as the live sidecar sees it (its detector keeps only ``runtime.detectors.MARITIME_KEEP``),
+    so a cached `bench`/`kite` box cannot suppress an anomaly proposal that the sidecar's fusion would keep."""
+
+    def __init__(self, base):
+        from edgeml.runtime.detectors import MARITIME_KEEP as SIDECAR_KEEP
+
+        self.base, self.keep, self.name = base, SIDECAR_KEEP, getattr(base, "name", "cached")
+
+    def set_frame(self, fi):
+        self.base.set_frame(fi)
+
+    def detect(self, img):
+        return [d for d in self.base.detect(img) if d.label in self.keep]
+
+
 # ------------------------------------------------------------------------------------------------------------- cache
 def cmd_cache(a):
     from edgeml.runtime.detectors import load_detector
@@ -93,7 +109,7 @@ def cmd_cache(a):
         if a.fusion is not None:                      # replay the cached YOLO dets, run only the anomaly proposer live
             from edgeml.detectors.anomaly import AnomalyFusionDetector, SeaAnomalyProposer
 
-            base = CachedDetector(det_cache_path(data, a.base_cache, seq))
+            base = _SidecarView(CachedDetector(det_cache_path(data, a.base_cache, seq)))
             det = AnomalyFusionDetector(base, SeaAnomalyProposer(**json.loads(a.fusion)))
         rows = []
         for fi, t, p in seq.frames():
