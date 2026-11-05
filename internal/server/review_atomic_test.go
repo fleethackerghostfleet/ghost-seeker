@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
@@ -46,6 +47,10 @@ func TestReviewEvictionDuringAppend(t *testing.T) {
 			close(evicted)
 		}()
 		<-started
+		select {
+		case <-evicted:
+		case <-time.After(100 * time.Millisecond):
+		}
 		return l.Append(rec)
 	}}
 	w := httptest.NewRecorder()
