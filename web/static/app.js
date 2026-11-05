@@ -16,6 +16,23 @@ function formChipsHTML(it){
  return FORMS.map(k=>{const st=f[k]||{state:'none'};const title=st.state==='received'?`${FORM_NAME[k]}: received (${fmtBytes(st.bytes)})`:st.state==='partial'?`${FORM_NAME[k]}: ${fmtBytes(st.received)} of ${fmtBytes(st.bytes)} — streaming over the link`:st.state==='pending'?`${FORM_NAME[k]}: waiting on the ship (${fmtBytes(st.bytes)})`:st.state==='offered'?`${FORM_NAME[k]}: available on the ship — request it to send it`:`${FORM_NAME[k]}: not available`;
   return`<span class="fchip ${st.state}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
 }
+function uploadState(it){
+ let u=it.upload;
+ if(it.live){
+  const forms=it.live.forms||{};
+  const key=it.live.imageForm||['full','crop','thumb'].find(k=>forms[k]?.state==='partial')||['thumb','crop','full'].find(k=>['pending','offered'].includes(forms[k]?.state));
+  const f=forms[key]||{};
+  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
+ }
+ const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
+ const done=!!u?.done&&bytes>0,queued=!done&&sent===0;
+ const label=done?'✓ Uploaded':queued?'Queued: waiting for bandwidth':`Uploading to shore: ${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
+ return{bytes,sent,done,queued,label};
+}
+function uploadHTML(it){
+ const u=uploadState(it);
+ return`<div class="upload-info${u.done?' uploaded':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)}</span></div>`;
+}
 function mergeLiveConfig(live){
  if(!live)return;
  for(const [k,v]of Object.entries(live.classes||{}))if(!CLS[k])CLS[k]=v;
@@ -301,13 +318,14 @@ function topLine(it){
 function cardHTML(it,mini){
  return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;el.className=`card p${it.tier}${it.fresh?' fresh':''}${it.sent?' sent':''}${it.reviewed?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
  el.querySelector('.night-badge')?.remove();el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
  const t=el.querySelector('.tier');t.className='tier t'+it.tier;t.textContent=`P${it.tier} ${TNAME[it.tier]}`;t.title=it.tier===1?'Notify Commander':'Image priority';
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
  el.querySelector('.cs').textContent=it.central.toFixed(2);
+ const upload=el.querySelector('.upload-slot');if(upload)upload.innerHTML=uploadHTML(it);
  if(it.live){el.classList.toggle('sup',!!it.live.suppressed);const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?FORM_NAME[it.live.imageForm]:'Summary only';ft.title=it.live.imageForm?`Image shown is the ${FORM_NAME[it.live.imageForm]} (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the image-version labels below for transfer status.`:'Only the object summary has arrived. Images follow as bandwidth becomes available.';el.querySelector('.suptag').title=liveSuppressReason(it).replace(/<[^>]+>/g,'');el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
  const dl=it.central-it.base,de=el.querySelector('.delta');de.className='delta '+(dl>.04?'up':dl<-.04?'dn':'');de.textContent=dl>.04?`▲${dl.toFixed(2).slice(1)}`:dl<-.04?`▼${(-dl).toFixed(2).slice(1)}`:'';
 }
@@ -330,6 +348,8 @@ function renderDirBar(){
 }
 function renderStats(){
  const vis=items.filter(i=>state.src==='ALL'||i.src.id===state.src);
+ const uploads=vis.filter(i=>!i.dismissed).map(uploadState),done=uploads.filter(u=>u.done).length,queued=uploads.filter(u=>u.queued).length;
+ const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${uploads.length-done-queued} uploading · ${queued} queued · ${done} uploaded`;
  $('hsImgs').textContent=vis.length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
  const unrevLive=vis.filter(i=>!i.reviewed&&!i.dismissed).length;
  if(LIVE){renderLiveStrip();$('rvCount').textContent=unrevLive||'';if(state.page==='rv')rvProgress();return}
@@ -432,7 +452,7 @@ function renderDetailContent(){
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   ${it.live?liveLadderHTML(it):`<div class="dsec"><h4>Processing chain</h4><ul class="tl">
    <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
-   <li><i></i><div>Sent to shore<br><small>${it.src.link} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
+   <li><i></i><div>Sent to shore: ${esc(uploadState(it).label)}<br><small>${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div></li>
    <li><i></i><div>Stored in imagery database<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
    <li><i></i><div>Shore priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
   </ul></div>`}

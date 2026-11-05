@@ -277,6 +277,20 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
  assert.equal(vm.runInContext('indicator.textContent',context),'RECONNECTING');
  assert.equal(vm.runInContext("$('live').title",context),'Reconnecting — click to resume feed');
 });
+test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
+ const context=setup();
+ assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 256 kbps/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40,sent:40,done:true}})',context),/✓ Uploaded/);
+ assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
+ assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
+});
+test('live uploads derive progress from shown form, never from commander escalation',()=>{
+ const context=setup();
+ assert.equal(vm.runInContext("uploadState({sent:true,live:{imageForm:'crop',forms:{crop:{state:'partial',bytes:100,received:25}}}}).sent",context),25);
+ assert.equal(vm.runInContext("uploadState({live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100,received:0}}}}).done",context),true);
+ assert.equal(vm.runInContext("uploadState({live:{forms:{thumb:{state:'pending',bytes:100}}}}).queued",context),true);
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({

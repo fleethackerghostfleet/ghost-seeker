@@ -47,7 +47,7 @@ func main() {
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
-	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
+	linkBps := flag.Int64("link-bps", 256_000, "ship-to-shore link rate in bits/s (0 disables uploads)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -120,6 +120,7 @@ func main() {
 	}
 
 	data := store.New(*retain)
+	data.SetLinkBPS(*linkBps)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
@@ -276,8 +277,16 @@ func shaperTarget(shoreURL string) (string, error) {
 
 func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	last := time.Now()
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
+		now := time.Now()
+		updates := data.AdvanceUploads(now.Sub(last))
+		last = now
+		_, cdr := data.Stats()
+		for _, updated := range updates {
+			app.PublishUpdate(updated, cdr)
+		}
 		_, _, _, state := data.Snapshot()
 		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
 		stored, evicted := data.Add(item, extra)

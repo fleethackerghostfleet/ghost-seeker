@@ -34,20 +34,22 @@ type State struct {
 }
 
 type Store struct {
-	mu         sync.RWMutex
-	retain     int
-	items      []command.Item
-	stats      command.Stats
-	cdr        int
-	model      string
-	directives []command.Directive
+	mu              sync.RWMutex
+	retain          int
+	items           []command.Item
+	stats           command.Stats
+	cdr             int
+	model           string
+	directives      []command.Directive
+	linkBPS         int64
+	uploadRemainder int64
 }
 
 func New(retain int) *Store {
 	if retain < 1 {
 		retain = 1
 	}
-	return &Store{retain: retain, model: "maritime"}
+	return &Store{retain: retain, model: "maritime", linkBPS: 256_000}
 }
 
 func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
@@ -64,6 +66,7 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	s.stats.DB++
 	item.DBID = s.stats.DB + 180000
 	command.Rescore(item, s.model, s.directives)
+	item.Upload = command.Upload{Bytes: int64(item.KB)*1024 + 512, BPS: s.linkBPS}
 	s.items = append(s.items, cloneItem(*item))
 	evicted := ""
 	if len(s.items) > s.retain {
@@ -306,6 +309,8 @@ func (s *Store) RequestFullRes(id, by string) (command.Item, int, error) {
 		if !item.FullRes {
 			now := time.Now()
 			item.FullRes, item.FullResBy, item.FullResAt = true, string(r), &now
+			item.Upload.Bytes = max(item.Upload.Bytes*16, 4*1024*1024)
+			item.Upload.Done = false
 		}
 		return cloneItem(*item), s.cdr, nil
 	}
