@@ -66,12 +66,12 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string, r
 		}
 		pol.Layers = cloneLayers(current.Layers)
 		if len(pol.Layers) == 0 && !replace {
-			pol.Layers = wrapFlatPolicy(current, pol.IssuedBy, echelon)
+			pol.Layers = wrapFlatPolicy(current, b.issuer(), echelon)
 		}
 	}
-	operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy, echelon)
+	operatorLayer := findOperatorLayer(pol.Layers, b.issuer(), echelon)
 	if operatorLayer < 0 {
-		pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: echelon, IssuedBy: pol.IssuedBy})
+		pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: echelon, IssuedBy: b.issuer()})
 		operatorLayer = len(pol.Layers) - 1
 	}
 	layer := pol.Layers[operatorLayer]
@@ -108,7 +108,7 @@ func (b *Bridge) addDirective(ctx context.Context, pol *pb.Policy) (*pb.SetPolic
 		return nil, "", err
 	}
 	ruleID := ""
-	if i := findOperatorLayer(pol.Layers, pol.IssuedBy, b.echelon()); i >= 0 {
+	if i := findOperatorLayer(pol.Layers, b.issuer(), b.echelon()); i >= 0 {
 		if rules := pol.Layers[i].Rules; len(rules) > 0 {
 			ruleID = rules[len(rules)-1].Id
 		}
@@ -145,12 +145,12 @@ func (b *Bridge) removeDirectives(ctx context.Context, ids []string) (*pb.SetPol
 	pol := proto.Clone(current).(*pb.Policy)
 	pol.IssuedBy = issuedBy
 	pol.Layers = cloneLayers(pol.Layers)
-	index := findOperatorLayer(pol.Layers, issuedBy, echelon)
+	index := findOperatorLayer(pol.Layers, b.issuer(), echelon)
 	if index < 0 {
 		if len(ids) > 0 {
 			return nil, errDirectiveNotFound
 		}
-		pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: echelon, IssuedBy: issuedBy})
+		pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: echelon, IssuedBy: b.issuer()})
 		index = len(pol.Layers) - 1
 	}
 	layer := pol.Layers[index]

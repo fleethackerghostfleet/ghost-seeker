@@ -1208,18 +1208,10 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	pol.IssuedBy = issuedBy
 	if len(pol.Layers) > 0 {
 		pol.Layers = cloneLayers(pol.Layers)
-		operatorLayer := findOperatorLayer(pol.Layers, issuedBy, b.echelon())
+		operatorLayer := findOperatorLayer(pol.Layers, b.issuer(), b.echelon())
 		if operatorLayer < 0 {
-			for i, layer := range pol.Layers {
-				if layer != nil && layer.Echelon == b.echelon() {
-					operatorLayer = i
-					break
-				}
-			}
-			if operatorLayer < 0 {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: issuedBy})
-				operatorLayer = len(pol.Layers) - 1
-			}
+			pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: b.issuer()})
+			operatorLayer = len(pol.Layers) - 1
 		}
 		pol.Layers[operatorLayer].Rules = withoutEmconOnlyRules(pol.Layers[operatorLayer].Rules)
 		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
@@ -1238,7 +1230,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 				SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...)})
 		}
 		pol.Layers = []*pb.PolicyLayer{{
-			Echelon: b.echelon(), IssuedBy: issuedBy, Rules: rules,
+			Echelon: b.echelon(), IssuedBy: b.issuer(), Rules: rules,
 			Emcon: &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()},
 		}}
 	}
