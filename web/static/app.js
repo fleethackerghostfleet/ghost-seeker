@@ -280,6 +280,8 @@ async function init(){
  $('polRaw').oninput=()=>{policyRawTouched=true};
  $('polRawValidate').onclick=()=>rawPolicyAction('validate');$('polRawApply').onclick=()=>rawPolicyAction('apply');$('polRawReload').onclick=()=>{policyRawTouched=false;loadRawPolicy(true)};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
+ $('grid').oncontextmenu=openCardMenu;$('cmSendNow').onclick=()=>sendNow($('cardMenu').dataset.id);$('cmOpen').onclick=()=>{const id=$('cardMenu').dataset.id;closeCardMenu();openDetail(id)};
+ document.addEventListener('pointerdown',e=>{if(!e.target.closest('#cardMenu'))closeCardMenu()},true);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cardMenu').hidden){e.stopImmediatePropagation();closeCardMenu()}},true);window.addEventListener('blur',closeCardMenu);window.addEventListener('hashchange',closeCardMenu);$('feed').addEventListener('scroll',closeCardMenu);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
@@ -336,6 +338,25 @@ function topLine(it){
 }
 function cardHTML(it,mini){
  return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+}
+function sendNowBlocked(it){const u=uploadState(it);return it.live||LIVE?'Not available on the live shore connection':typeof gsAuth!=='undefined'&&gsAuth.viewer()?'Viewer role is read-only':u.done?'Already uploaded to shore':u.next?'Already at the top of the send queue':''}
+function openCardMenu(e){
+ const c=e.target.closest('.card'),it=c&&findItem(c.dataset.id);if(!it)return;
+ e.preventDefault();
+ const m=$('cardMenu'),blocked=sendNowBlocked(it);
+ m.dataset.id=it.id;$('cmSendNow').disabled=!!blocked;$('cmSendNowSub').textContent=blocked||'Moves this image to the top of the send queue';
+ m.hidden=false;
+ const r=m.getBoundingClientRect();
+ m.style.left=Math.max(4,Math.min(e.clientX,innerWidth-r.width-4))+'px';m.style.top=Math.max(4,Math.min(e.clientY,innerHeight-r.height-4))+'px';
+ $('cmSendNow').focus();
+}
+function closeCardMenu(){const m=$('cardMenu');if(m&&!m.hidden)m.hidden=true}
+async function sendNow(id){
+ closeCardMenu();
+ const it=findItem(id);if(!it)return;
+ const blocked=sendNowBlocked(it);if(blocked){toast(blocked);return}
+ try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:'next'});cdr=result.cdr;applyItemUpdate(result.item);toast(`Sending now: ${it.src.id} image moved to the top of the send queue`)}
+ catch(error){toast(error.message)}
 }
 function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
@@ -525,7 +546,7 @@ async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{m
 function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
-let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
+let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
 const teamSync={available:false,on:false,proposals:[],hidden:new Set(),resolved:new Set(),local:new Map(),accepting:new Map(),revision:0,posting:false};
 function setupTeamSync(available){
  teamSync.available=available;
@@ -568,7 +589,7 @@ function receiveTeamProposal(p,finish=false){
 }
 async function proposeTeamSuggestion(s){
  teamSync.posting=true;teamSync.local.set(s.cls+':'+s.dir,s);
- try{const data=await request('/api/review-sync/proposals','POST',{cls:s.cls,dir:s.dir,n:s.n,of:s.of,highRisk:!!s.highRisk,reviewer:reviewerName});receiveTeamProposal(data.proposal)}
+ try{const data=await request('/api/review-sync/proposals','POST',{cls:s.cls,dir:s.dir,n:s.n,of:s.of,highRisk:!!s.highRisk,from:s.from||0,to:s.to||0,reviewer:reviewerName});receiveTeamProposal(data.proposal)}
  catch(error){toast('Team sync: '+error.message);if(!rv.ask){rv.ask={kind:'sug',s};renderAsk()}}
  finally{teamSync.posting=false}
 }
@@ -600,6 +621,7 @@ function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.don
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
  if(!rv.ask&&teamSync.on){const p=teamSync.proposals.find(p=>!teamSync.hidden.has(p.id));if(p)rv.ask={kind:'sug',s:p,team:p.id}}
+ renderNext(rv.cur);
  box.classList.toggle('rvask-suggestion',rv.ask?.kind==='sug');
  box.classList.toggle('rvask-team',!!rv.ask?.team);
  if(!rv.ask){box.hidden=true;box.innerHTML='';return}
@@ -610,10 +632,11 @@ function renderAsk(){
   return;
  }
  const s=rv.ask.s,label=CLS[s.cls]?.lab||s.cls,verb=s.dir==='lower'?'lowered':'raised',action=s.dir==='lower'?'Lower':'Raise';
- box.innerHTML=`<div class="rvask-copy"><b>You ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact. ${action} ${esc(label)} priority?</b>${s.highRisk?`<span class="rvask-warning">${esc(label)} is normally high priority — confirm this change.</span>`:''}</div><div class="rvask-actions"><button class="kb rvask-btn" data-ask="sug" data-answer="yes" ${rv.askBusy?'disabled':''}><kbd>Y</kbd>Yes</button><button class="kb rvask-btn" data-ask="sug" data-answer="no" ${rv.askBusy?'disabled':''}><kbd>N</kbd>No</button><button class="kb rvask-btn rvask-skip" data-ask="sug" data-answer="later" ${rv.askBusy?'disabled':''}><kbd>L</kbd>Later</button></div>`;
+ const change=tierChange(s);
+ box.innerHTML=`<div class="rvask-copy"><span class="rvask-kicker">Suggested priority change</span><b class="rvask-change">${change?`${esc(label)}: <span class="tpill t${change.from}">P${change.from} ${TNAME[change.from]}</span> → <span class="tpill t${change.to}">P${change.to} ${TNAME[change.to]}</span>`:`${action} ${esc(label)} priority?`}</b><span>You ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact${change?` from P${change.from} ${TNAME[change.from]} to P${change.to} ${TNAME[change.to]}`:''}. Yes adds a rule that ${s.dir==='lower'?'lowers':'raises'} ${esc(label)} priority for new images.</span>${s.highRisk?`<span class="rvask-warning">${esc(label)} is normally high priority — confirm this change.</span>`:''}</div><div class="rvask-actions"><button class="kb rvask-btn" data-ask="sug" data-answer="yes" ${rv.askBusy?'disabled':''}><kbd>Y</kbd>Yes, apply change</button><button class="kb rvask-btn" data-ask="sug" data-answer="no" ${rv.askBusy?'disabled':''}><kbd>N</kbd>No, keep as is</button><button class="kb rvask-btn rvask-skip" data-ask="sug" data-answer="later" ${rv.askBusy?'disabled':''}><kbd>L</kbd>Ask me later</button></div>`;
  if(rv.ask.team){
   const p=teamSync.proposals.find(p=>p.id===rv.ask.team)||s;
-  box.innerHTML=`<div class="rvask-team-banner">TEAM DISCUSSION — proposed by ${esc(p.proposedBy)}. Discuss with the team before accepting.</div><div class="rvask-copy"><b>${action} ${esc(label)} priority?</b><span>${esc(p.proposedBy)} ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact.</span>${s.highRisk?'<span class="rvask-warning">Normally high priority — confirm this change.</span>':''}</div><ul class="rvask-votes">${Object.entries(p.votes).map(([name,vote])=>`<li class="${name===reviewerName?'own-vote':''}">${esc(name)}: ${esc(vote)}${name===reviewerName?' (you)':''}</li>`).join('')||'<li>No votes yet — discuss with your team.</li>'}</ul><div class="rvask-actions">${[['Y','Agree','agree'],['N','Disagree','disagree'],['A','Accept for team','accepted'],['R','Reject for team','rejected'],['L','Later','later']].map(([key,label,answer])=>`<button class="kb rvask-btn" data-ask="team" data-answer="${answer}" ${rv.askBusy?'disabled':''}><kbd>${key}</kbd>${label}</button>`).join('')}</div>`;
+  box.innerHTML=`<div class="rvask-team-banner">TEAM DISCUSSION — proposed by ${esc(p.proposedBy)}. Discuss with the team before accepting.</div><div class="rvask-copy"><b class="rvask-change">${change?`${esc(label)}: <span class="tpill t${change.from}">P${change.from} ${TNAME[change.from]}</span> → <span class="tpill t${change.to}">P${change.to} ${TNAME[change.to]}</span>`:`${action} ${esc(label)} priority?`}</b><span>${esc(p.proposedBy)} ${verb} ${s.n} of the last ${s.of} images where ${esc(label)} was the top contact.</span>${s.highRisk?'<span class="rvask-warning">Normally high priority — confirm this change.</span>':''}</div><ul class="rvask-votes">${Object.entries(p.votes).map(([name,vote])=>`<li class="${name===reviewerName?'own-vote':''}">${esc(name)}: ${esc(vote)}${name===reviewerName?' (you)':''}</li>`).join('')||'<li>No votes yet — discuss with your team.</li>'}</ul><div class="rvask-actions">${[['Y','Agree','agree'],['N','Disagree','disagree'],['A','Accept for team','accepted'],['R','Reject for team','rejected'],['L','Later','later']].map(([key,label,answer])=>`<button class="kb rvask-btn" data-ask="team" data-answer="${answer}" ${rv.askBusy?'disabled':''}><kbd>${key}</kbd>${label}</button>`).join('')}</div>`;
  }
 }
 function checkLearningSuggestion(){
@@ -655,6 +678,18 @@ function reviewAskKey(k){
  }
  if(k==='y')answerSuggestion('yes');else if(k==='n')answerSuggestion('no');else if(k==='l'||k==='escape')answerSuggestion('later');
 }
+function tierChange(s){const from=Number(s?.from),to=Number(s?.to);return from>=1&&from<=4&&to>=1&&to<=4&&from!==to?{from,to}:null}
+function renderNext(it){
+ const box=$('rvNext');if(!box)return;
+ let step;
+ if(!reviewerName)step='Enter your reviewer name above to start reviewing.';
+ else if(rv.ask?.kind==='why')step='Answer the question above to continue: press the number of your choice, or <kbd>Esc</kbd> to skip.';
+ else if(rv.ask)step='Answer the yellow question to continue.';
+ else if(!it)step='No images left to review. New images will appear here.';
+ else step=`${rv.last?'This is the next image. ':''}Press <kbd>Space</kbd> to agree with P${it.centralTier} ${TNAME[it.centralTier]}, or <kbd>1</kbd>–<kbd>4</kbd> to set a different priority. Each choice saves and moves on.`;
+ box.innerHTML=(rv.last?`<span class="rvnext-done">${esc(rv.last)}</span>`:'')+`<span class="rvnext-step"><b>Next:</b> ${step}</span>`;
+}
+function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)return;box.classList.remove('flash');void box.offsetWidth;box.classList.add('flash')}
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
@@ -667,7 +702,7 @@ function renderReviewContent(){
  const age=Math.max(0,Math.round((Date.now()-it.ts)/60000));
  const classifications=rows.filter(([d])=>d.ship).slice(0,3).map(([d])=>shipLine(d));
  [...$('rvKeys').querySelectorAll('[data-a]')].forEach(b=>b.classList.toggle('sugg',b.dataset.a===String(sug)));
- $('accLbl').textContent=`Agree with suggested priority · P${sug} ${TNAME[sug]}`;
+ $('accLbl').textContent=`Agree (P${sug} ${TNAME[sug]}) & next`;
  $('rvMain').innerHTML=`<div class="rvimg"><div class="rvframe p${sug}">${largeImage(it)}</div></div>
  <div class="rvside">
   <div class="rvcard"><div class="lbl">Model suggests</div><div class="rvsug"><span class="tier t${sug}">P${sug} ${TNAME[sug]}</span></div><div class="rvsub" title="Command score is the shore-side priority estimate; edge score is the ship-side estimate.">Shore score ${it.central.toFixed(2)} · ship score ${it.edge.toFixed(2)}${state.directives.length?` · ${state.directives.length} directive${state.directives.length>1?'s':''} active`:''}</div></div>
@@ -680,19 +715,19 @@ function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)r
 function rvAct(a){
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it;rv.shown=null;rv.busy=false;setLast('↶ Undone: you are back on that image.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
  const it=rv.cur;if(!it)return;
- if(a==='skip'){rv.skipped[it.id]=Date.now();rv.cur=null;rv.shown=null;renderReview();return}
+ if(a==='skip'){rv.skipped[it.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
  const sug=it.centralTier,p={id:it.id,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
- let msg,col;
+ let msg,col,receipt;
  let changes={reviewed:true};
- if('1234'.includes(a)){changes.manual=+a;msg=`P${a} ${TNAME[+a]}`;col=tcol(+a);p.agreed=+a===sug}
- else if(a==='accept'){changes.manual=sug;msg=`✓ P${sug} ${TNAME[sug]}`;col=tcol(sug);p.agreed=true}
- else if(a==='dismiss'){changes.manual=4;changes.dismissed=true;msg='✕ Not relevant';col='#9aa7b3'}
- else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--good)'}
+ if('1234'.includes(a)){changes.manual=+a;msg=`P${a} ${TNAME[+a]}`;col=tcol(+a);p.agreed=+a===sug;receipt=p.agreed?`✓ Saved: last image kept at P${a} ${TNAME[+a]}.`:`✓ Saved: last image changed P${sug} ${TNAME[sug]} → P${a} ${TNAME[+a]}.`}
+ else if(a==='accept'){changes.manual=sug;msg=`✓ P${sug} ${TNAME[sug]}`;col=tcol(sug);p.agreed=true;receipt=`✓ Saved: you agreed with P${sug} ${TNAME[sug]} on the last image.`}
+ else if(a==='dismiss'){changes.manual=4;changes.dismissed=true;msg='✕ Not relevant';col='#9aa7b3';receipt='✓ Saved: last image marked not relevant and hidden from the feed.'}
+ else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--good)';receipt='✓ Saved: last image sent to the Commander.'}
  else return;
  rv.busy=true;
- submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
+ submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}setLast(receipt+' Press Z to undo.');rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').trim().slice(0,80)}catch{}

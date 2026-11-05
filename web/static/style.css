@@ -305,6 +305,25 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .wb-held{display:flex;align-items:center;gap:10px;margin:6px 0;padding:6px 10px;border:1px solid #5a4c1e;border-radius:4px;background:#2a240f;color:var(--p3)}
 .wb-held[hidden]{display:none}
 .kgap{width:8px;flex:none}
+.kb .kb-act{line-height:1.2;text-align:center}
+.rvkeys .kb kbd{font:800 15px var(--mono);min-width:36px;padding:2px 10px;text-align:center;color:var(--text)}
+.rvnext{flex:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px;padding:10px 20px 0;font-size:16px;color:var(--text);border-radius:6px}
+.rvnext-done{font-weight:800;color:var(--good)}
+.rvnext-step b{color:var(--accent)}
+.rvnext kbd{font:700 14px var(--mono);background:#0a1016;border:1px solid var(--line);border-radius:4px;padding:0 6px;color:var(--text)}
+.rvnext.flash{animation:rvnext 1.4s ease}
+@keyframes rvnext{0%{background:rgba(79,195,217,.35)}100%{background:transparent}}
+.rvprog-lbl{color:var(--text);font-weight:700}
+.rvbar-lbl{font-size:12px;color:var(--muted);margin-left:-8px}
+.rvask-kicker{font-size:clamp(14px,1.3vw,19px);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--suggestion-border,var(--p3))}
+.rvask-change .tpill{padding:0 .3em;border-radius:6px;color:#0b0f14;white-space:nowrap}.rvask-change .tpill.t4{color:#e6edf3}
+.cardmenu{position:fixed;z-index:80;min-width:260px;display:flex;flex-direction:column;gap:4px;padding:6px;background:var(--panel);border:2px solid var(--accent);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.55)}
+.cardmenu[hidden]{display:none}
+.cardmenu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--text);font:inherit;font-size:15px;font-weight:800;text-align:left;cursor:pointer}
+.cardmenu button small{font-size:12px;font-weight:500;color:var(--muted)}
+.cardmenu button:hover:not(:disabled),.cardmenu button:focus-visible{filter:brightness(1.25)}
+.cardmenu button:disabled{opacity:.55;cursor:default}
+.cardmenu .cm-send{border-color:var(--good);color:var(--good)}
 .rvflash{position:absolute;left:calc((100% - 360px)/2 + 20px);top:46%;transform:translate(-50%,-50%) scale(.85);font-size:52px;font-weight:900;padding:14px 36px;border-radius:16px;background:rgba(8,14,20,.88);border:2px solid currentColor;opacity:0;pointer-events:none;transition:.15s;z-index:5;white-space:nowrap}
 .rvflash.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .rvdone{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:16px}

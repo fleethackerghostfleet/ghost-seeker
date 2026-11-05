@@ -15,7 +15,7 @@ func TestReviewSync(t *testing.T) {
 	s := New(store.New(10))
 	c, _ := s.hub.add()
 	defer s.hub.remove(c)
-	body := map[string]any{"cls": "bird", "dir": "raise", "n": 4, "of": 5, "reviewer": "Alice"}
+	body := map[string]any{"cls": "bird", "dir": "raise", "n": 4, "of": 5, "from": 3, "to": 2, "reviewer": "Alice"}
 	create := func() *httptest.ResponseRecorder { return request(s, "POST", "/api/review-sync/proposals", body) }
 	r := create()
 	if r.Code != 201 {
@@ -28,6 +28,9 @@ func TestReviewSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := result.Proposal.ID
+	if result.Proposal.From != 3 || result.Proposal.To != 2 {
+		t.Fatalf("tier change not kept: %+v", result.Proposal)
+	}
 	e := <-c.events
 	if e.name != "review-sync" {
 		t.Fatal(e.name)
@@ -83,6 +86,8 @@ func TestReviewSyncValidationAndCap(t *testing.T) {
 		{"cls": "bird", "dir": "raise", "n": 4, "of": 5, "reviewer": " "},
 		{"cls": "bird", "dir": "raise", "n": 4, "of": 5, "reviewer": strings.Repeat("界", 81)},
 		{"cls": "bird", "dir": "raise", "n": 6, "of": 5, "reviewer": "A"},
+		{"cls": "bird", "dir": "raise", "n": 4, "of": 5, "from": 5, "to": 2, "reviewer": "A"},
+		{"cls": "bird", "dir": "raise", "n": 4, "of": 5, "from": 3, "to": -1, "reviewer": "A"},
 	} {
 		r := request(s, "POST", "/api/review-sync/proposals", body)
 		if r.Code != 400 {
