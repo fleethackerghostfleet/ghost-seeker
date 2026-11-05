@@ -61,6 +61,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 				},
 				Conf:  math.Round(randBetween(rng, .55, .98)*100) / 100,
 				Attrs: makeAttributes(rng, detection.Cls),
+				Ship:  detection.Ship,
 			})
 		}
 	} else {

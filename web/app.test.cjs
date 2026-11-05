@@ -255,3 +255,12 @@ test('paused updates do not requeue evicted IDs and unpaused updates still add u
  vm.runInContext("state.paused=false;applyItemUpdate(raw('new',1))",context);
  assert.equal(vm.runInContext("items.length===1&&items[0].id==='new'&&items[0].tier===1",context),true);
 });
+
+test('shipLine formats classified ships and omits absent details',()=>{
+ const context=setup();
+ assert.equal(vm.runInContext("shipLine({})",context),'');
+ assert.equal(vm.runInContext("shipLine({ship:{type:'tanker',label:'Tanker',conf:0.82,aspect:'beam',size:'large'}})",context),'Type: Tanker (82%) · Aspect: beam · Size: large');
+ assert.equal(vm.runInContext("shipLine({ship:{type:'unknown',label:'Unknown',conf:0.41}})",context),'Type: Unknown (41%)');
+ assert.equal(vm.runInContext("shipLine({ship:{type:'cargo',label:'Cargo',conf:0.7}})",context),'Type: Cargo (70%)');
+ assert.equal(vm.runInContext("shipVisibleLine({ship:{features:['radar mast','cranes'],markings:'not visible'}})",context),'Visible: radar mast, cranes · markings not visible');
+});

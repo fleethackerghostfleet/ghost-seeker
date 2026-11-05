@@ -11,6 +11,11 @@ func TestLibraryImages(t *testing.T) {
 	for _, source := range Sources {
 		sources[source.ID] = source
 	}
+	shipTypes := map[string]bool{
+		"cargo": true, "container": true, "tanker": true, "passenger": true,
+		"fishing": true, "tug": true, "sailboat": true, "small_boat": true,
+		"warship": true, "submarine": true, "coast_guard": true, "unknown": true,
+	}
 
 	for sourceID, images := range Library {
 		source, ok := sources[sourceID]
@@ -32,6 +37,26 @@ func TestLibraryImages(t *testing.T) {
 				box := detection.B
 				if box.X < 0 || box.Y < 0 || box.W <= 0 || box.H <= 0 || box.X+box.W > 480 || box.Y+box.H > 300 {
 					t.Errorf("image %q class %q has out-of-bounds box %+v", image.File, detection.Cls, box)
+				}
+				if ship := detection.Ship; ship != nil {
+					if !shipTypes[ship.Type] {
+						t.Errorf("image %q class %q has unknown ship type %q", image.File, detection.Cls, ship.Type)
+					}
+					if ship.Conf < 0 || ship.Conf > 1 {
+						t.Errorf("image %q class %q has ship confidence %.3f outside [0, 1]", image.File, detection.Cls, ship.Conf)
+					}
+					if ship.Label == "" {
+						t.Errorf("image %q class %q has empty ship label", image.File, detection.Cls)
+					}
+					if ship.Aspect != "" && ship.Aspect != "bow" && ship.Aspect != "stern" && ship.Aspect != "beam" && ship.Aspect != "quarter" {
+						t.Errorf("image %q class %q has invalid ship aspect %q", image.File, detection.Cls, ship.Aspect)
+					}
+					if ship.Size != "" && ship.Size != "small" && ship.Size != "medium" && ship.Size != "large" {
+						t.Errorf("image %q class %q has invalid ship size %q", image.File, detection.Cls, ship.Size)
+					}
+					if ship.Markings != "" && ship.Markings != "visible" && ship.Markings != "not visible" {
+						t.Errorf("image %q class %q has invalid ship markings %q", image.File, detection.Cls, ship.Markings)
+					}
 				}
 			}
 		}
