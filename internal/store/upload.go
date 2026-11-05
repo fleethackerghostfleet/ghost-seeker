@@ -38,14 +38,21 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 	return command.Item{}, s.cdr, ErrNotFound
 }
 
-func (s *Store) SetLinkBPS(bps int64) {
+func (s *Store) SetLinkBPS(bps int64) []command.Item {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.linkBPS = max(0, bps)
 	s.uploadRemainder = 0
+	var changed []command.Item
 	for i := range s.items {
-		s.items[i].Upload.BPS = s.linkBPS
+		u := &s.items[i].Upload
+		previous := u.BPS
+		u.BPS = s.linkBPS
+		if previous != u.BPS && u.Sent > 0 && !u.Done && u.Override != "hold" {
+			changed = append(changed, cloneItem(s.items[i]))
+		}
 	}
+	return changed
 }
 
 // AdvanceUploads spends one shared link budget in priority order.

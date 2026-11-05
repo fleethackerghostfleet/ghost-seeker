@@ -107,3 +107,43 @@ func TestSimulationUplinkResampleUpdatesOnlyTransferringItems(t *testing.T) {
 		t.Fatalf("expected only moving upload, got %+v", updates)
 	}
 }
+
+func TestSimulationUplinkRateChangesPublishOnlyPartialUploads(t *testing.T) {
+	data := store.New(10)
+	data.SetLinkBPS(8_000_000)
+	data.Add(&command.Item{ID: "completed", KB: 1}, 0)
+	data.AdvanceUploads(time.Second)
+	data.SetLinkBPS(8_000)
+	data.Add(&command.Item{ID: "held", KB: 100}, 0)
+	data.AdvanceUploads(time.Second)
+	if _, _, err := data.SetUploadOverride("held", "hold", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	data.Add(&command.Item{ID: "partial", KB: 100, Manual: 1}, 0)
+	data.AdvanceUploads(time.Second)
+	data.Add(&command.Item{ID: "queued", KB: 100, Manual: 4}, 0)
+	samples := []float64{0, -2, -2, 0}
+	u := newSimulationUplink(data, -1, func() float64 { z := samples[0]; samples = samples[1:]; return z })
+	u.untilSample = time.Nanosecond
+	for _, tc := range []struct {
+		name string
+		rate int64
+		want int
+	}{
+		{"outage", 0, 1},
+		{"unchanged outage", 0, 0},
+		{"recovery", 8_000_000, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			updates := u.advance(u.untilSample)
+			if len(updates) != tc.want {
+				t.Fatalf("got %d updates, want %d: %+v", len(updates), tc.want, updates)
+			}
+			for _, item := range updates {
+				if item.ID != "partial" || item.Upload.Sent != 1000 || item.Upload.BPS != tc.rate {
+					t.Fatalf("unexpected rate update: %+v", item)
+				}
+			}
+		})
+	}
+}

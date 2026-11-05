@@ -27,13 +27,14 @@ function uploadState(it){
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
  const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next',queued=!done&&!held&&sent===0;
- const transfer=`${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
- const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:queued?'Queued: waiting for bandwidth':`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
- return{bytes,sent,done,queued,label,form,held,next};
+ const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
+ const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
+ const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:queued?'Queued: waiting for bandwidth':paused?transfer:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
+ return{bytes,sent,done,queued,label,form,held,next,paused};
 }
 function uploadHTML(it){
  const u=uploadState(it);
- return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?'Upload next (operator)':(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+ return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.paused?'Link outage, paused':(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
 }
 function uploadControlsHTML(it){
  const u=uploadState(it),live=!!(LIVE||it.live),viewer=typeof gsAuth!=='undefined'&&gsAuth.viewer();

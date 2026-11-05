@@ -307,6 +307,18 @@ test('shore upload rendering covers queued, partial, completed and invalid paylo
  assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
 });
+test('partial simulation uploads show a link outage in the card and drawer state',()=>{
+ const context=setup();
+ vm.runInContext('outageItem={upload:{bytes:100,sent:25,bps:0}}',context);
+ assert.match(vm.runInContext('uploadState(outageItem).label',context),/^Link outage, paused · 25 B of 100 B$/);
+ assert.match(vm.runInContext('uploadHTML(outageItem)',context),/class="upload-label">Link outage, paused<\/span>/);
+ assert.match(vm.runInContext('uploadControlsHTML(outageItem)',context),/Link outage, paused/);
+ vm.runInContext("outageItem.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(outageItem)',context),/Upload next \(operator\) · Link outage, paused/);
+ for(const change of ["override:'hold'",'sent:0','sent:100,done:true','bps:8000','bps:undefined']){
+  assert.doesNotMatch(vm.runInContext(`uploadHTML({upload:{bytes:100,sent:25,bps:0,${change}}})`,context),/Link outage/);
+ }
+});
 test('live uploads derive progress from shown form, never from commander escalation',()=>{
  const context=setup();
  assert.equal(vm.runInContext("uploadState({sent:true,live:{imageForm:'crop',forms:{crop:{state:'partial',bytes:100,received:25}}}}).sent",context),25);
