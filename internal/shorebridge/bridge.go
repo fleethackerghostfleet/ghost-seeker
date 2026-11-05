@@ -816,15 +816,24 @@ const unknownThreshold = 0.5
 
 var formRank = map[string]int{"": 0, "thumb": 1, "full": 2, "crop": 3}
 
+func cardReceived(c *Card) bool {
+	for _, form := range c.Forms {
+		if form.State == "received" {
+			return true
+		}
+	}
+	return false
+}
+
 func better(a, b *Card) bool {
+	if cardReceived(a) != cardReceived(b) {
+		return cardReceived(a)
+	}
 	if (a.Type == "record") != (b.Type == "record") {
 		return b.Type == "record"
 	}
 	if formRank[a.ImageForm] != formRank[b.ImageForm] {
 		return formRank[a.ImageForm] > formRank[b.ImageForm]
-	}
-	if (a.Forms["fact"].State == "received") != (b.Forms["fact"].State == "received") {
-		return a.Forms["fact"].State == "received"
 	}
 	return a.CapturedMs > b.CapturedMs
 }

@@ -73,8 +73,14 @@ func TestGroupKeepsReceivedSummaryWhileNewerSummaryIsPending(t *testing.T) {
 			t.Fatalf("new pending summary hid receipt: %+v", objects)
 		}
 	}
-	newer.FormStates[0].Complete = true
+	old.Item.Type = pb.ItemType_ITEM_TYPE_RECORD
 	objects, _ := Group([]*pb.ItemView{old, newer}, nil, nil)
+	if objects[0].Best.ID != "old" {
+		t.Fatal("pending image displaced received record")
+	}
+	old.Item.Type = newer.Item.Type
+	newer.FormStates[0].Complete = true
+	objects, _ = Group([]*pb.ItemView{old, newer}, nil, nil)
 	if objects[0].Best.ID != "new" || objects[0].Best.Forms["fact"].State != "received" {
 		t.Fatalf("new received summary did not replace earlier one: %+v", objects[0].Best)
 	}
