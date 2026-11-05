@@ -266,6 +266,10 @@ test('Details screen lists automatically filtered photos by kind with their orig
  vm.runInContext("state.detKind='low-value';renderDetails()",context);
  assert.match(page(),/data-id="low"/);
  assert.doesNotMatch(page(),/data-id="gone"/);
+ vm.runInContext('stats.bytes=1048576;renderDetails()',context);
+ assert.match(page(),/Image data sent to shore<\/td><td class="n">1\.0 MB/);
+ vm.runInContext('stats.bytes=0;renderDetails()',context);
+ assert.match(page(),/Image data sent to shore<\/td><td class="n">0\.0 MB/);
 });
 test('shore rank uses all shore records by ship score regardless of review, sensor, tier or sort filters',()=>{
  const context=feedContext();
