@@ -12,7 +12,7 @@ variables:
     default: http://shore.ghost-seeker.svc.cluster.local:8080
     prompt: false
   - name: EDGE_ID
-    description: Edge identifier used by the edge and shore services.
+    description: Edge identifier (edge component).
     default: edge-1
     prompt: false
   - name: INFER_URL
@@ -29,6 +29,14 @@ variables:
     prompt: false
 
 components:
+  - name: namespace
+    required: true
+    description: ghost-seeker namespace
+    manifests:
+      - name: namespace
+        namespace: ghost-seeker
+        files:
+          - manifests/namespace.yaml
   - name: shore
     default: true
     required: false

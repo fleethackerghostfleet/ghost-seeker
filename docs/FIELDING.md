@@ -164,6 +164,9 @@ zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst --confirm
 kubectl -n ghost-seeker port-forward service/operator 8090:8090
 ```
 
+The required `namespace` component is always deployed, so selecting only
+`--components=edge` still creates the `ghost-seeker` namespace.
+
 The default `SHORE_URL` is the in-cluster shore service address. For a split
 deployment, install the `shore` and `operator` components in the shore/UDS
 cluster; install the `edge` component in the shipboard k3s cluster and override

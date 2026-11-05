@@ -1,9 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: ghost-seeker
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: edge-config
