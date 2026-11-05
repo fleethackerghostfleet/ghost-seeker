@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
@@ -50,6 +51,10 @@ type Bridge struct {
 	shore, edge string
 	link        LinkControl
 	client      *http.Client
+	// Compiler, when set, turns a free-text directive into rules (local LLM
+	// with the rules parser as fallback) and gives the operator a readback;
+	// nil keeps the simple Interpret path.
+	Compiler *command.Compiler
 
 	mu      sync.Mutex
 	snap    []byte
@@ -140,6 +145,7 @@ type Snapshot struct {
 	Edge       NodeStatus  `json:"edge"`
 	Link       LinkStatus  `json:"link"`
 	Policy     string      `json:"policy"`
+	Emcon      string      `json:"emcon,omitempty"`
 	PolicyInfo *PolicyInfo `json:"policyInfo,omitempty"`
 	Objects    []*Object   `json:"objects"`
 	Counts     Counts      `json:"counts"`
@@ -251,6 +257,9 @@ func (b *Bridge) refresh(ctx context.Context) {
 	var suppressed []string
 	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &pol); err == nil {
 		snap.Policy = pol.GetPolicy().GetText()
+		if m := pol.GetPolicy().GetEmcon(); m != pb.EmconMode_EMCON_MODE_UNSPECIFIED && m != pb.EmconMode_EMCON_MODE_NORMAL {
+			snap.Emcon = strings.TrimPrefix(m.String(), "EMCON_MODE_")
+		}
 		suppressed = pol.GetPolicy().GetInterest().GetSuppressLabels()
 		if pol.Policy != nil {
 			snap.PolicyInfo = policyInfo(pol.Policy)
@@ -726,7 +735,9 @@ type policyBody struct {
 }
 
 // setPolicy forwards an operator directive to shore. A free-text directive is
-// parsed with Interpret (e.g. "ignore cargo ships" -> suppress cargo ship).
+// compiled with the NL compiler when one is configured (readback, warnings and
+// path "llm"|"rules" are returned alongside the policy), otherwise parsed with
+// Interpret (e.g. "ignore cargo ships" -> suppress cargo ship).
 func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	var in policyBody
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
@@ -742,9 +753,55 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	if in.IssuedBy == "" {
 		in.IssuedBy = "operator-ui"
 	}
+	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	var compiled *command.Compiled
 	if len(in.Suppress) == 0 && len(in.Boost) == 0 && in.Text != "" {
-		pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
+		droppedScopedRules := false
+		if b.Compiler != nil {
+			c := b.Compiler.Compile(r.Context(), ruleText)
+			if c.Blocked {
+				http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
+				return
+			}
+			kept := make([]command.Rule, 0, len(c.Rules))
+			for _, rule := range c.Rules {
+				if len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0 {
+					kept = append(kept, rule)
+				} else {
+					droppedScopedRules = true
+				}
+			}
+			if droppedScopedRules {
+				priorWarnings := c.Warnings
+				path := c.Path
+				c = b.Compiler.Review(ruleText, kept, c.DurationMin)
+				c.Path = path
+				c.Warnings = mergeWarnings(priorWarnings, c.Warnings, []string{
+					"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.",
+				})
+				if c.Blocked {
+					http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
+					return
+				}
+			}
+			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
+			if mode != "" {
+				pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
+				c.Readback = strings.TrimSuffix(c.Readback, "No rules recognized.") + " EMCON " + mode + "."
+				c.Readback = strings.TrimSpace(c.Readback)
+			}
+			if c.DurationMin > 0 {
+				pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+			}
+			compiled = &c
+		}
+		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
+			if !droppedScopedRules && pol.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
+				compiled = nil
+			}
+		}
 	}
 	current, _ := b.getPolicy(r.Context())
 	if current != nil {
@@ -772,8 +829,61 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raw, _ := protojson.Marshal(&out)
+	resp := struct {
+		Policy   json.RawMessage   `json:"policy"`
+		Compiled *command.Compiled `json:"compiled,omitempty"`
+	}{Policy: raw, Compiled: compiled}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(raw)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// rulesToLabels flattens compiled rules into the flat boost/suppress label
+// lists the edge scorer matches against (classes only; attributes have no
+// edge-side equivalent yet).
+func rulesToLabels(rules []command.Rule) (suppress, boost []string) {
+	seen := map[string]bool{}
+	for _, rule := range rules {
+		for _, class := range rule.Classes {
+			key := rule.Type + "/" + class
+			if class == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			switch rule.Type {
+			case "suppress":
+				suppress = append(suppress, class)
+			case "boost":
+				boost = append(boost, class)
+			}
+		}
+	}
+	return suppress, boost
+}
+
+func mergeWarnings(groups ...[]string) []string {
+	merged := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, group := range groups {
+		for _, warning := range group {
+			if !seen[warning] {
+				seen[warning] = true
+				merged = append(merged, warning)
+			}
+		}
+	}
+	return merged
+}
+
+func blockedMessage(c command.Compiled) string {
+	for _, warning := range c.Warnings {
+		if strings.HasPrefix(warning, "Blocked") {
+			return warning
+		}
+	}
+	if len(c.Warnings) > 0 {
+		return c.Warnings[0]
+	}
+	return "directive is blocked"
 }
 
 func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {

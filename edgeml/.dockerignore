@@ -1,0 +1,14 @@
+.git
+.gitignore
+reports/
+eval_qa/
+scripts/
+tools/
+tests/
+*.pt
+*.jpg
+*.jpeg
+*.png
+*.jsonl
+**/__pycache__/
+**/*.pyc

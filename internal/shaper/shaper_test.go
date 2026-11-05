@@ -49,6 +49,13 @@ func TestShaperRateAndDown(t *testing.T) {
 	if el := time.Since(start); el < 300*time.Millisecond {
 		t.Fatalf("echo took %v, expected >= ~0.4 s at 80 kbit/s", el)
 	}
+	// The counter for the upstream->client direction is bumped after the
+	// last chunk is written, which can land just after ReadFull returns on
+	// a loaded CI runner; give it a moment.
+	deadline := time.Now().Add(time.Second)
+	for s.Bytes() < int64(2*len(payload)) && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
 	if s.Bytes() < int64(2*len(payload)) {
 		t.Fatalf("bytes = %d", s.Bytes())
 	}

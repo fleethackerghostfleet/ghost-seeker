@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import threading
 import time
@@ -19,8 +20,11 @@ from typing import Optional
 
 import numpy as np
 
+from edgeml.nightlights import BurstController, frame_report
+
 FORM_KINDS = {"fact": "FORM_KIND_FACT", "thumb": "FORM_KIND_THUMB", "crop": "FORM_KIND_CROP", "full": "FORM_KIND_FULL"}
 EVENTS = {"open": "EVENT_OPEN", "update": "EVENT_UPDATE", "close": "EVENT_CLOSE", "duplicate": "EVENT_DUPLICATE"}
+logger = logging.getLogger(__name__)
 
 
 class RpcError(Exception):
@@ -73,6 +77,7 @@ class _TextEmbedder:
 class _Source:
     tracker: object
     agg: object
+    burst: BurstController = field(default_factory=BurstController.from_config)
     frame_idx: int = 0
     t0_ms: Optional[int] = None
     size: Optional[tuple[int, int]] = None
@@ -139,12 +144,14 @@ class EdgemlEngine:
     def analyze(self, source: str, image_bgr: np.ndarray, captured_ms: Optional[int], known_labels: list[str], want_embedding: bool) -> dict:
         src = self._source(source or "default")
         t_start = time.perf_counter()
+        night_report = None
         with src.lock:
             src.frame_idx += 1
             fi = src.frame_idx
             t_s = self._frame_time(src, captured_ms)
             H, W = image_bgr.shape[:2]
             dets = [d for d in self.detector.detect(image_bgr) if d.score >= self.det_low_thr]
+            kept = [d for d in dets if d.score >= self.score_thr]
             tracks = src.tracker.update(dets, image_bgr, fi, t_s)
             events = src.agg.update(tracks, image_bgr, fi, t_s)
             base_ms = (captured_ms - int(t_s * 1000)) if captured_ms else int(time.time() * 1000) - int(t_s * 1000)
@@ -155,16 +162,30 @@ class EdgemlEngine:
                 st = src.agg.states.get(sid) if sid else None
                 if st is not None and st.status == "open" and sid not in reported:
                     reported.add(sid)
-                    sightings.append(self._duplicate(st, fi, W, H, base_ms))
+                    sightings.append(self._duplicate(st, fi, W, H, base_ms, getattr(tr, "box", None)))
             emb = next((src.agg.states[ev["sighting_id"]].emb for ev in events
                         if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
                         and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
             unknownness = max((float(ev.get("unknownness") or 0.0) for ev in events), default=0.0)
-        ms = (time.perf_counter() - t_start) * 1e3
+            ms = (time.perf_counter() - t_start) * 1e3
+            try:
+                night_report = frame_report(image_bgr, [(d.label, d.score, d.box) for d in kept],
+                                            burst=src.burst, t=t_s)
+            except Exception:
+                logger.exception("night-lights frame analysis failed; skipping optional results")
         self.frames += 1
         self.ms_total += ms
-        resp = {"detections": [{"label": d.label, "confidence": _f(d.score), "box": _norm_box(d.box, W, H)} for d in dets if d.score >= self.score_thr],
+        reported_dets = [{"label": d.label, "confidence": _f(d.score), "box": _norm_box(d.box, W, H)} for d in kept]
+        resp = {"detections": reported_dets,
                 "unknownness": _f(unknownness), "modelId": self.model_id, "latencyMs": str(int(ms)), "sightings": sightings}
+        if night_report is not None:
+            for index, confidence in night_report["dark"]:
+                box = dict(reported_dets[index]["box"])
+                resp["detections"].append({"label": "dark contact", "confidence": confidence, "box": box})
+            if night_report["burst"] is not None:
+                burst_result = night_report["burst"]
+                resp["burst"] = {"fps": burst_result["fps"], "durationS": burst_result["duration_s"],
+                                 "reason": burst_result["reason"]}
         if emb is not None:
             resp["embedding"] = [round(float(v), 5) for v in np.asarray(emb).ravel()]
         return resp
@@ -187,10 +208,11 @@ class EdgemlEngine:
             out["embedding"] = [round(float(v), 5) for v in np.asarray(st.emb).ravel()]
         return out
 
-    def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int) -> dict:
+    def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int, track_box=None) -> dict:
         s = st.s
+        box = track_box if track_box is not None else s.best_box
         return {"id": s.sighting_id, "event": "EVENT_DUPLICATE",
-                "keyDetection": {"label": s.label or "", "confidence": _f(s.best_score), "box": _norm_box(s.best_box, W, H)},
+                "keyDetection": {"label": s.label or "", "confidence": _f(s.best_score), "box": _norm_box(box, W, H)},
                 "isKeyFrame": False, "subtype": s.subtype or "", "value": 0.0, "forms": [],
                 "firstSeenUnixMs": str(base_ms + int(s.first_t_s * 1000)), "lastSeenUnixMs": str(base_ms + int(s.last_t_s * 1000)),
                 "nFrames": int(s.n_frames)}

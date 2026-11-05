@@ -65,9 +65,9 @@
     $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
-    $('#policy').textContent = policy ? `“${policy}”` : 'none set';
+    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (snap.emcon ? ` · EMCON ${snap.emcon}` : '');
     const focusedMode = document.activeElement?.closest?.('#shore-emcon button')?.dataset.mode;
-    const mode = String(policyInfo.emcon || 'NORMAL').toUpperCase();
+    const mode = String(policyInfo.emcon || snap.emcon || 'NORMAL').toUpperCase();
     const lockTitle = policyInfo.emconLocked ? `EMCON locked by ${policyInfo.emconLockedBy || policyInfo.emconSetBy || 'higher echelon'}` : '';
     $('#shore-emcon').innerHTML = `<div class="shore-emcon" role="group" aria-label="Go quiet (EMCON)" tabindex="-1" ${lockTitle ? `title="${esc(lockTitle)}"` : ''}><b>EMCON</b>${['NORMAL', 'BURST', 'SILENT'].map(value => `<button type="button" data-mode="${value}" aria-pressed="${mode === value}" class="${mode === value ? 'on' : ''}" ${policyInfo.emconLocked ? 'disabled' : ''} ${lockTitle ? `title="${esc(lockTitle)}"` : ''}>${value[0] + value.slice(1).toLowerCase()}</button>`).join('')}</div>`;
     if (focusedMode) {
@@ -249,7 +249,14 @@
     if (!text) return;
     try {
       const r = await post('/api/shore/policy', { text });
-      toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
+      const c = r.compiled;
+      if (c) {
+        $('#readback').textContent = `${c.readback} [${c.path}]${c.warnings.length ? ' — ' + c.warnings.join(' ') : ''}`;
+        toast(`policy set (${c.path}): ${c.readback}`);
+      } else {
+        $('#readback').textContent = '';
+        toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
+      }
       if (r.conflicts?.length) toast(window.gsPolicy.conflictToast(r.conflicts), true);
       $('#directive').value = '';
     } catch (err) { toast(err.message, true); }

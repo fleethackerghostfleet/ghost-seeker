@@ -29,6 +29,21 @@ test('spectral controls are metadata-driven and preserve the frame and boxes',()
  }
  assert.equal(vm.runInContext("bandControls({id:'other',src:{id:'EO-P7'}})",context),'');
 });
+test('global keyboard shortcuts ignore input while a dialog is open',()=>{
+ const context=setup();
+ vm.runInContext(`
+  handlers={};nightToggles=0;
+  document.querySelector=selector=>selector==='dialog[open]'?{}:null;
+  document.addEventListener=(type,handler)=>{if(type==='keydown')handlers[type]=handler};
+  toggleNight=()=>nightToggles++;
+ `,context);
+ const start=source.indexOf(" document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext(`handlers.keydown({key:'n',target:{tagName:'BODY',closest:()=>null}})`,context);
+ assert.equal(vm.runInContext('nightToggles',context),0);
+});
 test('band controls keep native Enter and Space activation without accepting review items',()=>{
  const context=setup();
  vm.runInContext(`
@@ -122,7 +137,7 @@ function setup(){
  const context=vm.createContext({
   gsLights:require('./static/lights.js'),
   setTimeout:()=>{},clearTimeout:()=>{},imageCache:new Map(),
-   document:{body:{classList:{remove(){}}}},
+  document:{body:{classList:{remove(){}}},querySelector:()=>null},
   $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
  });
  context.window=context;
