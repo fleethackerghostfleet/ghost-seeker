@@ -4,7 +4,7 @@
 #   make compose-demo          # build + up, then open http://localhost:8090
 #   make compose-demo-down     # stop and delete data + credentials (fresh replay)
 #
-# Prerequisites on the host (one-time, gcloud signed in as a lab account):
+# Prerequisites on the host (one-time; gh auth login while the repo is private):
 #   make demo-clips            # scenarios/ghostfleet_demo/frames (gitignored)
 #   make demo-models           # ~/models/D (override with MODELS=/path or GS_MODELS)
 #
