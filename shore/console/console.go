@@ -157,7 +157,10 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 			}
 		}
 		if preserveExpiry {
-			p.ExpiresAtUnixMs = prev.GetExpiresAtUnixMs()
+			previousExpiry := prev.GetExpiresAtUnixMs()
+			if previousExpiry == 0 || previousExpiry > now.UnixMilli() {
+				p.ExpiresAtUnixMs = previousExpiry
+			}
 		}
 		p.IssuedBy = op.ID
 		for _, layer := range p.Layers {
