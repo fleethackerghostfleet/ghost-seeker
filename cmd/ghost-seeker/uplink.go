@@ -39,7 +39,6 @@ func (u *simulationUplink) advance(elapsed time.Duration) []command.Item {
 		u.untilSample -= step
 		if u.untilSample == 0 {
 			u.data.SetLinkBPS(u.distribution.Rate(u.sample()))
-			updates = append(updates, u.data.Items()...)
 			u.untilSample = time.Duration(u.distribution.IntervalMS) * time.Millisecond
 		}
 	}
