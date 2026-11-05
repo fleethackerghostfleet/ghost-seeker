@@ -193,6 +193,20 @@ zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
 Edge can point across clusters to a separately routed sidecar if the network
 permits it.
 
+The edge only captures when it has a source: today that is replay via
+`-frames`/`FRAMES_DIR` or `-scenario`/`SCENARIO` (there is no live sensor input
+yet). The packaged edge mounts the node directory `FRAMES_HOSTPATH` (default
+`/var/lib/ghost-seeker/frames`) read-only at `/frames`; with `FRAMES_DIR` and
+`SCENARIO` empty (the defaults) the edge starts healthy but idle and shore
+receives nothing. To replay the demo clips, copy `scenarios/ghostfleet_demo`
+(including its LFS `frames/`) onto the node and point the edge at it:
+
+```sh
+zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
+  --confirm --components=edge \
+  --set-variables=FRAMES_HOSTPATH=/srv/ghost-seeker,SCENARIO=/frames/ghostfleet_demo/scenario.json
+```
+
 Shore and edge StatefulSets have independent RWO PVCs. Keep these PVCs when
 upgrading or rolling back; changing image tags does not migrate the schema or
 restore deleted storage. Stop the service before making a SQLite backup, and

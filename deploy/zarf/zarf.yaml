@@ -27,6 +27,18 @@ variables:
     description: Edge SQLite persistent volume size.
     default: 10Gi
     prompt: false
+  - name: FRAMES_HOSTPATH
+    description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop / replay clips). Empty FRAMES_DIR and SCENARIO leave the edge idle until a sensor source is configured.
+    default: /var/lib/ghost-seeker/frames
+    prompt: false
+  - name: FRAMES_DIR
+    description: Frame directory under /frames to replay the built-in scenario from (edge -frames); empty disables replay.
+    default: ""
+    prompt: false
+  - name: SCENARIO
+    description: Scenario JSON under /frames to replay into the edge store (edge -scenario); empty disables.
+    default: ""
+    prompt: false
 
 components:
   - name: namespace
