@@ -48,7 +48,7 @@ demo-compare: build
 demo-shore: build
 	$(BIN)/shore -data data/shore -listen :8080
 
-demo-ui: build   ## operator UI on live shore data + the shaped link the edge talks through (:18080)
+demo-ui: build   ## Patrick's operator console (index.html / cdr.html) on live shore data + the shaped link the edge talks through (:18080)
 	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
 
 MODELS ?= $(HOME)/models/D

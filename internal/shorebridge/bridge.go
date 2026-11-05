@@ -622,6 +622,12 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]con
 		}
 		o.Suppressed = o.Suppressed || c.Suppressed
 		o.Unknown = o.Unknown || c.Unknownness >= unknownThreshold
+		if o.Unknown { // an object the edge flagged unknown is never deprioritized by a directive
+			o.Suppressed = false
+			for _, it := range o.Items {
+				it.Suppressed, it.SuppressedBy = false, ""
+			}
+		}
 		if o.Best == nil || better(c, o.Best) {
 			o.Best = c
 		}
