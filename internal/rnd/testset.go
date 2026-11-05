@@ -33,6 +33,14 @@ type Image struct {
 	SHA256   string `json:"sha256"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
+	// Tags describe the source (viewpoint, modality, labeled); GroundTruth
+	// carries dataset annotations when the source has them.
+	Tags        map[string]string `json:"tags,omitempty"`
+	GroundTruth []GTBox           `json:"ground_truth,omitempty"`
+}
+type GTBox struct {
+	Label string      `json:"label"`
+	Box   command.Box `json:"box"`
 }
 type Detection struct {
 	Label   string      `json:"label"`
@@ -54,10 +62,13 @@ type Prediction struct {
 type frame struct {
 	path string
 	read func() ([]byte, error)
+	gt   []GTBox
+	ext  string // stored-file extension when path has none (catalog image IDs)
 }
 type clip struct {
 	name   string
 	frames []frame
+	tags   map[string]string
 }
 
 // Allocate gives each nonempty source an equal share, redistributing shortfalls
@@ -107,61 +118,82 @@ func discover(root string) ([]clip, error) {
 	paths = append(paths, dirs...)
 	clips := []clip{}
 	for _, p := range paths {
-		c := clip{name: strings.TrimSuffix(filepath.Base(p), "_frames.zip")}
+		var c clip
+		var err error
 		if filepath.Ext(p) == ".zip" {
-			z, err := zip.OpenReader(p)
-			if err != nil {
-				return nil, err
-			}
-			for _, f := range z.File {
-				if f.FileInfo().IsDir() || !imageFile(f.Name) {
-					continue
-				}
-				name := f.Name
-				c.frames = append(c.frames, frame{path: name, read: func() ([]byte, error) {
-					r, err := zip.OpenReader(p)
-					if err != nil {
-						return nil, err
-					}
-					defer r.Close()
-					for _, entry := range r.File {
-						if entry.Name == name {
-							rc, err := entry.Open()
-							if err != nil {
-								return nil, err
-							}
-							defer rc.Close()
-							var b bytes.Buffer
-							_, err = b.ReadFrom(rc)
-							return b.Bytes(), err
-						}
-					}
-					return nil, fmt.Errorf("missing ZIP entry %s", name)
-				}})
-			}
-			z.Close()
+			c, err = zipClip(strings.TrimSuffix(filepath.Base(p), "_frames.zip"), p)
 		} else {
-			c.name = filepath.Base(filepath.Dir(p))
-			entries, err := os.ReadDir(p)
-			if err != nil {
-				return nil, err
-			}
-			for _, e := range entries {
-				if e.IsDir() || !imageFile(e.Name()) {
-					continue
-				}
-				name := e.Name()
-				c.frames = append(c.frames, frame{path: filepath.ToSlash(filepath.Join("img1", name)), read: func() ([]byte, error) { return os.ReadFile(filepath.Join(p, name)) }})
-			}
+			c, err = dirClip(filepath.Base(filepath.Dir(p)), p, "img1")
 		}
-		sort.Slice(c.frames, func(i, j int) bool { return naturalLess(c.frames[i].path, c.frames[j].path) })
-		if len(c.frames) == 0 {
-			return nil, fmt.Errorf("empty clip %s", p)
+		if err != nil {
+			return nil, err
 		}
 		clips = append(clips, c)
 	}
 	sort.Slice(clips, func(i, j int) bool { return clips[i].name < clips[j].name })
 	return clips, nil
+}
+
+func zipClip(name, p string) (clip, error) {
+	c := clip{name: name}
+	z, err := zip.OpenReader(p)
+	if err != nil {
+		return c, err
+	}
+	defer z.Close()
+	for _, f := range z.File {
+		if f.FileInfo().IsDir() || !imageFile(f.Name) {
+			continue
+		}
+		entryName := f.Name
+		c.frames = append(c.frames, frame{path: entryName, read: func() ([]byte, error) {
+			r, err := zip.OpenReader(p)
+			if err != nil {
+				return nil, err
+			}
+			defer r.Close()
+			for _, entry := range r.File {
+				if entry.Name == entryName {
+					rc, err := entry.Open()
+					if err != nil {
+						return nil, err
+					}
+					defer rc.Close()
+					var b bytes.Buffer
+					_, err = b.ReadFrom(rc)
+					return b.Bytes(), err
+				}
+			}
+			return nil, fmt.Errorf("missing ZIP entry %s", entryName)
+		}})
+	}
+	return finishClip(c, p)
+}
+
+// dirClip lists the image files directly inside p; prefix is prepended to the
+// recorded original path.
+func dirClip(name, p, prefix string) (clip, error) {
+	c := clip{name: name}
+	entries, err := os.ReadDir(p)
+	if err != nil {
+		return c, err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !imageFile(e.Name()) {
+			continue
+		}
+		fileName := e.Name()
+		c.frames = append(c.frames, frame{path: filepath.ToSlash(filepath.Join(prefix, fileName)), read: func() ([]byte, error) { return os.ReadFile(filepath.Join(p, fileName)) }})
+	}
+	return finishClip(c, p)
+}
+
+func finishClip(c clip, p string) (clip, error) {
+	sort.Slice(c.frames, func(i, j int) bool { return naturalLess(c.frames[i].path, c.frames[j].path) })
+	if len(c.frames) == 0 {
+		return c, fmt.Errorf("empty clip %s", p)
+	}
+	return c, nil
 }
 
 func naturalLess(a, b string) bool {
@@ -227,7 +259,7 @@ func Predict(id string, r *pb.AnalyzeResponse) Prediction {
 func Rank(predictions []Prediction) {
 	objects := make([]*shorebridge.Object, len(predictions))
 	for i, p := range predictions {
-		objects[i] = &shorebridge.Object{Scene: len(p.Detections) == 0, Best: &shorebridge.Card{Score: p.EdgePriority}}
+		objects[i] = &shorebridge.Object{Scene: len(p.Detections) == 0, Score: p.EdgePriority, Best: &shorebridge.Card{Score: p.EdgePriority}}
 	}
 	shorebridge.AssignTiers(objects)
 	for i, o := range objects {
@@ -268,6 +300,32 @@ func Rerank(dir string) error {
 	return os.Rename(f.Name(), path)
 }
 
+func selectUnique(frames []frame, target int, seen map[[32]byte]bool) (frame, []byte, [32]byte, error) {
+	for distance := 0; distance < len(frames); distance++ {
+		candidates := []int{target + distance}
+		if distance > 0 {
+			candidates = append(candidates, target-distance)
+		}
+		for _, index := range candidates {
+			if index < 0 || index >= len(frames) {
+				continue
+			}
+			f := frames[index]
+			data, err := f.read()
+			if err != nil {
+				return frame{}, nil, [32]byte{}, err
+			}
+			digest := sha256.Sum256(data)
+			if seen[digest] {
+				continue
+			}
+			seen[digest] = true
+			return f, data, digest, nil
+		}
+	}
+	return frame{}, nil, [32]byte{}, fmt.Errorf("no byte-unique frame available near index %d", target)
+}
+
 func Build(ctx context.Context, root, out string, an inference.Analyzer) error {
 	clips, err := discover(root)
 	if err != nil {
@@ -281,6 +339,11 @@ func Build(ctx context.Context, root, out string, an inference.Analyzer) error {
 	if err != nil {
 		return err
 	}
+	return build(ctx, clips, counts, out, an)
+}
+
+func build(ctx context.Context, clips []clip, counts []int, out string, an inference.Analyzer) error {
+	var err error
 	if err = os.Mkdir(out, 0700); err != nil {
 		return fmt.Errorf("output must be new (parent must exist): %w", err)
 	}
@@ -289,24 +352,27 @@ func Build(ctx context.Context, root, out string, an inference.Analyzer) error {
 	}
 	manifest, predictions := []Image{}, []Prediction{}
 	run := time.Now().UTC().Format("20060102T150405.000000000")
+	seen := map[[32]byte]bool{}
 	for ci, c := range clips {
 		for i := 0; i < counts[ci]; i++ {
-			f := c.frames[SampleIndex(i, len(c.frames), counts[ci])]
-			data, err := f.read()
+			f, data, digest, err := selectUnique(c.frames, SampleIndex(i, len(c.frames), counts[ci]), seen)
 			if err != nil {
-				return err
+				return fmt.Errorf("source %s: %w", c.name, err)
 			}
 			cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("%s: %w", f.path, err)
 			}
 			id := fmt.Sprintf("rnd-%04d", len(manifest)+1)
-			digest := sha256.Sum256(data)
-			file := id + strings.ToLower(filepath.Ext(f.path))
+			ext := f.ext
+			if ext == "" {
+				ext = filepath.Ext(f.path)
+			}
+			file := id + strings.ToLower(ext)
 			if err = os.WriteFile(filepath.Join(out, "images", file), data, 0600); err != nil {
 				return err
 			}
-			manifest = append(manifest, Image{ID: id, Source: c.name, Original: f.path, File: file, SHA256: hex.EncodeToString(digest[:]), Width: cfg.Width, Height: cfg.Height})
+			manifest = append(manifest, Image{ID: id, Source: c.name, Original: f.path, File: file, SHA256: hex.EncodeToString(digest[:]), Width: cfg.Width, Height: cfg.Height, Tags: c.tags, GroundTruth: f.gt})
 			response, err := an.Analyze(ctx, inference.Frame{Image: data, Source: "rnd-" + run + "-" + id}, nil, nil)
 			if err != nil {
 				return fmt.Errorf("%s inference: %w", id, err)

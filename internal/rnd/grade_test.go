@@ -1,7 +1,9 @@
 package rnd
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -76,7 +78,7 @@ func fixture(t *testing.T) (string, string) {
 	images := []Image{}
 	ps := []Prediction{}
 	for i, id := range []string{"a", "b", "c"} {
-		images = append(images, Image{ID: id, Source: "source", File: id + ".jpg", Width: 100, Height: 100})
+		images = append(images, Image{ID: id, Source: "source", File: id + ".jpg", Width: 100, Height: 100, SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("image")))})
 		ps = append(ps, Prediction{ID: id, ModelTier: i + 1, ModelScore: float64(i), Detections: []Detection{}})
 		if err := os.WriteFile(filepath.Join(dir, "images", id+".jpg"), []byte("image"), 0600); err != nil {
 			t.Fatal(err)
@@ -89,6 +91,26 @@ func fixture(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	return dir, logs
+}
+func TestSessionVerifiesImageHash(t *testing.T) {
+	dir, logs := fixture(t)
+	s, err := OpenSession(dir, logs, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if err = os.WriteFile(filepath.Join(dir, "images", "a.jpg"), []byte("changed image"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = OpenSession(dir, logs, "Alice"); err == nil || !strings.Contains(err.Error(), "SHA-256 mismatch for image a") {
+		t.Fatalf("mismatch accepted: %v", err)
+	}
+	if err = os.Remove(filepath.Join(dir, "images", "a.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = OpenSession(dir, logs, "Alice"); err == nil {
+		t.Fatal("missing image accepted")
+	}
 }
 func TestPersistenceUndoResume(t *testing.T) {
 	dir, logs := fixture(t)
@@ -229,6 +251,7 @@ func TestHTTP(t *testing.T) {
 	} {
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Host = "localhost"
 		handler.ServeHTTP(rr, req)
 		if rr.Code != tc.code {
 			t.Fatalf("%s %s: %d %s", tc.method, tc.path, rr.Code, rr.Body.String())
@@ -245,6 +268,7 @@ func TestHTTP(t *testing.T) {
 		}
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/undo", strings.NewReader("{}"))
+	req.Host = "localhost"
 	req.Header.Set("Origin", "http://evil.invalid")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -253,6 +277,41 @@ func TestHTTP(t *testing.T) {
 	}
 	if s.State().Summary.Graded != 0 {
 		t.Fatal("undo did not clear")
+	}
+}
+func TestAllowedHosts(t *testing.T) {
+	dir, logs := fixture(t)
+	s, err := OpenSession(dir, logs, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	handler := s.Handler("preview.example", "second.example")
+	for _, tc := range []struct {
+		host string
+		code int
+	}{
+		{"localhost", 200}, {"localhost:8095", 200}, {"127.0.0.1:8095", 200}, {"[::1]:8095", 200}, {"::1", 200},
+		{"preview.example", 200}, {"second.example:8095", 200}, {"attacker.example", 403},
+		{"localhost.attacker.example", 403}, {"127.0.0.2", 403}, {"", 403}, {"localhost:8095:80", 403},
+	} {
+		for _, path := range []string{"/", "/api/state", "/images/a"} {
+			req := httptest.NewRequest("GET", path, nil)
+			req.Host = tc.host
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != tc.code {
+				t.Fatalf("Host=%q path=%s: %d", tc.host, path, rr.Code)
+			}
+		}
+	}
+	req := httptest.NewRequest("POST", "/api/grade", strings.NewReader(`{"id":"a","tier":1}`))
+	req.Host = "attacker.example"
+	req.Header.Set("Origin", "http://attacker.example")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != 403 || s.State().Summary.Graded != 0 {
+		t.Fatal("same-origin attacker Host accepted")
 	}
 }
 func TestBadInputs(t *testing.T) {
@@ -268,5 +327,40 @@ func TestBadInputs(t *testing.T) {
 	}
 	if _, err := OpenSession(dir, logs, "x"); err == nil {
 		t.Fatal("empty predictions")
+	}
+}
+
+func TestReplayRejectsGradeForReplacedFrame(t *testing.T) {
+	dir, logs := fixture(t)
+	s, err := OpenSession(dir, logs, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Grade("a", 2); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	replacement := []byte("a different frame")
+	if err = os.WriteFile(filepath.Join(dir, "images", "a.jpg"), replacement, 0600); err != nil {
+		t.Fatal(err)
+	}
+	images, err := readRows[Image](filepath.Join(dir, "manifest.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	for _, im := range images {
+		if im.ID == "a" {
+			im.SHA256 = fmt.Sprintf("%x", sha256.Sum256(replacement))
+		}
+		b, _ := json.Marshal(im)
+		out.Write(b)
+		out.WriteByte('\n')
+	}
+	if err = os.WriteFile(filepath.Join(dir, "manifest.jsonl"), []byte(out.String()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = OpenSession(dir, logs, "Alice"); err == nil || !strings.Contains(err.Error(), "invalid grade in journal") {
+		t.Fatalf("grade for replaced frame accepted: %v", err)
 	}
 }

@@ -34,6 +34,7 @@ type Event struct {
 	Reviewer   string    `json:"reviewer"`
 	Testset    string    `json:"testset"`
 	ImageID    string    `json:"image_id,omitempty"`
+	ImageSHA   string    `json:"image_sha256,omitempty"`
 	Source     string    `json:"source,omitempty"`
 	ModelTier  int       `json:"model_tier,omitempty"`
 	ModelScore float64   `json:"model_score,omitempty"`
@@ -205,8 +206,18 @@ func OpenSession(dir, logs, reviewer string) (*Session, error) {
 		if _, exists := s.byID[im.ID]; exists {
 			return nil, fmt.Errorf("duplicate manifest image %q", im.ID)
 		}
-		if _, err = os.Stat(filepath.Join(dir, "images", im.File)); err != nil {
+		f, err := os.Open(filepath.Join(dir, "images", im.File))
+		if err != nil {
 			return nil, err
+		}
+		digest := sha256.New()
+		_, err = io.Copy(digest, f)
+		f.Close()
+		if err != nil {
+			return nil, err
+		}
+		if !strings.EqualFold(fmt.Sprintf("%x", digest.Sum(nil)), im.SHA256) {
+			return nil, fmt.Errorf("SHA-256 mismatch for image %s", im.ID)
 		}
 		entry := Entry{Image: im, Prediction: p}
 		s.entries = append(s.entries, entry)
@@ -292,7 +303,7 @@ func (s *Session) replay() error {
 		switch e.Kind {
 		case "grade":
 			item, ok := s.byID[e.ImageID]
-			if !ok || e.ModelTier != item.ModelTier || e.ModelScore != item.ModelScore || e.Source != item.Image.Source || e.HumanTier < 1 || e.HumanTier > 4 || e.Delta != e.HumanTier-e.ModelTier || e.Changed != (e.Delta != 0) {
+			if !ok || !strings.EqualFold(e.ImageSHA, item.Image.SHA256) || e.ModelTier != item.ModelTier || e.ModelScore != item.ModelScore || e.Source != item.Image.Source || e.HumanTier < 1 || e.HumanTier > 4 || e.Delta != e.HumanTier-e.ModelTier || e.Changed != (e.Delta != 0) {
 				return fmt.Errorf("invalid grade in journal")
 			}
 		case "undo":
@@ -334,7 +345,7 @@ func (s *Session) Grade(id string, tier int) (State, error) {
 	if !ok || tier < 1 || tier > 4 {
 		return State{}, fmt.Errorf("unknown image or tier outside 1-4")
 	}
-	e := Event{Kind: "grade", ImageID: id, Source: item.Image.Source, ModelTier: item.ModelTier, ModelScore: item.ModelScore, HumanTier: tier, Delta: tier - item.ModelTier, Changed: tier != item.ModelTier}
+	e := Event{Kind: "grade", ImageID: id, ImageSHA: item.Image.SHA256, Source: item.Image.Source, ModelTier: item.ModelTier, ModelScore: item.ModelScore, HumanTier: tier, Delta: tier - item.ModelTier, Changed: tier != item.ModelTier}
 	return s.append(e)
 }
 

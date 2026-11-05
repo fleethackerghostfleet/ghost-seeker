@@ -361,9 +361,10 @@ test('reviewer sessions keep team sync disabled',()=>{
 });
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
- const context=vm.createContext({Event:class{constructor(type){this.type=type}},window:{dispatchEvent(){}},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
+ const nodes={};
+ const context=vm.createContext({Event,window:{dispatchEvent(){}},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{documentElement:{style:{setProperty(){}}},body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:id=>nodes[id]??={querySelectorAll:()=>[],dataset:{}}}});
  vm.runInContext(settingsSource,context);
- return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved)};
+ return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved),reset:()=>nodes.setReset.onclick()};
 }
 test('sidebar widths default empty, load valid settings, and clamp persisted values',()=>{
  for(const saved of [null,'broken','{}','{"widths":{"drawer":"bad","review":null}}']){
@@ -381,21 +382,21 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
  settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
  settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
 });
-test('feed filters default to showing duplicates, persist, validate, and return defensive copies',()=>{
+test('feed filters default to hiding duplicates, persist, validate, and return defensive copies',()=>{
  for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
-  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all","sensor":"ALL","tier":"all"}');
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":false,"review":"all","sensor":"ALL","tier":"all","dupDefault":"off"}');
  }
  const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
  settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
  settings.setFeed({review:'sent'});
- assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all',dupDefault:'off'});
  assert.equal(saved().bar,'right');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'all','a reload must not keep the main feed on sent-only');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,false);
  settings.setFeed({review:'unreviewed'});
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
  settings.setFeed({showDuplicates:true,review:'bad'});
- assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all',dupDefault:'off'});
 });
 test('sensor and priority filters persist, validate, and clear with all feed filters',()=>{
  const stored=settingsContext('{}');
@@ -407,7 +408,7 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  assert.equal(sentReload.sensor,'EO-P7');
  assert.equal(sentReload.tier,'2');
  assert.equal(sentReload.showDuplicates,false);
- assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
+ assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false,dupDefault:'off'});
  const context=setup();context.gsSettings=reloaded.settings;
  vm.runInContext("SRC={ALL:{id:'ALL'},'EO-P7':{id:'EO-P7'}};closeDetail=()=>{};syncFeedFilters()",context);
  assert.equal(vm.runInContext('state.src',context),'EO-P7');
@@ -419,7 +420,7 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  assert.equal(vm.runInContext('state.src',context),'ALL');
  assert.equal(vm.runInContext('state.tier',context),'all');
  assert.equal(context.$('clearFeedFilters').hidden,true);
- assert.deepEqual(reloaded.saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ assert.deepEqual(reloaded.saved().feed,{showDuplicates:false,review:'all',sensor:'ALL',tier:'all',dupDefault:'off'});
  reloaded.settings.setFeed({sensor:'missing',tier:'1'});
  vm.runInContext('syncFeedFilters()',context);
  assert.equal(vm.runInContext('state.src',context),'ALL');
@@ -495,6 +496,57 @@ test('global shortcuts leave native select keyboard events untouched',()=>{
   context.keyHandler({key,target:{tagName:'SELECT'},preventDefault(){prevented=true}});
   assert.equal(prevented,false,key);
  }
+});
+test('duplicate display defaults off, preserves explicit choices, and resets off',()=>{
+ assert.doesNotMatch(html.match(/<input[^>]*id="showDuplicates"[^>]*>/)[0],/\bchecked\b/);
+ for(const value of [null,'broken','{}','{"feed":null}',...['null','0','1','"true"','"false"','[]','{}'].map(v=>`{"feed":{"showDuplicates":${v}}}`)]){
+  assert.equal(settingsContext(value).settings.get().feed.showDuplicates,false);
+ }
+ for(const choice of [true,false]){
+  const {settings,saved,reset}=settingsContext(JSON.stringify({bar:'right',feed:{showDuplicates:choice,dupDefault:'off'}}));
+  assert.equal(settings.get().feed.showDuplicates,choice);
+  settings.resize('controls',300);
+  assert.equal(saved().bar,'right');
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,choice);
+  reset();
+  assert.equal(settings.get().feed.showDuplicates,false);
+  assert.equal(saved().feed.showDuplicates,false);
+  assert.equal(saved().feed.dupDefault,'off');
+ }
+});
+test('legacy duplicate defaults reset once without changing other display preferences',()=>{
+ const prefs={density:'l',theme:'day',prev:'day',bar:'right',hide:['clock','ov'],widths:{controls:300,drawer:400}};
+ for(const choice of [true,false]){
+  const {settings,saved}=settingsContext(JSON.stringify({...prefs,feed:{showDuplicates:choice,review:'reviewed'}}));
+  assert.equal(settings.get().feed.showDuplicates,false);
+  for(const [key,value] of Object.entries(prefs))assert.equal(JSON.stringify(settings.get()[key]),JSON.stringify(value),key);
+  assert.equal(settings.get().feed.review,'reviewed');
+  settings.density('l');
+  assert.equal(saved().feed.dupDefault,'off');
+  assert.equal(saved().feed.showDuplicates,false);
+  settings.setFeed({showDuplicates:true});
+  const reloaded=settingsContext(JSON.stringify(saved())).settings;
+  assert.equal(reloaded.get().feed.showDuplicates,true);
+  for(const [key,value] of Object.entries(prefs))assert.equal(JSON.stringify(reloaded.get()[key]),JSON.stringify(value),key);
+ }
+});
+test('duplicate checkbox enables repeats while unique unsent images stay visible when off',()=>{
+ const context=feedContext(),{settings,saved}=settingsContext('{}');
+ context.gsSettings=settings;context.addEventListener=()=>{};
+ vm.runInContext(`closeDetail=()=>{};toast=()=>{};
+  items=[frame('original',{tier:1}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),
+   frame('queued',{upload:{bytes:100,sent:0}}),frame('uploading',{upload:{bytes:100,sent:40}}),
+   frame('held',{upload:{bytes:100,sent:0,override:'hold'}})];`,context);
+ const start=source.indexOf(" $('showDuplicates').onchange=");
+ vm.runInContext(source.slice(start,source.indexOf(" $('modelSel').onchange",start)),context);
+ assert.equal(context.$('showDuplicates').checked,false);
+ assert.equal(vm.runInContext('ids()',context),'original,queued,uploading,held');
+ context.$('showDuplicates').onchange({target:{checked:true}});
+ assert.equal(context.$('showDuplicates').checked,true);
+ assert.equal(saved().feed.showDuplicates,true);
+ assert.equal(vm.runInContext('ids()',context),'original,repeat,queued,uploading,held');
+ context.$('showDuplicates').onchange({target:{checked:false}});
+ assert.equal(vm.runInContext('ids()',context),'original,queued,uploading,held');
 });
 test('feed shows every pipeline image by default with low-value, repeat and directive-lowered images at P4',()=>{
  const context=feedContext();
@@ -623,7 +675,7 @@ test('cards mark human sends purple and automatic sends green',()=>{
 test('main strip moves low-level counts to the Details screen',()=>{
  assert.match(css,/#simStrip :is\(#st2,#st4\),#simStrip :is\(#st2,#st4\)\+\.ar,#liveStrip \.lowlevel,#liveStrip \.lowlevel\+\.ar\{display:none\}/);
  assert.match(html,/href="#details">Details: counts &amp; filtered photos ›<\/a>/);
- assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0<\/span><\/label>/);
+ assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates"> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0<\/span><\/label>/);
  assert.match(html,/<div class="seg" id="densSeg"><button data-d="m" class="on">Small<\/button><button data-d="l">Large<\/button><\/div>/);
 });
 test('Details screen lists automatically filtered photos by kind with their originals',()=>{
@@ -684,6 +736,35 @@ test('feed density offers only Small and Large, persists them and maps the old X
  }
  settings.density('xl');settings.density('s');settings.density(null);
  assert.equal(settings.get().density,'l');
+});
+test('text size defaults, validates, persists and reloads all sizes',()=>{
+ for(const saved of [null,'broken','{}','{"textSize":"invalid"}','{"textSize":null}','{"textSize":"toString"}']){
+  assert.equal(settingsContext(saved).settings.get().textSize,'default');
+ }
+ const {settings,saved}=settingsContext('{}');
+ for(const size of ['compact','default','large','extra-large']){
+  settings.textSize(size);
+  assert.equal(saved().textSize,size);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().textSize,size);
+ }
+ for(const invalid of [null,42,'invalid','toString'])settings.textSize(invalid);
+ assert.equal(settings.get().textSize,'extra-large');
+ assert.equal(saved().textSize,'extra-large');
+});
+test('text layout keeps enlarged image labels in frame without collisions and handles empty frames',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'static/text-layout.js'),'utf8');
+ const labels=Array.from({length:2},()=>({style:{},offsetWidth:100,offsetHeight:20,parentElement:{getBoundingClientRect:()=>({left:190,top:3})}}));
+ const frame={clientWidth:200,clientHeight:150,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:200,height:150}),querySelectorAll:selector=>selector==='.box em'?labels:[]};
+ const context=vm.createContext({window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
+ vm.runInContext(source,context);
+ assert.equal(labels[0].style.maxWidth,'192px');
+ assert.equal(labels[0].style.left,'-94px');
+ assert.equal(labels[0].style.top,'1px');
+ assert.equal(labels[1].style.top,'25px');
+ labels.length=0;
+ assert.doesNotThrow(()=>context.window.gsTextLayout());
+ frame.getBoundingClientRect=()=>({width:0,height:0});
+ assert.doesNotThrow(()=>context.window.gsTextLayout());
 });
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();

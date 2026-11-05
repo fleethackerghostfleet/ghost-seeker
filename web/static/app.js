@@ -381,10 +381,10 @@ function syncFeedFilters(){
  if(state.src!==previousSource){rv.navigation++;rv.cur=null;rv.shown=null;rv.displayed=null}
  if(f.sensor&&state.src!==f.sensor)gsSettings.setFeed({sensor:state.src});
  $('srcSel').value=state.src;$('showDuplicates').checked=f.showDuplicates;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';
- $('clearFeedFilters').hidden=state.src==='ALL'&&state.tier==='all'&&f.review==='all'&&f.showDuplicates;
+ $('clearFeedFilters').hidden=state.src==='ALL'&&state.tier==='all'&&f.review==='all'&&!f.showDuplicates;
  closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp();
 }
-function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:true});syncFeedFilters()}
+function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:false});syncFeedFilters()}
 function humanReviewed(it){return !isScene(it)&&!!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed))}
 function humanSent(it){return !isScene(it)&&!!(it.sent&&!it.autoSent||it.fullRes)}
 function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
@@ -393,7 +393,7 @@ function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sen
 function feedTier(it){return it.tier}
 function reviewMatch(it,review){return isScene(it)?review==='all':review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
- const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};
+ const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:false,review:'all'};
  let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i)));
  feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);

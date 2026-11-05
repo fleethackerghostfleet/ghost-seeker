@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/briefing.css">
 <link rel="stylesheet" href="/lights.css">
 <link rel="stylesheet" href="/auth.css">
+<link rel="stylesheet" href="/text-size.css">
 </head>
 <body>
 <div class="banner" id="classificationBanner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
@@ -32,7 +33,7 @@
     <div class="hstat"><b id="hsCdr" style="color:var(--good)">0</b><span>Sent to Commander</span></div>
   </div>
   <div class="clock mono" id="clock">--:--:--Z</div>
-  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:11px">Watch officer</span></div></div>
+  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:0.6875rem">Watch officer</span></div></div>
   <span id="readOnlyBadge" class="read-only-badge" hidden>Read-only</span>
   <form id="authLogout" class="auth-logout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
   <a class="docs-link" href="https://ghostfleet-docs.vercel.app" target="_blank" rel="noopener noreferrer" aria-label="Open documentation (new tab)" title="Open documentation (new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg></a>
@@ -43,7 +44,7 @@
   <div class="toolbar" id="feedControls">
     <span class="lbl" id="sourceLabel">Sensor</span>
     <select id="srcSel"></select>
-    <label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0</span></label>
+    <label class="feed-check"><input type="checkbox" id="showDuplicates"> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0</span></label>
     <label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter"><option value="all">All images</option><option value="sent">Sent by a person</option><option value="reviewed">Reviewed by a person</option><option value="unreviewed">Not reviewed yet</option></select></label><span class="feed-note" id="sentOrder" hidden>Only images sent by a person · newest first <button type="button" class="btn sm" id="sentShowAll">Show all images</button></span>
     <div class="seg" id="tierSeg"></div>
     <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
@@ -144,7 +145,6 @@
   <div class="details-head"><a class="btn sm" href="#feed">‹ Back to feed</a><h2>Details</h2></div>
   <div id="detailsBody"></div>
 </section>
-<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <section class="page" id="pgBrief" aria-label="Briefing workspace">
  <div class="toolbar"><div><b>Briefing builder</b><div class="hint">Local evidence snapshot · no changes to review or command decisions</div></div><div class="spacer"></div><a class="btn" href="#feed">Back to imagery</a><button class="btn" id="briefRebuild">New snapshot from selection</button><button class="btn" id="briefPDF">Print / Save PDF</button><button class="btn primary" id="briefPPTX">Export PowerPoint</button></div>
  <div id="briefStatus" role="status" aria-live="polite"></div>
@@ -163,8 +163,10 @@
 </section>
 <div class="cardmenu" id="cardMenu" role="menu" hidden><button role="menuitem" class="cm-send" id="cmSendNow"><span>➤ Send now</span><small id="cmSendNowSub">Moves this image to the top of the send queue</small></button><button role="menuitem" id="cmOpen"><span>Open image details</span></button></div>
 <div class="toast" id="toast"></div>
+<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <dialog id="settings" class="setdlg"></dialog>
 <script src="/settings.js" defer></script>
+<script src="/text-layout.js" defer></script>
 <script src="/resize.js" defer></script>
 <script src="/view-tabs.js" defer></script>
 <script src="/render.js" defer></script>

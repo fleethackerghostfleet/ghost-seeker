@@ -9,7 +9,11 @@ seven `frames/*_frames.zip` clips and three
 frames are naturally sorted by original path. Allocate 50 per source, then
 redistribute any shortfall round-robin in source order. Within each clip take
 evenly spaced indices including both endpoints (integer floor; singleton uses
-the midpoint). IDs follow this order; SHA-256 and dimensions identify the bytes.
+the midpoint). A candidate whose SHA-256 was already selected anywhere in the
+set is skipped in favor of the nearest byte-unique frame in the same clip.
+Search by increasing index distance, preferring the later frame on equal
+distance; fail explicitly if a clip cannot supply enough unique frames.
+IDs follow this order; SHA-256 and dimensions identify the bytes.
 Selection is deterministic, without a random seed. A new output directory is
 required so interrupted runs cannot silently mix data.
 
@@ -20,6 +24,14 @@ no-detection scene images are P4, giving 371 P4 overall. The real
 `yolo11n-fp32-640-ort+mobileclip-s1-ort-fp32` run returned 219 detections,
 no non-tentative subtypes, and zero unknownness on every independent first
 frame. These are the actual API outputs, not filled-in maritime assumptions.
+
+The refreshed set has 500 distinct SHA-256 hashes. The source ZIP itself
+contains identical all-black JPEG bytes at Cargo_Ship_Uncut_View
+`sec_0001.jpg` and `sec_9000.jpg`; endpoint sampling previously selected both.
+The latter (rnd-0220) now selects the nearest unused `sec_8999.jpg` instead.
+All 500 images were rerun through real inference after deduplication; source,
+detection and tier counts above are unchanged. GCS images are checksum-synced
+with stale objects removed within this testset's `images/` prefix.
 
 ## Algorithm
 
@@ -89,8 +101,13 @@ Stop the grader first and archive existing journals before changing tiers.
 ```
 
 Open through a localhost tunnel; this lightweight tool has no login. Bind only
-to loopback or a trusted development network. Keys: 1–4 grade, Enter/Space accept,
-Z undo, left/right navigate. A negative signed mean delta means the human
+to loopback or a trusted development network.
+All requests require a loopback Host (localhost, 127.0.0.1 or ::1), or a
+hostname explicitly permitted by repeatable `-allow-host <hostname>` flags.
+Rejected Hosts and accepted request Hosts are logged; forwarded-host headers
+do not grant access. For a trusted preview proxy, allow its exact hostname.
+Keys: 1–4 grade, Enter/Space accept, Z undo, left/right navigate.
+A negative signed mean delta means the human
 assigns higher priority than the model (the model under-prioritizes).
 
 The displayed position is one-based; graded progress counts distinct effective
@@ -107,8 +124,56 @@ are validated against predictions; summaries are regenerated on startup and
 atomically replaced after every grade/undo. A torn final line is saved to a
 `.partial-<timestamp>` file before recovery; complete corrupt lines fail closed.
 Do not change metadata underneath an existing session.
+At startup every local image is hashed and compared with the manifest SHA-256;
+missing images or mismatches abort before a grading session can open.
 
 Logs default to `rnd/logs/` (ignored by Git). Preserve the raw journal plus
 `*-summary.json`; the latter is a derived view, not the source of truth.
 
 Checks: `GOTOOLCHAIN=local go vet ./... && GOTOOLCHAIN=local go test ./...`.
+
+## rnd-500-v2 — diverse set
+
+Built with `rnd-testset -plan rnd/testsets/rnd-500-v2/plan.json -sources ~/rnd-data/sources -out ~/rnd-data/rnd-500-v2`.
+The plan lists every source and its frame count; sources are the 42 ingested
+video clips (5 frames each, 6 for the five night clips) plus five labeled public
+datasets from the catalog. Catalog images are picked evenly over sorted
+`image_id` (see `select_catalog.py` notes below), clip frames evenly through the
+clip, byte-duplicates skipped as in v1. Images:
+`gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/rnd/testsets/rnd-500-v2/images/`.
+
+| Source | Images | Tags |
+|---|---:|---|
+| 42 video clips | 215 | surface, rgb, unlabeled |
+| SeaShips7000 | 75 | surface, rgb, labeled |
+| Singapore Maritime | 75 | surface, rgb, labeled |
+| SeaDronesSee | 50 | aerial, rgb, labeled |
+| IR maritime vessels | 50 | surface, ir, labeled |
+| SMD VIS onboard sample | 35 | surface, rgb, labeled |
+
+Each manifest row carries `tags` (viewpoint, modality, labeled, lighting) and,
+for labeled sources, `ground_truth` boxes in pixel x/y/w/h. The grader draws
+them dashed yellow under the model's green detections.
+
+Model output (same detector and live rank bands as v1):
+
+| Has detections | Images | P1 | P2 | P3 | P4 |
+|---|---:|---:|---:|---:|---:|
+| Yes | 293 | 29 | 73 | 103 | 88 |
+| No | 207 | 0 | 0 | 0 | 207 |
+
+Detector vs. ground truth, per labeled source (images with at least one truth box):
+
+| Source | GT-positive images | Detector found nothing | GT boxes | Detected boxes |
+|---|---:|---:|---:|---:|
+| seaships7000 | 75 | 19 | 98 | 66 |
+| singapore_maritime | 75 | 3 | 4139 | 223 |
+| seadronessee | 50 | 13 | 351 | 82 |
+| ir_maritime_vessels | 44 | 20 | 169 | 44 |
+| smd_vis_onboard_sample | 32 | 9 | 60 | 30 |
+
+Overall the detector returned nothing on 64 of 276 GT-positive images. As in
+v1, frames are scored independently, so no subtypes or unknownness appear.
+Catalog candidates were selected and downloaded with a small script (evenly
+spaced over sorted `image_id`, `count + 6` candidates per dataset to allow
+duplicate skipping) into `~/rnd-data/sources/datasets/<dataset>/index.jsonl`.
