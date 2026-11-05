@@ -1168,9 +1168,6 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	}
 	merged := mergePolicy(cur, suppress, boost)
 	pol := &pb.Policy{IssuedBy: "operator-ui", Text: text, Interest: &pb.Interest{SuppressLabels: merged.Suppress, BoostLabels: merged.Boost}, Emcon: cd.Emcon}
-	if cd.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED && cur.EMCON.Mode != "" && cur.EMCON.Mode != "NORMAL" {
-		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+cur.EMCON.Mode])
-	}
 	if cd.DurationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(cd.DurationMin) * time.Minute).UnixMilli()
 	}
