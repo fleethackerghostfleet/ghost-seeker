@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/ghost-seeker-logo.png" alt="Ghost Seeker" width="560"></p>
+
 # ghost-seeker
 
 Ship-to-shore **prioritized sync** for disconnected, low-bandwidth links.

@@ -5,7 +5,7 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .banner{flex:none;background:#007a33;color:#fff;text-align:center;font-weight:700;font-size:11px;letter-spacing:.18em;padding:3px 0}
 header{flex:none;display:flex;align-items:center;gap:20px;padding:0 20px;height:64px;background:linear-gradient(180deg,#0f1a2b,#0b1220);border-bottom:1px solid #2a3550;box-shadow:inset 0 -2px 0 rgba(217,178,95,.25)}
-.crest{width:38px;height:38px;flex:none;border-radius:50%;display:grid;place-items:center;border:2px solid var(--gold);color:var(--gold);font-size:18px}
+.crest{display:block;width:38px;height:38px;flex:none;border-radius:50%;border:2px solid var(--gold);box-sizing:border-box}
 .ttl b{display:block;letter-spacing:.16em;font-size:15px;color:var(--gold)}.ttl small{color:var(--muted);font-size:11.5px}
 .live{display:flex;align-items:center;gap:6px;font-weight:700;font-size:11px;letter-spacing:.1em;color:var(--good);padding:3px 9px;border:1px solid #1e5a43;border-radius:20px;background:#0f2a21}
 .live i{width:7px;height:7px;border-radius:50%;background:var(--good);animation:pulse 1.6s infinite}
