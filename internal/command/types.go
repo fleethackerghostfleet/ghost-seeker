@@ -79,6 +79,7 @@ type Latency struct {
 }
 
 type Item struct {
+	Upload      Upload     `json:"upload"`
 	Night       *bool      `json:"night,omitempty"`
 	Basis       string     `json:"basis,omitempty"`
 	Lum         float64    `json:"lum,omitempty"`
@@ -117,6 +118,17 @@ type Item struct {
 	// Live is set only when the item comes from a shore node (ghost-seeker
 	// -shore); the simulation leaves it nil.
 	Live *LiveMeta `json:"live,omitempty"`
+}
+
+type Upload struct {
+	Override   string     `json:"override,omitempty"`
+	OverrideBy string     `json:"overrideBy,omitempty"`
+	OverrideAt *time.Time `json:"overrideAt,omitempty"`
+	NextOrder  uint64     `json:"-"`
+	Bytes      int64      `json:"bytes"`
+	Sent       int64      `json:"sent"`
+	Done       bool       `json:"done"`
+	BPS        int64      `json:"bps"`
 }
 
 // LiveForm is the shore-side state of one form of an item's fidelity ladder.
