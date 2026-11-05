@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from collections import Counter
 from pathlib import Path
@@ -52,7 +53,8 @@ SMD_VESSEL_LABELS = {"Vessel/ship", "Ferry", "Speed boat", "Kayak", "Sail boat",
 
 def add_catalog_dataset(ds_id: str, split_map: dict[str, str], catalog: Path, datasets: Path, out: Path,
                         stats: Counter, labels: set[str] | None = None) -> None:
-    """Catalog image/annotation JSONL -> YOLO. Splits not in split_map (the upstream test split) are LOCKED and skipped."""
+    """Catalog image/annotation JSONL -> YOLO. Splits not in split_map (the upstream test split) are LOCKED and skipped;
+    records a clean catalog marks with ``eval_split`` other than ``dev`` (test / quarantine) are skipped too."""
     anns: dict[str, list[list[float]]] = {}
     for line in (catalog / "annotations" / f"{ds_id}.jsonl").read_text().splitlines():
         if line.strip():
@@ -63,6 +65,9 @@ def add_catalog_dataset(ds_id: str, split_map: dict[str, str], catalog: Path, da
         if not line.strip():
             continue
         r = json.loads(line)
+        if r.get("eval_split") not in (None, "dev"):  # clean catalog: test / quarantine
+            stats[f"{ds_id}_skipped_{r['eval_split']}"] += 1
+            continue
         split = split_map.get(r["split"])
         if split is None:
             stats[f"{ds_id}_skipped_test"] += 1
@@ -126,10 +131,17 @@ def main() -> None:
     ap.add_argument("--out", default=os.path.expanduser("~/data/yolo_g"))
     ap.add_argument("--holdout", nargs="*", default=DEFAULT_HOLDOUT)
     ap.add_argument("--every", type=int, default=1, help="use every Nth MOT frame")
-    ap.add_argument("--with-smd", action="store_true", help="also add Singapore Maritime dev splits (v2)")
+    ap.add_argument("--with-smd", action="store_true", help="also add Singapore Maritime upstream train/validation (v2 ablation only: its 36 source videos cross the "
+                         "upstream splits, so the SMD part of YOLO val is NOT recording-held-out; the clean catalog quarantines it)")
     ap.add_argument("--splits", default=str(Path(__file__).resolve().parents[1] / "configs" / "splits.yaml"))
+    ap.add_argument("--force", action="store_true", help="wipe an existing --out first (never layer rebuilds: a moved holdout seq would sit in both splits)")
     a = ap.parse_args()
     out = Path(a.out)
+    if (out / "images").exists():
+        if not a.force:
+            ap.error(f"{out} already holds a dataset; pass --force to rebuild it from scratch")
+        shutil.rmtree(out / "images")
+        shutil.rmtree(out / "labels", ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
     stats: Counter = Counter()
     add_seaships(Path(a.catalog), Path(a.datasets), out, stats)
