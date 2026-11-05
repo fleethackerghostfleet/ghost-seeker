@@ -104,6 +104,18 @@ class VerifyTests(unittest.TestCase):
 
 
 class PackageStrictTests(unittest.TestCase):
+    def test_explicit_python_interpreter_is_used(self):
+        script = Path(__file__).resolve().parents[1] / "deploy/zarf/check.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            python = Path(directory) / "chosen-python"
+            python.write_text("#!/bin/sh\necho chosen-python\nexit 42\n")
+            python.chmod(0o755)
+            result = subprocess.run(["/bin/sh", str(script)],
+                                    env={"PATH": "/bin", "PYTHON": str(python), "STRICT_CHECKS": "1"},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 42)
+            self.assertIn("chosen-python", result.stdout)
+
     def test_optional_tool_skips_fail_in_strict_mode(self):
         script = Path(__file__).resolve().parents[1] / "deploy/zarf/check.sh"
         with tempfile.TemporaryDirectory() as directory:

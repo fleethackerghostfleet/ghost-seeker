@@ -53,7 +53,8 @@ def run_check(name, command, output, timeout=3600):
     with log.open("w") as stream:
         try:
             process = subprocess.Popen(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
-                                       env={**os.environ, "STRICT_CHECKS": "1"}, start_new_session=True)
+                                       env={**os.environ, "STRICT_CHECKS": "1", "PYTHON": sys.executable},
+                                       start_new_session=True)
             try:
                 code = process.wait(timeout=timeout)
             except (subprocess.TimeoutExpired, KeyboardInterrupt):
@@ -83,7 +84,7 @@ def verify():
         if git("status", "--porcelain", "--untracked-files=all"):
             raise RuntimeError("Commit or stash local changes before verification; reports must test a clean commit")
         required = ["go", "node", "make", "buf", "protoc-gen-go", "protoc-gen-connect-go",
-                    "python3", "kubeconform", "zarf", "docker"]
+                    "kubeconform", "zarf", "docker"]
         missing = [tool for tool in required if not shutil.which(tool)]
         if missing:
             raise RuntimeError("Missing prerequisites: " + ", ".join(missing) + ". See docs/VERIFY.md")

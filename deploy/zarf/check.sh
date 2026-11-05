@@ -12,11 +12,12 @@ skip() {
   fi
 }
 
-if ! command -v python3 >/dev/null 2>&1; then
-  skip "python3 not installed"
+PYTHON=${PYTHON:-python3}
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+  skip "$PYTHON not installed"
   exit 0
 fi
-python3 "$SCRIPT_DIR/check_manifests.py"
+"$PYTHON" "$SCRIPT_DIR/check_manifests.py"
 
 if command -v kubeconform >/dev/null 2>&1; then
   tmp=$(mktemp -d)
