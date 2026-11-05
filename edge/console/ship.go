@@ -50,11 +50,16 @@ func (s *Service) ShipPolicyHandler() http.Handler {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			base := s.Sch.RawPolicy()
+			raw := s.Sch.RawPolicy()
+			base := raw
 			if base == nil {
 				base = s.Sch.Policy()
 			}
 			p := policy.WithLocalLayer(base, layer)
+			if raw != nil && raw.ExpiresAtUnixMs == 0 && !strings.HasPrefix(raw.Id, "ship-") {
+				// AcceptLocal re-stamps IssuedAt; keep the shore policy's own deadline.
+				p.ExpiresAtUnixMs = policy.Expiry(raw, policy.DefaultTTL).UnixMilli()
+			}
 			p.Id = fmt.Sprintf("ship-%d", s.Clk.Now().UnixMilli())
 			p.Text = "ship console"
 			p.Signature = nil

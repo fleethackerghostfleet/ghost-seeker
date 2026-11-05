@@ -123,6 +123,7 @@ func main() {
 	icfg.SceneEvery = *sceneEvery
 	icfg.Prioritizer = *prioritizer
 	ing := ingest.New(icfg, st, an, sch, clk, log)
+	ing.Frames = ingest.NewFrameLog(300)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -151,13 +152,16 @@ func main() {
 		}()
 	}
 
-	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped, Prioritizer: *prioritizer}
+	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped, Prioritizer: *prioritizer, Frames: ing.Frames}
 	mux := http.NewServeMux()
 	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc, connect.WithReadMaxBytes(1<<20))
 	mux.Handle(path, opauth.RequireBearer(operator, h))
 	mux.Handle("/blob/", opauth.RequireBearer(operator, svc.BlobHandler()))
 	mux.Handle("GET /policy/audit", opauth.RequireBearer(operator, svc.PolicyAuditHandler()))
 	mux.Handle("/ship/policy", opauth.RequireBearer(operator, svc.ShipPolicyHandler()))
+	mux.Handle("GET /ship/items", opauth.RequireBearer(operator, svc.ShipItemsHandler()))
+	mux.Handle("GET /ship/frames", opauth.RequireBearer(operator, svc.ShipFramesHandler()))
+	mux.Handle("GET /ship/frames/{seq}", opauth.RequireBearer(operator, svc.ShipFramesHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	httpx.StaticUI(mux, *uiDir, "edge "+*id)
 	srv := httpx.Server(*listen, h2c.NewHandler(httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux), &http2.Server{}))
