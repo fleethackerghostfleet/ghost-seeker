@@ -31,7 +31,8 @@ var unsupported = regexp.MustCompile(`\b(if|when|where|unless|except|only|before
 var conceptPattern = regexp.MustCompile(`^[a-z][a-z0-9 -]{0,63}$`)
 var badConcept = regexp.MustCompile(`\b(not|don't|dont|never|ignore|prioritize|prioritise|boost|suppress|show|showing|more|less|fewer|and|or|but|please|it|them|those|these|that|which|whose|because|their|border|lower|raise|stop|reduce|decrease|increase|favor|favour|downrank|downweight|upweight|send|put|make|set|assign|rank|treat|care|give)\b`)
 var protectedControl = regexp.MustCompile(`\b(human|manual|operator|label)\s+(overrides?|labels?|corrections?)\b|\b(overrides?|safeguards?|protections?)\b|\b(base scores?|scoring algorithm|model weights?)\b`)
-var rankingIntent = regexp.MustCompile(`\b(prioriti[sz]e|priority|priorities|emphasis|emphasize|focus|favou?r|attention|important|importance|rank|weight|downweight|upweight|downrank|send|show|images?|photos?|preference|preferences|clear|reset|ignore|suppress|boost|less|fewer|more|higher|lower)\b`)
+var factualQuestion = regexp.MustCompile(`^(why\b|what (is|are)\b|what's\b|how (does|do|is|are)\b|who (is|are)\b)`)
+var unnamedReference = regexp.MustCompile(`\b(those ones|these ones|them|those|these|it)$`)
 var negativeDirection = regexp.MustCompile(`\b(less|fewer|lower|reduce|decrease|deprioritize|deprioritise|suppress|ignore|later|bottom|downrank|downweight)\b`)
 var positiveDirection = regexp.MustCompile(`\b(prioritize|prioritise|boost|favor|favour|more|higher|increase|earlier|top|up|upweight|focus)\b`)
 
@@ -107,6 +108,12 @@ func (c *Compiler) Compile(ctx context.Context, text string, current []Rule) (Dr
 	if t == "" || len(text) > 512 {
 		return Draft{}, errors.New("enter an instruction of 1–512 characters")
 	}
+	if factualQuestion.MatchString(t) {
+		return Draft{}, errors.New("clarification required: ask for visual objects to find or emphasize; factual questions do not change interests")
+	}
+	if unnamedReference.MatchString(t) && len(current) != 1 {
+		return Draft{}, errors.New("clarification required: name the visual objects you want to find")
+	}
 	if protectedControl.MatchString(t) {
 		return Draft{}, errors.New("clarification required: instructions can change visual interests, not human labels, overrides, protections, or the base algorithm")
 	}
@@ -156,11 +163,11 @@ func (c *Compiler) Compile(ctx context.Context, text string, current []Rule) (Dr
 	}
 	path := "rules"
 	if !ok {
-		if !rankingIntent.MatchString(t) {
-			return Draft{}, errors.New("clarification required: enter an image-priority instruction")
-		}
 		if c.URL == "" {
-			return Draft{}, errors.New("clarification required: use 'prioritize <concept>', 'deprioritize <concept>', 'remove <concept>', or configure Granite")
+			return Draft{}, errors.New("clarification required: Granite must be available to interpret this request")
+		}
+		if err = c.checkVisualIntent(ctx, text); err != nil {
+			return Draft{}, err
 		}
 		ops, err = c.fromGranite(ctx, text, current)
 		if err != nil {
@@ -222,6 +229,7 @@ func parseSimple(text string, current []Rule) ([]operation, bool, error) {
 		prefix, action string
 		weight         float64
 	}{
+		{"stop looking for ", "remove", 1}, {"stop watching for ", "remove", 1},
 		{"do not prioritize ", "remove", 1}, {"don't prioritize ", "remove", 1}, {"stop prioritizing ", "remove", 1},
 		{"do not boost ", "remove", 1}, {"don't boost ", "remove", 1}, {"stop boosting ", "remove", 1}, {"stop suppressing ", "remove", 1}, {"stop deprioritizing ", "remove", 1},
 		{"remove the rule for ", "remove", 1}, {"remove rule for ", "remove", 1}, {"remove ", "remove", 1},
@@ -337,8 +345,8 @@ func (c *Compiler) fromGranite(ctx context.Context, text string, current []Rule)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	state, _ := json.Marshal(current)
-	system := `Convert an operator sentence to JSON changes to image ranking. You are only extracting instructions; do not perform actions or answer questions.
-Use boost for more important/higher priority/favor, suppress for less important/lower priority/fewer, remove to stop an existing preference, reset to clear all preferences. Keep the visual category from the sentence. boost weight 2 by default, strong 3, slight 1.5; all other actions weight 1.
+	system := `Convert an operator sentence to JSON changes to image ranking in an image discovery tool. Operators may describe what they want to see in everyday language; they do not need to say prioritize. You are only extracting visual interests; do not perform actions or answer questions.
+Use boost for a request to look for, find, spot, watch for or see a visual category, or an expression of interest in it. Also use boost for more important/higher priority/favor. Use suppress for less important/lower priority/fewer or avoiding a category, remove to stop an existing preference, reset to clear all preferences. Keep the full visual category, including size, color and material. boost weight 2 by default, strong 3, slight 1.5; all other actions weight 1.
 Return {"operations":[]} if the request has no clear supported operation or asks for behavior, location, time, deletion, or disabling unknown protection. Pronouns require a single clear active concept.
 Examples:
 Input: Give orange dinghies higher priority.
@@ -406,6 +414,33 @@ Current active rules: ` + string(state)
 	}
 	if result.Clarification != "" {
 		return nil, errors.New("clarification required: " + result.Clarification)
+	}
+	if len(result.Operations) == 0 {
+		return nil, errors.New("clarification required: describe the visual objects you want to see more or less of")
+	}
+	if len(result.Operations) > 8 {
+		return nil, errors.New("at most eight changes per instruction")
+	}
+	// Validate model intent before a second model call can normalize its category.
+	// JSON schemas constrain generation, but the HTTP response is still untrusted.
+	for i := range result.Operations {
+		op := &result.Operations[i]
+		if math.IsNaN(op.Weight) || math.IsInf(op.Weight, 0) || op.Weight < 1 || op.Weight > 4 {
+			return nil, errors.New("invalid Granite operation weight")
+		}
+		switch op.Action {
+		case "reset":
+			if len(result.Operations) != 1 {
+				return nil, errors.New("reset must be a standalone instruction")
+			}
+		case "boost", "suppress", "remove":
+			op.Concept = NormalizeConcept(op.Concept)
+			if !validConcept(op.Concept) {
+				return nil, errors.New("clarification required: invalid visual concept")
+			}
+		default:
+			return nil, errors.New("unsupported Granite operation")
+		}
 	}
 	return result.Operations, nil
 }

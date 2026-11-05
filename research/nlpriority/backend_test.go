@@ -78,6 +78,12 @@ func TestGraniteConstrainedOutputAndFailures(t *testing.T) {
 		if req["response_format"] == nil || req["model"] != "granite-4.0-350m" {
 			t.Errorf("missing schema/model: %v", req)
 		}
+		if format, ok := req["response_format"].(map[string]any); ok {
+			if schema, ok := format["json_schema"].(map[string]any); ok && schema["name"] == "intent_kind" {
+				conversationModelReply(w, `{"intent":"visual_interest"}`)
+				return
+			}
+		}
 		writeJSON(w, 200, map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": content}}}})
 	}))
 	defer srv.Close()
@@ -369,22 +375,24 @@ func TestFollowUpToUnappliedDraft(t *testing.T) {
 	}
 }
 
-func TestGranitePolarityAndUnrelatedChatGuard(t *testing.T) {
+func TestGranitePolarityGuard(t *testing.T) {
 	called := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body conversationModelRequest
+		if e := json.NewDecoder(r.Body).Decode(&body); e != nil {
+			t.Error(e)
+			w.WriteHeader(500)
+			return
+		}
+		if body.ResponseFormat.JSONSchema.Name == "intent_kind" {
+			conversationModelReply(w, `{"intent":"visual_interest"}`)
+			return
+		}
 		called = true
 		writeJSON(w, 200, map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"operations":[{"action":"boost","concept":"cargo ship","weight":2}]}`}}}})
 	}))
 	defer srv.Close()
 	c := &Compiler{URL: srv.URL}
-	for _, text := range []string{"I am hungry", "Make everything perfect"} {
-		if _, e := c.Compile(context.Background(), text, nil); e == nil {
-			t.Fatal("unrelated request accepted")
-		}
-	}
-	if called {
-		t.Fatal("unrelated request reached model")
-	}
 	if _, e := c.Compile(context.Background(), "Give cargo ships lower priority", nil); e == nil {
 		t.Fatal("reversed polarity accepted")
 	}

@@ -41,7 +41,7 @@ func resolverFixture(t *testing.T, mapping map[string]string) *Compiler {
 		if x, ok := mapping[input]; ok {
 			canonical = x
 		}
-		content, _ := json.Marshal(map[string]string{"label": canonical})
+		content, _ := json.Marshal(map[string]any{"qualifiers": []string{}, "label": canonical})
 		writeJSON(w, 200, map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": string(content)}}}})
 	}))
 	t.Cleanup(srv.Close)
@@ -197,7 +197,7 @@ func TestLiveGraniteCategoryResolution(t *testing.T) {
 		t.Skip("set GRANITE_TEST_URL for local model integration")
 	}
 	c := &Compiler{URL: url}
-	cases := map[string]string{"fishing vessels": "fishing boat", "cargo vessels": "cargo ship", "red fishing boats": "red fishing boat", "rescue boats": "rescue boat"}
+	cases := map[string]string{"big ships": "big ship", "small fishing vessels": "small fishing vessel", "fishing vessels": "fishing boat", "cargo vessels": "cargo ship", "red fishing boats": "red fishing boat", "rescue boats": "rescue boat"}
 	for input, want := range cases {
 		t.Run(input, func(t *testing.T) {
 			d, e := c.Compile(context.Background(), "prioritize "+input, nil)
@@ -218,4 +218,56 @@ func TestLiveGraniteCategoryResolution(t *testing.T) {
 			t.Fatalf("legacy literal was not resolved: %+v", d)
 		}
 	})
+}
+
+func TestModelReportedQualifierPreservation(t *testing.T) {
+	cases := []struct {
+		name, input, content, want string
+		invalid                    bool
+	}{
+		{"size preserved", "big ship", `{"qualifiers":["big"],"label":"ship"}`, "NONE", false},
+		{"alias retains qualifier", "fishing vessel", `{"qualifiers":["fishing"],"label":"fishing boat"}`, "fishing boat", false},
+		{"whole word boundary", "red boat", `{"qualifiers":["red"],"label":"redwing boat"}`, "NONE", false},
+		{"unknown retained", "rescue boat", `{"qualifiers":[],"label":"NONE"}`, "NONE", false},
+		{"missing qualifiers", "big ship", `{"label":"ship"}`, "", true},
+		{"null qualifiers", "big ship", `{"qualifiers":null,"label":"ship"}`, "", true},
+		{"hallucinated qualifier", "big ship", `{"qualifiers":["blue"],"label":"ship"}`, "", true},
+		{"empty qualifier", "big ship", `{"qualifiers":[""],"label":"ship"}`, "", true},
+		{"too many qualifiers", "big ship", `{"qualifiers":["big","big","big","big","big"],"label":"ship"}`, "", true},
+		{"raw label validated first", "big ship", `{"qualifiers":["big"],"label":"unavailable"}`, "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request struct {
+					ResponseFormat struct {
+						JSONSchema struct {
+							Schema struct {
+								Properties json.RawMessage `json:"properties"`
+							} `json:"schema"`
+						} `json:"json_schema"`
+					} `json:"response_format"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Error(err)
+				}
+				properties := string(request.ResponseFormat.JSONSchema.Schema.Properties)
+				if strings.Index(properties, `"qualifiers"`) >= strings.Index(properties, `"label"`) {
+					t.Error("qualifiers must precede label in schema")
+				}
+				writeJSON(w, 200, map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": tc.content}}}})
+			}))
+			defer server.Close()
+			got, err := (&Compiler{URL: server.URL}).resolveOne(context.Background(), tc.input, []string{"ship", "fishing boat", "redwing boat"})
+			if tc.invalid {
+				if err == nil {
+					t.Fatalf("accepted invalid model output %s", tc.content)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
 }

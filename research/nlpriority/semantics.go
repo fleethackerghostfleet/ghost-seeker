@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -125,37 +126,34 @@ func (c *Compiler) resolveOne(ctx context.Context, input string, known []string)
 	}
 	known = options
 	knownJSON, _ := json.Marshal(known)
-	system := `Normalize an object category to the equivalent known category. Use general English meaning to recognize synonyms, singular/plural forms, and alternative wording. The generic words boat, ship, vessel and craft do not define a new subtype when the function is the same. Use NONE only for a genuinely different category or an additional distinguishing feature. Colors, sizes and materials must be retained, so return NONE if they are absent from the known label. A generic vessel is broader than a specific role, so keep it. Do not change rescue craft into an unrelated category. The input and label must be the same kind of physical object. Equipment, parts, clothing and tools are not the vehicles, animals or people using them. Associated objects are not synonyms. Return NONE for equipment when no equivalent equipment category exists.
+	system := `Read the visual object phrase. First list any extra visual qualifiers (size, color, material) that are not part of a known category. Then choose the equivalent known category, or NONE. Synonyms for a known category do not create extra qualifiers. The words boat, ship, vessel and craft can refer to the same functional category. Equipment is different from the vehicle using it.
 Known categories: ` + string(knownJSON) + `
 Input: cargo vessel
-Output: {"label":"cargo ship"}
-Input: sailing boat
-Output: {"label":"sailboat"}
-Input: passenger vessel
-Output: {"label":"passenger ship"}
-Input: container vessel
-Output: {"label":"container ship"}
-Input: naval warship
-Output: {"label":"warship"}
+Output: {"qualifiers":[],"label":"cargo ship"}
+Input: large cargo vessel
+Output: {"qualifiers":["large"],"label":"cargo ship"}
 Input: red cargo ship
-Output: {"label":"NONE"}
-Input: life raft
-Output: {"label":"NONE"}
-Input: vessel
-Output: {"label":"NONE"}
+Output: {"qualifiers":["red"],"label":"cargo ship"}
 Input: rescue boat
-Output: {"label":"NONE"}
+Output: {"qualifiers":[],"label":"NONE"}
 Input: cargo net
-Output: {"label":"NONE"}
-Input: small cargo vessel
-Output: {"label":"NONE"}
-Final check: if the input adds a size, color, or material that is not in the chosen category, output NONE. Never discard such a qualifier.`
-	schema := map[string]any{"type": "object", "properties": map[string]any{"label": map[string]any{"type": "string", "enum": append(append([]string{}, known...), "NONE")}}, "required": []string{"label"}, "additionalProperties": false}
+Output: {"qualifiers":[],"label":"NONE"}`
+
+	// Keep property order: this small model extracts qualifiers before selecting
+	// a category. A map would serialize label first.
+	properties := struct {
+		Qualifiers any `json:"qualifiers"`
+		Label      any `json:"label"`
+	}{
+		Qualifiers: map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "maxItems": 4},
+		Label:      map[string]any{"type": "string", "enum": append(append([]string{}, known...), "NONE")},
+	}
+	schema := map[string]any{"type": "object", "properties": properties, "required": []string{"qualifiers", "label"}, "additionalProperties": false}
 	model := c.Model
 	if model == "" {
 		model = "granite-4.0-350m"
 	}
-	body, _ := json.Marshal(map[string]any{"model": model, "temperature": 0, "max_tokens": 40, "messages": []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": "Input: " + input + "\nOutput:"}}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "concept_resolution", "strict": true, "schema": schema}}})
+	body, _ := json.Marshal(map[string]any{"model": model, "temperature": 0, "max_tokens": 60, "messages": []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": "Input: " + input + "\nOutput:"}}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "concept_resolution", "strict": true, "schema": schema}}})
 	url := strings.TrimRight(c.URL, "/")
 	if !strings.HasSuffix(url, "/chat/completions") {
 		if !strings.HasSuffix(url, "/v1") {
@@ -191,7 +189,8 @@ Final check: if the input adds a size, color, or material that is not in the cho
 		return "", errors.New("invalid Granite category interpretation response")
 	}
 	var result struct {
-		Label string `json:"label"`
+		Qualifiers *[]string `json:"qualifiers"`
+		Label      string    `json:"label"`
 	}
 	dec := json.NewDecoder(strings.NewReader(envelope.Choices[0].Message.Content))
 	dec.DisallowUnknownFields()
@@ -201,6 +200,35 @@ Final check: if the input adds a size, color, or material that is not in the cho
 	var extra any
 	if dec.Decode(&extra) != io.EOF {
 		return "", errors.New("trailing category interpretation output")
+	}
+	// Check the raw label first; preservation must not hide an invalid answer.
+	allowed := result.Label == "NONE"
+	for _, label := range known {
+		if result.Label == label {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return "", errors.New("Granite selected a category outside the known vocabulary")
+	}
+	if result.Qualifiers == nil || len(*result.Qualifiers) > 4 {
+		return "", errors.New("category interpretation requires a qualifiers array with at most four entries")
+	}
+	preserve := result.Label == "NONE"
+	for _, qualifier := range *result.Qualifiers {
+		if strings.TrimSpace(qualifier) == "" || !strings.Contains(input, qualifier) {
+			return "", errors.New("Granite reported a qualifier absent from the original phrase")
+		}
+		// Attributes come from the model, not a static word/alias list. Require
+		// phrase boundaries: red is not considered present in redwing.
+		phrase := regexp.MustCompile(`(^|[^a-z0-9])` + regexp.QuoteMeta(qualifier) + `($|[^a-z0-9])`)
+		if !phrase.MatchString(result.Label) {
+			preserve = true
+		}
+	}
+	if preserve {
+		return "NONE", nil
 	}
 	return result.Label, nil
 }

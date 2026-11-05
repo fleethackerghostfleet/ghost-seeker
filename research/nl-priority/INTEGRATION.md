@@ -6,7 +6,9 @@
    optional human override and Tomer score.
 2. The matching MobileCLIP image encoder computes a reusable embedding.
 3. A command compiler uses strict rules for simple operations and local IBM
-   Granite for broader phrasing and category equivalence. Even fast-path commands
+   Granite for broader phrasing and category equivalence. Ordinary visual-search
+   requests are interpreted as interests without a ranking-keyword whitelist.
+   Empty or invalid model interpretations require clarification. Even fast-path commands
    send unfamiliar category names through Granite before proposing validated
    interest rules. The LLM never sees or processes image pixels.
 4. The text encoder compares the base vocabulary and up to16 operator concepts

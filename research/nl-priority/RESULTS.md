@@ -96,3 +96,37 @@ the UI correctly reported no matching images. The active state file was unchange
 See [the live smoke report](reports/semantic-resolution-smoke.json). Browser
 verification also confirmed Granite's interpretation, one changed image, and an
 enabled Apply button; the proposed policy was left unapplied.
+
+## Follow-up: everyday visual requests
+
+Removed the prioritization-keyword admission check. Granite now classifies
+ordinary visual requests, then extracts their intended interests. Requests such
+as `look for big ships`, `can you find fishing vessels`, and `I am interested in
+cargo ships` no longer require the verb `prioritize`. Simple factual questions
+and unnamed references without a single active interest require clarification.
+`stop looking for` removes the named existing interest.
+
+Granite now reports visual qualifiers before selecting an equivalent category.
+Validation preserves the original phrase if a proposed category omits a reported
+qualifier. Qualifiers come from the model, with no handcoded size/color list or
+synonym table. Missing, invented or malformed qualifier output is rejected.
+The exact `look for big ships` live preview retained `big ship`, took **2.418s**
+for the existing 45-image queue, and left active revision 4 unchanged. No crop
+met the experimental `big ship` matching threshold, so no current priorities
+changed. This is a single warm smoke check, not the 1,000-image resource gate.
+
+The full research unit/race suite passes. All **21 targeted conversational
+checks passed** (15 supported requests and 6 clarification cases), with 2.503s
+combined warm compile p95 in the final sequential run. This measures compilation,
+not a 1,000-image preview workload. The reproducible development corpus
+and final actual-model results are in `eval/conversational.json` and
+[the conversational report](reports/conversational-language-regression.json).
+The earlier failed run is retained separately. These examples informed development
+and do not establish new held-out accuracy or production readiness.
+
+**Known regression:** `cargo vessel` can produce an invented qualifier and is
+rejected, while the exact existing category `cargo ship` remains supported. The
+optional live category test retains that failing case. The small model still
+misses the broader language acceptance goal; no model or resource-budget
+substitution was made. Further tuning was stopped to deliver the requested
+phrasing fix promptly.

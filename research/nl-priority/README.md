@@ -74,6 +74,11 @@ expected, particularly on small or blurry crops. The displayed similarity is not
 a calibrated probability. Human labels override model labels. Unknown-object
 protection remains active, including when an instruction deprioritizes a class.
 
+Everyday requests such as `look for big ships`, `find fishing vessels`, or
+`I am interested in cargo ships` also express visual interests. Granite interprets
+these as boosts; no prioritization keyword is required. Review the proposed
+category and priority change before Apply.
+
 Instructions support boosts, suppression, changing emphasis, removing rules,
 reset and undo. Short references such as `less of those` need an unambiguous
 existing interest. Source/geographic/time conditions, behavior inferred from a
@@ -85,7 +90,9 @@ vocabulary still go through Granite: it can resolve an equivalent term to an
 existing category, or preserve the full phrase as a candidate concept. For
 example, `prioritize fishing vessels` should interpret the category as
 `fishing boat` rather than create a competing experimental label. There is no
-hardcoded synonym table. The constrained response can select only a supplied
+hardcoded synonym table. Granite also extracts qualifiers such as size and color;
+a candidate category that omits a reported qualifier cannot replace the original
+phrase. The constrained response can select only a supplied
 category or retain the original phrase; malformed or unavailable responses
 cannot change active state. This validates the response structure, not its
 semantic truth. Preview displays resolved terms, the number of priorities
