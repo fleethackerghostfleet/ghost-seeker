@@ -28,9 +28,23 @@ func token(t *testing.T, sub, role, key, alg string, exp *jwt.NumericDate) strin
 	return v
 }
 
+func tokenWithEchelon(t *testing.T, sub, role, echelon, key, alg string, exp *jwt.NumericDate) string {
+	t.Helper()
+	c := claims{Role: role, Echelon: echelon, RegisteredClaims: jwt.RegisteredClaims{Subject: sub, ExpiresAt: exp}}
+	v, err := jwt.NewWithClaims(jwt.GetSigningMethod(alg), c).SignedString([]byte(key))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
 func TestSyncAuth(t *testing.T) {
 	future := jwt.NewNumericDate(time.Now().Add(time.Hour))
 	valid, err := Mint("edge-1", testKey, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operatorToken, err := MintOperator("edge-1", pb.Echelon_ECHELON_SHIP, testKey, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,6 +65,7 @@ func TestSyncAuth(t *testing.T) {
 		{"wrong node", valid, "edge-2", true, connect.CodePermissionDenied},
 		{"missing node", valid, "", true, connect.CodePermissionDenied},
 		{"valid", valid, "edge-1", true, 0},
+		{"operator token", operatorToken, "edge-1", true, connect.CodeUnauthenticated},
 		{"auth off", "", "edge-1", false, 0},
 		{"auth off ignores invalid token", "broken", "edge-1", false, 0},
 	} {
@@ -81,6 +96,91 @@ func TestSyncAuth(t *testing.T) {
 				t.Fatalf("got %v, want %v", err, tc.code)
 			}
 		})
+	}
+}
+
+func TestOperatorFromHeader(t *testing.T) {
+	future := jwt.NewNumericDate(time.Now().Add(time.Hour))
+	valid, err := MintOperator("TAO-DDG51", pb.Echelon_ECHELON_SHIP, testKey, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := New(false, testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		bearer string
+		want   connect.Code
+	}{
+		{name: "missing", want: connect.CodeUnauthenticated},
+		{name: "malformed", bearer: "broken", want: connect.CodeUnauthenticated},
+		{name: "expired", bearer: tokenWithEchelon(t, "TAO", "operator", "ship", testKey, "HS256",
+			jwt.NewNumericDate(time.Now().Add(-time.Second))), want: connect.CodeUnauthenticated},
+		{name: "bad signature", bearer: tokenWithEchelon(t, "TAO", "operator", "ship",
+			"other-key-at-least-32-bytes-long!!", "HS256", future), want: connect.CodeUnauthenticated},
+		{name: "wrong algorithm", bearer: tokenWithEchelon(t, "TAO", "operator", "ship", testKey, "HS384", future),
+			want: connect.CodeUnauthenticated},
+		{name: "missing expiry", bearer: tokenWithEchelon(t, "TAO", "operator", "ship", testKey, "HS256", nil),
+			want: connect.CodeUnauthenticated},
+		{name: "empty subject", bearer: tokenWithEchelon(t, "", "operator", "ship", testKey, "HS256", future),
+			want: connect.CodeUnauthenticated},
+		{name: "unit role", bearer: tokenWithEchelon(t, "edge-1", "unit", "ship", testKey, "HS256", future),
+			want: connect.CodeUnauthenticated},
+		{name: "missing echelon", bearer: tokenWithEchelon(t, "TAO", "operator", "", testKey, "HS256", future),
+			want: connect.CodeUnauthenticated},
+		{name: "unknown echelon", bearer: tokenWithEchelon(t, "TAO", "operator", "fleet", testKey, "HS256", future),
+			want: connect.CodeUnauthenticated},
+		{name: "valid", bearer: valid},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			header := make(http.Header)
+			if tc.bearer != "" {
+				header.Set(OperatorJWTHeader, tc.bearer)
+			}
+			operator, err := auth.OperatorFromHeader(header)
+			if tc.want != 0 {
+				if connect.CodeOf(err) != tc.want {
+					t.Fatalf("got %v, want %v", err, tc.want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if operator.ID != "TAO-DDG51" || operator.Echelon != pb.Echelon_ECHELON_SHIP {
+				t.Fatalf("operator=%+v", operator)
+			}
+		})
+	}
+}
+
+func TestOperatorEchelonHelpersAndUnverifiedClaims(t *testing.T) {
+	for name, echelon := range map[string]pb.Echelon{
+		"unit": pb.Echelon_ECHELON_UNIT, "ship": pb.Echelon_ECHELON_SHIP, "command": pb.Echelon_ECHELON_COMMAND,
+	} {
+		got, err := EchelonFromString(name)
+		if err != nil || got != echelon || EchelonString(echelon) != name {
+			t.Fatalf("%s: got %v, %v", name, got, err)
+		}
+	}
+	if _, err := EchelonFromString("unknown"); err == nil {
+		t.Fatal("accepted unknown echelon")
+	}
+	raw, err := MintOperator("TAO", pb.Echelon_ECHELON_COMMAND, testKey, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	operator, err := UnverifiedOperator(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if operator.ID != "TAO" || operator.Echelon != pb.Echelon_ECHELON_COMMAND {
+		t.Fatalf("operator=%+v", operator)
+	}
+	if _, err := UnverifiedOperator("broken"); err == nil {
+		t.Fatal("accepted malformed token")
 	}
 }
 
@@ -147,5 +247,19 @@ func TestKeyAndTTLValidation(t *testing.T) {
 	}
 	if _, err := Mint("", testKey, time.Hour); err == nil {
 		t.Fatal("accepted empty node")
+	}
+	for _, echelon := range []pb.Echelon{pb.Echelon_ECHELON_UNSPECIFIED, pb.Echelon(99)} {
+		if _, err := MintOperator("TAO", echelon, testKey, time.Hour); err == nil {
+			t.Fatalf("accepted invalid operator echelon %v", echelon)
+		}
+	}
+	if _, err := MintOperator("TAO", pb.Echelon_ECHELON_SHIP, "short", time.Hour); err == nil {
+		t.Fatal("accepted short operator key")
+	}
+	if _, err := MintOperator("TAO", pb.Echelon_ECHELON_SHIP, testKey, time.Second-time.Nanosecond); err == nil {
+		t.Fatal("accepted short operator TTL")
+	}
+	if _, err := MintOperator(" \t ", pb.Echelon_ECHELON_SHIP, testKey, time.Hour); err == nil {
+		t.Fatal("accepted empty operator id")
 	}
 }

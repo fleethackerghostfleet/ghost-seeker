@@ -581,7 +581,7 @@ func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
 	if pol == nil {
 		return p
 	}
-	info := policyInfo(pol) // same merge/lock view as the F2 strip (#57)
+	info := policyInfo(pol, c.b.echelon()) // same merge/lock view as the F2 strip (#57)
 	p.Version, p.ExpiresAtUnixMs = info.Version, pol.GetExpiresAtUnixMs()
 	p.EMCON = EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy}
 	p.Locks, p.Conflicts = info.Locks, info.Conflicts
@@ -1172,13 +1172,16 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		text = cur.Text
 	}
 	merged := mergePolicy(cur, suppress, boost)
-	pol := &pb.Policy{IssuedBy: "operator-ui", Text: text, Interest: &pb.Interest{SuppressLabels: merged.Suppress, BoostLabels: merged.Boost}, Emcon: cd.Emcon}
+	pol := &pb.Policy{IssuedBy: c.b.issuer(), Text: text, Interest: &pb.Interest{SuppressLabels: merged.Suppress, BoostLabels: merged.Boost}, Emcon: cd.Emcon}
 	if cd.DurationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(cd.DurationMin) * time.Minute).UnixMilli()
 	}
 	out, err := c.b.applyPolicyProto(r.Context(), pol)
 	if err != nil {
 		log.Printf("console: set policy upstream: %v", err)
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadGateway, "upstream shore error")
 		return
 	}
@@ -1222,6 +1225,9 @@ func mergePolicy(cur LivePolicy, suppress, boost []string) LivePolicy {
 func (c *Console) clearDirectives(w http.ResponseWriter, r *http.Request) {
 	if _, err := c.b.applyPolicy(r.Context(), "", nil, nil); err != nil {
 		log.Printf("console: clear policy upstream: %v", err)
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadGateway, "upstream shore error")
 		return
 	}

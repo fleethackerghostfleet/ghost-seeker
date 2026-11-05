@@ -21,6 +21,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shorebridge"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
@@ -52,6 +53,8 @@ func main() {
 	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
 	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "operator token file")
+	operatorJWT := flag.String("operator-jwt", os.Getenv("GS_OPERATOR_JWT"), "operator JWT for shore policy authorization")
+	operatorJWTFile := flag.String("operator-jwt-file", os.Getenv("GS_OPERATOR_JWT_FILE"), "read operator JWT from a file")
 	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
 	flag.Parse()
 
@@ -72,7 +75,11 @@ func main() {
 	}
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID)
+		jwt, err := unitauth.Credential(*operatorJWT, *operatorJWTFile)
+		if err != nil {
+			log.Fatalf("-operator-jwt: %v", err)
+		}
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID, jwt)
 		return
 	}
 
@@ -151,7 +158,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID, operatorJWT string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -170,6 +177,9 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)
+	if err := bridge.SetOperatorJWT(operatorJWT); err != nil {
+		log.Fatalf("-operator-jwt: %v", err)
+	}
 	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
 	console := shorebridge.NewConsole(bridge)

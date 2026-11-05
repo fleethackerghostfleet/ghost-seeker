@@ -30,6 +30,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
 
 const consolePath = "/ghostseeker.v1.ConsoleService/"
@@ -64,6 +65,10 @@ type Bridge struct {
 	operator   string
 	edgeNodeID string
 
+	operatorJWT     string
+	operatorJWTSub  string
+	operatorEchelon pb.Echelon
+
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
 	onSnapshot func(*Snapshot, *pb.Policy) // Console hook, called with every fresh snapshot and the policy it was built from
 }
@@ -89,6 +94,48 @@ func (b *Bridge) Poke() {
 	}
 }
 
+func (b *Bridge) SetOperatorJWT(token string) error {
+	token = strings.TrimSpace(token)
+	var operator unitauth.Operator
+	var err error
+	if token != "" {
+		operator, err = unitauth.UnverifiedOperator(token)
+		if err != nil {
+			return err
+		}
+	}
+	b.mu.Lock()
+	b.operatorJWT = token
+	b.operatorJWTSub = operator.ID
+	b.operatorEchelon = operator.Echelon
+	b.mu.Unlock()
+	return nil
+}
+
+func (b *Bridge) issuer() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.operatorJWT != "" {
+		return b.operatorJWTSub
+	}
+	return b.operator
+}
+
+func (b *Bridge) echelon() pb.Echelon {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.operatorJWT == "" {
+		return pb.Echelon_ECHELON_SHIP
+	}
+	return b.operatorEchelon
+}
+
+func (b *Bridge) hasOperatorJWT() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.operatorJWT != ""
+}
+
 // DefaultOperator is the issuer recorded on policies this console edits when
 // no -operator-id is configured.
 const DefaultOperator = "operator-ui"
@@ -98,7 +145,9 @@ const DefaultOperator = "operator-ui"
 // authenticated console instance), never taken from the browser request.
 func (b *Bridge) WithOperator(id string) *Bridge {
 	if id = strings.TrimSpace(id); id != "" {
+		b.mu.Lock()
 		b.operator = id
+		b.mu.Unlock()
 	}
 	return b
 }
@@ -251,6 +300,12 @@ func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.
 		return err
 	}
 	hr.Header.Set("Content-Type", "application/json")
+	b.mu.Lock()
+	operatorJWT := b.operatorJWT
+	b.mu.Unlock()
+	if base == b.shore && operatorJWT != "" {
+		hr.Header.Set(unitauth.OperatorJWTHeader, operatorJWT)
+	}
 	b.authorize(hr)
 	res, err := b.client.Do(hr)
 	if err != nil {
@@ -262,9 +317,52 @@ func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.
 		return err
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: %s: %s", method, res.Status, strings.TrimSpace(string(raw)))
+		return &consoleCallError{method: method, statusCode: res.StatusCode, status: res.Status,
+			body: strings.TrimSpace(string(raw))}
 	}
 	return protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(raw, resp)
+}
+
+type consoleCallError struct {
+	method     string
+	statusCode int
+	status     string
+	body       string
+}
+
+func (e *consoleCallError) Error() string {
+	return fmt.Sprintf("%s: %s: %s", e.method, e.status, e.body)
+}
+
+func (e *consoleCallError) message() string {
+	var response struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(e.body), &response); err == nil {
+		if response.Message != "" {
+			return response.Message
+		}
+		if response.Error != "" {
+			return response.Error
+		}
+	}
+	if e.body != "" {
+		return e.body
+	}
+	return http.StatusText(e.statusCode)
+}
+
+func writeShoreAuthError(w http.ResponseWriter, err error) bool {
+	var upstream *consoleCallError
+	if !errors.As(err, &upstream) || (upstream.statusCode != http.StatusUnauthorized &&
+		upstream.statusCode != http.StatusForbidden) {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(upstream.statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": upstream.message()})
+	return true
 }
 
 // ---- polling ----
@@ -317,7 +415,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 		snap.Suppress = suppressed
 		snap.Boost = pol.GetPolicy().GetInterest().GetBoostLabels()
 		if pol.Policy != nil {
-			snap.PolicyInfo = policyInfo(pol.Policy)
+			snap.PolicyInfo = policyInfo(pol.Policy, b.echelon())
 		}
 	}
 	if b.edge != "" {
@@ -854,9 +952,10 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "text exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
-	issuedBy := b.operator
+	issuedBy := b.issuer()
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: issuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	var ruleExpiryUnixMs int64
 	if mode != "" {
 		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 	}
@@ -896,7 +995,11 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				c.Readback = strings.TrimSpace(c.Readback)
 			}
 			if c.DurationMin > 0 {
-				pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+				ruleExpiryUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+				pol.ExpiresAtUnixMs = ruleExpiryUnixMs
+				if !b.hasOperatorJWT() {
+					ruleExpiryUnixMs = 0
+				}
 			}
 			compiled = &c
 		}
@@ -910,15 +1013,22 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	warnings, err := b.layerPolicy(r.Context(), pol, mode)
 	if err != nil {
 		log.Printf("shorebridge: set policy: %v", err)
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
 	if compiled != nil {
 		compiled.Warnings = append(compiled.Warnings, warnings...)
 	}
+	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse
 	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
 		log.Printf("shorebridge: set policy upstream: %v", err)
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
@@ -995,12 +1105,12 @@ func blockedMessage(c command.Compiled) string {
 // applyPolicy replaces the standing shore policy with the given interest and
 // asks the poller to refresh so the console sees the change at once.
 func (b *Bridge) applyPolicy(ctx context.Context, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
-	return b.applyPolicyAs(ctx, "operator-ui", text, suppress, boost)
+	return b.applyPolicyAs(ctx, b.issuer(), text, suppress, boost)
 }
 
 func (b *Bridge) applyPolicyAs(ctx context.Context, issuedBy, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
 	if issuedBy == "" {
-		issuedBy = "operator-ui"
+		issuedBy = b.issuer()
 	}
 	if suppress == nil {
 		suppress = []string{}
@@ -1030,11 +1140,20 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 }
 
 // layerPolicy folds a freshly built operator policy into the current shore
-// policy (#57): an EMCON phrase changes the ship-echelon EMCON unless a higher
-// echelon locked it, and the operator's rule replaces their ship layer so
+// policy (#57): an EMCON phrase changes the caller-echelon EMCON unless a
+// higher echelon locked it, and the operator's rule replaces their layer so
 // higher-echelon layers, locks and signatures survive. Returns warnings for
 // the readback.
 func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
+	pol.IssuedBy = b.issuer()
+	echelon := b.echelon()
+	var ruleExpiryUnixMs int64
+	if b.hasOperatorJWT() {
+		ruleExpiryUnixMs = pol.GetExpiresAtUnixMs()
+		if mode == "" {
+			pol.ExpiresAtUnixMs = 0
+		}
+	}
 	current, err := b.getPolicy(ctx)
 	if err != nil {
 		// Shore policy unreadable: don't apply blind. Keep the last EMCON the
@@ -1047,8 +1166,17 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 		}
 		current = nil
 	}
+	emconLocked := false
 	if current != nil {
-		emconLocked := current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP
+		if mode != "" && ruleExpiryUnixMs > 0 {
+			for _, layer := range current.Layers {
+				if layer != nil && layer.Echelon > echelon {
+					warnings = append(warnings, "Timed EMCON can't expire on its own while higher-echelon layers are present; it stays until changed.")
+					break
+				}
+			}
+		}
+		emconLocked = current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > echelon
 		if mode == "" || emconLocked {
 			if mode != "" {
 				warnings = append(warnings, "EMCON locked by "+current.EmconSetting.SetBy+"; not changed.")
@@ -1058,14 +1186,14 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
 			}
 		} else {
-			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
 		}
 		if len(current.Layers) > 0 {
 			pol.Layers = cloneLayers(current.Layers)
-			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy)
+			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy, echelon)
 			// Labels another layer already boosts/suppresses (same polarity) are
-			// inherited, not repeated in the ship rule; an operator suppressing a
-			// label a higher layer boosts is a real override and stays.
+			// inherited, not repeated in the caller rule; an operator suppressing
+			// a label another layer boosts is a real override and stays.
 			inheritedBoost, inheritedSuppress := map[string]bool{}, map[string]bool{}
 			for i, layer := range pol.Layers {
 				if i == operatorLayer || layer == nil {
@@ -1090,17 +1218,29 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 				return out
 			}
 			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
-				BoostLabels: own(pol.GetInterest().GetBoostLabels(), inheritedBoost), SuppressLabels: own(pol.GetInterest().GetSuppressLabels(), inheritedSuppress), Text: pol.Text}
+				BoostLabels: own(pol.GetInterest().GetBoostLabels(), inheritedBoost), SuppressLabels: own(pol.GetInterest().GetSuppressLabels(), inheritedSuppress),
+				Text: pol.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
 			if operatorLayer >= 0 {
 				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
 			} else {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}})
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: echelon, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}})
 				operatorLayer = len(pol.Layers) - 1
 			}
 			if mode != "" && !emconLocked {
-				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
 			}
 		}
+	}
+	if b.hasOperatorJWT() && (current == nil || len(current.Layers) == 0) {
+		rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
+			BoostLabels:    append([]string(nil), pol.GetInterest().GetBoostLabels()...),
+			SuppressLabels: append([]string(nil), pol.GetInterest().GetSuppressLabels()...),
+			Text:           pol.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
+		layer := &pb.PolicyLayer{Echelon: echelon, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}}
+		if mode != "" && !emconLocked {
+			layer.Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
+		}
+		pol.Layers = []*pb.PolicyLayer{layer}
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	return warnings, nil
@@ -1134,16 +1274,19 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mode must be NORMAL, BURST, or SILENT", http.StatusBadRequest)
 		return
 	}
-	issuedBy := b.operator
+	issuedBy := b.issuer()
 	current, err := b.getPolicy(r.Context())
 	if err != nil {
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	if current == nil {
 		current = &pb.Policy{Interest: &pb.Interest{}}
 	}
-	if setting := current.EmconSetting; setting != nil && setting.Locked && setting.Echelon > pb.Echelon_ECHELON_SHIP {
+	if setting := current.EmconSetting; setting != nil && setting.Locked && setting.Echelon > b.echelon() {
 		w.WriteHeader(http.StatusConflict)
 		writeJSON(w, map[string]string{"error": "EMCON locked by " + setting.SetBy})
 		return
@@ -1152,27 +1295,50 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	pol.IssuedBy = issuedBy
 	if len(pol.Layers) > 0 {
 		pol.Layers = cloneLayers(pol.Layers)
-		operatorLayer := findOperatorLayer(pol.Layers, issuedBy)
+		operatorLayer := findOperatorLayer(pol.Layers, issuedBy, b.echelon())
 		if operatorLayer < 0 {
-			for i, layer := range pol.Layers {
-				if layer.Echelon == pb.Echelon_ECHELON_SHIP {
-					operatorLayer = i
-					break
+			if !b.hasOperatorJWT() {
+				for i, layer := range pol.Layers {
+					if layer.Echelon == b.echelon() {
+						operatorLayer = i
+						break
+					}
 				}
 			}
 			if operatorLayer < 0 {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: issuedBy})
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: issuedBy})
 				operatorLayer = len(pol.Layers) - 1
 			}
 		}
-		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
+	} else if b.hasOperatorJWT() {
+		rules := make([]*pb.InterestRule, 0, 2)
+		if pol.Interest != nil && len(pol.Interest.BoostLabels) > 0 {
+			var weight float64
+			if pol.Interest.BoostFactor > 0 {
+				weight = pol.Interest.BoostFactor
+			}
+			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-boost", time.Now().UnixMilli()), Author: issuedBy,
+				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), Weight: weight})
+		}
+		if pol.Interest != nil && len(pol.Interest.SuppressLabels) > 0 {
+			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-suppress", time.Now().UnixMilli()), Author: issuedBy,
+				SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...)})
+		}
+		pol.Layers = []*pb.PolicyLayer{{
+			Echelon: b.echelon(), IssuedBy: issuedBy, Rules: rules,
+			Emcon: &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()},
+		}}
 	} else {
 		pol.Emcon = mode
-		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse
 	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
@@ -1189,9 +1355,9 @@ func (b *Bridge) getPolicy(ctx context.Context) (*pb.Policy, error) {
 	return response.Policy, nil
 }
 
-func findOperatorLayer(layers []*pb.PolicyLayer, issuedBy string) int {
+func findOperatorLayer(layers []*pb.PolicyLayer, issuedBy string, echelon pb.Echelon) int {
 	for i, layer := range layers {
-		if layer != nil && layer.Echelon == pb.Echelon_ECHELON_SHIP && layer.IssuedBy == issuedBy {
+		if layer != nil && layer.Echelon == echelon && layer.IssuedBy == issuedBy {
 			return i
 		}
 	}
@@ -1223,14 +1389,18 @@ func parseEMCON(value string) (pb.EmconMode, bool) {
 	}
 }
 
-func policyInfo(p *pb.Policy) *PolicyInfo {
+func policyInfo(p *pb.Policy, operatorEchelon ...pb.Echelon) *PolicyInfo {
+	echelon := pb.Echelon_ECHELON_SHIP
+	if len(operatorEchelon) > 0 {
+		echelon = operatorEchelon[0]
+	}
 	info := &PolicyInfo{Version: p.Version, Emcon: emconName(p.Emcon), Locks: []PolicyLock{}, Conflicts: []PolicyConflict{}}
 	if p.EmconSetting != nil {
 		info.EmconSetBy = p.EmconSetting.SetBy
 		if p.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 			info.Emcon = emconName(p.EmconSetting.Mode)
 		}
-		if p.EmconSetting.Locked && p.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP {
+		if p.EmconSetting.Locked && p.EmconSetting.Echelon > echelon {
 			info.EmconLocked = true
 			info.EmconLockedBy = p.EmconSetting.SetBy
 		}

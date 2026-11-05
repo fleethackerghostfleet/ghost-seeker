@@ -289,3 +289,17 @@ func TestCheckRuleSameIDAndWeightBoundary(t *testing.T) {
 		t.Fatalf("greater weight blocked: %v", c)
 	}
 }
+
+func TestCheckCommandRulesUsesCallerEchelonName(t *testing.T) {
+	locks := []Lock{{RuleID: "sub", LockedBy: "CTF-72", Echelon: pb.Echelon_ECHELON_COMMAND,
+		BoostLabels: []string{"submarine"}, Weight: 3}}
+	warnings, blocked := CheckCommandRules(locks, pb.Echelon_ECHELON_UNIT, []RuleLabels{{
+		Type: "suppress", Classes: []string{"submarine"},
+	}})
+	if !blocked || len(warnings) != 1 {
+		t.Fatalf("warnings=%v blocked=%t", warnings, blocked)
+	}
+	if want := "Locked by CTF-72 — submarine can't be overridden at unit level"; warnings[0] != want {
+		t.Fatalf("warning=%q, want %q", warnings[0], want)
+	}
+}
