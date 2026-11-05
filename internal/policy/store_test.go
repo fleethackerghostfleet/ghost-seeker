@@ -59,11 +59,15 @@ func TestStoreLastGoodTTLAndRestart(t *testing.T) {
 func TestStoreVersionHighWater(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	pub, priv, err := GenerateKey("k")
+	if err != nil {
+		t.Fatal(err)
+	}
 	backend, err := NewFileBackend(t.TempDir() + "/state.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := NewStore(ctx, backend, Options{})
+	store, err := NewStore(ctx, backend, Options{Keys: Keyring{"k": pub}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +82,9 @@ func TestStoreVersionHighWater(t *testing.T) {
 		{version: 6},
 	} {
 		p := &pb.Policy{Id: "p", Version: tc.version, IssuedAtUnixMs: now.UnixMilli()}
+		if err := Sign(p, "k", priv); err != nil {
+			t.Fatal(err)
+		}
 		_, err := store.Accept(ctx, p, "console", now)
 		if !errors.Is(err, tc.wantErr) {
 			t.Fatalf("version %d error=%v, want %v", tc.version, err, tc.wantErr)
@@ -87,8 +94,94 @@ func TestStoreVersionHighWater(t *testing.T) {
 	if err != nil || reloaded.HighWater() != 6 {
 		t.Fatalf("highwater=%d err=%v", reloaded.HighWater(), err)
 	}
-	if _, err := reloaded.Accept(ctx, &pb.Policy{Id: "next", Version: 5, IssuedAtUnixMs: now.UnixMilli()}, "console", now); !errors.Is(err, ErrStaleVersion) {
+	reloaded, err = NewStore(ctx, backend, Options{Keys: Keyring{"k": pub}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := &pb.Policy{Id: "next", Version: 5, IssuedAtUnixMs: now.UnixMilli()}
+	if err := Sign(stale, "k", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reloaded.Accept(ctx, stale, "console", now); !errors.Is(err, ErrStaleVersion) {
 		t.Fatalf("version 5 after restart error=%v", err)
+	}
+}
+
+func TestStoreVersionRangeAndSignedHighWater(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	pub, priv, err := GenerateKey("k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStore(ctx, NewMemBackend(), Options{Keys: Keyring{"k": pub}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsigned := &pb.Policy{Id: "unsigned", Version: 7, IssuedAtUnixMs: now.UnixMilli()}
+	if _, err := store.Accept(ctx, unsigned, "console", now); err != nil {
+		t.Fatal(err)
+	}
+	if store.HighWater() != 0 || store.LastVersion() != 7 {
+		t.Fatalf("after unsigned accept highwater=%d lastversion=%d", store.HighWater(), store.LastVersion())
+	}
+	outOfRange := &pb.Policy{Id: "out-of-range", Version: int64(^uint64(0) >> 1), IssuedAtUnixMs: now.UnixMilli()}
+	if _, err := store.Accept(ctx, outOfRange, "console", now); !errors.Is(err, ErrVersionRange) {
+		t.Fatalf("MaxInt64 accept error=%v", err)
+	}
+	signed := &pb.Policy{Id: "signed", Version: 9, IssuedAtUnixMs: now.UnixMilli()}
+	if err := Sign(signed, "k", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Accept(ctx, signed, "downlink", now); err != nil {
+		t.Fatal(err)
+	}
+	if store.HighWater() != 9 || store.LastVersion() != 9 {
+		t.Fatalf("after signed accept highwater=%d lastversion=%d", store.HighWater(), store.LastVersion())
+	}
+	unsignedStale := &pb.Policy{Id: "unsigned-stale", Version: 9, IssuedAtUnixMs: now.UnixMilli()}
+	if _, err := store.Accept(ctx, unsignedStale, "console", now); !errors.Is(err, ErrStaleVersion) {
+		t.Fatalf("unsigned version at highwater error=%v", err)
+	}
+	audit, err := store.Audit(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(audit) != 4 || audit[2].Result != "rejected" || audit[2].Reason != ErrVersionRange.Error() {
+		t.Fatalf("version-range rejection missing from audit: %+v", audit)
+	}
+}
+
+func TestStoreAcceptLocalHoldsHigherLayerDeadline(t *testing.T) {
+	ctx := context.Background()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store, err := NewStore(ctx, NewMemBackend(), Options{TTL: 12 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}
+	prev := &pb.Policy{Id: "command", Version: 10, IssuedAtUnixMs: t0.UnixMilli(),
+		ExpiresAtUnixMs: t0.Add(time.Hour).UnixMilli(), Layers: []*pb.PolicyLayer{command}}
+	if _, err := store.Accept(ctx, prev, "downlink", t0); err != nil {
+		t.Fatal(err)
+	}
+	next := &pb.Policy{Id: "ship", Version: 900, Layers: []*pb.PolicyLayer{
+		proto.Clone(command).(*pb.PolicyLayer),
+		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ship"},
+	}}
+	accepted, err := store.AcceptLocal(ctx, next, "console", t0.Add(30*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted.ExpiresAtUnixMs != t0.Add(time.Hour).UnixMilli() || accepted.Version != t0.Add(30*time.Minute).UnixMilli() {
+		t.Fatalf("accepted expiry=%d version=%d", accepted.ExpiresAtUnixMs, accepted.Version)
+	}
+	expiredResend := &pb.Policy{Id: "expired-resend", Layers: []*pb.PolicyLayer{proto.Clone(command).(*pb.PolicyLayer)}}
+	if _, err := store.AcceptLocal(ctx, expiredResend, "console", t0.Add(2*time.Hour)); !errors.Is(err, ErrHigherEchelon) {
+		t.Fatalf("expired command resend error=%v", err)
+	}
+	if _, err := store.AcceptLocal(ctx, &pb.Policy{Id: "drop"}, "console", t0.Add(2*time.Hour)); err != nil {
+		t.Fatalf("dropping expired command layer: %v", err)
 	}
 }
 
@@ -142,14 +235,26 @@ func TestStoreExplicitExpiryAndSignedRequirements(t *testing.T) {
 func TestStoreAuditAppliedRejectedExpiredNewestFirst(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	store, err := NewStore(ctx, NewMemBackend(), Options{TTL: time.Hour})
+	pub, priv, err := GenerateKey("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Accept(ctx, &pb.Policy{Id: "p", Version: 2, IssuedAtUnixMs: now.UnixMilli()}, "ui", now); err != nil {
+	store, err := NewStore(ctx, NewMemBackend(), Options{TTL: time.Hour, Keys: Keyring{"k": pub}})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Accept(ctx, &pb.Policy{Id: "stale", Version: 2, IssuedAtUnixMs: now.UnixMilli()}, "admin", now); !errors.Is(err, ErrStaleVersion) {
+	applied := &pb.Policy{Id: "p", Version: 2, IssuedAtUnixMs: now.UnixMilli()}
+	if err := Sign(applied, "k", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Accept(ctx, applied, "ui", now); err != nil {
+		t.Fatal(err)
+	}
+	stale := &pb.Policy{Id: "stale", Version: 2, IssuedAtUnixMs: now.UnixMilli()}
+	if err := Sign(stale, "k", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Accept(ctx, stale, "admin", now); !errors.Is(err, ErrStaleVersion) {
 		t.Fatalf("stale error=%v", err)
 	}
 	store.Reject(ctx, &pb.Policy{Id: "rejected", IssuedBy: "TAO", Version: 3}, "ui", "rule conflict", now.Add(time.Second))

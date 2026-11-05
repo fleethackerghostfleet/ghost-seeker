@@ -121,13 +121,19 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if req.Msg.Policy == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("policy required"))
 	}
-	sup, boost, err := s.Sch.AcceptPolicy(ctx, req.Msg.Policy, "console")
+	var sup, boost int64
+	var err error
+	if signature := req.Msg.Policy.Signature; signature != nil && len(signature.Ed25519) > 0 {
+		sup, boost, err = s.Sch.AcceptPolicy(ctx, req.Msg.Policy, "console")
+	} else {
+		sup, boost, err = s.Sch.AcceptLocalPolicy(ctx, req.Msg.Policy, "console")
+	}
 	if err != nil {
 		code := connect.CodeInvalidArgument
 		switch {
 		case errors.Is(err, policy.ErrStaleVersion), errors.Is(err, policy.ErrExpired):
 			code = connect.CodeFailedPrecondition
-		case errors.Is(err, policy.ErrUnsigned), errors.Is(err, policy.ErrUnknownKey), errors.Is(err, policy.ErrBadSignature):
+		case errors.Is(err, policy.ErrUnsigned), errors.Is(err, policy.ErrUnknownKey), errors.Is(err, policy.ErrBadSignature), errors.Is(err, policy.ErrHigherEchelon):
 			code = connect.CodePermissionDenied
 		}
 		return nil, connect.NewError(code, err)

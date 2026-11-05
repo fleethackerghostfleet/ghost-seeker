@@ -11,12 +11,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"google.golang.org/protobuf/proto"
 	_ "modernc.org/sqlite"
 )
@@ -542,10 +543,42 @@ func (s *Store) GetPolicy(ctx context.Context) (*pb.Policy, error) {
 }
 
 func (s *Store) SetPolicy(ctx context.Context, p *pb.Policy) error {
+	return s.SetPolicyState(ctx, p, 0, false)
+}
+
+func (s *Store) GetCommandVersion(ctx context.Context) (int64, bool, error) {
+	var raw []byte
+	err := s.db.QueryRowContext(ctx, `SELECT v FROM kv WHERE k='policy_command_version'`).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	version, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil {
+		return 0, false, fmt.Errorf("parse command policy version: %w", err)
+	}
+	return version, true, nil
+}
+
+func (s *Store) SetPolicyState(ctx context.Context, p *pb.Policy, commandVersion int64, writeCommandVersion bool) error {
 	raw, err := proto.Marshal(p)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO kv(k,v) VALUES('policy',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, raw)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO kv(k,v) VALUES('policy',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, raw); err != nil {
+		return err
+	}
+	if writeCommandVersion {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO kv(k,v) VALUES('policy_command_version',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, strconv.FormatInt(commandVersion, 10)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

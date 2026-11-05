@@ -179,3 +179,278 @@ func TestSetPolicyPreservesLayerEMCONExpiryWithoutOperatorAuth(t *testing.T) {
 		}
 	}
 }
+
+func TestSetPolicyBoundsCallerVersionsAndUsesCommandMark(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	maxInt64 := int64(^uint64(0) >> 1)
+	first, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "huge", Version: maxInt64}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "small", Version: 1}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, got := range []*pb.Policy{first.Msg.Policy, second.Msg.Policy} {
+		if got.Version < t0.UnixMilli() || got.Version > policy.MaxVersion {
+			t.Fatalf("shore-assigned version out of range: %d", got.Version)
+		}
+	}
+	if second.Msg.Policy.Version <= first.Msg.Policy.Version {
+		t.Fatalf("versions not monotonic: first=%d second=%d", first.Msg.Policy.Version, second.Msg.Policy.Version)
+	}
+	signed := &pb.Policy{Id: "command", Version: second.Msg.Policy.Version + 1, IssuedAtUnixMs: t0.UnixMilli(),
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}}}
+	signedVersion := signed.Version
+	if err := policy.Sign(signed, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: signed})); err != nil {
+		t.Fatalf("normal-version command rejected after caller's huge version: %v", err)
+	}
+	commandMark, hasCommandMark, err := st.GetCommandVersion(ctx)
+	if err != nil || !hasCommandMark || commandMark != signedVersion {
+		t.Fatalf("command mark=%d err=%v, want %d", commandMark, err, signedVersion)
+	}
+}
+
+func TestSetPolicyFallsBackToStoredVersionWhenCommandMarkIsMissing(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	version := t0.UnixMilli()
+	if err := st.SetPolicy(ctx, &pb.Policy{Id: "legacy", Version: version, IssuedAtUnixMs: version}); err != nil {
+		t.Fatal(err)
+	}
+	if mark, exists, err := st.GetCommandVersion(ctx); err != nil || exists || mark != 0 {
+		t.Fatalf("command mark=%d exists=%v err=%v, want missing key", mark, exists, err)
+	}
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	signedPolicy := func(id string, commandVersion int64) *pb.Policy {
+		p := &pb.Policy{Id: id, Version: commandVersion, IssuedAtUnixMs: t0.UnixMilli(),
+			Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}}}
+		if err := policy.Sign(p, "command", commandPriv); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: signedPolicy("replay", version-1)})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("stale command policy code=%v err=%v, want PermissionDenied", connect.CodeOf(err), err)
+	}
+	newVersion := version + 1
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: signedPolicy("new-command", newVersion)})); err != nil {
+		t.Fatalf("new command policy rejected: %v", err)
+	}
+	mark, exists, err := st.GetCommandVersion(ctx)
+	if err != nil || !exists || mark != newVersion {
+		t.Fatalf("command mark=%d exists=%v err=%v, want %d and present", mark, exists, err, newVersion)
+	}
+}
+
+func TestSetPolicyFreshStoreShipVersionDoesNotBlockCommand(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	ship, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+		Id: "ship", Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ship"}},
+	}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipVersion := ship.Msg.Policy.Version
+	if mark, exists, err := st.GetCommandVersion(ctx); err != nil || !exists || mark != 0 {
+		t.Fatalf("command mark=%d exists=%v err=%v, want a persisted zero", mark, exists, err)
+	}
+	commandVersion := t0.UnixMilli() - 1000
+	if commandVersion <= 0 || commandVersion >= shipVersion {
+		t.Fatalf("test setup: command version %d must be positive and below ship version %d", commandVersion, shipVersion)
+	}
+	command := &pb.Policy{Id: "command", Version: commandVersion, IssuedAtUnixMs: t0.UnixMilli(),
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}}}
+	if err := policy.Sign(command, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: command})); err != nil {
+		t.Fatalf("command below ship version rejected: %v", err)
+	}
+	if mark, exists, err := st.GetCommandVersion(ctx); err != nil || !exists || mark != commandVersion {
+		t.Fatalf("command mark=%d exists=%v err=%v, want %d and present", mark, exists, err, commandVersion)
+	}
+}
+
+func TestSetPolicyLegacyCommandMarkStaysFixedAcrossShipWrites(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	legacyVersion := t0.UnixMilli()
+	if err := st.SetPolicy(ctx, &pb.Policy{Id: "legacy", Version: legacyVersion, IssuedAtUnixMs: legacyVersion}); err != nil {
+		t.Fatal(err)
+	}
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	writeShip := func(id string) *pb.Policy {
+		t.Helper()
+		response, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+			Id: id, Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ship"}},
+		}}))
+		if err != nil {
+			t.Fatalf("ship write %q: %v", id, err)
+		}
+		return response.Msg.Policy
+	}
+	firstShip := writeShip("first-ship")
+	if firstShip.Version <= legacyVersion {
+		t.Fatalf("first ship version=%d, want > legacy version %d", firstShip.Version, legacyVersion)
+	}
+	clk.Advance(10 * time.Second)
+	secondShip := writeShip("second-ship")
+	commandVersion := legacyVersion + 1
+	if secondShip.Version <= commandVersion {
+		t.Fatalf("second ship version=%d, want > command version %d", secondShip.Version, commandVersion)
+	}
+	command := &pb.Policy{Id: "command", Version: commandVersion, IssuedAtUnixMs: t0.UnixMilli(),
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}}}
+	if err := policy.Sign(command, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: command})); err != nil {
+		t.Fatalf("command below ship versions rejected: %v", err)
+	}
+	if mark, exists, err := st.GetCommandVersion(ctx); err != nil || !exists || mark != commandVersion {
+		t.Fatalf("command mark=%d exists=%v err=%v, want %d and present", mark, exists, err, commandVersion)
+	}
+}
+
+func TestSetPolicyCommandMarkIsIndependentOfShipVersion(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	commandLayer := func(id string) *pb.PolicyLayer {
+		return &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command",
+			Rules: []*pb.InterestRule{{Id: id, BoostLabels: []string{"vessel"}}}}
+	}
+	first := &pb.Policy{Id: "first", Version: t0.UnixMilli(), IssuedAtUnixMs: t0.UnixMilli(),
+		Layers: []*pb.PolicyLayer{commandLayer("first")}}
+	if err := policy.Sign(first, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: first})); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(10 * time.Second)
+	ship, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+		Id: "ship", Layers: []*pb.PolicyLayer{commandLayer("first"), {Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ship"}},
+	}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextCommand := &pb.Policy{Id: "second-command", Version: first.Version + 500, IssuedAtUnixMs: clk.Now().UnixMilli(),
+		Layers: []*pb.PolicyLayer{commandLayer("second")}}
+	nextCommandVersion := nextCommand.Version
+	if nextCommand.Version >= ship.Msg.Policy.Version {
+		t.Fatalf("test setup: command version %d must be below ship version %d", nextCommand.Version, ship.Msg.Policy.Version)
+	}
+	if err := policy.Sign(nextCommand, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: nextCommand})); err != nil {
+		t.Fatalf("command version above command mark but below ship version rejected: %v", err)
+	}
+	mark, hasCommandMark, err := st.GetCommandVersion(ctx)
+	if err != nil || !hasCommandMark || mark != nextCommandVersion {
+		t.Fatalf("command mark=%d err=%v, want %d", mark, err, nextCommandVersion)
+	}
+}
+
+func TestSetPolicyClampsAndExpiresHeldCommandLayer(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	layer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}
+	command := &pb.Policy{Id: "command", Version: t0.UnixMilli(), IssuedAtUnixMs: t0.UnixMilli(),
+		ExpiresAtUnixMs: t0.Add(time.Hour).UnixMilli(), Layers: []*pb.PolicyLayer{layer}}
+	if err := policy.Sign(command, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: command})); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(30 * time.Minute)
+	ship, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+		Id: "ship", Layers: []*pb.PolicyLayer{proto.Clone(layer).(*pb.PolicyLayer),
+			{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ship"}},
+	}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ship.Msg.Policy.ExpiresAtUnixMs != t0.Add(time.Hour).UnixMilli() {
+		t.Fatalf("ship deadline=%d, want command deadline %d", ship.Msg.Policy.ExpiresAtUnixMs, t0.Add(time.Hour).UnixMilli())
+	}
+	clk.Advance(90 * time.Minute)
+	resend := &pb.Policy{Id: "resend", Layers: []*pb.PolicyLayer{proto.Clone(layer).(*pb.PolicyLayer)}}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: resend})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("expired command layer resend code=%v err=%v", connect.CodeOf(err), err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "drop"}})); err != nil {
+		t.Fatalf("dropping expired command layer: %v", err)
+	}
+}
