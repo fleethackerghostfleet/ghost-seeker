@@ -38,7 +38,7 @@ func TestRuleMatchTransient(t *testing.T) {
 }
 
 func TestUnknownNightLightScoring(t *testing.T) {
-	lights := []Light{{Colour: "red", X: 100, Y: 30}, {Colour: "red", X: 100, Y: 60}}
+	lights := []Light{{Colour: "red", X: 100, Y: 30, Conf: 1}, {Colour: "red", X: 100, Y: 60, Conf: 1}}
 	box := Box{W: 200, H: 150}
 	det := Detection{Class: "unknown", Box: box, Conf: .2, Lights: lights, Signal: InterpretLights(lights, box, "")}
 	plain := ScoreDet(det, nil, "maritime")

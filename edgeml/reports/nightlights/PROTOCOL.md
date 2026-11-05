@@ -17,7 +17,59 @@ The system pip/setuptools could not install editable PEP 660 packages. Installat
 was completed in `/home/ubuntu/nightlights-venv` after upgrading pip/setuptools;
 no repository dependency/build files were changed.
 
-## Frozen candidate before first test evaluation
+## Strict-gate detector v4 (before/after)
+
+**Synthetic-procedural only; not at-sea accuracy.** The frozen detector and
+`lights.pattern_conf_threshold=0.85` are at commit
+`a3e3e9005fa3241368e9cddf38db0ce3cdb80a9d`. Tuning used hard/dev and easy/dev
+only; easy/test was a regression confirmation. Hard test/test2/test3 were not
+generated or evaluated during v3/v4 tuning. After freeze, hard/test3 (seed base
+4100000, 112 night + 8 day + 16 twilight, four registered frames per contact)
+was generated and evaluated exactly once, then boost-evaluated. Historical
+hard/test2 (2700000) and hard/test (900000) were evaluated for comparison only.
+Summary commit: `68dc0b94`. Subsequent API/dark-contact fixes below do not change
+normal detector-produced light observations or navigation boost metrics.
+
+The method combines local Gaussian peaks/compact PSFs, chromatic halos around
+saturated cores, contrast, aligned columns, resolved-pair confidence and
+colour-compatible reflections below the hull. No truth is used at inference.
+Vessel-only generated reflection streaks likely overstate the cue's real-world
+discrimination. Strict full multiset equality, zero white allowance and min
+light confidence >=0.85 are required for automatic boosts. The maximum dev
+would-be false boost confidence is 0.791667 (safety margin 0.058333).
+Signal-assisted distress is exempt. The two dev terminal-occluded CD->NUC
+ambiguities remain suppressed by confidence, not a demonstrated spacing cue;
+this does not guarantee safety for indistinguishable real patterns.
+Persistence requires >=2/4, including flashing 2/4; measured dev effect is a
+no-op. Many urgent contacts still miss (dev 17/21, test 20/21, test2 18/21,
+test3 19/21); zero observed false boosts is not accurate automatic recognition.
+
+The consolidated report's **Strict-gate detector v4 (before/after)** section
+contains the full P/R, rules, automatic rules, urgent true/false boosts,
+all/automatic false boosts, night/day-gate table, exact generation/evaluation
+commands and limitations. All v4 summaries are committed; detailed observations
+remain gitignored. Do not repeat test3 and count it as an independent trial.
+
+Go reads the same threshold and carries `conf` through demo observations,
+scoring and rescoring. The API follow-up makes missing/invalid confidence zero
+in Python as well as Go, while preserving assisted distress. Both suites read
+`internal/catalog/light_confidence_cases.json`, including missing confidence,
+and the refreshed demo catalog. Saved hard/dev and test3 v4 boost metrics were
+replayed and are identical; **no test3 image redetection/evaluation occurred**.
+The hard/dev summary JSON is byte-identical after redetection; all 136 contacts'
+lights and interpretations also match byte-for-byte under canonical JSON.
+
+Dark-contact presence now uses permissive compact bright-point candidates
+(peak >=100, local Gaussian-background contrast >=65), before colour,
+waterline and vessel-association rejection; these are not confirmed navigation
+lights. Default interpretation detections and threshold remain unchanged.
+Main / Phase-4 v4 / now false dark: easy/dev 0/1/0, easy/test2 0/0/0,
+hard/dev 12/21/9, hard/test2 12/17/9. All four retain TP=28, FN=0 (100% recall).
+The four dark/burst evaluations were rerun; burst metrics remain unchanged from
+Phase 4, including their regressions. Background candidates can hide genuinely
+dark hulls; this is synthetic evidence, not real-world recall validation.
+
+## Historical stage-1 frozen candidate before first test evaluation
 
 Dev was generated and evaluated during implementation. The final candidate passed
 36 unit tests and dev evaluation before generating or evaluating test. Test seeds
@@ -49,6 +101,32 @@ b0d4c376d0fa888ca615c2d2af7f4d3fddffc0b6033cdc397471391ef171e1d7  internal/catal
 /home/ubuntu/nightlights-venv/bin/python edgeml/scripts/nightlights_eval.py --library
 /home/ubuntu/nightlights-venv/bin/python -m pytest edgeml/tests/test_nightlights.py -q
 ```
+
+## v5 freeze and locked test4
+
+The v5 detector is frozen at commit
+`3bfa51bde7b0eb8602cd31b29fe59ff1d42d9719`, with pattern-confidence threshold
+**0.85**. Dev-only results and the precision/recall trade-off are recorded in
+`V5_DEV.md`. Strict complete-multiset equality and zero white allowance remain
+unchanged. No detector or threshold tuning is permitted after opening test4.
+
+Hard/test4 uses fresh seed base **4200000**, with 112 night contacts, 8 day
+records and 16 twilight records. It is to be generated only after this freeze
+record is committed, then detected exactly once as v5. Boost and dark-contact
+summaries must consume that saved observation dump without image redetection.
+Easy/test may subsequently be evaluated as a regression set, without retuning.
+
+Freeze record commit: `24ae0376c0df400b19b857457279c6b157d9cd73`. Test4 was
+subsequently generated and evaluated once, without crashes or detector changes.
+Boost and dark summaries used the saved `hard_test4_v5.json` observations.
+Test4 light P/R are 72.90%/50.32%, rules 34/112, automatic 20/98, automatic
+urgent boosts RAM/NUC/draught 2/0/0 with zero false boosts of any kind. Easy/test
+retains 100% light P/R, 112/112 rules, 98/98 automatic and 7/7 correct boosts
+for each urgent rule. Saved-observation false-dark counts are 0/94 observable
+lit night test4 contacts and 0/112 easy/test contacts; no unlit-vessel recall can
+be estimated from these sets. Full v5 results, precision trade-offs, demo changes
+and commands are in NIGHT_LIGHTS.md. Neither v4 artifacts nor the frozen v5
+detector/threshold were changed.
 
 ## API and meaning
 
@@ -90,4 +168,6 @@ when complete timezone-aware metadata is supplied, otherwise report
 - The rule table contains the requested signatures and references, not every
   possible configuration under Rules 20–31. Routine anchor/stern white ambiguity
   is explicit. Blue law-enforcement lights depend on local law, not COLREGS.
-- No Go code, integration, production deployment, or UI rendering is included.
+- Stage 1 included no Go integration or UI. Current v4 integration and synthetic
+  UI evidence are documented in NIGHT_LIGHTS.md; no operational validation or
+  production deployment is claimed.

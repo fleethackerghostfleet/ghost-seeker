@@ -40,7 +40,8 @@ def generate_demo():
         image, distractors = hard_scene(np.random.default_rng(83000+min(scene, 4)), contacts,
                                         size=(960, 600), frame=max(0, scene-4), harbor=harbor)
         name = f"night-{scene+1:02}.jpg"
-        cv2.imwrite(str(out/name), image, [cv2.IMWRITE_JPEG_QUALITY, 82])
+        if not (out/name).exists():
+            cv2.imwrite(str(out/name), image, [cv2.IMWRITE_JPEG_QUALITY, 82])
         if (out/name).stat().st_size >= 150000:
             raise ValueError(f"demo exceeds 150 KB: {name}")
         pending.append((name, contacts, ids, harbor, distractors))
@@ -75,7 +76,7 @@ def generate_demo():
              "Distress frames 05–08 use an externally supplied SOS signal, not automatic Morse recognition; track observations measure flashing across the saved frames.",
              "", "| Frame | Truth → detected | Bytes |", "|---|---|---:|"]
     for entry in entries:
-        comparison = "; ".join(f"{d['truth_rule_id']} → {d['interpretation']['rule_id'] or 'none'}" for d in entry["dets"])
+        comparison = "; ".join(f"{d['truth_rule_id']} → {d['interpretation']['rule_id'] or 'none'} (boost {d['interpretation']['boost']:g})" for d in entry["dets"])
         size = (ROOT/"web/static"/entry["file"]).stat().st_size
         lines.append(f"| {entry['file']} | {comparison} | {size} |")
         print(entry["file"], comparison, size)

@@ -1,4 +1,7 @@
 {
+  "lights": {
+    "pattern_conf_threshold": 0.85
+  },
   "burst": {
     "base_fps": 1.0,
     "burst_fps": 8.0,

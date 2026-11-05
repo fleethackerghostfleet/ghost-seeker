@@ -1,0 +1,225 @@
+{
+  "metrics": {
+    "split": "test",
+    "tier": "hard",
+    "night_contacts": 112,
+    "gate_images": 136,
+    "day_images": 8,
+    "twilight_images": 16,
+    "light_precision": 0.8103448275862069,
+    "light_recall": 0.5802469135802469,
+    "light_counts": {
+      "correct_colour": 94,
+      "predicted": 116,
+      "actual": 162
+    },
+    "confusion_matrix": {
+      "red": {
+        "red": 39,
+        "green": 0,
+        "white": 4,
+        "yellow": 0,
+        "blue": 0,
+        "ambiguous_orange": 1,
+        "miss": 24
+      },
+      "green": {
+        "red": 0,
+        "green": 8,
+        "white": 0,
+        "yellow": 0,
+        "blue": 0,
+        "ambiguous_orange": 0,
+        "miss": 7
+      },
+      "white": {
+        "red": 1,
+        "green": 0,
+        "white": 45,
+        "yellow": 2,
+        "blue": 0,
+        "ambiguous_orange": 1,
+        "miss": 19
+      },
+      "yellow": {
+        "red": 0,
+        "green": 0,
+        "white": 1,
+        "yellow": 2,
+        "blue": 0,
+        "ambiguous_orange": 0,
+        "miss": 2
+      },
+      "blue": {
+        "red": 0,
+        "green": 0,
+        "white": 0,
+        "yellow": 0,
+        "blue": 0,
+        "ambiguous_orange": 0,
+        "miss": 6
+      },
+      "ambiguous_orange": {
+        "red": 0,
+        "green": 0,
+        "white": 0,
+        "yellow": 0,
+        "blue": 0,
+        "ambiguous_orange": 0,
+        "miss": 0
+      },
+      "background": {
+        "red": 2,
+        "green": 0,
+        "white": 10,
+        "yellow": 0,
+        "blue": 0,
+        "ambiguous_orange": 0,
+        "miss": 0
+      }
+    },
+    "unmatched_predictions": {
+      "white": 10,
+      "red": 2
+    },
+    "false_positive_sources": {
+      "shore": 7,
+      "pier": 5
+    },
+    "per_colour": {
+      "red": {
+        "precision": 0.9285714285714286,
+        "recall": 0.5735294117647058
+      },
+      "green": {
+        "precision": 1.0,
+        "recall": 0.5333333333333333
+      },
+      "white": {
+        "precision": 0.75,
+        "recall": 0.6617647058823529
+      },
+      "yellow": {
+        "precision": 0.5,
+        "recall": 0.4
+      },
+      "blue": {
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "ambiguous_orange": {
+        "precision": 0.0,
+        "recall": 0.0
+      }
+    },
+    "per_rule": {
+      "ram": {
+        "correct": 0,
+        "total": 7,
+        "accuracy": 0.0
+      },
+      "constrained_draught": {
+        "correct": 4,
+        "total": 7,
+        "accuracy": 0.5714285714285714
+      },
+      "nuc": {
+        "correct": 1,
+        "total": 7,
+        "accuracy": 0.14285714285714285
+      },
+      "trawling": {
+        "correct": 3,
+        "total": 7,
+        "accuracy": 0.42857142857142855
+      },
+      "fishing": {
+        "correct": 1,
+        "total": 7,
+        "accuracy": 0.14285714285714285
+      },
+      "pilot": {
+        "correct": 2,
+        "total": 7,
+        "accuracy": 0.2857142857142857
+      },
+      "tow_long": {
+        "correct": 3,
+        "total": 7,
+        "accuracy": 0.42857142857142855
+      },
+      "two_mastheads": {
+        "correct": 1,
+        "total": 7,
+        "accuracy": 0.14285714285714285
+      },
+      "head_on": {
+        "correct": 2,
+        "total": 7,
+        "accuracy": 0.2857142857142857
+      },
+      "port": {
+        "correct": 1,
+        "total": 7,
+        "accuracy": 0.14285714285714285
+      },
+      "starboard": {
+        "correct": 2,
+        "total": 7,
+        "accuracy": 0.2857142857142857
+      },
+      "white_ambiguous": {
+        "correct": 5,
+        "total": 7,
+        "accuracy": 0.7142857142857143
+      },
+      "air_cushion": {
+        "correct": 1,
+        "total": 7,
+        "accuracy": 0.14285714285714285
+      },
+      "law_enforcement": {
+        "correct": 0,
+        "total": 7,
+        "accuracy": 0.0
+      },
+      "distress_flare": {
+        "correct": 7,
+        "total": 7,
+        "accuracy": 1.0
+      },
+      "distress_sos": {
+        "correct": 7,
+        "total": 7,
+        "accuracy": 1.0
+      }
+    },
+    "rule_accuracy": 0.35714285714285715,
+    "automatic_rule_accuracy": 0.2653061224489796,
+    "externally_identified_distress_accuracy": 1.0,
+    "aspect_accuracy": 0.8035714285714286,
+    "flashing_accuracy": 0.6419753086419753,
+    "night_gate_accuracy": 0.9632352941176471,
+    "day_false_night_rate": 0.0,
+    "notes": [
+      "Procedural labels, not real-world accuracy; four-frame static tracks. Hard tier includes optics, compression, occlusion and background nuisance lights.",
+      "Distress interpretation receives externally identified red_flare/SOS signals; no automatic flare or Morse recognition.",
+      "Permanently occluded GT lights excluded from light recall; latent full rule and aspect still scored. Missed observable GT lights count as flashing errors; colour P/R require position match within 6 pixels.",
+      "Aspect assumes isolated red/green points are sidelights; offset whites assume higher aft masthead, not towing.",
+      "Easy dev/test seed bases 1000/100000; hard dev/test bases 300000/900000, plus separate day/twilight seeds. No hard-test threshold tuning.",
+      "Unresolvable cases remain in all totals and are separately scored: permanent occlusion or a saturated one-pixel coloured emitter. Radius 0 renders one pixel, not a subpixel light. Hard-test2 seed base 2700000; hard-test v1 was not retuned or reevaluated."
+    ],
+    "observability": {
+      "resolvable": {
+        "correct": 36,
+        "total": 75,
+        "accuracy": 0.48
+      },
+      "unresolvable": {
+        "correct": 4,
+        "total": 37,
+        "accuracy": 0.10810810810810811
+      }
+    }
+  }
+}

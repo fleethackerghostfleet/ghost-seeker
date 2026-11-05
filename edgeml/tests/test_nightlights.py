@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import json
 import runpy
 
 import cv2
@@ -11,7 +12,7 @@ from edgeml.nightlights.core import colour
 
 
 def point(c, x=100, y=50, flashing=False):
-    return dict(colour=c, x=x, y=y, relative=[x/200, y/150], flashing=flashing)
+    return dict(colour=c, x=x, y=y, relative=[x/200, y/150], flashing=flashing, conf=1.)
 
 
 @pytest.mark.parametrize("rule", load_rules(), ids=lambda r: r["id"])
@@ -47,6 +48,75 @@ def test_boost_requires_complete_pattern():
     assert interpret(stack, True, signal="invalid")["boost"] == 0
 
 
+def test_pattern_confidence_preserves_rule_and_strict_coverage(monkeypatch):
+    from edgeml.nightlights import core
+    monkeypatch.setattr(core, 'load_config', lambda: {'lights': {'pattern_conf_threshold': .85}})
+    stack = [dict(point('red', y=30), conf=.9), dict(point('red', y=60), conf=.8)]
+    result = interpret(stack, True)
+    assert result['rule_id'] == 'nuc' and result['boost'] == 0
+    assert result['pattern_conf'] == .8
+    stack[1]['conf'] = .95
+    assert interpret(stack, True)['boost'] == .9
+    assert interpret(stack+[dict(point('white', x=180), conf=1)], True)['boost'] == 0
+    assert interpret([], True)['pattern_conf'] == 0
+
+
+def test_four_frame_persistence_keeps_flashing_not_singletons(monkeypatch):
+    from edgeml.nightlights import core
+    red = dict(point('red'), contrast=200., conf=.9)
+    white = dict(point('white', x=180), contrast=200., conf=.9)
+    observations = iter([[red, white], [], [red], []])
+    monkeypatch.setattr(core, 'detect_lights', lambda *args, **kwargs: next(observations) if not kwargs else [])
+    image = np.zeros((100, 200, 3), np.uint8)
+    result = analyze([image]*4, [0, 0, 200, 100])
+    assert len(result['lights']) == 1
+    assert result['lights'][0]['colour'] == 'red'
+    assert result['lights'][0]['persistence'] == 2 and result['lights'][0]['flashing']
+
+
+def test_bright_resolved_pair_confidence_with_faint_reflection():
+    image = np.zeros((160, 200, 3), np.uint8)
+    for y in (35, 60):
+        cv2.circle(image, (105, y), 3, (0, 0, 255), -1)
+    cv2.line(image, (105, 103), (105, 120), (0, 0, 80), 1)
+    image = cv2.GaussianBlur(image, (3, 3), .7)
+    result = analyze([image]*4, [40, 20, 80, 80])
+    assert len(result['lights']) == 2
+    assert all(0 <= light['conf'] <= 1 for light in result['lights'])
+    assert result['interpretation']['pattern_conf'] >= .9
+    assert result['interpretation']['rule_id'] == 'nuc'
+    assert result['interpretation']['boost'] == .9
+
+
+def test_demo_observations_are_shared_python_go_interpretation_fixtures():
+    catalog = Path(__file__).resolve().parents[2]/'internal/catalog/nightlights.json'
+    for image in json.loads(catalog.read_text())['nightLibrary']:
+        for det in image['dets']:
+            observation = det.get('track_observation', det)
+            lights = observation['lights']
+            assert all('conf' in p and 0 <= p['conf'] <= 1 for p in lights)
+            result = interpret(lights, image['night'], signal=det.get('signal'))
+            expected = det['interpretation']
+            assert result['rule_id'] == expected['rule_id']
+            assert result['boost'] == expected['boost']
+
+
+def test_shared_light_confidence_cases():
+    fixture = Path(__file__).resolve().parents[2]/'internal/catalog/light_confidence_cases.json'
+    for case in json.loads(fixture.read_text()):
+        result = interpret(case['lights'], True, signal=case['signal'] or None)
+        assert result['rule_id'] == case['rule_id'], case['name']
+        assert result['boost'] == case['boost'], case['name']
+
+
+@pytest.mark.parametrize('value', [None, '0.95', True, -1, 1.1, float('nan'), float('inf')])
+def test_invalid_light_confidence_is_conservative(value):
+    lights = [dict(point('red', y=30), conf=value), point('red', y=60)]
+    result = interpret(lights, True)
+    assert result['rule_id'] == 'nuc' and result['pattern_conf'] == 0 and result['boost'] == 0
+    assert interpret(lights, True, signal='sos')['boost'] == 1
+
+
 def test_boost_metric_denominators():
     module = runpy.run_path(str(Path(__file__).parents[1]/"scripts/nightlights_boost_eval.py"))
     rules = {r["id"]: r for r in load_rules()}
@@ -56,6 +126,20 @@ def test_boost_metric_denominators():
     assert result["false_boost_rate"] == 1 and result["false_boost_per_contact"] == .5
     assert result["missed_boost_rate"] == 1
     assert summarize([], rules)["false_boost_rate"] is None
+
+
+def test_urgent_boost_metrics_include_background_and_confusions():
+    module = runpy.run_path(str(Path(__file__).parents[1]/"scripts/nightlights_boost_eval.py"))
+    rules = {r["id"]: r for r in load_rules()}
+    summarize = module["summarize"]
+    result = summarize([dict(truth="ram", rule_id="ram", boost=.9),
+                        dict(truth="nuc", rule_id="ram", boost=.9),
+                        dict(truth=None, rule_id="nuc", boost=.9),
+                        dict(truth="port", rule_id="port", boost=0)], rules)
+    assert result["urgent_rules"]["ram"] == dict(true_urgent_boosts=1, false_urgent_boosts=1)
+    assert result["urgent_rules"]["nuc"] == dict(true_urgent_boosts=0, false_urgent_boosts=1)
+    assert result["false_boosts"] == 2
+    assert summarize([], rules)["urgent_rules"]["ram"]["true_urgent_boosts"] == 0
 
 
 def test_gate_image_and_solar():
@@ -186,6 +270,35 @@ def test_hard_renderer_is_deterministic_and_labels_nuisances():
     assert len(nuisance) == 17 and len(contact["lights"]) == 3
     twilight, _ = module["hard_scene"](np.random.default_rng(66), [], twilight=60)
     assert twilight.mean() > image.mean()
+
+
+def test_reflected_sibling_does_not_drop_unreflected_light():
+    image = np.zeros((180, 200, 3), np.uint8)
+    for x, y in [(60, 40), (66, 65)]:
+        cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
+    box = (20, 20, 160, 100)
+    before = detect_lights(image, box)
+    assert len(before) == 2
+    cv2.line(image, (60, 120), (60, 150), (0, 0, 80), 2)
+    cv2.circle(image, (110, 50), 2, (20, 105, 235), -1)
+    lights = detect_lights(image, box)
+    assert [(p['x'], p['y']) for p in lights] == [(60, 40), (66, 65)]
+    assert lights[0]['reflection'] >= 12 and lights[1]['reflection'] == 0
+    assert all(p['colour'] == 'red' and p['conf'] >= .85 for p in lights)
+    assert interpret(lights, True)['boost'] == .9
+
+
+def test_unreflected_bloomed_pair_uses_colour_and_grouping():
+    image = np.zeros((180, 200, 3), np.uint8)
+    for y in (40, 65):
+        cv2.circle(image, (60, y), 3, (0, 0, 255), -1)
+    image = cv2.GaussianBlur(image, (0, 0), 2)
+    lights = detect_lights(image, (20, 20, 160, 100))
+    assert len(lights) == 2
+    assert all(not p['sharp'] and p['reflection'] == 0 for p in lights)
+    assert interpret(lights, True)['boost'] == .9
+    image[53:] = 0
+    assert detect_lights(image, (20, 20, 160, 100)) == []
 
 
 def test_saturated_core_uses_chromatic_halo():

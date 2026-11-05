@@ -1,0 +1,116 @@
+{
+  "dataset": "easy/test",
+  "observations": "data/nightlights/reports/easy_test_v4.json",
+  "command": "/home/ubuntu/nightlights-venv/bin/python edgeml/scripts/nightlights_boost_eval.py --split test --tier easy --version v4",
+  "protocol": "Exact colour-multiset coverage; zero white allowance. Signal-assisted distress exempt. Frozen detector observations; no detector rerun or threshold change.",
+  "metrics": {
+    "without_gate": {
+      "all": {
+        "contacts": 120,
+        "boosted": 56,
+        "false_boosts": 0,
+        "false_boost_rate": 0.0,
+        "false_boost_per_contact": 0.0,
+        "high_severity": 35,
+        "missed_boosts": 0,
+        "missed_boost_rate": 0.0,
+        "missed_correct_boosts": 0,
+        "missed_correct_boost_rate": 0.0,
+        "urgent_rules": {
+          "ram": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "nuc": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "constrained_draught": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          }
+        }
+      },
+      "automatic": {
+        "contacts": 106,
+        "boosted": 42,
+        "false_boosts": 0,
+        "false_boost_rate": 0.0,
+        "false_boost_per_contact": 0.0,
+        "high_severity": 21,
+        "missed_boosts": 0,
+        "missed_boost_rate": 0.0,
+        "missed_correct_boosts": 0,
+        "missed_correct_boost_rate": 0.0,
+        "urgent_rules": {
+          "ram": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "nuc": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "constrained_draught": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          }
+        }
+      }
+    },
+    "with_gate": {
+      "all": {
+        "contacts": 120,
+        "boosted": 56,
+        "false_boosts": 0,
+        "false_boost_rate": 0.0,
+        "false_boost_per_contact": 0.0,
+        "high_severity": 35,
+        "missed_boosts": 0,
+        "missed_boost_rate": 0.0,
+        "missed_correct_boosts": 0,
+        "missed_correct_boost_rate": 0.0,
+        "urgent_rules": {
+          "ram": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "nuc": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "constrained_draught": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          }
+        }
+      },
+      "automatic": {
+        "contacts": 106,
+        "boosted": 42,
+        "false_boosts": 0,
+        "false_boost_rate": 0.0,
+        "false_boost_per_contact": 0.0,
+        "high_severity": 21,
+        "missed_boosts": 0,
+        "missed_boost_rate": 0.0,
+        "missed_correct_boosts": 0,
+        "missed_correct_boost_rate": 0.0,
+        "urgent_rules": {
+          "ram": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "nuc": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          },
+          "constrained_draught": {
+            "true_urgent_boosts": 7,
+            "false_urgent_boosts": 0
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,8 @@ package command
 
 import (
 	"encoding/json"
+	"math"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +41,31 @@ func TestNightLibraryPythonParity(t *testing.T) {
 	}
 	if count != 15 {
 		t.Fatalf("parity contacts = %d, want 15", count)
+	}
+}
+
+func TestSharedLightConfidenceCases(t *testing.T) {
+	data, err := os.ReadFile("../catalog/light_confidence_cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name   string  `json:"name"`
+		Lights []Light `json:"lights"`
+		Signal string  `json:"signal"`
+		RuleID string  `json:"rule_id"`
+		Boost  float64 `json:"boost"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			signal := InterpretLights(tc.Lights, Box{W: 200, H: 150}, tc.Signal)
+			if signal == nil || signal.RuleID != tc.RuleID || signal.Boost != tc.Boost {
+				t.Fatalf("shared Python/Go case: %+v", signal)
+			}
+		})
 	}
 }
 
@@ -87,7 +114,7 @@ func TestLightRulesFromTable(t *testing.T) {
 }
 
 func TestNightLightScoringGate(t *testing.T) {
-	lights := []Light{{Colour: "red", X: 100, Y: 30}, {Colour: "red", X: 100, Y: 60}}
+	lights := []Light{{Colour: "red", X: 100, Y: 30, Conf: 1}, {Colour: "red", X: 100, Y: 60, Conf: 1}}
 	box := Box{W: 200, H: 150}
 	nuc := InterpretLights(lights, box, "")
 	base := Detection{Class: "small boat", Box: box, Conf: 1}
@@ -126,6 +153,39 @@ func TestNightLightScoringGate(t *testing.T) {
 
 func boolPointer(value bool) *bool { return &value }
 
+func TestLightConfidenceGate(t *testing.T) {
+	box := Box{W: 200, H: 150}
+	for _, tc := range []struct {
+		name       string
+		confidence float64
+		boost      bool
+	}{
+		{"missing", 0, false}, {"below", .849, false}, {"at", .85, true},
+		{"above", .95, true}, {"invalid", math.NaN(), false}, {"out_of_range", 1.1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lights := []Light{{Colour: "red", X: 100, Y: 30, Conf: 1}, {Colour: "red", X: 100, Y: 60, Conf: tc.confidence}}
+			signal := InterpretLights(lights, box, "")
+			if signal == nil || signal.RuleID != "nuc" || (signal.Boost > 0) != tc.boost {
+				t.Fatalf("confidence gate: %+v", signal)
+			}
+			det := Detection{Class: "small boat", Box: box, Conf: 1, Lights: lights, Signal: &LightSignal{RuleID: "nuc", Boost: .9}}
+			if ScoreDet(det, nil, "maritime", true).Light != tc.boost {
+				t.Fatal("ScoreDet did not recheck confidence")
+			}
+			item := Item{SourceID: "EO-P7", Night: boolPointer(true), Dets: []Detection{det}}
+			RescoreAt(&item, "maritime", nil, time.Now())
+			if item.Det[0].Light != tc.boost {
+				t.Fatal("RescoreAt did not recheck confidence")
+			}
+			assisted := InterpretLights(lights, box, "sos")
+			if assisted == nil || assisted.Boost != 1 || !assisted.Assisted {
+				t.Fatal("confidence suppressed assisted distress")
+			}
+		})
+	}
+}
+
 func TestStaleNUCGeometryCannotBoost(t *testing.T) {
 	box := Box{W: 200, H: 150}
 	lights := []Light{{Colour: "red", X: 20, Y: 40}, {Colour: "red", X: 180, Y: 40}}
@@ -148,6 +208,9 @@ func TestExtraLightsCannotBoost(t *testing.T) {
 	stack := []Light{{Colour: "red", X: 100, Y: 30}, {Colour: "red", X: 100, Y: 60}}
 	for _, extras := range [][]Light{{{Colour: "white", X: 180, Y: 20}}, {{Colour: "green", X: 180, Y: 20}}, {{Colour: "white", X: 160, Y: 20}, {Colour: "green", X: 190, Y: 40}, {Colour: "red", X: 20, Y: 80}}} {
 		lights := append(append([]Light(nil), stack...), extras...)
+		for i := range lights {
+			lights[i].Conf = 1
+		}
 		signal := InterpretLights(lights, box, "")
 		if signal == nil || signal.RuleID != "nuc" || !signal.LowConfidence || signal.Boost != 0 || signal.ConfidenceNote != "extra unexplained lights — verify, no priority boost" {
 			t.Fatalf("partial NUC must remain visible but unboosted: %+v", signal)

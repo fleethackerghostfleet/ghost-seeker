@@ -33,6 +33,9 @@ type DarkContactConfig struct {
 }
 
 type NightConfigSettings struct {
+	Lights struct {
+		PatternConfThreshold float64 `json:"pattern_conf_threshold"`
+	} `json:"lights"`
 	Burst       BurstConfig       `json:"burst"`
 	DarkContact DarkContactConfig `json:"dark_contact"`
 }
@@ -57,6 +60,7 @@ type LightRule struct {
 }
 
 type ObservedLight struct {
+	Conf     float64 `json:"conf"`
 	Colour   string  `json:"colour"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`

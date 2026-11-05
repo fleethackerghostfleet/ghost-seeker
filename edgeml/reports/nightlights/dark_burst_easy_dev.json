@@ -37,28 +37,28 @@
   "burst": {
     "scenarios": {
       "flashing yellow 4-frame (air_cushion)": {
-        "requested": 28,
+        "requested": 20,
         "samples": 28,
         "expected": true,
-        "request_rate": 1.0
+        "request_rate": 0.7142857142857143
       },
       "single-frame yellow": {
-        "requested": 28,
+        "requested": 25,
         "samples": 28,
         "expected": true,
-        "request_rate": 1.0
+        "request_rate": 0.8928571428571429
       },
       "complete steady pattern": {
-        "requested": 0,
+        "requested": 18,
         "samples": 28,
         "expected": false,
-        "request_rate": 0.0
+        "request_rate": 0.6428571428571429
       },
       "partial/low-confidence pattern": {
-        "requested": 28,
+        "requested": 25,
         "samples": 28,
         "expected": true,
-        "request_rate": 1.0
+        "request_rate": 0.8928571428571429
       },
       "day": {
         "requested": 0,

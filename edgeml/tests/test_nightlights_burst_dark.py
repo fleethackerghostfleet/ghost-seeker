@@ -1,3 +1,4 @@
+import json
 import logging
 import runpy
 from pathlib import Path
@@ -7,7 +8,7 @@ import cv2
 import numpy as np
 import pytest
 
-from edgeml.nightlights import (BurstController, analyze, dark_contact, frame_report, load_config)
+from edgeml.nightlights import (BurstController, analyze, dark_contact, detect_lights, frame_report, load_config)
 from edgeml.sidecar import service
 
 
@@ -94,6 +95,50 @@ def test_dark_contact_and_masthead_above_hull_box():
     lit = _scene([(120, 42, (0, 0, 255))])
     result = dark_contact(lit, hull_box, "boat", gate_decision={"night": True, "confidence": 0.95})
     assert not result["flagged"] and result["basis"] == "lights_present" and result["n_lights"] == 1
+
+
+def test_dark_contact_uses_unclassified_candidates_without_association():
+    box = (70, 70, 100, 55)
+    image = _scene([(100, 90, (0, 90, 140))])
+    assert detect_lights(image, box) == []
+    assert detect_lights(image, box, associate=False)
+    result = dark_contact(image, box, 'boat', gate_decision={'night': True})
+    assert not result['flagged'] and result['basis'] == 'lights_present'
+    assert result['n_lights'] > 0
+
+
+def test_distress_demo_track_is_not_dark():
+    root = Path(__file__).resolve().parents[2]
+    catalog = json.loads((root/'internal/catalog/nightlights.json').read_text())
+    for entry in catalog['nightLibrary']:
+        for detection in entry['dets']:
+            if 'track_observation' not in detection:
+                continue
+            frames = [cv2.imread(str(root/'web/static'/name))
+                      for name in detection['sequence_files']]
+            assert len(frames) == 4 and all(frame is not None for frame in frames)
+            box = [2*detection['b'][key] for key in ('x', 'y', 'w', 'h')]
+            result = analyze(frames, box, signal=detection['signal'], label=detection['cls'])
+            assert [light['colour'] for light in result['lights']] == ['red']
+            assert result['lights'][0]['flashing']
+            assert result['interpretation']['boost'] == 1
+            dark = result['dark_contact']
+            assert not dark['flagged'] and dark['basis'] == 'lights_present'
+            assert dark['n_lights'] == 2
+            assert detection['track_observation']['dark_contact'] == dark
+
+
+def test_permissive_candidates_empty_and_invalid_boxes():
+    assert detect_lights(_scene(), (70, 70, 100, 55), associate=False) == []
+    assert detect_lights(_scene(), (500, 500, 100, 55), associate=False) == []
+    with pytest.raises(ValueError):
+        detect_lights(_scene(), (0, 0, 0, 55), associate=False)
+
+
+def test_permissive_candidates_reject_low_contrast_glow():
+    image = _scene()
+    cv2.rectangle(image, (70, 70), (170, 125), (85, 85, 85), -1)
+    assert detect_lights(image, (70, 70, 100, 55), associate=False) == []
 
 
 @pytest.mark.parametrize("modality", ["IR", "SAR", "THERMAL", "RADAR"])

@@ -138,7 +138,7 @@ def generate(out, split, tier="easy"):
     out = Path(out) / tier / split
     out.mkdir(parents=True, exist_ok=True)
     records = []
-    seed_base = ({"dev": 1000, "test": 100000, "test2": 1700000} if tier == "easy" else {"dev": 300000, "test": 900000, "test2": 2700000})[split]
+    seed_base = ({"dev": 1000, "test": 100000, "test2": 1700000, "test3": 4200000, "test4": 4300000} if tier == "easy" else {"dev": 300000, "test": 900000, "test2": 2700000, "test3": 4100000, "test4": 4200000})[split]
     for ri, rule in enumerate(load_rules()):
         for repeat in range(7):
             seed = seed_base + ri*100 + repeat
@@ -204,7 +204,7 @@ def generate(out, split, tier="easy"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default="data/nightlights")
-    parser.add_argument("--split", choices=["dev", "test", "test2"], required=True)
+    parser.add_argument("--split", choices=["dev", "test", "test2", "test3", "test4"], required=True)
     parser.add_argument("--tier", choices=["easy", "hard"], default="easy")
     args = parser.parse_args()
     print("COMMAND:", shlex.join([sys.executable]+sys.argv))

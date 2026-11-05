@@ -1,0 +1,7 @@
+[
+  {"name":"missing", "lights":[{"colour":"red","x":100,"y":30,"relative":[0.5,0.2]},{"colour":"red","x":100,"y":60,"relative":[0.5,0.4]}], "signal":"", "rule_id":"nuc", "boost":0},
+  {"name":"missing_assisted", "lights":[{"colour":"red","x":100,"y":30,"relative":[0.5,0.2]},{"colour":"red","x":100,"y":60,"relative":[0.5,0.4]}], "signal":"sos", "rule_id":"distress_sos", "boost":1},
+  {"name":"null", "lights":[{"colour":"red","x":100,"y":30,"relative":[0.5,0.2],"conf":null},{"colour":"red","x":100,"y":60,"relative":[0.5,0.4],"conf":1}], "signal":"", "rule_id":"nuc", "boost":0},
+  {"name":"out_of_range", "lights":[{"colour":"red","x":100,"y":30,"relative":[0.5,0.2],"conf":1.1},{"colour":"red","x":100,"y":60,"relative":[0.5,0.4],"conf":1}], "signal":"", "rule_id":"nuc", "boost":0},
+  {"name":"at_threshold", "lights":[{"colour":"red","x":100,"y":30,"relative":[0.5,0.2],"conf":0.85},{"colour":"red","x":100,"y":60,"relative":[0.5,0.4],"conf":1}], "signal":"", "rule_id":"nuc", "boost":0.9}
+]
