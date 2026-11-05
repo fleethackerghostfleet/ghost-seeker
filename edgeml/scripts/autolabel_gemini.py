@@ -22,6 +22,7 @@ import requests
 
 PROJECT = "qwiklabs-gcp-02-34a870014566"
 MODEL = "gemini-2.5-flash"
+ANNOTATION_R2_DIR = Path(__file__).resolve().parents[1] / "configs" / "annotation_r2"
 ENDPOINT = (
     "https://aiplatform.googleapis.com/v1/projects/"
     f"{PROJECT}/locations/global/publishers/google/models/{MODEL}:generateContent"
@@ -665,7 +666,7 @@ def annotate_sequence(
 ) -> dict[str, Any]:
     prompt_sha = hashlib.sha256(prompt_path.read_bytes()).hexdigest()
     if verify_prompt_path is None:
-        verify_prompt_path = Path("~/r2/gemini_verify_prompt.txt").expanduser()
+        verify_prompt_path = ANNOTATION_R2_DIR / "gemini_verify_prompt.txt"
     verify_prompt = verify_prompt_path.read_text(encoding="utf-8")
     verify_prompt_sha = hashlib.sha256(verify_prompt_path.read_bytes()).hexdigest()
     prompt = prompt_path.read_text(encoding="utf-8")
@@ -939,11 +940,13 @@ def configparser_values(path: Path) -> dict[str, str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path("~/eval/ghost_fleet_r2_1fps").expanduser())
-    parser.add_argument("--prompt", type=Path, default=Path("~/r2/gemini_prompt.txt").expanduser())
+    parser.add_argument(
+        "--prompt", type=Path, default=ANNOTATION_R2_DIR / "gemini_prompt.txt"
+    )
     parser.add_argument(
         "--verify-prompt",
         type=Path,
-        default=Path("~/r2/gemini_verify_prompt.txt").expanduser(),
+        default=ANNOTATION_R2_DIR / "gemini_verify_prompt.txt",
     )
     parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()

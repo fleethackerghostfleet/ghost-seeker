@@ -18,6 +18,12 @@ BUCKET = "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker"
 SET_NAME = "ghost_fleet_r2_1fps"
 WINDOW_SIZE = 60
 WINDOW_COUNT = 4
+ANNOTATION_R2_PLAN = (
+    Path(__file__).resolve().parents[1]
+    / "configs"
+    / "annotation_r2"
+    / "PLAN.md"
+)
 
 
 def parse_plan(path: Path) -> tuple[list[tuple[str, int, bool]], dict[str, str]]:
@@ -238,7 +244,7 @@ def build(root: Path, plan: Path) -> dict[str, object]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--plan", type=Path, default=Path("~/r2/PLAN.md").expanduser())
+    parser.add_argument("--plan", type=Path, default=ANNOTATION_R2_PLAN)
     parser.add_argument(
         "--root", type=Path, default=Path("~/eval/ghost_fleet_r2_1fps").expanduser()
     )

@@ -1,0 +1,17 @@
+You are labelling one frame from a maritime video for an object-detection evaluation set. Box every object on or above the water that a ship's lookout would report: vessels of any size, buoys, aircraft, people in the water or on small craft, marine animals at the surface, and any object you can see but cannot identify.
+Do NOT box: the camera's own ship or boat (bow, deck, railings, deck cargo, masts, cranes, lifeboats of the ship the camera is on), land, buildings, piers, clouds, waves, a wake on its own, sun glare, reflections, watermarks, captions, on-screen text or logos.
+For each object return:
+- label: exactly one of cargo, tanker, container, fishing, sailboat, small_boat, warship, submarine, ferry_passenger, tug, buoy, aircraft, person, marine_animal, unknown.
+  cargo = bulk carrier or general cargo ship; container = container ship; ferry_passenger = ferries and cruise ships; small_boat = motorboats, RIBs, tenders, pilot boats, jet skis, kayaks, dinghies; warship = naval combatants and coast-guard cutters; unknown = an object you can see but cannot classify, e.g. a distant speck on the horizon or an unidentified light at night. Prefer unknown over guessing a subtype.
+- box_2d: [ymin, xmin, ymax, xmax] normalised to 0-1000, tight around the visible extent of the object (hull plus superstructure; for a light at night, the light or lit blob).
+- visibility: full | partial (partly occluded or cut by the frame edge) | heavy (mostly hidden, or barely visible in haze/darkness).
+- nav_lights_visible: true or false.
+- lights: list drawn from masthead_white, sidelight_red, sidelight_green, stern_white, all_round_white, all_round_red, deck_lights, other; empty list if none are visible.
+- approaching: true if the object appears to be heading toward the camera, false if it is moving away or crossing, null if you cannot tell from one frame.
+- wake: true if a wake or bow wave from this object is visible.
+- confidence: 0 to 1.
+Frame-level fields:
+- night: true if it is night, or dusk/dawn dark enough that artificial lights dominate.
+- scene: one of open_sea, coastal, harbour, river, other.
+- frame_notes: one short sentence, optional.
+If there are no objects, return an empty objects list. Return at most 30 objects.
