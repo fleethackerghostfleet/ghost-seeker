@@ -43,11 +43,12 @@ run-edge: build demo-key ## replay the frame zips through the mock analyzer, 1 f
 DEMO := scenarios/ghostfleet_demo
 DEMO_SCENARIO = $(or $(wildcard $(DEMO)/scenario.generated.json),$(DEMO)/scenario.json)
 
+demo: export INCLUDE_BUCKET_FRAMES := 0
 demo: demo-clips demo-compare ## download the 5 fps clips, run naive vs hash vs sightings vs tomer over the link presets (headless, virtual time)
 	@echo; echo "Live demo: 'make demo-sidecar', 'make demo-shore', 'make demo-ui', 'make demo-edge' in four terminals, open http://localhost:8090 (see docs/DEMO.md)"
 
 demo-clips:      ## sync eval clips and all GCS frames/*_frames sets; generate the live scenario (needs gcloud auth + python3)
-	$(DEMO)/download.sh
+	INCLUDE_BUCKET_FRAMES=$(or $(INCLUDE_BUCKET_FRAMES),1) $(DEMO)/download.sh
 
 demo-compare: build
 	$(DEMO)/compare.sh

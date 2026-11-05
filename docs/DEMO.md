@@ -64,7 +64,8 @@ fields of `scenario.json`. `make compose-demo` and `make demo-edge` select this
 generated scenario, falling back to the committed scenario when it does not exist.
 Restart the edge after another sync to load newly added sets. For direct Compose,
 set `GS_DEMO_SCENARIO=scenario.generated.json`; without it the committed default is used.
-The headless comparison keeps the committed three-clip scenario and its GT data.
+The headless `make demo` comparison fetches only the eval clips (no bucket frame
+discovery/sync) and keeps the committed three-clip scenario and its GT data.
 
 Optional environment controls (apply when running `make demo-clips`):
 - `INCLUDE_BUCKET_FRAMES=0`: eval clips only.
