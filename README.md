@@ -40,7 +40,8 @@ internal/               fact format, virtual clock, scenario loader, http helper
 cmd/edge cmd/shore      the two services
 cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JSON metrics
 algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
-inference/              Python sidecar contract + stub (no model yet)
+inference/              inference contract notes + model-free Python stub
+edgeml/                 Python detection/tracking/sighting pipeline, real-model sidecar, evaluation reports
 deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
 frames/                 demo imagery (Git LFS zips)
 cmd/ghost-seeker web/   operator web app (Go, in-memory simulation, SSE feed); see "Operator web app" below
@@ -65,16 +66,18 @@ make run-shore             # :8080  SyncService + shore console + ui/
 make run-edge              # :8081  edge console; syncs to shore
 TOKEN=$(make -s demo-token)   # or: cat data/operator.token
 curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{}' localhost:8080/ghostseeker.v1.ConsoleService/GetStatus
-curl -s -H content-type:application/json -d '{"limit":10}' localhost:8081/ghostseeker.v1.ConsoleService/GetQueue
+curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{"limit":10}' localhost:8081/ghostseeker.v1.ConsoleService/GetQueue
 # operator on shore: "ignore cargo ships" -> downlinked on the next exchange, edge re-ranks
-curl -s -H content-type:application/json -d '{"policy":{"issuedBy":"ops","text":"ignore cargo ships","interest":{"suppressLabels":["cargo ship"]}}}' \
+curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{"policy":{"issuedBy":"ops","text":"ignore cargo ships","interest":{"suppressLabels":["cargo ship"]}}}' \
   localhost:8080/ghostseeker.v1.ConsoleService/SetPolicy
 # analyst pulls the full image of an item shore only has the fact for
-curl -s -H content-type:application/json -d '{"pull":{"itemId":"<id>","form":"FORM_KIND_FULL","requestedBy":"analyst"}}' \
+curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{"pull":{"itemId":"<id>","form":"FORM_KIND_FULL","requestedBy":"analyst"}}' \
   localhost:8080/ghostseeker.v1.ConsoleService/RequestPull
 ```
 
-With a shaped network instead of the in-process simulator:
+With a shaped network instead of the in-process simulator, first provision
+`GS_OPERATOR_TOKEN`, `GS_SIGNING_KEY`, and `GS_UNIT_TOKEN` as described in the
+[Compose setup](docs/FIELDING.md#compose-demonstration), then run:
 
 ```sh
 make compose                       # shore, toxiproxy, edge
@@ -186,9 +189,12 @@ trusts, so a ship console cannot mint locked COMMAND rules under the shore's key
 | edge | `-policy-keys` (JSON keyring; required with the flag above) | `GS_POLICY_KEYS` | unset |
 
 ```sh
+make build demo-key
 go run ./cmd/policy-keygen -id shore-1 -out-dir keys     # keys/shore-1.key.json (0600) + keys/keyring.json
-go run ./cmd/shore -policy-signing-key keys/shore-1.key.json
-go run ./cmd/edge -require-signed-policy -policy-keys keys/keyring.json
+(umask 077; ./bin/mint-unit-token -id edge-1 -ttl 24h -signing-key-file data/unit.key > data/edge.jwt)
+# Run these in separate terminals; the Ed25519 policy key is separate from unit auth.
+./bin/shore -signing-key-file data/unit.key -policy-signing-key keys/shore-1.key.json
+./bin/edge -id edge-1 -unit-token-file data/edge.jwt -require-signed-policy -policy-keys keys/keyring.json
 ```
 
 Unsigned or badly signed policies are rejected and audited; the edge keeps its
@@ -261,16 +267,17 @@ means the image bytes are not re-encoded; link gzip is lossless and leaves
 them byte-identical. The pull boost puts it at the head of the
 queue, and the edge event log records `pull-original` with the operator.
 
-    curl -s -H content-type:application/json localhost:8080/ghostseeker.v1.ConsoleService/RequestPull \
+    TOKEN=$(make -s demo-token)
+    curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json localhost:8080/ghostseeker.v1.ConsoleService/RequestPull \
       -d '{"pull":{"itemId":"<id>","original":true,"requestedBy":"op1"}}'
 
-In the operator web app this is the **Send full size** button. In live shore
-mode (`-shore`, the `shore.html` UI) it sits next to "Pull full image" on each
-card, asks for the operator's name and calls shore `RequestPull` with
-`original: true` through the bridge (`POST /api/shore/pull` with
-`{"itemId","form":"full","original":true,"by"}`; a blank `by` is rejected). In
-the standalone simulation it is in the image drawer and only records the
-override on the simulated item (`POST /api/items/{id}/full-res`).
+In the operator web app this is the **Send full size** button in the image
+drawer. It asks for the operator's name and posts to
+`/api/items/{id}/full-res` with `{"by":"op1"}`; a blank `by` is rejected.
+In live shore mode (`-shore`) the bridge calls shore `RequestPull` with
+`original: true`. In the standalone simulation it only records the override
+on the simulated item. Both modes use the same UI at `/`; the retired
+`/shore.html` path redirects there.
 
 ## Offline image prioritization baseline
 
@@ -280,7 +287,15 @@ override on the simulated item (`POST /api/items/{id}/full-res`).
 - [Ranking, byte accounting and CLI examples](algorithm/RANKING_AND_SELECTION.md)
 - [Color + pHash defaults, cache migration and pair evaluation](algorithm/SIMILARITY.md)
 
-This package is an offline image-level baseline. It is independent of `edgeml/` sighting aggregation and the live Go scheduler's manifest/fidelity/chunk planning. It does not implement the `InferenceService` RPCs or wire itself into the operator app. Its full-image selection metrics are distinct from unique-object delivery metrics in `edgeml/`.
+The package itself is an offline image-level baseline, separate from `edgeml/`
+sighting aggregation and the Go scheduler's manifest/fidelity/chunk planning.
+The sidecar's `tomer` adapter integrates its scoring and color+pHash similarity
+into the live pipeline: run the sidecar with `--prioritizer tomer` or `both`
+and the edge with `-prioritizer tomer`. The Go scheduler still selects forms
+and chunks; it does not call the offline whole-JPEG selector. See the
+[integration report](docs/reports/TOMER_INTEGRATION.md) for the streaming
+differences. Full-image selection metrics remain distinct from unique-object
+delivery metrics in `edgeml/`.
 
 ## Simulator results (satcom_contested, 60 min, mock analyzer)
 
@@ -379,14 +394,19 @@ Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for 
 
 ## Status / not done
 
-- Inference: mock + Python stub only. Planned sidecar: ONNX Runtime with the
-  OpenVINO execution provider, YOLO-class detector + MobileCLIP-class embedder
-  (CPU). See `inference/README.md`.
+- Inference: Go mock, model-free Python stub, and an implemented CPU sidecar
+  with ONNX Runtime/OpenVINO detection, tracking, MobileCLIP classification,
+  and sighting aggregation. Real models must be provisioned separately; see
+  [the sidecar setup](edgeml/sidecar/README.md). Evaluation results are prototype
+  measurements on small datasets, not field accuracy.
 - NL directives compile in `internal/command`, optionally through a local
   OpenAI-compatible LLM (`GS_LLM_URL`, `GS_LLM_MODEL`, `GS_LLM_TIMEOUT`) with
   JSON-schema constraints, regex fallback, deterministic readback and
   guardrails before apply.
-- No TLS on either service; SyncService unit auth is opt-in (see Configuration above) and ConsoleService has no auth.
+- Unit authentication is on by default, and operator authentication gates
+  ConsoleService and blobs. Policy signing remains opt-in. No service provides
+  TLS; see [Security](docs/SECURITY.md) for deployment requirements and residuals.
+- Capture input is frame/scenario replay; no live camera ingestion is implemented.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
 - Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
   the boat is not visible in every frame). `scenarios/sailboats_example.json`

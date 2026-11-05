@@ -1,9 +1,11 @@
 # Ghost Fleet demo runbook
 
-What the audience should take away: **at 9.6 kbps the shore still gets an image of nearly
-every object the ship sees** (5 of 6 in the committed headless run, vs 0 of 6 naive and 1 of 6
-with image-level dedup; all 6 from 64 kbps up), because the edge sends one *sighting* per
-object instead of every frame. The operator UI shows this live; `make demo` reproduces it headlessly.
+The committed headless run demonstrates **5 of 6 labeled objects imaged at shore
+at 9.6 kbps**, vs 0 of 6 naive and 1 of 6 with image-level dedup; the sightings
+row reaches all 6 from 64 kbps up. It uses ground-truth object identities to
+demonstrate delivery, not detector accuracy. `make demo` reproduces that
+comparison. The live stack below uses the implemented detector/tracker sidecar,
+so its observed contacts and delivery results can differ.
 
 Background numbers (edgeml reports C §9 / E headline): tracking + sighting aggregation
 → ~0.2 duplicate reports per object vs ~64 naive / ~6.5 image-level dedup; at 72 KB/min
@@ -29,8 +31,8 @@ Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/e
 
 ```sh
 make demo              # = make demo-clips demo-compare
-# or directly:
-./bin/sim -scenario scenarios/ghostfleet_demo/scenario.json -dedup all \
+# or directly, for the three modes that do not need a sidecar:
+./bin/sim -scenario scenarios/ghostfleet_demo/scenario.json -dedup naive,hash,sightings \
           -bps 9600,64000,256000,2000000 -strategies prioritized -duration 6m -sample 1m \
           -out scenarios/ghostfleet_demo/out/compare.json -md scenarios/ghostfleet_demo/out/compare.md
 ```
@@ -42,8 +44,14 @@ the clips at 5 fps through a flat link at each preset. `-dedup`:
 |---|---|---|
 | `naive` | every frame (byte-identical frames still dropped by `edge/ingest`) | – |
 | `hash` | frames whose dHash differs from the last 64 kept by > 10 bits (image-level dedup) | – |
-| `sightings` | one item when an object appears + a refresh ≤ every `-sighting-update` (30 s) | **MOT ground truth** (`gt/gt.txt` + `qa/corrections.yaml` merges) — an oracle stand-in until F1's sidecar lands; then `make demo-edge` with `-infer http://sidecar` + `-dedup sightings` is the same scenario on a real tracker |
+| `sightings` | one item when an object appears + a refresh ≤ every `-sighting-update` (30 s) | **MOT ground truth** (`gt/gt.txt` + `qa/corrections.yaml` merges) — an oracle for this simulator comparison. `make demo-edge` instead uses the real sidecar with `-dedup sightings`. |
 | `tomer` | Tomer's `algorithm/ghost_priority` image-level ranking through the sidecar (`--prioritizer tomer|both`, started by `compare.sh` on :9093): priority = his whole-frame score, color+pHash near-duplicates folded like `hash` ([report](reports/TOMER_INTEGRATION.md)) | – |
+
+The simulator's `hash` row uses perceptual dHash; the live edge's `-dedup hash`
+uses exact-content hashing (plus the sidecar's near-duplicate flag in `tomer`
+mode). To include `tomer` in a direct simulator run, use `-dedup all -infer <URL>`
+with a running sidecar in `--prioritizer tomer` or `both` mode. The comparison
+script starts that sidecar automatically when its Python dependencies are available.
 
 Metrics (`compare.json` / `compare.md`): unique GT objects with an image (thumb/crop/full)
 on shore at each sample time, time until all objects have an image, bytes on air, and bytes
@@ -73,8 +81,10 @@ Start the edge last (it starts replaying immediately) and give the sidecar ~10 s
 models (log line `sidecar listening on :9090`). Without the sidecar: `make demo-edge INFER=mock
 DEDUP=hash` (one item per distinct frame, no sightings). `make demo-edge PRIORITIZER=tomer DEDUP=hash` (sidecar in `--prioritizer both`, the `make demo-sidecar` default) ranks the queue by Tomer's image-level score instead; the strip shows `prioritization: tomer`.
 
-With the sidecar, items arrive with `tags.sighting_id` (`<clip>:<track>`), `subtype` (zero-shot
-MobileCLIP: cargo ship / submarine / marine mammal …), `event` (open / update) and a CROP form;
+With the sidecar, items arrive with `tags.sighting_id`, `subtype` (zero-shot
+MobileCLIP: cargo ship / submarine / marine mammal …), and `event` (open / update).
+A CROP form is included when eligible: unknowns skip CROP by default, and a crop
+no smaller than FULL is omitted. FULL is the complete capture, not the key crop;
 the UI shows one card per sighting with the crop, and the strip's "N duplicate frames folded on
 the edge" is `GetStatus.items_deduped`. When a sighting closes, the edge sends a ~200 B contact
 report (RECORD item); the card then shows "n frames seen" from it.
@@ -88,22 +98,23 @@ are excluded from the unique-object count, the review queue and the commander vi
 says "N camera heartbeats not counted"). Any per-frame leftovers
 (`-scene-every 0`) are hidden by the "sightings only" toggle.
 
-**Send full size.** The operator override next to "Pull full image": after a name prompt it
-calls shore `RequestPull` with `original: true`, so the edge sends the capture's original bytes
-as FULL with no re-encoding. Shown only on items that have a FULL form.
+**Send full size.** The operator override in the image drawer asks for a name,
+then calls `/api/items/{id}/full-res`. In live mode the bridge calls shore
+`RequestPull` with `original: true`, so the edge sends the capture's original
+bytes as FULL with no re-encoding.
 
 ## 3. Three-minute presenter script
 
 | t | do | say |
 |---|---|---|
 | 0:00 | Stack already running, link preset **2 Mbps**, feed tab. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." Point at the strip: items on edge vs shore are equal, every card has a crop/thumb. |
-| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute, less than one frame." The edge's estimator needs ~100 s to re-learn the link (strip: "edge estimates … · re-learning: n failed exchanges", 4 failures from 2 Mbps); then the edge queue keeps growing (object-free frames, see caveat) while *new sightings still land* as cards. A sighting is ~5–10 KB (fact + thumb + crop + full of the key crop), so one arrives per ~5–10 s of link time. |
+| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute." Watch the estimator adapt and the form chips advance. FACT and thumbnail precede larger images; actual delivery time depends on image sizes, backlog, and link overhead. FULL contains the complete capture. |
 | 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card with its crop, the zero-shot subtype, and we know exactly which forms have landed; 'duplicate frames folded on the edge' in the strip is what we did *not* send. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
 | 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed; matched on the sidecar subtype, the detector class or an operator override), submarines keep arriving. Policy text shows in the strip. Cards the edge flagged *unknown* are never suppressed (same rule as `edge/scoring`), so a low-confidence "Cargo Ship (Unknown)" stays — say so, it is the point of the unknown gate. |
-| 2:15 | On a card whose FULL chip is still pending click **Pull full image**. | "Full frames only on request." Full chip goes pending → partial % → received; the card switches to the full-resolution image. With the current edge a sighting ships thumb + crop + full of the key crop together, so at 9.6 kbps the button is usually already "full received" by the time the card appears; the pull path is live for anything still pending; the reliable demo of it is **Pull full frame** in the Cameras strip, whose FULL is never sent unless asked for. |
+| 2:15 | On a card whose FULL chip is still pending click **Pull full image**, or use **Pull full frame** in the Cameras strip. | "A pull gives this image priority." Ordinary contact FULL forms can drain automatically after the smaller forms; camera-overview FULL forms are pull-only. Watch pending → partial → received on the form chip. Use **Send full size** in the image drawer to request the original bytes. |
 | 2:45 | Click **2 Mbps**; switch to **Review queue** / **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
 
-Dry run (2026-11-04, real sidecar, 8-core laptop-class VM): the three clips replay **interleaved** (same
+Historical dry run (2026-11-04, real sidecar, 8-core laptop-class VM; not rerun here with the current full-frame/form defaults): the three clips replay **interleaved** (same
 frame names, so `edge/ingest` sorts them together) and the sidecar tracks them as three sources; the
 whole replay is 1270 frames = 254 s, so start the script within a minute of `make demo-edge`. Over
 the run the sidecar reported 20+ sightings (subtypes: submarine, marine mammal, cargo ship, tanker,
