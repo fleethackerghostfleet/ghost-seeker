@@ -18,13 +18,10 @@ while the repo is private, the **GitHub CLI** signed in once (`brew install gh &
 so `make demo-clips demo-models` can pull the ~225 MB of clips + models from the
 [`demo-data-v1` release](https://github.com/fleethackerghostfleet/ghost-seeker/releases/tag/demo-data-v1)
 (`deploy/demo-data.sh`; it falls back to the lab GCS bucket via gcloud). No Go needed.
-Generating the live ocean crops once also requires Python + Pillow (see below) and the
-existing LFS source: `git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'`.
+The live ocean watch comes from the same release (`demo-ocean.tar.gz`, 32 screened crops)
+and is laid out by `ocean.py` with the system `python3` (no Pillow, no LFS).
 
 ```sh
-python3 -m venv ~/edgeml-venv
-~/edgeml-venv/bin/pip install Pillow==12.3.0
-export PY=~/edgeml-venv/bin/python
 make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (GitHub release; gh auth)
 make compose-demo             # builds the four images (first time ~5-10 min), starts the stack
 open http://localhost:8090    # signed in automatically; the edge starts replaying once the sidecar is healthy (~30 s)
@@ -70,8 +67,6 @@ authentication; only the UI's login form accepts arbitrary tokens.
 make build
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
 pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
-pip install Pillow==12.3.0
-git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'
 make demo-clips        # three released ship clips + generated Open_ocean_watch/img1 (all gitignored)
 make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports + H's unknown_calib.npz)
 ```
@@ -84,7 +79,9 @@ Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/e
 
 `make demo-clips` prepares all live inputs via `demo-ship-clips` and `demo-ocean`.
 The live `demo-edge` and `compose-demo` targets also depend on `demo-ocean`.
-Only live setup requires the LFS ocean ZIP and Pillow; headless `make demo` fetches
+`demo-ocean` fetches the released crops (verified against `ocean-manifest.json`); only
+without them does it regenerate from the LFS ZIP, which needs `git lfs pull
+--include='frames/30_Days_at_Sea_Timelapse_frames.zip'` and Pillow 12.3.0. Headless `make demo` fetches
 the three ship clips via `demo-ship-clips`, and `demo-compare` uses those clips directly.
 `demo-ocean` runs `ocean.py`: 32 manually inspected, real-sidecar-screened
 688×516 side-region crops of the existing `30_Days_at_Sea_Timelapse_frames.zip`.

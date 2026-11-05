@@ -8,8 +8,6 @@ from pathlib import Path
 import sys
 import zipfile
 
-from PIL import Image
-
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -21,7 +19,17 @@ def checked(data, expected, name):
     return data
 
 
+def cached(manifest, cache):
+    """The released crops (demo-ocean.tar.gz), verified against the manifest; None if absent."""
+    paths = [Path(cache) / f"{i:02d}.jpg" for i in range(len(manifest["frames"]))]
+    if not manifest["frames"] or not all(p.is_file() for p in paths):
+        return None
+    return [checked(p.read_bytes(), f["output_sha256"], str(p)) for p, f in zip(paths, manifest["frames"])]
+
+
 def crops(manifest, archive):
+    from PIL import Image
+
     checked(archive.read_bytes(), manifest["source_sha256"], str(archive))
     with zipfile.ZipFile(archive) as source:
         result = []
@@ -43,9 +51,9 @@ def extract(dest):
     manifest = json.loads((HERE / "ocean-manifest.json").read_text())
     archive = ROOT / manifest["source_zip"]
     try:
-        images = crops(manifest, archive)
-    except (OSError, ValueError, zipfile.BadZipFile) as error:
-        raise SystemExit(f"Ocean watch: {error}. Run git lfs pull --include='{manifest['source_zip']}' and use Pillow {manifest['pillow']}.") from error
+        images = cached(manifest, Path(dest) / ".ocean-crops") or crops(manifest, archive)
+    except (ImportError, OSError, ValueError, zipfile.BadZipFile) as error:
+        raise SystemExit(f"Ocean watch: {error}. Run make demo-ocean (fetches the released crops via gh), or git lfs pull --include='{manifest['source_zip']}' with Pillow {manifest['pillow']}.") from error
     img1 = Path(dest) / "Open_ocean_watch" / "img1"
     img1.mkdir(parents=True, exist_ok=True)
     names = set()

@@ -50,7 +50,8 @@ demo-clips: demo-ship-clips demo-ocean ## prepare all live clips, including the 
 demo-ship-clips: ## fetch the three ship clips (gitignored; GitHub release demo-data-v1 via gh, gcloud fallback)
 	$(DEMO)/download.sh
 
-demo-ocean:      ## generate live-only ocean crops from the existing LFS ZIP (Python + Pillow)
+demo-ocean:      ## live-only ocean watch: released crops (demo-data-v1, needs only python3), else regenerated from the LFS ZIP (Pillow)
+	@test -d $(DEMO)/frames/.ocean-crops || deploy/demo-data.sh demo-ocean.tar.gz $(DEMO)/frames/.ocean-crops 1 || echo "demo-ocean: released crops unavailable; regenerating from the LFS ZIP" >&2
 	$(PY) $(DEMO)/ocean.py $(DEMO)/frames
 
 demo-compare: build
@@ -81,7 +82,7 @@ demo-ui: build   ## Patrick's operator console (index.html / cdr.html) on live s
 	$(BIN)/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN) -demo-accept-any-token
 
 MODELS ?= $(or $(GS_MODELS),$(HOME)/models/D)
-PY ?= python
+PY ?= python3
 
 demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unknown_calib.npz into $(MODELS) (GitHub release demo-data-v1 via gh, gcloud fallback)
 	@ok=1; for f in yolo11n-640/model.onnx yolo11n-640/meta.json mobileclip-s1/model.onnx mobileclip-s1/meta.json mobileclip-s1/text_cache.json; do test -s $(MODELS)/$$f || ok=; done; test -n "$$ok" && echo "have models in $(MODELS)" || \
