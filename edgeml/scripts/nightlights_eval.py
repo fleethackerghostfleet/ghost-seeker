@@ -141,7 +141,7 @@ def library(report):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", default="data/nightlights")
-    p.add_argument("--split", choices=["dev", "test", "test2", "test3"])
+    p.add_argument("--split", choices=["dev", "test", "test2", "test3", "test4"])
     p.add_argument("--version", default="")
     p.add_argument("--tier", choices=["easy", "hard"], default="easy")
     p.add_argument("--library", action="store_true")

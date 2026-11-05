@@ -163,14 +163,38 @@ def evaluate(split="dev", tier="easy", n=28):
             "burst_n_per_scenario": n, "burst": _burst_eval(seed + 19, tier, n, rules)}
 
 
+def summarize_observations(path):
+    data = json.loads(Path(path).read_text())
+    lit = [row for row in data['contacts'] if row['truth']['night']
+           and row['truth']['rule_id'] is not None
+           and any(not light.get('occluded') for light in row['truth']['lights'])]
+    flagged = [row for row in lit if row['result']['dark_contact']['flagged']]
+    return dict(observations=str(path),
+                protocol='Saved observations only; false-dark counts on observable lit night contacts. No unlit-vessel ground truth; dark-contact recall is not measurable.',
+                lit_night_contacts=len(lit), false_dark_contacts=len(flagged),
+                false_dark_seeds=[row['truth'].get('seed') for row in flagged],
+                night_gate_misses=sum(not row['result']['night'] for row in lit))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--split", choices=("dev", "test2"), required=True)
-    parser.add_argument("--tier", choices=("easy", "hard"), required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--split", choices=("dev", "test2"))
+    source.add_argument("--observations", type=Path)
+    parser.add_argument("--tier", choices=("easy", "hard"))
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--n", type=int, default=28)
     args = parser.parse_args()
-    summary = evaluate(args.split, args.tier, args.n)
-    output = Path(__file__).resolve().parents[1] / "reports/nightlights" / f"dark_burst_{args.tier}_{args.split}.json"
+    if args.observations:
+        if args.output is None:
+            parser.error('--observations requires --output')
+        summary = summarize_observations(args.observations)
+        output = args.output
+    else:
+        if args.tier is None:
+            parser.error('--split requires --tier')
+        summary = evaluate(args.split, args.tier, args.n)
+        output = args.output or Path(__file__).resolve().parents[1] / "reports/nightlights" / f"dark_burst_{args.tier}_{args.split}.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))

@@ -116,6 +116,18 @@ record is committed, then detected exactly once as v5. Boost and dark-contact
 summaries must consume that saved observation dump without image redetection.
 Easy/test may subsequently be evaluated as a regression set, without retuning.
 
+Freeze record commit: `24ae0376c0df400b19b857457279c6b157d9cd73`. Test4 was
+subsequently generated and evaluated once, without crashes or detector changes.
+Boost and dark summaries used the saved `hard_test4_v5.json` observations.
+Test4 light P/R are 72.90%/50.32%, rules 34/112, automatic 20/98, automatic
+urgent boosts RAM/NUC/draught 2/0/0 with zero false boosts of any kind. Easy/test
+retains 100% light P/R, 112/112 rules, 98/98 automatic and 7/7 correct boosts
+for each urgent rule. Saved-observation false-dark counts are 0/94 observable
+lit night test4 contacts and 0/112 easy/test contacts; no unlit-vessel recall can
+be estimated from these sets. Full v5 results, precision trade-offs, demo changes
+and commands are in NIGHT_LIGHTS.md. Neither v4 artifacts nor the frozen v5
+detector/threshold were changed.
+
 ## API and meaning
 
 `analyze(image_or_frame_list, [x,y,w,h], modality="EO", timestamp=None,

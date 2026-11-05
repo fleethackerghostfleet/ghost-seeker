@@ -2,7 +2,94 @@
 
 **Synthetic demonstration, not operational accuracy.** Automatic light detections remain unreliable in clutter. Partial patterns are displayed but cannot raise priority. All accuracy numbers below are measured on the named procedural datasets, not estimates of performance at sea.
 
-## Strict-gate detector v4 (before/after)
+## Strict-gate detector v5: independent unreflected lights
+
+**Synthetic-procedural results, not at-sea accuracy.** v5 was tuned on hard/dev
+and easy/dev only, frozen at **`3bfa51bde7b0eb8602cd31b29fe59ff1d42d9719`** with
+threshold **0.85**, and recorded in PROTOCOL.md in commit **`24ae037`** before
+hard/test4 was generated. Test4 uses base seed **4200000** (112 night contacts,
+8 day and 16 twilight records). It was evaluated **exactly once**; both boost
+and dark-contact summaries consumed that same saved observation dump. Easy/test
+was subsequently checked as a regression set. No detector/threshold changes
+followed either result.
+
+The v4 association expression selected reflected lights *instead of* independently
+qualified unreflected lights whenever any reflected candidate existed. v5 takes
+their union: compact sharp points retain their own evidence, and colour-pure,
+high-contrast same-colour vertical pairs can qualify without reflections. A
+compact, transversely centered half-peak footprint rejects broad glare corners;
+sodium ambiguity, pier rows and dense horizontal clutter remain rejection cues.
+Confidence uses each light's own PSF/reflection evidence. Complete colour-multiset
+equality, zero white allowance and assisted-distress exemption are unchanged.
+
+Urgent columns show **true/false automatic boosts**. False boosts are all/automatic.
+
+| Dataset | Light P | Light R | Rules /112 | Automatic /98 | RAM | NUC | Draught | False boosts | Night gate | Day false-night |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| easy/dev v5 | 100% | 100% | 112 | 98 | 7/0 | 7/0 | 7/0 | 0/0 | 120/120 (100%) | 0% |
+| easy/test v5 | 100% | 100% | 112 | 98 | 7/0 | 7/0 | 7/0 | 0/0 | 120/120 (100%) | 0% |
+| hard/dev v5 | 72.41% | 51.53% | 39 | 25 | 2/0 | 2/0 | 1/0 | 0/0 | 132/136 (97.06%) | 0% |
+| hard/test4 v5 | 72.90% | 50.32% | 34 | 20 | 2/0 | 0/0 | 0/0 | 0/0 | 133/136 (97.79%) | 0% |
+
+**Precision trade-off:** hard/dev changes from v4's 82 correct / 107 predicted
+lights (P 76.64%, R 50.31%) to 84 / 116 (P 72.41%, R 51.53%). Rules improve
+38→39, automatic rules 24→25 and correct urgent boosts 4→5, recovering NUC
+300201 at confidence 0.9321875. Additional shore/pier candidates still survive.
+The six would-be false boosts before confidence suppression retain maximum
+confidence **0.791667**, leaving dev margin **0.058333** to 0.85. Easy/dev has no
+would-be false boost, so its maximum/margin are not applicable.
+
+Saved-observation dark-contact false-dark counts (only observable lit night
+contacts, excluding fully occluded emitters and background records):
+
+| Dataset | False dark / eligible lit contacts | Night-gate misses among eligible |
+|---|---:|---:|
+| easy/dev v5 | 0/112 | 0 |
+| easy/test v5 | 0/112 | 0 |
+| hard/dev v5 | 0/97 | 0 |
+| hard/test4 v5 | 0/94 | 0 |
+
+These sets have **no labeled unlit-vessel ground truth**, so dark-contact recall
+cannot be measured here. The separate dev dark-contact scenario evaluation is
+unchanged: easy/dev TP/FP/FN **28/0/0**, hard/dev **28/9/0**. That is a different
+dataset/denominator, not a contradiction of the saved-observation table.
+
+Only **2/21** automatic urgent test4 contacts receive correct boosts, both RAM;
+NUC and draught receive none. Zero observed false boosts is not a general safety
+guarantee. Occluded CD can still resemble NUC, heuristic confidence is not a
+calibrated probability, static-frame persistence remains weak evidence, and the
+generator's vessel-only reflection cue remains optimistically discriminative.
+No test4 retuning or post-result detector changes were made.
+
+### v5 commands and demo refresh
+
+```sh
+PY=~/nightlights-venv/bin/python
+# After committing the freeze record; detector evaluation below was run once.
+$PY edgeml/scripts/nightlights_synth.py --tier hard --split test4
+$PY edgeml/scripts/nightlights_eval.py --tier hard --split test4 --version v5
+$PY edgeml/scripts/nightlights_boost_eval.py --tier hard --split test4 --version v5
+$PY edgeml/scripts/nightlights_dark_eval.py --observations data/nightlights/reports/hard_test4_v5.json --output edgeml/reports/nightlights/dark_contacts_hard_test4_v5.json
+$PY edgeml/scripts/nightlights_eval.py --tier easy --split test --version v5
+$PY edgeml/scripts/nightlights_boost_eval.py --tier easy --split test --version v5
+$PY edgeml/scripts/nightlights_dark_eval.py --observations data/nightlights/reports/easy_test_v5.json --output edgeml/reports/nightlights/dark_contacts_easy_test_v5.json
+$PY edgeml/scripts/nightlights_demo.py
+$PY -m pytest edgeml/tests -q
+PATH="$HOME/sdk/go/bin:$PATH" go test ./...
+```
+
+Dev dark summaries likewise replay the saved `easy_dev_v5.json` and
+`hard_dev_v5.json` observations without redetection. Large per-case dumps remain
+gitignored; committed evaluation artifacts are summaries only.
+
+The demo catalog was refreshed because v5 changes detections: night-01 port
+gains an extra light, night-01 starboard changes to two_mastheads, and night-03
+pilot changes to two_mastheads. These errors are retained, not relabeled.
+Night-02 NUC **+0.90** and draught **+0.70** remain unchanged, as do assisted
+distress boosts. All eight JPEGs are byte-identical. The v4 screenshots below
+are retained as historical evidence, not newly captured v5 screenshots.
+
+## Strict-gate detector v4 (before/after, historical)
 
 **Synthetic-procedural measurements only, not at-sea accuracy.** Detector and
 threshold were frozen in `a3e3e9005fa3241368e9cddf38db0ce3cdb80a9d`.

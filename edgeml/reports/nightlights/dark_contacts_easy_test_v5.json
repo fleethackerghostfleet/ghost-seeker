@@ -1,0 +1,8 @@
+{
+  "observations": "data/nightlights/reports/easy_test_v5.json",
+  "protocol": "Saved observations only; false-dark counts on observable lit night contacts. No unlit-vessel ground truth; dark-contact recall is not measurable.",
+  "lit_night_contacts": 112,
+  "false_dark_contacts": 0,
+  "false_dark_seeds": [],
+  "night_gate_misses": 0
+}

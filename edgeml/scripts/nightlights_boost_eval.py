@@ -74,7 +74,7 @@ def refresh_demos():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--split", choices=["dev", "test", "test2", "test3"])
+    group.add_argument("--split", choices=["dev", "test", "test2", "test3", "test4"])
     group.add_argument("--refresh-demos", action="store_true")
     parser.add_argument("--version", default="v2")
     parser.add_argument("--tier", choices=["easy", "hard"], default="hard")

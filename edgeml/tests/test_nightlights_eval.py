@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import runpy
 from pathlib import Path
 
 import pytest
@@ -56,3 +57,33 @@ def test_boost_evaluation_versioned_dump(tmp_path, monkeypatch):
     assert output["metrics"]["with_gate"]["all"]["contacts"] == 0
     assert output["observations"] == "data/nightlights/reports/easy_dev_baseline.json"
     assert legacy.read_text() == "unchanged"
+
+
+def test_dark_summary_uses_saved_observations(tmp_path, monkeypatch):
+    scripts = Path(__file__).resolve().parents[1]/'scripts'
+    monkeypatch.syspath_prepend(str(scripts))
+    module = runpy.run_path(str(scripts/'nightlights_dark_eval.py'))
+    path = tmp_path/'observations.json'
+    summarize = module['summarize_observations']
+    with pytest.raises(FileNotFoundError):
+        summarize(path)
+    path.write_text(json.dumps(dict(contacts=[])))
+    assert summarize(path)['lit_night_contacts'] == 0
+    rows = []
+    for seed, night, rule, lights, detected_night, flagged in [
+            (1, True, 'nuc', [{}], True, True),
+            (2, True, 'nuc', [{}], True, False),
+            (3, True, 'nuc', [{}], False, False),
+            (4, False, None, [], False, False),
+            (5, True, None, [], True, True),
+            (6, True, 'nuc', [dict(occluded=True)], True, True)]:
+        rows.append(dict(truth=dict(seed=seed, night=night, rule_id=rule, lights=lights),
+                         result=dict(night=detected_night, dark_contact=dict(flagged=flagged))))
+    path.write_text(json.dumps(dict(contacts=rows)))
+    result = summarize(path)
+    assert result['lit_night_contacts'] == 3
+    assert result['false_dark_contacts'] == 1 and result['false_dark_seeds'] == [1]
+    assert result['night_gate_misses'] == 1
+    path.write_text('{}')
+    with pytest.raises(KeyError):
+        summarize(path)
