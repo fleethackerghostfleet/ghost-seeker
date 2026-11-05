@@ -176,6 +176,13 @@ func TestPolicyInfoAndLayeredDirectiveEMCON(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad mode status=%d body=%s", rec.Code, rec.Body.String())
 	}
+
+	rec = httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/emcon",
+		strings.NewReader(`{"mode":"NORMAL","padding":"`+strings.Repeat("x", 5<<10)+`"}`)))
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "invalid request body\n" {
+		t.Fatalf("oversized EMCON body status=%d body=%q", rec.Code, rec.Body.String())
+	}
 }
 
 func readBody(t *testing.T, r *http.Request) []byte {
