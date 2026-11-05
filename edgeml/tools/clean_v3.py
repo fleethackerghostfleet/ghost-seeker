@@ -20,6 +20,7 @@ import hashlib
 import json
 import re
 import shutil
+import tempfile
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -156,8 +157,8 @@ def main():
     missing = {"ir_maritime_vessels", "seadronessee"} - raw_ds.keys()
     if missing:
         ap.error(f"datasets.jsonl rows missing for {sorted(missing)} in --ir-catalog/--sds-catalog")
-    out = a.output.with_name(a.output.name + ".partial")  # renamed to --output only after a complete build
-    shutil.rmtree(out, ignore_errors=True)
+    a.output.parent.mkdir(parents=True, exist_ok=True)  # unique per-run staging dir, renamed to --output when complete
+    out = Path(tempfile.mkdtemp(prefix=a.output.name + ".partial-", dir=a.output.parent))
     shutil.copytree(a.v2, out / "catalog")
     issues, recordings = [], []
     ir_img, ir_ann, ir_groups = clean_ir(a.ir_raw, a.ir_catalog, issues, recordings)
