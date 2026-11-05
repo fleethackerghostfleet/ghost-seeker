@@ -98,6 +98,9 @@ message Pull {
   FormKind form = 2;
   double priority_boost = 3; // added to the item's priority; default large
   string requested_by = 4;
+  // Operator override: send the capture's original bytes as FULL (no
+  // re-encoding) and skip THUMB/CROP. Requires requested_by.
+  bool original = 5;
 }
 
 message LabelOverride {

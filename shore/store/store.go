@@ -168,12 +168,13 @@ func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int6
 	var complete int
 	var hash string
 	err := s.db.QueryRowContext(ctx, `SELECT received, complete, hash FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash)
-	if err == nil && complete == 1 {
-		if c.ContentHash == "" || c.ContentHash == hash {
-			return c.TotalBytes, true, nil
-		}
-		// The edge regenerated this form (e.g. FACT after a label override):
-		// start over with the new content.
+	if err == nil && complete == 1 && (c.ContentHash == "" || c.ContentHash == hash) {
+		return c.TotalBytes, true, nil
+	}
+	if err == nil && c.ContentHash != hash && c.ContentHash != "" && (complete == 1 || hash != "") {
+		// The edge regenerated this form (FACT after a label override, FULL
+		// after an original pull), possibly mid-transfer: start over with
+		// the new content.
 		received, complete = 0, 0
 		_ = os.Remove(path)
 	}
