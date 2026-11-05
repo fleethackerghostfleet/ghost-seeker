@@ -15,7 +15,8 @@ shore gets an image of 10/10 dev objects vs 2/10 naive.
 
 Prerequisites: **Docker Desktop** (Apple silicon or Intel; ~6 GB free for the images) and,
 once, **gcloud** signed in as a lab student account to pull the clips and models
-(the bucket is not public). No Go, Python or venv needed.
+(the bucket is not public), plus **Python 3** for dataset discovery/scenario generation.
+No Go or venv needed.
 
 ```sh
 make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (gcloud)
@@ -43,7 +44,7 @@ link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, product
 ```sh
 # toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
 make build
-make demo-clips        # -> scenarios/ghostfleet_demo/frames/<clip>/{img1,gt,seqinfo.ini}  (gitignored)
+make demo-clips        # sync eval clips + all bucket frames/*_frames (gcloud + python3; gitignored)
 make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB) + mobileclip-s1/unknown_calib.npz (H: dev-fitted unknownness calibration + kNN bank, auto-loaded by the sidecar)
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
 pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
@@ -51,8 +52,29 @@ pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download
 
 Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/ghost_fleet_5fps/`):
 `Submarine_surfacing` (372 f, 2 GT objects), `Cruise_ship_Mediterranean_sunset_off_Italy`
-(153 f, 3), `Spotted_A_Submarine` (745 f, 1). Change `CLIPS=` in `download.sh` / the
-`sets` in `scenarios/ghostfleet_demo/scenario.json` to use others.
+(153 f, 3), `Spotted_A_Submarine` (745 f, 1). `CLIPS` (space-separated) and
+`BUCKET` still override the eval clips and their GCS prefix.
+
+`make demo-clips` also discovers every `frames/*_frames/` prefix in that bucket
+and syncs the flat JPEG directories into `frames/bucket/`. Every run checks
+content checksums and updates changed/new files (and removes deleted local files
+within each synced set). No bucket data is modified. The resulting on-disk image
+sets are written to gitignored `scenario.generated.json`, preserving the other
+fields of `scenario.json`. `make compose-demo` and `make demo-edge` select this
+generated scenario, falling back to the committed scenario when it does not exist.
+Restart the edge after another sync to load newly added sets. For direct Compose,
+set `GS_DEMO_SCENARIO=scenario.generated.json`; without it the committed default is used.
+The headless `make demo` comparison fetches only the eval clips (no bucket frame
+discovery/sync) and keeps the committed three-clip scenario and its GT data.
+
+Optional environment controls (apply when running `make demo-clips`):
+- `INCLUDE_BUCKET_FRAMES=0`: eval clips only.
+- `FRAME_SETS_INCLUDE='*sailboat*,*SMD*'` / `FRAME_SETS_EXCLUDE='*test*'`:
+  comma-separated, case-sensitive glob filters on full directory names (including
+  `_frames`). Excluded cached sets are not added to the generated scenario.
+- `FRAMES_BUCKET=gs://another-bucket`: override the bucket root for discovery.
+- `DEST`: override the local frames directory; keep it inside the mounted
+  `scenarios/ghostfleet_demo/` directory for Docker replay.
 
 ## 1. Headless comparison (`make demo`)
 
