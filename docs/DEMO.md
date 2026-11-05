@@ -122,6 +122,11 @@ set `GS_DEMO_SCENARIO=scenario.generated.json`; without it `scenario.json` is us
 The headless `make demo` comparison fetches only the eval clips (no bucket frame
 discovery/sync) and keeps the committed three-clip scenario and its GT data.
 
+The visual simulator and live shaper use the demo's automatic normal rate model.
+`-sim-link-bps=N` pins simulated uploads; legacy `-link-bps=N` still pins the live
+shaper and aliases the simulator override when `-sim-link-bps` is not set to a
+fixed rate. Zero represents an outage; `-1` selects the automatic model.
+
 Optional environment controls (apply when running `make demo-clips`):
 - `INCLUDE_BUCKET_FRAMES=0`: eval clips only.
 - `INCLUDE_OCEAN_SCENES=1`: opt into screened ocean scenes (use with `make demo-clips`).

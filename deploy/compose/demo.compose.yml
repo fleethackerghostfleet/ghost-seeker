@@ -68,9 +68,7 @@ services:
     image: ghost-seeker/operator:0.1.0
     command: ["-addr", ":8090", "-shore", "http://shore:8080", "-edge", "http://edge:8081", "-link-listen", ":18080",
               "-dev-token-file", "/secrets/operator.token"]
-    # 127.0.0.1 only: with -dev-trust-peers a browser on this Mac is signed in
-    # automatically (its connection reaches the container from Docker's bridge
-    # gateway, not loopback); nothing else can reach the port.
+    # Loopback publication; relaxed presenter authentication requires the local override.
     ports: ["127.0.0.1:8090:8090"]
     volumes: ["demo-secrets:/secrets:ro"]
     depends_on:
@@ -81,7 +79,7 @@ services:
     build: { <<: *go-build, target: edge }
     image: ghost-seeker/edge:0.1.0
     command: ["-id", "edge-1", "-data", "/data/edge", "-listen", ":8081", "-ui", "/ui",
-              "-shore", "http://ui:18080", "-scenario", "/demo/${GS_DEMO_SCENARIO:-live.json}", "-period", "200ms",
+              "-shore", "http://ui:18080", "-scenario", "/demo/${GS_DEMO_SCENARIO:-scenario.json}", "-period", "200ms",
               "-infer", "http://sidecar:9090", "-dedup", "sightings", "-prioritizer", "edgeml",
               "-dev-token-file", "/secrets/operator.token", "-unit-token-file", "/secrets/edge-1.jwt"]
     environment:

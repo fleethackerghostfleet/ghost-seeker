@@ -83,12 +83,10 @@ func main() {
 	oids := flag.String("piv-policy-oids", os.Getenv("GS_PIV_POLICY_OIDS"), "comma-separated policy OIDs")
 	users := flag.String("piv-users", os.Getenv("GS_PIV_USERS"), "PIV user role mapping")
 	flag.Parse()
-	if *linkBps < -1 {
-		log.Fatal("-link-bps must be >= -1")
+	if *linkBps < -1 || *simLinkBps < -1 {
+		log.Fatal("-link-bps and -sim-link-bps must be >= -1")
 	}
-	if *simLinkBps == -1 && *linkBps >= 0 {
-		*simLinkBps = *linkBps
-	}
+	*simLinkBps = simulationLinkRate(*simLinkBps, *linkBps)
 	if *captureEvery <= 0 {
 		log.Fatal("-capture-every must be >0")
 	}
@@ -377,6 +375,20 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 	}
 }
 
+func simulationLinkRate(rate, legacy int64) int64 {
+	if rate == -1 && legacy >= 0 {
+		return legacy
+	}
+	return rate
+}
+
+func liveLinkShaper(target string, rate int64) *shaper.Shaper {
+	if rate >= 0 {
+		return shaper.New(target, rate)
+	}
+	return shaper.NewNormal(target)
+}
+
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through, with an automatically varying normal rate.
@@ -389,16 +401,17 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 		if err != nil {
 			log.Fatalf("-shore: %v", err)
 		}
-		sh := shaper.NewNormal(target)
-		if linkBps >= 0 {
-			sh = shaper.New(target, linkBps)
-		}
+		sh := liveLinkShaper(target, linkBps)
 		go func() {
 			if err := sh.ListenAndServe(ctx, linkListen); err != nil {
 				log.Fatalf("shaper: %v", err)
 			}
 		}()
-		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+		if linkBps >= 0 {
+			log.Printf("link shaper on %s -> %s: fixed %d bits/s", linkListen, target, linkBps)
+		} else {
+			log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+		}
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID).WithLinkOverride(demoLinkControl)
