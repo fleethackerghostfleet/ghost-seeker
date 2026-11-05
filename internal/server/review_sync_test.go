@@ -129,3 +129,27 @@ func TestReviewSyncValidationAndCap(t *testing.T) {
 		t.Fatal("not enough catalog classes to exercise cap")
 	}
 }
+
+func TestReviewSyncKeepsDistinctTierChanges(t *testing.T) {
+	s := New(store.New(10))
+	propose := func(from, to int) reviewProposal {
+		r := request(s, "POST", "/api/review-sync/proposals", map[string]any{"cls": "bird", "dir": "lower", "n": 3, "of": 3, "from": from, "to": to, "reviewer": "A"})
+		if r.Code != 201 && r.Code != 200 {
+			t.Fatal(r.Code, r.Body.String())
+		}
+		var result struct {
+			Proposal reviewProposal `json:"proposal"`
+		}
+		if err := json.Unmarshal(r.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result.Proposal
+	}
+	a, b, again := propose(1, 2), propose(3, 4), propose(1, 2)
+	if a.ID == b.ID || b.From != 3 || b.To != 4 {
+		t.Fatalf("distinct tier change merged: %+v %+v", a, b)
+	}
+	if again.ID != a.ID {
+		t.Fatalf("same tier change not deduplicated: %+v %+v", a, again)
+	}
+}
