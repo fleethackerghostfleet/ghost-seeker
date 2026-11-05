@@ -124,8 +124,7 @@ variables.
 | `-auto-cdr` | — | `15s` | Average watch-officer escalation interval; `0` disables |
 | `-shore` | — | empty | Enable live shore mode with this shore URL |
 | `-edge` | — | `http://localhost:8081` | Optional edge URL used in live mode |
-| `-link-listen` | — | `:18080` | Link shaper listener; empty disables shaping |
-| `-link-bps` | — | `2000000` | Initial shaped link rate in bits/s |
+| `-link-listen` | — | `:18080` | Automatic normal-distribution link shaper: 0–50 Mbps, mean 25 Mbps, stddev 8.33 Mbps, resampled every 5 s; empty disables shaping |
 | `-poll` | — | `1s` | Live shore polling interval |
 | `-operator-token` | `GS_OPERATOR_TOKEN` | unset | Opaque bearer token for the shore/edge ConsoleService transport gate |
 | `-operator-token-file` | `GS_OPERATOR_TOKEN_FILE` | unset | Read the opaque token from a file; takes precedence over the literal token |

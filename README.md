@@ -398,8 +398,12 @@ received form (crop > thumb > full, fact text otherwise) and a chip per form
 
 The process also hosts the ship→shore link: `internal/shaper` listens on `-link-listen`
 (default `:18080`) and forwards to shore with a token bucket, so start the edge with
-`-shore http://localhost:18080` and the 0 / 9.6 kbps / 64 kbps / 256 kbps / 2 Mbps buttons
-shape the real traffic. Pass `-link-listen ""` when the link is shaped elsewhere (compose +
+`-shore http://localhost:18080`. Its rate varies automatically every five seconds using a
+normal distribution (mean 25 Mbps, standard deviation 8.33 Mbps), clipped to
+0 kbps–50 Mbps. The feed strip shows the current applied rate and the ship's measured
+estimate; there are no manual speed buttons or rate-setting API. A zero sample drops
+the link until the next nonzero sample. The former `-link-bps` flag is removed.
+Pass `-link-listen ""` when the link is shaped elsewhere (compose +
 Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for the demo.
 
 ## Status / not done

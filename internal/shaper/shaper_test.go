@@ -3,11 +3,111 @@ package shaper
 import (
 	"context"
 	"io"
+	"math"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
+
+func TestNormalDistributionBounds(t *testing.T) {
+	s := NewNormal("unused")
+	d := s.Distribution()
+	if d.MinBps != 0 || d.MaxBps != 50_000_000 || d.MeanBps != 25_000_000 || d.StdDevBps != 50_000_000.0/6 || d.IntervalMS != 5000 {
+		t.Fatalf("unexpected distribution: %+v", d)
+	}
+	if s.Bps() < d.MinBps || s.Bps() > d.MaxBps {
+		t.Fatalf("initial rate outside bounds: %d", s.Bps())
+	}
+	for _, tc := range []struct {
+		z    float64
+		want int64
+	}{{-20, 0}, {-3, 0}, {0, 25_000_000}, {3, 50_000_000}, {20, 50_000_000}} {
+		if got := d.rate(tc.z); got != tc.want {
+			t.Errorf("rate(%v) = %d, want %d", tc.z, got, tc.want)
+		}
+	}
+	d.MaxBps = 1
+	if s.Distribution().MaxBps != 50_000_000 {
+		t.Fatal("caller mutated the active distribution")
+	}
+	if New("unused", 64_000).Distribution() != nil {
+		t.Fatal("fixed shaper must not advertise an automatic distribution")
+	}
+}
+
+func TestNormalDistributionShape(t *testing.T) {
+	d := NewNormal("unused").Distribution()
+	rng := rand.New(rand.NewPCG(42, 7))
+	const n = 100_000
+	var sum, squared float64
+	var low, center, high int
+	for i := 0; i < n; i++ {
+		rate := d.rate(rng.NormFloat64())
+		if rate < d.MinBps || rate > d.MaxBps {
+			t.Fatalf("sample outside bounds: %d", rate)
+		}
+		x := float64(rate)
+		sum += x
+		squared += x * x
+		switch {
+		case rate < 10_000_000:
+			low++
+		case rate >= 20_000_000 && rate <= 30_000_000:
+			center++
+		case rate > 40_000_000:
+			high++
+		}
+	}
+	mean := sum / n
+	stddev := math.Sqrt(squared/n - mean*mean)
+	if math.Abs(mean-d.MeanBps) > 100_000 || math.Abs(stddev-d.StdDevBps) > 150_000 || center <= low+high {
+		t.Fatalf("not the expected bell curve: mean %.0f, stddev %.0f, bins %d/%d/%d", mean, stddev, low, center, high)
+	}
+}
+
+func TestNormalRateUpdatesAndCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := NewNormal("unused")
+		s.SetBps(1)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		zs := []float64{-4, 0, 4}
+		n := 0
+		go s.varyRate(ctx, func() float64 {
+			z := zs[n]
+			n++
+			return z
+		})
+		synctest.Wait()
+		time.Sleep(4 * time.Second)
+		synctest.Wait()
+		if s.Bps() != 1 {
+			t.Fatal("rate changed before the five-second interval")
+		}
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if s.Bps() != 0 {
+			t.Fatalf("expected clipped outage, got %d", s.Bps())
+		}
+		for _, want := range []int64{25_000_000, 50_000_000} {
+			time.Sleep(5 * time.Second)
+			synctest.Wait()
+			if s.Bps() != want {
+				t.Fatalf("rate = %d, want %d", s.Bps(), want)
+			}
+		}
+		cancel()
+		synctest.Wait()
+		time.Sleep(15 * time.Second)
+		synctest.Wait()
+		if n != 3 || s.Bps() != 50_000_000 {
+			t.Fatal("automatic updates continued after cancellation")
+		}
+	})
+}
 
 func TestShaperRateAndDown(t *testing.T) {
 	up, err := net.Listen("tcp", "127.0.0.1:0")
