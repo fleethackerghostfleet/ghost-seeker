@@ -229,6 +229,7 @@ func TestHTTP(t *testing.T) {
 	} {
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Host = "localhost"
 		handler.ServeHTTP(rr, req)
 		if rr.Code != tc.code {
 			t.Fatalf("%s %s: %d %s", tc.method, tc.path, rr.Code, rr.Body.String())
@@ -245,6 +246,7 @@ func TestHTTP(t *testing.T) {
 		}
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/undo", strings.NewReader("{}"))
+	req.Host = "localhost"
 	req.Header.Set("Origin", "http://evil.invalid")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -253,6 +255,41 @@ func TestHTTP(t *testing.T) {
 	}
 	if s.State().Summary.Graded != 0 {
 		t.Fatal("undo did not clear")
+	}
+}
+func TestAllowedHosts(t *testing.T) {
+	dir, logs := fixture(t)
+	s, err := OpenSession(dir, logs, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	handler := s.Handler("preview.example", "second.example")
+	for _, tc := range []struct {
+		host string
+		code int
+	}{
+		{"localhost", 200}, {"localhost:8095", 200}, {"127.0.0.1:8095", 200}, {"[::1]:8095", 200}, {"::1", 200},
+		{"preview.example", 200}, {"second.example:8095", 200}, {"attacker.example", 403},
+		{"localhost.attacker.example", 403}, {"127.0.0.2", 403}, {"", 403}, {"localhost:8095:80", 403},
+	} {
+		for _, path := range []string{"/", "/api/state", "/images/a"} {
+			req := httptest.NewRequest("GET", path, nil)
+			req.Host = tc.host
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != tc.code {
+				t.Fatalf("Host=%q path=%s: %d", tc.host, path, rr.Code)
+			}
+		}
+	}
+	req := httptest.NewRequest("POST", "/api/grade", strings.NewReader(`{"id":"a","tier":1}`))
+	req.Host = "attacker.example"
+	req.Header.Set("Origin", "http://attacker.example")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != 403 || s.State().Summary.Graded != 0 {
+		t.Fatal("same-origin attacker Host accepted")
 	}
 }
 func TestBadInputs(t *testing.T) {
