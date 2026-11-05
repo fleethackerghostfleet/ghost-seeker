@@ -11,6 +11,8 @@ button,.btn,.policy-badge,.banner{white-space:normal;overflow-wrap:anywhere}
 header{height:auto;min-height:3.25rem;flex-wrap:wrap;overflow:visible}
 header nav{min-height:2.75rem;height:auto}
 header nav a{flex:none}
+header .view-tabs{height:auto;align-self:stretch;max-width:100%}
+header .view-tabs nav{flex-wrap:nowrap}
 .logo,.hstats,.user,.kpis{max-width:100%}
 .hstats,.kpis{flex-wrap:wrap}
 .dirbar{min-width:0}

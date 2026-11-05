@@ -808,6 +808,13 @@ test('text layout keeps enlarged image labels in frame without collisions and ha
  frame.getBoundingClientRect=()=>({width:0,height:0});
  assert.doesNotThrow(()=>context.window.gsTextLayout());
 });
+test('scalable header tabs use intrinsic height rather than inheriting the wrapped header height',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'static/text-size.css'),'utf8');
+ assert.match(html,/href="\/style\.css"[\s\S]*href="\/text-size\.css"/);
+ assert.match(css,/header\s*\{[^}]*height:auto;[^}]*flex-wrap:wrap;[^}]*overflow:visible/);
+ assert.match(css,/header \.view-tabs\s*\{[^}]*height:auto;[^}]*align-self:stretch;[^}]*max-width:100%/);
+ assert.match(css,/header \.view-tabs nav\s*\{[^}]*flex-wrap:nowrap/);
+});
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();
  vm.runInContext(`
