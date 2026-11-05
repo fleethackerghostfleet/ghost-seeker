@@ -12,6 +12,15 @@
            one merges two contacts.
 * Key frame: q = score × sqrt(area) × laplacian_var(crop) × border_margin (normalised to [0,1]); kept so the
            `forms[]` (fact/crop/thumb/full, exact JPEG byte sizes) can be pre-encoded for the selection step (§5b).
+* Tentative reports (`tentative_after_s`): a pending object seen only in `state='tentative'` tracks (the adapter's
+           pass-through of unmatched detections, see boxmot_adapter) or fewer than `min_hits` times is normally never
+           reported. When set, such an object whose best score is >= `tentative_min_score` is reported as `open` with
+           `tentative=true` once it is `tentative_after_s` old; a later confirmation emits an `update`
+           (reason=confirmed, tentative=false). A second detection within the gap confirms it immediately.
+* Per-size gates: `relink_max_diag` caps the re-link distance at that many box diagonals per second of gap, so a
+           small boat appearing next to a just-lost neighbour is not relinked into its sighting (the frame-relative
+           `relink_speed_frac` gate is ~100 px/s at 1080p, larger than a dinghy) while a large ship re-acquired after a
+           long gap still is.
 * Optional own-ship mask (`static_mask_s`): a track that sits on the same pixels for that long marks a static region;
            new tracks inside it are not reported (railings, masts, deck gear on an onboard camera).
 """
@@ -27,6 +36,7 @@ import numpy as np
 
 from ..types import Box, Form, Sighting, Track, box_iou
 from .embed import ColorHistEmbedder, crop
+from .realness import trajectory_realness
 
 
 @dataclass
@@ -46,7 +56,11 @@ class AggregatorParams:
     min_update_interval_s: float = 3.0
     max_updates: int = 6                 # cap on update events per sighting (open/close not counted)
     # value
-    unknown_bonus_age_s: float = 2.0     # unknownness counts in `value` only after this track age
+    unknown_bonus_age_s: float = 2.0     # minimum age for unknown bonus and trajectory realness
+    gate_unknown_bonus_on_realness: bool = False
+    unknown_min_hits: int = 3
+    unknown_threshold: float = 0.5
+    realness_threshold: float = 0.5
     # camera / size geometry
     hfov_deg: float = 90.0
     size_px: tuple = (24.0, 64.0, 160.0)  # sqrt(area) thresholds: tiny | small | medium | large
@@ -60,6 +74,9 @@ class AggregatorParams:
     full_max_side: int = 1280
     jpeg_q: dict = field(default_factory=lambda: {"crop_lo": 50, "crop_hi": 80, "thumb": 75, "full": 80})
     emit_closed_as_update: bool = True   # re-acquired after a close -> `update` with reason=relink
+    tentative_after_s: Optional[float] = None  # report a single-detection object as tentative after this age (None = never)
+    tentative_min_score: float = 0.5     # ... if its best detection score is at least this
+    relink_max_diag: Optional[float] = None    # cap re-link distance at this many box diagonals per second of gap (None = off)
     static_mask_s: Optional[float] = None  # own-ship mask: suppress tracks static for this long (None = off)
 
 
@@ -82,6 +99,8 @@ class _State:
     traj: list = field(default_factory=list)   # (frame_idx, t_s, box, score)
     velocity: tuple = (0.0, 0.0)
     first_box: Optional[Box] = None
+    conf_hits: int = 0                  # observations from confirmed (tracker-emitted) tracks
+    last_state: str = "confirmed"       # state of the last observed track
 
 
 def laplacian_var(img: np.ndarray) -> float:
@@ -150,8 +169,9 @@ class SightingAggregator:
         seen: set[str] = set()
 
         # pass 1: tracks already mapped to a sighting; pass 2: new track ids (re-link / merge / open)
-        known = [tr for tr in tracks if tr.track_id in self.track_to_sid]
-        fresh = [tr for tr in tracks if tr.track_id not in self.track_to_sid]
+        # best score first within each group, so when two live tracks land on one sighting the better one is observed
+        known = sorted((tr for tr in tracks if tr.track_id in self.track_to_sid), key=lambda tr: -tr.score)
+        fresh = sorted((tr for tr in tracks if tr.track_id not in self.track_to_sid), key=lambda tr: -tr.score)
         for tr in known + fresh:
             sid = self.track_to_sid.get(tr.track_id)
             if sid is None:
@@ -175,7 +195,7 @@ class SightingAggregator:
                         seen.add(sid)
                         continue
             st = self.states[sid]
-            if sid in seen and tr.score <= st.s.best_score:   # two live tracks on one sighting: keep the better one
+            if sid in seen:        # two live tracks on one sighting this frame: one observation per frame
                 continue
             self._observe(st, tr, image_bgr, frame_idx, t_s)
             seen.add(sid)
@@ -183,13 +203,21 @@ class SightingAggregator:
                 if self.p.static_mask_s and self._is_static(st, t_s):
                     st.status = "masked"
                     self._static.append((list(st.s.box), t_s))
-                elif st.hits >= self.p.min_hits and (t_s - st.s.first_t_s) >= self.p.min_duration_s:
+                elif self._confirmed(st) and (t_s - st.s.first_t_s) >= self.p.min_duration_s:
                     st.status = "open"
                     out.append(self._report(st, "open", frame_idx, t_s))
+                elif self._tentative_due(st, t_s):
+                    st.status = "open"
+                    st.s.tentative = True
+                    out.append(self._report(st, "open", frame_idx, t_s, reason="tentative"))
             elif st.status == "open":
-                reason = self._material_change(st, t_s)
-                if reason:
-                    out.append(self._report(st, "update", frame_idx, t_s, reason=reason))
+                if st.s.tentative and self._confirmed(st):
+                    st.s.tentative = False
+                    out.append(self._report(st, "update", frame_idx, t_s, reason="confirmed"))
+                else:
+                    reason = self._material_change(st, t_s)
+                    if reason:
+                        out.append(self._report(st, "update", frame_idx, t_s, reason=reason))
 
         # close / expire
         for sid, st in list(self.states.items()):
@@ -199,6 +227,12 @@ class SightingAggregator:
             if st.status == "open" and gone > self.p.close_after_s:
                 st.status = "closed"
                 out.append(self._close(st, frame_idx, t_s))
+            elif st.status == "pending" and self._tentative_due(st, t_s):
+                st.status = "open"
+                st.s.tentative = True
+                out.append(self._report(st, "open", frame_idx, t_s, reason="tentative"))
+            elif st.status == "pending" and self.p.tentative_after_s is not None and gone <= self.p.tentative_after_s:
+                continue        # keep a single detection around until it is due (or confirmed)
             elif st.status in ("pending", "masked") and gone > self.p.close_after_s:
                 self._drop(sid)
             elif st.status == "closed" and gone > max(self.p.relink_gap_s, self.p.close_after_s) * 2:
@@ -294,6 +328,33 @@ class SightingAggregator:
                 return True
         return False
 
+    def _confirmed(self, st: _State) -> bool:
+        """min_hits confirmed (tracker-emitted) observations, or min_hits+1 observations of any kind: two detections of
+        a tentative object are the same evidence a tracker needs to emit a track."""
+        return st.conf_hits >= self.p.min_hits or st.hits >= max(2, self.p.min_hits + 1)
+
+    def _tentative_due(self, st: _State, t_s: float) -> bool:
+        return (self.p.tentative_after_s is not None and st.s.best_score >= self.p.tentative_min_score
+                and (t_s - st.s.first_t_s) >= self.p.tentative_after_s and not self._near_known(st, t_s))
+
+    def _near_known(self, st: _State, t_s: float) -> bool:
+        """A single detection within the (frame-relative, uncapped) re-link gate of a sighting that was reported recently
+        is most likely a flicker of that object (panning camera, missed frames): never report it as a new tentative."""
+        W = self._W()
+        b = st.s.box
+        cx, cy = b[0] + b[2] / 2, b[1] + b[3] / 2
+        for sid, other in self.states.items():
+            if other is st or other.status not in ("open", "closed"):
+                continue
+            gap = abs(st.s.first_t_s - other.last_seen_t)
+            if gap > self.p.relink_gap_s:
+                continue
+            ob = other.s.box
+            ocx, ocy = ob[0] + ob[2] / 2 + other.velocity[0] * gap, ob[1] + ob[3] / 2 + other.velocity[1] * gap
+            if math.hypot(cx - ocx, cy - ocy) <= self.p.relink_speed_frac * W * gap + 1.5 * math.hypot(ob[2], ob[3]):
+                return True
+        return False
+
     def _is_static(self, st: _State, t_s: float) -> bool:
         return (st.first_box is not None and t_s - st.s.first_t_s >= self.p.static_mask_s
                 and box_iou(st.first_box, st.s.box) > 0.8)
@@ -306,9 +367,14 @@ class SightingAggregator:
         """A new track that sits on top of a sighting seen this frame (tracker spawned a duplicate id) joins it."""
         best, best_iou = None, self.p.merge_iou
         for sid, st in self.states.items():
-            if st.status in ("open", "pending") and st.last_seen_frame == frame_idx:
+            if st.status not in ("open", "pending"):
+                continue
+            same_frame = st.last_seen_frame == frame_idx
+            # a tracker id taking over an object we so far only saw as tentative detections (last 2 frames)
+            handoff = st.last_state == "tentative" and tr.state == "confirmed" and 0 < frame_idx - st.last_seen_frame <= 2
+            if same_frame or handoff:
                 i = box_iou(tr.box, st.s.box)
-                if i >= best_iou:
+                if i >= best_iou or (handoff and i >= self.p.merge_iou * 0.6):
                     best, best_iou = sid, i
         return best
 
@@ -353,6 +419,8 @@ class SightingAggregator:
             ocx, ocy = ob[0] + ob[2] / 2 + st.velocity[0] * gap, ob[1] + ob[3] / 2 + st.velocity[1] * gap
             diag = math.hypot(ob[2], ob[3])
             allowed = self.p.relink_speed_frac * W * gap + 1.5 * diag
+            if self.p.relink_max_diag is not None:        # per-size cap: diagonals per second of gap (at least 1 s)
+                allowed = min(allowed, self.p.relink_max_diag * diag * max(1.0, gap))
             dist = math.hypot(cx - ocx, cy - ocy)
             if dist > allowed:
                 continue
@@ -378,6 +446,9 @@ class SightingAggregator:
             vy = ((tr.box[1] + tr.box[3] / 2) - (s.box[1] + s.box[3] / 2)) / dt
             st.velocity = (0.5 * st.velocity[0] + 0.5 * vx, 0.5 * st.velocity[1] + 0.5 * vy)
         st.hits += 1
+        if tr.state != "tentative":
+            st.conf_hits += 1
+        st.last_state = tr.state
         st.last_seen_t, st.last_seen_frame = t_s, frame_idx
         s.last_t_s, s.last_frame_idx, s.box, s.n_frames = t_s, frame_idx, list(tr.box), s.n_frames + 1
         s.frames.append(frame_idx)
@@ -405,9 +476,10 @@ class SightingAggregator:
                 st.emb = self.embedder.embed_crops([c])[0]
 
     def _snapshot(self, st: _State) -> dict:
+        self._refresh_realness(st)
         s = st.s
         return {"label": s.label, "score": s.best_score, "bearing": s.bearing_deg, "size_class": s.size_class,
-                "aspect": s.aspect, "closing": s.closing, "key_q": s.key_q}
+                "aspect": s.aspect, "closing": s.closing, "key_q": s.key_q, "unknown_real": s.unknown_real}
 
     def _material_change(self, st: _State, t_s: float) -> Optional[str]:
         if t_s - st.last_report_t < self.p.min_update_interval_s or st.n_updates >= self.p.max_updates:
@@ -415,6 +487,8 @@ class SightingAggregator:
         now, last = self._snapshot(st), st.last_report
         if not last:
             return None
+        if self.p.gate_unknown_bonus_on_realness and now["unknown_real"] != last.get("unknown_real", False):
+            return "unknown_real"
         if now["label"] != last["label"]:
             return "label_flip"
         if now["score"] - last["score"] > self.p.score_jump:
@@ -431,13 +505,24 @@ class SightingAggregator:
             return "better_keyframe"
         return None
 
+    def _refresh_realness(self, st: _State) -> None:
+        st.s.realness = trajectory_realness(st.traj, self.p.unknown_min_hits, self.p.unknown_bonus_age_s)
+        st.s.unknown_real = (st.s.unknownness >= self.p.unknown_threshold
+                             and st.s.realness > 0 and st.s.realness >= self.p.realness_threshold)
+
     def _value(self, st: _State) -> float:
+        self._refresh_realness(st)
         s = st.s
         size = min(1.0, math.sqrt(max(1.0, s.best_box[2] * s.best_box[3])) / (0.15 * self._W()))
         age = s.last_t_s - s.first_t_s
-        unk = s.unknownness if age >= self.p.unknown_bonus_age_s else 0.0
+        if self.p.gate_unknown_bonus_on_realness:
+            unk = s.unknownness if s.unknown_real else 0.0
+        else:
+            unk = s.unknownness if age >= self.p.unknown_bonus_age_s else 0.0
         closing = min(1.0, max(0.0, self._growth(st) / 0.3))
         v = 0.5 * s.best_score + 0.2 * unk + 0.2 * size + 0.1 * closing
+        if self.p.gate_unknown_bonus_on_realness and s.unknown_real:
+            v = max(v, 0.3 + 0.2 * size)  # at least the confidence contribution of a 0.6 known contact
         return float(min(1.0, max(0.0, v)))
 
     def _forms(self, st: _State, fact: dict) -> list[Form]:
@@ -472,4 +557,5 @@ class SightingAggregator:
         return ev
 
     def _close(self, st: _State, frame_idx: int, t_s: float) -> dict:
+        self._refresh_realness(st)
         return st.s.event("close", t_s, frame_idx)

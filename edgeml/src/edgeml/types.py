@@ -69,6 +69,8 @@ class Sighting:
     label_scores: dict = field(default_factory=dict)
     subtype: Optional[str] = None
     unknownness: float = 0.0
+    realness: float = 0.0
+    unknown_real: bool = False
     frames: list[int] = field(default_factory=list)  # frames where the object was tracked
     # lookout-report fields (literature.md §7; optional in CONTRACTS)
     bearing_deg: Optional[float] = None   # relative bearing from the camera axis (box centre x, camera HFOV)
@@ -76,6 +78,7 @@ class Sighting:
     aspect: Optional[str] = None          # bow_stern | quarter | beam (box w/h)
     closing: Optional[str] = None         # closing | opening | steady (sign of box-area growth)
     key_q: float = 0.0                    # key-frame quality score of best_frame_idx
+    tentative: bool = False               # reported from a single (or unconfirmed) detection; cleared on confirmation
 
     def event(self, kind: str, t_s: float, frame_idx: int, value: Optional[float] = None,
               forms: Optional[list[Form]] = None, reason: Optional[str] = None) -> dict:
@@ -89,6 +92,8 @@ class Sighting:
             "label_scores": {k: float(v) for k, v in self.label_scores.items()},
             "subtype": self.subtype,
             "unknownness": float(self.unknownness),
+            "realness": float(self.realness),
+            "unknown_real": bool(self.unknown_real),
             "box": [float(v) for v in self.box],
             "best_frame_idx": int(self.best_frame_idx),
             "best_box": [float(v) for v in self.best_box],
@@ -102,6 +107,7 @@ class Sighting:
             "aspect": self.aspect,
             "closing": self.closing,
             "key_q": float(self.key_q),
+            "tentative": bool(self.tentative),
         }
         if value is not None:
             ev["value"] = float(value)

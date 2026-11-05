@@ -36,6 +36,23 @@ SMD_TO_SUBTYPE = {"Vessel/ship": None, "Boat": None, "Speed boat": "speedboat", 
                   "Ferry": "passenger ship", "Kayak": None, "Flying bird/plane": "aircraft", "Other": None}
 
 
+CALIB_FILE = "unknown_calib.npz"
+
+
+def load_classifier(embedder, embed_dir=None, calib=None, **kw) -> "ZeroShotClassifier":
+    """ZeroShotClassifier that auto-loads ``<embed_dir>/unknown_calib.npz`` (dev-fitted sim_ref + kNN bank) when present."""
+    from pathlib import Path
+
+    clf = ZeroShotClassifier(embedder, **kw)
+    p = Path(calib) if calib else (Path(embed_dir).expanduser() / CALIB_FILE if embed_dir else None)
+    if p is not None and p.exists():
+        clf.calibration_meta = clf.load_calibration(p)
+        clf.calibration_path = str(p)
+    else:
+        clf.calibration_meta, clf.calibration_path = {}, None
+    return clf
+
+
 class ZeroShotClassifier:
     def __init__(self, embedder, subtypes: dict[str, list[str]] = SUBTYPES, unknown_prompts: list[str] = UNKNOWN_PROMPTS,
                  sim_ref: float = 0.30, sim_width: float = 0.10, image_prototypes: dict[str, np.ndarray] | None = None):
@@ -57,6 +74,30 @@ class ZeroShotClassifier:
         self.sim_ref, self.sim_width = sim_ref, sim_width
         self.bank: np.ndarray | None = None
         self.knn_k, self.knn_ref, self.knn_width = 5, 0.0, 1.0
+        self.w_knn = 0.5                                         # kNN weight when a bank is present
+
+    # -- dev-fitted calibration artifact (sim_ref/sim_width + kNN bank), shipped next to the MobileCLIP export -------
+    def save_calibration(self, path, meta: dict | None = None) -> None:
+        """Write ``unknown_calib.npz``: scalars + the kNN bank (dev known crops only). ``meta`` is stored as JSON."""
+        import json
+
+        np.savez(str(path), sim_ref=self.sim_ref, sim_width=self.sim_width, scale=self.scale, w_knn=self.w_knn,
+                 knn_k=self.knn_k, knn_ref=self.knn_ref, knn_width=self.knn_width,
+                 bank=self.bank if self.bank is not None else np.zeros((0, self.prototypes.shape[1]), np.float32),
+                 meta=json.dumps(meta or {}))
+
+    def load_calibration(self, path) -> dict:
+        import json
+
+        z = np.load(str(path), allow_pickle=False)
+        self.sim_ref, self.sim_width = float(z["sim_ref"]), float(z["sim_width"])
+        self.scale, self.w_knn = float(z["scale"]), float(z["w_knn"])
+        self.knn_k, self.knn_ref, self.knn_width = int(z["knn_k"]), float(z["knn_ref"]), float(z["knn_width"])
+        bank = z["bank"].astype(np.float32)
+        if bank.shape[1] != self.prototypes.shape[1]:
+            raise ValueError(f"calibration bank dim {bank.shape[1]} != embedding dim {self.prototypes.shape[1]}")
+        self.bank = bank if len(bank) else None
+        return json.loads(str(z["meta"]))
 
     def calibrate(self, known_feats: np.ndarray) -> dict:
         """Set ``sim_ref``/``sim_width`` from the max-cosine distribution of known (dev) crops: p10 and (p50-p10)*2."""
@@ -96,7 +137,7 @@ class ZeroShotClassifier:
             max_sim = float(sims[i, k])
             dist_term = float(np.clip((self.sim_ref - max_sim) / self.sim_width, 0, 1))
             mcm = 0.5 * (1.0 - float(probs[i, k])) + 0.5 * dist_term
-            unk = mcm if knn is None else 0.5 * mcm + 0.5 * float(knn[i])
+            unk = mcm if knn is None else (1.0 - self.w_knn) * mcm + self.w_knn * float(knn[i])
             # background-looking crops (sea/sky closer than any known class) are also "unknown"
             if bg[i] > max_sim:
                 unk = max(unk, 0.5 + 0.5 * float(np.clip(bg[i] - max_sim, 0, 0.1) / 0.1))

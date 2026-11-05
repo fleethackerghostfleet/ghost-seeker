@@ -58,6 +58,27 @@ func TestInterestBoostAndSuppress(t *testing.T) {
 	}
 }
 
+func TestInterestPerLabelBoostWeights(t *testing.T) {
+	p := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"submarine", "tanker"}, BoostWeights: map[string]float64{"submarine": 3}}}
+	ctx := &Context{Policy: p, Now: time.Now()}
+	if r := (Interest{}).Score(img("submarine", 0.9, 0), ctx); r.Multiplier != 3 {
+		t.Fatalf("weighted label multiplier=%v, want 3", r.Multiplier)
+	}
+	if r := (Interest{}).Score(img("tanker", 0.9, 0), ctx); r.Multiplier != DefaultBoostFactor {
+		t.Fatalf("unweighted label multiplier=%v, want default %v", r.Multiplier, DefaultBoostFactor)
+	}
+	// Plural / spaced labels keep their weight (keyed as Merge stores them),
+	// and the strongest of several matching labels wins regardless of order.
+	plural := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"vessel", "Submarines "}, BoostWeights: map[string]float64{"submarines": 5}}}
+	if r := (Interest{}).Score(img("submarine", 0.9, 0), &Context{Policy: plural, Now: time.Now()}); r.Multiplier != 5 {
+		t.Fatalf("plural weighted label multiplier=%v, want 5", r.Multiplier)
+	}
+	several := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"submarine", "submarine periscope"}, BoostWeights: map[string]float64{"submarine": 3, "submarine periscope": 6}}}
+	if r := (Interest{}).Score(img("submarine periscope", 0.9, 0), &Context{Policy: several, Now: time.Now()}); r.Multiplier != 6 {
+		t.Fatalf("strongest matching label multiplier=%v, want 6", r.Multiplier)
+	}
+}
+
 func TestFreshnessFloor(t *testing.T) {
 	it := img("x", 0.9, 0)
 	it.CapturedAtUnixMs = time.Now().Add(-100 * time.Hour).UnixMilli()
@@ -92,5 +113,64 @@ func TestInterestMatchesSubtypeTag(t *testing.T) {
 	}
 	if r := (Interest{}).Score(mk("", 0), ctx); r.Suppressed || r.Multiplier > 1 {
 		t.Fatalf("no subtype, detector label boat: neutral, got %+v", r)
+	}
+}
+
+func TestDarkContactScoringAndPolicyLabels(t *testing.T) {
+	e := Default()
+	ctx := &Context{Now: time.Now()}
+	dark := img("dark contact", 0.9, 0)
+	lit := img("boat", 0.9, 0)
+	darkPriority := e.Score(dark, ctx, 0)
+	litPriority := e.Score(lit, ctx, 0)
+	if darkPriority.Priority <= litPriority.Priority {
+		t.Fatalf("dark contact priority %v <= lit boat %v", darkPriority.Priority, litPriority.Priority)
+	}
+	foundDark := false
+	for _, reason := range darkPriority.Reasons {
+		if reason.Scorer == "dark" && reason.Note == "dark contact: no navigation lights at night" {
+			foundDark = true
+		}
+	}
+	if !foundDark {
+		t.Fatalf("dark-contact reason missing: %+v", darkPriority.Reasons)
+	}
+
+	policy := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"dark vessels"}}}
+	boosted := e.Score(dark, &Context{Policy: policy, Now: time.Now()}, 0)
+	if boosted.Priority <= darkPriority.Priority {
+		t.Fatalf("dark-vessel alias did not boost priority: %v <= %v", boosted.Priority, darkPriority.Priority)
+	}
+	policy = &pb.Policy{Interest: &pb.Interest{SuppressLabels: []string{"vessels running dark"}}}
+	suppressed := e.Score(dark, &Context{Policy: policy, Now: time.Now()}, 0)
+	if !suppressed.Suppressed {
+		t.Fatalf("dark-vessel alias did not suppress: %+v", suppressed)
+	}
+	policy = &pb.Policy{ScorerWeights: map[string]float64{"dark": 0}}
+	disabled := e.Score(dark, &Context{Policy: policy, Now: time.Now()}, 0)
+	for _, reason := range disabled.Reasons {
+		if reason.Scorer == "dark" {
+			t.Fatalf("disabled dark scorer still emitted a reason: %+v", disabled.Reasons)
+		}
+	}
+}
+
+func TestDarkContactHonorsLabelOverride(t *testing.T) {
+	item := img("dark contact", 0.9, 0)
+	item.Features.LabelOverride = "boat"
+	result := (DarkContact{}).Score(item, &Context{Now: time.Now()})
+	if result.Value != 0 || result.Note != "" {
+		t.Fatalf("non-dark override received dark score: %+v", result)
+	}
+	for _, reason := range Default().Score(item, &Context{Now: time.Now()}, 0).Reasons {
+		if reason.Scorer == "dark" {
+			t.Fatalf("non-dark override received dark reason: %+v", reason)
+		}
+	}
+
+	item.Features.LabelOverride = "dark vessel"
+	result = (DarkContact{}).Score(item, &Context{Now: time.Now()})
+	if result.Value != float64(float32(0.9)) || result.Note != "dark contact: no navigation lights at night" {
+		t.Fatalf("normalized dark override lost dark score: %+v", result)
 	}
 }

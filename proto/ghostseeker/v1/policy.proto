@@ -18,6 +18,12 @@ message Policy {
   EmconMode emcon = 7;
   int32 digest_interval_s = 8; // 0 = no periodic digest
   map<string, double> scorer_weights = 9; // override default weights by scorer name
+  int64 version = 10; // monotonic; edge ignores a policy whose version <= last applied version (0 = unversioned, always accepted)
+  int64 expires_at_unix_ms = 11; // 0 = issued_at + 12h default; an expired policy falls back to the built-in default policy
+  repeated PolicyLayer layers = 12; // echelon layers; when non-empty, edge derives interest + emcon from merge(layers)
+  EmconSetting emcon_setting = 13; // who set EMCON and whether lower echelons may change it
+  PolicySignature signature = 14; // optional Ed25519 over proto.MarshalOptions{Deterministic:true} of the policy with signature cleared
+  repeated MergeConflict conflicts = 15; // filled by merge: lower-echelon rules dropped because they hit a lock
 }
 
 message Interest {
@@ -27,6 +33,7 @@ message Interest {
   repeated float negative_embedding = 4; // text embedding of what to ignore
   double boost_factor = 5; // default 2.0
   double suppress_factor = 6; // default 0.05 (deprioritize, never drop)
+  map<string, double> boost_weights = 7; // per-label boost from merged rule weights; missing = boost_factor
 }
 
 message Thresholds {
@@ -40,4 +47,48 @@ enum EmconMode {
   EMCON_MODE_NORMAL = 1;
   EMCON_MODE_BURST = 2; // only FACT/manifest, in short bursts
   EMCON_MODE_SILENT = 3; // queue only
+}
+
+enum Echelon {
+  ECHELON_UNSPECIFIED = 0;
+  ECHELON_UNIT = 1; // USV / sensor operator
+  ECHELON_SHIP = 2; // e.g. DDG-51
+  ECHELON_COMMAND = 3; // e.g. CTF-72
+}
+
+message PolicyLayer {
+  Echelon echelon = 1;
+  string issued_by = 2;
+  repeated InterestRule rules = 3;
+  EmconSetting emcon = 4;
+}
+
+message InterestRule {
+  string id = 1;
+  string author = 2;
+  bool locked = 3; // lower echelons cannot remove, suppress, or lower the weight of these labels
+  repeated string boost_labels = 4;
+  repeated string suppress_labels = 5;
+  double weight = 6; // boost factor override; 0 = Interest default
+  int64 expires_at_unix_ms = 7; // 0 = no per-rule expiry
+  repeated string targets = 8; // edge node ids; empty = all
+  string text = 9; // operator's words, for readback/audit
+}
+
+message EmconSetting {
+  EmconMode mode = 1;
+  string set_by = 2;
+  Echelon echelon = 3;
+  bool locked = 4;
+}
+
+message MergeConflict {
+  string rule_id = 1;
+  string reason = 2; // e.g. "Locked by CTF-72"
+  string blocked_by = 3; // id of the locking rule (or "emcon")
+}
+
+message PolicySignature {
+  string key_id = 1;
+  bytes ed25519 = 2;
 }

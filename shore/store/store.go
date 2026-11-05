@@ -152,6 +152,9 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 // MaxBlobBytes bounds any single form shore will accept.
 const MaxBlobBytes = 256 << 20
 
+// MaxChunkBytes caps one Chunk; the edge scheduler sends at most 64 KiB.
+const MaxChunkBytes = 4 << 20
+
 // WriteChunk stores a chunk at its offset and returns the new contiguous
 // receive count and whether the form is complete. Out-of-order or duplicate
 // chunks are safe: bytes are written in place and "received" only advances
@@ -160,7 +163,8 @@ func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int6
 	if !ids.Valid(c.ItemId) {
 		return 0, false, fmt.Errorf("invalid item id %q", c.ItemId)
 	}
-	if c.TotalBytes <= 0 || c.TotalBytes > MaxBlobBytes || c.Offset < 0 || c.Offset+int64(len(c.Data)) > c.TotalBytes {
+	n := int64(len(c.Data))
+	if c.TotalBytes <= 0 || c.TotalBytes > MaxBlobBytes || n > MaxChunkBytes || c.Offset < 0 || c.Offset > c.TotalBytes || n > c.TotalBytes-c.Offset {
 		return 0, false, fmt.Errorf("chunk out of bounds: off=%d len=%d total=%d", c.Offset, len(c.Data), c.TotalBytes)
 	}
 	path := filepath.Join(s.blobDir, c.ItemId, fmt.Sprintf("%d", c.Form))
@@ -168,12 +172,13 @@ func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int6
 	var complete int
 	var hash string
 	err := s.db.QueryRowContext(ctx, `SELECT received, complete, hash FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash)
-	if err == nil && complete == 1 {
-		if c.ContentHash == "" || c.ContentHash == hash {
-			return c.TotalBytes, true, nil
-		}
-		// The edge regenerated this form (e.g. FACT after a label override):
-		// start over with the new content.
+	if err == nil && complete == 1 && (c.ContentHash == "" || c.ContentHash == hash) {
+		return c.TotalBytes, true, nil
+	}
+	if err == nil && c.ContentHash != hash && c.ContentHash != "" && (complete == 1 || hash != "") {
+		// The edge regenerated this form (FACT after a label override, FULL
+		// after an original pull), possibly mid-transfer: start over with
+		// the new content.
 		received, complete = 0, 0
 		_ = os.Remove(path)
 	}

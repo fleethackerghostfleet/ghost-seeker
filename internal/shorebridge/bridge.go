@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,11 +20,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 )
 
@@ -43,25 +48,59 @@ type LinkControl interface {
 }
 
 type Bridge struct {
+	token       string
 	shore, edge string
 	link        LinkControl
 	client      *http.Client
+	// Compiler, when set, turns a free-text directive into rules (local LLM
+	// with the rules parser as fallback) and gives the operator a readback;
+	// nil keeps the simple Interpret path.
+	Compiler *command.Compiler
 
-	mu      sync.Mutex
-	snap    []byte
-	subs    map[chan []byte]struct{}
-	records map[string]int // RECORD item id -> n_frames
+	mu         sync.Mutex
+	snap       []byte
+	subs       map[chan []byte]struct{}
+	records    map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
+	operator   string
+	edgeNodeID string
+
+	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
+	onSnapshot func(*Snapshot, *pb.Policy) // Console hook, called with every fresh snapshot and the policy it was built from
 }
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	return &Bridge{
-		shore:   strings.TrimRight(shoreURL, "/"),
-		edge:    strings.TrimRight(edgeURL, "/"),
-		link:    link,
-		client:  &http.Client{Timeout: 10 * time.Second},
-		subs:    map[chan []byte]struct{}{},
-		records: map[string]int{},
+		shore:    strings.TrimRight(shoreURL, "/"),
+		edge:     strings.TrimRight(edgeURL, "/"),
+		link:     link,
+		client:   &http.Client{Timeout: 10 * time.Second},
+		subs:     map[chan []byte]struct{}{},
+		records:  map[string]contactReport{},
+		poke:     make(chan struct{}, 1),
+		operator: DefaultOperator,
 	}
+}
+
+// Poke asks the poller to refresh now instead of at the next tick.
+func (b *Bridge) Poke() {
+	select {
+	case b.poke <- struct{}{}:
+	default:
+	}
+}
+
+// DefaultOperator is the issuer recorded on policies this console edits when
+// no -operator-id is configured.
+const DefaultOperator = "operator-ui"
+
+// WithOperator sets the identity recorded as IssuedBy / rule Author / EMCON
+// SetBy on policies this console submits. It is server configuration (the
+// authenticated console instance), never taken from the browser request.
+func (b *Bridge) WithOperator(id string) *Bridge {
+	if id = strings.TrimSpace(id); id != "" {
+		b.operator = id
+	}
+	return b
 }
 
 // ---- wire model (what the browser sees) ----
@@ -73,23 +112,24 @@ type FormStatus struct {
 }
 
 type Card struct {
-	ID          string                `json:"id"`
-	Type        string                `json:"type"` // image | record | telemetry
-	CapturedMs  int64                 `json:"capturedMs"`
-	Source      string                `json:"source"`
-	Label       string                `json:"label"`
-	Conf        float64               `json:"conf"`
-	Override    string                `json:"override,omitempty"`
-	Unknownness float64               `json:"unknownness"`
-	Priority    string                `json:"priority"` // P1..P4, relative rank in the current shore picture (assignTiers)
-	Score       float64               `json:"score"`
-	Suppressed  bool                  `json:"suppressed"`
-	Tags        map[string]string     `json:"tags,omitempty"`
-	Forms       map[string]FormStatus `json:"forms"`
-	Image       string                `json:"image,omitempty"` // best available form URL
-	ImageForm   string                `json:"imageForm,omitempty"`
-	FactURL     string                `json:"factUrl"`
-	Box         *pb.Box               `json:"box,omitempty"`
+	ID           string                `json:"id"`
+	Type         string                `json:"type"` // image | record | telemetry
+	CapturedMs   int64                 `json:"capturedMs"`
+	Source       string                `json:"source"`
+	Label        string                `json:"label"`
+	Conf         float64               `json:"conf"`
+	Override     string                `json:"override,omitempty"`
+	Unknownness  float64               `json:"unknownness"`
+	Priority     string                `json:"priority"` // P1..P4, relative rank in the current shore picture (assignTiers)
+	Score        float64               `json:"score"`
+	Suppressed   bool                  `json:"suppressed"`
+	SuppressedBy string                `json:"suppressedBy,omitempty"` // policy label that matched
+	Tags         map[string]string     `json:"tags,omitempty"`
+	Forms        map[string]FormStatus `json:"forms"`
+	Image        string                `json:"image,omitempty"` // best available form URL
+	ImageForm    string                `json:"imageForm,omitempty"`
+	FactURL      string                `json:"factUrl"`
+	Box          *pb.Box               `json:"box,omitempty"`
 }
 
 type Object struct {
@@ -115,7 +155,9 @@ type Object struct {
 type NodeStatus struct {
 	OK          bool    `json:"ok"`
 	ItemsTotal  int64   `json:"itemsTotal"`
-	Deduped     int64   `json:"itemsDeduped"` // edge: captures folded into an existing item (hash/sighting duplicates)
+	Deduped     int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
+	Prioritizer string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
+	Evicted     int64   `json:"itemsEvicted"`
 	ItemsUnique int64   `json:"itemsComplete"`
 	Unknown     int64   `json:"itemsUnknown"`
 	Bytes       int64   `json:"bytes"`
@@ -130,13 +172,40 @@ type NodeStatus struct {
 }
 
 type Snapshot struct {
-	TS      int64      `json:"ts"`
-	Shore   NodeStatus `json:"shore"`
-	Edge    NodeStatus `json:"edge"`
-	Link    LinkStatus `json:"link"`
-	Policy  string     `json:"policy"`
-	Objects []*Object  `json:"objects"`
-	Counts  Counts     `json:"counts"`
+	TS         int64       `json:"ts"`
+	Shore      NodeStatus  `json:"shore"`
+	Edge       NodeStatus  `json:"edge"`
+	Link       LinkStatus  `json:"link"`
+	Policy     string      `json:"policy"`
+	PolicyID   string      `json:"policyId,omitempty"`
+	Emcon      string      `json:"emcon,omitempty"`
+	Suppress   []string    `json:"suppress,omitempty"`
+	Boost      []string    `json:"boost,omitempty"`
+	PolicyInfo *PolicyInfo `json:"policyInfo,omitempty"`
+	Objects    []*Object   `json:"objects"`
+	Counts     Counts      `json:"counts"`
+}
+
+type PolicyInfo struct {
+	Version       int64            `json:"version"`
+	Emcon         string           `json:"emcon"`
+	EmconSetBy    string           `json:"emconSetBy,omitempty"`
+	EmconLocked   bool             `json:"emconLocked"`
+	EmconLockedBy string           `json:"emconLockedBy,omitempty"`
+	Locks         []PolicyLock     `json:"locks"`
+	Conflicts     []PolicyConflict `json:"conflicts"`
+}
+
+type PolicyLock struct {
+	RuleID   string   `json:"ruleId"`
+	Labels   []string `json:"labels"`
+	LockedBy string   `json:"lockedBy"`
+}
+
+type PolicyConflict struct {
+	RuleID    string `json:"ruleId"`
+	Reason    string `json:"reason"`
+	BlockedBy string `json:"blockedBy"`
 }
 
 type LinkStatus struct {
@@ -159,6 +228,19 @@ type Counts struct {
 
 // ---- console RPC helpers ----
 
+// WithToken sets the operator bearer token the bridge presents to the shore
+// and edge consoles (and to shore blobs it proxies).
+func (b *Bridge) WithToken(token string) *Bridge {
+	b.token = token
+	return b
+}
+
+func (b *Bridge) authorize(r *http.Request) {
+	if b.token != "" {
+		r.Header.Set("Authorization", "Bearer "+b.token)
+	}
+}
+
 func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.Message) error {
 	body, err := protojson.Marshal(req)
 	if err != nil {
@@ -169,6 +251,7 @@ func (b *Bridge) call(ctx context.Context, base, method string, req, resp proto.
 		return err
 	}
 	hr.Header.Set("Content-Type", "application/json")
+	b.authorize(hr)
 	res, err := b.client.Do(hr)
 	if err != nil {
 		return err
@@ -195,6 +278,7 @@ func (b *Bridge) Run(ctx context.Context, every time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-b.poke:
 		}
 	}
 }
@@ -210,7 +294,8 @@ func (b *Bridge) refresh(ctx context.Context) {
 
 	var st pb.GetStatusResponse
 	if err := b.call(ctx, b.shore, "GetStatus", &pb.GetStatusRequest{}, &st); err != nil {
-		snap.Shore.Error = err.Error()
+		log.Printf("shorebridge: shore status: %v", err)
+		snap.Shore.Error = "upstream shore error"
 	} else {
 		snap.Shore = nodeStatus(&st)
 		if b.link == nil {
@@ -220,16 +305,33 @@ func (b *Bridge) refresh(ctx context.Context) {
 	}
 	var pol pb.GetPolicyResponse
 	var suppressed []string
+	var policy *pb.Policy
 	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &pol); err == nil {
+		policy = pol.GetPolicy()
 		snap.Policy = pol.GetPolicy().GetText()
+		if m := pol.GetPolicy().GetEmcon(); m != pb.EmconMode_EMCON_MODE_UNSPECIFIED && m != pb.EmconMode_EMCON_MODE_NORMAL {
+			snap.Emcon = strings.TrimPrefix(m.String(), "EMCON_MODE_")
+		}
+		snap.PolicyID = pol.GetPolicy().GetId()
 		suppressed = pol.GetPolicy().GetInterest().GetSuppressLabels()
+		snap.Suppress = suppressed
+		snap.Boost = pol.GetPolicy().GetInterest().GetBoostLabels()
+		if pol.Policy != nil {
+			snap.PolicyInfo = policyInfo(pol.Policy)
+		}
 	}
 	if b.edge != "" {
 		var est pb.GetStatusResponse
 		if err := b.call(ctx, b.edge, "GetStatus", &pb.GetStatusRequest{}, &est); err != nil {
-			snap.Edge.Error = err.Error()
+			log.Printf("shorebridge: edge status: %v", err)
+			snap.Edge.Error = "upstream edge error"
 		} else {
 			snap.Edge = nodeStatus(&est)
+			if nodeID := est.GetNodeId(); nodeID != "" {
+				b.mu.Lock()
+				b.edgeNodeID = nodeID
+				b.mu.Unlock()
+			}
 		}
 	}
 
@@ -238,8 +340,9 @@ func (b *Bridge) refresh(ctx context.Context) {
 	for page := 0; page < 20; page++ {
 		var lr pb.ListItemsResponse
 		if err := b.call(ctx, b.shore, "ListItems", &pb.ListItemsRequest{Limit: 500, PageToken: token}, &lr); err != nil {
+			log.Printf("shorebridge: shore list items: %v", err)
 			if snap.Shore.Error == "" {
-				snap.Shore.Error = err.Error()
+				snap.Shore.Error = "upstream shore error"
 			}
 			break
 		}
@@ -249,7 +352,10 @@ func (b *Bridge) refresh(ctx context.Context) {
 			break
 		}
 	}
-	snap.Objects, snap.Counts = Group(items, suppressed, b.recordFrames(ctx, items))
+	snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
+	if b.onSnapshot != nil {
+		b.onSnapshot(snap, policy)
+	}
 
 	buf, err := json.Marshal(snap)
 	if err != nil {
@@ -267,11 +373,12 @@ func (b *Bridge) refresh(ctx context.Context) {
 	b.mu.Unlock()
 }
 
-// recordFrames reads n_frames from each closed sighting's contact report
-// (RECORD items, FACT complete). Facts are immutable, so they are fetched
-// once per item.
-func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[string]int {
-	out := map[string]int{}
+// recordReports reads each closed sighting's contact report (RECORD items,
+// FACT complete): n_frames, and the sighting_id/label/subtype that let Group
+// fold the report into its sighting when the item carries no tags itself.
+// Facts are immutable, so they are fetched once per item.
+func (b *Bridge) recordReports(ctx context.Context, items []*pb.ItemView) map[string]contactReport {
+	out := map[string]contactReport{}
 	fetched := 0
 	for _, v := range items {
 		it := v.GetItem()
@@ -288,66 +395,61 @@ func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[str
 			continue
 		}
 		b.mu.Lock()
-		n, ok := b.records[it.GetId()]
+		rep, ok := b.records[it.GetId()]
 		b.mu.Unlock()
 		if !ok {
 			if fetched >= maxRecordFetchesPerRefresh { // the rest are picked up by later polls
 				continue
 			}
 			fetched++
-			// Cache failures too (as 0) so an unreadable report is tried once
+			// Cache failures too (empty) so an unreadable report is tried once
 			// and cannot starve later ones of their fetch budget.
-			n = b.fetchRecordFrames(ctx, it.GetId())
-			if n < 0 {
-				n = 0
-			}
+			rep = b.fetchRecord(ctx, it.GetId())
 			b.mu.Lock()
-			b.records[it.GetId()] = n
+			b.records[it.GetId()] = rep
 			b.mu.Unlock()
 		}
-		if n > 0 {
-			out[it.GetId()] = n
+		if rep.NFrames > 0 || rep.SightingID != "" {
+			out[it.GetId()] = rep
 		}
 	}
 	return out
 }
 
-func (b *Bridge) fetchRecordFrames(ctx context.Context, id string) int {
+func (b *Bridge) fetchRecord(ctx context.Context, id string) contactReport {
 	hr, err := http.NewRequestWithContext(ctx, http.MethodGet, b.shore+"/blob/"+id+"/fact", nil)
 	if err != nil {
-		return -1
+		return contactReport{}
 	}
+	b.authorize(hr)
 	res, err := b.client.Do(hr)
 	if err != nil {
-		return -1
+		return contactReport{}
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return -1
+		return contactReport{}
 	}
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return -1
+		return contactReport{}
 	}
 	var rep contactReport
 	// The fact may be the report itself or a fact envelope carrying it; try both.
-	if json.Unmarshal(raw, &rep) != nil || rep.NFrames == 0 {
+	if json.Unmarshal(raw, &rep) != nil || (rep.NFrames == 0 && rep.SightingID == "") {
 		var env struct {
 			Record json.RawMessage `json:"record"`
 			Data   json.RawMessage `json:"data"`
 		}
 		if json.Unmarshal(raw, &env) == nil {
 			for _, r := range [][]byte{env.Record, env.Data} {
-				if len(r) > 0 && json.Unmarshal(r, &rep) == nil && rep.NFrames > 0 {
+				if len(r) > 0 && json.Unmarshal(r, &rep) == nil && (rep.NFrames > 0 || rep.SightingID != "") {
 					break
 				}
 			}
 		}
 	}
-	if rep.NFrames == 0 {
-		return -1
-	}
-	return rep.NFrames
+	return rep
 }
 
 func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
@@ -355,6 +457,8 @@ func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 		OK:          true,
 		ItemsTotal:  st.GetItemsTotal(),
 		Deduped:     st.GetItemsDeduped(),
+		Prioritizer: st.GetPrioritizer(),
+		Evicted:     st.GetItemsEvicted(),
 		ItemsUnique: st.GetItemsComplete(),
 		Unknown:     st.GetItemsUnknown(),
 		Bytes:       st.GetBytesSent(),
@@ -468,7 +572,11 @@ func ToCard(v *pb.ItemView) *Card {
 	if c.Label == "" && c.Unknownness > 0.5 {
 		c.Label = "unknown"
 	}
-	for _, n := range []string{"crop", "thumb", "full"} {
+	prefer := []string{"crop", "thumb", "full"}
+	if c.Tags["event"] == "scene" { // no object to crop: a pulled FULL beats the thumb
+		prefer = []string{"full", "thumb"}
+	}
+	for _, n := range prefer {
 		if c.Forms[n].State == "received" {
 			c.Image, c.ImageForm = "/blob/"+c.ID+"/"+n, n
 			break
@@ -490,20 +598,38 @@ func itemTypeName(t pb.ItemType) string {
 
 // contactReport is the edge's CLOSE record for a sighting (edge/ingest.ContactReport).
 type contactReport struct {
-	NFrames int `json:"n_frames"`
+	SightingID string `json:"sighting_id"`
+	Label      string `json:"label"`
+	Subtype    string `json:"subtype"`
+	NFrames    int    `json:"n_frames"`
 }
 
 // Group buckets cards by sighting_id (one object per sighting; items without
 // a tag are their own object), newest first. Items whose label is in the
 // current policy's suppress list are marked suppressed even if they were
 // scored before the policy reached the edge.
-// reports maps RECORD item id -> n_frames from its contact report (may be nil).
-func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int) ([]*Object, Counts) {
+// reports maps RECORD item id -> its contact report (may be nil); a report
+// whose item carries no sighting_id tag is folded into the sighting the
+// report names, so a closed sighting never shows up as a second, empty card.
+func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]contactReport) ([]*Object, Counts) {
 	var cnt Counts
 	byKey := map[string]*Object{}
 	var order []*Object
 	for _, v := range views {
 		c := ToCard(v)
+		if rep, ok := reports[c.ID]; ok && c.Type == "record" && c.Tags["sighting_id"] == "" && rep.SightingID != "" {
+			tags := map[string]string{"sighting_id": rep.SightingID}
+			for k, val := range c.Tags {
+				tags[k] = val
+			}
+			if rep.Subtype != "" {
+				tags["subtype"] = rep.Subtype
+			}
+			c.Tags = tags
+			if c.Label == "" {
+				c.Label = rep.Label
+			}
+		}
 		for _, l := range suppressLabels {
 			// Mirrors edge/scoring: a negative interest never suppresses an unknown.
 			if c.Unknownness >= unknownThreshold {
@@ -511,7 +637,7 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 			}
 			// Detector class, operator override or the sidecar's zero-shot subtype.
 			if strings.EqualFold(l, c.Label) || (c.Override != "" && strings.EqualFold(l, c.Override)) || strings.EqualFold(l, c.Tags["subtype"]) {
-				c.Suppressed = true
+				c.Suppressed, c.SuppressedBy = true, l
 			}
 		}
 		cnt.Items++
@@ -537,8 +663,8 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 			o.Frames = o.Reports
 		}
 		if c.Type == "record" && c.Forms["fact"].State == "received" && reports != nil {
-			if n, ok := reports[c.ID]; ok && n >= o.Frames {
-				o.Frames, o.FramesKnown = n, true
+			if rep, ok := reports[c.ID]; ok && rep.NFrames >= o.Frames && rep.NFrames > 0 {
+				o.Frames, o.FramesKnown = rep.NFrames, true
 			}
 		}
 		if c.CapturedMs < o.FirstMs {
@@ -561,6 +687,12 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 		}
 		o.Suppressed = o.Suppressed || c.Suppressed
 		o.Unknown = o.Unknown || c.Unknownness >= unknownThreshold
+		if o.Unknown { // an object the edge flagged unknown is never deprioritized by a directive
+			o.Suppressed = false
+			for _, it := range o.Items {
+				it.Suppressed, it.SuppressedBy = false, ""
+			}
+		}
 		if o.Best == nil || better(c, o.Best) {
 			o.Best = c
 		}
@@ -625,12 +757,34 @@ func (b *Bridge) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/shore/stream", b.stream)
 	mux.HandleFunc("POST /api/shore/policy", b.setPolicy)
+	mux.HandleFunc("POST /api/shore/emcon", b.setEMCON)
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
 	mux.HandleFunc("POST /api/shore/link", b.setLink)
 	if u, err := url.Parse(b.shore); err == nil {
-		mux.Handle("/blob/", httputil.NewSingleHostReverseProxy(u))
+		rp := httputil.NewSingleHostReverseProxy(u)
+		director := rp.Director
+		// The browser's session cookie stays on this origin; the shore sees
+		// the operator bearer token instead.
+		rp.Director = func(r *http.Request) {
+			director(r)
+			r.Header.Del("Cookie")
+			r.Header.Del("Authorization")
+			b.authorize(r)
+		}
+		rp.ModifyResponse = func(res *http.Response) error {
+			if res.Header.Get("Content-Security-Policy") == "" {
+				res.Header.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+			}
+			res.Header.Set("X-Content-Type-Options", "nosniff")
+			return nil
+		}
+		mux.Handle("GET /blob/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Outer middleware already set nosniff; the upstream copy would duplicate it.
+			w.Header().Del("X-Content-Type-Options")
+			rp.ServeHTTP(w, r)
+		}))
 	}
 	return mux
 }
@@ -650,7 +804,7 @@ func (b *Bridge) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	ch := make(chan []byte, 4)
 	b.mu.Lock()
 	b.subs[ch] = struct{}{}
@@ -682,24 +836,341 @@ type policyBody struct {
 	Text     string   `json:"text"`
 	Suppress []string `json:"suppress"`
 	Boost    []string `json:"boost"`
-	IssuedBy string   `json:"issuedBy"`
 }
 
 // setPolicy forwards an operator directive to shore. A free-text directive is
-// parsed with Interpret (e.g. "ignore cargo ships" -> suppress cargo ship).
+// compiled with the NL compiler when one is configured (readback, warnings and
+// path "llm"|"rules" are returned alongside the policy), otherwise parsed with
+// Interpret (e.g. "ignore cargo ships" -> suppress cargo ship).
 func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	var in policyBody
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: policy request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	if in.IssuedBy == "" {
-		in.IssuedBy = "operator-ui"
+	if utf8.RuneCountInString(in.Text) > 500 {
+		http.Error(w, "text exceeds 500 characters", http.StatusBadRequest)
+		return
 	}
-	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	issuedBy := b.operator
+	mode, ruleText := command.SplitEmcon(in.Text)
+	pol := &pb.Policy{IssuedBy: issuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	if mode != "" {
+		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
+	}
+	var compiled *command.Compiled
 	if len(in.Suppress) == 0 && len(in.Boost) == 0 && in.Text != "" {
-		pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
+		droppedScopedRules := false
+		if b.Compiler != nil {
+			c := b.Compiler.Compile(r.Context(), ruleText)
+			if c.Blocked {
+				http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
+				return
+			}
+			kept := make([]command.Rule, 0, len(c.Rules))
+			for _, rule := range c.Rules {
+				if len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0 {
+					kept = append(kept, rule)
+				} else {
+					droppedScopedRules = true
+				}
+			}
+			if droppedScopedRules {
+				priorWarnings := c.Warnings
+				path := c.Path
+				c = b.Compiler.Review(ruleText, kept, c.DurationMin)
+				c.Path = path
+				c.Warnings = mergeWarnings(priorWarnings, c.Warnings, []string{
+					"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.",
+				})
+				if c.Blocked {
+					http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
+					return
+				}
+			}
+			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
+			if mode != "" {
+				c.Readback = strings.TrimSuffix(c.Readback, "No rules recognized.") + " EMCON " + mode + "."
+				c.Readback = strings.TrimSpace(c.Readback)
+			}
+			if c.DurationMin > 0 {
+				pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+			}
+			compiled = &c
+		}
+		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
+			if !droppedScopedRules && pol.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
+				compiled = nil
+			}
+		}
 	}
+	warnings, err := b.layerPolicy(r.Context(), pol, mode)
+	if err != nil {
+		log.Printf("shorebridge: set policy: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
+		return
+	}
+	if compiled != nil {
+		compiled.Warnings = append(compiled.Warnings, warnings...)
+	}
+	var out pb.SetPolicyResponse
+	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
+		log.Printf("shorebridge: set policy upstream: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
+		return
+	}
+	raw, _ := protojson.Marshal(&out)
+	var policy map[string]any
+	if json.Unmarshal(raw, &policy) != nil {
+		policy = map[string]any{}
+	}
+	readback := Readback(pol.Interest.SuppressLabels, pol.Interest.BoostLabels)
+	if compiled != nil && compiled.Readback != "" {
+		readback = compiled.Readback
+	}
+	if rb, ok := policy["readback"].(string); ok && rb != "" { // a shore that compiles directives itself wins
+		readback = rb
+	}
+	resp := struct {
+		Policy   json.RawMessage   `json:"policy"`
+		Compiled *command.Compiled `json:"compiled,omitempty"`
+		Readback string            `json:"readback"`
+	}{Policy: raw, Compiled: compiled, Readback: readback}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// rulesToLabels flattens compiled rules into the flat boost/suppress label
+// lists the edge scorer matches against (classes only; attributes have no
+// edge-side equivalent yet).
+func rulesToLabels(rules []command.Rule) (suppress, boost []string) {
+	seen := map[string]bool{}
+	for _, rule := range rules {
+		for _, class := range rule.Classes {
+			key := rule.Type + "/" + class
+			if class == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			switch rule.Type {
+			case "suppress":
+				suppress = append(suppress, class)
+			case "boost":
+				boost = append(boost, class)
+			}
+		}
+	}
+	return suppress, boost
+}
+
+func mergeWarnings(groups ...[]string) []string {
+	merged := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, group := range groups {
+		for _, warning := range group {
+			if !seen[warning] {
+				seen[warning] = true
+				merged = append(merged, warning)
+			}
+		}
+	}
+	return merged
+}
+
+func blockedMessage(c command.Compiled) string {
+	for _, warning := range c.Warnings {
+		if strings.HasPrefix(warning, "Blocked") {
+			return warning
+		}
+	}
+	if len(c.Warnings) > 0 {
+		return c.Warnings[0]
+	}
+	return "directive is blocked"
+}
+
+// applyPolicy replaces the standing shore policy with the given interest and
+// asks the poller to refresh so the console sees the change at once.
+func (b *Bridge) applyPolicy(ctx context.Context, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
+	return b.applyPolicyAs(ctx, "operator-ui", text, suppress, boost)
+}
+
+func (b *Bridge) applyPolicyAs(ctx context.Context, issuedBy, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
+	if issuedBy == "" {
+		issuedBy = "operator-ui"
+	}
+	if suppress == nil {
+		suppress = []string{}
+	}
+	if boost == nil {
+		boost = []string{}
+	}
+	return b.applyPolicyProto(ctx, &pb.Policy{IssuedBy: issuedBy, Text: text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost}})
+}
+
+// applyPolicyProto sends a fully built policy (interest, EMCON, expiry) to the
+// shore and pokes the poller.
+func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetPolicyResponse, error) {
+	mode := ""
+	if pol.Emcon != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+		mode = emconName(pol.Emcon)
+	}
+	if _, err := b.layerPolicy(ctx, pol, mode); err != nil {
+		return nil, err
+	}
+	var out pb.SetPolicyResponse
+	if err := b.call(ctx, b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
+		return nil, err
+	}
+	b.Poke()
+	return &out, nil
+}
+
+// layerPolicy folds a freshly built operator policy into the current shore
+// policy (#57): an EMCON phrase changes the ship-echelon EMCON unless a higher
+// echelon locked it, and the operator's rule replaces their ship layer so
+// higher-echelon layers, locks and signatures survive. Returns warnings for
+// the readback.
+func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
+	current, err := b.getPolicy(ctx)
+	if err != nil {
+		// Shore policy unreadable: don't apply blind. Keep the last EMCON the
+		// poller saw so an ordinary directive cannot reset BURST/SILENT to NORMAL.
+		warnings = append(warnings, "Current shore policy could not be read; higher-echelon layers were not merged.")
+		if mode == "" {
+			if cached, ok := parseEMCON(b.cachedEmcon()); ok {
+				pol.Emcon = cached
+			}
+		}
+		current = nil
+	}
+	if current != nil {
+		emconLocked := current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP
+		if mode == "" || emconLocked {
+			if mode != "" {
+				warnings = append(warnings, "EMCON locked by "+current.EmconSetting.SetBy+"; not changed.")
+			}
+			pol.Emcon = current.Emcon
+			if current.EmconSetting != nil {
+				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
+			}
+		} else {
+			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+		}
+		if len(current.Layers) > 0 {
+			pol.Layers = cloneLayers(current.Layers)
+			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy)
+			// Labels another layer already boosts/suppresses (same polarity) are
+			// inherited, not repeated in the ship rule; an operator suppressing a
+			// label a higher layer boosts is a real override and stays.
+			inheritedBoost, inheritedSuppress := map[string]bool{}, map[string]bool{}
+			for i, layer := range pol.Layers {
+				if i == operatorLayer || layer == nil {
+					continue
+				}
+				for _, r := range layer.GetRules() {
+					for _, l := range r.GetBoostLabels() {
+						inheritedBoost[l] = true
+					}
+					for _, l := range r.GetSuppressLabels() {
+						inheritedSuppress[l] = true
+					}
+				}
+			}
+			own := func(labels []string, inherited map[string]bool) []string {
+				out := make([]string, 0, len(labels))
+				for _, l := range labels {
+					if !inherited[l] {
+						out = append(out, l)
+					}
+				}
+				return out
+			}
+			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
+				BoostLabels: own(pol.GetInterest().GetBoostLabels(), inheritedBoost), SuppressLabels: own(pol.GetInterest().GetSuppressLabels(), inheritedSuppress), Text: pol.Text}
+			if operatorLayer >= 0 {
+				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
+			} else {
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}})
+				operatorLayer = len(pol.Layers) - 1
+			}
+			if mode != "" && !emconLocked {
+				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+			}
+		}
+	}
+	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
+	return warnings, nil
+}
+
+// cachedEmcon is the EMCON label of the last snapshot the poller built ("" if none).
+func (b *Bridge) cachedEmcon() string {
+	b.mu.Lock()
+	raw := b.snap
+	b.mu.Unlock()
+	var snap struct {
+		Emcon string `json:"emcon"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &snap) != nil {
+		return ""
+	}
+	return snap.Emcon
+}
+
+func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Mode string `json:"mode"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	mode, ok := parseEMCON(in.Mode)
+	if !ok {
+		http.Error(w, "mode must be NORMAL, BURST, or SILENT", http.StatusBadRequest)
+		return
+	}
+	issuedBy := b.operator
+	current, err := b.getPolicy(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if current == nil {
+		current = &pb.Policy{Interest: &pb.Interest{}}
+	}
+	if setting := current.EmconSetting; setting != nil && setting.Locked && setting.Echelon > pb.Echelon_ECHELON_SHIP {
+		w.WriteHeader(http.StatusConflict)
+		writeJSON(w, map[string]string{"error": "EMCON locked by " + setting.SetBy})
+		return
+	}
+	pol := proto.Clone(current).(*pb.Policy)
+	pol.IssuedBy = issuedBy
+	if len(pol.Layers) > 0 {
+		pol.Layers = cloneLayers(pol.Layers)
+		operatorLayer := findOperatorLayer(pol.Layers, issuedBy)
+		if operatorLayer < 0 {
+			for i, layer := range pol.Layers {
+				if layer.Echelon == pb.Echelon_ECHELON_SHIP {
+					operatorLayer = i
+					break
+				}
+			}
+			if operatorLayer < 0 {
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: issuedBy})
+				operatorLayer = len(pol.Layers) - 1
+			}
+		}
+		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+	} else {
+		pol.Emcon = mode
+		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+	}
+	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse
 	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -710,14 +1181,113 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	w.Write(raw)
 }
 
+func (b *Bridge) getPolicy(ctx context.Context) (*pb.Policy, error) {
+	var response pb.GetPolicyResponse
+	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &response); err != nil {
+		return nil, err
+	}
+	return response.Policy, nil
+}
+
+func findOperatorLayer(layers []*pb.PolicyLayer, issuedBy string) int {
+	for i, layer := range layers {
+		if layer != nil && layer.Echelon == pb.Echelon_ECHELON_SHIP && layer.IssuedBy == issuedBy {
+			return i
+		}
+	}
+	return -1
+}
+
+func cloneLayers(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
+	out := make([]*pb.PolicyLayer, 0, len(layers))
+	for _, layer := range layers {
+		if layer == nil {
+			out = append(out, nil)
+			continue
+		}
+		out = append(out, proto.Clone(layer).(*pb.PolicyLayer))
+	}
+	return out
+}
+
+func parseEMCON(value string) (pb.EmconMode, bool) {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "NORMAL":
+		return pb.EmconMode_EMCON_MODE_NORMAL, true
+	case "BURST":
+		return pb.EmconMode_EMCON_MODE_BURST, true
+	case "SILENT":
+		return pb.EmconMode_EMCON_MODE_SILENT, true
+	default:
+		return pb.EmconMode_EMCON_MODE_UNSPECIFIED, false
+	}
+}
+
+func policyInfo(p *pb.Policy) *PolicyInfo {
+	info := &PolicyInfo{Version: p.Version, Emcon: emconName(p.Emcon), Locks: []PolicyLock{}, Conflicts: []PolicyConflict{}}
+	if p.EmconSetting != nil {
+		info.EmconSetBy = p.EmconSetting.SetBy
+		if p.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+			info.Emcon = emconName(p.EmconSetting.Mode)
+		}
+		if p.EmconSetting.Locked && p.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP {
+			info.EmconLocked = true
+			info.EmconLockedBy = p.EmconSetting.SetBy
+		}
+	}
+	for _, lock := range policy.Locks(p.Layers) {
+		if !lock.Emcon {
+			info.Locks = append(info.Locks, PolicyLock{RuleID: lock.RuleID, Labels: append([]string(nil), lock.BoostLabels...), LockedBy: lock.LockedBy})
+		}
+	}
+	for _, conflict := range p.Conflicts {
+		if conflict != nil {
+			info.Conflicts = append(info.Conflicts, PolicyConflict{RuleID: conflict.RuleId, Reason: conflict.Reason, BlockedBy: conflict.BlockedBy})
+		}
+	}
+	return info
+}
+
+func emconName(mode pb.EmconMode) string {
+	switch mode {
+	case pb.EmconMode_EMCON_MODE_BURST:
+		return "BURST"
+	case pb.EmconMode_EMCON_MODE_SILENT:
+		return "SILENT"
+	default:
+		return "NORMAL"
+	}
+}
+
 func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ItemID string `json:"itemId"`
 		Form   string `json:"form"`
+		// Original is the operator override: FULL at full size, no
+		// re-encoding. It needs the operator's name in By.
+		Original bool   `json:"original"`
+		By       string `json:"by"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.ItemID == "" {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: pull request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if in.ItemID == "" {
 		http.Error(w, "itemId required", http.StatusBadRequest)
 		return
+	}
+	if !ids.Valid(in.ItemID) {
+		http.Error(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+	by := "operator-ui"
+	if in.Original {
+		if by = strings.TrimSpace(in.By); by == "" {
+			http.Error(w, "operator name (by) required for a full-size override", http.StatusBadRequest)
+			return
+		}
 	}
 	kind := pb.FormKind_FORM_KIND_FULL
 	for k, n := range formNames {
@@ -726,12 +1296,14 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var out pb.RequestPullResponse
-	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: in.ItemID, Form: kind, RequestedBy: "operator-ui"}}
+	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: in.ItemID, Form: kind, RequestedBy: by, Original: in.Original}}
 	if err := b.call(r.Context(), b.shore, "RequestPull", req, &out); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.Printf("shorebridge: request pull upstream: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true, "itemId": in.ItemID, "form": formNames[kind]})
+	b.Poke()
+	writeJSON(w, map[string]any{"ok": true, "itemId": in.ItemID, "form": formNames[kind], "original": in.Original})
 }
 
 func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
@@ -739,14 +1311,29 @@ func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
 		ItemID string `json:"itemId"`
 		Label  string `json:"label"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.ItemID == "" {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: override request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if in.ItemID == "" {
 		http.Error(w, "itemId required", http.StatusBadRequest)
+		return
+	}
+	if !ids.Valid(in.ItemID) {
+		http.Error(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+	if utf8.RuneCountInString(in.Label) > 500 {
+		http.Error(w, "label exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
 	var out pb.OverrideLabelResponse
 	req := &pb.OverrideLabelRequest{Override: &pb.LabelOverride{ItemId: in.ItemID, Label: in.Label, By: "operator-ui"}}
 	if err := b.call(r.Context(), b.shore, "OverrideLabel", req, &out); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.Printf("shorebridge: override upstream: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
@@ -760,8 +1347,10 @@ func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Bps int64 `json:"bps"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: link request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 	b.link.SetBps(in.Bps)
@@ -771,4 +1360,19 @@ func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+
+func decodeJSONBody(reader io.Reader, dst any) error {
+	decoder := json.NewDecoder(reader)
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("unexpected trailing JSON")
+		}
+		return err
+	}
+	return nil
 }

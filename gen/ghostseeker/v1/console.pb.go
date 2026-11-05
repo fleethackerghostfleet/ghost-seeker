@@ -699,8 +699,9 @@ type SetPolicyResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Policy *Policy                `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
 	// Preview of effect on the current backlog so the operator can confirm.
-	SuppressedCount int64 `protobuf:"varint,2,opt,name=suppressed_count,json=suppressedCount,proto3" json:"suppressed_count,omitempty"`
-	BoostedCount    int64 `protobuf:"varint,3,opt,name=boosted_count,json=boostedCount,proto3" json:"boosted_count,omitempty"`
+	SuppressedCount int64            `protobuf:"varint,2,opt,name=suppressed_count,json=suppressedCount,proto3" json:"suppressed_count,omitempty"`
+	BoostedCount    int64            `protobuf:"varint,3,opt,name=boosted_count,json=boostedCount,proto3" json:"boosted_count,omitempty"`
+	Conflicts       []*MergeConflict `protobuf:"bytes,4,rep,name=conflicts,proto3" json:"conflicts,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -754,6 +755,13 @@ func (x *SetPolicyResponse) GetBoostedCount() int64 {
 		return x.BoostedCount
 	}
 	return 0
+}
+
+func (x *SetPolicyResponse) GetConflicts() []*MergeConflict {
+	if x != nil {
+		return x.Conflicts
+	}
+	return nil
 }
 
 type OverrideLabelRequest struct {
@@ -965,6 +973,8 @@ type GetStatusResponse struct {
 	BytesSent       int64                  `protobuf:"varint,9,opt,name=bytes_sent,json=bytesSent,proto3" json:"bytes_sent,omitempty"`
 	PolicyId        string                 `protobuf:"bytes,10,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
 	ItemsDeduped    int64                  `protobuf:"varint,11,opt,name=items_deduped,json=itemsDeduped,proto3" json:"items_deduped,omitempty"` // edge: captures folded into an existing item (hash or sighting duplicates)
+	ItemsEvicted    int64                  `protobuf:"varint,12,opt,name=items_evicted,json=itemsEvicted,proto3" json:"items_evicted,omitempty"` // edge: delivered items evicted by the storage cap
+	Prioritizer     string                 `protobuf:"bytes,13,opt,name=prioritizer,proto3" json:"prioritizer,omitempty"`                        // active prioritization backend: "edgeml" | "tomer"
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1074,6 +1084,20 @@ func (x *GetStatusResponse) GetItemsDeduped() int64 {
 		return x.ItemsDeduped
 	}
 	return 0
+}
+
+func (x *GetStatusResponse) GetItemsEvicted() int64 {
+	if x != nil {
+		return x.ItemsEvicted
+	}
+	return 0
+}
+
+func (x *GetStatusResponse) GetPrioritizer() string {
+	if x != nil {
+		return x.Prioritizer
+	}
+	return ""
 }
 
 type LinkState struct {
@@ -1194,18 +1218,19 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	"\x11GetPolicyResponse\x12.\n" +
 	"\x06policy\x18\x01 \x01(\v2\x16.ghostseeker.v1.PolicyR\x06policy\"B\n" +
 	"\x10SetPolicyRequest\x12.\n" +
-	"\x06policy\x18\x01 \x01(\v2\x16.ghostseeker.v1.PolicyR\x06policy\"\x93\x01\n" +
+	"\x06policy\x18\x01 \x01(\v2\x16.ghostseeker.v1.PolicyR\x06policy\"\xd0\x01\n" +
 	"\x11SetPolicyResponse\x12.\n" +
 	"\x06policy\x18\x01 \x01(\v2\x16.ghostseeker.v1.PolicyR\x06policy\x12)\n" +
 	"\x10suppressed_count\x18\x02 \x01(\x03R\x0fsuppressedCount\x12#\n" +
-	"\rboosted_count\x18\x03 \x01(\x03R\fboostedCount\"Q\n" +
+	"\rboosted_count\x18\x03 \x01(\x03R\fboostedCount\x12;\n" +
+	"\tconflicts\x18\x04 \x03(\v2\x1d.ghostseeker.v1.MergeConflictR\tconflicts\"Q\n" +
 	"\x14OverrideLabelRequest\x129\n" +
 	"\boverride\x18\x01 \x01(\v2\x1d.ghostseeker.v1.LabelOverrideR\boverride\"\x17\n" +
 	"\x15OverrideLabelResponse\">\n" +
 	"\x12RequestPullRequest\x12(\n" +
 	"\x04pull\x18\x01 \x01(\v2\x14.ghostseeker.v1.PullR\x04pull\"\x15\n" +
 	"\x13RequestPullResponse\"\x12\n" +
-	"\x10GetStatusRequest\"\xa1\x03\n" +
+	"\x10GetStatusRequest\"\xe8\x03\n" +
 	"\x11GetStatusResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x127\n" +
@@ -1220,7 +1245,9 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	"bytes_sent\x18\t \x01(\x03R\tbytesSent\x12\x1b\n" +
 	"\tpolicy_id\x18\n" +
 	" \x01(\tR\bpolicyId\x12#\n" +
-	"\ritems_deduped\x18\v \x01(\x03R\fitemsDeduped\"\xa2\x01\n" +
+	"\ritems_deduped\x18\v \x01(\x03R\fitemsDeduped\x12#\n" +
+	"\ritems_evicted\x18\f \x01(\x03R\fitemsEvicted\x12 \n" +
+	"\vprioritizer\x18\r \x01(\tR\vprioritizer\"\xa2\x01\n" +
 	"\tLinkState\x12\x0e\n" +
 	"\x02up\x18\x01 \x01(\bR\x02up\x12!\n" +
 	"\festimate_bps\x18\x02 \x01(\x01R\vestimateBps\x12/\n" +
@@ -1275,9 +1302,10 @@ var file_ghostseeker_v1_console_proto_goTypes = []any{
 	(*Score)(nil),                 // 22: ghostseeker.v1.Score
 	(FormKind)(0),                 // 23: ghostseeker.v1.FormKind
 	(*Policy)(nil),                // 24: ghostseeker.v1.Policy
-	(*LabelOverride)(nil),         // 25: ghostseeker.v1.LabelOverride
-	(*Pull)(nil),                  // 26: ghostseeker.v1.Pull
-	(*Heartbeat)(nil),             // 27: ghostseeker.v1.Heartbeat
+	(*MergeConflict)(nil),         // 25: ghostseeker.v1.MergeConflict
+	(*LabelOverride)(nil),         // 26: ghostseeker.v1.LabelOverride
+	(*Pull)(nil),                  // 27: ghostseeker.v1.Pull
+	(*Heartbeat)(nil),             // 28: ghostseeker.v1.Heartbeat
 }
 var file_ghostseeker_v1_console_proto_depIdxs = []int32{
 	20, // 0: ghostseeker.v1.ListItemsRequest.type:type_name -> ghostseeker.v1.ItemType
@@ -1293,31 +1321,32 @@ var file_ghostseeker_v1_console_proto_depIdxs = []int32{
 	24, // 10: ghostseeker.v1.GetPolicyResponse.policy:type_name -> ghostseeker.v1.Policy
 	24, // 11: ghostseeker.v1.SetPolicyRequest.policy:type_name -> ghostseeker.v1.Policy
 	24, // 12: ghostseeker.v1.SetPolicyResponse.policy:type_name -> ghostseeker.v1.Policy
-	25, // 13: ghostseeker.v1.OverrideLabelRequest.override:type_name -> ghostseeker.v1.LabelOverride
-	26, // 14: ghostseeker.v1.RequestPullRequest.pull:type_name -> ghostseeker.v1.Pull
-	27, // 15: ghostseeker.v1.GetStatusResponse.heartbeat:type_name -> ghostseeker.v1.Heartbeat
-	19, // 16: ghostseeker.v1.GetStatusResponse.link:type_name -> ghostseeker.v1.LinkState
-	0,  // 17: ghostseeker.v1.ConsoleService.ListItems:input_type -> ghostseeker.v1.ListItemsRequest
-	4,  // 18: ghostseeker.v1.ConsoleService.GetItem:input_type -> ghostseeker.v1.GetItemRequest
-	6,  // 19: ghostseeker.v1.ConsoleService.GetQueue:input_type -> ghostseeker.v1.GetQueueRequest
-	9,  // 20: ghostseeker.v1.ConsoleService.GetPolicy:input_type -> ghostseeker.v1.GetPolicyRequest
-	11, // 21: ghostseeker.v1.ConsoleService.SetPolicy:input_type -> ghostseeker.v1.SetPolicyRequest
-	13, // 22: ghostseeker.v1.ConsoleService.OverrideLabel:input_type -> ghostseeker.v1.OverrideLabelRequest
-	15, // 23: ghostseeker.v1.ConsoleService.RequestPull:input_type -> ghostseeker.v1.RequestPullRequest
-	17, // 24: ghostseeker.v1.ConsoleService.GetStatus:input_type -> ghostseeker.v1.GetStatusRequest
-	3,  // 25: ghostseeker.v1.ConsoleService.ListItems:output_type -> ghostseeker.v1.ListItemsResponse
-	5,  // 26: ghostseeker.v1.ConsoleService.GetItem:output_type -> ghostseeker.v1.GetItemResponse
-	8,  // 27: ghostseeker.v1.ConsoleService.GetQueue:output_type -> ghostseeker.v1.GetQueueResponse
-	10, // 28: ghostseeker.v1.ConsoleService.GetPolicy:output_type -> ghostseeker.v1.GetPolicyResponse
-	12, // 29: ghostseeker.v1.ConsoleService.SetPolicy:output_type -> ghostseeker.v1.SetPolicyResponse
-	14, // 30: ghostseeker.v1.ConsoleService.OverrideLabel:output_type -> ghostseeker.v1.OverrideLabelResponse
-	16, // 31: ghostseeker.v1.ConsoleService.RequestPull:output_type -> ghostseeker.v1.RequestPullResponse
-	18, // 32: ghostseeker.v1.ConsoleService.GetStatus:output_type -> ghostseeker.v1.GetStatusResponse
-	25, // [25:33] is the sub-list for method output_type
-	17, // [17:25] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	25, // 13: ghostseeker.v1.SetPolicyResponse.conflicts:type_name -> ghostseeker.v1.MergeConflict
+	26, // 14: ghostseeker.v1.OverrideLabelRequest.override:type_name -> ghostseeker.v1.LabelOverride
+	27, // 15: ghostseeker.v1.RequestPullRequest.pull:type_name -> ghostseeker.v1.Pull
+	28, // 16: ghostseeker.v1.GetStatusResponse.heartbeat:type_name -> ghostseeker.v1.Heartbeat
+	19, // 17: ghostseeker.v1.GetStatusResponse.link:type_name -> ghostseeker.v1.LinkState
+	0,  // 18: ghostseeker.v1.ConsoleService.ListItems:input_type -> ghostseeker.v1.ListItemsRequest
+	4,  // 19: ghostseeker.v1.ConsoleService.GetItem:input_type -> ghostseeker.v1.GetItemRequest
+	6,  // 20: ghostseeker.v1.ConsoleService.GetQueue:input_type -> ghostseeker.v1.GetQueueRequest
+	9,  // 21: ghostseeker.v1.ConsoleService.GetPolicy:input_type -> ghostseeker.v1.GetPolicyRequest
+	11, // 22: ghostseeker.v1.ConsoleService.SetPolicy:input_type -> ghostseeker.v1.SetPolicyRequest
+	13, // 23: ghostseeker.v1.ConsoleService.OverrideLabel:input_type -> ghostseeker.v1.OverrideLabelRequest
+	15, // 24: ghostseeker.v1.ConsoleService.RequestPull:input_type -> ghostseeker.v1.RequestPullRequest
+	17, // 25: ghostseeker.v1.ConsoleService.GetStatus:input_type -> ghostseeker.v1.GetStatusRequest
+	3,  // 26: ghostseeker.v1.ConsoleService.ListItems:output_type -> ghostseeker.v1.ListItemsResponse
+	5,  // 27: ghostseeker.v1.ConsoleService.GetItem:output_type -> ghostseeker.v1.GetItemResponse
+	8,  // 28: ghostseeker.v1.ConsoleService.GetQueue:output_type -> ghostseeker.v1.GetQueueResponse
+	10, // 29: ghostseeker.v1.ConsoleService.GetPolicy:output_type -> ghostseeker.v1.GetPolicyResponse
+	12, // 30: ghostseeker.v1.ConsoleService.SetPolicy:output_type -> ghostseeker.v1.SetPolicyResponse
+	14, // 31: ghostseeker.v1.ConsoleService.OverrideLabel:output_type -> ghostseeker.v1.OverrideLabelResponse
+	16, // 32: ghostseeker.v1.ConsoleService.RequestPull:output_type -> ghostseeker.v1.RequestPullResponse
+	18, // 33: ghostseeker.v1.ConsoleService.GetStatus:output_type -> ghostseeker.v1.GetStatusResponse
+	26, // [26:34] is the sub-list for method output_type
+	18, // [18:26] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_ghostseeker_v1_console_proto_init() }

@@ -1,0 +1,34 @@
+{
+  "/home/ubuntu/data/catalog/annotations/seaships7000.jsonl": {
+    "sha256": "943029eb71042fb80e1e74c1b8db4c343b82c47c80931e774566ae0cf13a1004",
+    "bytes": 2061275
+  },
+  "/home/ubuntu/data/catalog/annotations/smd_vis_onboard_sample.jsonl": {
+    "sha256": "77016a784a413d49aa48c28a7fc459feff6d56e22be3eab2d9d10764d934f12a",
+    "bytes": 48139
+  },
+  "/home/ubuntu/bakeoff/seaships_dev_ids.txt": {
+    "sha256": "c1742eef033797e3a47d16df59e5408aac2a9d20dc4210b6316ed8099a2014da",
+    "bytes": 90999
+  },
+  "/home/ubuntu/bakeoff/seaships_test_ids.txt": {
+    "sha256": "2b8d8b475c1c36e1dd3a235b2d5987242d796f4459397ac99734a4a574272679",
+    "bytes": 87499
+  },
+  "/home/ubuntu/repos/ghost-seeker/edgeml/configs/splits.yaml": {
+    "sha256": "817ebb30a452d2463fb554a73f66298f0cae9903afd2027f81d3b6914e2a326f",
+    "bytes": 1754
+  },
+  "/home/ubuntu/data/catalog/images/seaships7000.jsonl": {
+    "sha256": "b2c72e89c09b5a2d6174abcb4314e10a0ea75c475a78c532f07ea53209b03145",
+    "bytes": 2621032
+  },
+  "/home/ubuntu/data/catalog/images/smd_vis_onboard_sample.jsonl": {
+    "sha256": "add9f8ac71794097994cb8f250929cc7392e29f0805826274b03382a9b7544a8",
+    "bytes": 37245
+  },
+  "/home/ubuntu/data/catalog/datasets.jsonl": {
+    "sha256": "4497f9015a5b7db4b7ec57f0d0a7008c351f2aae708b33a02662a24902b48385",
+    "bytes": 27309
+  }
+}

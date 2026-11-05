@@ -5,38 +5,76 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
 type Server struct {
-	store *store.Store
-	hub   *hub
-	mux   *http.ServeMux
+	store    *store.Store
+	hub      *hub
+	mux      *http.ServeMux
+	policy   *policyRuntime
+	compiler *command.Compiler
+	after    func(time.Duration, func())
 }
 
-func New(data *store.Store) *Server {
-	s := &Server{store: data, hub: newHub(), mux: http.NewServeMux()}
+const maxStreamClients = 64
+
+func New(data *store.Store, options ...Option) *Server {
+	opts := serverOptions{}
+	for _, option := range options {
+		option(&opts)
+	}
+	s := &Server{
+		store: data, hub: newHub(), mux: http.NewServeMux(),
+		compiler: &command.Compiler{}, after: func(delay time.Duration, fn func()) { time.AfterFunc(delay, fn) },
+	}
+	s.policy = newPolicyRuntime(opts, data)
+	s.policy.onChange = s.publishSnapshot
 	s.mux.HandleFunc("GET /api/config", s.config)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
+	s.mux.HandleFunc("GET /api/policy", s.getPolicy)
+	s.mux.HandleFunc("POST /api/policy/emcon", s.setPolicyEMCON)
+	s.mux.HandleFunc("GET /api/policy/audit", s.policyAudit)
+	s.mux.HandleFunc("POST /api/policy/validate", s.validatePolicy)
+	s.mux.HandleFunc("PUT /api/policy", s.applyAdminPolicy)
 	s.mux.HandleFunc("POST /api/directives", s.addDirective)
+	s.mux.HandleFunc("POST /api/directives/compile", s.compileDirective)
 	s.mux.HandleFunc("POST /api/directives/preview", s.previewDirectives)
 	s.mux.HandleFunc("DELETE /api/directives", s.clearDirectives)
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
 	s.mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
 	s.mux.HandleFunc("POST /api/items/{id}/decision", s.decide)
+	s.mux.HandleFunc("POST /api/items/{id}/full-res", s.fullRes)
 	s.mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
 	s.mux.Handle("GET /", web.Handler())
 	return s
+}
+
+func (s *Server) SetCompiler(compiler *command.Compiler) {
+	if compiler == nil {
+		compiler = &command.Compiler{}
+	}
+	s.compiler = compiler
+}
+
+func (s *Server) directiveCompiler() *command.Compiler {
+	if s.compiler == nil {
+		return &command.Compiler{}
+	}
+	return s.compiler
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -82,12 +120,16 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Connection", "keep-alive")
-	client := s.hub.add()
+	client, ok := s.hub.add()
+	if !ok {
+		http.Error(w, "too many stream clients", http.StatusServiceUnavailable)
+		return
+	}
 	defer s.hub.remove(client)
-	items, stats, cdr, state := s.store.Snapshot()
-	if !writeEvent(w, "snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives)}) {
+	items, stats, cdr, state := s.store.SnapshotWithDirectives()
+	if !writeEvent(w, "snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives), "policy": s.policySummary()}) {
 		return
 	}
 	flusher.Flush()
@@ -115,21 +157,73 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Text  string          `json:"text"`
-		Rules *[]command.Rule `json:"rules"`
+	if s.policy.guard == nil {
+		writeError(w, http.StatusInternalServerError, s.policy.err.Error())
+		return
 	}
+	var body struct {
+		Text        string          `json:"text"`
+		Rules       *[]command.Rule `json:"rules"`
+		DurationMin int             `json:"durationMin"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	if utf8.RuneCountInString(body.Text) > 500 {
 		writeError(w, http.StatusBadRequest, "Directive text must be 500 characters or fewer")
 		return
 	}
-	rules := command.ParseDirective(body.Text)
+	if body.DurationMin < 0 || body.DurationMin > 10080 {
+		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+		return
+	}
+	s.policy.mu.Lock()
+	defer s.policy.mu.Unlock()
+	compiler := s.directiveCompiler()
+	var compiled command.Compiled
+	var rules []command.Rule
+	durationMin := body.DurationMin
 	if body.Rules != nil {
 		rules = *body.Rules
+		compiled = compiler.Review(body.Text, rules, durationMin)
+		durationMin = compiled.DurationMin
+	} else {
+		compiled = compiler.Compile(r.Context(), body.Text)
+		rules = compiled.Rules
+		if durationMin == 0 {
+			durationMin = compiled.DurationMin
+		}
+	}
+	lockWarnings := []string{}
+	lockBlocked := false
+	if compiler.Locks != nil {
+		lockWarnings, lockBlocked = compiler.Locks.CheckLocks(rules)
+	}
+	otherBlock := false
+	for _, warning := range compiled.Warnings {
+		if strings.HasPrefix(warning, "Blocked:") {
+			otherBlock = true
+			break
+		}
+	}
+	if compiled.Blocked && (!lockBlocked || otherBlock) {
+		message := ""
+		for _, warning := range compiled.Warnings {
+			if strings.HasPrefix(warning, "Blocked:") {
+				message = warning
+				break
+			}
+		}
+		if message == "" && len(compiled.Warnings) > 0 {
+			message = compiled.Warnings[0]
+		}
+		if message == "" {
+			message = "Directive is blocked"
+		}
+		writeError(w, http.StatusUnprocessableEntity, message)
+		return
 	}
 	if err := validateRules(rules); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -139,27 +233,150 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects or behaviors — try ships, aircraft, drones, people, AIS, approaching…")
 		return
 	}
-	directive, err := s.store.AddDirective(strings.TrimSpace(body.Text), rules)
+	if durationMin < 0 || durationMin > 10080 {
+		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+		return
+	}
+	candidate := &pb.Policy{Layers: append([]*pb.PolicyLayer(nil), s.policy.higherLayers...)}
+	operator := s.policy.operatorLayer()
+	for i, rule := range rules {
+		labels := rule.Classes
+		if len(labels) == 0 {
+			labels = rule.Attrs
+		}
+		ir := &pb.InterestRule{Id: fmt.Sprintf("new:%d", i), Author: "TAO", Text: body.Text, Weight: rule.Weight}
+		if rule.Type == "suppress" {
+			ir.SuppressLabels = append([]string(nil), labels...)
+		} else {
+			ir.BoostLabels = append([]string(nil), labels...)
+		}
+		operator.Rules = append(operator.Rules, ir)
+	}
+	candidate.Layers = append(candidate.Layers, operator)
+	_, _, conflicts := policy.MergeRules(candidate.Layers, s.policy.nodeID, time.Now())
+	blocked := make(map[string]bool)
+	for _, conflict := range conflicts {
+		if conflict != nil {
+			id, index, _, ok := parsePolicyRuleID(conflict.RuleId)
+			if ok && id == "new" {
+				blocked[fmt.Sprintf("new:%d", index)] = true
+			}
+		}
+	}
+	kept := make([]command.Rule, 0, len(rules))
+	for i, rule := range rules {
+		if !blocked[fmt.Sprintf("new:%d", i)] {
+			kept = append(kept, rule)
+		}
+	}
+	if len(kept) == 0 {
+		reason := "Policy rule blocked by higher-echelon lock"
+		if lockBlocked && len(lockWarnings) > 0 {
+			reason = lockWarnings[0]
+		} else if len(conflicts) > 0 && conflicts[0] != nil {
+			reason = conflicts[0].Reason
+		}
+		candidate.Id, candidate.IssuedBy, candidate.Text = fmt.Sprintf("sim-%d", time.Now().UnixMilli()), "TAO", strings.TrimSpace(body.Text)
+		s.policy.guard.Reject(r.Context(), candidate, "ui", reason, time.Now())
+		writeJSON(w, http.StatusConflict, map[string]any{"error": reason, "conflicts": conflictSummaries(conflicts)})
+		return
+	}
+	directive, err := s.store.AddDirective(strings.TrimSpace(body.Text), kept)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	if _, err := s.policy.apply("ui", "TAO", directive.Text, time.Now()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.publishSnapshot()
-	writeJSON(w, http.StatusCreated, directive)
+	audit(r, "directive.add", "id", directive.ID, "text", directive.Text)
+	if durationMin > 0 {
+		id := directive.ID
+		s.after(time.Duration(durationMin)*time.Minute, func() {
+			s.policy.mu.Lock()
+			deleted := s.store.DeleteDirective(id)
+			if deleted {
+				if _, err := s.policy.apply("expiry", "TAO", "Directive expired", time.Now()); err != nil {
+					log.Printf("server: expire directive %s: %v", id, err)
+				}
+			}
+			s.policy.mu.Unlock()
+			if deleted {
+				s.publishSnapshot()
+			}
+		})
+	}
+	response, _ := json.Marshal(directive)
+	var result map[string]any
+	_ = json.Unmarshal(response, &result)
+	result["conflicts"] = conflictSummaries(conflicts)
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (s *Server) compileDirective(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Text        string          `json:"text"`
+		Rules       *[]command.Rule `json:"rules"`
+		DurationMin int             `json:"durationMin"`
+	}
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if utf8.RuneCountInString(body.Text) > 500 {
+		writeError(w, http.StatusBadRequest, "Directive text must be 500 characters or fewer")
+		return
+	}
+	compiler := s.directiveCompiler()
+	var compiled command.Compiled
+	if body.Rules != nil {
+		if err := validateRules(*body.Rules); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if body.DurationMin < 0 || body.DurationMin > 10080 {
+			writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+			return
+		}
+		compiled = compiler.Review(body.Text, *body.Rules, body.DurationMin)
+	} else {
+		compiled = compiler.Compile(r.Context(), body.Text)
+	}
+	writeJSON(w, http.StatusOK, compiled)
 }
 
 func (s *Server) deleteDirective(w http.ResponseWriter, r *http.Request) {
+	s.policy.mu.Lock()
+	defer s.policy.mu.Unlock()
+	if directive, ok := s.store.Directive(r.PathValue("id")); ok && directive.Source != "" {
+		writeError(w, http.StatusConflict, "Issued by "+directive.Source+" — change it at that echelon")
+		return
+	}
 	if !s.store.DeleteDirective(r.PathValue("id")) {
 		http.NotFound(w, r)
 		return
 	}
+	if _, err := s.policy.apply("ui", "TAO", "Directive removed", time.Now()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.publishSnapshot()
+	audit(r, "directive.delete", "id", r.PathValue("id"))
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) clearDirectives(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) clearDirectives(w http.ResponseWriter, r *http.Request) {
+	s.policy.mu.Lock()
+	defer s.policy.mu.Unlock()
 	s.store.ClearDirectives()
+	if _, err := s.policy.apply("ui", "TAO", "Directives cleared", time.Now()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.publishSnapshot()
+	audit(r, "directive.clear")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -167,8 +384,9 @@ func (s *Server) setModel(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ID string `json:"id"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	if _, ok := catalog.Models[body.ID]; !ok {
@@ -177,6 +395,7 @@ func (s *Server) setModel(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.SetModel(body.ID)
 	s.publishSnapshot()
+	audit(r, "model.set", "id", body.ID)
 	writeJSON(w, http.StatusOK, map[string]string{"id": body.ID})
 }
 
@@ -187,8 +406,9 @@ func (s *Server) patchItem(w http.ResponseWriter, r *http.Request) {
 		Dismissed *bool `json:"dismissed"`
 		Sent      *bool `json:"sent"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	if body.Manual != nil && (*body.Manual < 0 || *body.Manual > 4) {
@@ -201,6 +421,20 @@ func (s *Server) patchItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.PublishUpdate(item, cdr)
+	args := []any{"id", item.ID}
+	if body.Manual != nil {
+		args = append(args, "manual", *body.Manual)
+	}
+	if body.Reviewed != nil {
+		args = append(args, "reviewed", *body.Reviewed)
+	}
+	if body.Dismissed != nil {
+		args = append(args, "dismissed", *body.Dismissed)
+	}
+	if body.Sent != nil {
+		args = append(args, "sent", *body.Sent)
+	}
+	audit(r, "item.patch", args...)
 	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 
@@ -209,8 +443,9 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		Decision string `json:"decision"`
 		Note     string `json:"note"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	item, cdr, err := s.store.Decide(r.PathValue("id"), body.Decision, body.Note)
@@ -226,12 +461,39 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.PublishUpdate(item, cdr)
+	audit(r, "item.decide", "id", item.ID, "decision", body.Decision, "note", body.Note)
+	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
+}
+
+// fullRes is the operator override to send an image's original bytes at
+// full size. It requires the operator's name.
+func (s *Server) fullRes(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		By string `json:"by"`
+	}
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	item, cdr, err := s.store.RequestFullRes(r.PathValue("id"), body.By)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.Is(err, store.ErrOperatorRequired):
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.PublishUpdate(item, cdr)
 	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 
 func (s *Server) publishSnapshot() {
-	items, stats, cdr, state := s.store.Snapshot()
-	s.hub.publish("snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives)})
+	items, stats, cdr, state := s.store.SnapshotWithDirectives()
+	s.hub.publish("snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives), "policy": s.policySummary()})
 }
 
 func decodeJSON(reader io.Reader, dst any) error {
@@ -245,6 +507,28 @@ func decodeJSON(reader io.Reader, dst any) error {
 		return fmt.Errorf("unexpected trailing JSON")
 	}
 	return nil
+}
+
+func writeRequestBodyError(w http.ResponseWriter, err error) {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		return
+	}
+	writeError(w, http.StatusBadRequest, "invalid JSON body")
+}
+
+// There is no authenticated identity yet, so the log records the source address only.
+func audit(r *http.Request, action string, args ...any) {
+	fields := make([]string, 0, (len(args)+1)/2)
+	for i := 0; i < len(args); i += 2 {
+		value := ""
+		if i+1 < len(args) {
+			value = fmt.Sprint(args[i+1])
+		}
+		fields = append(fields, fmt.Sprintf("%v=%q", args[i], value))
+	}
+	log.Printf("audit action=%q source=%q request=%s %q args=%s", action, r.RemoteAddr, r.Method, r.URL.Path, strings.Join(fields, " "))
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -284,12 +568,15 @@ func newHub() *hub {
 	return &hub{clients: make(map[*client]struct{})}
 }
 
-func (h *hub) add() *client {
+func (h *hub) add() (*client, bool) {
 	c := &client{events: make(chan event, 32)}
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.clients) >= maxStreamClients {
+		return nil, false
+	}
 	h.clients[c] = struct{}{}
-	h.mu.Unlock()
-	return c
+	return c, true
 }
 
 func (h *hub) remove(c *client) {

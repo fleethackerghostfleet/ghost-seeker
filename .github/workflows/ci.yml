@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.x
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build ./cmd/...
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test web/*.test.cjs
+
+  edgeml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e 'edgeml[test]'
+      - run: pytest -q edgeml/tests
+
+  proto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.x
+      - name: Install buf
+        env:
+          BUF_VERSION: 1.47.2
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64" -o "$HOME/.local/bin/buf"
+          chmod +x "$HOME/.local/bin/buf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install pinned Go plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.18.1
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - run: buf lint
+      - run: buf generate
+      - name: Check generated code is current
+        run: |
+          git diff --exit-code -- gen/
+          test -z "$(git ls-files --others --exclude-standard -- gen/)"
+
+  package-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PyYAML, kubeconform, and Zarf
+        env:
+          KUBECONFORM_VERSION: 0.6.7
+          ZARF_VERSION: 0.89.0
+        run: |
+          python -m pip install pyyaml
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar -xz -C "$HOME/.local/bin" kubeconform
+          curl -fsSL "https://github.com/zarf-dev/zarf/releases/download/v${ZARF_VERSION}/zarf_v${ZARF_VERSION}_Linux_amd64" -o "$HOME/.local/bin/zarf"
+          chmod +x "$HOME/.local/bin/zarf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: make package-check
+
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: shore
+            context: .
+            file: deploy/Dockerfile
+            target: shore
+          - image: edge
+            context: .
+            file: deploy/Dockerfile
+            target: edge
+          - image: operator
+            context: .
+            file: deploy/Dockerfile
+            target: operator
+          - image: edgeml-sidecar
+            context: edgeml
+            file: edgeml/Dockerfile
+            target: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

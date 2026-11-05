@@ -15,6 +15,7 @@ import (
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/vec"
 )
 
@@ -53,8 +54,9 @@ const (
 // operator interest, and detection confidence.
 func Default() *Engine {
 	return &Engine{
-		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}},
-		Weights: map[string]float64{"base": 1, "unknown": 3, "interest": 1, "confidence": 0.5},
+		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}},
+		Weights: map[string]float64{"base": 1, "unknown": 3, "interest": 1, "confidence": 0.5,
+			"dark": catalog.NightConfig.DarkContact.PriorityWeight},
 	}
 }
 
@@ -78,6 +80,9 @@ func (e *Engine) Score(it *pb.Item, ctx *Context, pullBoost float64) *pb.Score {
 	for _, s := range e.Scorers {
 		r := s.Score(it, ctx)
 		w := e.weight(s.Name(), ctx.Policy)
+		if s.Name() == "dark" && w == 0 {
+			continue
+		}
 		if r.Value != 0 {
 			sum += w * r.Value
 		}
@@ -231,10 +236,23 @@ func (Interest) Score(it *pb.Item, ctx *Context) Result {
 			return Result{Multiplier: sup, Suppressed: true, Note: "suppressed: " + l}
 		}
 	}
+	// Strongest matching boost label wins; BoostWeights is keyed by the
+	// lower-cased, trimmed label exactly as Merge stored it.
+	matched, weight := "", 0.0
 	for _, l := range in.BoostLabels {
-		if hasLabel(labels, l) {
-			return Result{Value: 1, Multiplier: boost, Note: "boosted: " + l}
+		if !hasLabel(labels, l) {
+			continue
 		}
+		w := in.BoostWeights[strings.ToLower(strings.TrimSpace(l))]
+		if w <= 0 {
+			w = boost
+		}
+		if matched == "" || w > weight {
+			matched, weight = l, w
+		}
+	}
+	if matched != "" {
+		return Result{Value: 1, Multiplier: weight, Note: "boosted: " + matched}
 	}
 	emb := it.GetFeatures().GetEmbedding()
 	if len(emb) == 0 || (len(in.PositiveEmbedding) == 0 && len(in.NegativeEmbedding) == 0) {
@@ -303,7 +321,37 @@ func hasLabel(labels []string, want string) bool {
 func norm(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.TrimSuffix(s, "s")
-	return strings.ReplaceAll(s, "_", " ")
+	s = strings.ReplaceAll(s, "_", " ")
+	switch s {
+	case "dark vessel", "dark ship", "running dark", "vessel running dark", "dark contact":
+		return "dark contact"
+	case "vessels running dark":
+		return "dark contact"
+	default:
+		return s
+	}
+}
+
+type DarkContact struct{}
+
+func (DarkContact) Name() string { return "dark" }
+func (DarkContact) Score(it *pb.Item, ctx *Context) Result {
+	f := it.GetFeatures()
+	if f == nil || (f.LabelOverride != "" && norm(f.LabelOverride) != "dark contact") {
+		return Result{}
+	}
+	_, detMin := thresholds(ctx.Policy)
+	var confidence float32
+	for _, detection := range f.GetDetections() {
+		if strings.EqualFold(detection.GetLabel(), catalog.NightConfig.DarkContact.Label) &&
+			detection.Confidence >= detMin && detection.Confidence > confidence {
+			confidence = detection.Confidence
+		}
+	}
+	if confidence == 0 {
+		return Result{}
+	}
+	return Result{Value: float64(confidence), Note: "dark contact: no navigation lights at night"}
 }
 
 // Confidence: a confident detection of anything is worth a little more than

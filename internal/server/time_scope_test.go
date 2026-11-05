@@ -28,7 +28,10 @@ func TestTimeScopedRefreshExpiresBoostAndPublishes(t *testing.T) {
 		t.Fatal(err)
 	}
 	app := New(data)
-	client := app.hub.add()
+	client, ok := app.hub.add()
+	if !ok {
+		t.Fatal("could not add stream client")
+	}
 	defer app.hub.remove(client)
 
 	for _, tc := range []struct {
@@ -78,7 +81,10 @@ func TestTimeScopedRefreshWithoutWindowDoesNotPublish(t *testing.T) {
 			}
 		}
 		app := New(data)
-		client := app.hub.add()
+		client, ok := app.hub.add()
+		if !ok {
+			t.Fatal("could not add stream client")
+		}
 		app.RescoreTimeScoped(time.Now())
 		select {
 		case event := <-client.events:

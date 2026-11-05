@@ -5,9 +5,11 @@ package console
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
@@ -15,16 +17,24 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 )
 
 type Service struct {
 	ghostseekerv1connect.UnimplementedConsoleServiceHandler
-	NodeID string
-	St     *store.Store
-	Clk    clock.Clock
+	policyMu sync.Mutex
+	NodeID   string
+	St       *store.Store
+	Clk      clock.Clock
 	// Embedder compiles natural-language interest into vectors; optional.
 	Embedder inference.Analyzer
+	Signer   *policy.SigningKey
+	// Keys trusts policies signed by higher echelons: a SetPolicy that changes
+	// layers above ECHELON_SHIP must itself verify against this keyring.
+	Keys policy.Keyring
 	// Edge to address downlink to; "" = broadcast to all edges.
 	EdgeID string
 }
@@ -50,9 +60,12 @@ func view(it *store.Item) *pb.ItemView {
 }
 
 func (s *Service) ListItems(ctx context.Context, req *connect.Request[pb.ListItemsRequest]) (*connect.Response[pb.ListItemsResponse], error) {
-	off, _ := strconv.Atoi(req.Msg.PageToken)
+	off, lim, err := console.Page(req.Msg.PageToken, req.Msg.Limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	items, total, err := s.St.List(ctx, store.ListFilter{Type: req.Msg.Type, UnknownOnly: req.Msg.UnknownOnly, Label: req.Msg.Label,
-		Limit: int(req.Msg.Limit), Offset: off})
+		Limit: lim, Offset: off})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -89,19 +102,68 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if p == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("policy required"))
 	}
+	s.policyMu.Lock()
+	defer s.policyMu.Unlock()
 	now := s.Clk.Now()
+	prev, err := s.St.GetPolicy(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// The shore signs what the ship console submits, so it must not certify
+	// higher-echelon layers it did not already hold: those only change when
+	// the submitted policy carries a valid signature from a trusted key.
+	if higherLayersChanged(prev, p) {
+		if p.Signature == nil || len(s.Keys) == 0 {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon layers can only be set by a policy signed with a trusted key"))
+		}
+		if err := policy.Verify(p, s.Keys); err != nil {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
+		}
+		// The signed version is part of the signed bytes; requiring it to rise
+		// above the stored policy stops an old (revoked) command policy from
+		// being replayed and re-signed by the shore.
+		if p.Version == 0 || (prev != nil && p.Version <= prev.Version) {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", prev.GetVersion()))
+		}
+	}
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
 	}
+	if p.Version == 0 {
+		// Shore-assigned versions are wall-clock ms (so they stay above any
+		// ms-scale version the edge accepted directly) and strictly above the
+		// stored one; a signed higher-echelon issuer goes one above GetPolicy.
+		version := now.UnixMilli()
+		if prev != nil && prev.Version+1 > version {
+			version = prev.Version + 1
+		}
+		p.Version = version
+	}
 	p.IssuedAtUnixMs = now.UnixMilli()
+	if len(p.Layers) > 0 {
+		p = policy.Flatten(p, s.EdgeID, now)
+		if p.Interest != nil {
+			p.Interest.PositiveEmbedding = nil
+			p.Interest.NegativeEmbedding = nil
+		}
+	}
 	if p.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		p.Emcon = pb.EmconMode_EMCON_MODE_NORMAL
 	}
 	if p.Interest == nil {
 		p.Interest = &pb.Interest{}
 	}
+	if err := console.ValidateInterest(p.Interest); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	if s.Embedder != nil {
 		if err := s.compileInterest(ctx, p.Interest); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+	p.Signature = nil
+	if s.Signer != nil {
+		if err := s.Signer.Sign(p); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
@@ -111,7 +173,7 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_Policy{Policy: p}}, now); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&pb.SetPolicyResponse{Policy: p}), nil
+	return connect.NewResponse(&pb.SetPolicyResponse{Policy: p, Conflicts: p.Conflicts}), nil
 }
 
 // compileInterest turns boost/suppress label lists into positive/negative
@@ -153,6 +215,9 @@ func (s *Service) RequestPull(ctx context.Context, req *connect.Request[pb.Reque
 	if p == nil || p.ItemId == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("pull required"))
 	}
+	if req.Msg.Pull.Original && strings.TrimSpace(req.Msg.Pull.RequestedBy) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("original (full-size) pull is an operator override: requestedBy is required"))
+	}
 	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_Pull{Pull: p}}, s.Clk.Now()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -190,6 +255,10 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		if !ids.Valid(parts[0]) {
+			http.NotFound(w, r)
+			return
+		}
 		kind := console.ParseForm(parts[1])
 		it, err := s.St.Get(r.Context(), parts[0])
 		if err != nil {
@@ -206,7 +275,35 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", f.Mime)
-		_, _ = w.Write(data)
+		httpx.ServeBlob(w, f.Mime, data)
 	})
+}
+
+// higherLayersChanged reports whether next carries layers above
+// ECHELON_SHIP that differ from the ones prev already held.
+func higherLayersChanged(prev, next *pb.Policy) bool {
+	var was, now []*pb.PolicyLayer
+	if prev != nil {
+		was = higherLayers(prev.Layers)
+	}
+	now = higherLayers(next.Layers)
+	if len(was) != len(now) {
+		return true
+	}
+	for i := range now {
+		if !proto.Equal(was[i], now[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func higherLayers(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
+	var out []*pb.PolicyLayer
+	for _, l := range layers {
+		if l != nil && l.Echelon > pb.Echelon_ECHELON_SHIP {
+			out = append(out, l)
+		}
+	}
+	return out
 }

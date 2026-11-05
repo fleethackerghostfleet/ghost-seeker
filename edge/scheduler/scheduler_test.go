@@ -13,6 +13,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 )
 
 // fakeShore is an in-memory SyncService that acks everything it gets and
@@ -284,6 +285,165 @@ func TestDownlinkPolicyAndPull(t *testing.T) {
 	}
 }
 
+func TestAcceptSignedLayeredPolicyAndConflicts(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	pub, priv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.PolicyKeys = policy.Keyring{"command": pub}
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{Keys: s.cfg.PolicyKeys})
+	if err != nil {
+		t.Fatal(err)
+	}
+	layers := &pb.Policy{Id: "layered", Version: 1, IssuedAtUnixMs: clk.Now().UnixMilli(), Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
+			{Id: "locked-sub", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
+		}},
+		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO", Rules: []*pb.InterestRule{
+			{Id: "suppress-sub", SuppressLabels: []string{"submarine"}},
+		}},
+	}}
+	if err := policy.Sign(layers, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), layers, "downlink"); err != nil {
+		t.Fatal(err)
+	}
+	applied := s.Policy()
+	if len(applied.Interest.BoostLabels) != 1 || applied.Interest.BoostLabels[0] != "submarine" ||
+		len(applied.Conflicts) != 1 || applied.Conflicts[0].RuleId != "suppress-sub" {
+		t.Fatalf("applied layered policy=%+v", applied)
+	}
+}
+
+func TestRejectedPolicyDownlinkAdvancesCursorAndStaleVersion(t *testing.T) {
+	s, st, sh, _ := setup(t, Prioritized)
+	s.cfg.RequireSignedPolicy = true
+	var err error
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{RequireSigned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, priv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.PolicyKeys = policy.Keyring{"command": pub}
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{Keys: s.cfg.PolicyKeys, RequireSigned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := &pb.Policy{Id: "accepted", Version: 4}
+	if err := policy.Sign(accepted, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), accepted, "console"); err != nil {
+		t.Fatal(err)
+	}
+	stale := &pb.Policy{Id: "stale", Version: 4}
+	if err := policy.Sign(stale, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), stale, "console"); !errors.Is(err, policy.ErrStaleVersion) {
+		t.Fatalf("stale version error=%v", err)
+	}
+	sh.downlink = []*pb.Downlink{{Seq: 7, Msg: &pb.Downlink_Policy{Policy: &pb.Policy{Id: "unsigned", Version: 5}}}}
+	if _, err := s.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Policy().Id; got != "accepted" {
+		t.Fatalf("rejected downlink replaced policy: %q", got)
+	}
+	cursor, err := st.GetCursor(context.Background())
+	if err != nil || cursor != 7 {
+		t.Fatalf("cursor=%d err=%v", cursor, err)
+	}
+	audit, err := s.PolicyAudit(context.Background(), 0)
+	if err != nil || len(audit) < 2 || audit[0].Result != "rejected" || audit[0].Source != "downlink" {
+		t.Fatalf("audit=%+v err=%v", audit, err)
+	}
+}
+
+func TestPolicyExpiryAndRuleExpiryOnTick(t *testing.T) {
+	s, _, _, clk := setup(t, Prioritized)
+	ctx := context.Background()
+	start := clk.Now()
+	withRuleExpiry := &pb.Policy{
+		Id: "rule-expiry", IssuedAtUnixMs: start.UnixMilli(), ExpiresAtUnixMs: start.Add(time.Hour).UnixMilli(),
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, Rules: []*pb.InterestRule{
+			{Id: "short", BoostLabels: []string{"submarine"}, ExpiresAtUnixMs: start.Add(time.Second).UnixMilli()},
+		}}},
+	}
+	if _, _, err := s.AcceptPolicy(ctx, withRuleExpiry, "console"); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(time.Second)
+	if _, err := s.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Policy().Interest.BoostLabels; len(got) != 0 {
+		t.Fatalf("expired rule remains active: %v", got)
+	}
+	audit, err := s.PolicyAudit(ctx, 0)
+	if err != nil || len(audit) != 1 || audit[0].Result != "applied" {
+		t.Fatalf("rule expiry audit=%+v err=%v", audit, err)
+	}
+
+	expiring := &pb.Policy{Id: "whole-policy", IssuedAtUnixMs: clk.Now().UnixMilli(), ExpiresAtUnixMs: clk.Now().Add(time.Second).UnixMilli()}
+	if _, _, err := s.AcceptPolicy(ctx, expiring, "console"); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(time.Second)
+	if _, err := s.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Policy().Id; got != "default" {
+		t.Fatalf("expired policy fallback=%q, want default", got)
+	}
+	audit, err = s.PolicyAudit(ctx, 0)
+	if err != nil || len(audit) < 2 || audit[0].Result != "expired" {
+		t.Fatalf("policy expiry audit=%+v err=%v", audit, err)
+	}
+}
+
+func TestPolicyRestartRestoresFlattenedLastGood(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	cfg := DefaultConfig("edge-7")
+	first, err := New(cfg, st, newFakeShore(), scoring.Default(), clk, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &pb.Policy{Id: "persisted", Version: 3, IssuedAtUnixMs: clk.Now().UnixMilli(), Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_SHIP, Rules: []*pb.InterestRule{{Id: "sub", BoostLabels: []string{"submarine"}}}},
+	}}
+	if _, _, err := first.AcceptPolicy(ctx, p, "console"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	restored, err := New(cfg, reopened, newFakeShore(), scoring.Default(), clk, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Policy().Id != "persisted" || len(restored.Policy().Interest.BoostLabels) != 1 ||
+		restored.Policy().Interest.BoostLabels[0] != "submarine" {
+		t.Fatalf("restored policy=%+v", restored.Policy())
+	}
+}
+
 func TestFIFOBaselineSendsFullInOrder(t *testing.T) {
 	s, st, sh, clk := setup(t, FIFO)
 	ctx := context.Background()
@@ -312,5 +472,141 @@ func TestEmconSilentSendsNothing(t *testing.T) {
 	}
 	if len(sh.chunks) != 0 || len(sh.manifests) != 0 {
 		t.Fatal("SILENT must transmit nothing")
+	}
+	// The exchange still runs empty so the downlink that lifts SILENT arrives.
+	sh.mu.Lock()
+	sh.downlink = append(sh.downlink, &pb.Downlink{Seq: 1, Msg: &pb.Downlink_Policy{Policy: &pb.Policy{Id: "normal", Emcon: pb.EmconMode_EMCON_MODE_NORMAL}}})
+	sh.mu.Unlock()
+	_, _ = s.Tick(ctx)
+	if s.Policy().GetEmcon() != pb.EmconMode_EMCON_MODE_NORMAL || s.Policy().Id != "normal" {
+		t.Fatalf("SILENT edge must still receive the downlinked policy: %+v", s.Policy())
+	}
+	_, _ = s.Tick(ctx)
+	if len(sh.chunks) == 0 && len(sh.manifests) == 0 {
+		t.Fatal("after NORMAL the edge must transmit again")
+	}
+}
+
+func TestScenePullOnlyFull(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	ctx := context.Background()
+	it := &pb.Item{Id: "scene-1", Type: pb.ItemType_ITEM_TYPE_IMAGE, CapturedAtUnixMs: clk.Now().UnixMilli(),
+		Features: &pb.Features{Tags: map[string]string{"event": "scene"}}}
+	payloads := map[pb.FormKind][]byte{
+		pb.FormKind_FORM_KIND_FACT:  []byte(`{"id":"scene-1"}`),
+		pb.FormKind_FORM_KIND_THUMB: make([]byte, 2000),
+		pb.FormKind_FORM_KIND_FULL:  make([]byte, 5000),
+	}
+	if _, err := st.Put(ctx, it, payloads); err != nil {
+		t.Fatal(err)
+	}
+	row, err := st.Get(ctx, it.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ScoreItem(ctx, row); err != nil {
+		t.Fatal(err)
+	}
+	hasFull := func() bool {
+		rows, _ := st.All(ctx)
+		for _, r := range rows {
+			r.ManifestAcked = true
+			for _, k := range []pb.FormKind{pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB} {
+				if f := r.Form(k); f != nil {
+					f.AckedThrough, f.Complete = f.Bytes, true
+				}
+			}
+		}
+		for _, q := range s.BuildPlan(rows, 2_000_000, clk.Now()).Queue {
+			if q.ItemId == it.Id && q.Form == pb.FormKind_FORM_KIND_FULL {
+				return true
+			}
+		}
+		return false
+	}
+	if hasFull() {
+		t.Fatal("scene FULL must not be offered on the ladder before a pull")
+	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Form: pb.FormKind_FORM_KIND_THUMB, RequestedBy: "shore"}); err != nil {
+		t.Fatal(err)
+	}
+	if hasFull() {
+		t.Fatal("pulling the THUMB must not release the scene FULL")
+	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Form: pb.FormKind_FORM_KIND_FULL, RequestedBy: "shore"}); err != nil {
+		t.Fatal(err)
+	}
+	if !hasFull() {
+		t.Fatal("pulled scene FULL must be queued")
+	}
+}
+
+// A scene FULL is pull-only; an operator's full-size override (original:true)
+// targets FULL and so must release it too.
+func TestScenePullOriginalReleasesFull(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	ctx := context.Background()
+	it := &pb.Item{Id: "scene-2", Type: pb.ItemType_ITEM_TYPE_IMAGE, CapturedAtUnixMs: clk.Now().UnixMilli(),
+		Features: &pb.Features{Tags: map[string]string{"event": "scene"}}}
+	payloads := map[pb.FormKind][]byte{
+		pb.FormKind_FORM_KIND_FACT:  []byte(`{"id":"scene-2"}`),
+		pb.FormKind_FORM_KIND_THUMB: make([]byte, 2000),
+		pb.FormKind_FORM_KIND_FULL:  make([]byte, 5000),
+	}
+	if _, err := st.Put(ctx, it, payloads); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutOriginal(ctx, it.Id, make([]byte, 9000)); err != nil {
+		t.Fatal(err)
+	}
+	row, err := st.Get(ctx, it.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ScoreItem(ctx, row); err != nil {
+		t.Fatal(err)
+	}
+	queuedFull := func() *pb.QueueEntry {
+		rows, _ := st.All(ctx)
+		for _, r := range rows {
+			r.ManifestAcked = true
+			for _, k := range []pb.FormKind{pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB} {
+				if f := r.Form(k); f != nil {
+					f.AckedThrough, f.Complete = f.Bytes, true
+				}
+			}
+		}
+		for _, q := range s.BuildPlan(rows, 2_000_000, clk.Now()).Queue {
+			if q.ItemId == it.Id && q.Form == pb.FormKind_FORM_KIND_FULL {
+				return q
+			}
+		}
+		return nil
+	}
+	if queuedFull() != nil {
+		t.Fatal("scene FULL must not be offered on the ladder before a pull")
+	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Original: true}); err == nil {
+		t.Fatal("original pull without requested_by must be rejected")
+	}
+	if queuedFull() != nil {
+		t.Fatal("a rejected pull must not release the scene FULL")
+	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Original: true, RequestedBy: "op1"}); err != nil {
+		t.Fatal(err)
+	}
+	q := queuedFull()
+	if q == nil {
+		t.Fatal("scene FULL pulled with original:true must be queued")
+	}
+	row, err = st.Get(ctx, it.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !row.PullOriginal || row.PullForm != pb.FormKind_FORM_KIND_FULL {
+		t.Fatalf("row pull state = original %v form %v", row.PullOriginal, row.PullForm)
+	}
+	if f := row.Form(pb.FormKind_FORM_KIND_FULL); f == nil || f.Bytes != 9000 {
+		t.Fatalf("FULL should be the 9000-byte original, got %+v", f)
 	}
 }

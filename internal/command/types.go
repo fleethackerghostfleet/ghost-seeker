@@ -1,6 +1,10 @@
 package command
 
-import "time"
+import (
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+)
 
 type Rule struct {
 	Type        string   `json:"type"`
@@ -12,12 +16,17 @@ type Rule struct {
 	Sources     []string `json:"sources,omitempty"`
 	WithinMin   int      `json:"withinMin,omitempty"`
 	Edited      bool     `json:"edited,omitempty"`
+	Blocked     string   `json:"blocked,omitempty"`
 }
 
 type Directive struct {
-	ID    string `json:"id"`
-	Text  string `json:"text"`
-	Rules []Rule `json:"rules"`
+	ID       string `json:"id"`
+	Text     string `json:"text"`
+	Rules    []Rule `json:"rules"`
+	Source   string `json:"source,omitempty"`
+	Locked   bool   `json:"locked,omitempty"`
+	LockedBy string `json:"lockedBy,omitempty"`
+	Blocked  string `json:"blocked,omitempty"`
 }
 
 type Box struct {
@@ -34,6 +43,7 @@ type Box struct {
 }
 
 type Attributes struct {
+	Transient   bool `json:"transient,omitempty"`
 	Approaching bool `json:"approaching"`
 	New         bool `json:"new"`
 	Dark        bool `json:"dark"`
@@ -42,12 +52,13 @@ type Attributes struct {
 }
 
 type Detection struct {
-	Lights []Light      `json:"lights,omitempty"`
-	Signal *LightSignal `json:"sig,omitempty"`
-	Class  string       `json:"cls"`
-	Box    Box          `json:"b"`
-	Conf   float64      `json:"conf"`
-	Attrs  Attributes   `json:"attrs"`
+	Lights []Light            `json:"lights,omitempty"`
+	Signal *LightSignal       `json:"sig,omitempty"`
+	Class  string             `json:"cls"`
+	Box    Box                `json:"b"`
+	Conf   float64            `json:"conf"`
+	Attrs  Attributes         `json:"attrs"`
+	Ship   *catalog.ShipClass `json:"ship,omitempty"`
 }
 
 type DetectionScore struct {
@@ -91,12 +102,60 @@ type Item struct {
 	Sent        bool       `json:"sent"`
 	SentAt      *time.Time `json:"sentAt,omitempty"`
 	// Commander's final decision on an image the watch floor escalated.
-	Decision     string           `json:"decision,omitempty"`
-	DecisionNote string           `json:"decisionNote,omitempty"`
-	DecidedAt    *time.Time       `json:"decidedAt,omitempty"`
-	Lat          Latency          `json:"lat"`
-	Dets         []Detection      `json:"dets"`
-	Det          []DetectionScore `json:"det"`
+	Decision     string     `json:"decision,omitempty"`
+	DecisionNote string     `json:"decisionNote,omitempty"`
+	DecidedAt    *time.Time `json:"decidedAt,omitempty"`
+	// Operator override: send the original image at full size, no compression.
+	FullRes   bool             `json:"fullRes,omitempty"`
+	FullResBy string           `json:"fullResBy,omitempty"`
+	FullResAt *time.Time       `json:"fullResAt,omitempty"`
+	Lat       Latency          `json:"lat"`
+	Dets      []Detection      `json:"dets"`
+	Det       []DetectionScore `json:"det"`
+	// Live is set only when the item comes from a shore node (ghost-seeker
+	// -shore); the simulation leaves it nil.
+	Live *LiveMeta `json:"live,omitempty"`
+}
+
+// LiveForm is the shore-side state of one form of an item's fidelity ladder.
+type LiveForm struct {
+	State    string `json:"state"` // none | offered | pending | partial | received
+	Bytes    int64  `json:"bytes"`
+	Received int64  `json:"received"`
+}
+
+// LiveMeta carries what a shore sighting knows that the simulation does not:
+// which shore item backs the card, how it was grouped, which forms have
+// landed and whether the standing policy deprioritizes it.
+type LiveMeta struct {
+	ItemID       string              `json:"itemId"` // shore item the card shows (best received form)
+	SightingID   string              `json:"sightingId,omitempty"`
+	Subtype      string              `json:"subtype,omitempty"` // sidecar zero-shot subtype
+	Label        string              `json:"label,omitempty"`   // detector class
+	Override     string              `json:"override,omitempty"`
+	Event        string              `json:"event,omitempty"`
+	Unknownness  float64             `json:"unknownness"`
+	Unknown      bool                `json:"unknown"`
+	Score        float64             `json:"score"`    // shore priority score (unbounded)
+	Priority     string              `json:"priority"` // P1..P4 by rank on shore
+	Suppressed   bool                `json:"suppressed"`
+	SuppressedBy string              `json:"suppressedBy,omitempty"`
+	Frames       int                 `json:"frames"`
+	FramesKnown  bool                `json:"framesKnown"`
+	Reports      int                 `json:"reports"`
+	FirstMs      int64               `json:"firstMs"`
+	LastMs       int64               `json:"lastMs"`
+	Forms        map[string]LiveForm `json:"forms"`
+	ImageForm    string              `json:"imageForm,omitempty"`
+	FactURL      string              `json:"factUrl"`
+	Pull         LivePull            `json:"pull"`
+}
+
+// LivePull explains the state of the "Pull full image" action for a card.
+type LivePull struct {
+	Enabled bool   `json:"enabled"`
+	Label   string `json:"label"`
+	Reason  string `json:"reason"`
 }
 
 type Stats struct {

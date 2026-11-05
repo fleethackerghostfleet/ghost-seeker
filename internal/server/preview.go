@@ -88,7 +88,8 @@ func (s *Server) previewDirectives(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "Directive text must be 500 characters or fewer")
 			return
 		}
-		rules, unknown = command.ParseDirectiveDetailed(*body.Text)
+		compiled := s.directiveCompiler().CompileRules(*body.Text)
+		rules, unknown = compiled.Rules, compiled.Unknown
 	}
 	if body.Rules != nil {
 		rules = *body.Rules
@@ -107,7 +108,7 @@ func (s *Server) previewDirectives(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, _, _, state := s.store.Snapshot()
+	items, _, _, state := s.store.SnapshotWithDirectives()
 	visible := items[:0]
 	for _, item := range items {
 		if !item.Dismissed {
