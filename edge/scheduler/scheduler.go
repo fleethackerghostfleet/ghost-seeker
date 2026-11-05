@@ -526,6 +526,9 @@ func (s *Scheduler) mkCand(r *store.Row, f *store.FormState, minImg float64) *ca
 			(r.Score.Suppressed || r.Score.Priority < minImg) {
 			c.tier = 1
 		}
+		if r.Item.GetFeatures().GetTags()["event"] == "scene" {
+			c.tier = 2
+		}
 	}
 	return c
 }

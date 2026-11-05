@@ -76,6 +76,11 @@ func (e *Engine) weight(name string, p *pb.Policy) float64 {
 // boost (0 if none).
 func (e *Engine) Score(it *pb.Item, ctx *Context, pullBoost float64) *pb.Score {
 	out := &pb.Score{ComputedAtUnixMs: ctx.Now.UnixMilli()}
+	if it.GetFeatures().GetTags()["event"] == "scene" {
+		out.Priority = 0.0001
+		out.Reasons = []*pb.Reason{{Scorer: "scene", Value: out.Priority, Note: "object-free camera overview"}}
+		return out
+	}
 	sum, mult := 0.0, 1.0
 	for _, s := range e.Scorers {
 		r := s.Score(it, ctx)

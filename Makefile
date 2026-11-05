@@ -47,6 +47,7 @@ demo: demo-clips demo-compare ## download the 5 fps clips, run naive vs hash vs 
 
 demo-clips:      ## fetch the demo clips into $(DEMO)/frames (gitignored; GitHub release demo-data-v1 via gh, gcloud fallback)
 	$(DEMO)/download.sh
+	$(PY) $(DEMO)/ocean.py $(DEMO)/frames
 
 demo-compare: build
 	$(DEMO)/compare.sh
@@ -87,7 +88,7 @@ demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tr
 
 demo-edge: build demo-key ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
 	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
-	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
+	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/live.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
 
 compose:
 	docker compose -f deploy/compose/docker-compose.yml up --build
@@ -100,7 +101,7 @@ DEMO_COMPOSE := deploy/compose/demo.compose.yml
 DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) docker compose -f $(DEMO_COMPOSE)
 
 compose-demo:    ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
-	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO)/scenario.json); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (see docs/DEMO.md)"; exit 1; }; done
+	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO)/live.json); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (see docs/DEMO.md)"; exit 1; }; done
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (or MODELS=/path/to/D)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d
 	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"
