@@ -34,7 +34,7 @@ func RuleMatch(r Rule, d Detection) bool {
 	return classMatch && attrMatch
 }
 
-func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
+func ScoreDet(d Detection, rules []Rule, model string, opticalNight ...bool) DetectionScore {
 	w := ContactWeight(d, model)
 	boosts, only, matched, suppressed := 0, false, false, false
 	notes := make([]Rule, 0)
@@ -77,7 +77,12 @@ func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
 			w *= .6
 		}
 	}
-	return DetectionScore{Score: min(.99, w*ConfFactor(d.Conf)), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes}
+	signal := gateLightSignal(d.Lights, d.Box, d.Signal)
+	light := len(opticalNight) > 0 && opticalNight[0] && signal != nil && signal.Boost > 0
+	if light {
+		w = 1 - (1-w)*(1-min(1, max(0, signal.Boost)))
+	}
+	return DetectionScore{Score: min(.99, w*ConfFactor(d.Conf)), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes, Light: light}
 }
 
 // ConfSat is the detector confidence treated as certain; lower confidences scale the score down linearly.
@@ -152,11 +157,30 @@ func RescoreAt(item *Item, model string, directives []Directive, now time.Time) 
 		}
 	}
 	item.Det = make([]DetectionScore, len(item.Dets))
+	eligible := OpticalNight(item)
+	if eligible {
+		for i := range item.Dets {
+			item.Dets[i].Signal = gateLightSignal(item.Dets[i].Lights, item.Dets[i].Box, item.Dets[i].Signal)
+		}
+	}
+	if !eligible {
+		for i := range item.Dets {
+			item.Dets[i].Lights = nil
+			item.Dets[i].Signal = nil
+		}
+		for _, source := range catalog.Sources {
+			if source.ID == item.SourceID && source.Mode == "sar" {
+				item.Night = nil
+				item.Basis = "not_applicable_radar"
+				item.Lum = 0
+			}
+		}
+	}
 	scores, baseScores := make([]float64, 0, len(item.Dets)), make([]float64, 0, len(item.Dets))
 	for i, detection := range item.Dets {
-		item.Det[i] = ScoreDet(detection, rules, model)
+		item.Det[i] = ScoreDet(detection, rules, model, eligible)
 		scores = append(scores, item.Det[i].Score)
-		baseScores = append(baseScores, ScoreDet(detection, nil, model).Score)
+		baseScores = append(baseScores, ScoreDet(detection, nil, model, eligible).Score)
 	}
 	item.Central = FrameScore(scores)
 	if len(rules) == 0 {

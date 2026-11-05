@@ -468,7 +468,11 @@ func ToCard(v *pb.ItemView) *Card {
 	if c.Label == "" && c.Unknownness > 0.5 {
 		c.Label = "unknown"
 	}
-	for _, n := range []string{"crop", "thumb", "full"} {
+	prefer := []string{"crop", "thumb", "full"}
+	if c.Tags["event"] == "scene" { // no object to crop: a pulled FULL beats the thumb
+		prefer = []string{"full", "thumb"}
+	}
+	for _, n := range prefer {
 		if c.Forms[n].State == "received" {
 			c.Image, c.ImageForm = "/blob/"+c.ID+"/"+n, n
 			break

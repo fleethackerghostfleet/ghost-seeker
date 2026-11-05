@@ -321,7 +321,7 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 	}
 	for i := range r.Forms {
 		f := &r.Forms[i]
-		if !f.Ready || f.Complete {
+		if !f.Ready || f.Complete || PullOnly(r, f) {
 			continue
 		}
 		if skipForm(r, f) {
@@ -349,11 +349,21 @@ func skipForm(r *store.Row, f *store.FormState) bool {
 	return false
 }
 
+// PullOnly reports whether a form is held on the edge for shore to pull
+// rather than offered on the ladder: the FULL of an object-free "scene"
+// item, until shore asks for that form specifically. Such a form is not
+// backlog: it never counts as queued.
+func PullOnly(r *store.Row, f *store.FormState) bool {
+	return f.Kind == pb.FormKind_FORM_KIND_FULL &&
+		r.Item.GetFeatures().GetTags()["event"] == "scene" &&
+		!(r.PullBoost > 0 && r.PullForm == pb.FormKind_FORM_KIND_FULL)
+}
+
 // nextFormAfter returns the ladder rung following kind, if sendable.
 func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.EmconMode) *store.FormState {
 	for i := range r.Forms {
 		f := &r.Forms[i]
-		if f.Kind <= kind || !f.Ready || f.Complete || skipForm(r, f) {
+		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) || skipForm(r, f) {
 			continue
 		}
 		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {

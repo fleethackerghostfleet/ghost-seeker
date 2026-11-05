@@ -1,0 +1,34 @@
+import importlib.util
+import json
+from pathlib import Path
+
+
+def test_day_and_twilight_counts_are_disjoint(tmp_path, monkeypatch):
+    scripts = Path(__file__).resolve().parents[1]/"scripts"
+    monkeypatch.syspath_prepend(str(scripts))
+    spec = importlib.util.spec_from_file_location("evaluation", scripts/"nightlights_eval.py")
+    evaluation = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(evaluation)
+    light = dict(colour="red", x=10, y=10, flashing=False)
+    labels = [dict(rule_id=r["id"], night=True, lights=[light]) for r in evaluation.load_rules()]
+    labels += [dict(rule_id=None, night=False, lights=[]) for _ in range(8)]
+    labels += [dict(rule_id=None, night=i < 8, lights=[], gate_only=True) for i in range(16)]
+    for record in labels:
+        record.update(frames=["frame.png"], box=[0, 0, 20, 20], aspect="unknown")
+    directory = tmp_path/"hard"/"dev"
+    directory.mkdir(parents=True)
+    (directory/"labels.json").write_text(json.dumps(labels))
+    results = iter(dict(lights=r["lights"], night=r["night"],
+                        interpretation=dict(rule_id=r["rule_id"], aspect="unknown")) for r in labels)
+    monkeypatch.setattr(evaluation, "analyze", lambda *args, **kwargs: next(results))
+    monkeypatch.setattr(evaluation.cv2, "imread", lambda path: None)
+    monkeypatch.setattr(evaluation, "observability", lambda record: dict(unresolvable=False))
+    report = tmp_path/"summaries"
+    evaluation.evaluate(tmp_path, "dev", report, tier="hard")
+    summary = json.loads((report/"hard_dev.json").read_text())
+    metrics = summary["metrics"]
+    assert metrics["day_images"] == 8
+    assert metrics["twilight_images"] == 16
+    assert metrics["gate_images"] == metrics["night_contacts"] + metrics["day_images"] + metrics["twilight_images"]
+    assert "contacts" not in summary
+    assert len(json.loads((tmp_path/"reports"/"hard_dev.json").read_text())["contacts"]) == len(labels)

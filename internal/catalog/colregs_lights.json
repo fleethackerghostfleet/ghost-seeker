@@ -1,0 +1,255 @@
+[
+  {
+    "id": "ram",
+    "pattern": {
+      "layout": "vertical",
+      "colours": [
+        "red",
+        "white",
+        "red"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 27(b)",
+    "meaning": "restricted in ability to manoeuvre — keep clear",
+    "line": "Vessel showing red-over-white-over-red: restricted in ability to manoeuvre — keep clear",
+    "severity": "urgent",
+    "priority_boost": 0.8
+  },
+  {
+    "id": "constrained_draught",
+    "pattern": {
+      "layout": "vertical",
+      "colours": [
+        "red",
+        "red",
+        "red"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 28",
+    "meaning": "constrained by draught — avoid impeding safe passage",
+    "line": "Vessel showing red-over-red-over-red: constrained by draught — avoid impeding safe passage",
+    "severity": "urgent",
+    "priority_boost": 0.7
+  },
+  {
+    "id": "nuc",
+    "pattern": {
+      "layout": "vertical",
+      "colours": [
+        "red",
+        "red"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 27(a)",
+    "meaning": "not under command — keep clear",
+    "line": "Vessel showing red-over-red: not under command — keep clear",
+    "severity": "urgent",
+    "priority_boost": 0.9
+  },
+  {
+    "id": "trawling",
+    "pattern": {
+      "layout": "vertical",
+      "colours": [
+        "green",
+        "white"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 26(b)",
+    "meaning": "engaged in trawling",
+    "line": "Vessel showing green-over-white: engaged in trawling",
+    "severity": "advisory",
+    "priority_boost": 0.1
+  },
+  {
+    "id": "fishing",
+    "pattern": {
+      "layout": "vertical",
+      "colours": [
+        "red",
+        "white"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 26(c)",
+    "meaning": "fishing other than trawling",
+    "line": "Vessel showing red-over-white: fishing other than trawling",
+    "severity": "advisory",
+    "priority_boost": 0.1
+  },
+  {
+    "id": "pilot",
+    "pattern": {
+      "layout": "vertical",
+      "colours": [
+        "white",
+        "red"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 29",
+    "meaning": "pilot vessel on duty",
+    "line": "Vessel showing white-over-red: pilot vessel on duty",
+    "severity": "advisory",
+    "priority_boost": 0
+  },
+  {
+    "id": "tow_long",
+    "pattern": {
+      "layout": "vertical",
+      "colours": [
+        "white",
+        "white",
+        "white"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 24(a)",
+    "meaning": "possible towing vessel, tow exceeds 200 m; verify towing lights and aspect",
+    "line": "Vessel showing white-over-white-over-white: possible towing vessel, tow exceeds 200 m; verify towing lights and aspect",
+    "severity": "advisory",
+    "priority_boost": 0.1
+  },
+  {
+    "id": "two_mastheads",
+    "pattern": {
+      "select": ["white"],
+      "layout": "set",
+      "colours": [
+        "white",
+        "white"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rules 23(a), 24(a)",
+    "meaning": "ambiguous: towing (vertical whites) or power-driven vessel 50 m or longer (forward/aft mastheads); geometry alone is insufficient",
+    "line": "Vessel showing white + white: ambiguous: towing (vertical whites) or power-driven vessel 50 m or longer (forward/aft mastheads); geometry alone is insufficient",
+    "severity": "advisory",
+    "priority_boost": 0
+  },
+  {
+    "id": "head_on",
+    "pattern": {
+      "select": ["red", "green"],
+      "isolated": true,
+      "layout": "set",
+      "colours": [
+        "red",
+        "green"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rules 21, 23",
+    "meaning": "both sidelights visible: approximately head-on; confirm risk and vessel type",
+    "line": "Vessel showing red + green: both sidelights visible: approximately head-on; confirm risk and vessel type",
+    "severity": "advisory",
+    "priority_boost": 0
+  },
+  {
+    "id": "port",
+    "pattern": {
+      "select": ["red", "green"],
+      "isolated": true,
+      "layout": "set",
+      "colours": [
+        "red"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 21(b)",
+    "meaning": "her port side visible, likely crossing right to left; light alone does not establish right of way",
+    "line": "Vessel showing red: her port side visible, likely crossing right to left; light alone does not establish right of way",
+    "severity": "advisory",
+    "priority_boost": 0
+  },
+  {
+    "id": "starboard",
+    "pattern": {
+      "select": ["red", "green"],
+      "isolated": true,
+      "layout": "set",
+      "colours": [
+        "green"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rule 21(b)",
+    "meaning": "her starboard side visible, likely crossing left to right; light alone does not establish right of way",
+    "line": "Vessel showing green: her starboard side visible, likely crossing left to right; light alone does not establish right of way",
+    "severity": "advisory",
+    "priority_boost": 0
+  },
+  {
+    "id": "white_ambiguous",
+    "pattern": {
+      "layout": "set",
+      "colours": [
+        "white"
+      ]
+    },
+    "flashing": null,
+    "ref": "Rules 21(c), 23(d), 30",
+    "meaning": "ambiguous white light: stern, anchored vessel, or small power vessel; do not infer motion",
+    "line": "Vessel showing white: ambiguous white light: stern, anchored vessel, or small power vessel; do not infer motion",
+    "severity": "advisory",
+    "priority_boost": 0
+  },
+  {
+    "id": "air_cushion",
+    "pattern": {
+      "layout": "set",
+      "colours": [
+        "yellow"
+      ]
+    },
+    "flashing": true,
+    "ref": "Rule 23(b)",
+    "meaning": "possible air-cushion vessel in non-displacement mode; verify other lights",
+    "line": "Vessel showing yellow: possible air-cushion vessel in non-displacement mode; verify other lights",
+    "severity": "advisory",
+    "priority_boost": 0.05
+  },
+  {
+    "id": "law_enforcement",
+    "pattern": {
+      "layout": "set",
+      "colours": [
+        "blue"
+      ]
+    },
+    "flashing": true,
+    "ref": "Local jurisdiction (non-COLREGS)",
+    "meaning": "possible law enforcement where locally authorized; flashing blue is not a universal COLREGS signal",
+    "line": "Vessel showing blue: possible law enforcement where locally authorized; flashing blue is not a universal COLREGS signal",
+    "severity": "advisory",
+    "priority_boost": 0.1
+  },
+  {
+    "id": "distress_flare",
+    "pattern": {
+      "signal": "red_flare"
+    },
+    "flashing": null,
+    "ref": "Annex IV 1(c), 1(i)",
+    "meaning": "red flare reported: distress — render assistance as safe",
+    "line": "Vessel showing red flares: red flare reported: distress — render assistance as safe",
+    "severity": "urgent",
+    "priority_boost": 1
+  },
+  {
+    "id": "distress_sos",
+    "pattern": {
+      "signal": "sos"
+    },
+    "flashing": null,
+    "ref": "Annex IV 1(d)",
+    "meaning": "SOS reported by flashing light: distress — render assistance as safe",
+    "line": "Vessel showing SOS: SOS reported by flashing light: distress — render assistance as safe",
+    "severity": "urgent",
+    "priority_boost": 1
+  }
+]

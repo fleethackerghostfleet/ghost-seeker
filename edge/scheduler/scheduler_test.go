@@ -314,3 +314,57 @@ func TestEmconSilentSendsNothing(t *testing.T) {
 		t.Fatal("SILENT must transmit nothing")
 	}
 }
+
+func TestScenePullOnlyFull(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	ctx := context.Background()
+	it := &pb.Item{Id: "scene-1", Type: pb.ItemType_ITEM_TYPE_IMAGE, CapturedAtUnixMs: clk.Now().UnixMilli(),
+		Features: &pb.Features{Tags: map[string]string{"event": "scene"}}}
+	payloads := map[pb.FormKind][]byte{
+		pb.FormKind_FORM_KIND_FACT:  []byte(`{"id":"scene-1"}`),
+		pb.FormKind_FORM_KIND_THUMB: make([]byte, 2000),
+		pb.FormKind_FORM_KIND_FULL:  make([]byte, 5000),
+	}
+	if _, err := st.Put(ctx, it, payloads); err != nil {
+		t.Fatal(err)
+	}
+	row, err := st.Get(ctx, it.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ScoreItem(ctx, row); err != nil {
+		t.Fatal(err)
+	}
+	hasFull := func() bool {
+		rows, _ := st.All(ctx)
+		for _, r := range rows {
+			r.ManifestAcked = true
+			for _, k := range []pb.FormKind{pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB} {
+				if f := r.Form(k); f != nil {
+					f.AckedThrough, f.Complete = f.Bytes, true
+				}
+			}
+		}
+		for _, q := range s.BuildPlan(rows, 2_000_000, clk.Now()).Queue {
+			if q.ItemId == it.Id && q.Form == pb.FormKind_FORM_KIND_FULL {
+				return true
+			}
+		}
+		return false
+	}
+	if hasFull() {
+		t.Fatal("scene FULL must not be offered on the ladder before a pull")
+	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Form: pb.FormKind_FORM_KIND_THUMB, RequestedBy: "shore"}); err != nil {
+		t.Fatal(err)
+	}
+	if hasFull() {
+		t.Fatal("pulling the THUMB must not release the scene FULL")
+	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Form: pb.FormKind_FORM_KIND_FULL, RequestedBy: "shore"}); err != nil {
+		t.Fatal(err)
+	}
+	if !hasFull() {
+		t.Fatal("pulled scene FULL must be queued")
+	}
+}
