@@ -83,6 +83,7 @@ the environment variables shown in the table.
 | `-id` | `EDGE_ID` | `edge-1` | Edge identifier |
 | `-data` | `DATA_DIR` | `data/edge` | SQLite store and blobs |
 | `-listen` | `LISTEN` | `:8081` | Console and sync HTTP listener |
+| `-public-hosts` | `GS_PUBLIC_HOSTS` | empty | Additional Host names accepted by the DNS-rebinding guard |
 | `-shore` | `SHORE_URL` | `http://localhost:8080` | Shore base URL |
 | `-infer` | `INFER_URL` | `mock` | Inference URL or `mock` |
 | `-unit-token` | `GS_UNIT_TOKEN` | unset | HS256 unit token for shore sync |
@@ -104,6 +105,7 @@ the environment variables shown in the table.
 |---|---|---|---|
 | `-data` | `DATA_DIR` | `data/shore` | SQLite store |
 | `-listen` | `LISTEN` | `:8080` | Shore HTTP listener |
+| `-public-hosts` | `GS_PUBLIC_HOSTS` | empty | Additional Host names accepted by the DNS-rebinding guard |
 | `-infer` | `INFER_URL` | `mock` | Inference URL for text embedding, or `mock` |
 | `-require-auth` | `GS_REQUIRE_AUTH` | `true` | Require unit JWTs on SyncService; `false` is for isolated lab links only |
 | `-signing-key` | `GS_SIGNING_KEY` | unset | HS256 signing key; also accepted by mint tool |

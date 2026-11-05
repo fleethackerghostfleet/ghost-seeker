@@ -89,8 +89,9 @@ Shore ConsoleService, the edge console, `/blob/` on both and the operator web ap
 (default `data/operator.token`, auto-generated for a local demo; `none` to require an explicit
 token). API calls need `Authorization: Bearer <token>` (401 otherwise); the web app exchanges it
 for an `HttpOnly; SameSite=Strict` session cookie at `/login` (automatic for a loopback browser in
-dev mode). CORS is same-origin unless `-cors-origins` / `GS_CORS_ORIGINS` lists an origin. See
-`docs/SECURITY.md` for the full control list and the Deep-scan before/after.
+dev mode). CORS is same-origin unless `-cors-origins` / `GS_CORS_ORIGINS` lists an origin. Set
+`-public-hosts` / `GS_PUBLIC_HOSTS` for any public DNS or ingress Host name. See `docs/SECURITY.md`
+for the full control list and the Deep-scan before/after.
 
 ## Configuration: unit sync authentication and edge storage caps
 

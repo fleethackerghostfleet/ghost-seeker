@@ -13,6 +13,8 @@ services:
       # Unit (edge->shore) auth is mandatory in production: mint edge tokens with cmd/mint-unit-token.
       GS_REQUIRE_AUTH: "true"
       GS_SIGNING_KEY: ${GS_SIGNING_KEY:?set GS_SIGNING_KEY (>=32 bytes) for unit JWTs}
+      # Edge reaches shore through toxiproxy as http://link:18080 (Host: link:18080).
+      GS_PUBLIC_HOSTS: "shore,link,localhost"
     ports: ["8080:8080"]
     volumes: ["shore-data:/data"]
 
@@ -31,6 +33,7 @@ services:
       GS_OPERATOR_TOKEN: ${GS_OPERATOR_TOKEN:?set GS_OPERATOR_TOKEN (>=16 bytes) for the shore/edge consoles}
       GS_DEV_TOKEN_FILE: none
       GS_UNIT_TOKEN: ${GS_UNIT_TOKEN:?set GS_UNIT_TOKEN (edge JWT from cmd/mint-unit-token)}
+      GS_PUBLIC_HOSTS: "edge,localhost"
     ports: ["8081:8081"]
     volumes: ["edge-data:/data", "../../frames:/frames:ro"]
     depends_on: [link]

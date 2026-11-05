@@ -18,6 +18,7 @@ way as the unit sync credential (`internal/unitauth.Credential`):
 | shore / edge / ghost-seeker | `-operator-token-file` | `GS_OPERATOR_TOKEN_FILE` | token file (0600 secret mount); **production**, wins over the literal |
 | shore / edge / ghost-seeker | `-dev-token-file` | `GS_DEV_TOKEN_FILE` | **local demo only**: if no explicit token is set, read or auto-generate a 256-bit token here. Default `data/operator.token`; `none` disables it |
 | shore / edge | `-cors-origins` | `GS_CORS_ORIGINS` | browser origins allowed cross-origin (default: same-origin only) |
+| shore / edge | `-public-hosts` | `GS_PUBLIC_HOSTS` | extra Host names this node answers to (defaults always include loopback, IP literals, machine hostname and `-listen` host) |
 
 * **Shore and edge** wrap the whole `/ghostseeker.v1.ConsoleService/` prefix and `/blob/` in
   `opauth.RequireBearer`: every RPC — including ones added later, e.g. by policy signing — and
@@ -52,6 +53,10 @@ JavaScript, query strings or `localStorage`.
 
 ## 2. CSRF / cross-origin
 
+* **Host header / DNS rebinding**: shore and edge reject requests with an unknown `Host` using
+  **403** before setting CORS headers. Same-origin is accepted only when the Origin host is also
+  allowlisted; IP literals, loopback names, the machine hostname and `-listen` host are always
+  allowed.
 * **Shore / edge**: `httpx.CORSAllow` replaces the old `Access-Control-Allow-Origin: *`. A
   request with an `Origin` that is neither this host nor on `-cors-origins` gets **403** on
   any state-changing method (and on preflight) and no CORS headers on GET, so the browser blocks
@@ -144,9 +149,8 @@ what remains open; none is reachable without either an enrolled unit token or th
 * **Medium — shore items have no owning edge** (`UpsertManifest` / `WriteChunk`): one compromised
   unit token can overwrite other ships' contacts. Fix: bind items to the JWT `sub` and reject
   writes from a different unit (operator overrides stay allowed).
-* **Medium — `CORSAllow` trusts `Host`** (DNS rebinding against SyncService); only exploitable
-  with `-require-auth=false`, so effectively mitigated by PR #75. Fix: a `-public-hosts`
-  allowlist checked before CORS.
+* **Resolved — `CORSAllow` trusted `Host`** (DNS rebinding against SyncService): shore and edge
+  now check the `-public-hosts` allowlist before CORS.
 * **Low ×10** — SSE stream has no subscriber cap / stalled-client eviction; EMCON SILENT still
   sends a heartbeat every tick; an attribute-only suppress directive can defeat a command-locked
   priority rule; 1-byte chunks make the shore re-read and re-hash a 256 MiB blob per chunk;
