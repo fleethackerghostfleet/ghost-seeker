@@ -1,7 +1,9 @@
 package rnd
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -76,7 +78,7 @@ func fixture(t *testing.T) (string, string) {
 	images := []Image{}
 	ps := []Prediction{}
 	for i, id := range []string{"a", "b", "c"} {
-		images = append(images, Image{ID: id, Source: "source", File: id + ".jpg", Width: 100, Height: 100})
+		images = append(images, Image{ID: id, Source: "source", File: id + ".jpg", Width: 100, Height: 100, SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("image")))})
 		ps = append(ps, Prediction{ID: id, ModelTier: i + 1, ModelScore: float64(i), Detections: []Detection{}})
 		if err := os.WriteFile(filepath.Join(dir, "images", id+".jpg"), []byte("image"), 0600); err != nil {
 			t.Fatal(err)
@@ -89,6 +91,26 @@ func fixture(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	return dir, logs
+}
+func TestSessionVerifiesImageHash(t *testing.T) {
+	dir, logs := fixture(t)
+	s, err := OpenSession(dir, logs, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if err = os.WriteFile(filepath.Join(dir, "images", "a.jpg"), []byte("changed image"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = OpenSession(dir, logs, "Alice"); err == nil || !strings.Contains(err.Error(), "SHA-256 mismatch for image a") {
+		t.Fatalf("mismatch accepted: %v", err)
+	}
+	if err = os.Remove(filepath.Join(dir, "images", "a.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = OpenSession(dir, logs, "Alice"); err == nil {
+		t.Fatal("missing image accepted")
+	}
 }
 func TestPersistenceUndoResume(t *testing.T) {
 	dir, logs := fixture(t)

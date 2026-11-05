@@ -205,8 +205,18 @@ func OpenSession(dir, logs, reviewer string) (*Session, error) {
 		if _, exists := s.byID[im.ID]; exists {
 			return nil, fmt.Errorf("duplicate manifest image %q", im.ID)
 		}
-		if _, err = os.Stat(filepath.Join(dir, "images", im.File)); err != nil {
+		f, err := os.Open(filepath.Join(dir, "images", im.File))
+		if err != nil {
 			return nil, err
+		}
+		digest := sha256.New()
+		_, err = io.Copy(digest, f)
+		f.Close()
+		if err != nil {
+			return nil, err
+		}
+		if !strings.EqualFold(fmt.Sprintf("%x", digest.Sum(nil)), im.SHA256) {
+			return nil, fmt.Errorf("SHA-256 mismatch for image %s", im.ID)
 		}
 		entry := Entry{Image: im, Prediction: p}
 		s.entries = append(s.entries, entry)
