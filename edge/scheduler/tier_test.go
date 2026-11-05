@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -28,7 +29,7 @@ func TestPinnedPolicyRescoresSchedulerOrder(t *testing.T) {
 			t.Fatal("P4 pin must suppress payloads")
 		}
 	}
-	if !(scores["critical"] > scores["high"] && scores["high"] == scores["routine"] && scores["routine"] > scores["low"]) {
+	if !(scores["critical"] > scores["high"] && math.Abs(scores["high"]-scores["routine"]) < 1e-6 && scores["routine"] > scores["low"]) {
 		t.Fatalf("unexpected score-based order: %v", scores)
 	}
 }

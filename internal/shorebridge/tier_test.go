@@ -89,9 +89,11 @@ func TestLiveConsoleSuggestionPinsWholeClass(t *testing.T) {
 		t.Fatalf("missing live items: %d", len(console.base))
 	}
 	console.mu.Unlock()
-	var policyView LivePolicy
+	var policyView struct {
+		Policy LivePolicy `json:"policy"`
+	}
 	getJSON(t, console.Handler(), "/api/policy", &policyView)
-	if !strings.Contains(policyView.Readback, "Set tanker → P2 High") {
+	if !strings.Contains(policyView.Policy.Readback, "Set tanker → P2 High") {
 		t.Fatal(policyView)
 	}
 	for _, tier := range []int{-1, 5} {
