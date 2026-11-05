@@ -724,6 +724,7 @@ function renderAsk(){
  }
 }
 function checkLearningSuggestion(){
+ if(typeof gsAuth!=='undefined'&&gsAuth.reviewer())return;
  if(rv.ask||teamSync.posting||typeof gsLearn==='undefined')return;
  const s=gsLearn.suggestion();if(s){
   if(teamSync.on&&reviewerName){proposeTeamSuggestion(s);return}

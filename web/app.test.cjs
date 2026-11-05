@@ -79,6 +79,28 @@ test('review suggestions alone use the overlay and retain busy buttons',()=>{
  assert.equal(box.innerHTML,'');
  assert.ok(!classes.has('rvask-suggestion'));
 });
+test('repeated reviewer overrides do not prompt to add a learning rule',async()=>{
+ const context=setup();
+ vm.runInContext(`
+  gsAuth={reviewer:()=>true};reviewerName='Alice';state.page='rv';
+  CLS={vessel:{lab:'Vessel'}};
+  overrideCount=0;suggestionChecks=0;
+  gsLearn={
+   record:()=>{overrideCount++;return{}},
+   suggestion:()=>{suggestionChecks++;return overrideCount>=5?{cls:'vessel',dir:'lower',n:5,of:5}:null}
+  };
+  submitReview=()=>Promise.resolve({});
+  rvPress=()=>{};rvFlash=()=>{};
+  items=Array.from({length:5},(_,i)=>({id:'override-'+i,src:{id:i%2?'EO-P7':'IR-S1'},centralTier:3,manual:0,reviewed:false,dismissed:false,sent:false,dets:[{cls:'vessel'}],det:[{s:.9}]}));
+  renderAsk();
+ `,context);
+ for(let i=0;i<5;i++)vm.runInContext(`rv.cur=items[${i}];rv.busy=false;rvAct('1')`,context);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('overrideCount',context),5);
+ assert.equal(vm.runInContext('suggestionChecks',context),0);
+ assert.equal(vm.runInContext('rv.ask',context),null);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
 test('team proposals render escaped discussion, live own votes, busy buttons and isolated keys',()=>{
  const context=setup();
  vm.runInContext(`teamSync.available=true;teamSync.on=true;reviewerName='Bob';
