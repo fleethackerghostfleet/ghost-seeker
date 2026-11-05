@@ -64,7 +64,7 @@ function liveSuppressReason(it){const l=it.live;if(!l?.suppressed)return'';retur
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>clsOf(k).lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>clsOf(k).lab).join(' / ')):'Any object';
  const at=r.attrs.length?' · '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):'';
- return(r.type==='boost'?'▲ ':'▼ ')+cl+at;
+ return(r.type==='boost'?'▲ ':'▼ ')+cl+at+(r.tier?` → P${r.tier} ${TNAME[r.tier]}`:'');
 }
 
 /* ---------------- UI ---------------- */
@@ -732,7 +732,8 @@ async function answerWhy(choice){
 }
 function addSuggestionDirective(s){
  const label=CLS[s.cls]?.lab||s.cls;
- return request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]});
+ const tier=Number.isInteger(s.to)&&s.to>=1&&s.to<=4?s.to:0;
+ return request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}${tier?` to P${tier} ${TNAME[tier]}`:''}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false,...(tier?{tier}:{})}]});
 }
 function answerSuggestion(answer){
  const ask=rv.ask;if(!ask||ask.kind!=='sug'||rv.askBusy||typeof gsLearn==='undefined')return;

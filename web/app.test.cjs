@@ -9,6 +9,14 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('learning acceptance sends the advertised tier for the whole class',async()=>{
+ const context=setup();
+ vm.runInContext("calls=[];CLS={tanker:{lab:'Tanker'}};request=async(...args)=>{calls.push(args)}",context);
+ await vm.runInContext("addSuggestionDirective({cls:'tanker',dir:'lower',from:1,to:2})",context);
+ const body=JSON.parse(vm.runInContext('JSON.stringify(calls[0][2])',context));
+ assert.equal(body.text,'Operator feedback: lower Tanker to P2 High');
+ assert.deepEqual(body.rules,[{type:'suppress',classes:['tanker'],attrs:[],only:false,tier:2}]);
+});
 test('mobile review scrolls the whole page without shrinking its image track',()=>{
  assert.match(css,/#pgRv\{overflow-y:auto\}/);
  assert.match(css,/#pgRv \.rvmain\{flex:none;grid-template-rows:minmax\(220px,38vh\) auto;overflow:visible\}/);

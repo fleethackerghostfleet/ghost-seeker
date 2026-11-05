@@ -15,6 +15,28 @@ func TestRescoreWithoutRules(t *testing.T) {
 	}
 }
 
+func TestClassFeedbackTargetsAdvertisedTier(t *testing.T) {
+	for tier := 1; tier <= 4; tier++ {
+		rules := []Rule{{Type: "suppress", Classes: []string{"tanker"}, Tier: tier}}
+		for _, confidence := range []float64{.3, .95} {
+			item := Item{Dets: []Detection{{Class: "tanker", Conf: confidence}, {Class: "tanker", Conf: confidence}}}
+			Rescore(&item, "maritime", []Directive{{Rules: rules}})
+			if item.Tier != tier || item.Det[0].Sup {
+				t.Fatalf("target P%d: %+v", tier, item)
+			}
+		}
+		other := Detection{Class: "warship", Conf: .9}
+		if ScoreDet(other, rules, "maritime").Score != ScoreDet(other, nil, "maritime").Score {
+			t.Fatal("class feedback changed unrelated class")
+		}
+	}
+	item := Item{}
+	Rescore(&item, "maritime", []Directive{{Rules: []Rule{{Type: "suppress", Classes: []string{"tanker"}, Tier: 2}}}})
+	if item.Tier != 4 {
+		t.Fatal("empty frame gained a class priority")
+	}
+}
+
 func TestSuppressRuleLowersMatchingScore(t *testing.T) {
 	detection := Detection{Class: "warship", Conf: .9}
 	base := ScoreDet(detection, nil, "maritime").Score

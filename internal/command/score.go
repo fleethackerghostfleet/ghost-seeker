@@ -39,15 +39,22 @@ func RuleMatch(r Rule, d Detection) bool {
 func ScoreDet(d Detection, rules []Rule, model string, opticalNight ...bool) DetectionScore {
 	w := ContactWeight(d, model)
 	boosts, only, matched, suppressed := 0, false, false, false
+	targetTier := 0
 	notes := make([]Rule, 0)
 	for _, r := range rules {
 		if r.Only {
 			only = true
 		}
-		if r.Type == "boost" {
+		if r.Type == "boost" && r.Tier == 0 {
 			boosts++
 		}
 		if !RuleMatch(r, d) {
+			continue
+		}
+		if r.Tier >= 1 && r.Tier <= 4 {
+			targetTier = r.Tier
+			matched = true
+			notes = append(notes, r)
 			continue
 		}
 		if r.Type == "boost" {
@@ -89,7 +96,12 @@ func ScoreDet(d Detection, rules []Rule, model string, opticalNight ...bool) Det
 		// Classification confidence is not evidence that a persistent contact is noise.
 		confidence = 1
 	}
-	return DetectionScore{Score: min(.99, w*confidence), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes, Light: light}
+	score := min(.99, w*confidence)
+	if targetTier != 0 {
+		score = [...]float64{0, .9, .7, .475, .175}[targetTier]
+		suppressed = false
+	}
+	return DetectionScore{Score: score, Matched: matched, Sup: suppressed, Focus: focus, Notes: notes, Light: light}
 }
 
 // ConfSat is the detector confidence treated as certain; lower confidences scale the score down linearly.
