@@ -66,6 +66,7 @@ func safeOutputs(inputs []string, outputs ...string) error {
 		}
 		seen[a] = true
 	}
+	var outputFiles []os.FileInfo
 	for _, o := range outputs {
 		oi, err := os.Stat(o)
 		if os.IsNotExist(err) {
@@ -74,6 +75,12 @@ func safeOutputs(inputs []string, outputs ...string) error {
 		if err != nil {
 			return err
 		}
+		for _, previous := range outputFiles {
+			if os.SameFile(previous, oi) {
+				return fmt.Errorf("outputs alias the same file: %s", o)
+			}
+		}
+		outputFiles = append(outputFiles, oi)
 		for _, p := range inputs {
 			pi, err := os.Stat(p)
 			if err == nil && os.SameFile(pi, oi) {
