@@ -67,5 +67,15 @@ def extract(dest):
     print(f"Ocean watch: {len(images)} screened crops → {len(names)} replay frames in {img1}")
 
 
+def have_cache(dest):
+    """Exit status for make: 0 iff every released crop is present and verified."""
+    try:
+        return cached(json.loads((HERE / "ocean-manifest.json").read_text()), Path(dest) / ".ocean-crops") is not None
+    except (OSError, ValueError):
+        return False
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--have-cache"]:
+        sys.exit(0 if have_cache(sys.argv[2]) else 1)
     extract(sys.argv[1] if len(sys.argv) > 1 else HERE / "frames")

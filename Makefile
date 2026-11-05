@@ -51,7 +51,7 @@ demo-ship-clips: ## fetch the three ship clips (gitignored; GitHub release demo-
 	$(DEMO)/download.sh
 
 demo-ocean:      ## live-only ocean watch: released crops (demo-data-v1, needs only python3), else regenerated from the LFS ZIP (Pillow)
-	@test -d $(DEMO)/frames/.ocean-crops || deploy/demo-data.sh demo-ocean.tar.gz $(DEMO)/frames/.ocean-crops 1 || echo "demo-ocean: released crops unavailable; regenerating from the LFS ZIP" >&2
+	@$(PY) $(DEMO)/ocean.py --have-cache $(DEMO)/frames || deploy/demo-data.sh demo-ocean.tar.gz $(DEMO)/frames/.ocean-crops 1 || echo "demo-ocean: released crops unavailable; regenerating from the LFS ZIP" >&2
 	$(PY) $(DEMO)/ocean.py $(DEMO)/frames
 
 demo-compare: build
