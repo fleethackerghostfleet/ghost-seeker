@@ -713,7 +713,18 @@ func (b *Bridge) Handler() http.Handler {
 			r.Header.Del("Authorization")
 			b.authorize(r)
 		}
-		mux.Handle("GET /blob/", rp)
+		rp.ModifyResponse = func(res *http.Response) error {
+			if res.Header.Get("Content-Security-Policy") == "" {
+				res.Header.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+			}
+			res.Header.Set("X-Content-Type-Options", "nosniff")
+			return nil
+		}
+		mux.Handle("GET /blob/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Outer middleware already set nosniff; the upstream copy would duplicate it.
+			w.Header().Del("X-Content-Type-Options")
+			rp.ServeHTTP(w, r)
+		}))
 	}
 	return mux
 }

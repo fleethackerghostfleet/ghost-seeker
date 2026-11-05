@@ -18,7 +18,9 @@ func Secure(next http.Handler) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			header.Set("Cache-Control", "no-store")
 		}
-		if header.Get("Content-Security-Policy") == "" {
+		// Blobs carry their own (stricter, sandboxed) policy from ServeBlob or the
+		// shore proxy, so the page policy is not stacked on top of it.
+		if header.Get("Content-Security-Policy") == "" && !strings.HasPrefix(r.URL.Path, "/blob/") {
 			header.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 		}
 		next.ServeHTTP(w, r)
