@@ -124,12 +124,18 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 Remaining open findings after the re-scan (7 further findings were auto-dismissed as duplicates):
 
 * **High** — SyncService accepts unauthenticated edges by default (`-require-auth` is opt-in since
-  PR #53). Decision for the owners: flip the default on, or keep it opt-in for the demo and require
-  it via compose/Zarf. Shore logs a warning when it is off.
-* **Medium** — shore items carry no owning edge, so one enrolled unit can overwrite another's
-  contacts (sync-layer data model; out of scope here). DNS-rebinding variants of the dev-mode
-  loopback auto-login and of the same-host CORS rule (the Host must be a loopback name and dev
-  mode is loopback-only; production disables it entirely).
+  PR #53). Decision: the Go default stays opt-in for the local `make demo-*` path; **production
+  enforces it** — `deploy/compose` sets `GS_REQUIRE_AUTH=true` with `${GS_SIGNING_KEY:?}` /
+  `${GS_UNIT_TOKEN:?}` and Zarf defaults `SHORE_REQUIRE_AUTH=true` with required (non-optional)
+  `shore-auth`/`edge-auth` secrets, so they refuse to start without credentials. Shore logs a
+  WARN at startup when unit auth is off.
+* **Medium (residual, documented)** — shore items carry no owning edge, so one enrolled unit can
+  overwrite or relabel another ship's contacts. Design for the follow-up: bind item ownership to
+  the authenticated unit id (`sub` of the unit JWT) at `WriteManifest`/`WriteChunk`/override time
+  and reject writes from a different unit (shore-side overrides by operators stay allowed).
+* **Medium (dev-only, documented)** — DNS-rebinding variants of the dev-mode loopback auto-login
+  and of the same-host CORS rule: dev mode requires a loopback peer *and* a loopback `Host`, and
+  production (`GS_DEV_TOKEN_FILE=none`) has no auto-login at all.
 * **Low** — one-byte chunks make the shore re-hash a large file per chunk; chunk uploads have no
   per-edge item-count/disk cap; the `original` full-size pull handler body is bounded only by the
   Connect read cap. (Fixed in the same PR after the scan: tab/newline in `/login?next`, the
