@@ -79,7 +79,7 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	if len(s.items) > s.retain {
 		candidates := s.items[:len(s.items)-1]
 		oldest := oldestIndex(candidates, func(it command.Item) bool {
-			return !it.Sent && it.Decision == "" && !it.Reviewed && !it.Dismissed && it.Manual == 0 && it.Upload.Override == "" && (it.Upload.Done || it.Upload.Sent == 0)
+			return !it.Sent && it.Decision == "" && !it.Reviewed && !it.Dismissed && it.Manual == 0 && !it.FullRes && it.Upload.Override == "" && (it.Upload.Done || it.Upload.Sent == 0)
 		})
 		if oldest < 0 {
 			oldest = oldestIndex(candidates, func(it command.Item) bool { return !it.Sent && it.Decision == "" })

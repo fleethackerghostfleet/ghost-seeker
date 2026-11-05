@@ -15,6 +15,7 @@ func TestEvictionPrefersUntouchedQueuedItems(t *testing.T) {
 		{"reviewed", func(it *command.Item) { it.Reviewed = true }},
 		{"dismissed", func(it *command.Item) { it.Dismissed = true }},
 		{"manual", func(it *command.Item) { it.Manual = 1 }},
+		{"full-size", func(it *command.Item) { it.FullRes = true }},
 		{"next", func(it *command.Item) { it.Upload.Override = "next" }},
 		{"hold", func(it *command.Item) { it.Upload.Override = "hold" }},
 		{"mid-transfer", func(it *command.Item) { it.Upload.Sent = 1 }},
