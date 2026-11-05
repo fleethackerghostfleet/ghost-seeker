@@ -91,11 +91,21 @@ func Merge(layers []*pb.PolicyLayer, nodeID string, now time.Time) (*pb.Interest
 	for _, item := range accepted {
 		for _, label := range item.Rule.BoostLabels {
 			key := normalizeLabel(label)
-			if key == "" || seenBoost[key] {
+			if key == "" {
 				continue
 			}
-			seenBoost[key] = true
-			interest.BoostLabels = append(interest.BoostLabels, strings.TrimSpace(label))
+			if !seenBoost[key] {
+				seenBoost[key] = true
+				interest.BoostLabels = append(interest.BoostLabels, strings.TrimSpace(label))
+			}
+			// Per-label weight: the strongest accepted rule for that label (a
+			// lower echelon may raise a locked label's weight, never lower it).
+			if item.Rule.Weight > 0 && item.Rule.Weight > interest.BoostWeights[key] {
+				if interest.BoostWeights == nil {
+					interest.BoostWeights = map[string]float64{}
+				}
+				interest.BoostWeights[key] = item.Rule.Weight
+			}
 		}
 		for _, label := range item.Rule.SuppressLabels {
 			key := normalizeLabel(label)
@@ -104,9 +114,6 @@ func Merge(layers []*pb.PolicyLayer, nodeID string, now time.Time) (*pb.Interest
 			}
 			seenSuppress[key] = true
 			interest.SuppressLabels = append(interest.SuppressLabels, strings.TrimSpace(label))
-		}
-		if len(item.Rule.BoostLabels) > 0 && item.Rule.Weight > 0 && item.Rule.Weight > interest.BoostFactor {
-			interest.BoostFactor = item.Rule.Weight
 		}
 	}
 	return interest, emcon, conflicts
@@ -125,7 +132,10 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	inputSuppress := append([]string(nil), out.Interest.SuppressLabels...)
 	out.Interest.BoostLabels = interest.BoostLabels
 	out.Interest.SuppressLabels = interest.SuppressLabels
-	out.Interest.BoostFactor = interest.BoostFactor
+	// BoostFactor is left as configured on the policy: it still scales the
+	// embedding-similarity path and unweighted labels. Per-label weights come
+	// from the merged rules.
+	out.Interest.BoostWeights = interest.BoostWeights
 	if !sameLabelSet(inputBoost, interest.BoostLabels) {
 		out.Interest.PositiveEmbedding = nil
 	}

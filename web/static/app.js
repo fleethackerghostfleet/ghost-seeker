@@ -88,11 +88,14 @@ async function loadRawPolicy(force){
   $('polRawMsg').textContent='';$('polRawMsg').className='';
  }catch(error){$('polRawMsg').textContent=error.message;$('polRawMsg').className='policy-error'}
 }
+let adminToken='';// super-admin re-auth: operator token, kept in memory only (never stored)
 async function rawPolicyAction(action){
  const msg=$('polRawMsg');msg.textContent='';msg.className='';
  try{
-  const response=await fetch(`/api/policy${action==='validate'?'/validate':''}`,{method:action==='validate'?'POST':'PUT',headers:{'Content-Type':'application/json'},body:$('polRaw').value});
+  if(!adminToken){adminToken=(window.prompt('Super admin: paste the operator token to authorize this policy edit')||'').trim();if(!adminToken)throw new Error('Operator token required for super admin edits')}
+  const response=await fetch(`/api/policy${action==='validate'?'/validate':''}`,{method:action==='validate'?'POST':'PUT',headers:{'Content-Type':'application/json',Authorization:`Bearer ${adminToken}`},body:$('polRaw').value});
   const data=await response.json();
+  if(response.status===401){adminToken='';throw new Error('Operator token rejected; try again')}
   if(!response.ok)throw new Error(data.error||`Request failed (${response.status})`);
   msg.className='policy-valid';msg.textContent=`Valid · ${(data.conflicts||[]).length} conflicts`;
   msg.insertAdjacentHTML('beforeend',gsPolicy.conflictsHTML(data.conflicts||[]));

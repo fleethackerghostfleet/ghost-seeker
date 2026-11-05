@@ -287,12 +287,13 @@ func (x *Policy) GetConflicts() []*MergeConflict {
 
 type Interest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	BoostLabels       []string               `protobuf:"bytes,1,rep,name=boost_labels,json=boostLabels,proto3" json:"boost_labels,omitempty"`                            // e.g. "cargo ship", "container"
-	SuppressLabels    []string               `protobuf:"bytes,2,rep,name=suppress_labels,json=suppressLabels,proto3" json:"suppress_labels,omitempty"`                   // e.g. "sailboat"
-	PositiveEmbedding []float32              `protobuf:"fixed32,3,rep,packed,name=positive_embedding,json=positiveEmbedding,proto3" json:"positive_embedding,omitempty"` // text embedding of what matters now
-	NegativeEmbedding []float32              `protobuf:"fixed32,4,rep,packed,name=negative_embedding,json=negativeEmbedding,proto3" json:"negative_embedding,omitempty"` // text embedding of what to ignore
-	BoostFactor       float64                `protobuf:"fixed64,5,opt,name=boost_factor,json=boostFactor,proto3" json:"boost_factor,omitempty"`                          // default 2.0
-	SuppressFactor    float64                `protobuf:"fixed64,6,opt,name=suppress_factor,json=suppressFactor,proto3" json:"suppress_factor,omitempty"`                 // default 0.05 (deprioritize, never drop)
+	BoostLabels       []string               `protobuf:"bytes,1,rep,name=boost_labels,json=boostLabels,proto3" json:"boost_labels,omitempty"`                                                                                // e.g. "cargo ship", "container"
+	SuppressLabels    []string               `protobuf:"bytes,2,rep,name=suppress_labels,json=suppressLabels,proto3" json:"suppress_labels,omitempty"`                                                                       // e.g. "sailboat"
+	PositiveEmbedding []float32              `protobuf:"fixed32,3,rep,packed,name=positive_embedding,json=positiveEmbedding,proto3" json:"positive_embedding,omitempty"`                                                     // text embedding of what matters now
+	NegativeEmbedding []float32              `protobuf:"fixed32,4,rep,packed,name=negative_embedding,json=negativeEmbedding,proto3" json:"negative_embedding,omitempty"`                                                     // text embedding of what to ignore
+	BoostFactor       float64                `protobuf:"fixed64,5,opt,name=boost_factor,json=boostFactor,proto3" json:"boost_factor,omitempty"`                                                                              // default 2.0
+	SuppressFactor    float64                `protobuf:"fixed64,6,opt,name=suppress_factor,json=suppressFactor,proto3" json:"suppress_factor,omitempty"`                                                                     // default 0.05 (deprioritize, never drop)
+	BoostWeights      map[string]float64     `protobuf:"bytes,7,rep,name=boost_weights,json=boostWeights,proto3" json:"boost_weights,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"` // per-label boost from merged rule weights; missing = boost_factor
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -367,6 +368,13 @@ func (x *Interest) GetSuppressFactor() float64 {
 		return x.SuppressFactor
 	}
 	return 0
+}
+
+func (x *Interest) GetBoostWeights() map[string]float64 {
+	if x != nil {
+		return x.BoostWeights
+	}
+	return nil
 }
 
 type Thresholds struct {
@@ -811,14 +819,18 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\tconflicts\x18\x0f \x03(\v2\x1d.ghostseeker.v1.MergeConflictR\tconflicts\x1a@\n" +
 	"\x12ScorerWeightsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x80\x02\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x92\x03\n" +
 	"\bInterest\x12!\n" +
 	"\fboost_labels\x18\x01 \x03(\tR\vboostLabels\x12'\n" +
 	"\x0fsuppress_labels\x18\x02 \x03(\tR\x0esuppressLabels\x12-\n" +
 	"\x12positive_embedding\x18\x03 \x03(\x02R\x11positiveEmbedding\x12-\n" +
 	"\x12negative_embedding\x18\x04 \x03(\x02R\x11negativeEmbedding\x12!\n" +
 	"\fboost_factor\x18\x05 \x01(\x01R\vboostFactor\x12'\n" +
-	"\x0fsuppress_factor\x18\x06 \x01(\x01R\x0esuppressFactor\"\x92\x01\n" +
+	"\x0fsuppress_factor\x18\x06 \x01(\x01R\x0esuppressFactor\x12O\n" +
+	"\rboost_weights\x18\a \x03(\v2*.ghostseeker.v1.Interest.BoostWeightsEntryR\fboostWeights\x1a?\n" +
+	"\x11BoostWeightsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\x92\x01\n" +
 	"\n" +
 	"Thresholds\x12\x1f\n" +
 	"\vunknown_min\x18\x01 \x01(\x02R\n" +
@@ -877,7 +889,7 @@ func file_ghostseeker_v1_policy_proto_rawDescGZIP() []byte {
 }
 
 var file_ghostseeker_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ghostseeker_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_ghostseeker_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_ghostseeker_v1_policy_proto_goTypes = []any{
 	(EmconMode)(0),          // 0: ghostseeker.v1.EmconMode
 	(Echelon)(0),            // 1: ghostseeker.v1.Echelon
@@ -890,6 +902,7 @@ var file_ghostseeker_v1_policy_proto_goTypes = []any{
 	(*MergeConflict)(nil),   // 8: ghostseeker.v1.MergeConflict
 	(*PolicySignature)(nil), // 9: ghostseeker.v1.PolicySignature
 	nil,                     // 10: ghostseeker.v1.Policy.ScorerWeightsEntry
+	nil,                     // 11: ghostseeker.v1.Interest.BoostWeightsEntry
 }
 var file_ghostseeker_v1_policy_proto_depIdxs = []int32{
 	3,  // 0: ghostseeker.v1.Policy.interest:type_name -> ghostseeker.v1.Interest
@@ -900,16 +913,17 @@ var file_ghostseeker_v1_policy_proto_depIdxs = []int32{
 	7,  // 5: ghostseeker.v1.Policy.emcon_setting:type_name -> ghostseeker.v1.EmconSetting
 	9,  // 6: ghostseeker.v1.Policy.signature:type_name -> ghostseeker.v1.PolicySignature
 	8,  // 7: ghostseeker.v1.Policy.conflicts:type_name -> ghostseeker.v1.MergeConflict
-	1,  // 8: ghostseeker.v1.PolicyLayer.echelon:type_name -> ghostseeker.v1.Echelon
-	6,  // 9: ghostseeker.v1.PolicyLayer.rules:type_name -> ghostseeker.v1.InterestRule
-	7,  // 10: ghostseeker.v1.PolicyLayer.emcon:type_name -> ghostseeker.v1.EmconSetting
-	0,  // 11: ghostseeker.v1.EmconSetting.mode:type_name -> ghostseeker.v1.EmconMode
-	1,  // 12: ghostseeker.v1.EmconSetting.echelon:type_name -> ghostseeker.v1.Echelon
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	11, // 8: ghostseeker.v1.Interest.boost_weights:type_name -> ghostseeker.v1.Interest.BoostWeightsEntry
+	1,  // 9: ghostseeker.v1.PolicyLayer.echelon:type_name -> ghostseeker.v1.Echelon
+	6,  // 10: ghostseeker.v1.PolicyLayer.rules:type_name -> ghostseeker.v1.InterestRule
+	7,  // 11: ghostseeker.v1.PolicyLayer.emcon:type_name -> ghostseeker.v1.EmconSetting
+	0,  // 12: ghostseeker.v1.EmconSetting.mode:type_name -> ghostseeker.v1.EmconMode
+	1,  // 13: ghostseeker.v1.EmconSetting.echelon:type_name -> ghostseeker.v1.Echelon
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_ghostseeker_v1_policy_proto_init() }
@@ -923,7 +937,7 @@ func file_ghostseeker_v1_policy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ghostseeker_v1_policy_proto_rawDesc), len(file_ghostseeker_v1_policy_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
