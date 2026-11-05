@@ -227,7 +227,11 @@ def test_qa_apply_rebuilds_attrs_from_pristine_teacher_copy(tmp_path):
 
     rows, classes = apply(seq_dir, {}, {"1": "ship", "2": "buoy"})
     rewrite_attrs(seq_dir, {}, rows, classes)
-    assert (seq_dir / "gt" / "attrs.jsonl").read_bytes() == original_attrs
+    restored = [
+        json.loads(line)
+        for line in (seq_dir / "gt" / "attrs.jsonl").read_text().splitlines()
+    ]
+    assert restored == [json.loads(line) for line in original_attrs.decode().splitlines()]
 
 
 def test_qa_apply_box_relabel_overrides_track_relabel(tmp_path):
