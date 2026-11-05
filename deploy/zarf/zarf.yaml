@@ -1,17 +1,75 @@
-# Zarf package skeleton for UDS: one package, two components. Images come
-# from deploy/Dockerfile. Manifests are left as TODO until the k8s shape
-# (edge on a single-node k3s aboard, shore on UDS Core) is agreed.
+apiVersion: zarf.dev/v1alpha1
 kind: ZarfPackageConfig
 metadata:
   name: ghost-seeker
-  description: Ship-to-shore prioritized sync (edge + shore)
   version: 0.1.0
+  architecture: amd64
+  description: Ghost Seeker ship-to-shore prioritized sync; set INFER_URL=http://edgeml-sidecar:9090 when enabling edge-inference.
+
+variables:
+  - name: SHORE_URL
+    description: Edge-to-shore URL; set to a reachable shore address for shipboard edge deployments.
+    default: http://shore.ghost-seeker.svc.cluster.local:8080
+    prompt: false
+  - name: EDGE_ID
+    description: Edge identifier used by the edge and shore services.
+    default: edge-1
+    prompt: false
+  - name: INFER_URL
+    description: Inference URL, or mock; use http://edgeml-sidecar:9090 when edge-inference is enabled.
+    default: mock
+    prompt: false
+  - name: SHORE_STORAGE
+    description: Shore SQLite persistent volume size.
+    default: 5Gi
+    prompt: false
+  - name: EDGE_STORAGE
+    description: Edge SQLite persistent volume size.
+    default: 10Gi
+    prompt: false
+
 components:
   - name: shore
+    default: true
     required: false
-    images: [ghost-seeker:0.1.0]
-    # manifests: [{name: shore, files: [manifests/shore.yaml]}]
+    description: Shore sync receiver and console with persistent SQLite storage.
+    images:
+      - ghost-seeker/shore:0.1.0
+    manifests:
+      - name: shore
+        namespace: ghost-seeker
+        files:
+          - manifests/shore.yaml
+  - name: operator
+    default: true
+    required: false
+    description: Live operator UI backed by the shore service.
+    images:
+      - ghost-seeker/operator:0.1.0
+    manifests:
+      - name: operator
+        namespace: ghost-seeker
+        files:
+          - manifests/operator.yaml
   - name: edge
+    default: true
     required: false
-    images: [ghost-seeker:0.1.0]
-    # manifests: [{name: edge, files: [manifests/edge.yaml]}]
+    description: Edge capture and prioritized sync service with persistent SQLite storage.
+    images:
+      - ghost-seeker/edge:0.1.0
+    manifests:
+      - name: edge
+        namespace: ghost-seeker
+        files:
+          - manifests/edge.yaml
+  - name: edge-inference
+    default: false
+    required: false
+    description: Optional CPU edgeml sidecar; set INFER_URL=http://edgeml-sidecar:9090 to connect the edge.
+    images:
+      - ghost-seeker/edgeml-sidecar:0.1.0
+    manifests:
+      - name: edge-inference
+        namespace: ghost-seeker
+        files:
+          - manifests/edge-inference.yaml

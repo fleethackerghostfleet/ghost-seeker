@@ -6,6 +6,8 @@ time a connection is available, *what to send, in what order, and in what
 form*, so the most important information reaches shore first and nothing is
 lost. Images are the first data type; the item model is type-agnostic.
 
+See [Fielding](docs/FIELDING.md) for offline builds, container staging, and Zarf deployment.
+
 Key behaviours (all covered by `go test ./...` and the simulator):
 
 - **Unknown-first.** Items the model can't classify score highest by default.
