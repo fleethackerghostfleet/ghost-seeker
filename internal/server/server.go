@@ -36,6 +36,7 @@ func New(data *store.Store, options ...Option) *Server {
 	}
 	s := &Server{store: data, hub: newHub(), mux: http.NewServeMux()}
 	s.policy = newPolicyRuntime(opts, data)
+	s.policy.onChange = s.publishSnapshot
 	s.mux.HandleFunc("GET /api/config", s.config)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
 	s.mux.HandleFunc("GET /api/policy", s.getPolicy)

@@ -42,12 +42,15 @@ func WithNodeID(nodeID string) Option {
 
 type policyRuntime struct {
 	mu            sync.Mutex
+	timerMu       sync.Mutex
 	store         *store.Store
 	guard         *policy.Store
 	admin         bool
 	nodeID        string
 	higherLayers  []*pb.PolicyLayer
 	operatorEMCON *pb.EmconSetting
+	expiryTimer   *time.Timer
+	onChange      func()
 	err           error
 }
 
@@ -76,6 +79,7 @@ func newPolicyRuntime(options serverOptions, data *store.Store) *policyRuntime {
 			}
 		}
 		rt.syncStore(active, time.Now())
+		rt.armExpiry(active)
 		return rt
 	}
 	if !seedPolicy {
@@ -144,7 +148,47 @@ func (rt *policyRuntime) apply(source, who, text string, now time.Time) (*pb.Pol
 		return accepted, err
 	}
 	rt.syncStore(accepted, now)
+	rt.armExpiry(accepted)
 	return accepted, nil
+}
+
+func (rt *policyRuntime) armExpiry(p *pb.Policy) {
+	rt.timerMu.Lock()
+	defer rt.timerMu.Unlock()
+	if rt.expiryTimer != nil {
+		rt.expiryTimer.Stop()
+		rt.expiryTimer = nil
+	}
+	if p == nil || p.ExpiresAtUnixMs == 0 {
+		return
+	}
+	delay := time.Until(time.UnixMilli(p.ExpiresAtUnixMs))
+	if delay < 0 {
+		delay = 0
+	}
+	rt.expiryTimer = time.AfterFunc(delay, func() {
+		rt.expire(time.Now())
+	})
+}
+
+func (rt *policyRuntime) expire(now time.Time) {
+	rt.mu.Lock()
+	if rt.guard == nil {
+		rt.mu.Unlock()
+		return
+	}
+	_, expired := rt.guard.Active(now)
+	if !expired {
+		rt.mu.Unlock()
+		return
+	}
+	_ = rt.guard.MarkExpired(context.Background(), now)
+	rt.higherLayers = nil
+	rt.store.SetPolicyDirectives(nil, nil)
+	rt.mu.Unlock()
+	if rt.onChange != nil {
+		rt.onChange()
+	}
 }
 
 func (rt *policyRuntime) operatorLayer() *pb.PolicyLayer {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
@@ -130,6 +131,38 @@ func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	}
 	if !foundRejected {
 		t.Fatalf("audit entries %#v do not include rejected directive", audit.Entries)
+	}
+}
+
+func TestSimulationPolicyExpiryClearsLocksAndSourceDirectives(t *testing.T) {
+	data := store.New(10)
+	app := New(data, WithAdmin(true))
+	input := map[string]any{"text": "ignore submarines", "rules": []command.Rule{
+		{Type: "suppress", Classes: []string{"submarine"}},
+	}}
+	if response := request(app, http.MethodPost, "/api/directives", input); response.Code != http.StatusConflict {
+		t.Fatalf("pre-expiry directive status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	app.policy.expire(time.Now().Add(13 * time.Hour))
+	for _, directive := range data.Directives() {
+		if directive.Source == "CTF-72" {
+			t.Fatalf("expired source directive remains: %+v", directive)
+		}
+	}
+	audit, err := app.policy.guard.Audit(context.Background(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundExpired := false
+	for _, entry := range audit {
+		foundExpired = foundExpired || entry.Result == "expired"
+	}
+	if !foundExpired {
+		t.Fatalf("expired audit entry missing: %+v", audit)
+	}
+	if response := request(app, http.MethodPost, "/api/directives", input); response.Code != http.StatusCreated {
+		t.Fatalf("post-expiry directive status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
