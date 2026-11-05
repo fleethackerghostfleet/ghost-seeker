@@ -154,6 +154,31 @@ for retry, while preserving progress through already-applied messages.
 `GetStatusResponse.items_evicted` reports cumulative evictions. The live-shore
 operator app displays it alongside the existing edge queue status.
 
+
+### Signed policies (opt-in)
+
+Policies downlinked to the edge can be signed by the shore with an Ed25519 key so
+the edge only applies command policy from a trusted issuer; the shore in turn only
+signs higher-echelon (fleet/command) layers that arrive already signed by a key it
+trusts, so a ship console cannot mint locked COMMAND rules under the shore's key.
+
+| Process | Flag | Environment | Default |
+|---|---|---|---|
+| shore | `-policy-signing-key` (JSON private key from `policy-keygen`) | `GS_POLICY_SIGNING_KEY` | unset (unsigned) |
+| shore | `-policy-keys` (JSON keyring trusted for higher-echelon layers) | `GS_POLICY_KEYS` | unset (higher layers immutable) |
+| edge | `-require-signed-policy` | `GS_REQUIRE_SIGNED_POLICY` | `false` |
+| edge | `-policy-keys` (JSON keyring; required with the flag above) | `GS_POLICY_KEYS` | unset |
+
+```sh
+go run ./cmd/policy-keygen -id shore-1 -out-dir keys     # keys/shore-1.key.json (0600) + keys/keyring.json
+go run ./cmd/shore -policy-signing-key keys/shore-1.key.json
+go run ./cmd/edge -require-signed-policy -policy-keys keys/keyring.json
+```
+
+Unsigned or badly signed policies are rejected and audited; the edge keeps its
+last-good policy. In EMCON `SILENT` the edge still exchanges an empty heartbeat so
+the policy that lifts SILENT arrives.
+
 ## How ranking works
 
 ```
