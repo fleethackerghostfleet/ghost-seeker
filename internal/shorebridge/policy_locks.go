@@ -33,5 +33,8 @@ func (c shoreLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 			Classes: rule.Classes, Attrs: rule.Attrs,
 		}
 	}
-	return policy.CheckCommandRules(policy.ActiveLocks(active.Layers, "", now), pb.Echelon_ECHELON_SHIP, converted)
+	c.bridge.mu.Lock()
+	nodeID := c.bridge.edgeNodeID
+	c.bridge.mu.Unlock()
+	return policy.CheckCommandRules(policy.ActiveLocks(active.Layers, nodeID, now), pb.Echelon_ECHELON_SHIP, converted)
 }

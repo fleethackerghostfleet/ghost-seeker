@@ -181,8 +181,7 @@ func ActiveLocks(layers []*pb.PolicyLayer, nodeID string, now time.Time) []Lock 
 			continue
 		}
 		for _, rule := range layer.Rules {
-			if rule == nil || !rule.Locked || expiredRule(rule, now) ||
-				(nodeID == "" && len(rule.Targets) > 0) || !targetsNode(rule.Targets, nodeID) {
+			if rule == nil || !rule.Locked || expiredRule(rule, now) || !targetsNode(rule.Targets, nodeID) {
 				continue
 			}
 			locks = append(locks, ruleLock(layer, rule))
