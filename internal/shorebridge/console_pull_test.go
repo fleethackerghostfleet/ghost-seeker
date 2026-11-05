@@ -6,7 +6,7 @@ import "testing"
 // console must offer the pull instead of reporting it as queued backlog.
 func TestPullStateScenePendingIsPullable(t *testing.T) {
 	held := FormStatus{State: "pending", Bytes: 120000}
-	if p := pullState(held, true); !p.Enabled || p.Label != "Pull full frame" {
+	if p := pullState(held, true); !p.Enabled || p.Label != "Request full image" {
 		t.Fatalf("scene held FULL: got %+v, want enabled pull", p)
 	}
 	if p := pullState(held, false); p.Enabled {

@@ -9,11 +9,12 @@ const fmtRate=bps=>bps>=1e6?`${(bps/1e6).toFixed(1)} Mbps`:`${(bps/1000).toFixed
 const presetName=bps=>bps===0?'OFF':bps>=1e6?`${bps/1e6} Mbps`:`${bps/1000} kbps`;
 const ago=ms=>{const s=Math.max(0,(Date.now()-ms)/1000);return s<60?`${s|0}s ago`:s<3600?`${(s/60)|0}m ago`:`${(s/3600)|0}h ago`};
 const FORMS=['fact','thumb','crop','full'];
-const FORM_HELP={fact:'FACT — ~200 B structured summary (labels, time, sighting). Always sent first.',thumb:'THUMB — small preview of the whole frame.',crop:'CROP — the detection at native resolution.',full:'FULL — the whole frame at full fidelity. Pull-only for camera heartbeats.'};
+const FORM_NAME={fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'};
+const FORM_HELP={fact:'FACT: a small summary of the object and capture time (about 200 bytes). Sent before images.',thumb:'THUMB: a small preview of the whole image.',crop:'CROP: a close-up of the detected object at its original resolution.',full:'FULL: the complete, full-quality image. Camera overview images are sent only when requested.'};
 function formChipsHTML(it){
  const f=it.live?.forms;if(!f)return'';
- return FORMS.map(k=>{const st=f[k]||{state:'none'};const title=st.state==='received'?`${k}: received (${fmtBytes(st.bytes)})`:st.state==='partial'?`${k}: ${fmtBytes(st.received)} of ${fmtBytes(st.bytes)} — streaming over the link`:st.state==='pending'?`${k}: queued on the edge (${fmtBytes(st.bytes)})`:st.state==='offered'?`${k}: offered by the edge, not sent — pull to request it`:`${k}: not available`;
-  return`<span class="fchip ${st.state}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${k}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
+ return FORMS.map(k=>{const st=f[k]||{state:'none'};const title=st.state==='received'?`${FORM_NAME[k]}: received (${fmtBytes(st.bytes)})`:st.state==='partial'?`${FORM_NAME[k]}: ${fmtBytes(st.received)} of ${fmtBytes(st.bytes)} — streaming over the link`:st.state==='pending'?`${FORM_NAME[k]}: waiting on the ship (${fmtBytes(st.bytes)})`:st.state==='offered'?`${FORM_NAME[k]}: available on the ship — request it to send it`:`${FORM_NAME[k]}: not available`;
+  return`<span class="fchip ${st.state}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
 }
 function mergeLiveConfig(live){
  if(!live)return;
@@ -21,7 +22,7 @@ function mergeLiveConfig(live){
  let added=false;for(const src of live.sources||[]){if(!SRC[src.id]){SRC[src.id]=src;SOURCES.push(src);added=true}}
  if(added){const sel=$('srcSel');if(sel&&sel.innerHTML!==undefined){const cur=state.src;sel.innerHTML=SOURCES.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');sel.value=cur}}
 }
-function liveSuppressReason(it){const l=it.live;if(!l?.suppressed)return'';return`Deprioritized by the standing directive${l.suppressedBy?` (“ignore ${esc(l.suppressedBy)}”)`:''} — ranked P4, still on the board, nothing deleted`}
+function liveSuppressReason(it){const l=it.live;if(!l?.suppressed)return'';return`Deprioritized by the standing directive${l.suppressedBy?` (“ignore ${esc(l.suppressedBy)}”)`:''} — ranked P4 Low, still in the feed, nothing deleted`}
 
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>clsOf(k).lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>clsOf(k).lab).join(' / ')):'Any object';
@@ -51,7 +52,7 @@ function bandFor(it){const bands=bandsFor(it);return bands.includes(selectedBand
 function bandControls(it){
  const bands=bandsFor(it);if(bands.length<2)return '';
  const band=bandFor(it);
- return `<div class="band-controls" role="group" aria-label="Spectral band">${bands.map(b=>`<button type="button" data-band="${esc(b)}" data-band-item="${esc(it.id)}" aria-pressed="${b===band}" title="${b==='IR'?'Simulated LWIR · white-hot':esc(b)}">${esc(b)}</button>`).join('')}<span>B · cycle</span></div><span class="band-label">${esc(band)}${band==='IR'?' · white-hot · simulated LWIR':''}</span>`;
+ return `<div class="band-controls" role="group" title="Spectral band: choose visible light or infrared (heat) imagery" aria-label="Spectral band">${bands.map(b=>`<button type="button" data-band="${esc(b)}" data-band-item="${esc(it.id)}" aria-pressed="${b===band}" title="${b==='IR'?'Simulated long-wave infrared (LWIR): warm objects appear white':b==='EO'?'Electro-optical (EO): visible-light camera':esc(b)}">${esc(b)}</button>`).join('')}<span>B: change image band</span></div><span class="band-label">${esc(band)}${band==='IR'?' · white-hot · simulated LWIR':''}</span>`;
 }
 function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${imageFor(it)}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
 function preserveBandFocus(render){
@@ -181,11 +182,11 @@ async function patchItem(id,changes){
 }
 function renderLive(){
  const live=$('live');live.classList.toggle('off',!!state.offline);live.classList.toggle('paused',!state.offline&&state.paused);
- live.querySelector('span').textContent=state.offline?'RECONNECTING':state.paused?'FEED HELD':'FEED ACTIVE';
- const action=state.paused?'resume':'hold';
- live.title=state.offline?`Reconnecting — click to ${action}`:state.paused?'Feed held — click to resume':'Feed active — click to hold';
+ live.querySelector('span').textContent=state.offline?'RECONNECTING':state.paused?'FEED PAUSED':'FEED ACTIVE';
+ const action=state.paused?'resume feed':'pause feed';
+ live.title=state.offline?`Reconnecting — click to ${action}`:state.paused?'Feed paused — click to resume feed':'Feed active — click to pause feed';
  live.setAttribute('aria-label',live.title);live.setAttribute('aria-pressed',String(!!state.paused));
- $('pauseBtn').textContent=state.paused?'Resume':'Hold';$('wbHeld').hidden=!state.paused;
+ $('pauseBtn').textContent=state.paused?'Resume feed':'Pause feed';$('wbHeld').hidden=!state.paused;
 }
 function toggleHold(){
  state.paused=!state.paused;renderLive();
@@ -219,7 +220,7 @@ function openStream(){
 }
 async function init(){
  const config=await request('/api/config');
- SOURCES=[{id:'ALL',name:'All Sources (fused)'},...config.sources];
+ SOURCES=[{id:'ALL',name:'All sensors (combined)'},...config.sources];
  SRC=Object.fromEntries(SOURCES.map(source=>[source.id,source]));
  CLS=config.classes;MODELS=config.models;ATTR_LAB=config.attrLabels;EXAMPLES=config.examples;
  if(config.live&&!MODELS[state.model])state.model=Object.keys(MODELS)[0]||state.model;
@@ -279,7 +280,7 @@ function visible(){
  return{l,counts};
 }
 function renderTierSeg(counts){
- const T=[['all','All'],['1','P1'],['2','P2'],['3','P3'],['4','P4']];
+ const T=[['all','All'],['1','P1 Critical'],['2','P2 High'],['3','P3 Routine'],['4','P4 Low']];
  $('tierSeg').innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${state.tier===k?'on':''}">${k!=='all'?`<span class="tchip" style="background:${tcol(+k)}"></span>`:''}${l}<span class="c">${counts[k]}</span></button>`).join('');
 }
 function boxesHTML(it,labels){
@@ -288,22 +289,22 @@ function boxesHTML(it,labels){
 }
 function topLine(it){
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return'—';
- if(it.live){const l=it.live,[d,sd]=r[0];const det=l.label&&l.label.toLowerCase()!==d.cls?` <span style="opacity:.6">· detector: ${esc(l.label)}</span>`:'';const frames=l.sightingId?(l.framesKnown?` · ${l.frames} frames`:` · ${l.reports} report${l.reports===1?'':'s'}`):'';
+ if(it.live){const l=it.live,[d,sd]=r[0];const det=l.label&&l.label.toLowerCase()!==d.cls?` <span style="opacity:.6">· computer label: ${esc(l.label)}</span>`:'';const frames=l.sightingId?(l.framesKnown?` · ${l.frames} frames`:` · ${l.reports} report${l.reports===1?'':'s'}`):'';
   return`<span class="${l.suppressed?'s':sd.matched?'m':l.unknown?'a':''}">${esc(clsOf(d.cls).lab)}${l.unknown?' (unknown)':''}</span>${det}<span style="opacity:.6">${frames}</span>`}
  const[d,sd]=r[0];const tag=d.attrs.dark&&clsOf(d.cls).g!=='other'&&clsOf(d.cls).g!=='clutter'?' · no AIS':d.attrs.approaching?' · inbound':d.attrs.new?' · new':'';
  return`<span class="${sd.matched?'m':tag&&sd.s>.4?'a':''}">${esc(clsOf(d.cls).lab)}${tag}</span>${r.length>1?` <span style="opacity:.6">+${r.length-1}</span>`:''}`;
 }
 function cardHTML(it,mini){
- return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}">P${it.tier}</span><span class="cdrtag">✓ FWD</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${it.src.id}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+ return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${it.src.id}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
 function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;el.className=`card p${it.tier}${it.fresh?' fresh':''}${it.sent?' sent':''}${it.reviewed?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
  el.querySelector('.night-badge')?.remove();el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
- const t=el.querySelector('.tier');t.className='tier t'+it.tier;t.textContent='P'+it.tier;
+ const t=el.querySelector('.tier');t.className='tier t'+it.tier;t.textContent=`P${it.tier} ${TNAME[it.tier]}`;t.title=it.tier===1?'Notify Commander':'Image priority';
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
  el.querySelector('.cs').textContent=it.central.toFixed(2);
- if(it.live){el.classList.toggle('sup',!!it.live.suppressed);const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?it.live.imageForm.toUpperCase():'FACT ONLY';ft.title=it.live.imageForm?`Image shown is the ${it.live.imageForm.toUpperCase()} form (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the chips below for the rest of the ladder.`:'No image form has landed yet — only the FACT summary. Thumb/crop arrive when the link allows.';el.querySelector('.suptag').title=liveSuppressReason(it).replace(/<[^>]+>/g,'');el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
+ if(it.live){el.classList.toggle('sup',!!it.live.suppressed);const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?FORM_NAME[it.live.imageForm]:'Summary only';ft.title=it.live.imageForm?`Image shown is the ${FORM_NAME[it.live.imageForm]} (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the image-version labels below for transfer status.`:'Only the object summary has arrived. Images follow as bandwidth becomes available.';el.querySelector('.suptag').title=liveSuppressReason(it).replace(/<[^>]+>/g,'');el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
  const dl=it.central-it.base,de=el.querySelector('.delta');de.className='delta '+(dl>.04?'up':dl<-.04?'dn':'');de.textContent=dl>.04?`▲${dl.toFixed(2).slice(1)}`:dl<-.04?`▼${(-dl).toFixed(2).slice(1)}`:'';
 }
 function renderFeed(noAnim){
@@ -320,7 +321,7 @@ function renderFeed(noAnim){
 }
 function renderDirBar(){
  const d=state.directives;$('dirCount').textContent=d.length||'';
- if(LIVE){const p=LIVE.policy||{};$('dirBar').innerHTML=d.length?`<span>Standing directive:</span><span class="pill" title="${esc(p.text||'')}">${esc(p.text||p.readback||'')}</span><span class="readback" title="Shore read-back: what the edge actually applies">→ ${esc(p.readback||'')}</span><a href="#reprioritize">Edit</a>`:`<span>No standing directive — ranked by ${esc(LIVE.prioritization?.label||'the edge scorer')}</span><a href="#reprioritize">Set priorities →</a>`;return}
+ if(LIVE){const p=LIVE.policy||{};$('dirBar').innerHTML=d.length?`<span>Standing directive:</span><span class="pill" title="${esc(p.text||'')}">${esc(p.text||p.readback||'')}</span><span class="readback" title="What your words mean: the priorities the ship will apply">→ ${esc(p.readback||'')}</span><a href="#reprioritize">Edit</a>`:`<span>No standing directive — ranked by ${esc(LIVE.prioritization?.label||'the ship scoring model')}</span><a href="#reprioritize">Set priorities →</a>`;return}
  $('dirBar').innerHTML=d.length?`<span>Directives:</span>${d.slice(0,2).map(x=>`<span class="pill" title="${esc(x.text)}">${esc(x.text)}</span>`).join('')}${d.length>2?`<span>+${d.length-2}</span>`:''}<a href="#reprioritize">Edit</a>`:`<span>Base model only</span><a href="#reprioritize">Set priorities →</a>`;
 }
 function renderStats(){
@@ -341,49 +342,49 @@ function renderLiveStrip(){
  const {shore,edge,link,counts,policy,prioritization}=L;
  const rate=link.controllable?link.bps:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
  const est=edge.ok?edge.estimateBps:shore.estimateBps;
- const relearn=edge.ok&&edge.consecutiveFailures>0?` · re-learning: ${edge.consecutiveFailures} failed exchange${edge.consecutiveFailures===1?'':'s'}`:'';
- const presets=(link.presets||[]).map(p=>`<button data-bps="${p}" class="${link.controllable&&p===link.bps?'on':''}" ${link.controllable?'':'disabled'} title="${link.controllable?`Set the shaped ship→shore link to ${presetName(p)}`:'Link is shaped outside this process (deploy/compose/degrade.sh)'}">${presetName(p)}</button>`).join('');
+ const relearn=edge.ok&&edge.consecutiveFailures>0?` · estimating speed again: ${edge.consecutiveFailures} failed transfer${edge.consecutiveFailures===1?'':'s'}`:'';
+ const presets=(link.presets||[]).map(p=>`<button data-bps="${p}" class="${link.controllable&&p===link.bps?'on':''}" ${link.controllable?'':'disabled'} title="${link.controllable?`Set the simulated ship-to-shore connection speed to ${presetName(p)}`:'Connection speed is controlled outside this console'}">${presetName(p)}</button>`).join('');
  const sightingMode=counts.grouped>0;
  const objsShown=sightingMode?counts.sightings:counts.objects,objsImg=sightingMode?counts.sightingsWithImage:counts.objectsWithImage;
  const preTrack=sightingMode?Math.max(0,counts.objects-counts.sightings):0;
  const dropPct=edge.ok&&(edge.itemsTotal+edge.itemsDeduped)>0?Math.round(100*edge.itemsDeduped/(edge.itemsTotal+edge.itemsDeduped)):0;
  el.innerHTML=`
-  <div class="st link" title="The ship→shore link the edge talks through. Presets set the in-process shaper; the edge measures the rate itself (its estimate is shown) and needs a few exchanges to re-learn after a change.">Link <div class="seg" id="linkPresets">${presets}</div><b>${fmtRate(rate)}</b>${link.controllable&&est?`<span class="hint">edge estimates ${fmtRate(est)}${relearn}</span>`:''}</div><span class="ar">›</span>
-  <div class="st" title="Edge = ship side. Items: one per sighting (object) plus camera heartbeats, never one per frame. Duplicate frames folded: frames the tracker attributed to a sighting already reported — they never left the ship. Queue: items/bytes waiting for the link.">Edge ${edge.ok?`<b>${edge.itemsTotal}</b> items · <b>${edge.itemsDeduped||0}</b> dup frames folded · queue <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
-  <div class="st" title="Shore = what crossed the link. Items counts every FACT that landed (sightings, contact reports, heartbeats). Sightings = unique objects, one card each; 'with image' = a thumb/crop/full has landed, the rest are FACT-only cards.${preTrack?` ${preTrack} per-frame item${preTrack===1?'':'s'} from before the tracker locked on are folded away.`:''}">Shore <b>${shore.ok?shore.itemsTotal:'—'}</b> items · <b>${objsShown}</b> sightings (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> heartbeats${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
-  <div class="st" title="Bytes that actually crossed the shaped link${link.controllable?` (shore itself counted ${fmtBytes(shore.bytes||0)})`:''}. Compare with what ${edge.itemsDeduped||0} duplicate frames would have cost.">Over the link <b>${fmtBytes(link.controllable?link.bytes:shore.bytes||0)}</b></div><span class="ar">›</span>
-  <div class="st" title="${esc(policy.text?`Operator wrote: “${policy.text}”. The shore read it back as: ${policy.readback}`:policy.readback||'')}">Directive <b class="rb">${esc(policy.text?policy.readback:'none')}</b>${policy.emcon&&policy.emcon.mode&&policy.emcon.mode!=='NORMAL'?` · EMCON <b>${esc(policy.emcon.mode)}</b>`:''}</div><span class="ar">›</span>
-  <div class="st" id="prioMode" title="Which scorer ranks the feed on the edge. P1–P4 are rank bands within the current shore picture (top 10% / 25% / 35% / rest); a deprioritized object is always P4.">Ranking <b>${esc(prioritization?.label||'edge score')}</b>${prioritization?.source==='edge'?'':' <span class="hint">(built-in)</span>'}</div>
-  <span class="sv" title="Share of frames the edge saw that never left the ship (folded into a sighting already reported).">${dropPct}% of frames never left the ship</span>`;
- const seg=$('linkPresets');if(seg)seg.onclick=async e=>{const b=e.target.closest('button[data-bps]');if(!b||b.disabled)return;try{await request('/api/shore/link','POST',{bps:+b.dataset.bps});toast(`Link → ${presetName(+b.dataset.bps)} — the edge re-learns the rate over the next exchanges`)}catch(error){toast(error.message)}};
+  <div class="st link" title="Ship-to-shore connection. These buttons set its simulated speed. The ship measures the speed over several transfers, so its estimate may take time to catch up.">Ship-to-shore connection <div class="seg" id="linkPresets">${presets}</div><b>${fmtRate(rate)}</b>${link.controllable&&est?`<span class="hint">ship estimates ${fmtRate(est)}${relearn}</span>`:''}</div><span class="ar">›</span>
+  <div class="st" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
+  <div class="st" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
+  <div class="st" title="Image and summary data sent over the connection${link.controllable?` (shore itself counted ${fmtBytes(shore.bytes||0)})`:''}. Compare with what ${edge.itemsDeduped||0} repeated views would have cost to send.">Data transferred <b>${fmtBytes(link.controllable?link.bytes:shore.bytes||0)}</b></div><span class="ar">›</span>
+  <div class="st" title="${esc(policy.text?`Operator wrote: “${policy.text}”. The shore read it back as: ${policy.readback}`:policy.readback||'')}">Directive <b class="rb">${esc(policy.text?policy.readback:'none')}</b>${policy.emcon&&policy.emcon.mode&&policy.emcon.mode!=='NORMAL'?` · Transmission mode <b>${esc(policy.emcon.mode)}</b>`:''}</div><span class="ar">›</span>
+  <div class="st" id="prioMode" title="Scoring model used on the ship. P1 Critical, P2 High, P3 Routine and P4 Low divide the current shore feed into priority groups (top 10%, next 25%, next 35%, then the rest). Deprioritized objects are P4 Low.">Scoring model <b>${esc(prioritization?.label||'Ship score')}</b>${prioritization?.source==='edge'?'':' <span class="hint">(built-in)</span>'}</div>
+  <span class="sv" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span>`;
+ const seg=$('linkPresets');if(seg)seg.onclick=async e=>{const b=e.target.closest('button[data-bps]');if(!b||b.disabled)return;try{await request('/api/shore/link','POST',{bps:+b.dataset.bps});toast(`Link → ${presetName(+b.dataset.bps)} — the ship updates its speed estimate over the next transfers`)}catch(error){toast(error.message)}};
 }
 const pulling=new Set();
 function renderCameras(){
  const el=$('cameras');if(!el)return;const cams=LIVE?.cameras||[];el.hidden=!LIVE||!cams.length;if(el.hidden){el.innerHTML='';return}
- el.innerHTML=`<div class="camhead" title="One entry per ship camera. The view is the edge's object-free heartbeat frame (~2 KB/min, FACT+THUMB only; FULL stays on the ship until pulled) or, before one lands, the newest contact's image. Heartbeats are not contacts: not counted as sightings, not in the review queue.">Cameras · ${cams.length} · heartbeats, not contacts</div>`+cams.map(c=>{const v=c.view,p=v?.pull;const busy=v&&pulling.has(v.itemId);
-  return`<div class="cam ${c.heartbeat?'hb':'contact'}" title="${c.heartbeat?'Latest object-free frame from this camera (edge heartbeat). Not a contact.':'No heartbeat frame yet — showing the newest contact from this camera.'}">${v?.image?`<img src="${esc(v.image)}" alt="">`:'<div class="noimg">no view yet</div>'}<div class="meta"><b>${esc(c.name||c.source)}</b><span>seen ${ago(c.lastMs)} · ${c.contacts} contact${c.contacts===1?'':'s'}${v?` · view: ${esc((v.imageForm||'fact').toUpperCase())} ${ago(v.lastMs)}`:''}</span>${p?`<button class="btn sm" data-pull="${esc(v.itemId)}" ${p.enabled&&!busy?'':'disabled'} title="${esc(p.reason)}">${busy?'requested…':esc(p.label)}</button>`:''}</div></div>`}).join('');
- el.onclick=async e=>{const b=e.target.closest('button[data-pull]');if(!b||b.disabled)return;const id=b.dataset.pull;pulling.add(id);b.disabled=true;b.textContent='requested…';try{await request('/api/shore/pull','POST',{itemId:id,form:'full'});toast('Full frame requested from the edge — watch the FULL chip go pending → received')}catch(error){pulling.delete(id);toast(error.message)}};
+ el.innerHTML=`<div class="camhead" title="One view per ship camera. Camera overview updates show scenes without detected objects (about 2 KB per minute). Full images stay on the ship until requested. Until an overview arrives, the latest detected object is shown instead. Overview updates do not enter the object review queue.">Cameras · ${cams.length} · overview updates</div>`+cams.map(c=>{const v=c.view,p=v?.pull;const busy=v&&pulling.has(v.itemId);
+  return`<div class="cam ${c.heartbeat?'hb':'contact'}" title="${c.heartbeat?'Latest camera overview with no detected objects. Not included in the review queue.':'No camera overview yet — showing this camera’s latest detected object.'}">${v?.image?`<img src="${esc(v.image)}" alt="">`:'<div class="noimg">no view yet</div>'}<div class="meta"><b>${esc(c.name||c.source)}</b><span>seen ${ago(c.lastMs)} · ${c.contacts} detected object${c.contacts===1?'':'s'}${v?` · view: ${esc(FORM_NAME[v.imageForm||'fact'])} ${ago(v.lastMs)}`:''}</span>${p?`<button class="btn sm" data-pull="${esc(v.itemId)}" ${p.enabled&&!busy?'':'disabled'} title="${esc(p.reason)}">${busy?'requested…':esc(p.label)}</button>`:''}</div></div>`}).join('');
+ el.onclick=async e=>{const b=e.target.closest('button[data-pull]');if(!b||b.disabled)return;const id=b.dataset.pull;pulling.add(id);b.disabled=true;b.textContent='requested…';try{await request('/api/shore/pull','POST',{itemId:id,form:'full'});toast('Full image requested from the ship — its status changes from waiting to received')}catch(error){pulling.delete(id);toast(error.message)}};
 }
 function liveLadderHTML(it){
  const l=it.live;if(!l)return'';const p=l.pull||{};
- const rows=FORMS.map(k=>{const f=l.forms[k]||{state:'none'};const st=f.state==='received'?`received · ${fmtBytes(f.bytes)}`:f.state==='partial'?`${fmtBytes(f.received)} of ${fmtBytes(f.bytes)} streaming`:f.state==='pending'?`queued on edge · ${fmtBytes(f.bytes)}`:f.state==='offered'?`on the edge, not sent · ${fmtBytes(f.bytes)}`:'not available';
-  return`<tr class="${f.state}${l.imageForm===k?' shown':''}"><td>${k.toUpperCase()}${l.imageForm===k?' <small>· shown</small>':''}</td><td>${esc(st)}</td></tr>`}).join('');
- return`<div class="dsec live-ladder"><h4>Fidelity ladder · shore item ${esc(l.itemID||l.itemId||'')}</h4>
-  <div class="hint" style="margin-bottom:6px">Image shown: <b>${l.imageForm?l.imageForm.toUpperCase():'none — FACT only'}</b>${l.sightingId?` · sighting <span class="mono">${esc(l.sightingId)}</span>`:' · untracked item'}${l.framesKnown?` · ${l.frames} frames seen on the ship, ${l.reports} report${l.reports===1?'':'s'} sent`:` · ${l.reports} report${l.reports===1?'':'s'} so far`}${l.event?` · ${esc(l.event)}`:''}</div>
+ const rows=FORMS.map(k=>{const f=l.forms[k]||{state:'none'};const st=f.state==='received'?`received · ${fmtBytes(f.bytes)}`:f.state==='partial'?`${fmtBytes(f.received)} of ${fmtBytes(f.bytes)} streaming`:f.state==='pending'?`waiting on the ship · ${fmtBytes(f.bytes)}`:f.state==='offered'?`on the ship, not sent · ${fmtBytes(f.bytes)}`:'not available';
+  return`<tr class="${f.state}${l.imageForm===k?' shown':''}"><td>${FORM_NAME[k]}${l.imageForm===k?' <small>· shown</small>':''}</td><td>${esc(st)}</td></tr>`}).join('');
+ return`<div class="dsec live-ladder"><h4>Image versions · shore record ${esc(l.itemID||l.itemId||'')}</h4>
+  <div class="hint" style="margin-bottom:6px">Image shown: <b>${l.imageForm?FORM_NAME[l.imageForm]:'none — summary only'}</b>${l.sightingId?` · Tracked object <span class="mono">${esc(l.sightingId)}</span>`:' · object not yet tracked'}${l.framesKnown?` · ${l.frames} frames seen on the ship, ${l.reports} report${l.reports===1?'':'s'} sent`:` · ${l.reports} report${l.reports===1?'':'s'} so far`}${l.event?` · ${esc(l.event)}`:''}</div>
   <table class="ladder">${rows}</table>
-  <div class="pullrow"><button class="btn ${p.enabled?'primary':''}" id="aPull" ${p.enabled&&!pulling.has(l.itemId)?'':'disabled'} title="${esc(p.reason||'')}">${pulling.has(l.itemId)?'requested…':esc(p.label||'Pull full image')}</button><span class="hint">${esc(p.reason||'')}</span></div>
+  <div class="pullrow"><button class="btn ${p.enabled?'primary':''}" id="aPull" ${p.enabled&&!pulling.has(l.itemId)?'':'disabled'} title="${esc(p.reason||'')}">${pulling.has(l.itemId)?'requested…':esc(p.label||'Request full image')}</button><span class="hint">${esc(p.reason||'')}</span></div>
  </div>`;
 }
 function liveWhy(it){
  const l=it.live,why=[];if(!l)return why;
  const rank=visible().l.filter(x=>!x.live?.suppressed);const pos=rank.findIndex(x=>x.id===it.id);
  if(l.suppressed)why.push({c:'dn',t:liveSuppressReason(it)});
- else if(pos>=0)why.push({c:it.tier===1?'al':'',t:`Rank ${pos+1} of ${rank.length} on shore by edge priority score (${l.score.toFixed(2)}) → P${it.centralTier}`});
- if(l.unknown)why.push({c:'al',t:`Edge flagged this contact <b>unknown</b> (unknownness ${l.unknownness.toFixed(2)}) — unknown contacts are never deprioritized by a directive`});
- if(l.subtype)why.push({c:'',t:`Zero-shot subtype <b>${esc(l.subtype)}</b>${l.label&&l.label!==l.subtype?` (detector class: ${esc(l.label)})`:''}`});
- if(l.override)why.push({c:'up',t:`Operator relabelled this object “${esc(l.override)}” on shore`});
+ else if(pos>=0)why.push({c:it.tier===1?'al':'',t:`Rank ${pos+1} of ${rank.length} on shore by ship score (${l.score.toFixed(2)}) → P${it.centralTier} ${TNAME[it.centralTier]}`});
+ if(l.unknown)why.push({c:'al',t:`The ship marked this object <b>unknown</b> (unfamiliarity score ${l.unknownness.toFixed(2)}) — unknown objects are never deprioritized by a directive`});
+ if(l.subtype)why.push({c:'',t:`Suggested object type <b>${esc(l.subtype)}</b>${l.label&&l.label!==l.subtype?` (computer label: ${esc(l.label)})`:''}`});
+ if(l.override)why.push({c:'up',t:`Operator changed the label of this object “${esc(l.override)}” on shore`});
  if(it.det[0]?.matched)why.push({c:'up',t:'Boosted by the standing directive'});
- if(!l.imageForm)why.push({c:'',t:'Only the FACT has landed so far — the card gets its image when a thumb/crop crosses the link'});
+ if(!l.imageForm)why.push({c:'',t:'Only the object summary has arrived — its image appears when the connection delivers a preview or close-up'});
  return why;
 }
 
@@ -393,17 +394,17 @@ function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
 function renderZoom(){preserveBandFocus(renderZoomContent)}
 function renderZoomContent(){const it=items.find(i=>i.id===state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
- z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}">P${it.tier}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>DB #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
+ z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
 function closeDetail(){closeZoom();const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
 function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function buildWhy(it,rows){
  const why=[...liveWhy(it),...gsLights.why(it)];const top=rows[0];
  rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
- if(top)why.push({c:top[1].s>.6?'al':'',t:`Top contact: <b>${esc(clsOf(top[0].cls).lab)}</b> (conf ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${MODELS[state.model].name}`});
+ if(top)why.push({c:top[1].s>.6?'al':'',t:`Main object: <b>${esc(clsOf(top[0].cls).lab)}</b> (confidence ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${MODELS[state.model].name}`});
  rows.forEach(([d])=>{if(d.attrs.dark&&!['other','clutter'].includes(clsOf(d.cls).g))why.push({c:'al',t:`${esc(clsOf(d.cls).lab)} has no AIS / transponder correlation`});if(d.attrs.approaching)why.push({c:'al',t:`${esc(clsOf(d.cls).lab)} track is inbound toward the sensor`});if(d.attrs.new)why.push({c:'',t:`Change detection: ${esc(clsOf(d.cls).lab)} not present in previous pass`})});
  const seen=new Set();rows.forEach(([d,sd])=>sd.notes.forEach(r=>{const k=ruleLabel(r);if(seen.has(k))return;seen.add(k);const dir=state.directives.find(x=>x.id===r.directiveId);why.push({c:r.type==='boost'?'up':'dn',t:`${r.type==='boost'?'Boosted':'Suppressed'} by directive “${dir?esc(dir.text):''}” (${k.slice(2)})`})}));
- if(rows.some(([,sd])=>sd.focus))why.push({c:'dn',t:'Contacts not matching active directives are de-weighted (focus mode)'});
- if(!it.live&&it.edge<it.central-.15)why.push({c:'up',t:`Command model ranked this higher than edge triage (${it.edge.toFixed(2)} → ${it.central.toFixed(2)})`});
+ if(rows.some(([,sd])=>sd.focus))why.push({c:'dn',t:'Objects outside your active directives receive lower scores (focus mode)'});
+ if(!it.live&&it.edge<it.central-.15)why.push({c:'up',t:`Shore scoring raised the ship’s priority estimate (${it.edge.toFixed(2)} → ${it.central.toFixed(2)})`});
  const _w=new Set();for(let i=why.length-1;i>=0;i--){if(_w.has(why[i].t))why.splice(i,1);else _w.add(why[i].t)}
  return why;
 }
@@ -413,35 +414,34 @@ function renderDetailContent(){
  if(!it){D.innerHTML='';return}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
  const why=buildWhy(it,rows);
- const tierName=['','Critical — notify commander','High','Routine','Low'][it.tier];
  const fmtMs=ms=>ms>=1000?(ms/1000).toFixed(1)+' s':ms+' ms';const dl=it.central-it.base;
  const l=visible().l,idx=l.findIndex(x=>x.id===it.id);
- D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}">P${it.tier}</span>${tierName}</h2><small>${esc(it.src.name)} · <span class="mono">${zulu(it.ts)}</span> · DB #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
+ D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span></h2><small>${esc(it.src.name)} · <span class="mono" title="UTC time (Zulu)">${zulu(it.ts)}</span> · Stored image #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
   <div class="dnav"><button id="dPrev" title="Previous (←)">‹</button><button id="dNext" title="Next (→)">›</button><button id="dClose" title="Close (Esc)">×</button></div></div>
  <div class="dimg" id="dImg" title="Enlarge (F)">${largeImage(it)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
-  <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">${t} · P${t}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
-  <div class="scores"><div class="sc" title="${it.live?'Edge priority score, normalized to the highest on shore':''}"><span>${it.live?'Edge priority':'Edge triage'}</span><b>${it.edge.toFixed(2)}</b></div><div class="sc" title="${it.live?'Rank on shore after the standing directive (P1–P4 are rank bands)':''}"><span>${it.live?'Shore rank':'Command score'}</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span>Directive Δ</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
-  <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n">Conf</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>ATTR_LAB[a]).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
+  <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">P${t} ${TNAME[t]}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
+  <div class="scores"><div class="sc" title="${it.live?'Ship score: importance relative to the highest score on shore':'Edge score: the ship’s initial estimate of importance'}"><span>Ship score</span><b>${it.edge.toFixed(2)}</b></div><div class="sc" title="${it.live?'Shore score: relative importance after applying your directive':'Command score: importance after shore scoring and directives'}"><span>Shore score</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span title="How much active directives changed the base score">Change from directives</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
+  <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>ATTR_LAB[a]).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
   ${gsLights.section(it,CLS)}
   <div class="dsec" id="briefDetections"></div>
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   ${it.live?liveLadderHTML(it):`<div class="dsec"><h4>Processing chain</h4><ul class="tl">
-   <li class="edge"><i></i><div>Captured &amp; triaged on sensor<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
-   <li><i></i><div>Uplinked to central<br><small>${it.src.link} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
+   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
+   <li><i></i><div>Sent to shore<br><small>${it.src.link} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
    <li><i></i><div>Stored in imagery database<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
-   <li><i></i><div>Command reprioritization<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
+   <li><i></i><div>Shore priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
   </ul></div>`}
-  <div class="actions"><button class="btn cdr ${it.sent?'done':''}" id="aCdr">${it.sent?'✓ Sent to Commander':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis">Dismiss</button></div>
+  <div class="actions"><button class="btn cdr ${it.sent?'done':''}" id="aCdr">${it.sent?'✓ Sent to Commander':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
  briefing.renderDetections(it);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
- const aPull=$('aPull');if(aPull)aPull.onclick=async()=>{const id=it.live.itemId;pulling.add(id);aPull.disabled=true;aPull.textContent='requested…';try{await request(`/api/items/${encodeURIComponent(it.id)}/pull`,'POST',{form:'full'});toast('Full image requested from the edge — the FULL chip goes queued → streaming → received')}catch(error){pulling.delete(id);toast(error.message)}};
+ const aPull=$('aPull');if(aPull)aPull.onclick=async()=>{const id=it.live.itemId;pulling.add(id);aPull.disabled=true;aPull.textContent='requested…';try{await request(`/api/items/${encodeURIComponent(it.id)}/pull`,'POST',{form:'full'});toast('Full image requested from the ship — its status changes from waiting to transferring to received')}catch(error){pulling.delete(id);toast(error.message)}};
  $('aSim').onclick=()=>{const k=rows[0]&&rows[0][0].cls;if(!k)return;$('nlIn').value=`Prioritize ${clsOf(k).lab.toLowerCase()}s`;location.hash='#reprioritize';toast('Drafted a directive from this image — review and apply')};
- $('aDis').onclick=async()=>{const l=visible().l,i=l.indexOf(it),nx=l[i+1]||l[i-1];try{await patchItem(it.id,{dismissed:true,reviewed:true});nx&&findItem(nx.id)?openDetail(nx.id):closeDetail();toast(it.live?'Dismissed from this console (retained on shore; nothing deleted)':'Image dismissed from feed (retained in DB)')}catch(error){toast(error.message)}};
+ $('aDis').onclick=async()=>{const l=visible().l,i=l.indexOf(it),nx=l[i+1]||l[i-1];try{await patchItem(it.id,{dismissed:true,reviewed:true});nx&&findItem(nx.id)?openDetail(nx.id):closeDetail();toast(it.live?'Image hidden from this console (still stored on shore)':'Image hidden from feed (still stored)')}catch(error){toast(error.message)}};
 }
 
 /* ---- reprioritize page ---- */
@@ -464,10 +464,10 @@ async function requestFullRes(it){
  if(it.fullRes)return;
  const by=prompt('Operator override: send this image at FULL SIZE with NO compression.\nThis uses much more link bandwidth than the usual thumbnail/crop.\n\nEnter your name or operator ID to confirm:');
  if(by===null)return;
- if(!by.trim()){toast('Not sent: operator name is required');return}
+ if(!by.trim()){toast('Not sent: enter your name or operator ID in the confirmation box');return}
  try{await request(`/api/items/${encodeURIComponent(it.id)}/full-res`,'POST',{by:by.trim()});toast(`Full-size send requested by ${by.trim()}`)}catch(error){toast(error.message)}
 }
-async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} — logged as model feedback`)}catch(error){toast(error.message)}}
+async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} ${TNAME[t]} — logged as model feedback`)}catch(error){toast(error.message)}}
 function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
@@ -480,7 +480,7 @@ function renderAsk(){
  box.hidden=false;
  if(rv.ask.kind==='why'){
   const tier=findItem(rv.ask.id)?.tier||'?';
-  box.innerHTML=`<div class="rvask-copy"><b>Why did you set the last image to P${tier}?</b><span>Two contacts scored close. Pick the one that drove your call.</span></div><div class="rvask-actions">${rv.ask.classes.map((cls,i)=>`<button class="kb rvask-btn" data-ask="why" data-choice="${esc(cls)}" ${rv.askBusy?'disabled':''}><kbd>${i+1}</kbd>${esc(CLS[cls]?.lab||cls)}</button>`).join('')}<button class="kb rvask-btn" data-ask="why" data-choice="wrong" ${rv.askBusy?'disabled':''}><kbd>${rv.ask.classes.length+1}</kbd>Wrong detection</button><button class="kb rvask-btn rvask-skip" data-ask="why" data-choice="skip" ${rv.askBusy?'disabled':''}><kbd>Esc</kbd>Skip</button></div>`;
+  box.innerHTML=`<div class="rvask-copy"><b>Why did you set the last image to P${tier} ${TNAME[tier]}?</b><span>Two contacts scored close. Pick the one that drove your call.</span></div><div class="rvask-actions">${rv.ask.classes.map((cls,i)=>`<button class="kb rvask-btn" data-ask="why" data-choice="${esc(cls)}" ${rv.askBusy?'disabled':''}><kbd>${i+1}</kbd>${esc(CLS[cls]?.lab||cls)}</button>`).join('')}<button class="kb rvask-btn" data-ask="why" title="The computer drew a detection box on the wrong thing. This keeps the wrong detection out of future priority-learning suggestions." data-choice="wrong" ${rv.askBusy?'disabled':''}><kbd>${rv.ask.classes.length+1}</kbd>Wrong detection</button><button class="kb rvask-btn rvask-skip" data-ask="why" data-choice="skip" ${rv.askBusy?'disabled':''}><kbd>Esc</kbd>Skip</button></div>`;
   return;
  }
  const s=rv.ask.s,label=CLS[s.cls]?.lab||s.cls,verb=s.dir==='lower'?'lowered':'raised',action=s.dir==='lower'?'Lower':'Raise';
@@ -527,10 +527,10 @@ function renderReviewContent(){
  const age=Math.max(0,Math.round((Date.now()-it.ts)/60000));
  const classifications=rows.filter(([d])=>d.ship).slice(0,3).map(([d])=>shipLine(d));
  [...$('rvKeys').querySelectorAll('[data-a]')].forEach(b=>b.classList.toggle('sugg',b.dataset.a===String(sug)));
- $('accLbl').textContent=`Agree · P${sug}`;
+ $('accLbl').textContent=`Agree with suggested priority · P${sug} ${TNAME[sug]}`;
  $('rvMain').innerHTML=`<div class="rvimg"><div class="rvframe p${sug}">${largeImage(it)}</div></div>
  <div class="rvside">
-  <div class="rvcard"><div class="lbl">Model suggests</div><div class="rvsug"><span class="tier t${sug}">P${sug}</span><b>${TNAME[sug]}</b></div><div class="rvsub">Command score ${it.central.toFixed(2)} · edge ${it.edge.toFixed(2)}${state.directives.length?` · ${state.directives.length} directive${state.directives.length>1?'s':''} active`:''}</div></div>
+  <div class="rvcard"><div class="lbl">Model suggests</div><div class="rvsug"><span class="tier t${sug}">P${sug} ${TNAME[sug]}</span></div><div class="rvsub" title="Command score is the shore-side priority estimate; edge score is the ship-side estimate.">Shore score ${it.central.toFixed(2)} · ship score ${it.edge.toFixed(2)}${state.directives.length?` · ${state.directives.length} directive${state.directives.length>1?'s':''} active`:''}</div></div>
   <div class="rvcard"><div class="lbl" style="margin-bottom:4px">Why</div><ul class="why">${why.map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   <div class="rvcard rvmeta"><span>Source</span><b>${esc(it.src.name)}</b><span>Captured</span><b class="mono">${zulu(it.ts)} <span style="color:var(--muted);font-family:inherit;font-weight:500">(${age} min ago)</span></b><span>Objects</span><b>${rows.map(([d])=>esc(clsOf(d.cls).lab)).join(', ')||'—'}</b>${classifications.length?`<span>Classification</span><b class="rvclassification">${classifications.join('<br>')}</b>`:''}</div>
  </div><div class="rvflash" id="rvFlash"></div>`;
@@ -546,9 +546,9 @@ function rvAct(a){
  let msg,col;
  let changes={reviewed:true};
  if('1234'.includes(a)){changes.manual=+a;msg=`P${a} ${TNAME[+a]}`;col=tcol(+a);p.agreed=+a===sug}
- else if(a==='accept'){changes.manual=sug;msg=`✓ P${sug}`;col=tcol(sug);p.agreed=true}
+ else if(a==='accept'){changes.manual=sug;msg=`✓ P${sug} ${TNAME[sug]}`;col=tcol(sug);p.agreed=true}
  else if(a==='dismiss'){changes.manual=4;changes.dismissed=true;msg='✕ Not relevant';col='#9aa7b3'}
- else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Forwarded to CO';col='var(--good)'}
+ else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--good)'}
  else return;
  rv.busy=true;
  patchItem(it.id,changes).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});

@@ -3,7 +3,7 @@
 window.gsSettings=(()=>{
  const KEY='gs.settings';
  const BARS=[['top','Top'],['left','Left'],['right','Right'],['bottom','Bottom']];
- const THEMES=[['cic','CIC Dark'],['day','Day'],['red','Red light']];
+ const THEMES=[['cic','Dark'],['day','Day'],['red','Night mode (N)']];
  const PARTS=[['hstats','Header counts'],['live','Feed status'],['clock','Clock'],['user','Watch station'],['strip','Pipeline strip'],['dirbar','Active directives'],['ov','Thumbnail source & score'],['cl','Thumbnail captions'],['tbox','Thumbnail detection boxes']];
  const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[]});
  let s=load();
@@ -20,7 +20,7 @@ window.gsSettings=(()=>{
   b.classList.add('bar-'+s.bar,'theme-'+s.theme);
   s.hide.forEach(h=>b.classList.add('hide-'+h));
   b.classList.toggle('night',s.theme==='red');
-  const nb=document.getElementById('nightBtn');if(nb)nb.textContent=s.theme==='red'?'Exit red light (N)':'Red light (N)';
+  const nb=document.getElementById('nightBtn');if(nb)nb.textContent=s.theme==='red'?'Exit night mode (N)':'Night mode (N)';
   const dlg=document.getElementById('settings');
   dlg.querySelectorAll('.seg[data-k] button').forEach(x=>x.classList.toggle('on',s[x.parentElement.dataset.k]===x.dataset.v));
   dlg.querySelectorAll('input[data-p]').forEach(x=>x.checked=!s.hide.includes(x.dataset.p));
@@ -32,7 +32,7 @@ window.gsSettings=(()=>{
   const seg=(k,opts)=>`<div class="seg" data-k="${k}">${opts.map(([v,l])=>`<button type="button" data-v="${v}">${l}</button>`).join('')}</div>`;
   dlg.innerHTML=`<h3>Display settings</h3>
   <div class="setsec"><div class="lbl">Feed controls position</div>${seg('bar',BARS)}</div>
-  <div class="setsec"><div class="lbl">Theme</div>${seg('theme',THEMES)}<small>Red light is also available with the N key.</small></div>
+  <div class="setsec"><div class="lbl">Theme</div>${seg('theme',THEMES)}<small>Night mode is also available with the N key.</small></div>
   <div class="setsec"><div class="lbl">Show</div><div class="setparts">${PARTS.map(([p,l])=>`<label><input type="checkbox" data-p="${p}"> ${l}</label>`).join('')}</div></div>
   <p class="hint">Classification banners are always shown. Settings are saved in this browser.</p>
   <div class="setfoot"><button type="button" class="btn sm" id="setReset">Reset to defaults</button><span class="spacer"></span><button type="button" class="btn sm primary" id="setDone">Done</button></div>`;

@@ -105,7 +105,7 @@ func newPolicyRuntime(options serverOptions, data *store.Store) *policyRuntime {
 	rt.higherLayers = []*pb.PolicyLayer{{
 		Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
 		Rules: []*pb.InterestRule{
-			{Id: "ctf72-submarine", Author: "CTF-72", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3, Text: "CTF-72: submarines are FLASH — locked"},
+			{Id: "ctf72-submarine", Author: "CTF-72", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3, Text: "CTF-72: submarines are P1 Critical — locked"},
 			{Id: "ctf72-tanker", Author: "CTF-72", BoostLabels: []string{"tanker"}, Text: "CTF-72: report tankers (delegated)"},
 		},
 	}}

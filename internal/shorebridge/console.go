@@ -142,7 +142,7 @@ const frameW, frameH = 480.0, 300.0
 const liveModel = "shore"
 
 var liveModels = map[string]catalog.Model{
-	liveModel: {Name: "Edge priority score", Desc: "Ranked on the ship by the edge scorer (unknown-first, policy boost/suppress). P1–P4 are rank bands within the current shore picture; the standing directive deprioritizes, it never deletes.", W: map[string]float64{}, Lift: map[string]float64{}},
+	liveModel: {Name: "Ship score", Desc: "The ship ranks objects using its scoring model and your priorities, with unfamiliar objects first. P1 Critical, P2 High, P3 Routine and P4 Low are priority groups within the current shore feed. Lowering an object's priority does not delete it.", W: map[string]float64{}, Lift: map[string]float64{}},
 }
 
 var liveExamples = []string{"ignore cargo ships", "prioritize submarines", "ignore birds and buoys", "prioritize unknown contacts"}
@@ -157,7 +157,7 @@ func NewConsole(b *Bridge) *Console {
 		sources: map[string]catalog.Source{},
 		subs:    map[chan sseEvent]struct{}{},
 	}
-	c.live.Prioritization = Prioritization{Mode: "edge", Label: "Edge priority score", Source: "default"}
+	c.live.Prioritization = Prioritization{Mode: "edge", Label: "Ship score", Source: "default"}
 	c.live.Policy.Readback = Readback(nil, nil)
 	b.onSnapshot = c.onSnapshot
 	return c
@@ -394,27 +394,27 @@ func pullState(full FormStatus, scene bool) command.LivePull {
 	}
 	switch full.State {
 	case "received":
-		return command.LivePull{Enabled: false, Label: "Full " + what + " received", Reason: fmt.Sprintf("FULL (%s) is on shore; nothing left to pull.", fmtBytes(full.Bytes))}
+		return command.LivePull{Enabled: false, Label: "Full " + what + " received", Reason: fmt.Sprintf("The full image (%s) is already stored on shore.", fmtBytes(full.Bytes))}
 	case "partial":
 		pct := 0
 		if full.Bytes > 0 {
 			pct = int(100 * full.Received / full.Bytes)
 		}
-		return command.LivePull{Enabled: false, Label: fmt.Sprintf("Full %s %d%%", what, pct), Reason: fmt.Sprintf("FULL is streaming over the link (%s of %s, resumable).", fmtBytes(full.Received), fmtBytes(full.Bytes))}
+		return command.LivePull{Enabled: false, Label: fmt.Sprintf("Full %s %d%%", what, pct), Reason: fmt.Sprintf("The full image is transferring (%s of %s). Interrupted transfers can resume.", fmtBytes(full.Received), fmtBytes(full.Bytes))}
 	case "pending":
 		if scene && full.Received == 0 {
 			// Scene FULL is pull-only: the edge holds it (so it shows as a pending form) but never
 			// schedules it. Only an explicit pull releases it.
-			return command.LivePull{Enabled: true, Label: "Pull full frame", Reason: fmt.Sprintf("The edge holds the FULL frame (%s) but scene frames never ship unless asked for; pulling requests it now.", fmtBytes(full.Bytes))}
+			return command.LivePull{Enabled: true, Label: "Request full image", Reason: fmt.Sprintf("The full camera overview (%s) stays on the ship until you request it.", fmtBytes(full.Bytes))}
 		}
-		return command.LivePull{Enabled: false, Label: "Full " + what + " queued", Reason: "FULL is already queued on the edge; it lands when the link allows."}
+		return command.LivePull{Enabled: false, Label: "Full " + what + " queued", Reason: "The full image is waiting on the ship and will arrive as bandwidth becomes available."}
 	case "offered":
 		if scene {
-			return command.LivePull{Enabled: true, Label: "Pull full frame", Reason: fmt.Sprintf("The edge holds the FULL frame (%s) but scene frames never ship unless asked for; pulling requests it now.", fmtBytes(full.Bytes))}
+			return command.LivePull{Enabled: true, Label: "Request full image", Reason: fmt.Sprintf("The full camera overview (%s) stays on the ship until you request it.", fmtBytes(full.Bytes))}
 		}
-		return command.LivePull{Enabled: true, Label: "Pull full " + what, Reason: fmt.Sprintf("The edge offered FULL (%s) in its manifest but has not sent it; pulling asks the edge to send it now, ahead of the queue.", fmtBytes(full.Bytes))}
+		return command.LivePull{Enabled: true, Label: "Request full " + what, Reason: fmt.Sprintf("The full image (%s) is available on the ship. Request it to send it ahead of other waiting images.", fmtBytes(full.Bytes))}
 	default:
-		return command.LivePull{Enabled: true, Label: "Request full " + what, Reason: "Shore has no FULL form for this item yet; pulling asks the edge to produce and send it."}
+		return command.LivePull{Enabled: true, Label: "Request full " + what, Reason: "No full image is stored on shore yet. Request it to have the ship prepare and send it."}
 	}
 }
 
@@ -562,15 +562,15 @@ func prioritizationMode(snap *Snapshot) Prioritization {
 	mode := strings.ToLower(strings.TrimSpace(snap.Edge.Prioritizer))
 	switch mode {
 	case "tomer":
-		return Prioritization{Mode: mode, Label: "Tomer prioritizer (algorithm/)", Source: "edge"}
+		return Prioritization{Mode: mode, Label: "Image scoring model", Source: "edge"}
 	case "both":
-		return Prioritization{Mode: mode, Label: "Edge priority score + Tomer prioritizer", Source: "edge"}
+		return Prioritization{Mode: mode, Label: "Combined ship and image scoring models", Source: "edge"}
 	case "edgeml":
-		return Prioritization{Mode: mode, Label: "Edge priority score (edgeml)", Source: "edge"}
+		return Prioritization{Mode: mode, Label: "Object scoring model", Source: "edge"}
 	case "":
-		return Prioritization{Mode: "edge", Label: "Edge priority score", Source: "default"}
+		return Prioritization{Mode: "edge", Label: "Ship score", Source: "default"}
 	}
-	return Prioritization{Mode: mode, Label: "Edge prioritizer: " + mode, Source: "edge"}
+	return Prioritization{Mode: mode, Label: "Ship scoring model: " + mode, Source: "edge"}
 }
 
 func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
@@ -731,7 +731,7 @@ func (c *Console) Handler() http.Handler {
 	mux.HandleFunc("POST /api/directives/preview", c.preview)
 	mux.HandleFunc("POST /api/directives/compile", c.compile)
 	mux.HandleFunc("PUT /api/model", func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusConflict, "Live shore mode: the edge scorer ranks the feed; there is no base model to switch.")
+		writeError(w, http.StatusConflict, "The live feed is ranked by the ship’s scoring model. You cannot change that model here.")
 	})
 	mux.HandleFunc("GET /api/policy", func(w http.ResponseWriter, r *http.Request) {
 		c.mu.Lock()
@@ -741,7 +741,7 @@ func (c *Console) Handler() http.Handler {
 	})
 	mux.HandleFunc("POST /api/policy/emcon", c.b.setEMCON)
 	unsupported := func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusConflict, "Live shore mode: raw policy editing is done on the shore node (policy-keygen / shore admin), not from the console.")
+		writeError(w, http.StatusConflict, "Advanced policy editing must be done by a shore administrator, not from this console.")
 	}
 	mux.HandleFunc("POST /api/policy/validate", unsupported)
 	mux.HandleFunc("PUT /api/policy", unsupported)
