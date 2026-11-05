@@ -94,7 +94,7 @@ test('repeated reviewer overrides do not prompt to add a learning rule',async()=
   items=Array.from({length:5},(_,i)=>({id:'override-'+i,src:{id:i%2?'EO-P7':'IR-S1'},centralTier:3,manual:0,reviewed:false,dismissed:false,sent:false,dets:[{cls:'vessel'}],det:[{s:.9}]}));
   renderAsk();
  `,context);
- for(let i=0;i<5;i++)vm.runInContext(`rv.cur=items[${i}];rv.busy=false;rvAct('1')`,context);
+ for(let i=0;i<5;i++)vm.runInContext(`rv.cur=items[${i}];rv.displayed={...items[${i}]};rv.busy=false;rvAct('1')`,context);
  await new Promise(resolve=>setImmediate(resolve));
  assert.equal(vm.runInContext('overrideCount',context),5);
  assert.equal(vm.runInContext('suggestionChecks',context),0);
