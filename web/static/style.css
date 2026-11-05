@@ -69,6 +69,9 @@ select:focus,input[type=text]:focus{border-color:var(--accent)}
 .btn{background:var(--panel3);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{border-color:#36506a}
 .btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}.btn.primary:hover{background:#278a9f}
+.btn.danger{background:#a52b39;border-color:#dc5361;color:#fff}.btn.danger:hover{background:#bd3343}
+#resetDemoBtn[hidden]{display:none}
+#resetDemoDialog{max-width:500px;background:var(--panel);color:var(--text);border:1px solid #345065;border-radius:2px;padding:24px;line-height:1.5}#resetDemoDialog::backdrop{background:#000b}#resetDemoDialog :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .btn.sm{padding:4px 9px;font-size:12px}
 .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .seg button{background:var(--panel);color:var(--muted);border:none;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer;border-right:1px solid var(--line)}

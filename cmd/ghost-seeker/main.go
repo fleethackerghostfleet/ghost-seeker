@@ -138,7 +138,7 @@ func main() {
 	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
-	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
+	options := []server.Option{server.WithDemoReset(), server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
 		if err != nil {

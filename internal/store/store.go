@@ -44,6 +44,8 @@ type Store struct {
 	linkBPS         int64
 	uploadRemainder int64
 	uploadOrder     uint64
+	dbSequence      int
+	epoch           uint64
 }
 
 func New(retain int) *Store {
@@ -68,7 +70,8 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 		s.stats.Keep++
 	}
 	s.stats.DB++
-	item.DBID = s.stats.DB + 180000
+	s.dbSequence++
+	item.DBID = s.dbSequence + 180000
 	command.Rescore(item, s.model, s.directives)
 	item.Upload = command.Upload{Bytes: int64(item.KB)*1024 + 512, BPS: s.linkBPS}
 	s.items = append(s.items, cloneItem(*item))
@@ -94,6 +97,34 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 
 func (s *Store) Snapshot() ([]command.Item, command.Stats, int, State) {
 	return s.snapshot(false)
+}
+
+func (s *Store) Reset() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = nil
+	s.cdr = 0
+	s.stats = command.Stats{LinkBPS: s.linkBPS, LinkFixed: s.stats.LinkFixed}
+	s.uploadRemainder = 0
+	s.epoch++
+	return s.epoch
+}
+
+func (s *Store) Epoch() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.epoch
+}
+
+func (s *Store) Has(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) SnapshotWithDirectives() ([]command.Item, command.Stats, int, State) {

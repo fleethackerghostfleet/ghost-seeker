@@ -1,6 +1,7 @@
 /* Commander View: received shore picture and final decisions on escalations. */
 let SRC={},CLS={},MODELS={},ATTR_LAB={},model='maritime';
 let items=new Map(),view={tab:'received',sel:null,busy:false,undo:[]};
+let snapshotEpoch=null,resetRevision=0;
 const DEC={
  action:{k:'1',lab:'Take action',sub:'Task an asset · intercept / investigate',c:'#ff4d5e'},
  track:{k:'2',lab:'Track',sub:'Keep following this object',c:'#ff9a3c'},
@@ -104,11 +105,15 @@ function renderBrief(it){
 function render(){ensureSel();renderKpis();renderQueue();renderStage()}
 
 async function api(path,method='GET',body){
+ const revision=resetRevision;
  if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
  const r=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
- const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.statusText);return j;
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.statusText);
+ if(method!=='GET'&&(revision!==resetRevision||(j.item&&!items.has(j.item.id))))throw new Error('Image is no longer available — the feed changed');
+ return j;
 }
 async function decide(decision,id=view.sel){
+ const revision=resetRevision;
  const it=items.get(id);if(!it||(!it.sent&&!it.decision)||view.busy)return;
  const note=decision?($('note')?.value||''):'';view.busy=true;
  try{
@@ -119,13 +124,14 @@ async function decide(decision,id=view.sel){
   if(decision){view.undo.push(id);if(view.tab==='pending')view.sel=next?.id||null;toast(`${DEC[decision].lab} · P${it.tier} ${TN[it.tier]} ${title(it)}`)}
   else{setTab('pending');view.sel=id;toast('Decision reopened')}
   render();return true;
- }catch(e){toast(e.message);return false}finally{view.busy=false}
+ }catch(e){if(revision===resetRevision)toast(e.message);return false}finally{if(revision===resetRevision)view.busy=false}
 }
 async function undo(){
+ const revision=resetRevision;
  if(view.busy)return;
  const fromStack=view.undo.length>0,id=fromStack?view.undo.pop():(items.get(view.sel)?.decision?view.sel:null);
  if(!id||!items.get(id)?.decision)return;
- if(!await decide('',id)&&fromStack)view.undo.push(id);
+ if(!await decide('',id)&&fromStack&&revision===resetRevision)view.undo.push(id);
 }
 function setTab(t){view.tab=t;[...$('tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
 function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue();renderStage()}}
@@ -135,13 +141,21 @@ let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on'
 function connect(){
  const es=new EventSource('/api/stream');
  es.onopen=()=>setLive(true);es.onerror=()=>setLive(false);
- es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);if(m.live){Object.assign(SRC,Object.fromEntries((m.live.sources||[]).map(s=>[s.id,s])));Object.assign(CLS,m.live.classes||{});const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
+ es.addEventListener('snapshot',e=>applySnapshot(JSON.parse(e.data)));
  es.addEventListener('update',e=>{
   const m=JSON.parse(e.data),prev=view.sel,{it,isNew}=upsert(m.item);
   if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${TN[it.tier]} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}
   ensureSel();renderKpis();renderQueue();if(view.sel!==prev||it.id===view.sel)renderStage();
  });
  es.addEventListener('evict',e=>{const{id}=JSON.parse(e.data);if(items.delete(id))render()});
+}
+function applySnapshot(m){
+ if(m.reset===true||(snapshotEpoch!==null&&m.epoch!==undefined&&m.epoch!==snapshotEpoch)){
+  ++resetRevision;items=new Map();view.sel=null;view.undo=[];view.busy=false;imageCache.clear();$('stage').innerHTML='';$('brief').innerHTML='';
+ }
+ if(m.epoch!==undefined)snapshotEpoch=m.epoch;
+ if(m.live){Object.assign(SRC,Object.fromEntries((m.live.sources||[]).map(s=>[s.id,s])));Object.assign(CLS,m.live.classes||{});const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}
+ model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render();
 }
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
