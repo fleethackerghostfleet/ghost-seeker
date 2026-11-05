@@ -5,6 +5,7 @@
 # repo is private), with the team GCS bucket as the fallback (gcloud).
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
+custom_bucket=${BUCKET:+1}
 BUCKET=${BUCKET:-gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/ghost_fleet_5fps}
 DEST=${DEST:-$here/frames}
 DEFAULT_CLIPS="Submarine_surfacing Cruise_ship_Mediterranean_sunset_off_Italy Spotted_A_Submarine"
@@ -19,8 +20,10 @@ for c in $CLIPS; do
 done
 if [ -n "$missing" ]; then
   gcs_fallback() { for c in $missing; do echo "fetching $c (gcloud)"; gcloud storage cp -r "$BUCKET/$c" "$DEST/" --no-user-output-enabled; done; }
-  # The release archive holds exactly the default clips; anything else comes from GCS.
-  if [ "$CLIPS" = "$DEFAULT_CLIPS" ] && "$here/../../deploy/demo-data.sh" demo-frames.tar.gz "$DEST" 1; then
+  # The release archive holds the default clips; use it unless a custom BUCKET or a clip outside it is requested.
+  bundled=${custom_bucket:-yes}
+  for c in $missing; do case " $DEFAULT_CLIPS " in *" $c "*) ;; *) bundled="";; esac; done
+  if [ "$bundled" = yes ] && "$here/../../deploy/demo-data.sh" demo-frames.tar.gz "$DEST" 1; then
     :
   elif command -v gcloud >/dev/null 2>&1; then
     gcs_fallback
