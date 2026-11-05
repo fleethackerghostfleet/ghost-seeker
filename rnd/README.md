@@ -1,0 +1,98 @@
+# R&D 500-frame grading
+
+Images (not in Git):
+`gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/rnd/testsets/rnd-500-v1/images/`
+
+The committed manifest and predictions describe exactly 500 real frames from
+seven `frames/*_frames.zip` clips and three
+`scenarios/ghostfleet_demo/frames/*/img1` clips. Sources are sorted by name;
+frames are naturally sorted by original path. Allocate 50 per source, then
+redistribute any shortfall round-robin in source order. Within each clip take
+evenly spaced indices including both endpoints (integer floor; singleton uses
+the midpoint). IDs follow this order; SHA-256 and dimensions identify the bytes.
+Selection is deterministic, without a random seed. A new output directory is
+required so interrupted runs cannot silently mix data.
+
+In v1, Dolphins_Pungo_Ferry_Bridge has only 5 frames; its 45-frame shortfall
+is shared equally by the other nine sources (55 each). There are 50 P1,
+125 P2, 175 P3 and 150 P4 predictions. The real
+`yolo11n-fp32-640-ort+mobileclip-s1-ort-fp32` run returned 219 detections,
+no non-tentative subtypes, and zero unknownness on every independent first
+frame. These are the actual API outputs, not filled-in maritime assumptions.
+
+## Algorithm
+
+Each image is sent through the real sidecar Analyze API via `edge/inference`,
+with a unique source per image **and run**, isolating tracker state. Predictions
+use the response's frame detections, not accumulated sighting detections.
+Boxes are normalized x/y/width/height. Subtype is included only when a matching
+label's sighting supplies one other than `tentative`; absence is not a guessed
+class. Unknownness is the actual Analyze response, including zero when the
+first independent frame has not opened a sighting. This is an independent-frame
+benchmark, not a replay of the live multi-frame sighting lifecycle.
+
+Primary `model_score` (also `edge_priority_score`) is
+`edge/scoring.Default()` for an image item with its Analyze features, no policy,
+no operator interests/overrides, no pull boost, and age zero. We call the actual
+shore bridge tier assignment on all 500 scores; ties retain manifest order.
+**Model tiers are rank-relative to this set**, not absolute per-image cutoffs:
+P1 top 10%, P2 next 25%, P3 next 35%, P4 remainder. This follows live edgeml's
+scoring/ranking, not the simulation catalog model, and the comparison unit here
+is an image rather than a deduplicated live object. The live console has no
+catalog mission model for primary edgeml scoring (its display model is `shore`).
+
+Secondary `alt_tier_maritime` calls `ScoreDet → FrameScore → TierFor` with
+the simulation default mission **maritime**, no directives/attributes, using
+lowercase subtype when available, otherwise the detector label. Labels not in
+the catalog retain that pipeline's zero default weight. This alternate tier is
+not displayed as the model tier or used in grading deltas.
+
+## Build / generate / upload
+
+```sh
+GOTOOLCHAIN=local go build -o bin/rnd-testset ./cmd/rnd-testset
+GOTOOLCHAIN=local go build -o bin/rnd-grade ./cmd/rnd-grade
+mkdir -p "$HOME/rnd-data"
+./bin/rnd-testset -repo . -out "$HOME/rnd-data/rnd-500-v1" -infer http://127.0.0.1:9091
+gcloud storage cp --recursive "$HOME/rnd-data/rnd-500-v1/images" \
+  gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/rnd/testsets/rnd-500-v1/
+```
+
+The sidecar must be real, e.g. ONNX yolo11n-640 plus mobileclip-s1, with
+`--prioritizer edgeml`. It does not need the separate image-priority backend.
+Copy the two generated JSONL files into `rnd/testsets/rnd-500-v1/` to version
+the metadata. To download elsewhere, create the local testset directory, copy
+the two committed JSONL files there, then download the GCS `images/` directory
+into it. Keep images outside Git.
+
+## Grade
+
+```sh
+./bin/rnd-grade -testset "$HOME/rnd-data/rnd-500-v1" \
+  -log-dir rnd/logs -reviewer operator -addr 127.0.0.1:8095
+```
+
+Open through a localhost tunnel; this lightweight tool has no login. Bind only
+to loopback or a trusted development network. Keys: 1–4 grade, Enter/Space accept,
+Z undo, left/right navigate. A negative signed mean delta means the human
+assigns higher priority than the model (the model under-prioritizes).
+
+The displayed position is one-based; graded progress counts distinct effective
+image grades. A regrade replaces that image's effective grade; undo appends an
+event and restores the previous effective grade. Last-20 means the newest 20
+**effective** grades in journal order. Empty counters are zero. The summary's
+4×4 confusion matrix rows are model P1–P4, columns human P1–P4.
+
+Logs are fsynced append-only JSONL, with reviewer/testset names sanitized and
+hash-suffixed in filenames to avoid collisions. Restart with the same reviewer,
+testset directory name and log directory to resume the latest matching session.
+A process lock prevents concurrent writers to that session. Replayed records
+are validated against predictions; summaries are regenerated on startup and
+atomically replaced after every grade/undo. A torn final line is saved to a
+`.partial-<timestamp>` file before recovery; complete corrupt lines fail closed.
+Do not change metadata underneath an existing session.
+
+Logs default to `rnd/logs/` (ignored by Git). Preserve the raw journal plus
+`*-summary.json`; the latter is a derived view, not the source of truth.
+
+Checks: `GOTOOLCHAIN=local go vet ./... && GOTOOLCHAIN=local go test ./...`.
