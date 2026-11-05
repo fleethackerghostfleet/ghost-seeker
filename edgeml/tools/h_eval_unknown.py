@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import zlib
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -309,7 +310,7 @@ def cmd_auroc(a):
             print("no torch text tower; prompt variants skipped:", str(e)[:100])
     known = kind == "known"
     # dev: fit on even real track ids, evaluate on odd ones so the bank never contains the evaluated crop
-    key = np.asarray([hash((s, int(t))) % 2 for s, t in zip(seq, tid)])
+    key = np.asarray([zlib.crc32(f"{s}:{int(t)}".encode()) % 2 for s, t in zip(seq, tid)])   # deterministic across runs
     fit_mask, eval_mask = known & (key == 0), known & (key == 1)
     if a.fit_crops:                                   # test mode: frozen dev bank, evaluate all test known crops
         zf = np.load(Path(a.fit_crops).expanduser(), allow_pickle=True)
@@ -320,6 +321,8 @@ def cmd_auroc(a):
     results = []
     for name, v in (variants() if not a.frozen else [(a.frozen_name, json.loads(Path(a.frozen).read_text())["variant"])]):
         if v.get("prompts") and tower is None:
+            continue
+        if a.only and not any(o in name for o in a.only.split("|")):
             continue
         clf, cal = fit_variant(emb, v, known_fit, tower)
         u = score_variant(clf, feats, v)
@@ -461,6 +464,7 @@ def main():
     k.add_argument("--out", required=True)
     u = sub.add_parser("auroc", parents=[common])
     u.add_argument("--crops", required=True)
+    u.add_argument("--only", default=None, help="'|'-separated variant-name substrings to run (test: 'before|kNN bank k=5')")
     u.add_argument("--fit-crops", default=None, help="TEST mode: dev crops .npz used to fit the frozen bank")
     u.add_argument("--frozen", default=None, help="TEST mode: artifact JSON with the single frozen variant")
     u.add_argument("--frozen-name", default="frozen")
