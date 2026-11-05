@@ -47,6 +47,7 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 #pgRv,#pgBrief{flex:1 0 auto}
 .brief-workspace{flex:1 0 24rem;min-height:24rem}
 #pgRp .panel{overflow-wrap:normal;word-break:normal}
+#directives q{overflow-wrap:anywhere}
 #pgRp button{overflow-wrap:normal;word-break:normal}
 #pgRp .wrow{grid-template-columns:minmax(min-content,8.125rem) minmax(1rem,1fr) max-content}
 #pgRp .wrow .v{white-space:nowrap;min-width:max-content}
