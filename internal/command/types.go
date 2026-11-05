@@ -86,6 +86,10 @@ type Item struct {
 	Bands       []string   `json:"bands,omitempty"`
 	ID          string     `json:"id"`
 	Img         string     `json:"img,omitempty"`
+	DatasetID   string     `json:"dataset_id,omitempty"`
+	ImageID     string     `json:"image_id,omitempty"`
+	SourceVideo string     `json:"source_video,omitempty"`
+	SHA256      string     `json:"sha256,omitempty"`
 	DBID        int        `json:"dbId"`
 	Frame       int        `json:"frame"`
 	SourceID    string     `json:"src"`

@@ -15,6 +15,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/dataset"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
@@ -23,16 +24,18 @@ import (
 )
 
 type Server struct {
-	syncMu    sync.Mutex
-	proposals []*reviewProposal
-	reviews   *reviews.Log
-	reviewMu  sync.Mutex
-	store     *store.Store
-	hub       *hub
-	mux       *http.ServeMux
-	policy    *policyRuntime
-	compiler  *command.Compiler
-	after     func(time.Duration, func())
+	syncMu         sync.Mutex
+	proposals      []*reviewProposal
+	reviews        *reviews.Log
+	reviewMu       sync.Mutex
+	store          *store.Store
+	hub            *hub
+	mux            *http.ServeMux
+	policy         *policyRuntime
+	compiler       *command.Compiler
+	after          func(time.Duration, func())
+	datasetMode    bool
+	datasetSources []catalog.Source
 }
 
 const maxStreamClients = 64
@@ -45,6 +48,11 @@ func New(data *store.Store, options ...Option) *Server {
 	s := &Server{
 		store: data, hub: newHub(), mux: http.NewServeMux(),
 		compiler: &command.Compiler{}, after: func(delay time.Duration, fn func()) { time.AfterFunc(delay, fn) },
+	}
+	if opts.datasetDir != "" {
+		s.datasetMode = true
+		s.datasetSources = opts.datasetSources
+		s.mux.Handle("GET /dataset-images/", dataset.ImageHandler(opts.datasetDir))
 	}
 	s.policy = newPolicyRuntime(opts, data)
 	s.policy.onChange = s.publishSnapshot
@@ -123,10 +131,14 @@ func (s *Server) PublishEvict(id string) {
 }
 
 func (s *Server) config(w http.ResponseWriter, _ *http.Request) {
+	sources := catalog.Sources
+	if s.datasetMode {
+		sources = s.datasetSources
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"sources": catalog.Sources, "classes": catalog.Classes, "models": catalog.Models,
+		"sources": sources, "classes": catalog.Classes, "models": catalog.Models,
 		"attrLabels": catalog.AttrLabels, "examples": catalog.Examples,
-		"reviewSync": true,
+		"reviewSync": true, "datasetMode": s.datasetMode,
 	})
 }
 

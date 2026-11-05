@@ -74,6 +74,8 @@ var Library map[string][]LibraryImage
 func init() {
 	for _, model := range Models {
 		model.W["unknown"] = .7
+		model.W["vessel"] = model.W["cargo ship"]
+		model.W["aircraft"] = model.W["military aircraft"]
 	}
 	var images []LibraryImage
 	if err := json.Unmarshal(imageryJSON, &images); err != nil {
@@ -101,7 +103,9 @@ var Classes = map[string]Class{
 	"tanker":            {Group: "vessel", Length: .42, Aspect: .22, Label: "Tanker"},
 	"fishing vessel":    {Group: "vessel", Length: .15, Aspect: .6, Label: "Fishing vessel"},
 	"small boat":        {Group: "vessel", Length: .08, Aspect: .45, Label: "Small boat"},
+	"vessel":            {Group: "vessel", Length: .4, Aspect: .3, Label: "Vessel — type not classified"},
 	"submarine":         {Group: "vessel", Length: .13, Aspect: .35, Label: "Submarine"},
+	"aircraft":          {Group: "aircraft", Length: .18, Aspect: .36, Label: "Aircraft — type not classified"},
 	"military aircraft": {Group: "aircraft", Length: .14, Aspect: .42, Label: "Military aircraft"},
 	"civil aircraft":    {Group: "aircraft", Length: .18, Aspect: .36, Label: "Civil aircraft"},
 	"helicopter":        {Group: "aircraft", Length: .11, Aspect: .5, Label: "Helicopter"},

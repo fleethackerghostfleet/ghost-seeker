@@ -143,6 +143,13 @@ func clone(m map[string]float64) map[string]float64 {
 	return v
 }
 
+func reviewExampleID(v reviews.Record) string {
+	if v.ImageID != "" {
+		return v.ImageID
+	}
+	return v.ItemID
+}
+
 func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 	groups := map[string][]reviews.Record{}
 	r.Reviewers = map[string]int{}
@@ -157,7 +164,7 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 			}
 			return nil, fmt.Errorf("record %s: invalid item or unknown mission model", v.ID)
 		}
-		pair := key + "\x00" + v.ItemID + "\x00" + v.Reviewer
+		pair := key + "\x00" + reviewExampleID(v) + "\x00" + v.Reviewer
 		old, ok := latestRecords[pair]
 		if !ok || v.ReviewedAt.After(old.ReviewedAt) || (v.ReviewedAt.Equal(old.ReviewedAt) && v.ID > old.ID) {
 			latestRecords[pair] = v
@@ -176,7 +183,8 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 			return nil, fmt.Errorf("record %s: invalid item, tier or detections", v.ID)
 		}
 		r.Usable++
-		groups[key+"\x00"+v.ItemID] = append(groups[key+"\x00"+v.ItemID], v)
+		group := key + "\x00" + reviewExampleID(v)
+		groups[group] = append(groups[group], v)
 	}
 	out := map[string][]Example{}
 	keys := []string{}
@@ -230,7 +238,7 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 				}
 			}
 		}
-		out[key] = append(out[key], Example{ID: v.ItemID, Dets: v.Detections, Human: tiers[len(tiers)/2], Credit: credit, Night: night})
+		out[key] = append(out[key], Example{ID: reviewExampleID(v), Dets: v.Detections, Human: tiers[len(tiers)/2], Credit: credit, Night: night})
 	}
 	return out, nil
 }
@@ -356,7 +364,7 @@ func (r Result) Markdown() string {
 	for _, n := range names {
 		fmt.Fprintf(&b, "- %s: %d\n", strings.ReplaceAll(n, "\n", " "), r.Reviewers[n])
 	}
-	fmt.Fprint(&b, "\nNo directives. Latest label per reviewer/item/mission, upper median for even label counts. Item-id FNV-1a hash: 80/20 train/holdout. Named reason classes receive training credit; otherwise the highest-scoring class does. Only train labels influence bounded coordinate search. Lifts unchanged.\n\n")
+	fmt.Fprint(&b, "\nNo directives. Latest label per reviewer/image (falling back to item)/mission, upper median for even label counts. Image-id FNV-1a hash: 80/20 train/holdout. Named reason classes receive training credit; otherwise the highest-scoring class does. Only train labels influence bounded coordinate search. Lifts unchanged.\n\n")
 	for _, m := range r.Models {
 		fmt.Fprintf(&b, "## %s\n\nTrain items: %d; holdout items: %d.\n\n", m.Key, m.Train, m.Holdout)
 		if m.TooLittle {
