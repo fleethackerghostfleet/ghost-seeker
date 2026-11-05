@@ -78,7 +78,7 @@ func (s *Server) reviewSyncCreate(w http.ResponseWriter, r *http.Request) {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 	for _, p := range s.proposals {
-		if p.Cls == b.Cls && p.Dir == b.Dir && p.From == b.From && p.To == b.To {
+		if p.Cls == b.Cls && p.Dir == b.Dir {
 			writeJSON(w, 200, map[string]any{"proposal": p})
 			return
 		}
