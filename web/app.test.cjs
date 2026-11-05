@@ -168,7 +168,10 @@ test('feed filters default to showing duplicates, persist, validate, and return 
  settings.setFeed({review:'sent'});
  assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent'});
  assert.equal(saved().bar,'right');
- assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'sent');
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'all','a reload must not keep the main feed on sent-only');
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,false);
+ settings.setFeed({review:'unreviewed'});
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
  settings.setFeed({showDuplicates:true,review:'bad'});
  assert.deepEqual(saved().feed,{showDuplicates:true,review:'all'});
 });
@@ -199,6 +202,23 @@ test('feed shows every pipeline image by default with low-value, repeat and dire
  vm.runInContext("filters.showDuplicates=true;state.tier='4'",context);
  assert.equal(vm.runInContext('ids()',context),'repeat,directive,low');
  assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
+});
+test('main feed shows queued, uploading, held, unsent and uploaded images; a stale sent-only setting is cleared on reload',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('queued',{upload:{bytes:100,sent:0}}),frame('uploading',{upload:{bytes:100,sent:40}}),
+  frame('held',{upload:{bytes:100,sent:0,override:'hold'}}),frame('next',{upload:{bytes:100,sent:10,override:'next'}}),
+  frame('done',{upload:{bytes:100,sent:100,done:true}}),frame('cdr',{sent:true,upload:{bytes:100,sent:100,done:true}})]`,context);
+ const all='queued,uploading,held,next,done,cdr';
+ assert.deepEqual(vm.runInContext('ids()',context).split(',').sort(),all.split(',').sort());
+ vm.runInContext("items[1].upload={bytes:100,sent:100,done:true};items[0].upload={bytes:100,sent:60}",context);
+ assert.deepEqual(vm.runInContext('ids()',context).split(',').sort(),all.split(',').sort(),'upload progress/completion must not remove or duplicate images');
+ vm.runInContext("filters.review='sent'",context);
+ assert.equal(vm.runInContext('ids()',context),'cdr');
+ const {settings}=settingsContext(JSON.stringify({feed:{showDuplicates:true,review:'sent'}}));
+ vm.runInContext(`filters=${JSON.stringify(settings.get().feed)}`,context);
+ assert.deepEqual(vm.runInContext('ids()',context).split(',').sort(),all.split(',').sort());
+ assert.match(html,/id="sentShowAll"/);
+ assert.match(source,/\$\('sentShowAll'\)\.onclick=\(\)=>\{gsSettings\.setFeed\(\{review:'all'\}\)/);
 });
 test('feed interleaves sensors within a priority tier without changing priorities',()=>{
  const context=feedContext();
