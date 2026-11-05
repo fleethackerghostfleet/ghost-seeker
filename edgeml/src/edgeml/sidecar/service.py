@@ -91,27 +91,40 @@ class EdgemlEngine:
 
     def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
-                 score_thr: float = 0.25, det_low_thr: float = 0.05, agg: Optional[dict] = None, text_tower: str = "cache"):
+                 score_thr: float = 0.25, det_low_thr: float = 0.05, agg: Optional[dict] = None, text_tower: str = "cache",
+                 anomaly_fallback: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
         self.threads, self.fps, self.tracker_variant, self.asso = threads, fps, tracker, asso
         self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
         self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, det_low_thr))
+        if anomaly_fallback is not None:
+            # H: cheap "anything-on-water" proposer (horizon-band colour anomaly) fills in where YOLO11n is blind
+            # (semi-submersibles, small debris); proposals carry label "anomaly" and feed the tracker like detections.
+            from edgeml.detectors.anomaly import AnomalyFusionDetector, SeaAnomalyProposer
+
+            self.detector = AnomalyFusionDetector(self.detector, SeaAnomalyProposer(**anomaly_fallback))
         self.embedder = self.classifier = None
         self.clip_name = None
         self._text_tower, self._torch_clip = text_tower, None
         if embed and str(embed).lower() != "none":
             from edgeml.embed.clip_embedder import ClipEmbedder
-            from edgeml.embed.zeroshot import ZeroShotClassifier
+            from edgeml.embed.zeroshot import load_classifier
 
             d = Path(embed).expanduser()
             meta = json.loads((d / "meta.json").read_text())
             clip = ClipEmbedder(meta["model"], backend="ort", onnx_dir=d, threads=threads, precision=meta.get("precision", "fp32"))
             self.embedder = _TextEmbedder(clip)
-            self.classifier = ZeroShotClassifier(self.embedder)
+            # H: dev-fitted sim_ref/sim_width + kNN bank (unknown_calib.npz next to the export) make `unknownness`
+            # informative (AUROC known-vs-unknown 0.49 -> ~0.8 on synth_unknown dev); without the file: MCM defaults.
+            self.classifier = load_classifier(self.embedder, embed_dir=d)
+            self.unknown_calib = self.classifier.calibration_path
             self.clip_name = getattr(clip, "name", meta["model"])
-        self.agg_params = AggregatorParams(**{"relink_gap_s": 20.0, "min_update_interval_s": 10.0, **(agg or {})})
+        # H: realness-gated unknown flag by default — on synth_unknown dev it removed every false "unknown" on known
+        # vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
+        self.agg_params = AggregatorParams(**{"relink_gap_s": 20.0, "min_update_interval_s": 10.0,
+                                              "gate_unknown_bonus_on_realness": True, **(agg or {})})
         self.sources: dict[str, _Source] = {}
         self._lock = threading.Lock()
         self.model_id = self.detector.name + (f"+{self.clip_name}" if self.clip_name else "")
