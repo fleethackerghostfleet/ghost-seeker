@@ -17,21 +17,22 @@ function formChipsHTML(it){
   return`<span class="fchip ${st.state}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
 }
 function uploadState(it){
- let u=it.upload;
+ let u=it.upload,form='';
  if(it.live){
   const forms=it.live.forms||{};
-  const key=it.live.imageForm||['full','crop','thumb'].find(k=>forms[k]?.state==='partial')||['thumb','crop','full'].find(k=>['pending','offered'].includes(forms[k]?.state));
+  const key=FORMS.find(k=>forms[k]?.state==='partial')||FORMS.find(k=>forms[k]?.state==='pending')||it.live.imageForm||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||FORMS.find(k=>forms[k]?.state==='offered');
+  form=FORM_NAME[key]||'';
   const f=forms[key]||{};
   u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
  const done=!!u?.done&&bytes>0,queued=!done&&sent===0;
- const label=done?'✓ Uploaded':queued?'Queued: waiting for bandwidth':`Uploading to shore: ${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
- return{bytes,sent,done,queued,label};
+ const label=(done?'✓ Uploaded':queued?'Queued: waiting for bandwidth':`Uploading to shore: ${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`)+(form?` · ${form}`:'');
+ return{bytes,sent,done,queued,label,form};
 }
 function uploadHTML(it){
  const u=uploadState(it);
- return`<div class="upload-info${u.done?' uploaded':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)}</span></div>`;
+ return`<div class="upload-info${u.done?' uploaded':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
 }
 function mergeLiveConfig(live){
  if(!live)return;

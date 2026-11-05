@@ -291,6 +291,19 @@ test('live uploads derive progress from shown form, never from commander escalat
  assert.equal(vm.runInContext("uploadState({live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100,received:0}}}}).done",context),true);
  assert.equal(vm.runInContext("uploadState({live:{forms:{thumb:{state:'pending',bytes:100}}}}).queued",context),true);
 });
+test('live active and pending forms take precedence over a received preview',()=>{
+ const context=setup();
+ vm.runInContext("liveItem={live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},crop:{state:'partial',bytes:100,received:25},full:{state:'pending',bytes:1000}}}}",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).sent',context),25);
+ assert.equal(vm.runInContext('uploadState(liveItem).done',context),false);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/Uploading to shore · 25% · Object close-up/);
+ vm.runInContext("liveItem.live.forms.crop.state='received'",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).queued',context),true);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/Queued for shore · Full image/);
+ vm.runInContext("liveItem.live.forms.full.state='received'",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
