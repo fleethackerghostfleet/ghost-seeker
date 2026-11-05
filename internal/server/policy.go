@@ -514,7 +514,7 @@ func (s *Server) validatePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	interest, emcon, conflicts := policy.Merge(p.Layers, s.policy.nodeID, time.Now())
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "conflicts": conflictSummaries(conflicts), "interest": map[string]any{"boost": interest.BoostLabels, "suppress": interest.SuppressLabels, "boostFactor": interest.BoostFactor}, "emcon": emconModeName(func() pb.EmconMode {
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "conflicts": conflictSummaries(conflicts), "interest": map[string]any{"boost": interest.BoostLabels, "suppress": interest.SuppressLabels, "boostFactor": interest.BoostFactor, "boostWeights": interest.BoostWeights}, "emcon": emconModeName(func() pb.EmconMode {
 		if emcon == nil {
 			return pb.EmconMode_EMCON_MODE_NORMAL
 		}

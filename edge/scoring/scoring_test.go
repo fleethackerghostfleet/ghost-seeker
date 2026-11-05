@@ -58,6 +58,17 @@ func TestInterestBoostAndSuppress(t *testing.T) {
 	}
 }
 
+func TestInterestPerLabelBoostWeights(t *testing.T) {
+	p := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"submarine", "tanker"}, BoostWeights: map[string]float64{"submarine": 3}}}
+	ctx := &Context{Policy: p, Now: time.Now()}
+	if r := (Interest{}).Score(img("submarine", 0.9, 0), ctx); r.Multiplier != 3 {
+		t.Fatalf("weighted label multiplier=%v, want 3", r.Multiplier)
+	}
+	if r := (Interest{}).Score(img("tanker", 0.9, 0), ctx); r.Multiplier != DefaultBoostFactor {
+		t.Fatalf("unweighted label multiplier=%v, want default %v", r.Multiplier, DefaultBoostFactor)
+	}
+}
+
 func TestFreshnessFloor(t *testing.T) {
 	it := img("x", 0.9, 0)
 	it.CapturedAtUnixMs = time.Now().Add(-100 * time.Hour).UnixMilli()
