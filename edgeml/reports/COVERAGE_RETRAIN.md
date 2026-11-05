@@ -6,7 +6,10 @@ candidates and ship typing (MobileCLIP-S1 zero-shot / Gemini) were not trained o
 **TL;DR**
 * Data (additive only): SeaDronesSee (aerial UAV, CC0) is ingested. ir_maritime_vessels (IR) is cleaned into **clean v3**, but its license is
   **unknown → internal dev only**. Clean v2 and every raw object/table are untouched.
-* Detector: DETECTOR_TLDR
+* Detector: a multi-class YOLO11n fine-tune (COCO head kept, maritime → `boat`, far-target repeats + tiles) **keeps far/small recall** this time.
+  Dev far/small recall goes 0.34 → 0.74. On the locked test, SeaShips R_small is 0.33 → 0.67, AP50 0.46 → 0.93, and false sightings 40 → 24.
+  But locked-test sighting recall is 0.46 vs 0.48 (24 vs 25 of 52) and SMD-onboard AP50 drops 0.82 → 0.61, so it **does not pass the gate**.
+  The COCO YOLO11n-640 default is unchanged (§2).
 * Ship type: a linear probe on frozen MobileCLIP-S1 / DINOv2-B / SigLIP-B features scores 89–96 % on SeaShips test and 95–99 % on UAV test
   (zero-shot: 55 %, Gemini: 64 %). It **collapses on our onboard YouTube views** (gf_test 27–41 % vs zero-shot 93 % / Gemini 93 %).
   Ship type stays display-only, and no default changes (§3).
@@ -78,7 +81,8 @@ Maritime GT is added as extra COCO `boat` (class 8) examples, and SeaDronesSee s
 replay images (all 80 classes), SeaShips train (1,746), SDS train (5,435), and FVessel/GF dev clips outside the holdout. Non-boat objects in maritime
 frames get YOLO11x pseudo-labels (1,497 boxes). Far-target frames are repeated (4,696) and tiled at native resolution (4,181 tiles).
 YOLO-val has 2,766 images. Two configs were trained from `yolo11n.pt` at 640 for 15 epochs on one T4: `yolo11n-cov-640` (full fine-tune) and
-`yolo11n-cov-640-fz10` (first 10 layers frozen). IR is excluded (unknown license).
+`yolo11n-cov-640-fz10` (first 10 layers frozen). IR is excluded (unknown license). YOLO-val mAP50 / mAP50-95 (all classes present in val):
+cov-640 best at epoch 14/15 = 0.311 / 0.229; fz10 early-stopped at epoch 10 (patience 6), best at epoch 4 = 0.275 / 0.200.
 
 ### 2a. Dev only (selection)
 
@@ -88,7 +92,7 @@ Far/small dev slice (1,683 vessel objects < 32² px at 640, never trained on; Io
 |---|---|---|---|---|---|---|
 | yolo11n COCO 640 (default) | 0.343 | 0.334 | 0.634 | 0.226 | 0.781 | 1.36 |
 | yolo11n-cov-640 | **0.739** | 0.852 | 0.866 | 0.477 | 1.000 | 2.75 |
-FARSMALL_ROWS
+| yolo11n-cov-640-fz10 | 0.718 | 0.816 | 0.773 | 0.519 | 0.875 | 2.27 |
 
 C sighting metrics on dev (G's sidecar config: ByteTrack, centroid association, max_lost 6 s, min score 0.25; 15 dev clips, 34 GT objects;
 `run_c.py matrix`, aggregated by `cov_agg_c.py`):
@@ -97,7 +101,7 @@ C sighting metrics on dev (G's sidecar config: ByteTrack, centroid association, 
 |---|---|---|---|
 | yolo11n COCO 640 (default) | 0.65 / 36 / 1.32 | 0.70 / 13 | 251 |
 | yolo11n-cov-640 | 0.79 / 19 / 0.70 | 0.80 / 13 | 216 |
-CDEV_ROWS
+| yolo11n-cov-640-fz10 | 0.82 / 21 / 0.77 | 0.90 / 14 | 222 |
 
 All-dev rows are optimistic for the fine-tunes, because 11 of the 15 dev clips (all but the 4 holdout clips) are in their training set.
 The holdout-only column is the honest dev number.
@@ -108,7 +112,7 @@ B harness, class-agnostic vessel AP50 on dev (`bench_detectors.py --split dev`; 
 |---|---|---|---|
 | yolo11n COCO 640 | 0.639 (τ 0.35) | 0.067 | 0.452 |
 | yolo11n-cov-640 | 0.571 (τ 0.25) | 0.054 | skipped (training data) |
-BDEV_ROWS
+| yolo11n-cov-640-fz10 | 0.604 (τ 0.10) | 0.063 | skipped (training data) |
 
 INT8 OpenVINO CPU latency (`edgeml.runtime.bench`, G's harness: 4 pinned threads, 80 SMD 1080p frames; NNCF calibration on 300 YOLO-val frames).
 Measured interleaved A/B on this session's 8-vCPU AVX2 box, which drifts by ~±15 % between runs:
@@ -126,11 +130,48 @@ The two INT8 graphs are identical (1,066 layers, 73 FakeQuantize nodes, same wei
 far/small recall is not worse, and latency matches the baseline. Then, on the **locked test** (once), sighting recall must go up, false/min must not be worse,
 **and SeaShips-test R_small must not drop below the baseline's**. Only then would the default change.
 
-DEV_PICK
+**Dev pick: `yolo11n-cov-640`**, the only final candidate. Its far/small recall more than doubles (0.343 → 0.739, every subset up, GF holdout 25 → 32 of 32).
+Holdout sighting recall goes up (0.70 → 0.80) at equal holdout false sightings (13 → 13), and all-dev false/min halves (1.32 → 0.70). The graph and latency are the same.
+`fz10` gets one more holdout object (0.90) but adds a holdout false sighting (14 > 13), so it fails the rule. Its far/small recall is also lower (0.718), so it stays an ablation
+and was **not** run on test. Known dev regression for the pick: SMD onboard-sample AP50 0.639 → 0.571 (40 images, 27 GT), similar to G's fine-tune (0.43) but much smaller.
 
 ### 2b. Locked test (evaluated once per final candidate; `splits.yaml` test)
 
-DETECTOR_TEST
+Same sidecar config as 2a. 8 GF test clips + `fvessel_clip07/09`, 52 GT objects. This is the same test set and config as G §6a, and the baseline reproduces G's 0.48 / 40.
+
+| detector | sighting recall | false sightings | false/min | dup/obj | reports |
+|---|---|---|---|---|---|
+| yolo11n COCO 640 (default, unchanged) | **0.48** (25/52) | 40 | 1.13 | 0.23 | 301 |
+| yolo11n-cov-640 | 0.46 (24/52) | **24** | **0.68** | 0.23 | 279 |
+| *(G's single-class fine-tune, for reference)* | *0.37* | *9* | *0.26* | *0.12* | *122* |
+
+Per clip (GT objects: found, false), baseline → cov-640:
+`Arriving_In_Norfolk_seg1h10` 6: 3,0 → 3,0 · `seg1h13` 4: 1,0 → 1,0 · `Cruise_Ship_Docked…Dingy` 29: 11,2 → **9**,0 · `Ferry_Passing_By` 1: 1,0 → 1,1 ·
+`Sailboat_on_the_horizon_seg0` 2: 2,3 → **2,0** · `Ship_in_the_Distance_Ian` 1: 1,0 → **1**,0 · `Spotted_A_Submarine` 1: 1,9 → 1,4 ·
+`US_Destroyer_POV` 1: 1,1 → **1**,0 · `fvessel_clip07` 4: 2,14 → 2,12 · `fvessel_clip09` 3: 2,11 → **3**,7.
+
+B harness, class-agnostic vessel AP50 at the dev-fixed τ (`bench_detectors.py --split test --taus`):
+
+| detector | SeaShips test AP50 (3,500 img, 4,683 GT) | R_small / R_med @τ | SMD onboard test AP50 (MVI_0797/0801, 72 GT) |
+|---|---|---|---|
+| yolo11n COCO 640 (τ 0.25 / 0.35) | 0.461 | 0.33 / 0.61 | **0.817** |
+| yolo11n-cov-640 (τ 0.25 / 0.25) | **0.934** | **0.67** / 0.81 | 0.609 |
+
+τ for the candidate on SeaShips is the sidecar's fixed 0.25 min-score, because SeaShips dev is its training data and cannot pick a τ (§2a). The SMD τ is the dev pick.
+SeaShips-test R_small is computed on only 9 small GT boxes (3/9 → 6/9; the other 4,674 are medium/large), so it shows the direction
+(no collapse, unlike G's 0.33 → 0.00), not a precise number.
+
+**Result: the gate fails, so the production default is unchanged.** Sighting recall on the locked test is 0.46 vs 0.48 (one object, 24 vs 25 of 52). The two
+missed objects are both dinghies in `Cruise_Ship_Docked…Dingy`, and one is regained on `fvessel_clip09`. False sightings drop 40 → 24 (−40 %).
+Far/small recall is **not** lost this time: every open-sea far single-vessel clip that G's fine-tune dropped (`Sailboat_on_the_horizon`, `Ship_in_the_Distance_Ian`,
+`US_Destroyer_POV`) is still found, with fewer false sightings, and SeaShips R_small goes up. The cost is the onboard SMD AP50 (0.817 → 0.609), which was already
+visible on dev. `yolo11n-cov-640` is kept as an experimental artifact only: ONNX/FP32/INT8 export plus both runs' `best.pt`, results and all dev/test metrics are in
+`gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/models/coverage-20261105/` (`cov_artifacts.tgz`). `make demo-models`, the sidecar default and every config still
+point at D's COCO `yolo11n-640`. No production-default commit was made.
+
+**Next steps (not done here):** (1) recover onboard and dense-harbour recall by adding SMD onboard/onshore *train* recordings that do not cross into its dev/test (needs the
+per-video re-split from DATA_CLEANUP.md); (2) pick a per-domain τ for the cov model on a non-training SeaShips slice; (3) run 2–3 seeds, because a 1-object gap on 52 is
+within run-to-run noise. None of these may tune on the locked test.
 
 ## 3. Ship-type classifier (12-way taxonomy of `docs/reports/SHIP_CLASSIFICATION.md`)
 
@@ -275,6 +316,7 @@ python edgeml/tools/run_c.py cache --data ~/data/edgeml_eval --sets ghost_fleet_
     --detector <best.pt> --name <run> --imgsz 640 --conf 0.05 --device 0
 python edgeml/tools/run_c.py matrix --data ~/data/edgeml_eval --sets ghost_fleet_5fps fvessel_clip10 --split dev \
     --detectors yolo11n-640 <run> --trackers bytetrack --trk '{"asso_func":"centroid","max_lost_s":6}' --min-score 0.25 --out ...
+python edgeml/tools/cov_agg_c.py ~/runs/cov/cdev_<run>/results.jsonl --per-clip   # all / holdout-only / trained-clip sighting numbers
 #   locked test: the same two commands with --split test, once per final candidate; B harness:
 EDGEML_ZOO_EXTRA="<run>=<best.pt>:seaships7000" python edgeml/tools/bench_detectors.py --split test --taus taus.json \
     --sets seaships7000:5,smd_vis_onboard_sample:1 --models yolo11n,<run> ...
