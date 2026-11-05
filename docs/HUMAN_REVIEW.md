@@ -38,6 +38,33 @@ The **Review data** panel shows totals, agreement and reviewer counts and links
 to CSV / JSONL exports. Exports contain effective reviews: corrections applied,
 undone reviews removed. Keep the original append-only logs for provenance.
 
+## Review on real datasets
+
+Start the live stack from the repository root (build the binaries first).
+These commands share the default development token in `data/operator.token`;
+for forwarded browsers, enter that token at the login page.
+
+```sh
+./bin/shore -listen 127.0.0.1:8080 -require-auth=false
+./bin/ghost-seeker -addr :8091 -shore http://localhost:8080 \
+  -link-listen 127.0.0.1:18080 -review-log /home/ubuntu/ghost-review-data/live-reviews.jsonl
+./bin/edge -listen 127.0.0.1:8081 -shore http://localhost:18080 -frames ./frames -infer mock
+```
+
+Open port 8091, select **Operator Review**, and set your reviewer name.
+The example replays real dataset frames with mock inference and disables unit JWT
+authentication only for the isolated lab link, so shore and the shaped link
+both bind to loopback. Do not expose either listener;
+use the signed unit-token setup in [DEMO.md](DEMO.md) for shared deployments.
+For real detections,
+replace `-infer mock` with the running sidecar URL; see [DEMO.md](DEMO.md) for
+sidecar setup and scenario replay. Git LFS ZIPs must be downloaded first.
+Live records include shore/sighting IDs, camera/source, computer label/subtype,
+unknownness and the image form available when reviewed (fact/thumb/crop/full).
+Live priorities are rank-based, not catalog mission scores: retune reports their
+outcomes separately and excludes them from weight fitting.
+The console overlay is ephemeral; the append-only review log survives restarts.
+
 ## Propose weights offline
 
 Use a copied, stable log or exported JSONL, not a file currently being appended:
@@ -84,8 +111,6 @@ go test ./...
 ## Limitations
 
 - Names are self-reported under a shared operator token, not authenticated identities.
-- Durable reviews are **not captured in shore/live mode**; that mode retains its
-  existing console overlay/PATCH behavior.
 - The simulation feed itself is ephemeral; the review log survives restarts.
 - Empty `-review-log` disables review endpoints (503). Do not run multiple writers
   against the same file. Back up logs and protect them as operator-generated data.

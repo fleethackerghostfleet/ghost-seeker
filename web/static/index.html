@@ -34,15 +34,16 @@
 </header>
 
 <section class="page on" id="pgFeed">
- <div class="fhead">
-  <div class="toolbar">
+ <div class="fhead" id="feedHead">
+  <div class="toolbar" id="feedControls">
     <span class="lbl">Sensor</span>
     <select id="srcSel"></select>
     <label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates</label>
     <label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter"><option value="all">All images</option><option value="sent">Sent by a person</option><option value="reviewed">Reviewed by a person</option><option value="unreviewed">Not reviewed yet</option></select></label><span class="feed-note" id="sentOrder" hidden>Newest send first</span>
     <div class="seg" id="tierSeg"></div>
     <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
-    <span class="lbl">Size</span><div class="seg" id="densSeg"><button data-d="m" class="on">Small</button><button data-d="l">Large</button></div>
+    <span class="lbl density-label">Size</span><div class="seg" id="densSeg"><button data-d="m" class="on">Small</button><button data-d="l">Large</button></div>
+    <button type="button" class="btn sm" id="feedFilters" aria-expanded="false" aria-controls="feedControls">Filters</button>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
     <button class="btn sm" id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing (0)</button>

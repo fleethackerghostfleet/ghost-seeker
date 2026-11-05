@@ -122,7 +122,7 @@ func main() {
 	}
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath)
 		return
 	}
 
@@ -236,7 +236,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through, with an automatically varying normal rate.
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -258,6 +258,14 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
 	console := shorebridge.NewConsole(bridge)
+	if reviewPath != "" {
+		l, err := reviews.Open(reviewPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer l.Close()
+		console.SetReviewLog(l)
+	}
 	go bridge.Run(ctx, poll)
 
 	// One site: Patrick's operator console (index.html / cdr.html) on live
