@@ -413,6 +413,7 @@ nav a{flex:none}
 body.bar-bottom .fhead{order:2}
 body.bar-bottom .toolbar{border-bottom:none;border-top:1px solid var(--line)}
 body.bar-bottom .strip{order:-1;border-top:1px solid var(--line);border-bottom:none}
+@media(min-width:701px){
 body.bar-left #pgFeed,body.bar-right #pgFeed{flex-direction:row}
 body.bar-right .fhead{order:2;border-left:1px solid var(--line)}
 body.bar-left .fhead{border-right:1px solid var(--line)}
@@ -427,6 +428,7 @@ body.bar-left .fhead{border-right:1px solid var(--line)}
 .bar-left .strip,.bar-right .strip{flex-direction:column;align-items:stretch;white-space:normal;overflow:visible;padding:10px 6px;border-bottom:none;background:transparent;gap:2px}
 .bar-left .strip .ar,.bar-right .strip .ar{display:none}
 .bar-left .strip .sv,.bar-right .strip .sv{margin-left:0;padding:6px 10px}
+}
 .hide-hstats .hstats,.hide-live button.live,.hide-clock .clock,.hide-user .user,.hide-strip .strip,.hide-dirbar .dirbar,.hide-ov .card .ov,.hide-cl .grid .cl,.hide-tbox .thumb .box{display:none}
 .hide-cl .grid{--cap:2px}
 .setdlg{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:2px;padding:18px 20px;width:min(440px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.5)}
