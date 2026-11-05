@@ -54,7 +54,7 @@ func TestShaperRateAndDown(t *testing.T) {
 	// a loaded CI runner; give it a moment.
 	deadline := time.Now().Add(time.Second)
 	for s.Bytes() < int64(2*len(payload)) && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 	if s.Bytes() < int64(2*len(payload)) {
 		t.Fatalf("bytes = %d", s.Bytes())
