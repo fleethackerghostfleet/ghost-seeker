@@ -276,6 +276,10 @@ func (s *Store) RestoreReview(before command.Item, at time.Time) (command.Item, 
 func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *bool, before *command.Item, at time.Time) (command.Item, int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.patchItemLocked(id, manual, reviewed, dismissed, sent, before, at)
+}
+
+func (s *Store) patchItemLocked(id string, manual *int, reviewed, dismissed, sent *bool, before *command.Item, at time.Time) (command.Item, int, bool) {
 	for i := range s.items {
 		item := &s.items[i]
 		if item.ID != id {
