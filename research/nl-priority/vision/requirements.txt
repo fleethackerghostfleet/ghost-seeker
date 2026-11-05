@@ -1,0 +1,5 @@
+numpy==2.4.6
+onnxruntime==1.31.1
+ftfy==6.3.1
+regex==2026.9.29
+Pillow==13.0.0

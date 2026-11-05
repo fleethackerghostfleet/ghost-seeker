@@ -6,6 +6,7 @@ in the [root README](../README.md) and [demo runbook](../docs/DEMO.md).
 
 | Area | Contents |
 |---|---|
+| [`nl-priority/`](nl-priority/README.md) | Local natural-language priority lab: IBM Granite, MobileCLIP, production scoring and scheduling |
 | [`edgeml/`](edgeml/README.md) | ML experiments, evaluation/export package, reports, annotations, configs, scripts, and tests |
 | [`cmd/`](cmd/) | Go `sim`, `bench`, `retune`, and development-only `piv-testpki` commands |
 | [`internal/`](internal/) | Benchmark oracle and offline retuning implementation |
