@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"mime"
@@ -327,7 +328,7 @@ func NewReplay(images []Image, imageDir string, seed int64) (*Replay, error) {
 		if err != nil {
 			return nil, err
 		}
-		if _, err := os.Stat(path); err != nil {
+		if err := verifyImageSHA(path, image.SHA256); err != nil {
 			return nil, fmt.Errorf("dataset image %q: %w", image.File, err)
 		}
 	}
@@ -337,6 +338,26 @@ func NewReplay(images []Image, imageDir string, seed int64) (*Replay, error) {
 	}
 	replay.shuffle()
 	return replay, nil
+}
+
+func verifyImageSHA(path, expected string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	actual := hex.EncodeToString(hash.Sum(nil))
+	if !strings.EqualFold(actual, expected) {
+		return fmt.Errorf("sha256 mismatch: got %s, want %s", actual, expected)
+	}
+	return nil
 }
 
 func sourceIDForName(images []Image, id string) string {

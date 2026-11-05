@@ -158,10 +158,12 @@ func main() {
 			log.Fatalf("validate dataset splits: %v", err)
 		}
 		log.Printf("dataset split guard: %d locked rows rejected", rejected)
+		replayStarted := time.Now()
 		replay, err = reviewdataset.NewReplay(images, *datasetDir, reviewdataset.Seed)
 		if err != nil {
 			log.Fatalf("load dataset images: %v", err)
 		}
+		log.Printf("dataset replay prepared and SHA-verified %d images in %s", len(images), time.Since(replayStarted))
 		sources := reviewdataset.Sources(images)
 		options = append(options, server.WithDataset(*datasetDir, sources))
 		summary := reviewdataset.Summarize(images)

@@ -2,6 +2,8 @@ package dataset
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,9 +18,10 @@ import (
 )
 
 func testImage(id, datasetID string) Image {
+	digest := sha256.Sum256([]byte("image"))
 	return Image{
 		ImageID: id, DatasetID: datasetID, EvalSplit: "dev", SourceVideo: "clip-1",
-		SHA256: strings.Repeat("a", 64), File: id + ".jpg", Width: 1920, Height: 1080,
+		SHA256: hex.EncodeToString(digest[:]), File: id + ".jpg", Width: 1920, Height: 1080,
 		Detections: []Detection{{Class: "person", Box: command.Box{X: 10, Y: 20, W: 30, H: 40}, Conf: .8}},
 	}
 }
@@ -148,7 +151,17 @@ func TestRealReviewManifestHasNoLockedRows(t *testing.T) {
 	if err != nil || rejected != 0 {
 		t.Fatalf("real manifest locked-row count = %d, err=%v; want 0", rejected, err)
 	}
-	t.Logf("validated %d real manifest rows; rejected %d", len(images), rejected)
+	imageDir := filepath.Join("..", "..", "data", "review_set", "images")
+	if _, err := os.Stat(imageDir); os.IsNotExist(err) {
+		t.Skipf("real review-set images are not present; manifest rows validated=%d rejected=%d", len(images), rejected)
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	if _, err := NewReplay(images, imageDir, Seed); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("validated %d real manifest rows; rejected %d; SHA-verified replay setup took %s", len(images), rejected, time.Since(started))
 }
 
 func TestAuthoritativeReviewSelectionHasNoLockedRows(t *testing.T) {
@@ -221,6 +234,17 @@ func TestReplayOrderAndEachOncePerPass(t *testing.T) {
 		if count != 1 {
 			t.Fatalf("second pass has %d copies of %q", count, id)
 		}
+	}
+}
+
+func TestNewReplayRejectsTamperedImage(t *testing.T) {
+	root := t.TempDir()
+	image := testImage("one", "video_one")
+	if err := os.WriteFile(filepath.Join(root, image.File), []byte("tampered"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewReplay([]Image{image}, root, Seed); err == nil || !strings.Contains(err.Error(), "sha256 mismatch") {
+		t.Fatalf("NewReplay error = %v, want sha256 mismatch", err)
 	}
 }
 
