@@ -86,7 +86,7 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "cannot persist review")
 		return
 	}
-	item, cdr, ok := s.store.PatchItem(old.ID, &tier, &yes, dismissed, sent)
+	item, cdr, ok := s.store.ApplyReview(old.ID, &tier, &yes, dismissed, sent, rec.ReviewedAt)
 	if !ok {
 		writeError(w, 409, "item evicted after review was logged")
 		return
@@ -160,7 +160,7 @@ func (s *Server) correctReview(w http.ResponseWriter, r *http.Request) {
 	audit(r, "review."+action, "record", original.ID, "reviewer", b.Reviewer)
 	if action == "undo" {
 		o := original.Before
-		item, cdr, ok := s.store.RestoreReview(o)
+		item, cdr, ok := s.store.RestoreReview(o, original.ReviewedAt)
 		if ok {
 			s.PublishUpdate(item, cdr)
 			writeJSON(w, 200, map[string]any{"record": rec, "item": item, "cdr": cdr})

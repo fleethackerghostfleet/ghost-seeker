@@ -81,6 +81,40 @@ func TestHumanReviewPreservesAutomaticSendOrigin(t *testing.T) {
 	}
 }
 
+func TestUndoReviewPreservesNewerOperatorSend(t *testing.T) {
+	for _, automatic := range []bool{false, true} {
+		data := New(5)
+		data.Add(&command.Item{ID: "image", Manual: 1}, 0)
+		if automatic {
+			data.AutoEscalate()
+		}
+		before, _ := data.GetItem("image")
+		at := time.Now().Add(-time.Second)
+		tier, yes, no := 2, true, false
+		data.ApplyReview("image", &tier, &yes, nil, nil, at)
+		if automatic {
+			data.PatchItem("image", nil, nil, nil, &no)
+		}
+		sent, _, _ := data.PatchItem("image", nil, nil, nil, &yes)
+		restored, count, _ := data.RestoreReview(before, at)
+		if !restored.Sent || restored.AutoSent || count != 1 || !restored.SentAt.Equal(*sent.SentAt) || restored.Manual != before.Manual || restored.HumanReviewed != before.HumanReviewed {
+			t.Fatalf("undo erased newer send (automatic=%v): %+v", automatic, restored)
+		}
+	}
+}
+
+func TestUndoCommanderReviewRevertsItsOwnSend(t *testing.T) {
+	data := New(5)
+	before, _ := data.Add(&command.Item{ID: "image"}, 0)
+	at := time.Now()
+	tier, yes := 1, true
+	data.ApplyReview("image", &tier, &yes, nil, &yes, at)
+	item, count, _ := data.RestoreReview(before, at)
+	if item.Sent || item.HumanReviewed || count != 0 {
+		t.Fatalf("review's own send survived undo: %+v", item)
+	}
+}
+
 func TestEmptyFrameKeepsEmptyDetectionLists(t *testing.T) {
 	data := New(10)
 	kept, _ := data.Add(&command.Item{ID: "empty", Filtered: command.FilteredLowValue, Dets: []command.Detection{}}, 0)

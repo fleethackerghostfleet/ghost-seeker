@@ -262,14 +262,18 @@ func (s *Store) RestoreDirectives(directives []command.Directive) {
 }
 
 func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *bool) (command.Item, int, bool) {
-	return s.patchItem(id, manual, reviewed, dismissed, sent, nil)
+	return s.patchItem(id, manual, reviewed, dismissed, sent, nil, time.Time{})
 }
 
-func (s *Store) RestoreReview(before command.Item) (command.Item, int, bool) {
-	return s.patchItem(before.ID, &before.Manual, &before.Reviewed, &before.Dismissed, &before.Sent, &before)
+func (s *Store) ApplyReview(id string, manual *int, reviewed, dismissed, sent *bool, at time.Time) (command.Item, int, bool) {
+	return s.patchItem(id, manual, reviewed, dismissed, sent, nil, at)
 }
 
-func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *bool, before *command.Item) (command.Item, int, bool) {
+func (s *Store) RestoreReview(before command.Item, at time.Time) (command.Item, int, bool) {
+	return s.patchItem(before.ID, &before.Manual, &before.Reviewed, &before.Dismissed, &before.Sent, &before, at)
+}
+
+func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *bool, before *command.Item, at time.Time) (command.Item, int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.items {
@@ -277,6 +281,7 @@ func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *boo
 		if item.ID != id {
 			continue
 		}
+		newerSend := before != nil && item.SentAt != nil && item.SentAt.After(at)
 		if manual != nil {
 			item.Manual = *manual
 		}
@@ -289,10 +294,13 @@ func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *boo
 		if dismissed != nil {
 			item.Dismissed = *dismissed
 		}
-		if sent != nil && item.Sent != *sent {
+		if sent != nil && !newerSend && item.Sent != *sent {
 			if *sent {
 				s.cdr++
 				now := time.Now()
+				if !at.IsZero() && before == nil {
+					now = at
+				}
 				item.SentAt, item.Decision, item.DecisionNote, item.DecidedAt = &now, "", "", nil
 			} else {
 				s.cdr--
@@ -301,7 +309,10 @@ func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *boo
 			item.Sent, item.AutoSent = *sent, false
 		}
 		if before != nil {
-			item.HumanReviewed, item.AutoSent = before.HumanReviewed, before.AutoSent
+			item.HumanReviewed = before.HumanReviewed
+			if !newerSend {
+				item.AutoSent = before.AutoSent
+			}
 		}
 		command.Rescore(item, s.model, s.directives)
 		return cloneItem(*item), s.cdr, true
