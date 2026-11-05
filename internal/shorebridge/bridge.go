@@ -58,7 +58,10 @@ type Bridge struct {
 	mu      sync.Mutex
 	snap    []byte
 	subs    map[chan []byte]struct{}
-	records map[string]int // RECORD item id -> n_frames
+	records map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
+
+	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
+	onSnapshot func(*Snapshot, *pb.Policy) // Console hook, called with every fresh snapshot and the policy it was built from
 }
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
@@ -68,7 +71,16 @@ func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 		link:    link,
 		client:  &http.Client{Timeout: 10 * time.Second},
 		subs:    map[chan []byte]struct{}{},
-		records: map[string]int{},
+		records: map[string]contactReport{},
+		poke:    make(chan struct{}, 1),
+	}
+}
+
+// Poke asks the poller to refresh now instead of at the next tick.
+func (b *Bridge) Poke() {
+	select {
+	case b.poke <- struct{}{}:
+	default:
 	}
 }
 
@@ -81,23 +93,24 @@ type FormStatus struct {
 }
 
 type Card struct {
-	ID          string                `json:"id"`
-	Type        string                `json:"type"` // image | record | telemetry
-	CapturedMs  int64                 `json:"capturedMs"`
-	Source      string                `json:"source"`
-	Label       string                `json:"label"`
-	Conf        float64               `json:"conf"`
-	Override    string                `json:"override,omitempty"`
-	Unknownness float64               `json:"unknownness"`
-	Priority    string                `json:"priority"` // P1..P4, relative rank in the current shore picture (assignTiers)
-	Score       float64               `json:"score"`
-	Suppressed  bool                  `json:"suppressed"`
-	Tags        map[string]string     `json:"tags,omitempty"`
-	Forms       map[string]FormStatus `json:"forms"`
-	Image       string                `json:"image,omitempty"` // best available form URL
-	ImageForm   string                `json:"imageForm,omitempty"`
-	FactURL     string                `json:"factUrl"`
-	Box         *pb.Box               `json:"box,omitempty"`
+	ID           string                `json:"id"`
+	Type         string                `json:"type"` // image | record | telemetry
+	CapturedMs   int64                 `json:"capturedMs"`
+	Source       string                `json:"source"`
+	Label        string                `json:"label"`
+	Conf         float64               `json:"conf"`
+	Override     string                `json:"override,omitempty"`
+	Unknownness  float64               `json:"unknownness"`
+	Priority     string                `json:"priority"` // P1..P4, relative rank in the current shore picture (assignTiers)
+	Score        float64               `json:"score"`
+	Suppressed   bool                  `json:"suppressed"`
+	SuppressedBy string                `json:"suppressedBy,omitempty"` // policy label that matched
+	Tags         map[string]string     `json:"tags,omitempty"`
+	Forms        map[string]FormStatus `json:"forms"`
+	Image        string                `json:"image,omitempty"` // best available form URL
+	ImageForm    string                `json:"imageForm,omitempty"`
+	FactURL      string                `json:"factUrl"`
+	Box          *pb.Box               `json:"box,omitempty"`
 }
 
 type Object struct {
@@ -140,14 +153,17 @@ type NodeStatus struct {
 }
 
 type Snapshot struct {
-	TS      int64      `json:"ts"`
-	Shore   NodeStatus `json:"shore"`
-	Edge    NodeStatus `json:"edge"`
-	Link    LinkStatus `json:"link"`
-	Policy  string     `json:"policy"`
-	Emcon   string     `json:"emcon,omitempty"`
-	Objects []*Object  `json:"objects"`
-	Counts  Counts     `json:"counts"`
+	TS       int64      `json:"ts"`
+	Shore    NodeStatus `json:"shore"`
+	Edge     NodeStatus `json:"edge"`
+	Link     LinkStatus `json:"link"`
+	Policy   string     `json:"policy"`
+	PolicyID string     `json:"policyId,omitempty"`
+	Emcon    string     `json:"emcon,omitempty"`
+	Suppress []string   `json:"suppress,omitempty"`
+	Boost    []string   `json:"boost,omitempty"`
+	Objects  []*Object  `json:"objects"`
+	Counts   Counts     `json:"counts"`
 }
 
 type LinkStatus struct {
@@ -206,6 +222,7 @@ func (b *Bridge) Run(ctx context.Context, every time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-b.poke:
 		}
 	}
 }
@@ -232,12 +249,17 @@ func (b *Bridge) refresh(ctx context.Context) {
 	}
 	var pol pb.GetPolicyResponse
 	var suppressed []string
+	var policy *pb.Policy
 	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &pol); err == nil {
+		policy = pol.GetPolicy()
 		snap.Policy = pol.GetPolicy().GetText()
 		if m := pol.GetPolicy().GetEmcon(); m != pb.EmconMode_EMCON_MODE_UNSPECIFIED && m != pb.EmconMode_EMCON_MODE_NORMAL {
 			snap.Emcon = strings.TrimPrefix(m.String(), "EMCON_MODE_")
 		}
+		snap.PolicyID = pol.GetPolicy().GetId()
 		suppressed = pol.GetPolicy().GetInterest().GetSuppressLabels()
+		snap.Suppress = suppressed
+		snap.Boost = pol.GetPolicy().GetInterest().GetBoostLabels()
 	}
 	if b.edge != "" {
 		var est pb.GetStatusResponse
@@ -266,7 +288,10 @@ func (b *Bridge) refresh(ctx context.Context) {
 			break
 		}
 	}
-	snap.Objects, snap.Counts = Group(items, suppressed, b.recordFrames(ctx, items))
+	snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
+	if b.onSnapshot != nil {
+		b.onSnapshot(snap, policy)
+	}
 
 	buf, err := json.Marshal(snap)
 	if err != nil {
@@ -284,11 +309,12 @@ func (b *Bridge) refresh(ctx context.Context) {
 	b.mu.Unlock()
 }
 
-// recordFrames reads n_frames from each closed sighting's contact report
-// (RECORD items, FACT complete). Facts are immutable, so they are fetched
-// once per item.
-func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[string]int {
-	out := map[string]int{}
+// recordReports reads each closed sighting's contact report (RECORD items,
+// FACT complete): n_frames, and the sighting_id/label/subtype that let Group
+// fold the report into its sighting when the item carries no tags itself.
+// Facts are immutable, so they are fetched once per item.
+func (b *Bridge) recordReports(ctx context.Context, items []*pb.ItemView) map[string]contactReport {
+	out := map[string]contactReport{}
 	fetched := 0
 	for _, v := range items {
 		it := v.GetItem()
@@ -305,66 +331,60 @@ func (b *Bridge) recordFrames(ctx context.Context, items []*pb.ItemView) map[str
 			continue
 		}
 		b.mu.Lock()
-		n, ok := b.records[it.GetId()]
+		rep, ok := b.records[it.GetId()]
 		b.mu.Unlock()
 		if !ok {
 			if fetched >= maxRecordFetchesPerRefresh { // the rest are picked up by later polls
 				continue
 			}
 			fetched++
-			// Cache failures too (as 0) so an unreadable report is tried once
+			// Cache failures too (empty) so an unreadable report is tried once
 			// and cannot starve later ones of their fetch budget.
-			n = b.fetchRecordFrames(ctx, it.GetId())
-			if n < 0 {
-				n = 0
-			}
+			rep = b.fetchRecord(ctx, it.GetId())
 			b.mu.Lock()
-			b.records[it.GetId()] = n
+			b.records[it.GetId()] = rep
 			b.mu.Unlock()
 		}
-		if n > 0 {
-			out[it.GetId()] = n
+		if rep.NFrames > 0 || rep.SightingID != "" {
+			out[it.GetId()] = rep
 		}
 	}
 	return out
 }
 
-func (b *Bridge) fetchRecordFrames(ctx context.Context, id string) int {
+func (b *Bridge) fetchRecord(ctx context.Context, id string) contactReport {
 	hr, err := http.NewRequestWithContext(ctx, http.MethodGet, b.shore+"/blob/"+id+"/fact", nil)
 	if err != nil {
-		return -1
+		return contactReport{}
 	}
 	res, err := b.client.Do(hr)
 	if err != nil {
-		return -1
+		return contactReport{}
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return -1
+		return contactReport{}
 	}
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return -1
+		return contactReport{}
 	}
 	var rep contactReport
 	// The fact may be the report itself or a fact envelope carrying it; try both.
-	if json.Unmarshal(raw, &rep) != nil || rep.NFrames == 0 {
+	if json.Unmarshal(raw, &rep) != nil || (rep.NFrames == 0 && rep.SightingID == "") {
 		var env struct {
 			Record json.RawMessage `json:"record"`
 			Data   json.RawMessage `json:"data"`
 		}
 		if json.Unmarshal(raw, &env) == nil {
 			for _, r := range [][]byte{env.Record, env.Data} {
-				if len(r) > 0 && json.Unmarshal(r, &rep) == nil && rep.NFrames > 0 {
+				if len(r) > 0 && json.Unmarshal(r, &rep) == nil && (rep.NFrames > 0 || rep.SightingID != "") {
 					break
 				}
 			}
 		}
 	}
-	if rep.NFrames == 0 {
-		return -1
-	}
-	return rep.NFrames
+	return rep
 }
 
 func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
@@ -513,20 +533,38 @@ func itemTypeName(t pb.ItemType) string {
 
 // contactReport is the edge's CLOSE record for a sighting (edge/ingest.ContactReport).
 type contactReport struct {
-	NFrames int `json:"n_frames"`
+	SightingID string `json:"sighting_id"`
+	Label      string `json:"label"`
+	Subtype    string `json:"subtype"`
+	NFrames    int    `json:"n_frames"`
 }
 
 // Group buckets cards by sighting_id (one object per sighting; items without
 // a tag are their own object), newest first. Items whose label is in the
 // current policy's suppress list are marked suppressed even if they were
 // scored before the policy reached the edge.
-// reports maps RECORD item id -> n_frames from its contact report (may be nil).
-func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int) ([]*Object, Counts) {
+// reports maps RECORD item id -> its contact report (may be nil); a report
+// whose item carries no sighting_id tag is folded into the sighting the
+// report names, so a closed sighting never shows up as a second, empty card.
+func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]contactReport) ([]*Object, Counts) {
 	var cnt Counts
 	byKey := map[string]*Object{}
 	var order []*Object
 	for _, v := range views {
 		c := ToCard(v)
+		if rep, ok := reports[c.ID]; ok && c.Type == "record" && c.Tags["sighting_id"] == "" && rep.SightingID != "" {
+			tags := map[string]string{"sighting_id": rep.SightingID}
+			for k, val := range c.Tags {
+				tags[k] = val
+			}
+			if rep.Subtype != "" {
+				tags["subtype"] = rep.Subtype
+			}
+			c.Tags = tags
+			if c.Label == "" {
+				c.Label = rep.Label
+			}
+		}
 		for _, l := range suppressLabels {
 			// Mirrors edge/scoring: a negative interest never suppresses an unknown.
 			if c.Unknownness >= unknownThreshold {
@@ -534,7 +572,7 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 			}
 			// Detector class, operator override or the sidecar's zero-shot subtype.
 			if strings.EqualFold(l, c.Label) || (c.Override != "" && strings.EqualFold(l, c.Override)) || strings.EqualFold(l, c.Tags["subtype"]) {
-				c.Suppressed = true
+				c.Suppressed, c.SuppressedBy = true, l
 			}
 		}
 		cnt.Items++
@@ -560,8 +598,8 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]int
 			o.Frames = o.Reports
 		}
 		if c.Type == "record" && c.Forms["fact"].State == "received" && reports != nil {
-			if n, ok := reports[c.ID]; ok && n >= o.Frames {
-				o.Frames, o.FramesKnown = n, true
+			if rep, ok := reports[c.ID]; ok && rep.NFrames >= o.Frames && rep.NFrames > 0 {
+				o.Frames, o.FramesKnown = rep.NFrames, true
 			}
 		}
 		if c.CapturedMs < o.FirstMs {
@@ -777,17 +815,29 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	var out pb.SetPolicyResponse
-	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
+	out, err := b.applyPolicyProto(r.Context(), pol)
+	if err != nil {
 		log.Printf("shorebridge: set policy upstream: %v", err)
 		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
-	raw, _ := protojson.Marshal(&out)
+	raw, _ := protojson.Marshal(out)
+	var policy map[string]any
+	if json.Unmarshal(raw, &policy) != nil {
+		policy = map[string]any{}
+	}
+	readback := Readback(pol.Interest.SuppressLabels, pol.Interest.BoostLabels)
+	if compiled != nil && compiled.Readback != "" {
+		readback = compiled.Readback
+	}
+	if rb, ok := policy["readback"].(string); ok && rb != "" { // a shore that compiles directives itself wins
+		readback = rb
+	}
 	resp := struct {
 		Policy   json.RawMessage   `json:"policy"`
 		Compiled *command.Compiled `json:"compiled,omitempty"`
-	}{Policy: raw, Compiled: compiled}
+		Readback string            `json:"readback"`
+	}{Policy: raw, Compiled: compiled, Readback: readback}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -841,6 +891,36 @@ func blockedMessage(c command.Compiled) string {
 	return "directive is blocked"
 }
 
+// applyPolicy replaces the standing shore policy with the given interest and
+// asks the poller to refresh so the console sees the change at once.
+func (b *Bridge) applyPolicy(ctx context.Context, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
+	return b.applyPolicyAs(ctx, "operator-ui", text, suppress, boost)
+}
+
+func (b *Bridge) applyPolicyAs(ctx context.Context, issuedBy, text string, suppress, boost []string) (*pb.SetPolicyResponse, error) {
+	if issuedBy == "" {
+		issuedBy = "operator-ui"
+	}
+	if suppress == nil {
+		suppress = []string{}
+	}
+	if boost == nil {
+		boost = []string{}
+	}
+	return b.applyPolicyProto(ctx, &pb.Policy{IssuedBy: issuedBy, Text: text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost}})
+}
+
+// applyPolicyProto sends a fully built policy (interest, EMCON, expiry) to the
+// shore and pokes the poller.
+func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetPolicyResponse, error) {
+	var out pb.SetPolicyResponse
+	if err := b.call(ctx, b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
+		return nil, err
+	}
+	b.Poke()
+	return &out, nil
+}
+
 func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ItemID string `json:"itemId"`
@@ -884,6 +964,7 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
+	b.Poke()
 	writeJSON(w, map[string]any{"ok": true, "itemId": in.ItemID, "form": formNames[kind], "original": in.Original})
 }
 

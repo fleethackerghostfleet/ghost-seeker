@@ -143,18 +143,19 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link)
 	bridge.Compiler = compiler
+	console := shorebridge.NewConsole(bridge)
 	go bridge.Run(ctx, poll)
 
+	// One site: Patrick's operator console (index.html / cdr.html) on live
+	// shore items. The console speaks the simulation's API (/api/config,
+	// /api/stream, /api/items, /api/directives); the shore-only actions (link
+	// presets, pulls, overrides) stay under /api/shore/ and blobs are proxied.
 	mux := http.NewServeMux()
 	mux.Handle("/api/shore/", bridge.Handler())
 	mux.Handle("/blob/", bridge.Handler())
-	static := web.Handler()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/cdr" {
-			r.URL.Path = "/shore.html"
-		}
-		static.ServeHTTP(w, r)
-	})
+	mux.Handle("/api/", console.Handler())
+	mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
+	mux.Handle("/", web.Handler())
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
 	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(mux))))
 }
