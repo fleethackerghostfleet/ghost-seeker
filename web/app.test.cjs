@@ -61,6 +61,14 @@ test('Details distinguishes cumulative filtered frames from photos in the curren
  assert.match(output,/Current feed only/);
  assert.match(output,/Up to 60 photos shown per category/);
 });
+test('operator send provenance does not remove an image from the review queue',()=>{
+ const context=feedContext();
+ vm.runInContext("items=[frame('sent',{sent:true,autoSent:false,sentAt:'2026-11-05T10:00:00Z',reviewed:false}),frame('reviewed',{reviewed:true})]",context);
+ assert.equal(vm.runInContext('rvQueue().map(i=>i.id).join() ',context),'sent');
+ assert.equal(vm.runInContext('humanSent(items[0])',context),true);
+ vm.runInContext("filters.review='sent'",context);
+ assert.equal(vm.runInContext('ids()',context),'sent');
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);

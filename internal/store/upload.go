@@ -37,7 +37,7 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 				if !item.Sent {
 					s.cdr++
 				}
-				item.Sent, item.AutoSent, item.HumanReviewed, item.Reviewed = true, false, true, true
+				item.Sent, item.AutoSent = true, false
 				item.SentAt = &now
 			}
 		}

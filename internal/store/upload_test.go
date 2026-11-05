@@ -16,7 +16,7 @@ func TestUploadNextRecordsOperatorSend(t *testing.T) {
 			s.cdr = 1
 		}
 		item, cdr, err := s.SetUploadOverride("image", "next", "Alice")
-		if err != nil || !item.Sent || item.AutoSent || !item.HumanReviewed || !item.Reviewed || item.SentAt == nil || cdr != 1 {
+		if err != nil || !item.Sent || item.AutoSent || item.HumanReviewed || item.Reviewed || item.SentAt == nil || cdr != 1 {
 			t.Fatalf("operator send: %+v, cdr=%d err=%v", item, cdr, err)
 		}
 		_, cdr, err = s.SetUploadOverride("image", "next", "Alice")
