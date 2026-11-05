@@ -468,7 +468,7 @@ func (s *Store) GetPolicy(ctx context.Context) (*pb.Policy, error) {
 }
 
 func (s *Store) SetPolicy(ctx context.Context, p *pb.Policy) error {
-	return s.SetPolicyState(ctx, p, 0)
+	return s.SetPolicyState(ctx, p, 0, false)
 }
 
 func (s *Store) GetCommandVersion(ctx context.Context) (int64, bool, error) {
@@ -487,7 +487,7 @@ func (s *Store) GetCommandVersion(ctx context.Context) (int64, bool, error) {
 	return version, true, nil
 }
 
-func (s *Store) SetPolicyState(ctx context.Context, p *pb.Policy, commandVersion int64) error {
+func (s *Store) SetPolicyState(ctx context.Context, p *pb.Policy, commandVersion int64, writeCommandVersion bool) error {
 	raw, err := proto.Marshal(p)
 	if err != nil {
 		return err
@@ -500,7 +500,7 @@ func (s *Store) SetPolicyState(ctx context.Context, p *pb.Policy, commandVersion
 	if _, err := tx.ExecContext(ctx, `INSERT INTO kv(k,v) VALUES('policy',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, raw); err != nil {
 		return err
 	}
-	if commandVersion != 0 {
+	if writeCommandVersion {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO kv(k,v) VALUES('policy_command_version',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, strconv.FormatInt(commandVersion, 10)); err != nil {
 			return err
 		}

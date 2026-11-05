@@ -108,6 +108,14 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	commandMark, hasMark, err := s.St.GetCommandVersion(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if !hasMark {
+		// Preserve the old replay guard for pre-upgrade stores.
+		commandMark = prev.GetVersion()
+	}
 	var signedVersion int64
 	if policy.HigherLayersChanged(prev, p, now, policy.DefaultTTL) {
 		if p.Signature == nil || len(p.Signature.Ed25519) == 0 || len(s.Keys) == 0 {
@@ -115,14 +123,6 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		}
 		if err := policy.Verify(p, s.Keys); err != nil {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
-		}
-		commandMark, hasCommandMark, err := s.St.GetCommandVersion(ctx)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if !hasCommandMark {
-			// Preserve the old replay guard for pre-upgrade stores.
-			commandMark = prev.GetVersion()
 		}
 		if p.Version <= commandMark {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", commandMark))
@@ -185,7 +185,12 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
-	if err := s.St.SetPolicyState(ctx, p, signedVersion); err != nil {
+	newMark := signedVersion
+	if !hasMark && newMark < commandMark {
+		newMark = commandMark
+	}
+	writeMark := signedVersion != 0 || !hasMark
+	if err := s.St.SetPolicyState(ctx, p, newMark, writeMark); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_Policy{Policy: p}}, now); err != nil {

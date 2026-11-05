@@ -268,6 +268,98 @@ func TestSetPolicyFallsBackToStoredVersionWhenCommandMarkIsMissing(t *testing.T)
 	}
 }
 
+func TestSetPolicyFreshStoreShipVersionDoesNotBlockCommand(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	ship, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+		Id: "ship", Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ship"}},
+	}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipVersion := ship.Msg.Policy.Version
+	if mark, exists, err := st.GetCommandVersion(ctx); err != nil || !exists || mark != 0 {
+		t.Fatalf("command mark=%d exists=%v err=%v, want a persisted zero", mark, exists, err)
+	}
+	commandVersion := t0.UnixMilli() - 1000
+	if commandVersion <= 0 || commandVersion >= shipVersion {
+		t.Fatalf("test setup: command version %d must be positive and below ship version %d", commandVersion, shipVersion)
+	}
+	command := &pb.Policy{Id: "command", Version: commandVersion, IssuedAtUnixMs: t0.UnixMilli(),
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}}}
+	if err := policy.Sign(command, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: command})); err != nil {
+		t.Fatalf("command below ship version rejected: %v", err)
+	}
+	if mark, exists, err := st.GetCommandVersion(ctx); err != nil || !exists || mark != commandVersion {
+		t.Fatalf("command mark=%d exists=%v err=%v, want %d and present", mark, exists, err, commandVersion)
+	}
+}
+
+func TestSetPolicyLegacyCommandMarkStaysFixedAcrossShipWrites(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(t0)
+	legacyVersion := t0.UnixMilli()
+	if err := st.SetPolicy(ctx, &pb.Policy{Id: "legacy", Version: legacyVersion, IssuedAtUnixMs: legacyVersion}); err != nil {
+		t.Fatal(err)
+	}
+	commandPub, commandPriv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{St: st, Clk: clk, Keys: policy.Keyring{"command": commandPub}}
+	writeShip := func(id string) *pb.Policy {
+		t.Helper()
+		response, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{
+			Id: id, Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ship"}},
+		}}))
+		if err != nil {
+			t.Fatalf("ship write %q: %v", id, err)
+		}
+		return response.Msg.Policy
+	}
+	firstShip := writeShip("first-ship")
+	if firstShip.Version <= legacyVersion {
+		t.Fatalf("first ship version=%d, want > legacy version %d", firstShip.Version, legacyVersion)
+	}
+	clk.Advance(10 * time.Second)
+	secondShip := writeShip("second-ship")
+	commandVersion := legacyVersion + 1
+	if secondShip.Version <= commandVersion {
+		t.Fatalf("second ship version=%d, want > command version %d", secondShip.Version, commandVersion)
+	}
+	command := &pb.Policy{Id: "command", Version: commandVersion, IssuedAtUnixMs: t0.UnixMilli(),
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "command"}}}
+	if err := policy.Sign(command, "command", commandPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(ctx, connect.NewRequest(&pb.SetPolicyRequest{Policy: command})); err != nil {
+		t.Fatalf("command below ship versions rejected: %v", err)
+	}
+	if mark, exists, err := st.GetCommandVersion(ctx); err != nil || !exists || mark != commandVersion {
+		t.Fatalf("command mark=%d exists=%v err=%v, want %d and present", mark, exists, err, commandVersion)
+	}
+}
+
 func TestSetPolicyCommandMarkIsIndependentOfShipVersion(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(t.TempDir())
