@@ -17,6 +17,8 @@ if command -v kubeconform >/dev/null 2>&1; then
   for manifest in "$SCRIPT_DIR"/manifests/*.yaml; do
     sed \
       -e 's,###ZARF_VAR_SHORE_URL###,http://shore.ghost-seeker.svc.cluster.local:8080,g' \
+      -e 's|###ZARF_VAR_SHORE_PUBLIC_HOSTS###|shore,shore.ghost-seeker,shore.ghost-seeker.svc,shore.ghost-seeker.svc.cluster.local|g' \
+      -e 's|###ZARF_VAR_EDGE_PUBLIC_HOSTS###|edge,edge.ghost-seeker,edge.ghost-seeker.svc,edge.ghost-seeker.svc.cluster.local|g' \
       -e 's,###ZARF_VAR_EDGE_ID###,edge-1,g' \
       -e 's,###ZARF_VAR_SHORE_REQUIRE_AUTH###,false,g' \
       -e 's,###ZARF_VAR_EDGE_MAX_BYTES###,0,g' \

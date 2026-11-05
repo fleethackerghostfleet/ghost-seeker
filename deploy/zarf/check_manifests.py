@@ -62,6 +62,16 @@ def check() -> None:
     all_manifest_paths = sorted((ROOT / "manifests").glob("*.yaml"))
     require(bool(all_manifest_paths), "no manifests/*.yaml files found")
     parsed = {path: read_documents(path) for path in all_manifest_paths}
+    for filename, config_name in (("shore.yaml", "shore-config"), ("edge.yaml", "edge-config")):
+        documents = parsed[ROOT / "manifests" / filename]
+        config = next(
+            (document for document in documents
+             if document["kind"] == "ConfigMap" and document["metadata"]["name"] == config_name),
+            None,
+        )
+        require(config is not None, f"{filename}: ConfigMap/{config_name} is missing")
+        require(bool(config.get("data", {}).get("GS_PUBLIC_HOSTS", "").strip()),
+                f"{filename}: ConfigMap/{config_name} must set non-empty GS_PUBLIC_HOSTS")
     used_variables: set[str] = set()
     for path in all_manifest_paths:
         used_variables.update(VARIABLE_PATTERN.findall(path.read_text()))

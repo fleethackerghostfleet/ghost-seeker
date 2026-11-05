@@ -3,6 +3,7 @@
 package httpx
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -10,18 +11,71 @@ import (
 	"time"
 )
 
+// HostAllowlist is the set of Host names this node answers to.
+type HostAllowlist struct{ names map[string]bool }
+
+// NewHostAllowlist builds an allowlist from local names, the listen host and
+// any additional public names.
+func NewHostAllowlist(listen string, extra []string) *HostAllowlist {
+	a := &HostAllowlist{names: make(map[string]bool)}
+	add := func(hostport string) {
+		if name := normalizeHost(hostport); name != "" {
+			a.names[name] = true
+		}
+	}
+	for _, name := range []string{"localhost", "127.0.0.1", "::1"} {
+		add(name)
+	}
+	if host := normalizeHost(listen); host != "" && host != "0.0.0.0" && host != "::" {
+		add(listen)
+	}
+	if hostname, err := os.Hostname(); err == nil {
+		add(strings.ToLower(hostname))
+	}
+	for _, name := range extra {
+		add(name)
+	}
+	return a
+}
+
+// Allowed reports whether a Host header value is acceptable.
+func (a *HostAllowlist) Allowed(hostport string) bool {
+	if hostport == "" {
+		return true
+	}
+	if a == nil {
+		a = defaultHostAllowlist
+	}
+	host := normalizeHost(hostport)
+	if net.ParseIP(host) != nil {
+		// Rebinding pages send their DNS name as Host; probes and direct-IP clients use IPs.
+		return true
+	}
+	return a.names[host]
+}
+
+var defaultHostAllowlist = NewHostAllowlist("", nil)
+
+func normalizeHost(hostport string) string {
+	host, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		host = hostport
+	}
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	return strings.TrimSuffix(strings.ToLower(host), ".")
+}
+
 // CORS is the strict default: only same-origin browsers (and non-browser
 // clients, which send no Origin) may call the API. Equivalent to
-// CORSAllow(nil).
-func CORS(next http.Handler) http.Handler { return CORSAllow(nil, next) }
+// CORSAllow(nil, nil).
+func CORS(next http.Handler) http.Handler { return CORSAllow(nil, nil, next) }
 
-// CORSAllow replaces the old wildcard: a browser Origin is accepted only if
-// it is this host or on the allowlist (exact scheme://host[:port] entries,
-// e.g. from -cors-origins). Allowed origins get echoed back with
-// Vary: Origin; anything else gets 403 on state-changing requests and no
-// CORS headers (so the browser blocks the read) on GET/HEAD. Sec-Fetch-Site
-// cross-site requests are rejected the same way.
-func CORSAllow(origins []string, next http.Handler) http.Handler {
+// CORSAllow guards requests with a Host allowlist before applying the
+// cross-origin policy. Same-origin browser requests must also use an
+// allowlisted host; -cors-origins may additionally allow exact origins.
+func CORSAllow(origins []string, hosts *HostAllowlist, next http.Handler) http.Handler {
 	allow := map[string]bool{}
 	for _, o := range origins {
 		if o = strings.TrimRight(strings.TrimSpace(o), "/"); o != "" {
@@ -29,8 +83,17 @@ func CORSAllow(origins []string, next http.Handler) http.Handler {
 		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !hosts.Allowed(r.Host) {
+			http.Error(w, "host not allowed", http.StatusForbidden)
+			return
+		}
 		origin := r.Header.Get("Origin")
-		ok := origin == "" || allow[strings.ToLower(origin)] || sameOrigin(origin, r)
+		originURL, err := url.Parse(origin)
+		originHost := ""
+		if err == nil {
+			originHost = originURL.Host
+		}
+		ok := origin == "" || allow[strings.ToLower(origin)] || (hosts.Allowed(originHost) && sameOrigin(origin, r))
 		site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
 		if site == "cross-site" && !allow[strings.ToLower(origin)] {
 			ok = false

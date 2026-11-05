@@ -83,6 +83,7 @@ the environment variables shown in the table.
 | `-id` | `EDGE_ID` | `edge-1` | Edge identifier |
 | `-data` | `DATA_DIR` | `data/edge` | SQLite store and blobs |
 | `-listen` | `LISTEN` | `:8081` | Console and sync HTTP listener |
+| `-public-hosts` | `GS_PUBLIC_HOSTS` | empty | Additional Host names accepted by the DNS-rebinding guard |
 | `-shore` | `SHORE_URL` | `http://localhost:8080` | Shore base URL |
 | `-infer` | `INFER_URL` | `mock` | Inference URL or `mock` |
 | `-unit-token` | `GS_UNIT_TOKEN` | unset | HS256 unit token for shore sync |
@@ -104,6 +105,7 @@ the environment variables shown in the table.
 |---|---|---|---|
 | `-data` | `DATA_DIR` | `data/shore` | SQLite store |
 | `-listen` | `LISTEN` | `:8080` | Shore HTTP listener |
+| `-public-hosts` | `GS_PUBLIC_HOSTS` | empty | Additional Host names accepted by the DNS-rebinding guard |
 | `-infer` | `INFER_URL` | `mock` | Inference URL for text embedding, or `mock` |
 | `-require-auth` | `GS_REQUIRE_AUTH` | `true` | Require unit JWTs on SyncService; `false` is for isolated lab links only |
 | `-signing-key` | `GS_SIGNING_KEY` | unset | HS256 signing key; also accepted by mint tool |
@@ -184,8 +186,19 @@ The default `SHORE_URL` is the in-cluster shore service address. For a split
 deployment, install the `shore` and `operator` components in the shore/UDS
 cluster; install the `edge` component in the shipboard k3s cluster and override
 `SHORE_URL` with the shore address reachable from the ship. Deployments may
-override `EDGE_ID`, `SHORE_STORAGE`, and `EDGE_STORAGE` as well. For example,
-when staging an edge-only cluster:
+override `EDGE_ID`, `SHORE_STORAGE`, and `EDGE_STORAGE` as well. The shore
+package's `SHORE_PUBLIC_HOSTS` must include the ship-facing shore hostname for
+the DNS-rebinding guard; direct IP literals are always allowed and need no
+entry. Include any operator ingress hostname in this list too. For example,
+deploy the shore/operator components with:
+
+```sh
+zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
+  --confirm --components=shore,operator \
+  --set-variables=SHORE_PUBLIC_HOSTS=shore,shore.ghost-seeker,shore.ghost-seeker.svc,shore.ghost-seeker.svc.cluster.local,shore.example.internal
+```
+
+When staging an edge-only cluster:
 
 ```sh
 zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \

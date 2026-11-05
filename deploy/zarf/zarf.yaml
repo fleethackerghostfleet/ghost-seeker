@@ -11,6 +11,14 @@ variables:
     description: Edge-to-shore URL; set to a reachable shore address for shipboard edge deployments.
     default: http://shore.ghost-seeker.svc.cluster.local:8080
     prompt: false
+  - name: SHORE_PUBLIC_HOSTS
+    description: Host names the shore answers to; must include the host of SHORE_URL and any ingress name.
+    default: shore,shore.ghost-seeker,shore.ghost-seeker.svc,shore.ghost-seeker.svc.cluster.local
+    prompt: false
+  - name: EDGE_PUBLIC_HOSTS
+    description: Host names the edge answers to.
+    default: edge,edge.ghost-seeker,edge.ghost-seeker.svc,edge.ghost-seeker.svc.cluster.local
+    prompt: false
   - name: EDGE_ID
     description: Edge identifier (edge component).
     default: edge-1
