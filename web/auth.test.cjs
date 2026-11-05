@@ -13,6 +13,7 @@ function setup(){
 test('viewer blocks every non-read method and replaces identity using text nodes',()=>{
  const s=setup();s.run(`gsAuth.update({mode:'piv',role:'viewer',authenticated:true,name:'Jane Q. Doe',id:'synthetic@mil'})`);
  assert.equal(s.run('gsAuth.viewer()'),true);assert.ok(s.classes.has('role-viewer'));assert.equal(s.badge.hidden,false);assert.equal(s.logout.hidden,false);
+ assert.match(s.run('gsAuth.writeControls'),/#aUploadNext,#aUploadHold/);
  assert.equal(s.user.children[0].textContent,'JQ');assert.equal(s.user.children[1].children[0].textContent,'Jane Q. Doe');
  for(const method of ['POST','PUT','PATCH','DELETE']){assert.equal(s.run(`gsAuth.mayWrite('${method}')`),false);assert.throws(()=>s.run(`gsAuth.requireWrite('${method}')`),/read-only role/)}
  for(const method of ['GET','HEAD'])assert.equal(s.run(`gsAuth.mayWrite('${method}')`),true);

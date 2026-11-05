@@ -24,6 +24,13 @@ function setup(){
  vm.runInContext(source.slice(source.indexOf('function renderLiveStrip('),source.indexOf('/* ---- detail drawer ---- */')),context);
  return context;
 }
+test('simulation pipeline wraps groups instead of shrinking labels into each other',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
+ assert.match(css,/#simStrip\{[^}]*flex-wrap:wrap;[^}]*gap:4px 8px;[^}]*white-space:normal/);
+ assert.match(css,/#simStrip>\.st\{[^}]*flex:0 0 auto;[^}]*flex-wrap:wrap;[^}]*max-width:100%/);
+ assert.match(css,/#simStrip>\.ar\{display:none\}/);
+ assert.match(css,/#simStrip>\.sv\{[^}]*flex:0 1 auto/);
+});
 test('live connection and camera copy explain data flow and empty states',()=>{
  const c=setup();
  vm.runInContext('renderLiveStrip();renderCameras()',c);

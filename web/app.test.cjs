@@ -427,6 +427,72 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
  assert.equal(vm.runInContext('indicator.textContent',context),'RECONNECTING');
  assert.equal(vm.runInContext("$('live').title",context),'Reconnecting — click to resume feed');
 });
+test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
+ const context=setup();
+ assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 256 kbps/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40,sent:40,done:true}})',context),/✓ Uploaded/);
+ assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
+ assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
+});
+test('partial simulation uploads show a link outage in the card and drawer state',()=>{
+ const context=setup();
+ vm.runInContext('outageItem={upload:{bytes:100,sent:25,bps:0}}',context);
+ assert.match(vm.runInContext('uploadState(outageItem).label',context),/^Link outage, paused · 25 B of 100 B$/);
+ assert.match(vm.runInContext('uploadHTML(outageItem)',context),/class="upload-label">Link outage, paused<\/span>/);
+ assert.match(vm.runInContext('uploadControlsHTML(outageItem)',context),/Link outage, paused/);
+ vm.runInContext("outageItem.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(outageItem)',context),/Upload next \(operator\) · Link outage, paused/);
+ for(const change of ["override:'hold'",'sent:0','sent:100,done:true','bps:8000','bps:undefined']){
+  assert.doesNotMatch(vm.runInContext(`uploadHTML({upload:{bytes:100,sent:25,bps:0,${change}}})`,context),/Link outage/);
+ }
+});
+test('live uploads derive progress from shown form, never from commander escalation',()=>{
+ const context=setup();
+ assert.equal(vm.runInContext("uploadState({sent:true,live:{imageForm:'crop',forms:{crop:{state:'partial',bytes:100,received:25}}}}).sent",context),25);
+ assert.equal(vm.runInContext("uploadState({live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100,received:0}}}}).done",context),true);
+ assert.equal(vm.runInContext("uploadState({live:{forms:{thumb:{state:'pending',bytes:100}}}}).queued",context),true);
+});
+test('upload override labels, toggle undo and live/viewer guards',()=>{
+ const context=setup();
+ vm.runInContext("overrideItem={upload:{bytes:100,sent:20,override:'hold'}}",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-held.*Held by operator/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Release upload/);
+ assert.equal(vm.runInContext('uploadState(overrideItem).queued',context),false);
+ vm.runInContext("overrideItem.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/upload-next.*Upload next \(operator\)/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Back to priority order/);
+ vm.runInContext("overrideItem.upload.override=''",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/Uploading to shore/);
+ vm.runInContext("overrideItem.upload.done=true;overrideItem.upload.override='hold'",context);
+ assert.match(vm.runInContext('uploadHTML(overrideItem)',context),/✓ Uploaded/);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/already uploaded.*disabled/);
+ vm.runInContext("overrideItem.live={forms:{thumb:{state:'pending',bytes:100}}}",context);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/not supported by the live shore connection.*disabled/);
+ vm.runInContext("delete overrideItem.live;overrideItem.upload.done=false;gsAuth={viewer:()=>true}",context);
+ assert.match(vm.runInContext('uploadControlsHTML(overrideItem)',context),/Viewer role is read-only.*disabled/);
+});
+test('summary corrections do not reset a received image upload',()=>{
+ const context=setup();
+ for(const state of ['pending','partial']){
+  vm.runInContext(`corrected={live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100},fact:{state:'${state}',bytes:200,received:10}}}}`,context);
+  assert.equal(vm.runInContext('uploadState(corrected).done',context),true);
+  assert.match(vm.runInContext('uploadHTML(corrected)',context),/✓ Uploaded/);
+ }
+});
+test('live active and pending forms take precedence over a received preview',()=>{
+ const context=setup();
+ vm.runInContext("liveItem={live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},crop:{state:'partial',bytes:100,received:25},full:{state:'pending',bytes:1000}}}}",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).sent',context),25);
+ assert.equal(vm.runInContext('uploadState(liveItem).done',context),false);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/Uploading to shore · 25% · Object close-up/);
+ vm.runInContext("liveItem.live.forms.crop.state='received'",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).queued',context),true);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/Queued for shore · Full image/);
+ vm.runInContext("liveItem.live.forms.full.state='received'",context);
+ assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
+ assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
