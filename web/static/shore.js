@@ -55,7 +55,7 @@
     const sightingMode = counts.grouped > 0;
     $('#obj-img').textContent = sightingMode ? counts.sightingsWithImage : counts.objectsWithImage;
     $('#obj-all').textContent = sightingMode ? counts.sightings : counts.objects;
-    $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} scene tiles not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
+    $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
     $('#policy').textContent = policy ? `“${policy}”` : 'none set';
@@ -94,19 +94,31 @@
       render();
     } catch { setTimeout(() => factCache.delete(card.id), 5000); }
   }
-  function sceneTile(o) {
-    const b = o.best;
-    return `<div class="card scene" data-key="${esc(o.key)}" title="Object-free context frame: the edge sends one FACT+THUMB scene per source per minute; no FULL unless pulled">
-      ${imageBlock(b)}
-      <div class="body">
-        <div class="title"><span class="label">Scene</span><span class="tier P4">context</span></div>
-        <div class="meta">${ago(o.lastMs)} · ${esc(b.source)}</div>
-        <div class="forms">${formChips(b)}</div>
-        <div class="actions"><button class="btn" data-act="pull" data-id="${esc(b.id)}" ${pulling.has(b.id) || b.forms.full?.state === 'received' ? 'disabled' : ''}>Pull full frame</button></div>
-      </div></div>`;
+  // Cameras strip: per-source heartbeat built from object-free "scene" items
+  // (and the latest contact), instead of scene tiles in the feed.
+  function renderCameras(objs) {
+    const cams = new Map();
+    for (const o of objs) {
+      const src = o.best.source || 'camera';
+      const c = cams.get(src) || { src, lastMs: 0, scene: null, contacts: 0 };
+      c.lastMs = Math.max(c.lastMs, o.lastMs);
+      if (o.scene) { if (!c.scene || o.lastMs > c.scene.lastMs) c.scene = o; } else c.contacts++;
+      cams.set(src, c);
+    }
+    const el = $('#cameras');
+    if (!cams.size) { el.innerHTML = ''; return; }
+    el.innerHTML = [...cams.values()].sort((a, b) => a.src.localeCompare(b.src)).map(c => {
+      const b = c.scene?.best;
+      const img = b?.image ? `<img src="${b.image}?v=${b.forms[b.imageForm]?.bytes || 0}" alt="">` : '<div class="noimg">no view yet</div>';
+      const full = b?.forms.full?.state;
+      const pull = b ? `<button class="btn mini" data-act="pull" data-id="${esc(b.id)}" ${pulling.has(b.id) || full === 'received' ? 'disabled' : ''}>${full === 'received' ? 'full frame received' : full === 'partial' ? 'full frame…' : pulling.has(b.id) ? 'requested…' : 'Pull full frame'}</button>` : '';
+      return `<div class="cam" title="Latest object-free context frame from this camera (edge heartbeat, ~2 KB/min). Not a contact.">
+        ${img}
+        <div class="meta"><div class="k">${esc(c.src)}</div><div class="u">seen ${ago(c.lastMs)} · ${c.contacts} contact${c.contacts === 1 ? '' : 's'}${b ? ` · view ${ago(c.scene.lastMs)}` : ''}</div>${pull}</div>
+      </div>`;
+    }).join('');
   }
   function objectCard(o) {
-    if (o.scene) return sceneTile(o);
     const b = o.best;
     // Zero-shot subtype is the operator-facing name; the detector class stays in the meta line.
     const label = b.override || o.subtype || o.label || 'unknown';
@@ -149,15 +161,14 @@
     renderStrip();
     const objs = snap.objects;
     if (view === 'feed') {
-      let list = objs;
+      renderCameras(objs);
+      let list = objs.filter(o => !o.scene); // scenes live in the cameras strip
       const onlySightings = $('#only-sightings').checked && snap.counts.grouped > 0;
-      // Scene tiles (object-free context frames) stay as dim tiles; per-frame leftovers are hidden.
-      if (onlySightings) list = list.filter(o => o.sightingId || o.scene);
+      if (onlySightings) list = list.filter(o => o.sightingId);
       if ($('#hide-suppressed').checked) list = list.filter(o => !o.suppressed);
       if ($('#only-image').checked) list = list.filter(o => o.hasImage);
-      const hidden = objs.length - list.length;
-      const scenes = list.filter(o => o.scene).length;
-      $('#feed-note').textContent = `${list.length - scenes} objects${scenes ? ` + ${scenes} scene tiles` : ''} · newest first${onlySightings && hidden ? ` · ${hidden} object-free frames hidden` : ''}`;
+      const hidden = objs.filter(o => !o.scene).length - list.length;
+      $('#feed-note').textContent = `${list.length} objects · newest first${onlySightings && hidden ? ` · ${hidden} object-free frames hidden` : ''}`;
       $('#feed').innerHTML = list.length ? list.map(objectCard).join('') : '<div class="empty">No items on shore yet. Start the edge and open the link.</div>';
     } else if (view === 'review') {
       const order = { P1: 0, P2: 1, P3: 2, P4: 3 };
