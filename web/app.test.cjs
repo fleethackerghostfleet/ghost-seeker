@@ -200,6 +200,20 @@ test('feed shows every pipeline image by default with low-value, repeat and dire
  assert.equal(vm.runInContext('ids()',context),'repeat,directive,low');
  assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
 });
+test('feed interleaves sensors within a priority tier without changing priorities',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('a1',{central:.9}),frame('a2',{central:.8}),frame('a3',{central:.7}),frame('b1',{src:{id:'IR-U1'},central:.6}),
+  frame('b2',{src:{id:'IR-U1'},central:.5}),frame('p1',{tier:1,central:.95}),frame('c1',{tier:3,src:{id:'IR-U1'},central:.4}),frame('c2',{tier:3,central:.3})];before=JSON.stringify(items)`,context);
+ assert.equal(vm.runInContext('ids()',context),'p1,b1,a1,b2,a2,a3,c1,c2');
+ assert.equal(vm.runInContext("visible().l.map(i=>feedTier(i)).join('')",context),'12222233');
+ assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
+ vm.runInContext("state.src='EO-P7'",context);
+ assert.equal(vm.runInContext('ids()',context),'p1,a1,a2,a3,c2');
+ vm.runInContext("state.src='ALL';state.sort='time';items=[frame('n1',{ts:119000}),frame('n2',{ts:118000}),frame('m1',{src:{id:'IR-U1'},ts:117000}),frame('o1',{ts:59000}),frame('o2',{ts:58000}),frame('o3',{src:{id:'IR-U1'},ts:1000})]",context);
+ assert.equal(vm.runInContext('ids()',context),'n1,m1,n2,o3,o1,o2');
+ vm.runInContext("items.find(i=>i.id==='o3').ts=-1000",context);
+ assert.equal(vm.runInContext('ids()',context),'n1,m1,n2,o1,o2,o3');
+});
 test('a later boost keeps the stored priority despite an earlier suppression flag',()=>{
  const context=feedContext();
  vm.runInContext("items=[frame('boosted',{tier:2,central:.7998,det:[{sup:true,matched:true}]}),frame('low',{tier:4})]",context);
