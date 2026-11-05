@@ -48,6 +48,24 @@ test('commander queue and note templates escape item ids',()=>{
  assert.ok(Array.isArray(context.testItem.det));
 });
 
+test('commander processing chain keeps dataset provenance separate from shore receipt steps',()=>{
+ const {elements,context}=setup();
+ context.row={
+  id:'review-image',src:{id:'camera',name:'Camera'},ts:new Date(),tier:2,central:.7,edge:.5,
+  dets:[],det:[],dataset_id:'dev<set>',image_id:'frame<1>',sent:true,sentAt:new Date(),
+  decision:'track',decidedAt:new Date(),upload:{done:true},
+ };
+ vm.runInContext('datasetMode=true;renderBrief(row)',context);
+ const dataset=elements.get('brief').innerHTML;
+ for(const step of ['Dataset image','Detector output','Priority model','Operator review','Commander'])assert.ok(dataset.includes(`<b>${step}</b>`),step);
+ assert.match(dataset,/dev&lt;set&gt; · frame&lt;1&gt;/);
+ assert.doesNotMatch(dataset,/Sensor capture|Received on shore|Shore model/);
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ const shore=elements.get('brief').innerHTML;
+ for(const step of ['Sensor capture','Ship scoring','Received on shore','Shore model','Operator report','Commander'])assert.ok(shore.includes(`<b>${step}</b>`),step);
+ assert.doesNotMatch(shore,/Dataset image|Detector output|<b>Captured<\/b>|Kept on ship/);
+});
+
 test('shore view excludes ship backlog even after escalation and includes completed uploads',()=>{
  const {elements,context}=setup();
  context.rows=[

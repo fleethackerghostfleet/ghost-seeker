@@ -136,10 +136,10 @@ test('sentinel grows one page and keyboard stepping reveals the next off-window 
 });
 test('upload and status counts cover all retained items in one pass, not only the window',()=>{
  const h=setup(),c=h.context;
- vm.runInContext(source.slice(source.indexOf('function renderStats('),source.indexOf('/* ---- live shore strip')),c);
+ vm.runInContext(source.slice(source.indexOf('function renderStats('),source.indexOf('/* ---- details screen:')),c);
  vm.runInContext(`populate(3000);stats={cap:3000,keep:3000,drop:0,bytes:0,db:3000};
   items[0].upload={bytes:100,sent:100,done:true};items[1].upload={bytes:100,sent:20,override:'hold'};
-  items[2].upload={bytes:100,sent:50,bps:8000};items[3].dismissed=true;
+  items[2].upload={bytes:100,sent:50,bps:8000,active:true};items[3].dismissed=true;
   items.filter=items.map=()=>{throw Error('extra array pass')};renderStats();`,c);
  assert.equal(c.$('hsImgs').textContent,3000);
  assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 2996 queued · 1 held · 1 uploaded');

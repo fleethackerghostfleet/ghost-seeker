@@ -92,7 +92,6 @@ function renderBrief(it){
  const steps=datasetMode?[['Dataset image',`${esc(it.dataset_id)} · ${esc(it.image_id)}`],['Detector output',`${it.dets.length} contacts · ${it.edge.toFixed(2)}`],
   ['Priority model',`${esc(MODELS[model]?.name||model)} · ${it.central.toFixed(2)} → P${sug} ${TN[sug]}`],
   ['Operator review',it.sentAt?`sent to Commander as P${it.tier} ${TN[it.tier]} · ${zulu(it.sentAt)}`:'returned for another look'],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])]:
-  [['Captured',`${esc(it.src.id)} · ${zulu(it.ts)}`],['Kept on ship',`score ${it.edge.toFixed(2)} · ${esc(it.src.em||'')}`],['Sent to shore',esc(it.src.link||'—')],
   [['Sensor capture',`${esc(it.src.id)} · ${zulu(it.ts)}`],['Ship scoring',`score ${it.edge.toFixed(2)} · ${esc(it.src.em||'')}`],['Received on shore',esc(receipt(it))],
   ['Shore model',`${esc(MODELS[model]?.name||model)} · ${it.central.toFixed(2)} → P${sug} ${TN[sug]}`],
   ['Operator report',it.sentAt?`sent to Commander as P${it.tier} ${TN[it.tier]} · ${zulu(it.sentAt)}`:esc(reportStatus(it))],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])];

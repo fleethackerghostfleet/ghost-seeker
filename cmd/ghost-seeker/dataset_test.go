@@ -126,7 +126,7 @@ func TestDatasetTickTransfersAndPublishes(t *testing.T) {
 	}
 }
 
-func TestDatasetTickBackpressureAndOverrides(t *testing.T) {
+func TestDatasetTickAutomaticLinkAndOverrides(t *testing.T) {
 	for _, rate := range []int64{-1, 8000, 0} {
 		t.Run(fmt.Sprint(rate), func(t *testing.T) {
 			data := store.New(20)
@@ -140,7 +140,7 @@ func TestDatasetTickBackpressureAndOverrides(t *testing.T) {
 			items, _, _, _ := data.Snapshot()
 			wantCount, wantSent := 7, int64(1000)
 			if rate < 0 {
-				wantCount, wantSent = 6, 2000
+				wantSent = items[0].Upload.Bytes
 			} else if rate == 0 {
 				wantSent = 0
 			}
@@ -148,16 +148,9 @@ func TestDatasetTickBackpressureAndOverrides(t *testing.T) {
 			if len(items) != wantCount || item.Upload.Sent != wantSent {
 				t.Fatalf("rate=%d count=%d upload=%+v", rate, len(items), item.Upload)
 			}
-			if rate < 0 {
-				tickDatasetSimulation(data, replay, app, uplink, 1, time.Unix(1, 0), time.Minute)
-				items, _, _, _ = data.Snapshot()
-				if len(items) != 7 {
-					t.Fatal("generation did not resume after drain")
-				}
-				for _, item := range items {
-					if strings.HasPrefix(item.ID, "real-") && item.Frame != 1 {
-						t.Fatal("backpressured tick consumed a replay row")
-					}
+			for _, item := range items {
+				if strings.HasPrefix(item.ID, "real-") && item.Frame != 1 {
+					t.Fatal("tick did not generate the first replay row")
 				}
 			}
 		})

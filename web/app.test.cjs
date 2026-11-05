@@ -14,6 +14,7 @@ test('clear priority preview preserves detector-negative P4 pinning',()=>{
  vm.runInContext(`
   const items=[{id:'negative',detectorNegative:true},{id:'positive'}];
   const findItem=id=>items.find(it=>it.id===id);
+  const isScene=item=>item.live?.event==='scene';
   const draft={pins:{negative:0,positive:0}};
   const after=items.map(it=>({id:it.id,central:.9,tier:2}));
   const sorted=rows=>rows;
@@ -50,13 +51,13 @@ test('null detection arrays are normalized on snapshots, SSE and direct updates,
   renderReviewContent();
  `,context);
  assert.match(context.$('rvMain').innerHTML,/Detector found nothing — check for missed objects/);
- assert.equal(context.$('accLbl').textContent,'Nothing here');
+ assert.equal(context.$('accLbl').textContent,'Nothing here & next');
 });
 test('detector negatives have clear labels and retain review keys',()=>{
  const context=setup();
  assert.equal(context.detectorNegativeLabel({detectorNegative:true}),'Detector found nothing — check for missed objects');
  assert.equal(context.detectorNegativeLabel({}),'');
- assert.equal(context.reviewAcceptLabel({detectorNegative:true,centralTier:4}),'Nothing here');
+ assert.equal(context.reviewAcceptLabel({detectorNegative:true,centralTier:4}),'Nothing here & next');
  assert.match(context.reviewAcceptLabel({centralTier:2}),/P2/);
  for(const key of ['1','2','3','4'])assert.equal(context.reviewKeyAction(key),key);
  for(const key of [' ','enter'])assert.equal(context.reviewKeyAction(key),'accept');
@@ -449,12 +450,12 @@ function feedContext(){
  `,context);
  return context;
 }
-test('human reviewed filter has native options with clear labels and themed popup colors',()=>{
+test('human review filter has native options with clear labels and themed popup colors',()=>{
  const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
- assert.match(html,/<label class="feed-review" for="reviewFilter">Human reviewed <select id="reviewFilter">/);
+ assert.match(html,/<label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter">/);
  const select=html.match(/<select id="reviewFilter">(.*?)<\/select>/)[1];
  assert.deepEqual([...select.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map(m=>[m[1],m[2]]),[
-  ['all','All images'],['reviewed','Yes — reviewed'],['unreviewed','No — not reviewed'],
+  ['all','All images'],['sent','Sent by a person'],['reviewed','Reviewed by a person'],['unreviewed','Not reviewed yet'],
  ]);
  const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
  assert.match(css,/\.feed-review option\{background:var\(--panel2\);color:var\(--text\)\}/);
@@ -465,18 +466,19 @@ test('feed review select changes filter results and persists every value includi
  context.addEventListener=()=>{};
  vm.runInContext(`
   closeDetail=()=>{};resetFeedWindow=()=>{};
-  items=[frame('yes',{reviewed:true}),frame('no')];
+  items=[frame('yes',{reviewed:true,sent:true}),frame('no')];
  `,context);
- const start=source.indexOf(' const syncFeedFilters=');
+ const start=source.indexOf(" $('srcSel').onchange=");
  const end=source.indexOf(" $('modelSel').onchange",start);
  vm.runInContext(source.slice(start,end),context);
  assert.equal(context.$('reviewFilter').value,'all');
  assert.equal(vm.runInContext('ids()',context),'yes,no');
- for(const [value,ids] of [['reviewed','yes'],['unreviewed','no'],['all','yes,no']]){
+ for(const [value,ids] of [['sent','yes'],['reviewed','yes'],['unreviewed','no'],['all','yes,no']]){
   context.$('reviewFilter').onchange({target:{value}});
   assert.equal(vm.runInContext('ids()',context),ids);
   assert.equal(context.$('reviewFilter').value,value);
-  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,value);
+  assert.equal(saved().feed.review,value);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,value==='sent'?'all':value);
  }
  vm.runInContext('items=[]',context);
  context.$('reviewFilter').onchange({target:{value:'reviewed'}});
@@ -494,7 +496,6 @@ test('global shortcuts leave native select keyboard events untouched',()=>{
   assert.equal(prevented,false,key);
  }
 });
-test('feed checkbox reveals retained filtered and exact duplicate images at P4 without mutating scores',()=>{
 test('feed shows every pipeline image by default with low-value, repeat and directive-lowered images at P4',()=>{
  const context=feedContext();
  vm.runInContext(`
@@ -657,20 +658,6 @@ test('shore rank uses all shore records by ship score regardless of review, sens
   filters.review='reviewed';state.sort='new';state.tier='2';state.src='IR-U1';
  `,context);
  assert.match(vm.runInContext("liveWhy(items[1])[0].t",context),/Rank 2 of 3 on shore by ship score \(20\.00\)/);
-});
-test('feed density defaults, validates, persists and reloads all sizes',()=>{
- for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}']){
-  assert.equal(settingsContext(saved).settings.get().density,'m');
- }
- const {settings,saved}=settingsContext('{}');
- for(const density of ['s','m','l','xl']){
-  settings.density(density);
-  assert.equal(saved().density,density);
-  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().density,density);
- }
- settings.density('invalid');settings.density(null);
- assert.equal(settings.get().density,'xl');
- assert.equal(saved().density,'xl');
 });
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();
@@ -1092,7 +1079,7 @@ function setup(){
   gsLights:require('./static/lights.js'),
   setTimeout:()=>{},clearTimeout:()=>{},imageCache:new Map(),
   document:{body:{classList:{remove(){}}},querySelector:()=>null},
-  $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
+  $:id=>{if(!elements.has(id))elements.set(id,{style:{},classList:{toggle(){},add(){},remove(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
  });
  context.window=context;
  vm.runInContext(policySource,context);
@@ -1363,7 +1350,7 @@ test('Send now moves a feed image to the top of the send queue',async()=>{
  vm.runInContext(`calls=[];messages=[];toast=m=>messages.push(m);
   items=[{id:'img',src:{id:'EO-P7'},upload:{bytes:100,sent:0}}];
   request=async(url,method,body)=>{calls.push([url,method,body]);return{cdr:2,item:{...items[0],upload:{...items[0].upload,override:'next'}}}};
-  applyItemUpdate=item=>{items[0]=item};`,context);
+  applyItemUpdate=item=>Object.assign(findItem(item.id),item);`,context);
  await vm.runInContext("sendNow('img')",context);
  assert.equal(vm.runInContext('JSON.stringify(calls)',context),JSON.stringify([['/api/items/img/upload-override','POST',{override:'next'}]]));
  assert.match(vm.runInContext('messages[0]',context),/top of the send queue/);

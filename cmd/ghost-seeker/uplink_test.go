@@ -1,121 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"math"
 	"testing"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
-
-func TestSimulationUplinkSlowDistribution(t *testing.T) {
-	u := newSimulationUplink(store.New(1), -1, func() float64 { return 0 })
-	d := u.distribution
-	if d.MeanBps != 16_000 || d.MaxBps != 100_000 || d.MinBps != 0 || d.IntervalMS != 5000 {
-		t.Fatalf("unexpected simulation distribution: %+v", d)
-	}
-	if p := math.Erfc(d.MeanBps/(d.StdDevBps*math.Sqrt2)) / 2; math.Abs(p-0.05) > 1e-12 {
-		t.Fatalf("outage probability = %v, want 0.05", p)
-	}
-	for _, kb := range []int{18, 32, 45} {
-		data := store.New(1)
-		u := newSimulationUplink(data, -1, func() float64 { return 0 })
-		data.Add(&command.Item{ID: "image", KB: kb}, 0)
-		seconds := 0
-		for ; seconds <= 30; seconds++ {
-			item, _ := data.GetItem("image")
-			if item.Upload.Done {
-				break
-			}
-			u.advance(time.Second)
-		}
-		if seconds < 10 || seconds > 30 {
-			t.Fatalf("%d KB image took %d seconds", kb, seconds)
-		}
-	}
-}
-
-func TestSimulationUplinkBackpressure(t *testing.T) {
-	data := store.New(260)
-	u := newSimulationUplink(data, -1, func() float64 { return 0 })
-	maxPending, completed := 0, 0
-	for tick := 0; tick < 300; tick++ {
-		for _, item := range u.advance(2 * time.Second) {
-			if item.Upload.Done {
-				completed++
-			}
-		}
-		items, _, _, _ := data.Snapshot()
-		if u.canGenerate(items) {
-			data.Add(&command.Item{ID: fmt.Sprint(tick), KB: 32}, 0)
-		}
-		items, _, _, _ = data.Snapshot()
-		pending := 0
-		for _, item := range items {
-			if !item.Upload.Done {
-				pending++
-			}
-		}
-		maxPending = max(maxPending, pending)
-		if pending > 6 {
-			t.Fatalf("queue grew to %d", pending)
-		}
-	}
-	if maxPending != 6 || completed < 30 {
-		t.Fatalf("max pending=%d, completed=%d", maxPending, completed)
-	}
-	for _, rate := range []int64{0, 8000} {
-		fixed := newSimulationUplink(data, rate, func() float64 { t.Fatal("fixed link sampled"); return 0 })
-		items, _, _, _ := data.Snapshot()
-		if !fixed.canGenerate(items) || !fixed.canGenerate(nil) {
-			t.Fatalf("fixed override %d was backpressured", rate)
-		}
-	}
-}
-
-func TestSimulationUplinkSmallRetainBackpressure(t *testing.T) {
-	for _, retain := range []int{0, 1, 2, 3, 5, 6, 7} {
-		t.Run(fmt.Sprint(retain), func(t *testing.T) {
-			data := store.New(retain)
-			u := newSimulationUplink(data, -1, func() float64 { return 0 })
-			limit := max(1, min(6, max(1, retain)-1))
-			for i := 0; i < limit; i++ {
-				items, _, _, _ := data.Snapshot()
-				if !u.canGenerate(items) {
-					t.Fatalf("blocked before pending cap: %d", i)
-				}
-				data.Add(&command.Item{ID: fmt.Sprint(i), KB: 32}, 0)
-			}
-			items, _, _, _ := data.Snapshot()
-			if u.canGenerate(items) {
-				t.Fatalf("admitted at pending cap %d", limit)
-			}
-			u.advance(20 * time.Second)
-			items, _, _, _ = data.Snapshot()
-			if !u.canGenerate(items) {
-				t.Fatal("did not resume after upload completion")
-			}
-			wantEvicted := ""
-			if retain <= 1 {
-				completed, _ := data.GetItem("0")
-				if !completed.Upload.Done {
-					t.Fatal("replacement would evict an unfinished upload")
-				}
-				wantEvicted = "0"
-			}
-			if _, evicted := data.Add(&command.Item{ID: "new", KB: 32}, 0); evicted != wantEvicted {
-				t.Fatalf("unexpected eviction: %s", evicted)
-			}
-			for i := 1; i < limit; i++ {
-				if _, ok := data.GetItem(fmt.Sprint(i)); !ok {
-					t.Fatalf("pending upload %d was evicted", i)
-				}
-			}
-		})
-	}
-}
 
 func TestSimulationUplinkUsesCurrentBandwidthAndOutages(t *testing.T) {
 	data := store.New(1)

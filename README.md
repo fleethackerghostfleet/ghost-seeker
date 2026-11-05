@@ -413,20 +413,11 @@ Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for 
 
 ### Synthetic simulation uplink
 
-Without `-shore` or `-dataset`, the Imagery Feed uses a slower shared upload
-budget: a normal distribution centered on **16 kbps**, standard deviation about
-9.73 kbps, clipped to 0–100 kbps and resampled every five seconds. About 5% of
-intervals are outages. The synthetic 18–45 KiB images take roughly 10–24 seconds
-of uninterrupted airtime near the mean rate; queueing, priority and outages can
-extend elapsed time. Upload chips report the applied slow rate.
-
-Historical backfill starts uploaded. At six outstanding uploads (or `retain-1`,
-whichever is smaller) the automatic
-sim pauses new frame generation until an upload finishes, keeping a visible
-shared queue without unbounded growth (including during outages or holds).
-`-sim-link-bps N` still selects a fixed bits/second rate (`0` means outage),
-without this automatic admission limit. The live TCP shaper described above
-remains centered on 8 Mbps; dataset replay is unchanged.
+Without `-shore` or `-dataset`, the Imagery Feed's automatic simulation link
+uses the shared normal distribution from `shaper.NewNormal`, resampled every
+five seconds with outages. Historical backfill starts uploaded.
+`-sim-link-bps N` fixes the rate in bits/second (`0` means outage); for example,
+`-sim-link-bps 2000000` can build a visible upload queue. Dataset replay is unchanged.
 
 ## Status / not done
 
