@@ -124,7 +124,7 @@ be set independently. To make room, the edge evicts **only fully delivered**
 items: manifest ACKed and **every stored form** ready, complete, and ACKed through
 its full byte length. A delivered FACT does not make an undelivered FULL safe.
 Eviction order is lowest persisted scheduler priority first, then oldest capture
-time (ingest sequence breaks ties). Active pull state and persistent local pins
+time (ingest sequence breaks ties). Pending shipboard corrections, active pull state, and persistent local pins
 (`edge/store.SetPinned`) protect items; pins are not a new console/proto API.
 
 Eviction removes the local item and its blobs, not shore's received copies.
@@ -144,6 +144,8 @@ existing oversized protected backlog is retained and drains normally; caps are
 rechecked after ACKs and downlink pulls are applied. A capture larger than the
 byte cap cannot fit: raise the cap or change intake, rather than dropping it.
 Growing an existing form is also checked before writing it.
+Sighting form updates wait/retry just like new-item intake. A downlinked
+correction blocked by the cap leaves the downlink cursor unchanged for retry.
 
 `GetStatusResponse.items_evicted` reports cumulative evictions. The live-shore
 operator app displays it alongside the existing edge queue status.

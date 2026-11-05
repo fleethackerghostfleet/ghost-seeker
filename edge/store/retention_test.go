@@ -355,3 +355,38 @@ func TestConcurrentAdmissionStaysUnderCap(t *testing.T) {
 		t.Fatal(len(rows))
 	}
 }
+
+func TestPendingCorrectionSurvivesRestartAndCaps(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	putTest(t, s, "corrected", 0, 1, true)
+	putTest(t, s, "safe", 10, 2, true)
+	o := &pb.LabelOverride{ItemId: "corrected", Label: "boat", By: "ops"}
+	if err := s.QueueOverride(ctx, o); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.SetLimits(ctx, Limits{MaxItems: 1}); err != nil {
+		t.Fatal(err)
+	}
+	hasTest(t, s, "corrected", true)
+	hasTest(t, s, "safe", false)
+	if _, err := s.Put(ctx, &pb.Item{Id: "new"}, nil); !errors.Is(err, ErrFull) {
+		t.Fatalf("pending correction not protected: %v", err)
+	}
+	if err := s.ClearOverrides(ctx, []*pb.LabelOverride{o}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Put(ctx, &pb.Item{Id: "new"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	hasTest(t, s, "corrected", false)
+}

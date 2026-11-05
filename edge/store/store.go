@@ -563,6 +563,8 @@ func (s *Store) SetCursor(ctx context.Context, v int64) error {
 
 // QueueOverride records a shipboard label correction to be uplinked.
 func (s *Store) QueueOverride(ctx context.Context, o *pb.LabelOverride) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	cur, err := s.PendingOverrides(ctx)
 	if err != nil {
 		return err
@@ -593,6 +595,8 @@ func (s *Store) PendingOverrides(ctx context.Context) ([]*pb.LabelOverride, erro
 // ClearOverrides drops the given overrides once shore has taken them.
 // A newer correction for the same item queued meanwhile is kept.
 func (s *Store) ClearOverrides(ctx context.Context, sent []*pb.LabelOverride) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	cur, err := s.PendingOverrides(ctx)
 	if err != nil {
 		return err

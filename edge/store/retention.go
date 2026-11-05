@@ -75,6 +75,14 @@ func (s *Store) makeRoom(ctx context.Context, extraBytes, extraItems int64, prot
 	if !over() {
 		return nil
 	}
+	corrections, err := s.PendingOverrides(ctx)
+	if err != nil {
+		return err
+	}
+	pending := make(map[string]bool, len(corrections))
+	for _, o := range corrections {
+		pending[o.ItemId] = true
+	}
 	// Both the manifest and every form must be fully acknowledged. A completed
 	// FACT alone is not delivery; not-ready forms also protect the item.
 	q, err := s.db.QueryContext(ctx, `SELECT i.id, (SELECT COALESCE(SUM(bytes),0) FROM forms WHERE item_id=i.id), i.priority
@@ -104,6 +112,9 @@ ORDER BY i.priority ASC, i.captured_at ASC, i.ingest_seq ASC, i.id ASC`, protect
 	for _, e := range candidates {
 		if !over() {
 			break
+		}
+		if pending[e.id] {
+			continue
 		}
 		selected = append(selected, e)
 		bytes -= e.bytes
