@@ -20,7 +20,10 @@ func validateAuthMode(mode, cert, key, ca, crls, users string) error {
 	}
 	return nil
 }
-func validateReviewLinkAuthMode(mode, keyFile string) error {
+func validateReviewLinkAuthMode(mode, keyFile, shoreURL string) error {
+	if keyFile != "" && shoreURL != "" {
+		return fmt.Errorf("-review-link-key-file is supported only in simulation/dataset mode, not with -shore")
+	}
 	if mode == "piv" && keyFile != "" {
 		return fmt.Errorf("-review-link-key-file is incompatible with -auth-mode piv")
 	}

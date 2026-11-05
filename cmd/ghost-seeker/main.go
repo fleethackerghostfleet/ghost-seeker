@@ -85,7 +85,7 @@ func main() {
 	if math.IsNaN(*negativesRate) || *negativesRate < 0 || *negativesRate > 1 {
 		log.Fatal("-negatives-rate must be in [0,1]")
 	}
-	if err := validateReviewLinkAuthMode(*authMode, *reviewLinkKeyFile); err != nil {
+	if err := validateReviewLinkAuthMode(*authMode, *reviewLinkKeyFile, *shoreURL); err != nil {
 		log.Fatal(err)
 	}
 	reviewLogSet := false
