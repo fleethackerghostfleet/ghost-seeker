@@ -482,7 +482,7 @@ class Audit:
                         if len(values) < 8 or not all(math.isfinite(v) for v in values):
                             raise ValueError("invalid MOT fields")
                         frame = int(values[0])
-                        if values[0] != frame or frame not in frame_numbers:
+                        if frame < 1 or values[0] != frame or frame not in frame_numbers:
                             self.issue("mot_frame_out_of_range", f"{key}:{i}")
                             self.change("mot_annotation", f"{key}:{i}", line, None, "quarantine_missing_frame")
                             continue

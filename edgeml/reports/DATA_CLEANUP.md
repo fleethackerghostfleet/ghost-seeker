@@ -1,4 +1,4 @@
-# Data cleanup — measured audit and non-destructive clean v1
+# Data cleanup — measured audit and non-destructive clean catalog v2
 
 ## Verdict
 
@@ -6,11 +6,12 @@ Original GCS objects, original BigQuery tables, and the six Git LFS archives wer
 
 ## Published outputs
 
-- GCS: `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/clean/v1/data-quality-20261104-final/` — 13593 objects, 2737981824 bytes (publication receipt).
-- BigQuery: `qwiklabs-gcp-02-34a870014566.ghost_fleet.images_clean_v1` (49,708 rows), `annotations_clean_v1` (121,458), `datasets_clean_v1` (32).
+- GCS: `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/clean/v1/data-quality-20261105-reviewed/` — 13593 objects, 2738419289 bytes (publication receipt).
+- BigQuery: `qwiklabs-gcp-02-34a870014566.ghost_fleet.images_clean_v2` (49,717 rows), `annotations_clean_v2` (121,467), `datasets_clean_v2` (32).
+- Reviewed publication receipt: `publication.json`; independent query result: `verification.json`, both in the main reviewed prefix.
 - Independent `bq query` verification: **0 orphan annotations; 0 SHA-256 hashes spanning dev and test** in the clean image table.
 - Supplemental raw audit: `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/clean/v1/raw-audit-20261104/`.
-- Original generation/checksum inventory, publication receipts and BigQuery integrity-query result: `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/clean/v1/inventory-20261104/`.
+- Original generation/checksum inventory and earlier publication receipts: `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/clean/v1/inventory-20261104/`.
 - Each prefix contains `audit.json`, `issues.jsonl`, `changes.jsonl`, `frames.jsonl`, `selection.jsonl` and the input split policy. Main prefix also contains corrected MOT GT, clean catalog JSONL and reconstructed SMD JPEGs.
 - Non-SMD clean image URIs deliberately reference immutable originals; this is a clean catalog/selection overlay, not a second complete physical image corpus. Use `eval_split` and selection status, not upstream split alone.
 
@@ -27,7 +28,7 @@ Measured by `inventory_gcs.py` and `validate_data.py`. Byte sizes are exact, not
 | archive:Dolphins_Pungo_Ferry_Bridge_frames.zip | 238577 | 5 | — | see source manifest; unknown is not permission |
 | archive:SMD_VIS_Onboard_frames.zip | 14699611 | 80 | — | see source manifest; unknown is not permission |
 | synthetic | 3511009 | 48 | 121 | synthetic; per-image licence/source absent |
-| seaships7000 | 1240509199 | 6979 | 9198 | unknown |
+| seaships7000 | 1242753744 | 6987 | 9207 | unknown |
 | singapore_maritime | 2282514973 | 13410 | 112118 | unknown |
 | smd_vis_onboard_sample | 14852487 | 80 | 142 | unknown (academic research use) |
 | video_30_days_at_sea_timelapse | 78283528 | 644 | 0 | unknown |
@@ -52,7 +53,7 @@ Measured by `inventory_gcs.py` and `validate_data.py`. Byte sizes are exact, not
 | video_ship_crossing_mariana_trench | 1661515 | 13 | 0 | Standard YouTube license (no license stated); internal use only |
 | video_ship_in_the_distance_ian | 3932012 | 32 | 0 | Standard YouTube license (no license stated); internal use only |
 | video_ship_in_the_distance_utopia_of_the_seas | 1858301 | 15 | 0 | Standard YouTube license (no license stated); internal use only |
-| video_spotted_a_submarine | 7202070 | 145 | 0 | Standard YouTube license (no license stated); internal use only |
+| video_spotted_a_submarine | 7223289 | 146 | 0 | Standard YouTube license (no license stated); internal use only |
 | video_submarine_surfacing | 5960928 | 74 | 0 | Standard YouTube license (no license stated); internal use only |
 | video_sunrise_somewhere_in_the_ocean | 7531175 | 40 | 0 | Standard YouTube license (no license stated); internal use only |
 | video_tarpon_offshore | 10298220 | 40 | 0 | Facebook video by Chase N Fish Charters; no redistribution license stated; internal use only |
@@ -119,18 +120,19 @@ The validator read 28 QA index sequences and 19 QA YAML files. MOT rows below ar
 
 ## Main issue counts
 
-Counts come from `clean-v2/audit.json`. Reasons overlap; candidate counts are frames flagged, not exhaustive pair counts. Black frames are also counted as blank. An absent issue key means zero observed, not proof about unscanned inputs.
+Counts come from `clean-v3/audit.json`. Reasons overlap; candidate counts are frames flagged, not exhaustive pair counts. Black frames are also counted as blank. An absent issue key means zero observed, not proof about unscanned inputs.
 
 | Reason | Count |
 |---|---:|
 | black_frame | 25 |
 | blank_frame | 25 |
-| clip_bounds | 7789 |
+| clip_bounds | 7791 |
 | dev_exact_content_leak | 5 |
 | exact_content_cross_split | 5 |
 | exact_copy_across_artifacts | 15449 |
-| exact_duplicate_within_dataset | 235 |
-| label_norm_mismatch | 121418 |
+| exact_duplicate_locked_test | 35 |
+| exact_duplicate_within_dataset | 200 |
+| label_norm_mismatch | 121427 |
 | missing_license | 6 |
 | missing_sequence_source | 10 |
 | missing_sequence_source_url | 10 |
@@ -138,7 +140,7 @@ Counts come from `clean-v2/audit.json`. Reasons overlap; candidate counts are fr
 | mot_clip_bounds | 410 |
 | near_content_cross_split_candidate | 3689 |
 | near_duplicate_candidate | 58631 |
-| orphan_or_quarantined_annotation | 23 |
+| orphan_or_quarantined_annotation | 14 |
 | qa_split_mismatch | 1 |
 | scenario_input_not_local | 4 |
 | scenario_mixed_case_keys | 3 |
@@ -150,11 +152,11 @@ Counts come from `clean-v2/audit.json`. Reasons overlap; candidate counts are fr
 
 - **Singapore mis-join:** raw image_id restarts per video. Original catalog had 1,981 images; source Parquet has 13,410 paths and 112,118 annotations. Rebuilt IDs use `singapore_maritime/<image.path>` and annotations follow that path. All 36 videos cross upstream train/validation/test, so all 13,410 rebuilt images have `eval_split=quarantine`.
 - **Leakage:** all 185 dev FVessel clip05 frames exactly match held-out clip07. Clip05 is quarantined in policy and clean selection; locked test is not moved. Five SeaShips dev records matching test content are excluded from the clean catalog. Source-video aliases prevent segmented/1-fps/5-fps names from defaulting to conflicting splits.
-- **Boxes:** 7,789 catalog box-bound corrections and 410 MOT bound corrections; invalid/orphan annotations are excluded with reasons. 23 orphan/quarantined annotations are absent from the clean annotation table. Structured horizon metadata is retained, not forced into a box.
-- **Classes:** recomputed 121,418 inconsistent normalized labels using the repository vessel/buoy/object taxonomy; preserved native labels. Added observed boat/aircraft/drone/shark-fin synonyms, plus IR liner.
-- **Duplicates:** exact within-dataset duplicates and blank/black images are quarantined through the selection manifest; exact copies across distinct artifacts are reported, not universally discarded. Near-duplicates use 63-bit DCT pHash, Hamming radius 4, and are **review only**. Blank means grayscale std <1; black means grayscale 99th percentile <=3.
+- **Boxes:** 7,791 catalog box-bound corrections and 410 MOT bound corrections; invalid/orphan annotations are excluded with reasons. 14 orphan/quarantined annotations are absent from the clean annotation table. Structured horizon metadata is retained, not forced into a box.
+- **Classes:** recomputed 121,427 inconsistent normalized labels using the repository vessel/buoy/object taxonomy; preserved native labels. Added observed boat/aircraft/drone/shark-fin synonyms, plus IR liner.
+- **Duplicates:** exact within-dataset duplicates and blank/black images are quarantined through the selection manifest; locked-test duplicates are explicitly preserved. Exact copies across distinct artifacts are reported, not universally discarded. Near-duplicates use 63-bit DCT pHash, Hamming radius 4, and are **review only**. Blank means grayscale std <1; black means grayscale 99th percentile <=3.
 - **Metadata:** corrected source/split metadata only where source identity is supported. Missing license/source/sequence metadata is logged; no license or camera calibration is invented. The clean loader honors explicit eval_split and rejects a mixed legacy/clean split schema.
-- Main change log: **358,955** before/after records or selection decisions, with reasons. Published catalog substitutions also record original image URIs. Publication uses generation-match-zero uploads and WRITE_EMPTY new BigQuery tables; destination collisions fail closed.
+- Main change log: **358,950** before/after records or selection decisions, with reasons. Published catalog substitutions also record original image URIs. Publication uses generation-match-zero uploads and WRITE_EMPTY new BigQuery tables; destination collisions fail closed.
 
 ## Supplemental raw audit / remaining issues
 
@@ -172,7 +174,7 @@ All 8,402 IR XML files declare filenames different from their own stem. This may
 
 Remaining: resolve unknown/restricted licenses (including all 48 synthetic per-image records), missing source URLs and seqinfo fields; reconcile the one original QA split mismatch with quarantine; review pHash candidates; establish disjoint source-video splits for SMD/IR before evaluation; inspect raw CSV/YOLO annotation semantics; decode remaining GCS archives/videos if full media certification is required. Do not redistribute unknown-license assets. Do not use original mis-joined SMD tables for evaluation.
 
-An earlier interrupted publication may leave artifacts under another clean-only prefix; it is not authoritative. Use only the published destinations above. Original `catalog/` and BigQuery `images/annotations/datasets` were not replaced.
+Superseded outputs: `clean/v1/data-quality-20261104-final/` and BigQuery `*_clean_v1` contain the pre-review duplicate-selection bug; do not use them. They are retained, not overwritten. The reviewed rerun restored 203 locked-test selection records and nine locked-test catalog images (and their nine annotations). All 670 clip07 frames now avoid quarantine. The validator also now drops/logs MOT references absent from actual frame filenames, including gaps and fractional IDs; no such input GT rows occurred in this measured rerun. An earlier interrupted clean-only publication is also not authoritative. Use only the published destinations above. Original `catalog/` and BigQuery `images/annotations/datasets` were not replaced.
 
 The prototype is synthetic/unclassified. Public dataset READMEs (notably IR) describe captured imagery, so not every input pixel is synthetic. These data checks make no operational accuracy claim.
 
@@ -197,20 +199,20 @@ python -m compileall -q edgeml/tools
 git diff --check
 ```
 
-Executed verification: Go build/vet/tests passed; JavaScript 20 tests passed; Python 50 tests passed; compileall and whitespace checks passed. Go executable was installed at /home/ubuntu/go/bin and added to PATH; the requested Node executable was used. Python editable test/audit installation succeeded. The unit tests include SMD identity, duplicate/split quarantine, bounds, explicit clean split behavior and fail-closed output creation. No model tuning or locked-test accuracy evaluation was performed.
+Executed verification: Go build/vet/tests passed; JavaScript 20 tests passed; Python 57 tests passed; compileall and whitespace checks passed. Go executable was installed at /home/ubuntu/go/bin and added to PATH; the requested Node executable was used. Python editable test/audit installation succeeded. The unit tests include SMD identity, duplicate/split quarantine, bounds, explicit clean split behavior and fail-closed output creation. No model tuning or locked-test accuracy evaluation was performed.
 
-Independent BigQuery integrity query (executed with `bq query --use_legacy_sql=false --format=json`; result retained in the inventory prefix):
+Independent BigQuery integrity query (executed with `bq query --use_legacy_sql=false --format=json`; result retained as verification.json in the reviewed prefix):
 
 ```sql
 SELECT
-  (SELECT COUNT(*) FROM ghost_fleet.images_clean_v1) AS images,
-  (SELECT COUNT(*) FROM ghost_fleet.annotations_clean_v1) AS annotations,
-  (SELECT COUNT(*) FROM ghost_fleet.datasets_clean_v1) AS datasets,
-  (SELECT COUNT(*) FROM ghost_fleet.annotations_clean_v1 a
-   LEFT JOIN ghost_fleet.images_clean_v1 i USING(dataset_id,image_id)
+  (SELECT COUNT(*) FROM ghost_fleet.images_clean_v2) AS images,
+  (SELECT COUNT(*) FROM ghost_fleet.annotations_clean_v2) AS annotations,
+  (SELECT COUNT(*) FROM ghost_fleet.datasets_clean_v2) AS datasets,
+  (SELECT COUNT(*) FROM ghost_fleet.annotations_clean_v2 a
+   LEFT JOIN ghost_fleet.images_clean_v2 i USING(dataset_id,image_id)
    WHERE i.image_id IS NULL) AS orphans,
   (SELECT COUNT(*) FROM (
-    SELECT sha256 FROM ghost_fleet.images_clean_v1
+    SELECT sha256 FROM ghost_fleet.images_clean_v2
     WHERE eval_split IN ('dev','test') GROUP BY sha256
     HAVING COUNT(DISTINCT eval_split)>1)) AS exact_cross_split
 ```
