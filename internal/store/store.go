@@ -311,6 +311,7 @@ func (s *Store) RequestFullRes(id, by string) (command.Item, int, error) {
 			item.FullRes, item.FullResBy, item.FullResAt = true, string(r), &now
 			item.Upload.Bytes = max(item.Upload.Bytes*16, 4*1024*1024)
 			item.Upload.Sent = 0
+			item.Upload.Received = item.Upload.Received || item.Upload.Done
 			item.Upload.Done = false
 		}
 		return cloneItem(*item), s.cdr, nil

@@ -89,6 +89,30 @@ func TestUploadEvictionAndFullSize(t *testing.T) {
 	}
 }
 
+func TestFullSizeTransferPreservesEarlierShoreReceipt(t *testing.T) {
+	for _, received := range []bool{false, true} {
+		s := New(1)
+		s.Add(&command.Item{ID: "image", KB: 1}, 0)
+		if received {
+			s.AdvanceUploads(time.Second)
+		}
+		item, _, err := s.RequestFullRes("image", "operator")
+		if err != nil || item.Upload.Received != received || item.Upload.Done {
+			t.Fatalf("receipt before transfer %v: %+v %v", received, item.Upload, err)
+		}
+		s.AdvanceUploads(time.Second)
+		snapshot, _, _, _ := s.Snapshot()
+		if snapshot[0].Upload.Received != received || snapshot[0].Upload.Done {
+			t.Fatalf("receipt during transfer %v: %+v", received, snapshot[0].Upload)
+		}
+		s.AdvanceUploads(time.Hour)
+		item, _ = s.GetItem("image")
+		if !item.Upload.Received || !item.Upload.Done {
+			t.Fatalf("full-size receipt: %+v", item.Upload)
+		}
+	}
+}
+
 func TestUploadStatisticsCountTransferredBytesAndShipStorage(t *testing.T) {
 	s := New(1)
 	s.SetLinkBPS(0)

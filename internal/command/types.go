@@ -129,6 +129,7 @@ type Upload struct {
 	Bytes      int64      `json:"bytes"`
 	Sent       int64      `json:"sent"`
 	Done       bool       `json:"done"`
+	Received   bool       `json:"received,omitempty"`
 	BPS        int64      `json:"bps"`
 }
 

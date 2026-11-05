@@ -118,3 +118,21 @@ test('received report moves through pending and decided without changing receipt
  assert.match(elements.get('brief').innerHTML,/Commander/);
  assert.match(elements.get('brief').innerHTML,/Track/);
 });
+
+test('full-size transfer preserves previous receipts and decisions across snapshots',()=>{
+ const {elements,context}=setup();
+ context.rows=['awareness','pending','decided'].map((id,i)=>({
+  id,src:'BY-12',ts:new Date(),tier:2,central:.7,edge:.6,dets:[],det:[],
+  sent:i>0,sentAt:i>0?new Date():null,decision:i===2?'track':null,decidedAt:i===2?new Date():null,
+  fullRes:true,upload:{done:false,sent:100,received:true},
+ }));
+ vm.runInContext('items=new Map();rows.forEach(upsert);renderKpis();view.sel="decided";renderStage()',context);
+ assert.equal(elements.get('kReceived').textContent,3);
+ assert.equal(elements.get('kPend').textContent,1);
+ assert.equal(elements.get('kDone').textContent,1);
+ assert.match(elements.get('stage').innerHTML,/Image received · full-size transfer pending/);
+ assert.match(elements.get('brief').innerHTML,/Track/);
+ context.unreceived={...context.rows[0],id:'unreceived',upload:{done:false,received:false}};
+ vm.runInContext('upsert(unreceived);renderKpis()',context);
+ assert.equal(elements.get('kReceived').textContent,3);
+});

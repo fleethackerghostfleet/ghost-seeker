@@ -106,6 +106,7 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 		budget -= n
 		u.Done = u.Sent == u.Bytes
 		if u.Done {
+			u.Received = true
 			u.Override = ""
 			u.NextOrder = 0
 		}

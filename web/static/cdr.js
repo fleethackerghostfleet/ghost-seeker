@@ -20,7 +20,7 @@ function norm(it){
  it.ts=new Date(it.ts);it.src=SRC[typeof it.src==='string'?it.src:it.src.id]||{id:String(it.src),name:String(it.src),scene:'open',mode:'eo'};
  it.sentAt=it.sentAt?new Date(it.sentAt):null;it.decidedAt=it.decidedAt?new Date(it.decidedAt):null;return it;
 }
-const onShore=it=>it.live?it.live.event!=='scene'&&Object.values(it.live.forms||{}).some(f=>f.state==='received'):!!it.upload?.done;
+const onShore=it=>it.live?it.live.event!=='scene'&&Object.values(it.live.forms||{}).some(f=>f.state==='received'):!!(it.upload?.received||it.upload?.done);
 const awaiting=it=>onShore(it)&&it.sent&&!it.decision;
 function upsert(raw){
  const it=norm(raw),had=items.get(it.id);
@@ -32,7 +32,7 @@ const pending=()=>[...items.values()].filter(awaiting).sort((a,b)=>a.tier-b.tier
 const received=()=>[...items.values()].filter(onShore).sort((a,b)=>b.ts-a.ts);
 const decided=()=>[...items.values()].filter(i=>i.decision).sort((a,b)=>b.decidedAt-a.decidedAt);
 const list=()=>view.tab==='received'?received():view.tab==='pending'?pending():decided();
-const receipt=it=>it.live?it.live.imageForm?'Image received':'Summary only · image not received':'Image received';
+const receipt=it=>it.live?it.live.imageForm?'Image received':'Summary only · image not received':it.fullRes&&!it.upload?.done?'Image received · full-size transfer pending':'Image received';
 const reportStatus=it=>it.decision?DEC[it.decision].lab:it.sent?'Awaiting command decision':it.reviewed?'Reviewed on watch floor':'Not yet reviewed on watch floor';
 function ensureSel(){if(!items.has(view.sel)||!list().some(i=>i.id===view.sel))view.sel=list()[0]?.id||null}
 
