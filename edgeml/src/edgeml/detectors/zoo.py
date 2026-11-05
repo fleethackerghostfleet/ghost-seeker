@@ -11,6 +11,8 @@ from .labels import MARITIME_PROMPTS
 _REG: dict[str, Callable] = {}
 #: dataset_ids a model must NOT be scored on (trained on them)
 EXCLUDE: dict[str, set[str]] = {}
+#: dataset_ids whose DEV split a model trained on (the locked test split is still fair game)
+EXCLUDE_DEV: dict[str, set[str]] = {}
 TIER: dict[str, str] = {}
 
 
@@ -39,6 +41,7 @@ def register_extra(spec: str | None = None) -> list[str]:
         name, _, path = item.partition("=")
         if path:
             _reg(name, "finetune")(_ul(path, name, training="SeaShips-train+FVessel-dev+GF-dev (G)"))
+            EXCLUDE_DEV[name] = {"seaships7000"}  # trained on SeaShips train+valid = the whole SeaShips dev eval set
             added.append(name)
     return added
 

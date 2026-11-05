@@ -16,7 +16,7 @@ alternates and the tooling are kept as opt-in artifacts (§7) and the failure an
 | SeaShips `train` + `valid` (catalog `seaships7000`, 1 750 + 1 750 img) | training (`train`) / YOLO val (`valid`) | upstream `test` (3 500 img) LOCKED, never read |
 | FVessel dev clips 01–06, 08, 10 (`edgeml/eval/fvessel_clip10`) | training (01–06), YOLO val holdout (08, 10) | `fvessel_clip07/09` LOCKED |
 | Ghost-Fleet 5 fps dev clips with complete/partial GT (vessel classes only) | training; holdout `Submarine_surfacing`, `Ship_in_the_Distance_Utopia_of_the_Seas` → YOLO val | `Chase_N_Fish_Sharky` (incomplete GT) skipped; all `splits.yaml` test clips incl. `Spotted_A_Submarine` LOCKED |
-| Singapore Maritime onshore `train` + `validation` (v2 only) | training / YOLO val | `test` split + `smd_vis_onboard_sample` MVI_0797/0801 LOCKED |
+| Singapore Maritime onshore `train` + `validation` (v2 only) | training / YOLO val — **caveat:** SMD's 36 source videos cross the upstream splits (the clean catalog quarantines them, `DATA_CLEANUP.md`), so the SMD part of v2's YOLO val and its "Singapore dev" AP50 are not recording-held-out; v2 is an ablation only and was never a candidate | `test` split + `smd_vis_onboard_sample` MVI_0797/0801 LOCKED |
 | INT8 calibration: 306 dev frames (SeaShips train, GF dev, FVessel dev) | NNCF PTQ | |
 | **Model selection / sweeps** | C sighting metrics + B AP50 on **dev** only (§4) | |
 | **Locked test** (`splits.yaml` test: GF test clips, `fvessel_clip07/09`, SeaShips test, SMD MVI_0797/0801) | evaluated **once**, §6 | |
@@ -71,14 +71,18 @@ Naive per-frame recall for ft-640 is 0.85 as well: the tracker no longer loses r
 
 ### 4b. B harness, class-agnostic AP50 (`bench_detectors.py --split dev`)
 
-| detector | SeaShips dev (valid, stride 5) | SMD onboard sample dev (MVI_0790/0799) | Singapore Maritime onshore dev |
+| detector | SeaShips dev (upstream train+valid, stride 5) | SMD onboard sample dev (MVI_0790/0799) | Singapore Maritime onshore dev |
 |---|---|---|---|
 | yolo11n COCO 640 | 0.452 | 0.639 | 0.067 |
-| yolo11n-ft-640 (v1) | 0.958 | 0.429 | 0.051 |
-| yolo11n-ft-960 | 0.969 (at 960) | — | 0.045 |
-| yolo11n-ft-640-v2 | 0.955 | 0.600 | 0.216 |
+| yolo11n-ft-640 (v1) | 0.958 † | 0.429 | 0.051 |
+| yolo11n-ft-960 | 0.969 † (at 960) | — | 0.045 |
+| yolo11n-ft-640-v2 | 0.955 † | 0.600 | 0.216 ‡ |
 
-SeaShips valid was the YOLO val set (dev, not trained on). The onboard-sample drop (40 images) is the one regression seen on dev and is why v2 adds the SMD onshore dev frames;
+† **Not a held-out number**: the harness's SeaShips dev set is upstream `train`+`valid`, i.e. exactly the fine-tunes' training + YOLO-val images, so these
+cells (and the recall-at-threshold figures derived from them) are inflated and were not used for selection; `register_extra` now marks fine-tunes with
+`EXCLUDE_DEV["seaships7000"]` so `bench_detectors.py --split dev` skips SeaShips for them (the locked SeaShips `test` in §6 is untouched and fair).
+‡ Singapore source videos cross the upstream splits, so v2 trained on recordings that also appear in this dev set (see §1).
+The onboard-sample drop (40 images) is the one regression seen on dev and is why v2 adds the SMD onshore dev frames;
 the onshore set (~57 boxes/image, many < 32²) is near-zero for every YOLO11n variant and is not a sidecar target.
 
 ## 5. Decision rule (fixed before the test run)
