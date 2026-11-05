@@ -233,7 +233,10 @@ test('feed filters default to showing duplicates, persist, validate, and return 
  settings.setFeed({review:'sent'});
  assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all'});
  assert.equal(saved().bar,'right');
- assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'sent');
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'all','a reload must not keep the main feed on sent-only');
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,false);
+ settings.setFeed({review:'unreviewed'});
+ assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
  settings.setFeed({showDuplicates:true,review:'bad'});
  assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
 });
@@ -241,6 +244,12 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  const stored=settingsContext('{}');
  stored.settings.setFeed({sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
  const reloaded=settingsContext(JSON.stringify(stored.saved()));
+ stored.settings.setFeed({review:'sent'});
+ const sentReload=settingsContext(JSON.stringify(stored.saved())).settings.get().feed;
+ assert.equal(sentReload.review,'all');
+ assert.equal(sentReload.sensor,'EO-P7');
+ assert.equal(sentReload.tier,'2');
+ assert.equal(sentReload.showDuplicates,false);
  assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
  const context=setup();context.gsSettings=reloaded.settings;
  vm.runInContext("SRC={ALL:{id:'ALL'},'EO-P7':{id:'EO-P7'}};closeDetail=()=>{};syncFeedFilters()",context);
@@ -300,6 +309,23 @@ test('feed shows every pipeline image by default with low-value, repeat and dire
  vm.runInContext("filters.showDuplicates=true;state.tier='4'",context);
  assert.equal(vm.runInContext('ids()',context),'repeat,directive,low');
  assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
+});
+test('main feed shows queued, uploading, held, unsent and uploaded images; a stale sent-only setting is cleared on reload',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('queued',{upload:{bytes:100,sent:0}}),frame('uploading',{upload:{bytes:100,sent:40}}),
+  frame('held',{upload:{bytes:100,sent:0,override:'hold'}}),frame('next',{upload:{bytes:100,sent:10,override:'next'}}),
+  frame('done',{upload:{bytes:100,sent:100,done:true}}),frame('cdr',{sent:true,upload:{bytes:100,sent:100,done:true}})]`,context);
+ const all='queued,uploading,held,next,done,cdr';
+ assert.deepEqual(vm.runInContext('ids()',context).split(',').sort(),all.split(',').sort());
+ vm.runInContext("items[1].upload={bytes:100,sent:100,done:true};items[0].upload={bytes:100,sent:60}",context);
+ assert.deepEqual(vm.runInContext('ids()',context).split(',').sort(),all.split(',').sort(),'upload progress/completion must not remove or duplicate images');
+ vm.runInContext("filters.review='sent'",context);
+ assert.equal(vm.runInContext('ids()',context),'cdr');
+ const {settings}=settingsContext(JSON.stringify({feed:{showDuplicates:true,review:'sent'}}));
+ vm.runInContext(`filters=${JSON.stringify(settings.get().feed)}`,context);
+ assert.deepEqual(vm.runInContext('ids()',context).split(',').sort(),all.split(',').sort());
+ assert.match(html,/id="sentShowAll"/);
+ assert.match(source,/\$\('sentShowAll'\)\.onclick=\(\)=>\{gsSettings\.setFeed\(\{review:'all'\}\)/);
 });
 test('feed interleaves sensors within a priority tier without changing priorities',()=>{
  const context=feedContext();
@@ -954,7 +980,9 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),ctx);
  vm.runInContext(src.slice(src.indexOf('function linkPanelHTML('),src.indexOf('const pulling=new Set();')),ctx);
  vm.runInContext('renderSimLink()',ctx);
- assert.match(el.innerHTML,/Ship-to-shore connection<\/span> <b>0.50 MB\/s<\/b>.*Simulated · changes every 5 s/);
+ assert.match(el.innerHTML,/Ship-to-shore connection<\/span> <b>0.50 MB\/s<\/b>$/);
+ assert.doesNotMatch(el.innerHTML,/every|hint/i);
+ assert.doesNotMatch(el.innerHTML,/simulated/i);
  assert.doesNotMatch(el.innerHTML,/estimat/i);
  assert.equal(el.classList.on.has('down'),false);
  vm.runInContext('stats.linkBps=0;renderSimLink()',ctx);

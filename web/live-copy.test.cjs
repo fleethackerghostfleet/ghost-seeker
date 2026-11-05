@@ -57,7 +57,8 @@ test('automatic bandwidth shows one applied rate, no estimator readout and no ma
  c.LIVE.edge.estimateBps=2000000;c.LIVE.edge.consecutiveFailures=2;
  vm.runInContext('renderLiveStrip()',c);
  let html=vm.runInContext("$('liveStrip').innerHTML",c);
- for(const text of ['Ship-to-shore connection</span> <b>12500000 bps</b>','Simulated · changes every 5 s','mean 4000000 bps','clipped to 0 bps–16000000 bps'])assert.ok(html.includes(text),text);
+ for(const text of ['Ship-to-shore connection</span> <b>12500000 bps</b></div>','mean 4000000 bps','clipped to 0 bps–16000000 bps'])assert.ok(html.includes(text),text);
+ assert.ok(!html.includes('Simulated · ')&&!html.includes('Changes every'),'no simulation or cadence note beside the rate');
  assert.doesNotMatch(html,/estimat|2000000 bps|linkPresets|data-bps|<button/);
  c.LIVE.link.bps=0;
  vm.runInContext('renderLiveStrip()',c);

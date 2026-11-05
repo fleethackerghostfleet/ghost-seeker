@@ -9,6 +9,8 @@ window.gsSettings=(()=>{
  const REVIEWS=['all','reviewed','sent','unreviewed'];
  const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:cleanFeed()});
  function cleanFeed(value){return {showDuplicates:value?.showDuplicates!==false,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all'}}
+ // "Sent by a person" is a temporary view; a reload must not leave the main feed stuck on it.
+ function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';return feed}
  const WIDTHS={controls:[240,480],drawer:[340,780],review:[260,600],priorities:[260,540],briefing:[240,480],commanderQueue:[240,480],commanderBrief:[280,540]};
  function cleanWidths(value){
   const result={};
@@ -21,7 +23,7 @@ window.gsSettings=(()=>{
  function load(){
   try{
    const v=JSON.parse(localStorage.getItem(KEY))||{};const d=defaults();
-   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:cleanFeed(v.feed)};
+   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:startFeed(v.feed)};
   }catch{return defaults()}
  }
  function save(){try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}}
