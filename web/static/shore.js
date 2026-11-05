@@ -225,7 +225,15 @@
     if (!text) return;
     try {
       const r = await post('/api/shore/policy', { text });
-      toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
+      const c = r.compiled;
+      // NL-compiler hook: readback + path ("llm"|"rules") + guardrail warnings.
+      if (c) {
+        $('#readback').textContent = `${c.readback} [${c.path}]${c.warnings.length ? ' — ' + c.warnings.join(' ') : ''}`;
+        toast(`policy set (${c.path}): ${c.readback}`);
+      } else {
+        $('#readback').textContent = '';
+        toast('policy set');
+      }
       $('#directive').value = '';
     } catch (err) { toast(err.message, true); }
   });

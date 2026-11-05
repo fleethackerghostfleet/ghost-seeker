@@ -45,8 +45,15 @@ func main() {
 	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
 	flag.Parse()
 
+	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
+	if *llmURL == "" {
+		log.Printf("NL compiler: rules parser (set GS_LLM_URL to enable LLM)")
+	} else {
+		log.Printf("NL compiler: local LLM at %s", *llmURL)
+	}
+
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler)
 		return
 	}
 
@@ -54,12 +61,7 @@ func main() {
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
 	app := server.New(data)
-	app.SetCompiler(&command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)})
-	if *llmURL == "" {
-		log.Printf("NL compiler: rules parser (set GS_LLM_URL to enable LLM)")
-	} else {
-		log.Printf("NL compiler: local LLM at %s", *llmURL)
-	}
+	app.SetCompiler(compiler)
 	go runSimulation(data, generator, app)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
@@ -121,7 +123,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -140,6 +142,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link)
+	bridge.Compiler = compiler
 	go bridge.Run(ctx, poll)
 
 	mux := http.NewServeMux()

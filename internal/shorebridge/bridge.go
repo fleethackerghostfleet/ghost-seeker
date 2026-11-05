@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 )
@@ -49,6 +50,10 @@ type Bridge struct {
 	shore, edge string
 	link        LinkControl
 	client      *http.Client
+	// Compiler, when set, turns a free-text directive into rules (local LLM
+	// with the rules parser as fallback) and gives the operator a readback;
+	// nil keeps the simple Interpret path.
+	Compiler *command.Compiler
 
 	mu      sync.Mutex
 	snap    []byte
@@ -698,7 +703,9 @@ type policyBody struct {
 }
 
 // setPolicy forwards an operator directive to shore. A free-text directive is
-// parsed with Interpret (e.g. "ignore cargo ships" -> suppress cargo ship).
+// compiled with the NL compiler when one is configured (readback, warnings and
+// path "llm"|"rules" are returned alongside the policy), otherwise parsed with
+// Interpret (e.g. "ignore cargo ships" -> suppress cargo ship).
 func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	var in policyBody
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
@@ -715,8 +722,23 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		in.IssuedBy = "operator-ui"
 	}
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	var compiled *command.Compiled
 	if len(in.Suppress) == 0 && len(in.Boost) == 0 && in.Text != "" {
-		pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
+		if b.Compiler != nil {
+			c := b.Compiler.Compile(r.Context(), in.Text)
+			if c.Blocked {
+				http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
+				return
+			}
+			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
+			if c.DurationMin > 0 {
+				pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+			}
+			compiled = &c
+		}
+		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
+			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
+		}
 	}
 	var out pb.SetPolicyResponse
 	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
@@ -725,8 +747,47 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raw, _ := protojson.Marshal(&out)
+	resp := struct {
+		Policy   json.RawMessage   `json:"policy"`
+		Compiled *command.Compiled `json:"compiled,omitempty"`
+	}{Policy: raw, Compiled: compiled}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(raw)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// rulesToLabels flattens compiled rules into the flat boost/suppress label
+// lists the edge scorer matches against (classes only; attributes have no
+// edge-side equivalent yet).
+func rulesToLabels(rules []command.Rule) (suppress, boost []string) {
+	seen := map[string]bool{}
+	for _, rule := range rules {
+		for _, class := range rule.Classes {
+			key := rule.Type + "/" + class
+			if class == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			switch rule.Type {
+			case "suppress":
+				suppress = append(suppress, class)
+			case "boost":
+				boost = append(boost, class)
+			}
+		}
+	}
+	return suppress, boost
+}
+
+func blockedMessage(c command.Compiled) string {
+	for _, warning := range c.Warnings {
+		if strings.HasPrefix(warning, "Blocked") {
+			return warning
+		}
+	}
+	if len(c.Warnings) > 0 {
+		return c.Warnings[0]
+	}
+	return "directive is blocked"
 }
 
 func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
