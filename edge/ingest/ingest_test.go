@@ -293,7 +293,7 @@ func TestReplaceKeyFrameClearsDarkContactTag(t *testing.T) {
 func TestReplayBurstShortensAndDecays(t *testing.T) {
 	clk := clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	replay := &Replay{clk: clk, period: 10 * time.Second,
-		queue: []*Capture{{Source: "cam-a"}, {Source: "cam-a"}, {Source: "cam-a"}, {Source: "cam-a"}, {Source: "cam-a"}}}
+		queue: []replayFrame{{Capture: Capture{Source: "cam-a"}}, {Capture: Capture{Source: "cam-a"}}, {Capture: Capture{Source: "cam-a"}}, {Capture: Capture{Source: "cam-a"}}, {Capture: Capture{Source: "cam-a"}}}}
 	if _, _, err := replay.Next(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func TestReplayBurstDoesNotShortenOtherSource(t *testing.T) {
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	clk := clock.NewVirtual(start)
 	replay := &Replay{clk: clk, period: 10 * time.Second,
-		queue: []*Capture{{Source: "cam-a"}, {Source: "cam-b"}, {Source: "cam-a"}}}
+		queue: []replayFrame{{Capture: Capture{Source: "cam-a"}}, {Capture: Capture{Source: "cam-b"}}, {Capture: Capture{Source: "cam-a"}}}}
 	if _, _, err := replay.Next(context.Background()); err != nil {
 		t.Fatal(err)
 	}
