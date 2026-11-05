@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -22,6 +23,8 @@ type Server struct {
 	hub   *hub
 	mux   *http.ServeMux
 }
+
+const maxStreamClients = 64
 
 func New(data *store.Store) *Server {
 	s := &Server{store: data, hub: newHub(), mux: http.NewServeMux()}
@@ -82,9 +85,13 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Connection", "keep-alive")
-	client := s.hub.add()
+	client, ok := s.hub.add()
+	if !ok {
+		http.Error(w, "too many stream clients", http.StatusServiceUnavailable)
+		return
+	}
 	defer s.hub.remove(client)
 	items, stats, cdr, state := s.store.Snapshot()
 	if !writeEvent(w, "snapshot", map[string]any{"state": state, "stats": stats, "cdr": cdr, "items": items, "weights": command.EffectiveWeights(state.Model, state.Directives)}) {
@@ -119,8 +126,9 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		Text  string          `json:"text"`
 		Rules *[]command.Rule `json:"rules"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	if utf8.RuneCountInString(body.Text) > 500 {
@@ -145,6 +153,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.publishSnapshot()
+	audit(r, "directive.add", "id", directive.ID, "text", directive.Text)
 	writeJSON(w, http.StatusCreated, directive)
 }
 
@@ -154,12 +163,14 @@ func (s *Server) deleteDirective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.publishSnapshot()
+	audit(r, "directive.delete", "id", r.PathValue("id"))
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) clearDirectives(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) clearDirectives(w http.ResponseWriter, r *http.Request) {
 	s.store.ClearDirectives()
 	s.publishSnapshot()
+	audit(r, "directive.clear")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -167,8 +178,9 @@ func (s *Server) setModel(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ID string `json:"id"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	if _, ok := catalog.Models[body.ID]; !ok {
@@ -177,6 +189,7 @@ func (s *Server) setModel(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.SetModel(body.ID)
 	s.publishSnapshot()
+	audit(r, "model.set", "id", body.ID)
 	writeJSON(w, http.StatusOK, map[string]string{"id": body.ID})
 }
 
@@ -187,8 +200,9 @@ func (s *Server) patchItem(w http.ResponseWriter, r *http.Request) {
 		Dismissed *bool `json:"dismissed"`
 		Sent      *bool `json:"sent"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	if body.Manual != nil && (*body.Manual < 0 || *body.Manual > 4) {
@@ -201,6 +215,20 @@ func (s *Server) patchItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.PublishUpdate(item, cdr)
+	args := []any{"id", item.ID}
+	if body.Manual != nil {
+		args = append(args, "manual", *body.Manual)
+	}
+	if body.Reviewed != nil {
+		args = append(args, "reviewed", *body.Reviewed)
+	}
+	if body.Dismissed != nil {
+		args = append(args, "dismissed", *body.Dismissed)
+	}
+	if body.Sent != nil {
+		args = append(args, "sent", *body.Sent)
+	}
+	audit(r, "item.patch", args...)
 	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 
@@ -209,8 +237,9 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		Decision string `json:"decision"`
 		Note     string `json:"note"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	item, cdr, err := s.store.Decide(r.PathValue("id"), body.Decision, body.Note)
@@ -226,6 +255,7 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.PublishUpdate(item, cdr)
+	audit(r, "item.decide", "id", item.ID, "decision", body.Decision, "note", body.Note)
 	writeJSON(w, http.StatusOK, map[string]any{"item": item, "cdr": cdr})
 }
 
@@ -245,6 +275,28 @@ func decodeJSON(reader io.Reader, dst any) error {
 		return fmt.Errorf("unexpected trailing JSON")
 	}
 	return nil
+}
+
+func writeRequestBodyError(w http.ResponseWriter, err error) {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		return
+	}
+	writeError(w, http.StatusBadRequest, "invalid JSON body")
+}
+
+// There is no authenticated identity yet, so the log records the source address only.
+func audit(r *http.Request, action string, args ...any) {
+	fields := make([]string, 0, (len(args)+1)/2)
+	for i := 0; i < len(args); i += 2 {
+		value := ""
+		if i+1 < len(args) {
+			value = fmt.Sprint(args[i+1])
+		}
+		fields = append(fields, fmt.Sprintf("%v=%q", args[i], value))
+	}
+	log.Printf("audit action=%q source=%q request=%s %q args=%s", action, r.RemoteAddr, r.Method, r.URL.Path, strings.Join(fields, " "))
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -284,12 +336,15 @@ func newHub() *hub {
 	return &hub{clients: make(map[*client]struct{})}
 }
 
-func (h *hub) add() *client {
+func (h *hub) add() (*client, bool) {
 	c := &client{events: make(chan event, 32)}
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.clients) >= maxStreamClients {
+		return nil, false
+	}
 	h.clients[c] = struct{}{}
-	h.mu.Unlock()
-	return c
+	return c, true
 }
 
 func (h *hub) remove(c *client) {

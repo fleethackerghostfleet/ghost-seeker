@@ -2,6 +2,7 @@ package command
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
@@ -28,22 +29,15 @@ func RuleMatch(r Rule, d Detection) bool {
 			attrMatch = attrMatch || d.Attrs.Moving
 		case "loitering":
 			attrMatch = attrMatch || d.Attrs.Loitering
+		case "transient":
+			attrMatch = attrMatch || d.Attrs.Transient
 		}
 	}
 	return classMatch && attrMatch
 }
 
-func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
-	cls := catalog.Classes[d.Class]
-	w := catalog.Models[model].W[d.Class]
-	if cls.Group == "vessel" || cls.Group == "aircraft" {
-		if d.Attrs.Approaching {
-			w = min(1, w*1.15)
-		}
-		if d.Attrs.Dark {
-			w = min(1, w*1.2)
-		}
-	}
+func ScoreDet(d Detection, rules []Rule, model string, opticalNight ...bool) DetectionScore {
+	w := ContactWeight(d, model)
 	boosts, only, matched, suppressed := 0, false, false, false
 	notes := make([]Rule, 0)
 	for _, r := range rules {
@@ -85,7 +79,59 @@ func ScoreDet(d Detection, rules []Rule, model string) DetectionScore {
 			w *= .6
 		}
 	}
-	return DetectionScore{Score: min(.99, w*d.Conf), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes}
+	signal := gateLightSignal(d.Lights, d.Box, d.Signal)
+	light := len(opticalNight) > 0 && opticalNight[0] && signal != nil && signal.Boost > 0
+	if light {
+		w = 1 - (1-w)*(1-min(1, max(0, signal.Boost)))
+	}
+	confidence := ConfFactor(d.Conf)
+	if d.Class == "unknown" {
+		// Classification confidence is not evidence that a persistent contact is noise.
+		confidence = 1
+	}
+	return DetectionScore{Score: min(.99, w*confidence), Matched: matched, Sup: suppressed, Focus: focus, Notes: notes, Light: light}
+}
+
+// ConfSat is the detector confidence treated as certain; lower confidences scale the score down linearly.
+var ConfSat = .7
+
+// CrowdShare is how much of the noisy-or of a frame's secondary contacts adds to its top contact.
+var CrowdShare = .1
+
+func ConfFactor(conf float64) float64 { return min(1, conf/ConfSat) }
+
+// ContactWeight is the model's class weight raised by the model's attribute lifts.
+func ContactWeight(d Detection, model string) float64 {
+	m := catalog.Models[model]
+	w := m.W[d.Class]
+	if d.Class == "unknown" && w > 0 {
+		if d.Attrs.Transient {
+			return .05
+		}
+		if d.Attrs.Approaching || d.Attrs.Dark {
+			return max(w, .9)
+		}
+		return w
+	}
+	if !slices.Contains(m.LiftGroups, catalog.Classes[d.Class].Group) {
+		return w
+	}
+	for attr, on := range map[string]bool{"approaching": d.Attrs.Approaching, "dark": d.Attrs.Dark, "loitering": d.Attrs.Loitering} {
+		if on {
+			w = 1 - (1-w)*(1-m.Lift[attr])
+		}
+	}
+	return w
+}
+
+// FrameScore is the top contact's score plus a damped noisy-or of the rest, so crowds of minor contacts do not stack into P1.
+func FrameScore(scores []float64) float64 {
+	if len(scores) == 0 {
+		return 0
+	}
+	sorted := slices.Sorted(slices.Values(scores))
+	top := sorted[len(sorted)-1]
+	return top + (1-top)*CrowdShare*NoisyOr(sorted[:len(sorted)-1])
 }
 
 func NoisyOr(scores []float64) float64 {
@@ -127,17 +173,36 @@ func RescoreAt(item *Item, model string, directives []Directive, now time.Time) 
 		}
 	}
 	item.Det = make([]DetectionScore, len(item.Dets))
+	eligible := OpticalNight(item)
+	if eligible {
+		for i := range item.Dets {
+			item.Dets[i].Signal = gateLightSignal(item.Dets[i].Lights, item.Dets[i].Box, item.Dets[i].Signal)
+		}
+	}
+	if !eligible {
+		for i := range item.Dets {
+			item.Dets[i].Lights = nil
+			item.Dets[i].Signal = nil
+		}
+		for _, source := range catalog.Sources {
+			if source.ID == item.SourceID && source.Mode == "sar" {
+				item.Night = nil
+				item.Basis = "not_applicable_radar"
+				item.Lum = 0
+			}
+		}
+	}
 	scores, baseScores := make([]float64, 0, len(item.Dets)), make([]float64, 0, len(item.Dets))
 	for i, detection := range item.Dets {
-		item.Det[i] = ScoreDet(detection, rules, model)
+		item.Det[i] = ScoreDet(detection, rules, model, eligible)
 		scores = append(scores, item.Det[i].Score)
-		baseScores = append(baseScores, ScoreDet(detection, nil, model).Score)
+		baseScores = append(baseScores, ScoreDet(detection, nil, model, eligible).Score)
 	}
-	item.Central = NoisyOr(scores)
+	item.Central = FrameScore(scores)
 	if len(rules) == 0 {
 		item.Base = item.Central
 	} else {
-		item.Base = NoisyOr(baseScores)
+		item.Base = FrameScore(baseScores)
 	}
 	item.BaseTier = TierFor(item.Base)
 	item.CentralTier = TierFor(item.Central)

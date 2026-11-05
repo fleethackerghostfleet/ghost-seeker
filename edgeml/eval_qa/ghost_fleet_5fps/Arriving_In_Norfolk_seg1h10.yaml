@@ -1,0 +1,17 @@
+reviewed: true
+drop: [5, 9, 12, 13, 15, 16]
+merge:
+  4: [6]
+add_tracks:
+  - {id: 4, cls: boat, keyframes: {125: [889.5, 591.8, 12.5, 10.5], 285: [884.4, 593.7, 15.1, 11.5]}}
+gt_status: complete
+notes: >-
+  Bow camera of a container ship inbound in Thimble Shoal channel (segment 01:10:00-01:13:00). Kept: 1 = red pilot/tug
+  boat ahead then passing to port (f1-466); 2 = outbound MSC container ship passing close to port (f1-634, leaves frame
+  left); 3 = distant low vessel/barge on the horizon to port (f1-195, ~36x10 px); 4 = tiny white vessel dead ahead on
+  the horizon (12-22 px); teacher fragments 4 (f3-124) and 6 (f286-900) are the same object at the same bearing, merged,
+  and the 160-frame gap (f125-285, object still visible on the full-frame crops) is filled by linear interpolation of the
+  two end boxes (vis=0.5 rows); 10 = tug pushing a barge, passing to port (f519-900); 11 = second tiny white vessel next to
+  4 (f559-629, ~13x9 px, low confidence but visible). Dropped: 5, 9, 12 = whole-frame boxes on own deck cargo (own-platform
+  FPs); 13 (barge part), 15 (tug part) and 16 (duplicate of 15) are the same tug+barge unit already tracked as 10.
+  Not labelled: gulls in the sky, the shoreline. Own-ship containers fill the lower third of every frame.

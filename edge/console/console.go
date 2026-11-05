@@ -15,6 +15,8 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 )
 
 type Service struct {
@@ -23,6 +25,8 @@ type Service struct {
 	St     *store.Store
 	Sch    *scheduler.Scheduler
 	Clk    clock.Clock
+	// Deduped reports captures folded into existing items (ingest.Ingester.Deduped); optional.
+	Deduped func() int64
 }
 
 func view(r *store.Row) *pb.ItemView {
@@ -145,6 +149,13 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 	st := s.Sch.Stats()
 	resp := &pb.GetStatusResponse{NodeId: s.NodeID, Role: "edge", Link: s.Sch.Link().State(), PolicyId: s.Sch.Policy().Id,
 		BytesSent: st.BytesPayload + st.BytesManifest, ItemsTotal: int64(len(rows))}
+	resp.ItemsEvicted, err = s.St.ItemsEvicted(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if s.Deduped != nil {
+		resp.ItemsDeduped = s.Deduped()
+	}
 	var queued, qb int64
 	for _, r := range rows {
 		if r.ManifestAcked {
@@ -154,8 +165,9 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 			resp.ItemsUnknown++
 		}
 		done := true
-		for _, f := range r.Forms {
-			if !f.Complete {
+		for i := range r.Forms {
+			f := &r.Forms[i]
+			if !f.Complete && !scheduler.PullOnly(r, f) {
 				done = false
 				queued++
 				qb += f.Bytes - f.AckedThrough
@@ -179,6 +191,10 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		if !ids.Valid(parts[0]) {
+			http.NotFound(w, r)
+			return
+		}
 		kind := parseForm(parts[1])
 		row, err := s.St.Get(r.Context(), parts[0])
 		if err != nil {
@@ -195,7 +211,9 @@ func (s *Service) BlobHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", f.Mime)
+		w.Header().Set("Content-Type", httpx.SafeBlobMime(f.Mime))
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Disposition", "inline")
 		_, _ = w.Write(data)
 	})
 }

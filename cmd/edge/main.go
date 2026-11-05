@@ -4,12 +4,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/scenario"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
 
 func main() {
@@ -35,21 +38,32 @@ func main() {
 	listen := flag.String("listen", env("LISTEN", ":8081"), "console listen address")
 	shoreURL := flag.String("shore", env("SHORE_URL", "http://localhost:8080"), "shore base URL (put Toxiproxy here to degrade)")
 	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference sidecar URL, or 'mock'")
+	sceneEvery := flag.Duration("scene-every", 60*time.Second, "sightings mode: store at most one object-free 'scene' frame (FACT+THUMB) per source per interval; 0 = one item per frame")
+	dedup := flag.String("dedup", env("DEDUP", "hash"), "naive (item per frame) | hash (exact-duplicate frames fold) | sightings (one item per object; needs a sidecar that returns sightings)")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	scen := flag.String("scenario", env("SCENARIO", ""), "scenario JSON to replay into the store (optional)")
 	frames := flag.String("frames", env("FRAMES_DIR", ""), "replay the built-in scenario from this frame dir (optional)")
 	period := flag.Duration("period", 5*time.Second, "capture period for replay")
 	tick := flag.Duration("tick", 3*time.Second, "scheduler tick")
 	initBps := flag.Float64("init-bps", 64000, "initial link estimate (bits/s)")
+	tokenFlag := flag.String("unit-token", env("GS_UNIT_TOKEN", ""), "unit JWT (prefer env or file)")
+	tokenFile := flag.String("unit-token-file", env("GS_UNIT_TOKEN_FILE", ""), "unit JWT file")
+	maxBytes := flag.Int64("max-bytes", envInt64("GS_EDGE_MAX_BYTES"), "edge payload byte cap (0 = unlimited)")
+	maxItems := flag.Int64("max-items", envInt64("GS_EDGE_MAX_ITEMS"), "edge item cap (0 = unlimited)")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
+	token, err := unitauth.Credential(*tokenFlag, *tokenFile)
+	fatal(err)
 
 	st, err := store.Open(*data)
 	fatal(err)
 	defer st.Close()
+	if err := st.SetLimits(context.Background(), store.Limits{MaxBytes: *maxBytes, MaxItems: *maxItems}); err != nil && !errors.Is(err, store.ErrFull) {
+		fatal(err)
+	}
 	clk := clock.Real{}
-	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9))
+	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9), token)
 	cfg := scheduler.DefaultConfig(*id)
 	cfg.Tick = *tick
 	sch, err := scheduler.New(cfg, st, lk, scoring.Default(), clk, log)
@@ -63,6 +77,10 @@ func main() {
 	}
 	icfg := ingest.DefaultConfig()
 	icfg.EdgeID = *id
+	icfg.WaitForSpace = true
+	icfg.Dedup, err = ingest.ParseDedup(*dedup)
+	fatal(err)
+	icfg.SceneEvery = *sceneEvery
 	ing := ingest.New(icfg, st, an, sch, clk, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -88,7 +106,7 @@ func main() {
 		}()
 	}
 
-	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk}
+	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped}
 	mux := http.NewServeMux()
 	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc)
 	mux.Handle(path, h)
@@ -120,4 +138,10 @@ func fatal(err error) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func envInt64(k string) int64 {
+	v, err := strconv.ParseInt(env(k, "0"), 10, 64)
+	fatal(err)
+	return v
 }

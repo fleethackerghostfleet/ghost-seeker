@@ -19,6 +19,7 @@ type genericPattern struct {
 }
 
 var synonymPatterns = []classPattern{
+	{"unknown", regexp.MustCompile(`\b((unknown|unidentified) (objects?|contacts?)|unclassified)\b`)},
 	{"warship", regexp.MustCompile(`\b(warships?|destroyers?|frigates?|cruisers?|corvettes?|combatants?|navy (ship|vessel)s?|naval (ship|vessel)s?|military (ship|vessel)s?|grey hulls?|gray hulls?)\b`)},
 	{"submarine", regexp.MustCompile(`\b(submarines?|subs?|periscopes?|submersibles?)\b`)},
 	{"tanker", regexp.MustCompile(`\b(tankers?|oilers?)\b`)},

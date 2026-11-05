@@ -6,6 +6,8 @@
 <title>Ghost Seeker · Edge-to-Command Imagery Prioritization</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/briefing.css">
+<link rel="stylesheet" href="/lights.css">
 </head>
 <body>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
@@ -37,6 +39,8 @@
     <div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button></div>
     <button class="btn sm" id="pauseBtn">Hold</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
+    <button class="btn sm" id="briefCreate" disabled>Create J2 brief (0)</button>
+    <a class="btn sm" href="#briefing">J2 briefing</a>
     <div class="spacer"></div>
     <div class="dirbar" id="dirBar"></div>
   </div>
@@ -110,12 +114,32 @@
   </div>
 </section>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
+<section class="page" id="pgBrief" aria-label="J2 briefing workspace">
+ <div class="toolbar"><div><b>J2 briefing studio</b><div class="hint">Local evidence snapshot · no changes to review or command decisions</div></div><div class="spacer"></div><a class="btn" href="#feed">Back to imagery</a><button class="btn" id="briefRebuild">New snapshot from selection</button><button class="btn" id="briefPDF">Print / Save PDF</button><button class="btn primary" id="briefPPTX">Export PowerPoint</button></div>
+ <div id="briefStatus" role="status" aria-live="polite"></div>
+ <div class="brief-workspace">
+  <aside class="brief-controls">
+   <h3>Selected observations <span id="briefCount">0</span></h3><p class="hint">Different observations may show the same ship. Remove duplicates before briefing.</p><div id="briefSelection"></div>
+   <button class="btn" id="briefClear">Clear selection</button>
+   <label for="briefTitle">Briefing title</label><input id="briefTitle" type="text" maxlength="90" value="Selected ships | Maritime intelligence">
+   <label for="briefLayout">Slide layout</label><select id="briefLayout"><option value="combined">Combined · up to 4 per slide</option><option value="individual">One slide per observation</option></select>
+   <label for="briefAssessment">Analyst assessment</label><textarea id="briefAssessment" rows="7" maxlength="500" placeholder="Enter your assessment. Model observations do not establish identity, affiliation or intent."></textarea>
+   <label for="briefGaps">Intelligence gaps</label><textarea id="briefGaps" rows="4" maxlength="220">Identity, affiliation and verified position / course / speed are unavailable. Corroboration required.</textarea>
+   <p class="hint">Draft is held in this browser tab only; reloading loses it. Export before closing. All outputs retain the training marking.</p>
+  </aside>
+  <main id="briefPreview" aria-label="Briefing slide previews"></main>
+ </div>
+</section>
 <div class="toast" id="toast"></div>
 <dialog id="settings" class="setdlg"></dialog>
 <script src="/settings.js" defer></script>
 <script src="/render.js" defer></script>
 <script src="/workbench.js" defer></script>
+<script src="/pptxgen.bundle.js" defer></script>
+<script src="/briefing-model.js" defer></script>
+<script src="/briefing.js" defer></script>
 <script src="/learn.js" defer></script>
+<script src="/lights.js" defer></script>
 <script src="/app.js" defer></script>
 </body>
 </html>

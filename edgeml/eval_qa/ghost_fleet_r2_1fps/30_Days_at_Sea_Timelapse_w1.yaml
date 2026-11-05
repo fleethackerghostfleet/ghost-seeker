@@ -1,0 +1,9 @@
+reviewed: false
+drop_boxes:
+- - 24
+  - 2
+notes: 'teacher labels; frame-sampled QA only; known FNs
+
+  QA f24 fail (fp): container box covers quay/cranes/water, not a distinct object
+  -> drop'
+gt_status: partial

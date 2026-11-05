@@ -1,0 +1,60 @@
+{
+  "dataset": "hard/test2",
+  "observations": "data/nightlights/reports/hard_test2_v2.json",
+  "command": "/home/ubuntu/nightlights-venv/bin/python edgeml/scripts/nightlights_boost_eval.py --split test2",
+  "protocol": "Exact colour-multiset coverage; zero white allowance. Signal-assisted distress exempt. Frozen detector observations; no detector rerun or threshold change.",
+  "metrics": {
+    "without_gate": {
+      "all": {
+        "contacts": 112,
+        "boosted": 34,
+        "false_boosts": 15,
+        "false_boost_rate": 0.4411764705882353,
+        "false_boost_per_contact": 0.13392857142857142,
+        "high_severity": 35,
+        "missed_boosts": 18,
+        "missed_boost_rate": 0.5142857142857142,
+        "missed_correct_boosts": 21,
+        "missed_correct_boost_rate": 0.6
+      },
+      "automatic": {
+        "contacts": 98,
+        "boosted": 20,
+        "false_boosts": 15,
+        "false_boost_rate": 0.75,
+        "false_boost_per_contact": 0.15306122448979592,
+        "high_severity": 21,
+        "missed_boosts": 18,
+        "missed_boost_rate": 0.8571428571428571,
+        "missed_correct_boosts": 21,
+        "missed_correct_boost_rate": 1.0
+      }
+    },
+    "with_gate": {
+      "all": {
+        "contacts": 112,
+        "boosted": 14,
+        "false_boosts": 0,
+        "false_boost_rate": 0.0,
+        "false_boost_per_contact": 0.0,
+        "high_severity": 35,
+        "missed_boosts": 21,
+        "missed_boost_rate": 0.6,
+        "missed_correct_boosts": 21,
+        "missed_correct_boost_rate": 0.6
+      },
+      "automatic": {
+        "contacts": 98,
+        "boosted": 0,
+        "false_boosts": 0,
+        "false_boost_rate": null,
+        "false_boost_per_contact": 0.0,
+        "high_severity": 21,
+        "missed_boosts": 21,
+        "missed_boost_rate": 1.0,
+        "missed_correct_boosts": 21,
+        "missed_correct_boost_rate": 1.0
+      }
+    }
+  }
+}

@@ -78,6 +78,80 @@ make compose                       # shore, toxiproxy, edge
 deploy/compose/degrade.sh satcom   # 64 kbps / 600 ms; also trickle | starlink | down | up
 ```
 
+## Configuration: unit sync authentication and edge storage caps
+
+Both features are opt-in. Defaults preserve existing compose/simulator behavior:
+sync auth is off, and edge storage is unlimited (no age/staleness deletion).
+
+| Process | Flag | Environment | Default |
+|---|---|---|---|
+| shore | `-require-auth` | `GS_REQUIRE_AUTH` | `false` |
+| shore / mint tool | `-signing-key` | `GS_SIGNING_KEY` | unset |
+| shore / mint tool | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset |
+| edge | `-unit-token` | `GS_UNIT_TOKEN` | unset |
+| edge | `-unit-token-file` | `GS_UNIT_TOKEN_FILE` | unset |
+| edge | `-max-bytes` | `GS_EDGE_MAX_BYTES` | `0` (unlimited) |
+| edge | `-max-items` | `GS_EDGE_MAX_ITEMS` | `0` (unlimited) |
+
+File credentials take precedence over literal/env credentials. Shore requires a
+non-default signing key of at least 32 bytes when auth is enabled; there is no
+built-in secret. Prefer environment injection or a protected, read-only secret
+mount over flags (flags can appear in process listings). Never log credentials.
+
+With the same signing key securely provisioned to shore and the offline mint tool:
+
+```sh
+# GS_SIGNING_KEY is supplied by your secret manager, or use GS_SIGNING_KEY_FILE.
+go run ./cmd/shore -require-auth
+GS_UNIT_TOKEN=$(go run ./cmd/mint-unit-token -id edge-1 -ttl 1h)
+export GS_UNIT_TOKEN
+go run ./cmd/edge -id edge-1 -max-bytes 1073741824 -max-items 10000
+```
+
+The mint tool defaults to the reference tooling's one-hour TTL; `-ttl` accepts a
+Go duration (e.g. `5m`). Tokens use **HS256** and require `sub` (edge node ID),
+`role: "unit"`, and `exp`. Missing/invalid/expired tokens return Connect
+`Unauthenticated`; an `ExchangeRequest.edge_id` different from `sub` returns
+`PermissionDenied`. The SyncService interceptor covers unary calls and checks
+every received message on streaming handlers (the current proto only defines
+unary Exchange). No relay role or three-tier relay is implemented. The edge reads
+its token at startup: provision a fresh token and restart before expiry. This is
+sync authentication only, not operator/ConsoleService auth or TLS; deploy behind
+an approved TLS boundary and restrict console access to a trusted network.
+
+Caps count retained item rows and the sum of their form payload sizes, not
+SQLite/WAL overhead or audit history. Negative caps are rejected; either cap may
+be set independently. To make room, the edge evicts **only fully delivered**
+items: manifest ACKed and **every stored form** ready, complete, and ACKed through
+its full byte length. A delivered FACT does not make an undelivered FULL safe.
+Eviction order is lowest persisted scheduler priority first, then oldest capture
+time (ingest sequence breaks ties). Pending shipboard corrections, active pull state, and persistent local pins
+(`edge/store.SetPinned`) protect items; pins are not a new console/proto API.
+
+Eviction removes the local item and its blobs, not shore's received copies.
+Every eviction emits a structured `slog` event and a durable `eviction_log` row
+in `edge.db` (`item_id`, `bytes`, `score`, `reason`, `ts` in Unix milliseconds).
+Cleanup markers resume interrupted blob removal after restart; audit history
+and the cumulative counter survive restart. SQLite reuses freed pages rather
+than necessarily shrinking its database file. Local hash deduplication covers
+retained items; a later capture of already-evicted content can become a new item.
+
+If only protected items remain, admission returns `store.ErrFull` and logs a
+warning instead of deleting them. The edge replay ingester waits on that capture
+and retries every five seconds, without consuming the next capture. Other store
+callers must retain/retry input on `ErrFull`. New admission is conservative for
+all values: an urgent new capture never justifies deleting an unACKed item. An
+existing oversized protected backlog is retained and drains normally; caps are
+rechecked after ACKs and downlink pulls are applied. A capture larger than the
+byte cap cannot fit: raise the cap or change intake, rather than dropping it.
+Growing an existing form is also checked before writing it.
+Sighting form updates wait/retry just like new-item intake. A downlinked
+correction blocked by the cap stops the downlink cursor before that correction
+for retry, while preserving progress through already-applied messages.
+
+`GetStatusResponse.items_evicted` reports cumulative evictions. The live-shore
+operator app displays it alongside the existing edge queue status.
+
 ## How ranking works
 
 ```
@@ -132,6 +206,7 @@ The app imagery is AI-generated synthetic imagery; see [tools/imagegen](tools/im
 Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention, and number of historical items generated at startup. Pages:
 
 - **Imagery Feed** — browse prioritized sensor imagery, open an item for detections and processing details, and set its priority.
+- **J2 briefing** — in an image's detail drawer, add individual vessel detections to the briefing selection (other object types are excluded). Choose **Create J2 brief** in the feed toolbar to freeze evidence, including locally available imagery with the selected detection highlighted. The integrated `#briefing` workspace provides editable title, analyst assessment and intelligence gaps; combined slides paginate at four observations, or use one slide per observation. Export editable 16:9 PowerPoint or **Print / Save PDF** (opens a printable page; choose Save as PDF in the browser). Export is local and needs no external service. Drafts live only in the current tab and are lost on reload. A new snapshot explicitly replaces evidence without changing review/commander state. Different observations may depict the same vessel: remove duplicates manually; there is no verified track identity, affiliation or geospatial data. Missing images get explicit placeholders. All slides retain the training marking.
 - **Review** — `1`–`4` set priority, `Space` accept the model suggestion, `X` dismiss, `C` send to the commander queue, `→`/`S` skip, `Z` undo, `N` night mode.
   Repeated overrides can prompt a one-key directive suggestion; when contacts are close, Review can ask which object caused the override.
   Suggestions stay client-side until accepted, and accepted rules appear on the Commander's Board under “Learned from operator”.
@@ -142,6 +217,48 @@ Preview adds draft rules on top of active directives without mutating server sta
 
 The [standalone design reference](ui-mockup/reprioritize.html) retains 80 seeded synthetic images and simulated apply; open it directly without a server.
 
+Briefing export vendors PptxGenJS 3.12.0 (MIT, `web/static/pptxgen.LICENSE`) with its bundled JSZip dependency. `pptxgen.bundle.js` is the unmodified npm distribution with its source-map reference removed. No CDN or runtime npm install is required. Run web regression checks with `node --test web/*.test.cjs` (Node 18+); `node --check web/static/briefing*.js` checks syntax. Preview, print and PowerPoint share slide geometry; PowerPoint uses editable text and embedded raster images. PowerPoint font rendering may vary by viewer.
+
+## Prioritization benchmark
+
+Unknown contacts are injected in 12% of frames using a separate seeded RNG (library contacts and false positives are unchanged). Persistent unknowns default to P2; approaching or dark unknowns to P1, in every mission, even at low classification confidence. Transient flicker defaults to P4. Persistence is simulated track evidence, not a new vision detector. No restricted-area/geofencing model is implemented.
+
+Compare `go run ./cmd/bench -unknowns=false` (original frames), `go run ./cmd/bench -before-unknown` (same injected contacts, closed-set command/edge weights), and `go run ./cmd/bench` (unknown-aware). The extra table reports persistent unknown edge retention and joint retention/≤P2 scoring, approaching P1 scoring, and transient P4 scoring; contact scores avoid credit from unrelated high-priority frame contacts.
+
+`go run ./cmd/bench` scores edge triage and each command model against a written mission oracle (`internal/bench/oracle.go`) on deterministic synthetic frames: generated-library contacts with drawn confidence and track attributes, plus a spurious detection in 30% of frames. The oracle ignores confidence and false positives; each model is judged against its own mission (maritime security, air picture, search and rescue). Tune on seeds 1–3; report the held-out default seeds 101–103 (6,000 frames each).
+
+| Metric (held-out) | Maritime before → after | Air before → after | SAR before → after |
+|---|---|---|---|
+| Tier exact | 38.6% → 77.8% | 43.8% → 91.2% | 41.9% → 79.8% |
+| P1 recall | 54.0% → 89.7% | 65.2% → 91.5% | 76.4% → 99.3% |
+| P1 precision | 29.6% → 75.4% | 51.0% → 92.6% | 9.7% → 73.3% |
+| Critical miss (oracle P1 scored P3/P4) | 8.8% → 0.0% | 5.2% → 0.0% | 0.0% → 0.0% |
+| False flash (oracle P3/P4 scored P1) | 10.8% → 1.1% | 4.9% → 0.5% | 20.1% → 0.2% |
+| NDCG@20 per 200-frame window | 0.663 → 0.979 | 0.816 → 0.979 | 0.559 → 0.977 |
+| Review burden (share of window to reach every P1) | 80.8% → 52.2% | 45.2% → 21.4% | 46.3% → 5.7% |
+
+Edge triage drops 6.5% of frames and 0.1% of oracle P1 frames. Model changes: frame score is the top contact plus a damped (`CrowdShare` 0.1) noisy-or of the rest, so crowds of minor contacts no longer stack into P1; confidence saturates at `ConfSat` 0.7; per-model attribute lifts (approaching, dark, loitering) replace fixed multipliers and skip clutter. `TestModelsMeetFloor` fails if a change pushes any model below 0.95 NDCG, 85% P1 recall or above 1% critical miss. The oracle encodes one plausible commander intent and the confidences are simulated, so these numbers measure fit to that spec, not field accuracy.
+
+### Live shore mode (`-shore`)
+
+```sh
+go run ./cmd/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081
+```
+
+Backs the same app with a running shore node instead of the generator: `internal/shorebridge`
+polls the shore ConsoleService (`ListItems`/`GetStatus`/`GetPolicy`) once a second and streams
+snapshots to the browser over SSE; `/blob/*` is proxied to shore. Items are grouped into one
+card per `features.tags.sighting_id` (falling back to one card per item), showing the best
+received form (crop > thumb > full, fact text otherwise) and a chip per form
+(fact/thumb/crop/full: offered / pending / partial / received). Directives call shore
+`SetPolicy`, "Pull full image" calls `RequestPull`, "Relabel" calls `OverrideLabel`.
+
+The process also hosts the ship→shore link: `internal/shaper` listens on `-link-listen`
+(default `:18080`) and forwards to shore with a token bucket, so start the edge with
+`-shore http://localhost:18080` and the 0 / 9.6 kbps / 64 kbps / 256 kbps / 2 Mbps buttons
+shape the real traffic. Pass `-link-listen ""` when the link is shaped elsewhere (compose +
+Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for the demo.
+
 ## Status / not done
 
 - Inference: mock + Python stub only. Planned sidecar: ONNX Runtime with the
@@ -151,5 +268,6 @@ The [standalone design reference](ui-mockup/reprioritize.html) retains 80 seeded
   this repo consumes the compiled `Policy` (labels, vectors, thresholds).
 - No auth/TLS on either service. Zarf package is a skeleton.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
-- No sailboat dataset in `frames/` yet; `scenarios/sailboats_example.json`
-  shows where it plugs in.
+- Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
+  the boat is not visible in every frame). `scenarios/sailboats_example.json`
+  still uses a placeholder path for the sailboat set.

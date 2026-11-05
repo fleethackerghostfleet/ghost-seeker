@@ -5,9 +5,121 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+test('spectral controls are metadata-driven and preserve the frame and boxes',()=>{
+ const context=setup();
+ vm.runInContext(`
+  imageFor=()=>'/frame.jpg';boxesHTML=()=>'<div class="box">contact</div>';
+  renderReview=()=>{};state.page='rv';
+  multi={id:'multi',src:{name:'Mast'},bands:['EO','IR']};
+  before=largeImage(multi);selectBand(multi,'IR');after=largeImage(multi);
+ `,context);
+ assert.match(vm.runInContext('before',context),/aria-pressed="true"[^>]*>EO/);
+ assert.match(vm.runInContext('after',context),/class="spectrum-ir"/);
+ assert.match(vm.runInContext('after',context),/IR · white-hot · simulated LWIR/);
+ for(const name of ['before','after']){
+  assert.match(vm.runInContext(name,context),/src="\/frame.jpg"/);
+  assert.match(vm.runInContext(name,context),/<div class="box">contact<\/div>/);
+ }
+ vm.runInContext("selectBand(multi,'EO');selectBand(multi,'UV')",context);
+ assert.equal(vm.runInContext("bandFor(multi)",context),'EO');
+ for(const bands of [undefined,[],['EO'],['IR'],'EO/IR',[null,42,'EO','EO']]){
+  context.input=bands;
+  assert.equal(vm.runInContext("bandControls({id:'single',bands:input})",context),'');
+ }
+ assert.equal(vm.runInContext("bandControls({id:'other',src:{id:'EO-P7'}})",context),'');
+});
+test('band controls keep native Enter and Space activation without accepting review items',()=>{
+ const context=setup();
+ vm.runInContext(`
+  actions=[];prevented=false;insideBands=true;
+  document.addEventListener=(type,handler)=>{keydown=handler};
+  rvAct=action=>actions.push(action);
+  reviewAskKey=key=>actions.push('ask:'+key);
+  step=direction=>actions.push('step:'+direction);
+  setManual=(id,tier)=>actions.push('tier:'+tier);
+  selectBand=(item,band)=>actions.push('band:'+band);
+  location={hash:''};
+  state.page='rv';state.sel='multi';
+  items=[{id:'multi',bands:['EO','IR']}];rv.cur=items[0];
+  function press(key){
+   prevented=false;
+   keydown({key,target:{tagName:'BUTTON',closest:selector=>insideBands&&selector.includes('.band-controls')?{}:null},preventDefault(){prevented=true}});
+  }
+ `,context);
+ const start=source.indexOf(" document.addEventListener('keydown'");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ for(const key of ['Enter',' ']){
+  context.key=key;
+  for(const asking of [false,true]){
+   context.asking=asking;
+   vm.runInContext("rv.ask=asking?{}:null;actions=[];press(key)",context);
+   assert.equal(vm.runInContext('actions.length',context),0);
+   assert.equal(vm.runInContext('prevented',context),false);
+  }
+  vm.runInContext("rv.ask=null;insideBands=false;actions=[];press(key);insideBands=true",context);
+  assert.equal(vm.runInContext("actions.join(',')",context),'accept');
+ }
+ vm.runInContext("actions=[];press('B');press('1');press('2');press('3');press('4');press('Escape')",context);
+ assert.equal(vm.runInContext("actions.join(',')",context),'band:IR,1,2,3,4');
+ assert.equal(vm.runInContext('location.hash',context),'#feed');
+ vm.runInContext("state.page='feed';actions=[];press('ArrowRight');press('ArrowLeft');press('1')",context);
+ assert.equal(vm.runInContext("actions.join(',')",context),'step:1,step:-1,tier:1');
+});
+test('consecutive Space and Enter and live renders retain band focus without reviewing',()=>{
+ const context=setup();
+ vm.runInContext(`
+  handlers={};
+  document.addEventListener=(type,handler)=>{handlers[type]=handler};
+  document.activeElement=document.body;
+  const surface={
+   buttons:[],
+   querySelectorAll(){return this.buttons},
+   set innerHTML(html){
+    if(this.buttons.includes(document.activeElement))document.activeElement=document.body;
+    this.buttons=[...html.matchAll(/data-band="([^"]+)" data-band-item="([^"]+)"/g)].map(match=>({
+     tagName:'BUTTON',dataset:{band:match[1],bandItem:match[2]},
+     closest(selector){return selector.includes('#rvMain')?surface:selector.includes('.band-controls')||selector==='[data-band-item]'?this:null},
+     focus(){document.activeElement=this}
+    }));
+   }
+  };
+  const oldDollar=$;
+  $=id=>id==='rvMain'?surface:oldDollar(id);
+  $('rvKeys').children=[];$('rvKeys').querySelectorAll=()=>[];
+  rvProgress=()=>{};renderAsk=()=>{};buildWhy=()=>[];zulu=()=> '12:00:00Z';
+  imageFor=()=>'/frame.jpg';boxesHTML=()=>'';
+  rvAct=()=>{rv.cur.reviewed=true};
+  state.page='rv';
+  const item={...normalizeItem(raw('multi')),bands:['EO','IR'],src:{id:'EO-P7',name:'Mast'},centralTier:1,edge:.5,dets:[],det:[]};
+  SRC['EO-P7']=item.src;
+  items=[item];rv.cur=item;
+  function press(key){
+   let prevented=false;
+   handlers.keydown({key,target:document.activeElement,preventDefault(){prevented=true}});
+   if(!prevented&&(key===' '||key==='Enter'))handlers.click({target:document.activeElement,stopPropagation(){}});
+  }
+  renderReview();
+  surface.buttons.find(b=>b.dataset.band==='IR').focus();
+ `,context);
+ const start=source.indexOf(" document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]')");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext("originalButton=document.activeElement;press(' ');press('Enter')",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
+ vm.runInContext("press('B')",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='EO'&&document.activeElement.dataset.band==='IR'",context),true);
+ vm.runInContext("originalButton=document.activeElement;applyItemUpdate({...rv.cur,src:'EO-P7',central:.95})",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
+ vm.runInContext("press('Enter')",context);
+ assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&!!document.activeElement.closest('.band-controls button')",context),true);
+});
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
+  gsLights:require('./static/lights.js'),
   setTimeout:()=>{},imageCache:new Map(),
   document:{body:{classList:{remove(){}}}},
   $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
@@ -23,6 +135,30 @@ function setup(){
  `,context);
  return context;
 }
+
+test('unknown contact labels, distinct boxes and persistence explanations',()=>{
+ const context=setup();
+ vm.runInContext(`
+  CLS={unknown:{lab:'UNKNOWN — not classified',g:'unknown'}};
+  const W=480,H=300;
+  MODELS={maritime:{name:'Maritime'}};
+  const d={cls:'unknown',conf:.4,attrs:{},b:{x:200,y:180,w:30,h:20}};
+  const sd={s:.7,notes:[]};
+  const unknownItem={dets:[d],det:[sd],edge:.4,central:.7};
+ `,context);
+ assert.match(vm.runInContext('boxesHTML(unknownItem,true)',context),/unknown.*UNKNOWN — not classified/);
+ assert.match(vm.runInContext('buildWhy(unknownItem,[[d,sd]])[0].t',context),/persisted across frames — not noise/);
+ vm.runInContext('d.attrs.transient=true',context);
+ assert.match(vm.runInContext('buildWhy(unknownItem,[[d,sd]])[0].t',context),/Single-frame flicker, treated as noise/);
+ assert.equal(vm.runInContext('boxesHTML({dets:[],det:[]},true)',context),'');
+ vm.runInContext(`
+  unknownItem.night=true;unknownItem.src={mode:'eo'};
+  d.sig={severity:'urgent',line:'Vessel not under command',ref:'COLREG'};
+ `,context);
+ const why=vm.runInContext('buildWhy(unknownItem,[[d,sd]])',context);
+ assert.ok(why.some(row=>row.t.includes('Navigation lights')));
+ assert.ok(why.some(row=>row.t.includes('Single-frame flicker, treated as noise')));
+});
 
 test('paused snapshots refresh existing and queued scores without exposing captures; resume drains queue',()=>{
  const context=setup();

@@ -40,7 +40,13 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	var imageFile string
 	var detections []command.Detection
-	if images := catalog.Library[source.ID]; len(images) > 0 {
+	var night *catalog.NightImage
+	if images := catalog.NightLibrary[source.ID]; source.Mode == "eo" && len(images) > 0 && rng.Float64() < .2 {
+		image := images[rng.Intn(len(images))]
+		night = &image
+		imageFile = image.File
+		detections = command.NightDetections(image)
+	} else if images := catalog.Library[source.ID]; len(images) > 0 {
 		image := images[rng.Intn(len(images))]
 		imageFile = image.File
 		detections = make([]command.Detection, 0, len(image.Dets))
@@ -73,6 +79,14 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 			})
 		}
 	}
+	if rng.Float64() < .12 {
+		boxes := make([]command.Box, 0, len(detections))
+		for _, d := range detections {
+			boxes = append(boxes, d.Box)
+		}
+		detections = append(detections, command.Detection{Class: "unknown", Conf: .65,
+			Box: placeDetection(rng, "unknown", source.Scene, hz, boxes), Attrs: Attributes(rng, "unknown")})
+	}
 	edge := 0.0
 	if len(detections) == 0 {
 		edge = randBetween(rng, 0, .05)
@@ -81,7 +95,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 	}
 	frame := int(g.frame.Add(int64(rng.Intn(37) + 3)))
 	seed := rng.Uint32()
-	if edge < .2 {
+	if edge < EdgeKeep {
 		return nil, extra
 	}
 	up := 0
@@ -96,6 +110,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		up = int(math.Round(randBetween(rng, 40, 160)))
 	}
 	item := &command.Item{
+		Bands:    append([]string(nil), source.Bands...),
 		ID:       fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
 		Img:      imageFile,
 		Frame:    frame,
@@ -112,14 +127,38 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		},
 		Dets: detections,
 	}
+	if night != nil {
+		value := night.Night != nil && *night.Night
+		item.Night = &value
+		item.Basis = night.Basis
+		item.Lum = night.Lum
+	}
 	command.Rescore(item, model, directives)
 	return item, extra
+}
+
+// EdgeKeep is the on-sensor triage threshold; frames scoring below it are dropped before uplink.
+const EdgeKeep = .2
+
+// Attributes draws simulated track attributes for a detection of the given class.
+func Attributes(rng *rand.Rand, class string) command.Attributes { return makeAttributes(rng, class) }
+
+// EdgeScore is the low-compute on-sensor triage score for a frame's detections.
+func EdgeScore(rng *rand.Rand, detections []command.Detection) float64 {
+	return edgeScore(rng, detections)
 }
 
 func makeAttributes(rng *rand.Rand, class string) command.Attributes {
 	group := catalog.Classes[class].Group
 	attrs := command.Attributes{}
 	switch {
+	case class == "unknown":
+		switch rng.Intn(3) {
+		case 1:
+			attrs.Approaching, attrs.Moving = true, true
+		case 2:
+			attrs.Transient = true
+		}
 	case group == "vessel":
 		attrs.Moving = rng.Float64() < .5
 		attrs.Approaching = attrs.Moving && rng.Float64() < .45
@@ -188,7 +227,15 @@ func edgeScore(rng *rand.Rand, detections []command.Detection) float64 {
 	remaining := 1.0
 	for _, detection := range detections {
 		weight := catalog.EdgeW[catalog.Classes[detection.Class].Group]
-		remaining *= 1 - weight*detection.Conf*randBetween(rng, .75, 1)
+		conf := detection.Conf
+		if detection.Class == "unknown" {
+			if detection.Attrs.Transient && weight > 0 {
+				weight = .05
+			} else {
+				conf = max(conf, .7)
+			}
+		}
+		remaining *= 1 - weight*conf*randBetween(rng, .75, 1)
 	}
 	return 1 - remaining
 }

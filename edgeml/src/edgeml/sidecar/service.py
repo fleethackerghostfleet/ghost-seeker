@@ -1,0 +1,401 @@
+"""InferenceService semantics on top of the edgeml pipeline (detect -> track -> SightingAggregator -> zero-shot).
+
+One stateful pipeline per ``AnalyzeRequest.source``; the response carries the frame's per-object lifecycle as
+``sightings`` (OPEN / UPDATE / CLOSE from the aggregator, DUPLICATE for every open sighting that was tracked in this
+frame without a report) next to the stateless ``detections`` / ``embedding`` fields older clients read.
+Payloads are protobuf-JSON dicts (lowerCamelCase, enums as names, int64 as strings), what the Go ``inference.Remote``
+Connect client sends and expects.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import threading
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+
+FORM_KINDS = {"fact": "FORM_KIND_FACT", "thumb": "FORM_KIND_THUMB", "crop": "FORM_KIND_CROP", "full": "FORM_KIND_FULL"}
+EVENTS = {"open": "EVENT_OPEN", "update": "EVENT_UPDATE", "close": "EVENT_CLOSE", "duplicate": "EVENT_DUPLICATE"}
+
+
+class RpcError(Exception):
+    """Maps to a Connect error (code is the Connect code string, e.g. ``invalid_argument``)."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def _norm_box(box, w: int, h: int) -> dict:
+    x, y, bw, bh = (float(v) for v in box[:4])
+    return {"x": round(x / w, 5), "y": round(y / h, 5), "w": round(bw / w, 5), "h": round(bh / h, 5)}
+
+
+def _form_hint(f) -> dict:
+    get = f.get if isinstance(f, dict) else lambda k, d=None: getattr(f, k, d)
+    return {"kind": FORM_KINDS.get(str(get("kind")), "FORM_KIND_UNSPECIFIED"), "bytes": str(int(get("bytes", 0) or 0)),
+            "jpegQuality": int(get("quality", 0) or 0)}
+
+
+def _f(v: Optional[float]) -> float:
+    v = 0.0 if v is None else float(v)
+    return 0.0 if math.isnan(v) else round(v, 5)
+
+
+# ----------------------------------------------------------------------------- real engine
+class _TextEmbedder:
+    """D's ClipEmbedder exposes embed_text through the ORT text cache; ZeroShotClassifier only needs this trio."""
+
+    def __init__(self, clip):
+        self.clip, self.dim = clip, clip.dim
+        self.calls, self.ms = 0, 0.0
+
+    def embed_crops(self, crops):
+        t0 = time.perf_counter()
+        out = self.clip.embed_crops(crops)
+        self.ms += (time.perf_counter() - t0) * 1e3
+        self.calls += len(crops)
+        return out
+
+    def embed_text(self, texts):
+        return self.clip.embed_text(texts)
+
+    def logit_scale(self):
+        return self.clip.logit_scale()
+
+
+@dataclass
+class _Source:
+    tracker: object
+    agg: object
+    frame_idx: int = 0
+    t0_ms: Optional[int] = None
+    size: Optional[tuple[int, int]] = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+class EdgemlEngine:
+    """Detector + boxmot tracker + SightingAggregator (+ MobileCLIP zero-shot subtype) per source. CPU, no torch."""
+
+    COARSE = {"aircraft": "aircraft", "buoy": "buoy", "marine mammal": "marine_mammal"}
+
+    def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
+                 engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
+                 score_thr: float = 0.25, det_low_thr: float = 0.05, agg: Optional[dict] = None, text_tower: str = "cache"):
+        from edgeml.runtime.detectors import load_detector
+        from edgeml.tracking import AggregatorParams
+
+        self.threads, self.fps, self.tracker_variant, self.asso = threads, fps, tracker, asso
+        self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
+        self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, det_low_thr))
+        self.embedder = self.classifier = None
+        self.clip_name = None
+        self._text_tower, self._torch_clip = text_tower, None
+        if embed and str(embed).lower() != "none":
+            from edgeml.embed.clip_embedder import ClipEmbedder
+            from edgeml.embed.zeroshot import ZeroShotClassifier
+
+            d = Path(embed).expanduser()
+            meta = json.loads((d / "meta.json").read_text())
+            clip = ClipEmbedder(meta["model"], backend="ort", onnx_dir=d, threads=threads, precision=meta.get("precision", "fp32"))
+            self.embedder = _TextEmbedder(clip)
+            self.classifier = ZeroShotClassifier(self.embedder)
+            self.clip_name = getattr(clip, "name", meta["model"])
+        self.agg_params = AggregatorParams(**{"relink_gap_s": 20.0, "min_update_interval_s": 10.0, **(agg or {})})
+        self.sources: dict[str, _Source] = {}
+        self._lock = threading.Lock()
+        self.model_id = self.detector.name + (f"+{self.clip_name}" if self.clip_name else "")
+        self.embedding_dim = int(self.embedder.dim) if self.embedder else 0
+        self.labels = list(self.classifier.classes) if self.classifier else []
+        self.frames = 0
+        self.ms_total = 0.0
+
+    # -- per-source state ------------------------------------------------------------------------------------------
+    def _source(self, name: str) -> _Source:
+        with self._lock:
+            src = self.sources.get(name)
+            if src is None:
+                from edgeml.tracking import make_tracker
+
+                tracker = make_tracker(self.tracker_variant, fps=self.fps, asso_func=self.asso, max_lost_s=self.max_lost_s,
+                                       det_thresh=self.score_thr, low_thresh=self.det_low_thr)
+                agg = _ZeroShotAggregator(name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
+                src = self.sources[name] = _Source(tracker=tracker, agg=agg)
+            return src
+
+    def _frame_time(self, src: _Source, captured_ms: Optional[int]) -> float:
+        if captured_ms:
+            if src.t0_ms is None:
+                src.t0_ms = captured_ms
+            return max(0.0, (captured_ms - src.t0_ms) / 1000.0)
+        return (src.frame_idx - 1) / self.fps
+
+    # -- rpc -------------------------------------------------------------------------------------------------------
+    def analyze(self, source: str, image_bgr: np.ndarray, captured_ms: Optional[int], known_labels: list[str], want_embedding: bool) -> dict:
+        src = self._source(source or "default")
+        t_start = time.perf_counter()
+        with src.lock:
+            src.frame_idx += 1
+            fi = src.frame_idx
+            t_s = self._frame_time(src, captured_ms)
+            H, W = image_bgr.shape[:2]
+            dets = [d for d in self.detector.detect(image_bgr) if d.score >= self.det_low_thr]
+            tracks = src.tracker.update(dets, image_bgr, fi, t_s)
+            events = src.agg.update(tracks, image_bgr, fi, t_s)
+            base_ms = (captured_ms - int(t_s * 1000)) if captured_ms else int(time.time() * 1000) - int(t_s * 1000)
+            sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"])) for ev in events]
+            reported = {ev["sighting_id"] for ev in events}
+            for tr in tracks:
+                sid = src.agg.track_to_sid.get(tr.track_id)
+                st = src.agg.states.get(sid) if sid else None
+                if st is not None and st.status == "open" and sid not in reported:
+                    reported.add(sid)
+                    sightings.append(self._duplicate(st, fi, W, H, base_ms))
+            emb = next((src.agg.states[ev["sighting_id"]].emb for ev in events
+                        if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
+                        and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
+            unknownness = max((float(ev.get("unknownness") or 0.0) for ev in events), default=0.0)
+        ms = (time.perf_counter() - t_start) * 1e3
+        self.frames += 1
+        self.ms_total += ms
+        resp = {"detections": [{"label": d.label, "confidence": _f(d.score), "box": _norm_box(d.box, W, H)} for d in dets if d.score >= self.score_thr],
+                "unknownness": _f(unknownness), "modelId": self.model_id, "latencyMs": str(int(ms)), "sightings": sightings}
+        if emb is not None:
+            resp["embedding"] = [round(float(v), 5) for v in np.asarray(emb).ravel()]
+        return resp
+
+    def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int, st=None) -> dict:
+        label = ev.get("label") or ""
+        is_key = int(ev.get("best_frame_idx", -1)) == fi and ev["event"] != "close"
+        # The edge crops the frame it holds (this one), so report the object's box in *this* frame unless this frame
+        # is the key frame, where best_box is exactly that.
+        box = ev["best_box"] if is_key or not ev.get("box") else ev["box"]
+        out = {"id": ev["sighting_id"], "event": EVENTS[ev["event"]],
+               "keyDetection": {"label": label, "confidence": _f(ev.get("best_score")), "box": _norm_box(box, W, H)},
+               "isKeyFrame": is_key, "unknownness": _f(ev.get("unknownness")),
+               "subtype": ev.get("subtype") or "", "value": _f(ev.get("value")),
+               "forms": [_form_hint(f) for f in (ev.get("forms") or [])],
+               "firstSeenUnixMs": str(base_ms + int(float(ev.get("first_t_s", 0.0)) * 1000)),
+               "lastSeenUnixMs": str(base_ms + int(float(ev.get("last_t_s", ev.get("t_s", 0.0))) * 1000)),
+               "nFrames": int(ev.get("n_frames", 0))}
+        if st is not None and st.emb is not None and ev["event"] in ("open", "update"):
+            out["embedding"] = [round(float(v), 5) for v in np.asarray(st.emb).ravel()]
+        return out
+
+    def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int) -> dict:
+        s = st.s
+        return {"id": s.sighting_id, "event": "EVENT_DUPLICATE",
+                "keyDetection": {"label": s.label or "", "confidence": _f(s.best_score), "box": _norm_box(s.best_box, W, H)},
+                "isKeyFrame": False, "subtype": s.subtype or "", "value": 0.0, "forms": [],
+                "firstSeenUnixMs": str(base_ms + int(s.first_t_s * 1000)), "lastSeenUnixMs": str(base_ms + int(s.last_t_s * 1000)),
+                "nFrames": int(s.n_frames)}
+
+    def embed_text(self, texts: list[str]) -> list[list[float]]:
+        if self.embedder is None:
+            raise RpcError("unimplemented", "sidecar started without --embed")
+        try:
+            vecs = self.embedder.embed_text(texts)
+        except RuntimeError as e:
+            if self._text_tower != "torch":
+                raise RpcError("failed_precondition", f"text not in the ORT text cache and --text-tower torch not enabled: {e}") from e
+            vecs = self._torch_text(texts)
+        return [[round(float(v), 5) for v in row] for row in np.asarray(vecs, np.float32)]
+
+    def _torch_text(self, texts):
+        # Opt-in slow path (loads torch + the MobileCLIP text tower once); never used by Analyze.
+        if self._torch_clip is None:
+            from edgeml.embed.clip_embedder import ClipEmbedder
+
+            self._torch_clip = ClipEmbedder(self.embedder.clip.short, backend="torch")
+        return self._torch_clip.embed_text(texts)
+
+    def capabilities(self) -> dict:
+        return {"modelId": self.model_id, "openVocabulary": self.embedder is not None, "fixedLabels": list(self.labels),
+                "embeddingDim": self.embedding_dim}
+
+    def stats(self) -> dict:
+        return {"frames": self.frames, "ms_per_frame": (self.ms_total / self.frames) if self.frames else 0.0,
+                "sources": {k: {"frames": v.frame_idx, "open": sum(st.status == "open" for st in v.agg.states.values())} for k, v in self.sources.items()}}
+
+
+def _make_zeroshot_aggregator_class():
+    from edgeml.tracking import SightingAggregator
+
+    class ZeroShotAggregator(SightingAggregator):
+        """SightingAggregator whose ``subtype`` / ``unknownness`` / coarse ``label`` come from zero-shot MobileCLIP on
+        the key-frame embedding the aggregator already computes (the E demo's DemoAggregator, minus the stats)."""
+
+        def __init__(self, *a, classifier=None, coarse=None, **kw):
+            super().__init__(*a, **kw)
+            self.classifier, self.coarse = classifier, coarse or {}
+            self.zs: dict[str, dict] = {}
+
+        def _apply(self, st):
+            if self.classifier is None or st.emb is None:
+                return
+            z = self.zs.get(st.s.sighting_id)
+            if z is None or z["key"] is not st.emb:
+                r = self.classifier.classify(np.asarray(st.emb, np.float32)[None])[0]
+                z = self.zs[st.s.sighting_id] = {"key": st.emb, "subtype": r["subtype"], "unknownness": float(r["unknownness"])}
+            st.s.subtype, st.s.unknownness = z["subtype"], z["unknownness"]
+            st.s.label = self.coarse.get(z["subtype"], "boat")
+
+        def _snapshot(self, st):
+            self._apply(st)
+            return super()._snapshot(st) | {"subtype": st.s.subtype}
+
+        def _material_change(self, st, t_s):
+            r = super()._material_change(st, t_s)
+            if r or t_s - st.last_report_t < self.p.min_update_interval_s or st.n_updates >= self.p.max_updates or not st.last_report:
+                return r
+            return "subtype_flip" if st.s.subtype != st.last_report.get("subtype") else None
+
+        def _report(self, st, kind, frame_idx, t_s, reason=None):
+            self._apply(st)
+            return super()._report(st, kind, frame_idx, t_s, reason)
+
+        def _close(self, st, frame_idx, t_s):
+            self._apply(st)
+            ev = super()._close(st, frame_idx, t_s)
+            self.zs.pop(st.s.sighting_id, None)
+            return ev
+
+    return ZeroShotAggregator
+
+
+def _ZeroShotAggregator(*a, **kw):
+    return _make_zeroshot_aggregator_class()(*a, **kw)
+
+
+# ----------------------------------------------------------------------------- mock engine
+@dataclass
+class MockSchedule:
+    """Per-source script: frame ``open_at`` opens one object (key frame), ``key_at`` is a better key frame (UPDATE,
+    is_key_frame), every other frame while open is a DUPLICATE, ``close_at`` closes it; then the cycle repeats with a
+    new id. Frames before ``open_at`` carry no sightings (the Go edge falls back to hash behaviour for them)."""
+
+    open_at: int = 2
+    key_at: int = 5
+    close_at: int = 9
+    label: str = "boat"
+    subtype: str = "fishing vessel"
+    box: tuple = (0.3, 0.3, 0.4, 0.4)
+
+
+class MockEngine:
+    """Deterministic engine for Go tests / CI: no models, no downloads. Embeddings hash words like the Go mock."""
+
+    model_id = "edgeml-mock-v1"
+    embedding_dim = 64
+
+    def __init__(self, schedule: MockSchedule | None = None):
+        self.schedule = schedule or MockSchedule()
+        self.counts: dict[str, int] = {}
+        self.frames = 0
+        self._lock = threading.Lock()
+        self.labels = [self.schedule.label]
+
+    def analyze(self, source: str, image_bgr: np.ndarray, captured_ms: Optional[int], known_labels: list[str], want_embedding: bool) -> dict:
+        source = source or "default"
+        sc = self.schedule
+        with self._lock:
+            n = self.counts.get(source, 0) + 1
+            self.counts[source] = n
+            self.frames += 1
+        period = sc.close_at - sc.open_at + 1
+        cycle, pos = divmod(n - sc.open_at, period) if n >= sc.open_at else (0, -1)
+        sid = f"{source}-mock-{cycle + 1}"
+        now = captured_ms or int(time.time() * 1000)
+        x, y, w, h = sc.box
+        det = {"label": sc.label, "confidence": 0.9, "box": {"x": x, "y": y, "w": w, "h": h}}
+        resp = {"detections": [], "unknownness": 0.1, "modelId": self.model_id, "latencyMs": "1", "sightings": []}
+        if pos < 0:
+            return resp
+        resp["detections"] = [det]
+        resp["unknownness"] = 0.0
+        if want_embedding:
+            resp["embedding"] = self._vec(sc.label)
+        frame = sc.open_at + pos
+        if frame == sc.open_at:
+            event, key = "EVENT_OPEN", True
+        elif frame == sc.key_at:
+            event, key = "EVENT_UPDATE", True
+            det = dict(det, confidence=0.97)
+        elif frame == sc.close_at:
+            event, key = "EVENT_CLOSE", False
+        else:
+            event, key = "EVENT_DUPLICATE", False
+        forms = [] if event in ("EVENT_CLOSE", "EVENT_DUPLICATE") else [
+            {"kind": "FORM_KIND_FACT", "bytes": "180", "jpegQuality": 0}, {"kind": "FORM_KIND_CROP", "bytes": "6000", "jpegQuality": 75},
+            {"kind": "FORM_KIND_THUMB", "bytes": "4000", "jpegQuality": 55}, {"kind": "FORM_KIND_FULL", "bytes": str(int(image_bgr.nbytes // 20) or 1), "jpegQuality": 80}]
+        resp["sightings"] = [{"id": sid, "event": event, "keyDetection": det, "isKeyFrame": key, "subtype": sc.subtype,
+                              "value": 0.8 if key else 0.0, "forms": forms, "firstSeenUnixMs": str(now - pos * 200),
+                              "lastSeenUnixMs": str(now), "nFrames": pos + 1, "unknownness": 0.0,
+                              **({"embedding": self._vec(sc.subtype)} if key else {})}]
+        return resp
+
+    def _vec(self, text: str) -> list[float]:
+        v = np.zeros(self.embedding_dim, np.float32)
+        for w in text.lower().split():
+            seed = int.from_bytes(hashlib.sha256(w.encode()).digest()[:8], "little")
+            v += np.random.default_rng(seed).standard_normal(self.embedding_dim).astype(np.float32)
+        n = float(np.linalg.norm(v)) or 1.0
+        return [round(float(x / n), 5) for x in v]
+
+    def embed_text(self, texts: list[str]) -> list[list[float]]:
+        return [self._vec(t) for t in texts]
+
+    def capabilities(self) -> dict:
+        return {"modelId": self.model_id, "openVocabulary": True, "fixedLabels": self.labels, "embeddingDim": self.embedding_dim}
+
+    def stats(self) -> dict:
+        return {"frames": self.frames, "ms_per_frame": 0.0, "sources": dict(self.counts)}
+
+
+# ----------------------------------------------------------------------------- service (JSON in / JSON out)
+def _get(d: dict, camel: str, snake: str, default=None):
+    return d.get(camel, d.get(snake, default))
+
+
+class InferenceService:
+    """Decodes protobuf-JSON requests, dispatches to an engine, returns protobuf-JSON responses."""
+
+    SERVICE = "ghostseeker.v1.InferenceService"
+
+    def __init__(self, engine):
+        self.engine = engine
+
+    def Analyze(self, req: dict) -> dict:
+        import base64
+
+        import cv2
+
+        raw = _get(req, "image", "image")
+        if not raw:
+            raise RpcError("invalid_argument", "image is required")
+        buf = np.frombuffer(base64.b64decode(raw), np.uint8)
+        img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+        if img is None:
+            raise RpcError("invalid_argument", "image could not be decoded")
+        captured = _get(req, "capturedAtUnixMs", "captured_at_unix_ms")
+        captured = int(captured) if captured not in (None, "", 0, "0") else None
+        return self.engine.analyze(str(_get(req, "source", "source", "") or ""), img, captured,
+                                   list(_get(req, "knownLabels", "known_labels", []) or []), bool(_get(req, "wantEmbedding", "want_embedding", False)))
+
+    def EmbedText(self, req: dict) -> dict:
+        texts = [str(t) for t in (req.get("texts") or [])]
+        return {"embeddings": [{"values": v} for v in self.engine.embed_text(texts)], "modelId": getattr(self.engine, "model_id", "")}
+
+    def Capabilities(self, req: dict) -> dict:
+        return self.engine.capabilities()
+
+    def dispatch(self, method: str, req: dict) -> dict:
+        fn = getattr(self, method, None) if method in ("Analyze", "EmbedText", "Capabilities") else None
+        if fn is None:
+            raise RpcError("unimplemented", f"{self.SERVICE}/{method} is not implemented")
+        return fn(req)

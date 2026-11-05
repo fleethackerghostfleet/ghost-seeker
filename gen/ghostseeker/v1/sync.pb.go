@@ -435,6 +435,9 @@ type Heartbeat struct {
 	UnmanifestedItems int64                  `protobuf:"varint,4,opt,name=unmanifested_items,json=unmanifestedItems,proto3" json:"unmanifested_items,omitempty"`
 	PolicyId          string                 `protobuf:"bytes,5,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"` // policy the edge is currently applying
 	LinkEstimateBps   float64                `protobuf:"fixed64,6,opt,name=link_estimate_bps,json=linkEstimateBps,proto3" json:"link_estimate_bps,omitempty"`
+	ModelId           string                 `protobuf:"bytes,7,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"` // edge analyzer capabilities, so shore can lint rules
+	OpenVocabulary    bool                   `protobuf:"varint,8,opt,name=open_vocabulary,json=openVocabulary,proto3" json:"open_vocabulary,omitempty"`
+	FixedLabels       []string               `protobuf:"bytes,9,rep,name=fixed_labels,json=fixedLabels,proto3" json:"fixed_labels,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -509,6 +512,27 @@ func (x *Heartbeat) GetLinkEstimateBps() float64 {
 		return x.LinkEstimateBps
 	}
 	return 0
+}
+
+func (x *Heartbeat) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *Heartbeat) GetOpenVocabulary() bool {
+	if x != nil {
+		return x.OpenVocabulary
+	}
+	return false
+}
+
+func (x *Heartbeat) GetFixedLabels() []string {
+	if x != nil {
+		return x.FixedLabels
+	}
+	return nil
 }
 
 type Ack struct {
@@ -864,14 +888,17 @@ const file_ghostseeker_v1_sync_proto_rawDesc = "" +
 	"totalBytes\x12\x12\n" +
 	"\x04data\x18\x05 \x01(\fR\x04data\x12!\n" +
 	"\fcontent_hash\x18\x06 \x01(\tR\vcontentHash\x12\x12\n" +
-	"\x04mime\x18\a \x01(\tR\x04mime\"\xf0\x01\n" +
+	"\x04mime\x18\a \x01(\tR\x04mime\"\xd7\x02\n" +
 	"\tHeartbeat\x12%\n" +
 	"\x0fsent_at_unix_ms\x18\x01 \x01(\x03R\fsentAtUnixMs\x12!\n" +
 	"\fqueued_items\x18\x02 \x01(\x03R\vqueuedItems\x12!\n" +
 	"\fqueued_bytes\x18\x03 \x01(\x03R\vqueuedBytes\x12-\n" +
 	"\x12unmanifested_items\x18\x04 \x01(\x03R\x11unmanifestedItems\x12\x1b\n" +
 	"\tpolicy_id\x18\x05 \x01(\tR\bpolicyId\x12*\n" +
-	"\x11link_estimate_bps\x18\x06 \x01(\x01R\x0flinkEstimateBps\"\xa9\x01\n" +
+	"\x11link_estimate_bps\x18\x06 \x01(\x01R\x0flinkEstimateBps\x12\x19\n" +
+	"\bmodel_id\x18\a \x01(\tR\amodelId\x12'\n" +
+	"\x0fopen_vocabulary\x18\b \x01(\bR\x0eopenVocabulary\x12!\n" +
+	"\ffixed_labels\x18\t \x03(\tR\vfixedLabels\"\xa9\x01\n" +
 	"\x03Ack\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12,\n" +
 	"\x04form\x18\x02 \x01(\x0e2\x18.ghostseeker.v1.FormKindR\x04form\x12#\n" +

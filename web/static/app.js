@@ -11,7 +11,28 @@ function ruleLabel(r){
 /* ---------------- UI ---------------- */
 state.dens='m';state.page='feed';
 const tcol=t=>['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'][t];
-const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const selectedBands=new Map();
+function bandsFor(it){return Array.isArray(it.bands)?[...new Set(it.bands.filter(b=>typeof b==='string'&&b.trim()))]:[]}
+function bandFor(it){const bands=bandsFor(it);return bands.includes(selectedBands.get(it.id))?selectedBands.get(it.id):bands[0]}
+function bandControls(it){
+ const bands=bandsFor(it);if(bands.length<2)return '';
+ const band=bandFor(it);
+ return `<div class="band-controls" role="group" aria-label="Spectral band">${bands.map(b=>`<button type="button" data-band="${esc(b)}" data-band-item="${esc(it.id)}" aria-pressed="${b===band}" title="${b==='IR'?'Simulated LWIR · white-hot':esc(b)}">${esc(b)}</button>`).join('')}<span>B · cycle</span></div><span class="band-label">${esc(band)}${band==='IR'?' · white-hot · simulated LWIR':''}</span>`;
+}
+function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${imageFor(it)}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
+function preserveBandFocus(render){
+ const button=document.activeElement?.closest?.('.band-controls button');
+ const surface=button?.closest('#rvMain, #drawer, #zoom');
+ const item=button?.dataset.bandItem,band=button?.dataset.band;
+ render();
+ if(surface)[...surface.querySelectorAll('[data-band-item]')].find(b=>b.dataset.bandItem===item&&b.dataset.band===band)?.focus({preventScroll:true});
+}
+function selectBand(it,band){
+ const bands=it?bandsFor(it):[];if(bands.length<2||!bands.includes(band))return;
+ selectedBands.set(it.id,band);
+ if(state.page==='rv'){rv.shown=null;renderReview()}else if(state.sel===it.id)renderDetail();
+}
 function normalizeItem(item){
  item.ts=new Date(item.ts);item.src=SRC[typeof item.src==='string'?item.src:item.src.id];
  return item;
@@ -121,17 +142,20 @@ async function init(){
  $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
  $('modelSel').onchange=async e=>{try{await request('/api/model','PUT',{id:e.target.value});toast(`Base model set to ${MODELS[e.target.value].name}`)}catch(error){toast(error.message);e.target.value=state.model}};
  workbench.init();
+ briefing.init();
  $('clearDir').onclick=async()=>{if(!state.directives.length)return;try{await request('/api/directives','DELETE');toast('Directives cleared — base model restored')}catch(error){toast(error.message)}};
  $('sortSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.sort=b.dataset.s;[...$('sortSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderFeed()};
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens};
  $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
  $('pauseBtn').onclick=toggleHold;$('live').onclick=toggleHold;$('wbResume').onclick=toggleHold;
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
+ document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if($('settings').open)return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
-  if((k==='enter'||k===' ')&&e.target.closest?.('header'))return;
+  if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
+  if(k==='b'&&(state.page==='rv'||state.page==='feed')){const it=state.page==='rv'?rv.cur:findItem(state.sel);const bands=it?bandsFor(it):[];if(bands.length>1){e.preventDefault();if(!e.repeat)selectBand(it,bands[(bands.indexOf(bandFor(it))+1)%bands.length])}return}
   if(state.page==='rv'){if(k==='escape'){location.hash='#feed';return}const a=RVKEYS[k];if(a){e.preventDefault();if(!e.repeat)rvAct(a)}return}
   if(state.page!=='feed')return;
   if(k==='r'){location.hash='#review';return}
@@ -148,11 +172,12 @@ async function init(){
  route();renderFeed(true);renderStats();renderRp();openStream();
 }
 function route(){
- state.page=location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
+ state.page=location.hash==='#briefing'?'brief':location.hash==='#reprioritize'?'rp':location.hash==='#review'?'rv':'feed';
+ $('pgBrief').classList.toggle('on',state.page==='brief');
  $('pgFeed').classList.toggle('on',state.page==='feed');$('pgRp').classList.toggle('on',state.page==='rp');$('pgRv').classList.toggle('on',state.page==='rv');$('navRv').classList.toggle('on',state.page==='rv');
  $('navFeed').classList.toggle('on',state.page==='feed');$('navRp').classList.toggle('on',state.page==='rp');
  if(state.page!=='rv'&&rv.ask){rv.ask=null;rv.askBusy=false;renderAsk()}
- if(state.page==='feed')renderFeed(true);else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
+ if(state.page==='feed')renderFeed(true);else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
 function visible(){
@@ -168,7 +193,7 @@ function renderTierSeg(counts){
 }
 function boxesHTML(it,labels){
  return it.dets.map((d,i)=>{const sd=it.det[i];const c=sd.sup?'sup':sd.matched?'match':sd.s>=.6?'hi':sd.s>=.3?'md':'lo';const b=d.b;
-  return`<div class="box ${c}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
+  return`<div class="box ${c}${d.cls==='unknown'?' unknown':''}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${CLS[d.cls].lab} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
 function topLine(it){
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return'—';
@@ -178,9 +203,10 @@ function topLine(it){
 function cardHTML(it,mini){
  return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}">P${it.tier}</span><span class="cdrtag">✓ FWD</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${it.src.id}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div></div><div class="cl"></div>`;
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);it.el=el;return el}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;el.className=`card p${it.tier}${it.fresh?' fresh':''}${it.sent?' sent':''}${it.reviewed?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
+ el.querySelector('.night-badge')?.remove();el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
  const t=el.querySelector('.tier');t.className='tier t'+it.tier;t.textContent='P'+it.tier;
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
  el.querySelector('.cs').textContent=it.central.toFixed(2);
@@ -216,12 +242,14 @@ function renderStats(){
 function openDetail(id){const prev=items.find(i=>i.id===state.sel);state.sel=id;document.body.classList.add('drawer-open');prev&&updateCard(prev);const it=items.find(i=>i.id===id);it&&updateCard(it);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
 function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
-function renderZoom(){const it=items.find(i=>i.id===state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
- z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}">P${it.tier}</span><b>${it.src.name}</b><span class="mono">${zulu(it.ts)}</span><span>DB #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe"><img src="${imageFor(it)}">${boxesHTML(it,true)}</div>`;z.onclick=closeZoom}
+function renderZoom(){preserveBandFocus(renderZoomContent)}
+function renderZoomContent(){const it=items.find(i=>i.id===state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
+ z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}">P${it.tier}</span><b>${it.src.name}</b><span class="mono">${zulu(it.ts)}</span><span>DB #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
 function closeDetail(){closeZoom();const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
 function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function buildWhy(it,rows){
- const why=[];const top=rows[0];
+ const why=gsLights.why(it);const top=rows[0];
+ rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
  if(top)why.push({c:top[1].s>.6?'al':'',t:`Top contact: <b>${CLS[top[0].cls].lab}</b> (conf ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${MODELS[state.model].name}`});
  rows.forEach(([d])=>{if(d.attrs.dark&&!['other','clutter'].includes(CLS[d.cls].g))why.push({c:'al',t:`${CLS[d.cls].lab} has no AIS / transponder correlation`});if(d.attrs.approaching)why.push({c:'al',t:`${CLS[d.cls].lab} track is inbound toward the sensor`});if(d.attrs.new)why.push({c:'',t:`Change detection: ${CLS[d.cls].lab} not present in previous pass`})});
  const seen=new Set();rows.forEach(([d,sd])=>sd.notes.forEach(r=>{const k=ruleLabel(r);if(seen.has(k))return;seen.add(k);const dir=state.directives.find(x=>x.id===r.directiveId);why.push({c:r.type==='boost'?'up':'dn',t:`${r.type==='boost'?'Boosted':'Suppressed'} by directive “${dir?esc(dir.text):''}” (${k.slice(2)})`})}));
@@ -230,7 +258,8 @@ function buildWhy(it,rows){
  const _w=new Set();for(let i=why.length-1;i>=0;i--){if(_w.has(why[i].t))why.splice(i,1);else _w.add(why[i].t)}
  return why;
 }
-function renderDetail(){
+function renderDetail(){preserveBandFocus(renderDetailContent)}
+function renderDetailContent(){
  const it=items.find(i=>i.id===state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';return}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
@@ -240,11 +269,13 @@ function renderDetail(){
  const l=visible().l,idx=l.findIndex(x=>x.id===it.id);
  D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}">P${it.tier}</span>${tierName}</h2><small>${it.src.name} · <span class="mono">${zulu(it.ts)}</span> · DB #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
   <div class="dnav"><button id="dPrev" title="Previous (←)">‹</button><button id="dNext" title="Next (→)">›</button><button id="dClose" title="Close (Esc)">×</button></div></div>
- <div class="dimg" id="dImg" title="Enlarge (F)"><img src="${imageFor(it)}">${boxesHTML(it,true)}<span class="zhint">⤢ Enlarge · F</span></div>
+ <div class="dimg" id="dImg" title="Enlarge (F)">${largeImage(it)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
   <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">${t} · P${t}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
   <div class="scores"><div class="sc"><span>Edge triage</span><b>${it.edge.toFixed(2)}</b></div><div class="sc"><span>Command score</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span>Directive Δ</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
   <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n">Conf</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${CLS[d.cls].lab}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(CLS[d.cls].g))).map(a=>ATTR_LAB[a]).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`).join('')}</table></div>
+  ${gsLights.section(it,CLS)}
+  <div class="dsec" id="briefDetections"></div>
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   <div class="dsec"><h4>Processing chain</h4><ul class="tl">
    <li class="edge"><i></i><div>Captured &amp; triaged on sensor<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
@@ -256,6 +287,7 @@ function renderDetail(){
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
+ briefing.renderDetections(it);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aSim').onclick=()=>{const k=rows[0]&&rows[0][0].cls;if(!k)return;$('nlIn').value=`Prioritize ${CLS[k].lab.toLowerCase()}s`;location.hash='#reprioritize';toast('Drafted a directive from this image — review and apply')};
  $('aDis').onclick=async()=>{const l=visible().l,i=l.indexOf(it),nx=l[i+1]||l[i-1];try{await patchItem(it.id,{dismissed:true,reviewed:true});nx&&findItem(nx.id)?openDetail(nx.id):closeDetail();toast('Image dismissed from feed (retained in DB)')}catch(error){toast(error.message)}};
@@ -326,7 +358,8 @@ function reviewAskKey(k){
  }
  if(k==='y')answerSuggestion('yes');else if(k==='n')answerSuggestion('no');else if(k==='l'||k==='escape')answerSuggestion('later');
 }
-function renderReview(){
+function renderReview(){preserveBandFocus(renderReviewContent)}
+function renderReviewContent(){
  let it=rv.cur;if(!it||it.reviewed||it.dismissed||!items.includes(it))it=rv.cur=rvQueue()[0]||null;
  rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a&&b.dataset.a!=='undo')b.disabled=!it});
@@ -336,7 +369,7 @@ function renderReview(){
  const age=Math.max(0,Math.round((Date.now()-it.ts)/60000));
  [...$('rvKeys').querySelectorAll('[data-a]')].forEach(b=>b.classList.toggle('sugg',b.dataset.a===String(sug)));
  $('accLbl').textContent=`Agree · P${sug}`;
- $('rvMain').innerHTML=`<div class="rvimg"><div class="rvframe p${sug}"><img src="${imageFor(it)}">${boxesHTML(it,true)}</div></div>
+ $('rvMain').innerHTML=`<div class="rvimg"><div class="rvframe p${sug}">${largeImage(it)}</div></div>
  <div class="rvside">
   <div class="rvcard"><div class="lbl">Model suggests</div><div class="rvsug"><span class="tier t${sug}">P${sug}</span><b>${TNAME[sug]}</b></div><div class="rvsub">Command score ${it.central.toFixed(2)} · edge ${it.edge.toFixed(2)}${state.directives.length?` · ${state.directives.length} directive${state.directives.length>1?'s':''} active`:''}</div></div>
   <div class="rvcard"><div class="lbl" style="margin-bottom:4px">Why</div><ul class="why">${why.map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
