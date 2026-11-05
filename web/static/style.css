@@ -83,6 +83,7 @@ select:focus,input[type=text]:focus{border-color:var(--accent)}
 .toolbar select{min-width:240px}
 .feed-check,.feed-review{display:flex;align-items:center;gap:6px;font-size:12px;max-width:100%}
 .feed-check{cursor:pointer}.feed-check input{flex:none;accent-color:var(--accent)}
+.feed-check .c{font-variant-numeric:tabular-nums;font-size:11px;padding:0 6px;border-radius:9px;background:var(--line);opacity:.9}
 .toolbar .feed-review select{min-width:0;max-width:100%}
 .feed-review{flex-wrap:wrap}
 .dirbar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}

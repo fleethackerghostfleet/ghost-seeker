@@ -273,7 +273,7 @@ async function init(){
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
  $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
  const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showDuplicates').checked=f.showDuplicates;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';closeDetail();renderFeed(true)};
- $('showDuplicates').onchange=e=>{gsSettings.setFeed({showDuplicates:e.target.checked});syncFeedFilters()};
+ $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
  $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent'});state.tier='all';syncFeedFilters();location.hash='#feed'};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
  window.addEventListener('gs:feed-filters',syncFeedFilters);syncFeedFilters();
@@ -334,13 +334,25 @@ function feedTier(it){return it.tier}
 function reviewMatch(it,review){return review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
  const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};
- let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||i.filtered!=='duplicate'||humanReviewed(i)||humanSent(i)));
+ let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i)));
  feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
  l.sort(f.review==='sent'?(a,b)=>sendTime(b)-sendTime(a)||b.ts-a.ts:state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
  if(state.src==='ALL'&&f.review!=='sent')l=mixSources(l,state.sort==='pri'?i=>feedTier(i)+(feedReasons.has(i.id)?'f':''):i=>Math.floor(i.ts/60000));
+ if(f.showDuplicates&&f.review!=='sent')l=pairRepeats(l);
  return{l,counts};
+}
+function hideableRepeat(it){return it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
+function repeatCount(){return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.dismissed&&hideableRepeat(i)).length}
+/* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
+function pairRepeats(l){
+ const ids=new Set(l.map(i=>i.id)),after=new Map();
+ for(const i of l)if(hideableRepeat(i)&&i.dupOf&&ids.has(i.dupOf)){const o=l.find(x=>x.id===i.dupOf);if(o&&!hideableRepeat(o)){if(!after.has(o.id))after.set(o.id,[]);after.get(o.id).push(i)}}
+ if(!after.size)return l;
+ const moved=new Set([...after.values()].flat().map(i=>i.id)),out=[];
+ for(const i of l){if(moved.has(i.id))continue;out.push(i);if(after.has(i.id))out.push(...after.get(i.id))}
+ return out;
 }
 /* Display-only: interleave sensors so the feed shows several camera feeds at once.
    Items only move within a run sharing the same group key (priority tier, or capture minute when sorted by time)
@@ -412,7 +424,7 @@ function toggleFeedFilters(){
  $('feedFilters').setAttribute('aria-expanded',String(expanded));
 }
 function renderFeed(noAnim){
- const{l,counts}=visible();renderTierSeg(counts);$('empty').style.display=l.length?'none':'block';
+ const{l,counts}=visible();renderTierSeg(counts);const dc=$('dupCount');if(dc)dc.textContent=String(repeatCount());$('empty').style.display=l.length?'none':'block';
  if(state.page!=='feed')noAnim=true;
  const grid=$('grid'),first=new Map();
  if(!noAnim)[...grid.children].forEach(c=>first.set(c.dataset.id,c.getBoundingClientRect()));
