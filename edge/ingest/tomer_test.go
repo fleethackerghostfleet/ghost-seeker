@@ -74,6 +74,9 @@ func TestTomerFoldRebindsAfterReferenceEvicted(t *testing.T) {
 	if g.Deduped() != 1 {
 		t.Fatalf("dups=%d, want 1", g.Deduped())
 	}
+	if len(g.tomerItems) != len(g.tomerRing) || len(g.tomerRing) != 3 { // #1, #2 and the rebound alias all ride the ring
+		t.Fatalf("map=%d ring=%d", len(g.tomerItems), len(g.tomerRing))
+	}
 }
 
 func TestTomerNearDuplicatesStayUnderNaive(t *testing.T) {

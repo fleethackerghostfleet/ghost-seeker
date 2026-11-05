@@ -241,6 +241,18 @@ func (g *Ingester) rememberTomer(resp *pb.AnalyzeResponse, itemID string) {
 	if ip == nil || ip.FrameId == "" {
 		return
 	}
+	g.bindTomer(ip.FrameId, itemID)
+	// A flagged near-duplicate only gets this far in hash mode when its
+	// reference item is gone (evicted or outside the ring). The sidecar keeps
+	// naming that frame, so re-point it at the item we just stored.
+	if ip.NearDuplicate && ip.NearestPriorId != "" && g.cfg.Dedup == DedupHash {
+		g.bindTomer(ip.NearestPriorId, itemID)
+	}
+}
+
+// bindTomer maps a sidecar frame id to an item; every binding goes through
+// the ring so the map stays bounded.
+func (g *Ingester) bindTomer(frameID, itemID string) {
 	if g.tomerItems == nil {
 		g.tomerItems = map[string]string{}
 	}
@@ -248,14 +260,8 @@ func (g *Ingester) rememberTomer(resp *pb.AnalyzeResponse, itemID string) {
 		delete(g.tomerItems, g.tomerRing[0])
 		g.tomerRing = g.tomerRing[1:]
 	}
-	g.tomerItems[ip.FrameId] = itemID
-	g.tomerRing = append(g.tomerRing, ip.FrameId)
-	// A flagged near-duplicate only gets this far in hash mode when its
-	// reference item is gone (evicted or outside the ring). The sidecar keeps
-	// naming that frame, so re-point it at the item we just stored.
-	if ip.NearDuplicate && ip.NearestPriorId != "" && g.cfg.Dedup == DedupHash {
-		g.tomerItems[ip.NearestPriorId] = itemID
-	}
+	g.tomerItems[frameID] = itemID
+	g.tomerRing = append(g.tomerRing, frameID)
 }
 
 // existing returns the item already holding this exact content, if any.
