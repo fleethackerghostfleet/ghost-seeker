@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
@@ -26,7 +27,8 @@ func fakeShore(t *testing.T, got *pb.Policy) *httptest.Server {
 		if err := protojson.Unmarshal(body, &req); err != nil {
 			t.Errorf("unmarshal: %v", err)
 		}
-		*got = *req.Policy
+		proto.Reset(got)
+		proto.Merge(got, req.Policy)
 		raw, _ := protojson.Marshal(&pb.SetPolicyResponse{Policy: req.Policy})
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(raw)
