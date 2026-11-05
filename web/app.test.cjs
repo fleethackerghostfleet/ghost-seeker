@@ -29,6 +29,32 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
  settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
  settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
 });
+test('feed density defaults, validates, persists and reloads all sizes',()=>{
+ for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}']){
+  assert.equal(settingsContext(saved).settings.get().density,'m');
+ }
+ const {settings,saved}=settingsContext('{}');
+ for(const density of ['s','m','l','xl']){
+  settings.density(density);
+  assert.equal(saved().density,density);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().density,density);
+ }
+ settings.density('invalid');settings.density(null);
+ assert.equal(settings.get().density,'xl');
+ assert.equal(saved().density,'xl');
+});
+test('feed filters toggle synchronizes expansion and accessibility state',()=>{
+ const context=setup();
+ vm.runInContext(`
+  let expanded=false;
+  $('feedHead').classList.toggle=name=>{if(name!=='filters-open')throw Error(name);return expanded=!expanded};
+  $('feedFilters').setAttribute=(name,value)=>{if(name!=='aria-expanded')throw Error(name);filterExpanded=value};
+  toggleFeedFilters();
+ `,context);
+ assert.equal(vm.runInContext('filterExpanded',context),'true');
+ vm.runInContext('toggleFeedFilters()',context);
+ assert.equal(vm.runInContext('filterExpanded',context),'false');
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);
@@ -52,6 +78,24 @@ test('empty reviewer blocks actions before requests and empty note has no target
  const context=setup();
  vm.runInContext("messages=[];toast=m=>messages.push(m);rvAct('accept');openReviewNote()",context);
  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(messages)',context)),['Set your reviewer name first','Review an image first']);
+});
+test('live review uses durable submit, note, undo and summary endpoints',async()=>{
+ const context=setup();
+ vm.runInContext(`LIVE={};reviewerName='Alice';calls=[];applyItemUpdate=()=>{};findItem=id=>({id});request=async(...args)=>{calls.push(args);if(args[0].endsWith('/summary'))return {count:0,agreement:0,reviewers:{}};return {record:{id:'live-r'},item:{id:'live-i'},cdr:0}};p={id:'live-i'};`,context);
+ await vm.runInContext("submitReview('live-i','accept',{},p)",context);
+ await vm.runInContext("saveReviewReason('live-r','wrong_detection','bad box')",context);
+ await vm.runInContext("undoReview(p)",context);
+ await vm.runInContext("refreshReviewData()",context);
+ const calls=JSON.parse(vm.runInContext('JSON.stringify(calls)',context));
+ assert.ok(calls.some(c=>c[0]==='/api/items/live-i/review'&&c[1]==='POST'));
+ assert.ok(calls.some(c=>c[0]==='/api/reviews/live-r/reason'&&c[2].note==='bad box'));
+ assert.ok(calls.some(c=>c[0]==='/api/reviews/live-r/undo'));
+ assert.ok(calls.some(c=>c[0]==='/api/reviews/summary'));
+ assert.ok(calls.every(c=>c[1]!=='PATCH'));
+ vm.runInContext("request=async()=>{throw Error('review logging disabled')}",context);
+ await assert.rejects(vm.runInContext("submitReview('live-i','accept',{},p)",context),/review logging disabled/);
+ await vm.runInContext("refreshReviewData()",context);
+ assert.equal(vm.runInContext("$('reviewData').textContent",context),'review logging disabled');
 });
 test('spectral controls are metadata-driven and preserve the frame and boxes',()=>{
  const context=setup();
