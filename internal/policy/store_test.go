@@ -171,3 +171,30 @@ func TestStoreAuditAppliedRejectedExpiredNewestFirst(t *testing.T) {
 		t.Fatalf("audit reasons=%+v", audit)
 	}
 }
+
+type failingAuditBackend struct {
+	Backend
+}
+
+func (failingAuditBackend) AppendPolicyAudit(context.Context, AuditEntry) error {
+	return errors.New("audit unavailable")
+}
+
+func TestStoreAcceptSucceedsWhenAppliedAuditFails(t *testing.T) {
+	ctx := context.Background()
+	backend := failingAuditBackend{Backend: NewMemBackend()}
+	store, err := NewStore(ctx, backend, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	p := &pb.Policy{Id: "accepted", Version: 1, IssuedAtUnixMs: now.UnixMilli()}
+	accepted, err := store.Accept(ctx, p, "console", now)
+	if err != nil || accepted == nil || accepted.Id != p.Id {
+		t.Fatalf("Accept=%v err=%v", accepted, err)
+	}
+	active, expired := store.Active(now)
+	if expired || active == nil || active.Id != p.Id {
+		t.Fatalf("Active=%v expired=%v", active, expired)
+	}
+}

@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"errors"
+	"log"
 	"sync"
 	"time"
 
@@ -97,7 +98,8 @@ func (s *Store) Accept(ctx context.Context, p *pb.Policy, source string, now tim
 	}
 	s.lastGood, s.highWater = clonePolicy(accepted), nextHighWater
 	if err := s.appendAudit(ctx, auditEntry(accepted, source, now, "applied", "")); err != nil {
-		return clonePolicy(accepted), err
+		log.Printf("policy: append applied audit: %v", err)
+		return clonePolicy(accepted), nil
 	}
 	return clonePolicy(accepted), nil
 }
