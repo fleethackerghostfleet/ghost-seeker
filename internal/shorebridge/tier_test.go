@@ -166,3 +166,52 @@ func TestShoreTierPinsMatchEdgeLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestLivePreviewHonorsTierPins(t *testing.T) {
+	c := NewConsole(New("", "", nil))
+	card := ToCard(&pb.ItemView{Item: &pb.Item{Id: "contact", Features: &pb.Features{Detections: []*pb.Detection{{Label: "boat", Confidence: 1}}, Tags: map[string]string{"subtype": "tanker"}}}})
+	o := &Object{Key: "contact", Label: "boat", Subtype: "tanker", Best: card, Items: []*Card{card}, Score: 100}
+	c.onSnapshot(&Snapshot{Objects: []*Object{o}}, nil)
+	post := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		c.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/preview", strings.NewReader(body)))
+		return w
+	}
+	for tier := 1; tier <= 4; tier++ {
+		body := fmt.Sprintf(`{"rules":[{"type":"suppress","classes":["tanker"],"tier":%d}],"candidates":[{"key":"raise","rules":[{"type":"boost","classes":["tanker"],"tier":1}]},{"key":"generic","rules":[{"type":"suppress","classes":["tanker"]}]}]}`, tier)
+		w := post(body)
+		if w.Code != 200 {
+			t.Fatalf("%d %s", w.Code, w.Body.String())
+		}
+		var got struct {
+			Items      []previewItem     `json:"items"`
+			Counts     [4]int            `json:"counts"`
+			Candidates []candidateResult `json:"candidates"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Items) != 1 || got.Items[0].Tier != tier || got.Counts[tier-1] != 1 || got.Candidates[0].Counts[0] != 1 || got.Candidates[1].Counts[3] != 1 {
+			t.Fatalf("P%d preview incorrect: %+v", tier, got)
+		}
+	}
+	if c.base["contact"].Tier != 1 || len(c.policy.TierLabels) != 0 {
+		t.Fatal("preview mutated standing state")
+	}
+	c.overlay["contact"] = &overlay{Manual: 3}
+	w := post(`{"rules":[{"type":"suppress","classes":["tanker"],"tier":4}]}`)
+	if !strings.Contains(w.Body.String(), `"tier":3`) {
+		t.Fatalf("manual tier lost: %s", w.Body.String())
+	}
+	for _, body := range []string{`{"rules":[{"tier":5}]}`, `{"candidates":[{"rules":[{"tier":-1}]}]}`, `{`} {
+		if w := post(body); w.Code != 400 {
+			t.Fatalf("invalid preview: %d %s", w.Code, w.Body.String())
+		}
+	}
+	empty := NewConsole(New("", "", nil))
+	w = httptest.NewRecorder()
+	empty.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/preview", strings.NewReader(`{"rules":[]}`)))
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"items":[]`) {
+		t.Fatalf("empty preview: %d %s", w.Code, w.Body.String())
+	}
+}

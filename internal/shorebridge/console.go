@@ -32,6 +32,7 @@ import (
 // the shore does not keep (manual tier, reviewed, dismissed, sent to the
 // commander, the commander's decision) is an in-memory overlay keyed by object.
 type Console struct {
+	objects map[string]*Object
 	reviews *reviews.Log
 	pol     *pb.Policy        // flattened shore policy the current view was built from
 	ruleFor map[string]string // lowercased label -> id of the directive that boosts/suppresses it
@@ -177,6 +178,7 @@ func (c *Console) onSnapshot(snap *Snapshot, pol *pb.Policy) {
 	defer c.mu.Unlock()
 	prev := c.base
 	c.base, c.order = map[string]*command.Item{}, nil
+	c.objects = map[string]*Object{}
 	c.policy = c.policyFrom(snap, pol)
 	// Once the edge tracks sightings, per-frame items without a sighting_id
 	// (the first frames before the tracker locked on) are duplicates of a
@@ -193,6 +195,7 @@ func (c *Console) onSnapshot(snap *Snapshot, pol *pb.Policy) {
 	for _, o := range objects {
 		item := c.buildItem(o, scores[o])
 		c.base[item.ID] = item
+		c.objects[item.ID] = o
 		c.order = append(c.order, item.ID)
 	}
 	c.live = LiveStatus{
@@ -1359,7 +1362,11 @@ type candidateResult struct {
 // predict applies draft rules on top of the standing policy to the current
 // items: a newly suppressed object sinks to P4 (still listed), a newly boosted
 // one rises a band. It is the live stand-in for the simulation's rescoring.
-func (c *Console) predictLocked(suppress, boost []string) ([]previewItem, [4]int, int) {
+func (c *Console) predictLocked(suppress, boost []string, pins ...map[string]int32) ([]previewItem, [4]int, int) {
+	var tiers map[string]int32
+	if len(pins) > 0 {
+		tiers = pins[0]
+	}
 	var counts [4]int
 	changed := 0
 	out := make([]previewItem, 0, len(c.order))
@@ -1368,15 +1375,25 @@ func (c *Console) predictLocked(suppress, boost []string) ([]previewItem, [4]int
 		live := item.Live
 		tier, central := item.Tier, item.Central
 		if item.Manual == 0 {
-			switch {
-			case !live.Unknown && matchLabel(suppress, live.Override, live.Subtype, live.Label) != "":
-				tier, central = 4, round2(0.05+0.1*item.Edge)
-			case live.Suppressed && matchLabel(suppress, live.Override, live.Subtype, live.Label) == "" && matchLabel(c.policy.Suppress, live.Override, live.Subtype, live.Label) != "":
-				tier, central = item.BaseTier, item.Base // the draft lifts the standing suppression
+			o := c.objects[id]
+			if o == nil {
+				o = &Object{Label: live.Label, Subtype: live.Subtype, Best: &Card{Label: live.Label, Override: live.Override}}
 			}
-			if matchLabel(boost, live.Override, live.Subtype, live.Label) != "" && tier > 1 && (!live.Suppressed || matchLabel(suppress, live.Override, live.Subtype, live.Label) == "") {
-				tier--
-				central = round2(math.Min(0.98, central+0.2))
+			_, target := objectTierPin(o, tiers)
+			if target > 0 {
+				tier = int(target)
+				central = [...]float64{0, .9, .7, .475, .175}[target]
+			} else {
+				switch {
+				case !live.Unknown && matchLabel(suppress, live.Override, live.Subtype, live.Label) != "":
+					tier, central = 4, round2(0.05+0.1*item.Edge)
+				case live.Suppressed && matchLabel(suppress, live.Override, live.Subtype, live.Label) == "" && matchLabel(c.policy.Suppress, live.Override, live.Subtype, live.Label) != "":
+					tier, central = item.BaseTier, item.Base // the draft lifts the standing suppression
+				}
+				if matchLabel(boost, live.Override, live.Subtype, live.Label) != "" && tier > 1 && (!live.Suppressed || matchLabel(suppress, live.Override, live.Subtype, live.Label) == "") {
+					tier--
+					central = round2(math.Min(0.98, central+0.2))
+				}
 			}
 		}
 		if tier != item.Tier {
@@ -1402,6 +1419,19 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	var checkRules []command.Rule
+	if body.Rules != nil {
+		checkRules = append(checkRules, (*body.Rules)...)
+	}
+	for _, candidate := range body.Candidates {
+		checkRules = append(checkRules, candidate.Rules...)
+	}
+	for _, rule := range checkRules {
+		if rule.Tier < 0 || rule.Tier > 4 {
+			writeError(w, http.StatusBadRequest, "target tier must be between 1 and 4")
+			return
+		}
+	}
 	text := ""
 	if body.Text != nil {
 		text = *body.Text
@@ -1409,12 +1439,12 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 	suppress, boost, rules := rulesFromBody(text, body.Rules)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	items, counts, _ := c.predictLocked(suppress, boost)
+	items, counts, _ := c.predictLocked(suppress, boost, ruleTiers(rules))
 	cands := []candidateResult{}
 	for _, cand := range body.Candidates {
-		rs := cand.Rules
-		s, b, _ := rulesFromBody("", &rs)
-		_, cc, changed := c.predictLocked(dedupe(append(append([]string{}, suppress...), s...)), dedupe(append(append([]string{}, boost...), b...)))
+		rs := append(append([]command.Rule{}, rules...), cand.Rules...)
+		s, b, combined := rulesFromBody("", &rs)
+		_, cc, changed := c.predictLocked(s, b, ruleTiers(combined))
 		cands = append(cands, candidateResult{Key: cand.Key, Counts: cc, Changed: changed})
 	}
 	writeJSON(w, map[string]any{"rules": rules, "unknown": unknownWords(text, suppress, boost), "items": items, "counts": counts, "candidates": cands})
