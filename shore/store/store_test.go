@@ -26,13 +26,13 @@ func TestWriteChunkRestartsOnNewHashMidTransfer(t *testing.T) {
 	old := bytes.Repeat([]byte("j"), 100)
 	orig := bytes.Repeat([]byte("p"), 60)
 	full := pb.FormKind_FORM_KIND_FULL
-	if got, done, err := st.WriteChunk(ctx, &pb.Chunk{ItemId: id, Form: full, Offset: 0, TotalBytes: 100, Data: old[:40], ContentHash: hashOf(old)}, now); err != nil || done || got != 40 {
+	if got, done, err := st.WriteChunk(ctx, "edge-1", &pb.Chunk{ItemId: id, Form: full, Offset: 0, TotalBytes: 100, Data: old[:40], ContentHash: hashOf(old)}, now); err != nil || done || got != 40 {
 		t.Fatalf("partial old: got %d done %v err %v", got, done, err)
 	}
-	if got, done, err := st.WriteChunk(ctx, &pb.Chunk{ItemId: id, Form: full, Offset: 0, TotalBytes: 60, Data: orig[:20], ContentHash: hashOf(orig)}, now); err != nil || done || got != 20 {
+	if got, done, err := st.WriteChunk(ctx, "edge-1", &pb.Chunk{ItemId: id, Form: full, Offset: 0, TotalBytes: 60, Data: orig[:20], ContentHash: hashOf(orig)}, now); err != nil || done || got != 20 {
 		t.Fatalf("first new chunk: got %d done %v err %v, want 20 received", got, done, err)
 	}
-	if got, done, err := st.WriteChunk(ctx, &pb.Chunk{ItemId: id, Form: full, Offset: 20, TotalBytes: 60, Data: orig[20:], ContentHash: hashOf(orig)}, now); err != nil || !done || got != 60 {
+	if got, done, err := st.WriteChunk(ctx, "edge-1", &pb.Chunk{ItemId: id, Form: full, Offset: 20, TotalBytes: 60, Data: orig[20:], ContentHash: hashOf(orig)}, now); err != nil || !done || got != 60 {
 		t.Fatalf("rest of new: got %d done %v err %v", got, done, err)
 	}
 	if b, err := st.ReadForm(id, full); err != nil || !bytes.Equal(b, orig) {

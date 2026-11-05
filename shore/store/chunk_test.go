@@ -26,11 +26,11 @@ func TestWriteChunkBounds(t *testing.T) {
 		"negative offset": {ItemId: id, Form: pb.FormKind_FORM_KIND_FULL, TotalBytes: 1024, Offset: -1, Data: []byte("a")},
 		"zero total":      {ItemId: id, Form: pb.FormKind_FORM_KIND_FULL, TotalBytes: 0, Offset: 0, Data: nil},
 	} {
-		if _, _, err := st.WriteChunk(context.Background(), c, now); err == nil {
+		if _, _, err := st.WriteChunk(context.Background(), "edge-1", c, now); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if _, _, err := st.WriteChunk(context.Background(), &pb.Chunk{ItemId: id, Form: pb.FormKind_FORM_KIND_FULL, TotalBytes: 4, Offset: 0, Data: []byte("ab")}, now); err != nil {
+	if _, _, err := st.WriteChunk(context.Background(), "edge-1", &pb.Chunk{ItemId: id, Form: pb.FormKind_FORM_KIND_FULL, TotalBytes: 4, Offset: 0, Data: []byte("ab")}, now); err != nil {
 		t.Fatalf("valid chunk: %v", err)
 	}
 }
