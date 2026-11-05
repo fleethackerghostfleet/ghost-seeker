@@ -40,6 +40,18 @@ link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, product
 
 ## 0. One-time setup
 
+### Demo-only login fallback
+
+`make demo-ui` and `make compose-demo` explicitly enable `-demo-accept-any-token`.
+If automatic sign-in fails, enter **any non-empty token** on the login screen
+to get **operator** access. Empty or whitespace-only tokens are rejected.
+This deliberately insecure mode is off by default, emits a loud startup warning,
+and must never be used in production or on an untrusted network. It cannot be
+combined with `-auth-mode piv` (startup fails). For a manual demo launch, add
+`-demo-accept-any-token` to the `ghost-seeker` command; omit it for normal token
+validation. The real operator token is still required for shore/edge bearer
+authentication; only the UI's login form accepts arbitrary tokens.
+
 ```sh
 # toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
 make build
@@ -90,7 +102,7 @@ shore store regardless of mode.
 ```sh
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
-make demo-ui           # bin/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
+make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
 make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
 open http://localhost:8090
 ```
@@ -100,8 +112,10 @@ link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/un
 `make demo-edge` mints a 24 h edge token from it into `data/edge.jwt` on every start). With no
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
 (0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
-SameSite=Strict session cookie). From another machine the UI asks for the token at `/login`
-(`cat data/operator.token`). For `curl` against the shore/edge API use
+SameSite=Strict session cookie). `make demo-ui` binds the UI to `127.0.0.1` only (it runs with
+`-demo-accept-any-token`); for a browser on another machine, run the same `make demo-ui` command line
+(all live flags: `-shore`, `-edge`, `-link-listen`, `-dev-token-file`) but with `-addr :8090` and
+without `-demo-accept-any-token`, then enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
 `-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
@@ -158,6 +172,40 @@ multiply an item's score by 100, so it goes next. Items below the image threshol
 by a directive only send FACT until nothing better is waiting. The edge sizes each exchange from its own measured link
 estimate, which is internal to the scheduler; the operator only sees the shaped link rate.
 
+## Demo talking points
+
+- **Open integration:** It's an open system with an API, so any third-party system can pull the data (with authorized access).
+- **Adaptability during war:** Present the boss's mid-demo requests as proof of "adaptability during war": change collection priorities, review a contact, then show the updated report at command without rebuilding the system.
+- **Future work:** Granular audit logging of operator actions is a placeholder for later work; do not claim a complete operator-action audit trail exists today.
+
+### Empty water and shore receipts
+
+The standalone operator demo (`go run ./cmd/ghost-seeker -addr :8090`) includes
+two native-resolution, manually inspected empty-water frames from the team's
+`frames/Cruise_Ship_POV_frames/` GCS dataset. They show water, shoreline and the
+camera ship's wake, with no external contacts. No detections are invented for
+these frames. They appear under **BY-12** as **P4 Low / No contacts · empty water**
+and remain on ship, even when bandwidth is available. Interesting contacts use
+the link instead. An explicit **Upload next**, manual priority override,
+**Send to Commander**, or **Send full size** can release one for demonstration.
+The LFS archive `web/static/imagery/empty-ocean.zip` contains the original bytes
+and `provenance.json` with source, internal-use license restriction, GCS object
+generations and SHA-256 checksums. Run `git lfs pull` before building.
+
+Open **Commander View → Received** beside the ship feed: only completed demo
+uploads appear, independently of whether the operator has sent a command report.
+**Awaiting decision** contains received, escalated reports; **Decided** preserves
+the command outcome and note. Walk through sensor capture → ship scoring → shore
+receipt → operator report → command decision in the right-hand chain of custody.
+The Received count is the current retained picture, not a lifetime delivery total.
+
+In the live stack, Received reflects actual shore form states: a received summary
+can appear before an image, and Summary / Preview / Object close-up / Full image
+are listed separately. Pending or partial-only items do not count as received.
+The live object-free camera heartbeat behavior described above is unchanged;
+the empty-water backlog example is the standalone simulation, not a change to
+the sidecar or live edge scheduler. Commander View is a UI projection of the
+console feed, not a separate authorization boundary or a new audit log.
 ## 3. Three-minute presenter script
 
 | t | do | say |

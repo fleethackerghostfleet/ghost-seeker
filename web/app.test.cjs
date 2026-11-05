@@ -654,7 +654,7 @@ function setup(){
  vm.runInContext(policySource,context);
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
-  renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};
+  fullRenderStats=renderStats;renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};
   streamHandlers={};
   EventSource=class{addEventListener(type,handler){streamHandlers[type]=handler}};
   SRC={'EO-P7':{id:'EO-P7'}};
@@ -878,4 +878,48 @@ test('Send now moves a feed image to the top of the send queue',async()=>{
  assert.equal(vm.runInContext('calls.length',context),1);
  vm.runInContext("items[0]={id:'img',src:{id:'EO-P7'},upload:{bytes:100,sent:100,done:true}}",context);
  assert.equal(vm.runInContext('sendNowBlocked(items[0])',context),'Already uploaded to shore');
+});
+
+test('empty water has an obvious kept-on-ship label and explicit upload override',()=>{
+ const context=setup();
+ context.ocean={id:'ocean',src:'BY-12',ts:new Date(),background:true,dets:null,det:null,upload:{bytes:1000,sent:0,done:false,bps:64000}};
+ vm.runInContext('normalizeItem(ocean)',context);
+ assert.equal(vm.runInContext('topLine(ocean)',context),'No contacts · empty water');
+ assert.match(vm.runInContext('uploadHTML(ocean)',context),/Empty water · kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',context),false);
+ vm.runInContext("ocean.upload.override='next'",context);
+ assert.match(vm.runInContext('uploadHTML(ocean)',context),/Upload next \(operator\)/);
+ assert.doesNotMatch(vm.runInContext('uploadHTML(ocean)',context),/kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',context),true);
+});
+
+test('upload summary counts retained empty water separately from queued and active transfers',()=>{
+ const context=setup();
+ vm.runInContext(`
+  const upload={bytes:1000,sent:0,done:false};
+  items=[{id:'ocean',background:true,upload:{...upload}},{id:'contact',upload:{...upload}},{id:'active',upload:{...upload,sent:20}}];
+  fullRenderStats();
+ `,context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 0 held · 0 uploaded · 1 kept on ship');
+ vm.runInContext("items[0].upload.override='hold';fullRenderStats()",context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 1 held · 0 uploaded');
+ vm.runInContext("items[0].upload.override='next';fullRenderStats()",context);
+ assert.equal(context.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 2 queued · 0 held · 0 uploaded');
+});
+
+test('empty water processing chain explains local retention without claiming shore delivery',()=>{
+ const context=setup();
+ context.$('drawer').querySelectorAll=()=>[];
+ context.briefing={renderDetections(){}};
+ context.zulu=()=> '12:00Z';
+ vm.runInContext(`
+  MODELS={maritime:{name:'Maritime'}};largeImage=()=>'';visible=()=>({l:items});
+  items=[normalizeItem({id:'ocean',src:'BY-12',ts:new Date(),tier:4,central:0,base:0,edge:.02,lat:{edge:15,cen:80},background:true,dets:null,det:null,upload:{bytes:1000,sent:0,done:false}})];
+  state.sel='ocean';renderDetailContent();
+ `,context);
+ const html=context.$('drawer').innerHTML;
+ assert.match(html,/empty water retained locally for demo · no automatic upload/);
+ assert.match(html,/Shore transfer: Empty water · kept on ship/);
+ assert.match(html,/Priority scoring \(simulated\)/);
+ assert.doesNotMatch(html,/0\.02 ≥ 0\.20|Sent to shore:/);
 });

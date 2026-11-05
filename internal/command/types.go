@@ -85,6 +85,7 @@ const (
 )
 
 type Item struct {
+	Background  bool       `json:"background,omitempty"`
 	Upload      Upload     `json:"upload"`
 	Night       *bool      `json:"night,omitempty"`
 	Basis       string     `json:"basis,omitempty"`
@@ -142,6 +143,7 @@ type Upload struct {
 	Sent       int64      `json:"sent"`
 	Done       bool       `json:"done"`
 	Active     bool       `json:"active"` // received bytes in the latest link tick
+	Received   bool       `json:"received,omitempty"`
 	BPS        int64      `json:"bps"`
 }
 

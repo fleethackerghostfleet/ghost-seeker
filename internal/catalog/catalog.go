@@ -39,9 +39,10 @@ type Model struct {
 }
 
 type LibraryImage struct {
-	File string       `json:"file"`
-	Src  string       `json:"src"`
-	Dets []LibraryDet `json:"dets"`
+	Background bool         `json:"background,omitempty"`
+	File       string       `json:"file"`
+	Src        string       `json:"src"`
+	Dets       []LibraryDet `json:"dets"`
 }
 
 // ShipClass is an imagery-derived ship-type classification of one detection (edgeml/src/edgeml/embed/shiptype.py).

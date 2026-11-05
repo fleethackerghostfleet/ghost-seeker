@@ -1,6 +1,6 @@
-/* Commander View: final decisions on imagery the watch floor escalated. */
+/* Commander View: received shore picture and final decisions on escalations. */
 let SRC={},CLS={},MODELS={},ATTR_LAB={},model='maritime';
-let items=new Map(),view={tab:'pending',sel:null,busy:false,undo:[]};
+let items=new Map(),view={tab:'received',sel:null,busy:false,undo:[]};
 const DEC={
  action:{k:'1',lab:'Take action',sub:'Task an asset · intercept / investigate',c:'#ff4d5e'},
  track:{k:'2',lab:'Track',sub:'Keep following this object',c:'#ff9a3c'},
@@ -16,19 +16,24 @@ const ago=d=>{const s=Math.max(0,(Date.now()-d)/1000);return s<60?Math.round(s)+
 const lab=c=>CLS[c]?.lab||c;
 
 function norm(it){
+ it.dets=it.dets||[];it.det=it.det||[];
  it.ts=new Date(it.ts);it.src=SRC[typeof it.src==='string'?it.src:it.src.id]||{id:String(it.src),name:String(it.src),scene:'open',mode:'eo'};
  it.sentAt=it.sentAt?new Date(it.sentAt):null;it.decidedAt=it.decidedAt?new Date(it.decidedAt):null;return it;
 }
-const awaiting=it=>it.sent&&!it.decision;
+const onShore=it=>it.live?it.live.event!=='scene'&&Object.values(it.live.forms||{}).some(f=>f.state==='received'):!!(it.upload?.received||it.upload?.done);
+const awaiting=it=>onShore(it)&&it.sent&&!it.decision;
 function upsert(raw){
  const it=norm(raw),had=items.get(it.id);
  if(had&&had.img!==it.img)imageCache.delete(it.id);
- if(it.sent||it.decision)items.set(it.id,it);else items.delete(it.id);
+ if(onShore(it))items.set(it.id,it);else items.delete(it.id);
  return{it,isNew:awaiting(it)&&!(had&&awaiting(had))};
 }
 const pending=()=>[...items.values()].filter(awaiting).sort((a,b)=>a.tier-b.tier||b.central-a.central||a.sentAt-b.sentAt);
+const received=()=>[...items.values()].filter(onShore).sort((a,b)=>b.ts-a.ts);
 const decided=()=>[...items.values()].filter(i=>i.decision).sort((a,b)=>b.decidedAt-a.decidedAt);
-const list=()=>view.tab==='pending'?pending():decided();
+const list=()=>view.tab==='received'?received():view.tab==='pending'?pending():decided();
+const receipt=it=>it.live?it.live.imageForm?'Image received':'Summary only · image not received':it.fullRes&&!it.upload?.done?'Image received · full-size transfer pending':'Image received';
+const reportStatus=it=>it.decision?DEC[it.decision].lab:it.sent?'Awaiting command decision':it.reviewed?'Reviewed on watch floor':'Not yet reviewed on watch floor';
 function ensureSel(){if(!items.has(view.sel)||!list().some(i=>i.id===view.sel))view.sel=list()[0]?.id||null}
 
 function contacts(it){return it.dets.map((d,i)=>[d,it.det[i]||{s:0}]).sort((a,b)=>b[1].s-a[1].s)}
@@ -49,6 +54,7 @@ function boxes(it){
 }
 
 function renderKpis(){
+ $('kReceived').textContent=received().length;$('tReceived').textContent=received().length;
  const p=pending();$('kPend').textContent=p.length;$('kP1').textContent=p.filter(i=>i.tier===1).length;$('kDone').textContent=decided().length;
  const oldest=p.reduce((m,i)=>i.sentAt&&(!m||i.sentAt<m)?i.sentAt:m,null);$('kOld').textContent=oldest?ago(oldest):'—';
  $('tPend').textContent=p.length;$('tDone').textContent=decided().length;
@@ -61,36 +67,37 @@ function renderLearned(directives){
 }
 function renderQueue(){
  const l=list();
- if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here as the watch floor sends them up.':'No decisions yet.'}</div>`;return}
+ if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
   <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
-  <span class="mono">${it.decision?`<i class="dc" style="color:${DEC[it.decision].c}">${DEC[it.decision].lab}</i> · ${ago(it.decidedAt)} ago`:`sent ${ago(it.sentAt)} ago · ${it.central.toFixed(2)}`}</span></div></div>`).join('');
+  <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
  $('qlist').querySelector('.row.on')?.scrollIntoView({block:'nearest'});
 }
 function renderStage(){
  const it=items.get(view.sel),old=$('note'),keep=old&&old.dataset.id===view.sel?old.value:'';
  if(!it){
-  $('stage').innerHTML=`<div class="idle"><div class="big">✓</div><b>${view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';return;
+  $('stage').innerHTML=`<div class="idle"><b>${view.tab==='received'?'Waiting for ship data':view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='received'?'Ship backlog is not a shore receipt.':view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';return;
  }
  $('stage').innerHTML=`<div class="frame"><img src="${imageFor(it)}" alt=""><div class="bx">${boxes(it)}</div></div>
  <div class="facts"><div><span>Source</span><b>${esc(it.src.name)}</b></div><div><span>Location</span><b>${esc(it.src.loc||'—')}</b></div>
  <div><span>Captured</span><b class="mono">${zulu(it.ts)} · ${ago(it.ts)} ago</b></div><div><span>Record</span><b class="mono">#${it.dbId} · FRM ${it.frame}</b></div></div>
+ <div class="shore-receipt"><b>${esc(receipt(it))}</b><span>${esc(reportStatus(it))}</span>${it.live?`<ul>${['fact','thumb','crop','full'].map(k=>`<li>${{fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'}[k]}: ${esc(it.live.forms?.[k]?.state||'not offered')}</li>`).join('')}</ul>`:''}</div>
  <table class="dets"><tr><th>Contact</th><th>Behavior</th><th class="n">Conf</th><th class="n">Score</th></tr>${contacts(it).map(([d,sd])=>`<tr><td>${esc(lab(d.cls))}</td><td>${Object.entries(d.attrs).filter(([,v])=>v).map(([k])=>esc(ATTR_LAB[k]||k)).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n">${sd.s.toFixed(2)}</td></tr>`).join('')}</table>`;
  renderBrief(it);
  if(keep&&$('note'))$('note').value=keep;
 }
 function renderBrief(it){
  const sug=tierFor(it.central),f=flags(it),d=it.decision&&DEC[it.decision];
- const steps=[['Captured',`${esc(it.src.id)} · ${zulu(it.ts)}`],['Kept on ship',`score ${it.edge.toFixed(2)} · ${esc(it.src.em||'')}`],['Sent to shore',esc(it.src.link||'—')],
+ const steps=[['Sensor capture',`${esc(it.src.id)} · ${zulu(it.ts)}`],['Ship scoring',`score ${it.edge.toFixed(2)} · ${esc(it.src.em||'')}`],['Received on shore',esc(receipt(it))],
   ['Shore model',`${esc(MODELS[model]?.name||model)} · ${it.central.toFixed(2)} → P${sug} ${TN[sug]}`],
-  ['Watch officer',it.sentAt?`sent to Commander as P${it.tier} ${TN[it.tier]} · ${zulu(it.sentAt)}`:'returned for another look'],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])];
+  ['Operator report',it.sentAt?`sent to Commander as P${it.tier} ${TN[it.tier]} · ${zulu(it.sentAt)}`:esc(reportStatus(it))],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])];
  $('brief').innerHTML=`<div class="pri" style="--c:${tcol(it.tier)}"><span class="big">P${it.tier}</span><div><b>${TN[it.tier]}</b><span>Watch-officer priority${it.manual&&it.manual!==sug?` · model suggested P${sug} ${TN[sug]}`:''}</span></div></div>
  <div class="meter"><span title="Command score: importance after shore-side scoring">Shore score</span><div class="bar"><i style="width:${it.central*100}%;background:${tcol(sug)}"></i></div><b class="mono">${it.central.toFixed(2)}</b></div>
  <div class="meter"><span title="Edge score: the initial importance assigned on the ship">Ship score</span><div class="bar"><i style="width:${it.edge*100}%"></i></div><b class="mono">${it.edge.toFixed(2)}</b></div>
- <h4>Why it reached you</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||'<li>High command-model score</li>'}</ul>
+ <h4>Why it reached shore</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||'<li>Received over the ship-to-shore link</li>'}</ul>
  <h4 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
- <h4>Decision</h4>${d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
+ <h4>Decision</h4>${!it.sent&&!d?'<p>Received for awareness. Command decisions become available when the watch floor sends a report to Commander.</p>':d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
  `<textarea id="note" data-id="${esc(it.id)}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
  <div class="decs">${Object.entries(DEC).map(([k,v])=>`<button class="dec" title="${k==='close'?'Record a final decision to take no further action. The image remains stored in Decided.':v.sub}" data-d="${k}" style="--c:${v.c}"><kbd>${v.k.toUpperCase()}</kbd><b>${v.lab}</b><span>${v.sub}</span></button>`).join('')}</div>`}`;
 }
@@ -102,7 +109,7 @@ async function api(path,method='GET',body){
  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.statusText);return j;
 }
 async function decide(decision,id=view.sel){
- const it=items.get(id);if(!it||view.busy)return;
+ const it=items.get(id);if(!it||(!it.sent&&!it.decision)||view.busy)return;
  const note=decision?($('note')?.value||''):'';view.busy=true;
  try{
   const next=pending().filter(x=>x.id!==id)[0];
@@ -128,7 +135,7 @@ let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on'
 function connect(){
  const es=new EventSource('/api/stream');
  es.onopen=()=>setLive(true);es.onerror=()=>setLive(false);
- es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);if(m.live){const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
+ es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);if(m.live){Object.assign(SRC,Object.fromEntries((m.live.sources||[]).map(s=>[s.id,s])));Object.assign(CLS,m.live.classes||{});const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
  es.addEventListener('update',e=>{
   const m=JSON.parse(e.data),prev=view.sel,{it,isNew}=upsert(m.item);
   if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${TN[it.tier]} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}
@@ -149,10 +156,9 @@ async function init(){
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
   if(['arrowdown','arrowup','j','k'].includes(k)){e.preventDefault();step(k==='arrowdown'||k==='j'?1:-1);return}
-  if(k==='tab'){e.preventDefault();setTab(view.tab==='pending'?'decided':'pending');view.sel=null;render();return}
   if(k==='/'){e.preventDefault();$('note')?.focus();return}
   if(k==='z'){undo();return}
-  const it=items.get(view.sel);if(it&&!it.decision&&KEYDEC[k]){e.preventDefault();if(!e.repeat)decide(KEYDEC[k])}
+  const it=items.get(view.sel);if(it?.sent&&!it.decision&&KEYDEC[k]){e.preventDefault();if(!e.repeat)decide(KEYDEC[k])}
  });
  const tick=()=>{$('clock').textContent=zulu(new Date());renderKpis()};tick();setInterval(tick,1000);setInterval(renderQueue,15000);
  render();connect();
