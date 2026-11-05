@@ -813,7 +813,12 @@ test('scalable header tabs use intrinsic height rather than inheriting the wrapp
  assert.match(html,/href="\/style\.css"[\s\S]*href="\/text-size\.css"/);
  assert.match(css,/header\s*\{[^}]*height:auto;[^}]*flex-wrap:wrap;[^}]*overflow:visible/);
  assert.match(css,/header \.view-tabs\s*\{[^}]*height:auto;[^}]*align-self:stretch;[^}]*max-width:100%/);
- assert.match(css,/header \.view-tabs nav\s*\{[^}]*flex-wrap:nowrap/);
+ assert.match(css,/header \.view-tabs nav\s*\{[^}]*flex:1 1 0;[^}]*min-width:0;[^}]*flex-wrap:nowrap;[^}]*order:0/);
+ for(const selector of ['body:has(#pgFeed.on) header nav','body:not(:has(#pgFeed.on)) header nav']){
+  const rule=css.slice(css.indexOf(selector)).split('}')[0];
+  assert.match(rule,/flex:1 1 0/,'mobile tabs must share their row with both arrows on every view');
+  if(selector.startsWith('body:not'))assert.match(rule,/order:0/,'review navigation must remain between the arrows');
+ }
 });
 test('feed filters toggle synchronizes expansion and accessibility state',()=>{
  const context=setup();
