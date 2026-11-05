@@ -239,6 +239,9 @@ def compose_sequence(bg, sprites, cls: str, rng: random.Random, out_root: Path, 
             xw = o["x_world"] + o["v"] * t
             cx = W / 2 + f * xw / d + pan[i]
             w_px, h_px = f * Wm / d, f * Hm / d
+            if w_px < 3 or h_px < 3:                 # decide before painting: no unannotated pixels in complete-GT frames
+                alive[j] = False
+                continue
             y_wl = hz[i] + f * cam_h / d + o["bob"] * h_px * math.sin(2 * math.pi * 0.45 * t + o["phase"])
             haze = float(np.clip(1 - math.exp(-d / vis_m), 0, 0.75))
             strip = im[hcol_y:hcol_y + 6, max(0, int(cx) - 40):max(1, int(cx) + 40)]
