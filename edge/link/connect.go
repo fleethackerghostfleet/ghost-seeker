@@ -16,19 +16,28 @@ import (
 type Connect struct {
 	client ghostseekerv1connect.SyncServiceClient
 	est    *Estimator
+	token  string
 }
 
-func NewConnect(shoreURL string, timeout time.Duration, est *Estimator) *Connect {
+func NewConnect(shoreURL string, timeout time.Duration, est *Estimator, token ...string) *Connect {
 	hc := &http.Client{Timeout: timeout}
-	return &Connect{
+	c := &Connect{
 		client: ghostseekerv1connect.NewSyncServiceClient(hc, shoreURL, connect.WithGRPC()),
 		est:    est,
 	}
+	if len(token) > 0 {
+		c.token = token[0]
+	}
+	return c
 }
 
 func (c *Connect) Exchange(ctx context.Context, req *pb.ExchangeRequest) (*pb.ExchangeResponse, error) {
 	start := time.Now()
-	resp, err := c.client.Exchange(ctx, connect.NewRequest(req))
+	request := connect.NewRequest(req)
+	if c.token != "" {
+		request.Header().Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.client.Exchange(ctx, request)
 	if err != nil {
 		c.est.Failure()
 		return nil, err

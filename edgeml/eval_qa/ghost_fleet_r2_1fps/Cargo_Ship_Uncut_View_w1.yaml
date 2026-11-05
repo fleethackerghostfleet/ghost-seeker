@@ -1,0 +1,5 @@
+reviewed: false
+notes: 'teacher labels; frame-sampled QA only; known FNs
+
+  QA f27 pass (no issue): uncertain: faint speck on horizon'
+gt_status: partial

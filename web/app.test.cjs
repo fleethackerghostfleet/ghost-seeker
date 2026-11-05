@@ -119,6 +119,7 @@ test('consecutive Space and Enter and live renders retain band focus without rev
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
+  gsLights:require('./static/lights.js'),
   setTimeout:()=>{},imageCache:new Map(),
   document:{body:{classList:{remove(){}}}},
   $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
@@ -134,6 +135,30 @@ function setup(){
  `,context);
  return context;
 }
+
+test('unknown contact labels, distinct boxes and persistence explanations',()=>{
+ const context=setup();
+ vm.runInContext(`
+  CLS={unknown:{lab:'UNKNOWN — not classified',g:'unknown'}};
+  const W=480,H=300;
+  MODELS={maritime:{name:'Maritime'}};
+  const d={cls:'unknown',conf:.4,attrs:{},b:{x:200,y:180,w:30,h:20}};
+  const sd={s:.7,notes:[]};
+  const unknownItem={dets:[d],det:[sd],edge:.4,central:.7};
+ `,context);
+ assert.match(vm.runInContext('boxesHTML(unknownItem,true)',context),/unknown.*UNKNOWN — not classified/);
+ assert.match(vm.runInContext('buildWhy(unknownItem,[[d,sd]])[0].t',context),/persisted across frames — not noise/);
+ vm.runInContext('d.attrs.transient=true',context);
+ assert.match(vm.runInContext('buildWhy(unknownItem,[[d,sd]])[0].t',context),/Single-frame flicker, treated as noise/);
+ assert.equal(vm.runInContext('boxesHTML({dets:[],det:[]},true)',context),'');
+ vm.runInContext(`
+  unknownItem.night=true;unknownItem.src={mode:'eo'};
+  d.sig={severity:'urgent',line:'Vessel not under command',ref:'COLREG'};
+ `,context);
+ const why=vm.runInContext('buildWhy(unknownItem,[[d,sd]])',context);
+ assert.ok(why.some(row=>row.t.includes('Navigation lights')));
+ assert.ok(why.some(row=>row.t.includes('Single-frame flicker, treated as noise')));
+});
 
 test('paused snapshots refresh existing and queued scores without exposing captures; resume drains queue',()=>{
  const context=setup();
@@ -214,4 +239,13 @@ test('paused updates do not requeue evicted IDs and unpaused updates still add u
  assert.equal(vm.runInContext("items.length===0&&pendingItems.length===0",context),true);
  vm.runInContext("state.paused=false;applyItemUpdate(raw('new',1))",context);
  assert.equal(vm.runInContext("items.length===1&&items[0].id==='new'&&items[0].tier===1",context),true);
+});
+
+test('shipLine formats classified ships and omits absent details',()=>{
+ const context=setup();
+ assert.equal(vm.runInContext("shipLine({})",context),'');
+ assert.equal(vm.runInContext("shipLine({ship:{type:'tanker',label:'Tanker',conf:0.82,aspect:'beam',size:'large'}})",context),'Type: Tanker (82%) · Aspect: beam · Size: large');
+ assert.equal(vm.runInContext("shipLine({ship:{type:'unknown',label:'Unknown',conf:0.41}})",context),'Type: Unknown (41%)');
+ assert.equal(vm.runInContext("shipLine({ship:{type:'cargo',label:'Cargo',conf:0.7}})",context),'Type: Cargo (70%)');
+ assert.equal(vm.runInContext("shipVisibleLine({ship:{features:['radar mast','cranes'],markings:'not visible'}})",context),'Visible: radar mast, cranes · markings not visible');
 });

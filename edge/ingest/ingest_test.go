@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,53 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 )
+
+type spaceClock struct {
+	clock.Clock
+	onSleep func()
+}
+
+func (c spaceClock) Sleep(ctx context.Context, d time.Duration) error {
+	c.onSleep()
+	return ctx.Err()
+}
+
+func TestSightingUpdateWaitsForSpace(t *testing.T) {
+	an := &scripted{script: map[int][]*pb.Sighting{1: {sighting("s1", pb.Sighting_EVENT_OPEN, true, "boat")}, 2: {sighting("s1", pb.Sighting_EVENT_UPDATE, false, strings.Repeat("subtype", 100))}}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	row, err := g.Ingest(context.Background(), capture(clk, 40))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bytes int64
+	for _, f := range row.Forms {
+		bytes += f.Bytes
+	}
+	if err := st.SetLimits(context.Background(), store.Limits{MaxBytes: bytes}); err != nil {
+		t.Fatal(err)
+	}
+	g.cfg.WaitForSpace = true
+	sleeps := 0
+	g.clk = spaceClock{Clock: clk, onSleep: func() {
+		sleeps++
+		if err := st.SetLimits(context.Background(), store.Limits{}); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	updated, err := g.Ingest(context.Background(), capture(clk, 50))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sleeps != 1 || an.calls != 2 || updated.Item.Features.Tags["subtype"] != strings.Repeat("subtype", 100) {
+		t.Fatalf("update lost or reanalyzed: sleeps=%d calls=%d row=%v", sleeps, an.calls, updated)
+	}
+	data, err := st.ReadFormAll(row.Item.Id, pb.FormKind_FORM_KIND_FACT)
+	if err != nil || !bytesContains(data, strings.Repeat("subtype", 100)) {
+		t.Fatalf("FACT not updated: %s %v", data, err)
+	}
+}
+
+func bytesContains(data []byte, text string) bool { return strings.Contains(string(data), text) }
 
 // scripted returns the sightings scripted for the n-th Analyze call (1-based)
 // and records the frames it was handed.
@@ -251,12 +299,12 @@ func TestSceneThrottle(t *testing.T) {
 		empty: map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 8: true, 9: true}}
 	g, st, clk := newIngester(t, DedupSightings, an)
 	g.cfg.SceneEvery = time.Second
-	// 1: first object-free frame -> scene item, FACT+THUMB only
+	// 1: first object-free frame -> scene item: FACT+THUMB on the ladder, FULL kept for pulls
 	scene, err := g.Ingest(ctx, capture(clk, 1))
 	if err != nil || scene == nil {
 		t.Fatalf("scene: %v %v", scene, err)
 	}
-	if scene.Item.Features.Tags["event"] != "scene" || scene.Form(pb.FormKind_FORM_KIND_FULL) != nil || scene.Form(pb.FormKind_FORM_KIND_THUMB) == nil || scene.Form(pb.FormKind_FORM_KIND_FACT) == nil {
+	if scene.Item.Features.Tags["event"] != "scene" || scene.Form(pb.FormKind_FORM_KIND_FULL) == nil || scene.Form(pb.FormKind_FORM_KIND_THUMB) == nil || scene.Form(pb.FormKind_FORM_KIND_FACT) == nil {
 		t.Fatalf("scene item: tags=%v forms=%+v", scene.Item.Features.Tags, scene.Forms)
 	}
 	// 2-5: within SceneEvery (200 ms apart) -> folded
@@ -311,17 +359,17 @@ func TestSceneThrottleStatelessAnalyzer(t *testing.T) {
 	}
 	full := 0
 	for _, r := range rows {
-		if r.Form(pb.FormKind_FORM_KIND_FULL) != nil {
+		if r.Item.Features.Tags["event"] != "scene" && r.Form(pb.FormKind_FORM_KIND_FULL) != nil {
 			full++
 		}
 	}
 	if full != 2 {
-		t.Fatalf("detected frames must keep FULL: %d", full)
+		t.Fatalf("detected frames must keep FULL as normal items: %d", full)
 	}
 }
 
 func TestSceneDoesNotSwallowDetectedTwin(t *testing.T) {
-	// Same bytes: first analysed as empty (-> scene, no FULL), then with a detection (stateless engine).
+	// Same bytes: first analysed as empty (-> scene), then with a detection (stateless engine).
 	// The detected frame must become a full item instead of folding into the scene.
 	ctx := context.Background()
 	an := &scripted{empty: map[int]bool{1: true}}

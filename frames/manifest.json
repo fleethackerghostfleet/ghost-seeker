@@ -1,0 +1,86 @@
+[
+  {
+    "path": "frames/30_Days_at_Sea_Timelapse_frames.zip",
+    "bytes": 78422846,
+    "sha256": "018cb314c8740b0938f65fe2bfa3791ff65526a00a522cfd38cf148286b9bbb5",
+    "git_lfs_pointer": "version https://git-lfs.github.com/spec/v1\noid sha256:018cb314c8740b0938f65fe2bfa3791ff65526a00a522cfd38cf148286b9bbb5\nsize 78422846\n",
+    "gcs_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/30_Days_at_Sea_Timelapse_frames.zip",
+    "verification": "local MD5 equals recorded GCS MD5 and size",
+    "verified_gcs_copies": [
+      {
+        "uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/30_Days_at_Sea_Timelapse_frames.zip",
+        "generation": 1793816011906835,
+        "md5": "MjqJ8ekIoIHeBZ0CpmDBCw=="
+      }
+    ]
+  },
+  {
+    "path": "frames/Argentina_to_Alaska_Cruise_Bridge_Timelapse_frames.zip",
+    "bytes": 5498925,
+    "sha256": "b3df078a6ae6028bed04506916e5bb9c3bb8ae4d0e71a3321400bea18109f2c6",
+    "git_lfs_pointer": "version https://git-lfs.github.com/spec/v1\noid sha256:b3df078a6ae6028bed04506916e5bb9c3bb8ae4d0e71a3321400bea18109f2c6\nsize 5498925\n",
+    "gcs_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/Argentina_to_Alaska_Cruise_Bridge_Timelapse_frames.zip",
+    "verification": "local MD5 equals recorded GCS MD5 and size",
+    "verified_gcs_copies": [
+      {
+        "uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/Argentina_to_Alaska_Cruise_Bridge_Timelapse_frames.zip",
+        "generation": 1793816009681206,
+        "md5": "nhMzeIB4BeLBMQe83MfStw=="
+      }
+    ]
+  },
+  {
+    "path": "frames/Cargo_Ship_Storm_first_hour_frames.zip",
+    "bytes": 53967050,
+    "sha256": "cd847f0a7bf9e39a077e1f820874bba63e2c2c1a9f6068aeff6f2204d1405c86",
+    "git_lfs_pointer": "version https://git-lfs.github.com/spec/v1\noid sha256:cd847f0a7bf9e39a077e1f820874bba63e2c2c1a9f6068aeff6f2204d1405c86\nsize 53967050\n",
+    "gcs_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/Cargo_Ship_Storm_first_hour_frames.zip",
+    "verification": "local MD5 equals recorded GCS MD5 and size",
+    "verified_gcs_copies": [
+      {
+        "uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/Cargo_Ship_Storm_first_hour_frames.zip",
+        "generation": 1793816011297042,
+        "md5": "pofF33lokW6qkt9xS2OYVQ=="
+      }
+    ]
+  },
+  {
+    "path": "frames/Cargo_Ship_Uncut_View_frames.zip",
+    "bytes": 276458645,
+    "sha256": "0d10bd79b201773b9f75449c170175d780dfcedcec57061fb23a9244d9b4a958",
+    "git_lfs_pointer": "version https://git-lfs.github.com/spec/v1\noid sha256:0d10bd79b201773b9f75449c170175d780dfcedcec57061fb23a9244d9b4a958\nsize 276458645\n",
+    "gcs_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/Cargo_Ship_Uncut_View_frames.zip",
+    "verification": "no identical GCS object in inventory",
+    "verified_gcs_copies": []
+  },
+  {
+    "path": "frames/Dolphins_Pungo_Ferry_Bridge_frames.zip",
+    "bytes": 238577,
+    "sha256": "bd276358e117d8da0c0e6dcb46783337d65ac61a7667d75aea203033fae05693",
+    "git_lfs_pointer": "version https://git-lfs.github.com/spec/v1\noid sha256:bd276358e117d8da0c0e6dcb46783337d65ac61a7667d75aea203033fae05693\nsize 238577\n",
+    "gcs_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/Dolphins_Pungo_Ferry_Bridge_frames.zip",
+    "verification": "local MD5 equals recorded GCS MD5 and size",
+    "verified_gcs_copies": [
+      {
+        "uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/zips/Dolphins_Pungo_Ferry_Bridge_frames.zip",
+        "generation": 1793816009393198,
+        "md5": "IbZHykUPGpIyac1EW2r9tw=="
+      }
+    ]
+  },
+  {
+    "path": "frames/SMD_VIS_Onboard_frames.zip",
+    "bytes": 14699611,
+    "sha256": "09581b624b7233329de95621bd4e3f6b289d59b61e439772e9d05704a55a4912",
+    "git_lfs_pointer": "version https://git-lfs.github.com/spec/v1\noid sha256:09581b624b7233329de95621bd4e3f6b289d59b61e439772e9d05704a55a4912\nsize 14699611\n",
+    "gcs_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/raw/smd_vis_onboard_sample/SMD_VIS_Onboard_frames.zip",
+    "verification": "local MD5 equals recorded GCS MD5 and size",
+    "verified_gcs_copies": [
+      {
+        "uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/raw/smd_vis_onboard_sample/SMD_VIS_Onboard_frames.zip",
+        "generation": 1793819212069073,
+        "md5": "viQaSHHHux+/+RPfyNPqnw=="
+      }
+    ]
+  }
+]

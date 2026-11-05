@@ -15,3 +15,9 @@ scenarios/ghostfleet_demo/out/
 
 # python build metadata
 *.egg-info/
+
+# algorithm/ (Tomer) run artifacts
+*.py[cod]
+.venv/
+algorithm/runs/
+algorithm/models/

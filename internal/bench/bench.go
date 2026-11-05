@@ -27,6 +27,11 @@ const (
 
 // Generate draws n frames deterministically from seed using the generated imagery library.
 func Generate(seed int64, n int) []Frame {
+	return GenerateWithUnknowns(seed, n, true)
+}
+
+// GenerateWithUnknowns keeps the original capture RNG independent of unknown injection.
+func GenerateWithUnknowns(seed int64, n int, inject bool) []Frame {
 	rng := rand.New(rand.NewSource(seed))
 	frames := make([]Frame, 0, n)
 	for len(frames) < n {
@@ -49,22 +54,38 @@ func Generate(seed int64, n int) []Frame {
 		f.Edge = sensor.EdgeScore(rng, f.Dets)
 		frames = append(frames, f)
 	}
+	if inject {
+		unknownRNG := rand.New(rand.NewSource(seed ^ 0x554e4b4e))
+		for i := range frames {
+			if unknownRNG.Float64() >= .12 {
+				continue
+			}
+			d := command.Detection{Class: "unknown", Conf: round2(between(unknownRNG, .35, .98)), Attrs: sensor.Attributes(unknownRNG, "unknown")}
+			f := &frames[i]
+			f.Dets = append(f.Dets, d)
+			f.FP = append(f.FP, false)
+			f.Edge = 1 - (1-f.Edge)*(1-sensor.EdgeScore(unknownRNG, []command.Detection{d}))
+		}
+	}
 	return frames
 }
 
 // Result holds the benchmark metrics for one model on one frame set.
 type Result struct {
-	Model                   string
-	Frames, Kept            int
-	EdgeDrop                float64 // share of frames dropped at the edge
-	EdgeMissP1, EdgeMissP12 float64 // share of oracle P1 (P1–P2) frames dropped at the edge
-	TierExact, TierWithin1  float64 // on kept frames
-	P1Recall, P1Precision   float64
-	CriticalMiss            float64 // oracle P1 scored P3/P4
-	FalseFlash              float64 // oracle P3/P4 scored P1
-	FlashLoad               float64 // share of kept frames scored P1
-	NDCG                    float64 // mean NDCG@TopK per window
-	Burden                  float64 // mean share of a window reviewed (in score order) to reach every oracle P1
+	UnknownPersistent, UnknownKept, UnknownP12 int
+	UnknownApproaching, UnknownP1              int
+	UnknownTransient, UnknownP4                int
+	Model                                      string
+	Frames, Kept                               int
+	EdgeDrop                                   float64 // share of frames dropped at the edge
+	EdgeMissP1, EdgeMissP12                    float64 // share of oracle P1 (P1–P2) frames dropped at the edge
+	TierExact, TierWithin1                     float64 // on kept frames
+	P1Recall, P1Precision                      float64
+	CriticalMiss                               float64 // oracle P1 scored P3/P4
+	FalseFlash                                 float64 // oracle P3/P4 scored P1
+	FlashLoad                                  float64 // share of kept frames scored P1
+	NDCG                                       float64 // mean NDCG@TopK per window
+	Burden                                     float64 // mean share of a window reviewed (in score order) to reach every oracle P1
 }
 
 // Evaluate scores frames with model against the model's mission oracle.
@@ -79,6 +100,32 @@ func Evaluate(model string, frames []Frame) Result {
 	var p1, p12, p1Drop, p12Drop int
 	now := time.Unix(0, 0)
 	for _, f := range frames {
+		for _, d := range f.Dets {
+			if d.Class != "unknown" {
+				continue
+			}
+			tier := command.TierFor(command.ScoreDet(d, nil, model).Score)
+			if d.Attrs.Transient {
+				r.UnknownTransient++
+				if tier == 4 {
+					r.UnknownP4++
+				}
+				continue
+			}
+			r.UnknownPersistent++
+			if f.Edge >= sensor.EdgeKeep {
+				r.UnknownKept++
+				if tier <= 2 {
+					r.UnknownP12++
+				}
+			}
+			if d.Attrs.Approaching {
+				r.UnknownApproaching++
+				if tier == 1 {
+					r.UnknownP1++
+				}
+			}
+		}
 		gt := FrameTier(mission, f.Dets, f.FP)
 		if gt == 1 {
 			p1++
