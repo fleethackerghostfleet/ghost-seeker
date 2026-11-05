@@ -83,9 +83,9 @@ test('tab switches and next decisions reveal selection without scrolling page an
 test('toasts avoid decision controls and fall back to document flow when no overlay fits',()=>{
  const {context}=setup(),toast=context.$('toast'),classes=new Set();
  toast.classList={contains:c=>classes.has(c),add:c=>classes.add(c),remove:c=>classes.delete(c)};
- toast.style={};toast.getBoundingClientRect=()=>({height:80});context.innerHeight=390;
+ toast.style={};toast.getBoundingClientRect=()=>({height:80,left:100,right:600});context.innerHeight=390;
  let controls=[];
- context.document.querySelectorAll=()=>controls.map(r=>({getBoundingClientRect:()=>r}));
+ context.document.querySelectorAll=()=>controls.map(r=>({getBoundingClientRect:()=>({left:0,right:800,...r})}));
  vm.runInContext('placeToast()',context);
  assert.equal(toast.style.top,undefined);
  classes.add('on');
@@ -105,6 +105,30 @@ test('toasts avoid decision controls and fall back to document flow when no over
  assert.equal(toast.textContent,'Next escalation');
  assert.equal(classes.has('inline'),false);
  assert.equal(toast.style.top,'8px');
+});
+
+test('toasts use free space between both banners and overlapping decision obstacles',()=>{
+ const {context}=setup(),toast=context.$('toast'),classes=new Set(['on']);
+ toast.classList={contains:c=>classes.has(c),add:c=>classes.add(c),remove:c=>classes.delete(c)};
+ toast.style={};toast.getBoundingClientRect=()=>({height:80,left:100,right:600});context.innerHeight=768;
+ const controls=[{top:744,bottom:768},{top:0,bottom:24}];
+ context.document.querySelectorAll=selector=>{
+  assert.match(selector,/body>\.banner/);
+  return controls.map(r=>({getBoundingClientRect:()=>({left:0,right:800,...r})}));
+ };
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),false);
+ assert.equal(toast.style.top,'32px');
+ controls.push({top:48,bottom:400});
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,'408px');
+ controls.push({top:390,bottom:744});
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),true);
+ classes.delete('inline');controls.splice(2,2,{top:24,bottom:744,left:700,right:800});
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),false);
+ assert.equal(toast.style.top,'32px');
 });
 
 test('commander queue and note templates escape item ids',()=>{

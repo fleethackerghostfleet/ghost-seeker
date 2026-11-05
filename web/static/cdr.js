@@ -146,11 +146,14 @@ function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max
 function setLive(on){$('live').classList.toggle('off',!on);$('live').querySelector('span').textContent=on?'LIVE':'RECONNECTING'}
 function placeToast(){
  const t=$('toast');if(!t.classList.contains('on')||t.classList.contains('inline'))return;
- const height=t.getBoundingClientRect().height;
- const controls=[...document.querySelectorAll('#brief > :last-child,#brief #note,#brief h4:last-of-type,body>.banner')].map(e=>e.getBoundingClientRect()).filter(r=>r.bottom>0&&r.top<innerHeight);
- const first=Math.min(innerHeight,...controls.map(r=>r.top)),last=Math.max(0,...controls.map(r=>r.bottom));
- const top=height+16<=first?8:last+height+16<=innerHeight?last+8:null;
- if(top===null){t.classList.add('inline');return}
+ const bounds=t.getBoundingClientRect(),height=bounds.height;
+ const controls=[...document.querySelectorAll('#brief > :last-child,#brief #note,#brief h4:last-of-type,body>.banner')].map(e=>e.getBoundingClientRect()).filter(r=>r.bottom>0&&r.top<innerHeight&&r.right>bounds.left&&r.left<bounds.right).sort((a,b)=>a.top-b.top);
+ let top=8;
+ for(const control of controls){
+  if(top+height+8<=control.top)break;
+  top=Math.max(top,control.bottom+8);
+ }
+ if(top+height+8>innerHeight){t.classList.add('inline');return}
  t.classList.remove('inline');t.style.top=`${top}px`;
 }
 let tt;function toast(m){const t=$('toast');t.classList.remove('inline');t.textContent=m;t.classList.add('on');placeToast();clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
