@@ -302,7 +302,7 @@ Nothing below the double line was used for any training, threshold or model choi
 
 ```sh
 # Phase A (GCS writes are additive; refuses to overwrite)
-python datasets/ingest/seadronessee.py --snapshot <HF snapshot @ deb1f87>      # raw/ + datasets/ + catalog, sequences.jsonl
+python datasets/ingest/seadronessee.py --snapshot <HF snapshot @ deb1f87> --out <ingest dir>   # raw/ + datasets/ + catalog, sequences.jsonl
 python edgeml/tools/clean_v3.py --v2 <clean v2 catalog/> --ir-raw <IR raw> --ir-catalog <catalog/images> \
     --sds-catalog <catalog> --sds-sequences sequences.jsonl --output ~/data/clean_v3      # issues.jsonl, audit.json
 python edgeml/tools/coverage_table.py --catalog ~/data/clean_v3/catalog --data-root ~/data \
