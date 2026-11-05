@@ -10,7 +10,7 @@ window.gsSettings=(()=>{
  const TEXT_SIZES=[['compact','Compact'],['default','Default'],['large','Large'],['extra-large','Extra large']];
  const TEXT_SCALES={compact:1,default:1.12,large:1.25,'extra-large':1.4};
  const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:cleanFeed(),textSize:'default'});
- function cleanFeed(value){return {showDuplicates:value?.showDuplicates===true,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all',dupDefault:'off'}}
+ function cleanFeed(value){return {showDuplicates:value?.showDuplicates===true,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all',dupDefault:'off',hideUploaded:value?.hideUploaded===true}}
  // "Sent by a person" is a temporary view; a reload must not leave the main feed stuck on it.
  function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';
   // Reset legacy auto-saved defaults once; marked settings preserve later user choices.
