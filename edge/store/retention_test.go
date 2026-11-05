@@ -149,12 +149,12 @@ func TestProtectionRules(t *testing.T) {
 			}
 		}},
 		{"pulled", func(t *testing.T, s *Store) {
-			if err := s.SetPull(ctx, "protected", pb.FormKind_FORM_KIND_FULL, 100, "ops"); err != nil {
+			if err := s.SetPull(ctx, "protected", pb.FormKind_FORM_KIND_FULL, 100, "ops", false); err != nil {
 				t.Fatal(err)
 			}
 		}},
 		{"zero boost pull", func(t *testing.T, s *Store) {
-			if err := s.SetPull(ctx, "protected", pb.FormKind_FORM_KIND_FULL, 0, "ops"); err != nil {
+			if err := s.SetPull(ctx, "protected", pb.FormKind_FORM_KIND_FULL, 0, "ops", false); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -389,4 +389,75 @@ func TestPendingCorrectionSurvivesRestartAndCaps(t *testing.T) {
 		t.Fatal(err)
 	}
 	hasTest(t, s, "corrected", false)
+}
+
+func TestOriginalCountsAgainstByteCap(t *testing.T) {
+	s := openTest(t)
+	putTest(t, s, "a", 1, 1, true)
+	putTest(t, s, "b", 1, 2, false)
+	if err := s.SetLimits(ctx, Limits{MaxBytes: 40}); err != nil {
+		t.Fatal(err)
+	}
+	// 14+14+20 > 40: the delivered item makes room.
+	if err := s.PutOriginal(ctx, "b", make([]byte, 20)); err != nil {
+		t.Fatal(err)
+	}
+	hasTest(t, s, "a", false)
+	if _, err := s.Put(ctx, &pb.Item{Id: "c"}, map[pb.FormKind][]byte{pb.FormKind_FORM_KIND_FULL: make([]byte, 10)}); !errors.Is(err, ErrFull) {
+		t.Fatalf("put over cap with kept original: %v", err)
+	}
+	// Too big to fit: refused, and no stale original is left to restore.
+	if err := s.PutOriginal(ctx, "b", make([]byte, 50)); !errors.Is(err, ErrFull) {
+		t.Fatalf("oversized original: %v", err)
+	}
+	if changed, err := s.RestoreOriginal(ctx, "b"); err != nil || changed {
+		t.Fatalf("restore after refused original: changed=%v err=%v", changed, err)
+	}
+	if _, err := s.Put(ctx, &pb.Item{Id: "c"}, map[pb.FormKind][]byte{pb.FormKind_FORM_KIND_FULL: make([]byte, 10)}); err != nil {
+		t.Fatalf("put after original dropped: %v", err)
+	}
+}
+
+func TestRestoreOriginalAtFullCap(t *testing.T) {
+	s := openTest(t)
+	putTest(t, s, "b", 1, 1, false) // FACT 4 + FULL 10
+	if err := s.PutOriginal(ctx, "b", make([]byte, 20)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLimits(ctx, Limits{MaxBytes: 34}); err != nil {
+		t.Fatal(err)
+	}
+	// FULL grows 10 -> 20 but the 20-byte kept copy is freed: 24 <= 34.
+	if changed, err := s.RestoreOriginal(ctx, "b"); err != nil || !changed {
+		t.Fatalf("restore at cap: changed=%v err=%v", changed, err)
+	}
+	var n int64
+	if err := s.db.QueryRow(`SELECT original_bytes FROM items WHERE id='b'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("original_bytes after restore = %d, %v", n, err)
+	}
+}
+
+func TestUpgradeBackfillsOriginalBytes(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	putTest(t, s, "b", 1, 1, false)
+	if err := s.PutOriginal(ctx, "b", make([]byte, 20)); err != nil {
+		t.Fatal(err)
+	}
+	// A database from before original_bytes, with an original already kept.
+	if _, err := s.db.Exec(`ALTER TABLE items DROP COLUMN original_bytes`); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if s, err = Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var n int64
+	if err := s.db.QueryRow(`SELECT original_bytes FROM items WHERE id='b'`).Scan(&n); err != nil || n != 20 {
+		t.Fatalf("original_bytes after upgrade = %d, %v", n, err)
+	}
 }

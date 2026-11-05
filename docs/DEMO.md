@@ -78,6 +78,10 @@ are excluded from the unique-object count, the review queue and the commander vi
 says "N camera heartbeats not counted"). Any per-frame leftovers
 (`-scene-every 0`) are hidden by the "sightings only" toggle.
 
+**Send full size.** The operator override next to "Pull full image": after a name prompt it
+calls shore `RequestPull` with `original: true`, so the edge sends the capture's original bytes
+as FULL with no re-encoding. Shown only on items that have a FULL form.
+
 ## 3. Three-minute presenter script
 
 | t | do | say |

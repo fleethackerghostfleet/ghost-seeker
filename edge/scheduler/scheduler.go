@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,20 +232,32 @@ func (s *Scheduler) applyOverride(ctx context.Context, o *pb.LabelOverride) erro
 	return s.ScoreItem(ctx, row)
 }
 
-// Pull boosts an item because shore asked for it.
+// Pull boosts an item because shore asked for it. An original pull is an
+// operator override: FULL goes as the capture's original bytes and the item
+// skips THUMB/CROP from then on.
 func (s *Scheduler) Pull(ctx context.Context, p *pb.Pull) error {
 	boost := p.PriorityBoost
 	if boost <= 0 {
 		boost = s.cfg.PullBoost
 	}
-	if err := s.st.SetPull(ctx, p.ItemId, p.Form, boost, p.RequestedBy); err != nil {
+	form, event := p.Form, "pull"
+	if p.Original {
+		if strings.TrimSpace(p.RequestedBy) == "" {
+			return fmt.Errorf("original pull of %s: requested_by is required", p.ItemId)
+		}
+		form, event = pb.FormKind_FORM_KIND_FULL, "pull-original"
+		if _, err := s.st.RestoreOriginal(ctx, p.ItemId); err != nil {
+			return err
+		}
+	}
+	if err := s.st.SetPull(ctx, p.ItemId, form, boost, p.RequestedBy, p.Original); err != nil {
 		return err
 	}
 	row, err := s.st.Get(ctx, p.ItemId)
 	if err != nil {
 		return err
 	}
-	_ = s.st.Event(ctx, s.clk.Now(), "pull", p.ItemId, p.RequestedBy)
+	_ = s.st.Event(ctx, s.clk.Now(), event, p.ItemId, p.RequestedBy)
 	return s.ScoreItem(ctx, row)
 }
 
@@ -311,12 +324,29 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 		if !f.Ready || f.Complete || PullOnly(r, f) {
 			continue
 		}
+		if skipForm(r, f) {
+			continue
+		}
 		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
 			return nil
 		}
 		return f
 	}
 	return nil
+}
+
+// skipForm: an operator's original pull sends FULL first; THUMB/CROP wait
+// until it is complete so the item still finishes.
+func skipForm(r *store.Row, f *store.FormState) bool {
+	if !r.PullOriginal || (f.Kind != pb.FormKind_FORM_KIND_THUMB && f.Kind != pb.FormKind_FORM_KIND_CROP) {
+		return false
+	}
+	for _, o := range r.Forms {
+		if o.Kind == pb.FormKind_FORM_KIND_FULL {
+			return !o.Complete
+		}
+	}
+	return false
 }
 
 // PullOnly reports whether a form is held on the edge for shore to pull
@@ -333,7 +363,7 @@ func PullOnly(r *store.Row, f *store.FormState) bool {
 func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.EmconMode) *store.FormState {
 	for i := range r.Forms {
 		f := &r.Forms[i]
-		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) {
+		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) || skipForm(r, f) {
 			continue
 		}
 		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
