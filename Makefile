@@ -1,15 +1,26 @@
 GO ?= go
 BIN := bin
 
-.PHONY: all gen build test sim run-shore run-edge compose clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar
+.PHONY: all gen build test sim run-shore run-edge compose clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package
 
 all: build
+
+GO_IMAGE ?=
+PY_IMAGE ?=
+GO_BUILD_ARG = $(if $(GO_IMAGE),--build-arg GO_IMAGE=$(GO_IMAGE))
+PY_BUILD_ARG = $(if $(PY_IMAGE),--build-arg PY_IMAGE=$(PY_IMAGE))
+SHORE_IMAGE := ghost-seeker/shore:0.1.0
+EDGE_IMAGE := ghost-seeker/edge:0.1.0
+OPERATOR_IMAGE := ghost-seeker/operator:0.1.0
+EDGEML_IMAGE := ghost-seeker/edgeml-sidecar:0.1.0
+IMAGES := $(SHORE_IMAGE) $(EDGE_IMAGE) $(OPERATOR_IMAGE) $(EDGEML_IMAGE)
 
 gen:            ## regenerate Go from proto (needs buf, protoc-gen-go, protoc-gen-connect-go)
 	buf lint && buf generate
 
 build:
-	$(GO) build -o $(BIN)/ ./cmd/...
+	mkdir -p $(BIN)
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o $(BIN)/ ./cmd/...
 
 test:
 	$(GO) vet ./... && $(GO) test ./...
@@ -56,6 +67,26 @@ demo-edge: build ## replay the demo clips at 5 fps through the shaped link, one 
 
 compose:
 	docker compose -f deploy/compose/docker-compose.yml up --build
+
+images:
+	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
+	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
+	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
+	docker build $(PY_BUILD_ARG) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
+
+images-save:
+	mkdir -p dist
+	docker save -o dist/ghost-seeker-images.tar $(IMAGES)
+
+images-load:
+	docker load -i dist/ghost-seeker-images.tar
+
+package-check:
+	sh deploy/zarf/check.sh
+
+zarf-package:
+	mkdir -p dist
+	zarf package create deploy/zarf --confirm --output dist
 
 clean:
 	rm -rf $(BIN) data sim-results.json

@@ -104,6 +104,10 @@ func main() {
 		fatal(err)
 		src, err := ingest.NewReplay(clk, *period, sc.Sets...)
 		fatal(err)
+		ing.OnBurst = func(source string, fps float64, d time.Duration, reason string) {
+			src.Burst(source, fps, d)
+			log.Info("replay burst", "source", source, "fps", fps, "duration", d, "reason", reason)
+		}
 		log.Info("replaying", "frames", src.Len(), "period", *period)
 		go func() {
 			if err := ing.Run(ctx, src); err != nil && ctx.Err() == nil {

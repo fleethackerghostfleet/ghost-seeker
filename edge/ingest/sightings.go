@@ -112,7 +112,57 @@ func (g *Ingester) applySighting(ctx context.Context, c *Capture, hash string, r
 		return g.openItem(ctx, c, hash, resp, s)
 	case pb.Sighting_EVENT_DUPLICATE:
 		atomic.AddInt64(&g.Dups, 1)
-		return nil, nil
+		id, known := g.sightings[s.Id]
+		if !known || s.GetKeyDetection().GetBox() == nil {
+			return nil, nil
+		}
+		var dark *pb.Detection
+		for _, detection := range resp.Detections {
+			if strings.EqualFold(detection.GetLabel(), "dark contact") &&
+				boxIoU(detection.GetBox(), s.KeyDetection.GetBox()) >= 0.5 {
+				dark = detection
+				break
+			}
+		}
+		if dark == nil {
+			return nil, nil
+		}
+		row, err := g.st.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if row.Item.Features == nil {
+			row.Item.Features = &pb.Features{}
+		}
+		if row.Item.Features.Tags == nil {
+			row.Item.Features.Tags = map[string]string{}
+		}
+		if _, tagged := row.Item.Features.Tags["dark_contact"]; tagged {
+			existingIndex := -1
+			var existingConfidence float32
+			for i, detection := range row.Item.Features.Detections {
+				if strings.EqualFold(detection.GetLabel(), "dark contact") &&
+					(existingIndex < 0 || detection.GetConfidence() > existingConfidence) {
+					existingIndex = i
+					existingConfidence = detection.GetConfidence()
+				}
+			}
+			if existingIndex >= 0 {
+				if dark.GetConfidence() <= existingConfidence {
+					return nil, nil
+				}
+				row.Item.Features.Detections[existingIndex] = dark
+			} else {
+				row.Item.Features.Detections = append(row.Item.Features.Detections, dark)
+			}
+		} else {
+			row.Item.Features.Detections = append(row.Item.Features.Detections, dark)
+			row.Item.Features.Tags["dark_contact"] = "1"
+		}
+		if err := g.st.UpdateItem(ctx, row.Item); err != nil {
+			return nil, err
+		}
+		return g.rescore(ctx, id)
 	case pb.Sighting_EVENT_CLOSE:
 		id, known := g.sightings[s.Id]
 		delete(g.sightings, s.Id)
