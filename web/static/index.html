@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/briefing.css">
 <link rel="stylesheet" href="/lights.css">
 <link rel="stylesheet" href="/auth.css">
+<link rel="stylesheet" href="/text-size.css">
 </head>
 <body>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
@@ -28,7 +29,7 @@
     <div class="hstat"><b id="hsCdr" style="color:var(--good)">0</b><span>Sent to Commander</span></div>
   </div>
   <div class="clock mono" id="clock">--:--:--Z</div>
-  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:11px">Watch officer</span></div></div>
+  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:0.6875rem">Watch officer</span></div></div>
   <span id="readOnlyBadge" class="read-only-badge" hidden>Read-only</span>
   <form id="authLogout" class="auth-logout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
 </header>
@@ -126,7 +127,6 @@
     <button class="kb" data-a="undo" style="flex:.7"><kbd>Z</kbd>Undo</button>
   </div>
 </section>
-<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <section class="page" id="pgBrief" aria-label="Briefing workspace">
  <div class="toolbar"><div><b>Briefing builder</b><div class="hint">Local evidence snapshot · no changes to review or command decisions</div></div><div class="spacer"></div><a class="btn" href="#feed">Back to imagery</a><button class="btn" id="briefRebuild">New snapshot from selection</button><button class="btn" id="briefPDF">Print / Save PDF</button><button class="btn primary" id="briefPPTX">Export PowerPoint</button></div>
  <div id="briefStatus" role="status" aria-live="polite"></div>
@@ -144,8 +144,10 @@
  </div>
 </section>
 <div class="toast" id="toast"></div>
+<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <dialog id="settings" class="setdlg"></dialog>
 <script src="/settings.js" defer></script>
+<script src="/text-layout.js" defer></script>
 <script src="/resize.js" defer></script>
 <script src="/render.js" defer></script>
 <script src="/workbench.js" defer></script>
