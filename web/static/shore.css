@@ -24,6 +24,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 "Inter",system-
 .presets button{font:inherit;font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:3px 8px;cursor:pointer}
 .presets button.on{border-color:var(--accent);color:var(--accent)}
 .presets button:disabled{opacity:.4;cursor:not-allowed}
+.shore-emcon{display:inline-flex;align-items:center;margin-top:7px;border:1px solid var(--line);border-radius:5px;overflow:hidden}.shore-emcon b{padding:3px 7px;color:var(--muted);font-size:10px;letter-spacing:.08em}.shore-emcon button{font:inherit;font-size:11px;background:var(--bg);color:var(--fg);border:0;border-left:1px solid var(--line);padding:4px 7px;cursor:pointer}.shore-emcon button.on{background:var(--line);color:var(--fg)}.shore-emcon button:disabled{opacity:.5;cursor:not-allowed}#policy-info{margin-top:5px;white-space:normal;line-height:1.45}
 .directive{display:flex;gap:6px;margin-top:6px}
 .directive input{flex:1;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
 .btn{font:inherit;font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}

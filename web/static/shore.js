@@ -21,13 +21,20 @@
   }
   async function post(url, body) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-    return r.json();
+    const text = await r.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch {}
+    if (!r.ok) {
+      if (data?.conflicts?.length) toast(window.gsPolicy.conflictToast(data.conflicts), true);
+      throw new Error(data?.error || `${r.status} ${text}`);
+    }
+    return data;
   }
 
   // ---- status strip ----
   function renderStrip() {
     const { shore, edge, link, counts, policy } = snap;
+    const policyInfo = snap.policyInfo || {};
     const c = $('#conn');
     c.textContent = shore.ok ? `shore ok · ${new Date(snap.ts).toLocaleTimeString()}` : `shore: ${shore.error || 'unreachable'}`;
     c.className = 'conn ' + (shore.ok ? 'ok' : 'bad');
@@ -58,7 +65,18 @@
     $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
-    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (snap.emcon ? ` · EMCON ${snap.emcon}` : '');
+    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (!snap.policyInfo && snap.emcon ? ` · EMCON ${snap.emcon}` : '');
+    const focusedMode = document.activeElement?.closest?.('#shore-emcon button')?.dataset.mode;
+    const mode = String(policyInfo.emcon || snap.emcon || 'NORMAL').toUpperCase();
+    const lockTitle = policyInfo.emconLocked ? `EMCON locked by ${policyInfo.emconLockedBy || policyInfo.emconSetBy || 'higher echelon'}` : '';
+    $('#shore-emcon').innerHTML = `<div class="shore-emcon" role="group" aria-label="Go quiet (EMCON)" tabindex="-1" ${lockTitle ? `title="${esc(lockTitle)}"` : ''}><b>EMCON</b>${['NORMAL', 'BURST', 'SILENT'].map(value => `<button type="button" data-mode="${value}" aria-pressed="${mode === value}" class="${mode === value ? 'on' : ''}" ${policyInfo.emconLocked ? 'disabled' : ''} ${lockTitle ? `title="${esc(lockTitle)}"` : ''}>${value[0] + value.slice(1).toLowerCase()}</button>`).join('')}</div>`;
+    if (focusedMode) {
+      const button = $('#shore-emcon').querySelector(`[data-mode="${focusedMode}"]`);
+      (button && !button.disabled ? button : $('#shore-emcon').querySelector('.shore-emcon'))?.focus({ preventScroll: true });
+    }
+    const locks = (policyInfo.locks || []).map(lock => `${esc(lock.lockedBy)}: ${esc((lock.labels || []).join(', '))}`).join(' · ');
+    const conflicts = (policyInfo.conflicts || []).map(conflict => `${esc(conflict.ruleId)} — ${esc(conflict.reason)}`).join(' · ');
+    $('#policy-info').innerHTML = [locks && `Locks: ${locks}`, conflicts && `Conflicts: ${conflicts}`].filter(Boolean).join(' | ');
     const review = snap.objects.filter(o => !decided.has(o.key) && !o.suppressed && !o.scene && (o.sightingId || !sightingMode));
     $('#review-n').textContent = review.length;
   }
@@ -232,15 +250,25 @@
     try {
       const r = await post('/api/shore/policy', { text });
       const c = r.compiled;
-      // NL-compiler hook: readback + path ("llm"|"rules") + guardrail warnings.
       if (c) {
         $('#readback').textContent = `${c.readback} [${c.path}]${c.warnings.length ? ' — ' + c.warnings.join(' ') : ''}`;
         toast(`policy set (${c.path}): ${c.readback}`);
       } else {
         $('#readback').textContent = '';
-        toast('policy set');
+        toast(`policy set${r.policyId ? ` (${r.policyId.slice(0, 8)})` : ''}`);
       }
+      const conflicts = r.policy?.conflicts || r.conflicts;
+      if (conflicts?.length) toast(window.gsPolicy.conflictToast(conflicts), true);
       $('#directive').value = '';
+    } catch (err) { toast(err.message, true); }
+  });
+  $('#shore-emcon').addEventListener('click', async e => {
+    const button = e.target.closest('button[data-mode]');
+    if (!button || button.disabled) return;
+    try {
+      const response = await post('/api/shore/emcon', { mode: button.dataset.mode });
+      if (response.conflicts?.length) toast(window.gsPolicy.conflictToast(response.conflicts), true);
+      else toast(`EMCON set to ${button.dataset.mode}`);
     } catch (err) { toast(err.message, true); }
   });
   for (const t of document.querySelectorAll('.tab')) t.onclick = () => {

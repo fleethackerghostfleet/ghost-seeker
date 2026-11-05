@@ -141,7 +141,7 @@ const workbench=(()=>{
   $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;unknown=[];renderChips();await preview({label:'Version restored'})}};
   $('wbUndo').onclick=()=>travel(-1);$('wbRedo').onclick=()=>travel(1);$('wbReset').onclick=()=>reset();
   document.addEventListener('keydown',e=>{
-   if(document.querySelector('dialog[open]')||state.page!=='rp'||busy||$('settings').open||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
+   if(document.querySelector('dialog[open]')||gsPolicy.isPolicyHotkeyTarget(e.target)||state.page!=='rp'||busy||$('settings').open||/TEXTAREA|INPUT|SELECT/.test(e.target.tagName)||e.altKey)return;
    const k=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();travel(e.shiftKey?1:-1);return}if(e.ctrlKey||e.metaKey)return;
    if(e.target.closest('select,input,button'))return;
    const tile=e.target.closest('.wb-tile');if(!tile)return;
@@ -172,10 +172,11 @@ const workbench=(()=>{
   $('wbConfirmApply').onclick=async()=>{
    busy=true;$('wbConfirmApply').disabled=true;
    try{
-    if(draft.rules.length){await request('/api/directives','POST',{text:draft.text||draft.rules.map(ruleText).join('; ').slice(0,500),rules:draft.rules,durationMin:pendingDuration});draft.rules=[]}
+    let conflicts=[];
+    if(draft.rules.length){const added=await request('/api/directives','POST',{text:draft.text||draft.rules.map(ruleText).join('; ').slice(0,500),rules:draft.rules,durationMin:pendingDuration});conflicts=added.conflicts||[];draft.rules=[]}
     for(const [id,manual]of Object.entries(draft.pins)){if(findItem(id))await patchItem(id,{manual});delete draft.pins[id]}
-    closeFocus='confirm';$('wbConfirm').close();await reset('Applied to live feed');$('nlIn').focus();toast('Workbench applied to live feed');
-   }catch(error){renderChips();closeFocus='apply';$('wbConfirm').close();toast('Apply stopped: '+error.message+'; successful changes are already live.')}finally{busy=false;$('wbConfirmApply').disabled=false;live()}
+    closeFocus='confirm';$('wbConfirm').close();await reset('Applied to live feed');$('nlIn').focus();toast(conflicts.length?gsPolicy.conflictToast(conflicts):'Workbench applied to live feed');
+   }catch(error){renderChips();closeFocus='apply';$('wbConfirm').close();if(!error.policyConflicts)toast('Apply stopped: '+error.message+'; successful changes are already live.')}finally{busy=false;$('wbConfirmApply').disabled=false;live()}
   };
  }
  function focusInput(){const input=$('nlIn');input.focus();input.setSelectionRange(input.value.length,input.value.length)}

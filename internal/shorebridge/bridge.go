@@ -28,6 +28,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 )
 
@@ -55,10 +56,11 @@ type Bridge struct {
 	// nil keeps the simple Interpret path.
 	Compiler *command.Compiler
 
-	mu      sync.Mutex
-	snap    []byte
-	subs    map[chan []byte]struct{}
-	records map[string]int // RECORD item id -> n_frames
+	mu         sync.Mutex
+	snap       []byte
+	subs       map[chan []byte]struct{}
+	records    map[string]int // RECORD item id -> n_frames
+	edgeNodeID string
 }
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
@@ -140,14 +142,37 @@ type NodeStatus struct {
 }
 
 type Snapshot struct {
-	TS      int64      `json:"ts"`
-	Shore   NodeStatus `json:"shore"`
-	Edge    NodeStatus `json:"edge"`
-	Link    LinkStatus `json:"link"`
-	Policy  string     `json:"policy"`
-	Emcon   string     `json:"emcon,omitempty"`
-	Objects []*Object  `json:"objects"`
-	Counts  Counts     `json:"counts"`
+	TS         int64       `json:"ts"`
+	Shore      NodeStatus  `json:"shore"`
+	Edge       NodeStatus  `json:"edge"`
+	Link       LinkStatus  `json:"link"`
+	Policy     string      `json:"policy"`
+	Emcon      string      `json:"emcon,omitempty"`
+	PolicyInfo *PolicyInfo `json:"policyInfo,omitempty"`
+	Objects    []*Object   `json:"objects"`
+	Counts     Counts      `json:"counts"`
+}
+
+type PolicyInfo struct {
+	Version       int64            `json:"version"`
+	Emcon         string           `json:"emcon"`
+	EmconSetBy    string           `json:"emconSetBy,omitempty"`
+	EmconLocked   bool             `json:"emconLocked"`
+	EmconLockedBy string           `json:"emconLockedBy,omitempty"`
+	Locks         []PolicyLock     `json:"locks"`
+	Conflicts     []PolicyConflict `json:"conflicts"`
+}
+
+type PolicyLock struct {
+	RuleID   string   `json:"ruleId"`
+	Labels   []string `json:"labels"`
+	LockedBy string   `json:"lockedBy"`
+}
+
+type PolicyConflict struct {
+	RuleID    string `json:"ruleId"`
+	Reason    string `json:"reason"`
+	BlockedBy string `json:"blockedBy"`
 }
 
 type LinkStatus struct {
@@ -238,6 +263,9 @@ func (b *Bridge) refresh(ctx context.Context) {
 			snap.Emcon = strings.TrimPrefix(m.String(), "EMCON_MODE_")
 		}
 		suppressed = pol.GetPolicy().GetInterest().GetSuppressLabels()
+		if pol.Policy != nil {
+			snap.PolicyInfo = policyInfo(pol.Policy)
+		}
 	}
 	if b.edge != "" {
 		var est pb.GetStatusResponse
@@ -246,6 +274,11 @@ func (b *Bridge) refresh(ctx context.Context) {
 			snap.Edge.Error = "upstream edge error"
 		} else {
 			snap.Edge = nodeStatus(&est)
+			if nodeID := est.GetNodeId(); nodeID != "" {
+				b.mu.Lock()
+				b.edgeNodeID = nodeID
+				b.mu.Unlock()
+			}
 		}
 	}
 
@@ -648,6 +681,7 @@ func (b *Bridge) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/shore/stream", b.stream)
 	mux.HandleFunc("POST /api/shore/policy", b.setPolicy)
+	mux.HandleFunc("POST /api/shore/emcon", b.setEMCON)
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
@@ -729,6 +763,9 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	if mode != "" {
+		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
+	}
 	var compiled *command.Compiled
 	if len(in.Suppress) == 0 && len(in.Boost) == 0 && in.Text != "" {
 		droppedScopedRules := false
@@ -761,7 +798,6 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
 			if mode != "" {
-				pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 				c.Readback = strings.TrimSuffix(c.Readback, "No rules recognized.") + " EMCON " + mode + "."
 				c.Readback = strings.TrimSpace(c.Readback)
 			}
@@ -777,6 +813,39 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	current, _ := b.getPolicy(r.Context())
+	if current != nil {
+		// An EMCON phrase in the directive ("go quiet") changes the ship-echelon
+		// EMCON unless a higher echelon has locked it; otherwise keep the current.
+		emconLocked := current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP
+		if mode == "" || emconLocked {
+			if mode != "" && compiled != nil {
+				compiled.Warnings = append(compiled.Warnings, "EMCON locked by "+current.EmconSetting.SetBy+"; not changed.")
+			}
+			pol.Emcon = current.Emcon
+			if current.EmconSetting != nil {
+				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
+			}
+		} else {
+			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+		}
+		if len(current.Layers) > 0 {
+			pol.Layers = cloneLayers(current.Layers)
+			operatorLayer := findOperatorLayer(pol.Layers, in.IssuedBy)
+			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: in.IssuedBy,
+				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...), Text: in.Text}
+			if operatorLayer >= 0 {
+				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
+			} else {
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: in.IssuedBy, Rules: []*pb.InterestRule{rule}})
+				operatorLayer = len(pol.Layers) - 1
+			}
+			if mode != "" && !emconLocked {
+				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+			}
+		}
+	}
+	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse
 	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
 		log.Printf("shorebridge: set policy upstream: %v", err)
@@ -839,6 +908,148 @@ func blockedMessage(c command.Compiled) string {
 		return c.Warnings[0]
 	}
 	return "directive is blocked"
+}
+
+func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Mode     string `json:"mode"`
+		IssuedBy string `json:"issuedBy"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	mode, ok := parseEMCON(in.Mode)
+	if !ok {
+		http.Error(w, "mode must be NORMAL, BURST, or SILENT", http.StatusBadRequest)
+		return
+	}
+	if in.IssuedBy == "" {
+		in.IssuedBy = "operator-ui"
+	}
+	current, err := b.getPolicy(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if current == nil {
+		current = &pb.Policy{Interest: &pb.Interest{}}
+	}
+	if setting := current.EmconSetting; setting != nil && setting.Locked && setting.Echelon > pb.Echelon_ECHELON_SHIP {
+		w.WriteHeader(http.StatusConflict)
+		writeJSON(w, map[string]string{"error": "EMCON locked by " + setting.SetBy})
+		return
+	}
+	pol := proto.Clone(current).(*pb.Policy)
+	pol.IssuedBy = in.IssuedBy
+	if len(pol.Layers) > 0 {
+		pol.Layers = cloneLayers(pol.Layers)
+		operatorLayer := findOperatorLayer(pol.Layers, in.IssuedBy)
+		if operatorLayer < 0 {
+			for i, layer := range pol.Layers {
+				if layer.Echelon == pb.Echelon_ECHELON_SHIP {
+					operatorLayer = i
+					break
+				}
+			}
+			if operatorLayer < 0 {
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: in.IssuedBy})
+				operatorLayer = len(pol.Layers) - 1
+			}
+		}
+		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+	} else {
+		pol.Emcon = mode
+		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+	}
+	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
+	var out pb.SetPolicyResponse
+	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	raw, _ := protojson.Marshal(&out)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(raw)
+}
+
+func (b *Bridge) getPolicy(ctx context.Context) (*pb.Policy, error) {
+	var response pb.GetPolicyResponse
+	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &response); err != nil {
+		return nil, err
+	}
+	return response.Policy, nil
+}
+
+func findOperatorLayer(layers []*pb.PolicyLayer, issuedBy string) int {
+	for i, layer := range layers {
+		if layer != nil && layer.Echelon == pb.Echelon_ECHELON_SHIP && layer.IssuedBy == issuedBy {
+			return i
+		}
+	}
+	return -1
+}
+
+func cloneLayers(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
+	out := make([]*pb.PolicyLayer, 0, len(layers))
+	for _, layer := range layers {
+		if layer == nil {
+			out = append(out, nil)
+			continue
+		}
+		out = append(out, proto.Clone(layer).(*pb.PolicyLayer))
+	}
+	return out
+}
+
+func parseEMCON(value string) (pb.EmconMode, bool) {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "NORMAL":
+		return pb.EmconMode_EMCON_MODE_NORMAL, true
+	case "BURST":
+		return pb.EmconMode_EMCON_MODE_BURST, true
+	case "SILENT":
+		return pb.EmconMode_EMCON_MODE_SILENT, true
+	default:
+		return pb.EmconMode_EMCON_MODE_UNSPECIFIED, false
+	}
+}
+
+func policyInfo(p *pb.Policy) *PolicyInfo {
+	info := &PolicyInfo{Version: p.Version, Emcon: emconName(p.Emcon), Locks: []PolicyLock{}, Conflicts: []PolicyConflict{}}
+	if p.EmconSetting != nil {
+		info.EmconSetBy = p.EmconSetting.SetBy
+		if p.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+			info.Emcon = emconName(p.EmconSetting.Mode)
+		}
+		if p.EmconSetting.Locked && p.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP {
+			info.EmconLocked = true
+			info.EmconLockedBy = p.EmconSetting.SetBy
+		}
+	}
+	for _, lock := range policy.Locks(p.Layers) {
+		if !lock.Emcon {
+			info.Locks = append(info.Locks, PolicyLock{RuleID: lock.RuleID, Labels: append([]string(nil), lock.BoostLabels...), LockedBy: lock.LockedBy})
+		}
+	}
+	for _, conflict := range p.Conflicts {
+		if conflict != nil {
+			info.Conflicts = append(info.Conflicts, PolicyConflict{RuleID: conflict.RuleId, Reason: conflict.Reason, BlockedBy: conflict.BlockedBy})
+		}
+	}
+	return info
+}
+
+func emconName(mode pb.EmconMode) string {
+	switch mode {
+	case pb.EmconMode_EMCON_MODE_BURST:
+		return "BURST"
+	case pb.EmconMode_EMCON_MODE_SILENT:
+		return "SILENT"
+	default:
+		return "NORMAL"
+	}
 }
 
 func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {

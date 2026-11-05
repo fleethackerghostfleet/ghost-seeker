@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
@@ -17,16 +18,19 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 )
 
 type Service struct {
 	ghostseekerv1connect.UnimplementedConsoleServiceHandler
-	NodeID string
-	St     *store.Store
-	Clk    clock.Clock
+	policyMu sync.Mutex
+	NodeID   string
+	St       *store.Store
+	Clk      clock.Clock
 	// Embedder compiles natural-language interest into vectors; optional.
 	Embedder inference.Analyzer
+	Signer   *policy.SigningKey
 	// Edge to address downlink to; "" = broadcast to all edges.
 	EdgeID string
 }
@@ -91,11 +95,31 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if p == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("policy required"))
 	}
+	s.policyMu.Lock()
+	defer s.policyMu.Unlock()
 	now := s.Clk.Now()
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
 	}
+	if p.Version == 0 {
+		prev, err := s.St.GetPolicy(ctx)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		version := now.UnixMilli()
+		if prev != nil && prev.Version+1 > version {
+			version = prev.Version + 1
+		}
+		p.Version = version
+	}
 	p.IssuedAtUnixMs = now.UnixMilli()
+	if len(p.Layers) > 0 {
+		p = policy.Flatten(p, s.EdgeID, now)
+		if p.Interest != nil {
+			p.Interest.PositiveEmbedding = nil
+			p.Interest.NegativeEmbedding = nil
+		}
+	}
 	if p.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		p.Emcon = pb.EmconMode_EMCON_MODE_NORMAL
 	}
@@ -107,13 +131,19 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 	}
+	p.Signature = nil
+	if s.Signer != nil {
+		if err := s.Signer.Sign(p); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
 	if err := s.St.SetPolicy(ctx, p); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_Policy{Policy: p}}, now); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&pb.SetPolicyResponse{Policy: p}), nil
+	return connect.NewResponse(&pb.SetPolicyResponse{Policy: p, Conflicts: p.Conflicts}), nil
 }
 
 // compileInterest turns boost/suppress label lists into positive/negative

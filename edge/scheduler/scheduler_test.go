@@ -13,6 +13,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 )
 
 // fakeShore is an in-memory SyncService that acks everything it gets and
@@ -281,6 +282,165 @@ func TestDownlinkPolicyAndPull(t *testing.T) {
 	}
 	if firstImg != b.Item.Id {
 		t.Fatalf("pulled item %s should be first image in queue, got %s (a=%s)", b.Item.Id, firstImg, a.Item.Id)
+	}
+}
+
+func TestAcceptSignedLayeredPolicyAndConflicts(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	pub, priv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.PolicyKeys = policy.Keyring{"command": pub}
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{Keys: s.cfg.PolicyKeys})
+	if err != nil {
+		t.Fatal(err)
+	}
+	layers := &pb.Policy{Id: "layered", Version: 1, IssuedAtUnixMs: clk.Now().UnixMilli(), Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
+			{Id: "locked-sub", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
+		}},
+		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO", Rules: []*pb.InterestRule{
+			{Id: "suppress-sub", SuppressLabels: []string{"submarine"}},
+		}},
+	}}
+	if err := policy.Sign(layers, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), layers, "downlink"); err != nil {
+		t.Fatal(err)
+	}
+	applied := s.Policy()
+	if len(applied.Interest.BoostLabels) != 1 || applied.Interest.BoostLabels[0] != "submarine" ||
+		len(applied.Conflicts) != 1 || applied.Conflicts[0].RuleId != "suppress-sub" {
+		t.Fatalf("applied layered policy=%+v", applied)
+	}
+}
+
+func TestRejectedPolicyDownlinkAdvancesCursorAndStaleVersion(t *testing.T) {
+	s, st, sh, _ := setup(t, Prioritized)
+	s.cfg.RequireSignedPolicy = true
+	var err error
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{RequireSigned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, priv, err := policy.GenerateKey("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.PolicyKeys = policy.Keyring{"command": pub}
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{Keys: s.cfg.PolicyKeys, RequireSigned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := &pb.Policy{Id: "accepted", Version: 4}
+	if err := policy.Sign(accepted, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), accepted, "console"); err != nil {
+		t.Fatal(err)
+	}
+	stale := &pb.Policy{Id: "stale", Version: 4}
+	if err := policy.Sign(stale, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), stale, "console"); !errors.Is(err, policy.ErrStaleVersion) {
+		t.Fatalf("stale version error=%v", err)
+	}
+	sh.downlink = []*pb.Downlink{{Seq: 7, Msg: &pb.Downlink_Policy{Policy: &pb.Policy{Id: "unsigned", Version: 5}}}}
+	if _, err := s.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Policy().Id; got != "accepted" {
+		t.Fatalf("rejected downlink replaced policy: %q", got)
+	}
+	cursor, err := st.GetCursor(context.Background())
+	if err != nil || cursor != 7 {
+		t.Fatalf("cursor=%d err=%v", cursor, err)
+	}
+	audit, err := s.PolicyAudit(context.Background(), 0)
+	if err != nil || len(audit) < 2 || audit[0].Result != "rejected" || audit[0].Source != "downlink" {
+		t.Fatalf("audit=%+v err=%v", audit, err)
+	}
+}
+
+func TestPolicyExpiryAndRuleExpiryOnTick(t *testing.T) {
+	s, _, _, clk := setup(t, Prioritized)
+	ctx := context.Background()
+	start := clk.Now()
+	withRuleExpiry := &pb.Policy{
+		Id: "rule-expiry", IssuedAtUnixMs: start.UnixMilli(), ExpiresAtUnixMs: start.Add(time.Hour).UnixMilli(),
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, Rules: []*pb.InterestRule{
+			{Id: "short", BoostLabels: []string{"submarine"}, ExpiresAtUnixMs: start.Add(time.Second).UnixMilli()},
+		}}},
+	}
+	if _, _, err := s.AcceptPolicy(ctx, withRuleExpiry, "console"); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(time.Second)
+	if _, err := s.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Policy().Interest.BoostLabels; len(got) != 0 {
+		t.Fatalf("expired rule remains active: %v", got)
+	}
+	audit, err := s.PolicyAudit(ctx, 0)
+	if err != nil || len(audit) != 1 || audit[0].Result != "applied" {
+		t.Fatalf("rule expiry audit=%+v err=%v", audit, err)
+	}
+
+	expiring := &pb.Policy{Id: "whole-policy", IssuedAtUnixMs: clk.Now().UnixMilli(), ExpiresAtUnixMs: clk.Now().Add(time.Second).UnixMilli()}
+	if _, _, err := s.AcceptPolicy(ctx, expiring, "console"); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(time.Second)
+	if _, err := s.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Policy().Id; got != "default" {
+		t.Fatalf("expired policy fallback=%q, want default", got)
+	}
+	audit, err = s.PolicyAudit(ctx, 0)
+	if err != nil || len(audit) < 2 || audit[0].Result != "expired" {
+		t.Fatalf("policy expiry audit=%+v err=%v", audit, err)
+	}
+}
+
+func TestPolicyRestartRestoresFlattenedLastGood(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	cfg := DefaultConfig("edge-7")
+	first, err := New(cfg, st, newFakeShore(), scoring.Default(), clk, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &pb.Policy{Id: "persisted", Version: 3, IssuedAtUnixMs: clk.Now().UnixMilli(), Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_SHIP, Rules: []*pb.InterestRule{{Id: "sub", BoostLabels: []string{"submarine"}}}},
+	}}
+	if _, _, err := first.AcceptPolicy(ctx, p, "console"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	restored, err := New(cfg, reopened, newFakeShore(), scoring.Default(), clk, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Policy().Id != "persisted" || len(restored.Policy().Interest.BoostLabels) != 1 ||
+		restored.Policy().Interest.BoostLabels[0] != "submarine" {
+		t.Fatalf("restored policy=%+v", restored.Policy())
 	}
 }
 

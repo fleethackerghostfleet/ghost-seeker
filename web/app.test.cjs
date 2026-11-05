@@ -5,6 +5,8 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
+const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
 test('spectral controls are metadata-driven and preserve the frame and boxes',()=>{
  const context=setup();
  vm.runInContext(`
@@ -36,12 +38,28 @@ test('global keyboard shortcuts ignore input while a dialog is open',()=>{
   document.addEventListener=(type,handler)=>{if(type==='keydown')handlers[type]=handler};
   toggleNight=()=>nightToggles++;
  `,context);
- const start=source.indexOf(" document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;");
+ const start=source.indexOf(" document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;");
  const end=source.indexOf(" $('rvKeys').onclick",start);
  assert.ok(start>=0&&end>start);
  vm.runInContext(source.slice(start,end),context);
  vm.runInContext(`handlers.keydown({key:'n',target:{tagName:'BODY',closest:()=>null}})`,context);
  assert.equal(vm.runInContext('nightToggles',context),0);
+ vm.runInContext(`document.querySelector=()=>null;handlers.keydown({key:'n',target:{tagName:'BODY',closest:selector=>selector.includes('#policyAdmin')?{}:null}})`,context);
+ assert.equal(vm.runInContext('nightToggles',context),0);
+});
+test('a blocked lock warning disables workbench confirmation',()=>{
+ const context=setup();
+ vm.runInContext(`
+  confirmButton={disabled:false};
+  $=id=>id==='wbConfirmApply'?confirmButton:{};
+  compiled={blocked:true,warnings:['Locked by CTF-72 — submarine can\\'t be overridden at ship level']};
+  draft={rules:[{type:'suppress',classes:['submarine']}],pins:{}};
+ `,context);
+ const start=workbenchSource.indexOf("$('wbConfirmApply').disabled=compiled.blocked");
+ const end=workbenchSource.indexOf(';',start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(workbenchSource.slice(start,end+1),context);
+ assert.equal(vm.runInContext('confirmButton.disabled',context),true);
 });
 test('band controls keep native Enter and Space activation without accepting review items',()=>{
  const context=setup();
@@ -135,10 +153,12 @@ function setup(){
  const elements=new Map();
  const context=vm.createContext({
   gsLights:require('./static/lights.js'),
-  setTimeout:()=>{},imageCache:new Map(),
+  setTimeout:()=>{},clearTimeout:()=>{},imageCache:new Map(),
   document:{body:{classList:{remove(){}}},querySelector:()=>null},
   $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
  });
+ context.window=context;
+ vm.runInContext(policySource,context);
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
   renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};

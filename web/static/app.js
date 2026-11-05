@@ -1,6 +1,6 @@
 let SOURCES=[],SRC={},CLS={},MODELS={},ATTR_LAB={},EXAMPLES=[];
-let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[]};
-let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null;
+let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[],policy:null};
+let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null,policyAuditTimer=null,policyRawTouched=false,policyRawLoaded=false;
 
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>CLS[k].lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>CLS[k].lab).join(' / ')):'Any object';
@@ -39,6 +39,44 @@ function preserveBandFocus(render){
  const item=button?.dataset.bandItem,band=button?.dataset.band;
  render();
  if(surface)[...surface.querySelectorAll('[data-band-item]')].find(b=>b.dataset.bandItem===item&&b.dataset.band===band)?.focus({preventScroll:true});
+}
+function renderPolicyControls(summary){
+ const root=$('emconControl'),active=document.activeElement?.closest?.('#emconSeg button'),mode=active?.dataset.mode;
+ root.innerHTML=gsPolicy.emconHTML(summary);
+ if(mode){const button=root.querySelector(`#emconSeg [data-mode="${mode}"]`);(button&&!button.disabled?button:root.querySelector('#emconSeg'))?.focus({preventScroll:true})}
+}
+function renderPolicyPanels(summary){
+ const admin=$('policyAdmin');admin.hidden=!summary?.admin;
+ $('policyConflicts').innerHTML=gsPolicy.conflictsHTML(summary?.conflicts||[]);
+ if(summary?.admin&&!policyRawLoaded){policyRawLoaded=true;loadRawPolicy(false)}
+ clearTimeout(policyAuditTimer);
+ policyAuditTimer=setTimeout(async()=>{
+  try{const response=await fetch('/api/policy/audit?limit=50');const data=await response.json();$('policyAuditRows').innerHTML=response.ok?gsPolicy.auditRowsHTML(data.entries||[]):'<tr><td colspan="7">Super admin required to view audit.</td></tr>'}
+  catch{$('policyAuditRows').innerHTML='<tr><td colspan="7">Audit unavailable.</td></tr>'}
+ },500);
+}
+function renderPolicySummary(summary){
+ state.policy=summary||null;renderPolicyControls(summary||{});renderPolicyPanels(summary||{});
+}
+async function loadRawPolicy(force){
+ if(policyRawTouched&&!force)return;
+ try{
+  const response=await fetch('/api/policy'),data=await response.json();
+  if(!response.ok)throw new Error(data.error||`Request failed (${response.status})`);
+  if(force||!policyRawTouched)$('polRaw').value=JSON.stringify(data.policy,null,2);
+  $('polRawMsg').textContent='';$('polRawMsg').className='';
+ }catch(error){$('polRawMsg').textContent=error.message;$('polRawMsg').className='policy-error'}
+}
+async function rawPolicyAction(action){
+ const msg=$('polRawMsg');msg.textContent='';msg.className='';
+ try{
+  const response=await fetch(`/api/policy${action==='validate'?'/validate':''}`,{method:action==='validate'?'POST':'PUT',headers:{'Content-Type':'application/json'},body:$('polRaw').value});
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||`Request failed (${response.status})`);
+  msg.className='policy-valid';msg.textContent=`Valid · ${(data.conflicts||[]).length} conflicts`;
+  msg.insertAdjacentHTML('beforeend',gsPolicy.conflictsHTML(data.conflicts||[]));
+  if(action==='apply')policyRawTouched=false;
+ }catch(error){msg.textContent=error.message;msg.className='policy-error'}
 }
 function selectBand(it,band){
  const bands=it?bandsFor(it):[];if(bands.length<2||!bands.includes(band))return;
@@ -79,6 +117,7 @@ function applySnapshot(data){
  }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
  state.model=data.state.model;state.directives=data.state.directives;
+ renderPolicySummary(data.policy);
  stats=data.stats;cdr=data.cdr;weightData=data.weights||{};
  state.sel=items.some(item=>item.id===selection)?selection:null;
  if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML='';closeZoom()}
@@ -100,7 +139,7 @@ function applyItemUpdate(raw){
 async function request(path,method='GET',body){
  const response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const data=response.status===204?null:await response.json();
- if(!response.ok)throw new Error(data?.error||`Request failed (${response.status})`);
+ if(!response.ok){const error=new Error(data?.error||`Request failed (${response.status})`);if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
  return data;
 }
 async function patchItem(id,changes){
@@ -160,9 +199,12 @@ async function init(){
  $('densSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.dens=b.dataset.d;[...$('densSeg').children].forEach(x=>x.classList.toggle('on',x===b));$('grid').className='grid '+state.dens};
  $('tierSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.t;renderFeed()};
  $('pauseBtn').onclick=toggleHold;$('live').onclick=toggleHold;$('wbResume').onclick=toggleHold;
+ $('emconControl').onclick=async e=>{const button=e.target.closest('#emconSeg [data-mode]');if(!button||button.disabled)return;try{const result=await request('/api/policy/emcon','POST',{mode:button.dataset.mode});if(result.conflicts?.length)toast(gsPolicy.conflictToast(result.conflicts))}catch(error){if(!error.policyConflicts)toast(error.message)}};
+ $('polRaw').oninput=()=>{policyRawTouched=true};
+ $('polRawValidate').onclick=()=>rawPolicyAction('validate');$('polRawApply').onclick=()=>rawPolicyAction('apply');$('polRawReload').onclick=()=>{policyRawTouched=false;loadRawPolicy(true)};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
- document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
   if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
@@ -319,7 +361,7 @@ function renderWeights(){
 }
 function renderDirectives(){
  const d=state.directives;$('clearDir').style.display=d.length?'':'none';
- $('directives').innerHTML=d.length?d.map((x,i)=>`<div class="dir"><span class="n">${i+1}</span><div class="body"><q>${esc(x.text)}</q><div class="rules">${x.rules.map(r=>`<span class="rule ${r.type==='suppress'?'sup':''}">${ruleLabel(r)}</span>`).join('')}${x.rules.some(r=>r.only)?'<span class="rule focus">Focus: others ×0.3</span>':''}</div></div><button class="x" data-id="${x.id}" title="Remove directive">×</button></div>`).join(''):'<div class="nodir">No directives — feed is ranked by the base model only.</div>';
+ $('directives').innerHTML=d.length?d.map((x,i)=>`<div class="dir ${x.blocked?'policy-blocked':''}"><span class="n">${i+1}</span><div class="body"><q>${esc(x.text)}</q><div>${gsPolicy.directiveBadge(x)}</div><div class="rules">${x.rules.map(r=>`<span class="rule ${r.type==='suppress'?'sup':''}">${ruleLabel(r)}</span>`).join('')}${x.rules.some(r=>r.only)?'<span class="rule focus">Focus: others ×0.3</span>':''}</div></div>${x.source?'':`<button class="x" data-id="${esc(x.id)}" title="Remove directive">×</button>`}</div>`).join(''):'<div class="nodir">No directives — feed is ranked by the base model only.</div>';
  $('directives').querySelectorAll('.x').forEach(b=>b.onclick=async()=>{try{await request(`/api/directives/${encodeURIComponent(b.dataset.id)}`,'DELETE');toast('Directive removed')}catch(error){toast(error.message)}});
 }
 async function requestFullRes(it){
@@ -365,8 +407,8 @@ function answerSuggestion(answer){
  rv.askBusy=true;renderAsk();
  const label=CLS[s.cls]?.lab||s.cls;
  request('/api/directives','POST',{text:`Operator feedback: ${s.dir==='lower'?'lower':'raise'} ${label}`,rules:[{type:s.dir==='lower'?'suppress':'boost',classes:[s.cls],attrs:[],only:false}]})
-  .then(()=>{gsLearn.resolve(s,'yes');toast('Rule added — review it on Collection Priorities')})
-  .catch(error=>{gsLearn.resolve(s,'later');toast(error.message)})
+  .then(result=>{gsLearn.resolve(s,'yes');toast(result.conflicts?.length?gsPolicy.conflictToast(result.conflicts):'Rule added — review it on Collection Priorities')})
+  .catch(error=>{gsLearn.resolve(s,'later');if(!error.policyConflicts)toast(error.message)})
   .finally(()=>{rv.askBusy=false;if(rv.ask===ask)rv.ask=null;renderAsk()});
 }
 function reviewAskKey(k){
