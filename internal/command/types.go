@@ -79,35 +79,36 @@ type Latency struct {
 }
 
 type Item struct {
-	Upload      Upload     `json:"upload"`
-	Night       *bool      `json:"night,omitempty"`
-	Basis       string     `json:"basis,omitempty"`
-	Lum         float64    `json:"lum,omitempty"`
-	Bands       []string   `json:"bands,omitempty"`
-	ID          string     `json:"id"`
-	Img         string     `json:"img,omitempty"`
-	DatasetID   string     `json:"dataset_id,omitempty"`
-	ImageID     string     `json:"image_id,omitempty"`
-	SourceVideo string     `json:"source_video,omitempty"`
-	SHA256      string     `json:"sha256,omitempty"`
-	DBID        int        `json:"dbId"`
-	Frame       int        `json:"frame"`
-	SourceID    string     `json:"src"`
-	TS          time.Time  `json:"ts"`
-	Seed        uint32     `json:"seed"`
-	HZ          float64    `json:"hz"`
-	KB          int        `json:"kb"`
-	Edge        float64    `json:"edge"`
-	Central     float64    `json:"central"`
-	Base        float64    `json:"base"`
-	CentralTier int        `json:"centralTier"`
-	BaseTier    int        `json:"baseTier"`
-	Tier        int        `json:"tier"`
-	Manual      int        `json:"manual"`
-	Reviewed    bool       `json:"reviewed"`
-	Dismissed   bool       `json:"dismissed"`
-	Sent        bool       `json:"sent"`
-	SentAt      *time.Time `json:"sentAt,omitempty"`
+	DetectorNegative bool       `json:"detectorNegative,omitempty"`
+	Upload           Upload     `json:"upload"`
+	Night            *bool      `json:"night,omitempty"`
+	Basis            string     `json:"basis,omitempty"`
+	Lum              float64    `json:"lum,omitempty"`
+	Bands            []string   `json:"bands,omitempty"`
+	ID               string     `json:"id"`
+	Img              string     `json:"img,omitempty"`
+	DatasetID        string     `json:"dataset_id,omitempty"`
+	ImageID          string     `json:"image_id,omitempty"`
+	SourceVideo      string     `json:"source_video,omitempty"`
+	SHA256           string     `json:"sha256,omitempty"`
+	DBID             int        `json:"dbId"`
+	Frame            int        `json:"frame"`
+	SourceID         string     `json:"src"`
+	TS               time.Time  `json:"ts"`
+	Seed             uint32     `json:"seed"`
+	HZ               float64    `json:"hz"`
+	KB               int        `json:"kb"`
+	Edge             float64    `json:"edge"`
+	Central          float64    `json:"central"`
+	Base             float64    `json:"base"`
+	CentralTier      int        `json:"centralTier"`
+	BaseTier         int        `json:"baseTier"`
+	Tier             int        `json:"tier"`
+	Manual           int        `json:"manual"`
+	Reviewed         bool       `json:"reviewed"`
+	Dismissed        bool       `json:"dismissed"`
+	Sent             bool       `json:"sent"`
+	SentAt           *time.Time `json:"sentAt,omitempty"`
 	// Commander's final decision on an image the watch floor escalated.
 	Decision     string     `json:"decision,omitempty"`
 	DecisionNote string     `json:"decisionNote,omitempty"`
@@ -177,9 +178,10 @@ type LivePull struct {
 }
 
 type Stats struct {
-	Cap   int `json:"cap"`
-	Keep  int `json:"keep"`
-	Drop  int `json:"drop"`
-	Bytes int `json:"bytes"`
-	DB    int `json:"db"`
+	DetectorNegatives int `json:"detectorNegatives,omitempty"`
+	Cap               int `json:"cap"`
+	Keep              int `json:"keep"`
+	Drop              int `json:"drop"`
+	Bytes             int `json:"bytes"`
+	DB                int `json:"db"`
 }

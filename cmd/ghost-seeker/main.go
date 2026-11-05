@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -42,6 +43,7 @@ func main() {
 	}
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
+	negativesRate := flag.Float64("negatives-rate", 0.15, "dataset mode: fraction of detector negatives to review")
 	datasetManifest := flag.String("dataset", "", "simulation mode: replay a clean-v2 review manifest")
 	datasetDir := flag.String("dataset-dir", "data/review_set/images", "simulation mode: dataset image directory")
 	splitsPath := flag.String("splits", "edgeml/configs/splits.yaml", "dataset mode: locked test and quarantine source policy")
@@ -78,6 +80,9 @@ func main() {
 	flag.Parse()
 	if *demoAcceptAnyToken && *authMode != "token" {
 		log.Fatal("-demo-accept-any-token requires -auth-mode token; incompatible with PIV")
+	}
+	if math.IsNaN(*negativesRate) || *negativesRate < 0 || *negativesRate > 1 {
+		log.Fatal("-negatives-rate must be in [0,1]")
 	}
 	reviewLogSet := false
 	flag.Visit(func(f *flag.Flag) {
@@ -170,7 +175,7 @@ func main() {
 		distribution, _ := json.Marshal(summary.DetectionsByClass)
 		log.Printf("real clean-v2 dev dataset: %d images; detections=%s; images with person=%d; person-driven P1=%d",
 			len(images), distribution, summary.ImagesWithPerson, summary.PersonDrivenP1)
-		fillDatasetBacklog(data, replay, *backfill)
+		fillDatasetBacklog(data, replay, *backfill, *negativesRate)
 	} else {
 		uplink = newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 		generator = sensor.NewGenerator()
@@ -195,7 +200,7 @@ func main() {
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
 	if replay != nil {
-		go runDatasetSimulation(data, replay, app)
+		go runDatasetSimulation(data, replay, app, *negativesRate)
 	} else {
 		go runSimulation(data, generator, app, uplink)
 	}
@@ -251,11 +256,12 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 	}
 }
 
-func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count int) {
+func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count int, negativesRate float64) {
 	start := time.Now().Add(-45 * time.Minute)
 	for index := 0; index < count; index++ {
 		item := replay.Next(start.Add(time.Duration(index) * 18 * time.Second))
-		if item.Edge < sensor.EdgeKeep {
+		item.DetectorNegative = item.Edge < sensor.EdgeKeep
+		if item.DetectorNegative && !reviewdataset.SampleNegative(item.ImageID, negativesRate) {
 			data.Add(nil, 0)
 			continue
 		}
@@ -263,13 +269,14 @@ func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count i
 	}
 }
 
-func runDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app *server.Server) {
+func runDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app *server.Server, negativesRate float64) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
 		_, _, _, state := data.Snapshot()
 		item := replay.Next(time.Now())
-		if item.Edge < sensor.EdgeKeep {
+		item.DetectorNegative = item.Edge < sensor.EdgeKeep
+		if item.DetectorNegative && !reviewdataset.SampleNegative(item.ImageID, negativesRate) {
 			data.Add(nil, 0)
 			stats, _ := data.Stats()
 			app.PublishStats(stats)

@@ -7,6 +7,17 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('detector negatives have clear labels and retain review keys',()=>{
+ const context=setup();
+ assert.equal(context.detectorNegativeLabel({detectorNegative:true}),'Detector found nothing — check for missed objects');
+ assert.equal(context.detectorNegativeLabel({}),'');
+ assert.equal(context.reviewAcceptLabel({detectorNegative:true,centralTier:4}),'Nothing here');
+ assert.match(context.reviewAcceptLabel({centralTier:2}),/P2/);
+ for(const key of ['1','2','3','4'])assert.equal(context.reviewKeyAction(key),key);
+ for(const key of [' ','enter'])assert.equal(context.reviewKeyAction(key),'accept');
+ assert.match(context.detectorNegativeHTML({detectorNegative:true}),/class="detector-negative"/);
+ assert.equal(context.detectorNegativeHTML({}),'');
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);

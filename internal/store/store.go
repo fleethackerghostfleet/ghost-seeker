@@ -62,7 +62,12 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 		s.stats.Drop++
 		return command.Item{}, ""
 	}
-	s.stats.Keep++
+	if item.DetectorNegative {
+		s.stats.DetectorNegatives++
+		s.stats.Drop++
+	} else {
+		s.stats.Keep++
+	}
 	s.stats.DB++
 	item.DBID = s.stats.DB + 180000
 	command.Rescore(item, s.model, s.directives)
