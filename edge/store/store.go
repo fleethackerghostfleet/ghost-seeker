@@ -467,6 +467,10 @@ func (s *Store) execEach(ctx context.Context, q string, ids []string, lead ...an
 func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.replaceForm(ctx, itemID, kind, data)
+}
+
+func (s *Store) replaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
 	var path string
 	var typ int
 	var oldBytes int64
@@ -573,6 +577,8 @@ func (s *Store) dropOriginal(ctx context.Context, itemID string) error {
 // RestoreOriginal makes FULL the original capture bytes again, resetting its
 // send state if it changes. It reports whether FULL changed.
 func (s *Store) RestoreOriginal(ctx context.Context, itemID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	data, err := os.ReadFile(s.originalPath(itemID))
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil // FULL already is the original
@@ -580,11 +586,14 @@ func (s *Store) RestoreOriginal(ctx context.Context, itemID string) (bool, error
 	if err != nil {
 		return false, err
 	}
-	if _, err := s.ReplaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data); err != nil {
+	// The kept copy becomes FULL, so admission must not count it twice.
+	if _, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=0 WHERE id=?`, itemID); err != nil {
 		return false, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if _, err := s.replaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data); err != nil {
+		_, uerr := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=? WHERE id=?`, len(data), itemID)
+		return false, errors.Join(err, uerr)
+	}
 	return true, s.dropOriginal(ctx, itemID)
 }
 

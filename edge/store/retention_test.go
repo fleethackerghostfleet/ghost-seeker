@@ -417,3 +417,22 @@ func TestOriginalCountsAgainstByteCap(t *testing.T) {
 		t.Fatalf("put after original dropped: %v", err)
 	}
 }
+
+func TestRestoreOriginalAtFullCap(t *testing.T) {
+	s := openTest(t)
+	putTest(t, s, "b", 1, 1, false) // FACT 4 + FULL 10
+	if err := s.PutOriginal(ctx, "b", make([]byte, 20)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLimits(ctx, Limits{MaxBytes: 34}); err != nil {
+		t.Fatal(err)
+	}
+	// FULL grows 10 -> 20 but the 20-byte kept copy is freed: 24 <= 34.
+	if changed, err := s.RestoreOriginal(ctx, "b"); err != nil || !changed {
+		t.Fatalf("restore at cap: changed=%v err=%v", changed, err)
+	}
+	var n int64
+	if err := s.db.QueryRow(`SELECT original_bytes FROM items WHERE id='b'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("original_bytes after restore = %d, %v", n, err)
+	}
+}
