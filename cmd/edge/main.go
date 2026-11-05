@@ -85,7 +85,7 @@ func main() {
 		src, err := ingest.NewReplay(clk, *period, sc.Sets...)
 		fatal(err)
 		ing.OnBurst = func(source string, fps float64, d time.Duration, reason string) {
-			src.Burst(fps, d)
+			src.Burst(source, fps, d)
 			log.Info("replay burst", "source", source, "fps", fps, "duration", d, "reason", reason)
 		}
 		log.Info("replaying", "frames", src.Len(), "period", *period)

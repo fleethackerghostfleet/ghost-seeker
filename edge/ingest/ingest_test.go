@@ -140,11 +140,11 @@ func TestDuplicateDarkContactUpdatesKnownSighting(t *testing.T) {
 func TestReplayBurstShortensAndDecays(t *testing.T) {
 	clk := clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	replay := &Replay{clk: clk, period: 10 * time.Second,
-		queue: []*Capture{{}, {}, {}, {}, {}}}
+		queue: []*Capture{{Source: "cam-a"}, {Source: "cam-a"}, {Source: "cam-a"}, {Source: "cam-a"}, {Source: "cam-a"}}}
 	if _, _, err := replay.Next(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	replay.Burst(5, 500*time.Millisecond)
+	replay.Burst("cam-a", 5, 500*time.Millisecond)
 	for i := 0; i < 3; i++ {
 		if _, _, err := replay.Next(context.Background()); err != nil {
 			t.Fatal(err)
@@ -158,6 +158,29 @@ func TestReplayBurstShortensAndDecays(t *testing.T) {
 	}
 	if elapsed := clk.Now().Sub(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); elapsed != 10*time.Second+600*time.Millisecond {
 		t.Fatalf("base-rate elapsed after burst = %v", elapsed)
+	}
+}
+
+func TestReplayBurstDoesNotShortenOtherSource(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clk := clock.NewVirtual(start)
+	replay := &Replay{clk: clk, period: 10 * time.Second,
+		queue: []*Capture{{Source: "cam-a"}, {Source: "cam-b"}, {Source: "cam-a"}}}
+	if _, _, err := replay.Next(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	replay.Burst("cam-a", 5, 30*time.Second)
+	if _, _, err := replay.Next(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := clk.Now().Sub(start); elapsed != 10*time.Second {
+		t.Fatalf("source B wait = %v, want base period 10s", elapsed)
+	}
+	if _, _, err := replay.Next(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := clk.Now().Sub(start); elapsed != 10*time.Second+200*time.Millisecond {
+		t.Fatalf("source A wait after B = %v, want 10.2s", elapsed)
 	}
 }
 

@@ -100,13 +100,17 @@ func isImage(n string) bool {
 // rate in clock time. Sets are mixed proportionally so a short set (a few
 // dolphin frames) is spread across a long one (hours of cargo ship).
 type Replay struct {
-	clk         clock.Clock
-	period      time.Duration
-	queue       []*Capture
-	i           int
-	mu          sync.Mutex
-	burstPeriod time.Duration
-	burstUntil  time.Time
+	clk    clock.Clock
+	period time.Duration
+	queue  []*Capture
+	i      int
+	mu     sync.Mutex
+	bursts map[string]replayBurst
+}
+
+type replayBurst struct {
+	period time.Duration
+	until  time.Time
 }
 
 func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay, error) {
@@ -158,12 +162,12 @@ func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay
 		q = append(q, lists[best][idx[best]])
 		idx[best]++
 	}
-	return &Replay{clk: clk, period: period, queue: q}, nil
+	return &Replay{clk: clk, period: period, queue: q, bursts: make(map[string]replayBurst)}, nil
 }
 
 func (r *Replay) Len() int { return len(r.queue) }
 
-func (r *Replay) Burst(fps float64, d time.Duration) {
+func (r *Replay) Burst(source string, fps float64, d time.Duration) {
 	if fps <= 0 || d <= 0 {
 		return
 	}
@@ -174,10 +178,15 @@ func (r *Replay) Burst(fps float64, d time.Duration) {
 	now := r.clk.Now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.burstPeriod = period
-	if deadline := now.Add(d); deadline.After(r.burstUntil) {
-		r.burstUntil = deadline
+	if r.bursts == nil {
+		r.bursts = make(map[string]replayBurst)
 	}
+	burst := r.bursts[source]
+	burst.period = period
+	if deadline := now.Add(d); deadline.After(burst.until) {
+		burst.until = deadline
+	}
+	r.bursts[source] = burst
 }
 
 func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
@@ -188,8 +197,13 @@ func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
 		now := r.clk.Now()
 		r.mu.Lock()
 		period := r.period
-		if now.Before(r.burstUntil) && r.burstPeriod > 0 {
-			period = r.burstPeriod
+		source := r.queue[r.i].Source
+		if burst, ok := r.bursts[source]; ok {
+			if now.Before(burst.until) && burst.period > 0 {
+				period = burst.period
+			} else {
+				delete(r.bursts, source)
+			}
 		}
 		r.mu.Unlock()
 		if err := r.clk.Sleep(ctx, period); err != nil {

@@ -363,8 +363,9 @@ loaded by Python and embedded by Go:
 The sidecar keeps one controller per source and appends a separate
 `dark contact` detection using the hull's normalized box. `AnalyzeResponse`
 field 7 (`NightBurst`) carries granted requests. The edge invokes
-`Ingester.OnBurst`; replay connects it to `Replay.Burst`, which temporarily
-shortens the replay period and returns to the base period at the deadline.
+`Ingester.OnBurst`; replay passes the source to `Replay.Burst`, which keeps a
+separate period/deadline per source and shortens the wait only when the next
+queued capture belongs to a source with an active burst.
 In sightings mode, a `DUPLICATE` with a key-detection box can attach an
 overlapping (IoU ≥ 0.5) dark-contact detection to the existing item, tag it,
 and rescore it without replacing its forms or key frame. There is no new
