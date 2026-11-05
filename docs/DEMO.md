@@ -102,7 +102,7 @@ shore store regardless of mode.
 ```sh
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
-make demo-ui           # bin/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
+make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
 make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
 open http://localhost:8090
 ```
@@ -112,8 +112,9 @@ link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/un
 `make demo-edge` mints a 24 h edge token from it into `data/edge.jwt` on every start). With no
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
 (0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
-SameSite=Strict session cookie). From another machine the UI asks for the token at `/login`
-(`cat data/operator.token`). For `curl` against the shore/edge API use
+SameSite=Strict session cookie). `make demo-ui` binds the UI to `127.0.0.1` only (it runs with
+`-demo-accept-any-token`); for a browser on another machine, run `bin/ghost-seeker` with
+`-addr :8090` and without that flag, and enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
 `-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
