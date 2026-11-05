@@ -25,12 +25,13 @@ else
   [ -s "$tmp/gh.err" ] && sed 's/^/  gh: /' "$tmp/gh.err" >&2
   exit 1
 fi
-if curl -fsSL -o "$tmp/SHA256SUMS" "https://github.com/$repo/releases/download/$tag/SHA256SUMS" 2>/dev/null \
-   || { command -v gh >/dev/null 2>&1 && gh release download "$tag" -R "$repo" -p SHA256SUMS -D "$tmp" 2>/dev/null; }; then
-  want=$(awk -v a="$asset" '$2==a{print $1}' "$tmp/SHA256SUMS")
-  if command -v sha256sum >/dev/null 2>&1; then have=$(sha256sum "$tmp/$asset" | cut -d' ' -f1); else have=$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1); fi
-  [ -z "$want" ] || [ "$want" = "$have" ] || { echo "error: $asset checksum mismatch ($have != $want)" >&2; exit 1; }
-fi
+curl -fsSL -o "$tmp/SHA256SUMS" "https://github.com/$repo/releases/download/$tag/SHA256SUMS" 2>/dev/null \
+  || { command -v gh >/dev/null 2>&1 && gh release download "$tag" -R "$repo" -p SHA256SUMS -D "$tmp" --clobber 2>/dev/null; } \
+  || { echo "error: cannot fetch SHA256SUMS for $tag; refusing to unpack $asset unverified" >&2; exit 1; }
+want=$(awk -v a="$asset" '$2==a{print $1}' "$tmp/SHA256SUMS")
+[ -n "$want" ] || { echo "error: SHA256SUMS has no entry for $asset; refusing to unpack it unverified" >&2; exit 1; }
+if command -v sha256sum >/dev/null 2>&1; then have=$(sha256sum "$tmp/$asset" | cut -d' ' -f1); else have=$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1); fi
+[ "$want" = "$have" ] || { echo "error: $asset checksum mismatch ($have != $want)" >&2; exit 1; }
 mkdir -p "$dest"
 tar -xzf "$tmp/$asset" -C "$dest" --strip-components="$strip"
 echo "demo-data: $asset -> $dest (via $got)"
