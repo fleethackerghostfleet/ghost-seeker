@@ -278,6 +278,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .rvask-votes .own-vote{font-weight:800;color:var(--text)}
 .rvask.rvask-team .rvask-btn{flex:1 1 140px;min-height:84px;font-size:clamp(18px,1.6vw,23px)}
 #reviewSyncLabel{margin-left:16px;white-space:nowrap}
+.rvinstructions{flex:none;margin:0;padding:8px 20px 0}
 .rvkeys{flex:none;display:flex;gap:10px;padding:12px 20px 18px;align-items:stretch}
 .kb{flex:1;min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-radius:12px;border:2px solid var(--line);background:var(--panel2);color:var(--text);font:inherit;font-size:16px;font-weight:800;cursor:pointer;position:relative;transition:transform .08s,filter .08s}
 .kb:hover{filter:brightness(1.25)}
