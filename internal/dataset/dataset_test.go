@@ -104,6 +104,24 @@ func TestValidateSplitsRejectsLockedRows(t *testing.T) {
 			}(),
 		},
 		{
+			name: "normalized video dataset id match",
+			yaml: "test:\n  clips: [Spotted_A_Submarine]\n",
+			image: func() Image {
+				image := testImage("locked-normalized-dataset-row", " VIDEO_SPOTTED_A_SUBMARINE ")
+				image.SourceVideo = "Different_Clip"
+				return image
+			}(),
+		},
+		{
+			name: "non-video collection locked source",
+			yaml: "quarantine:\n  fvessel_clip10: [fvessel_clip05]\n",
+			image: func() Image {
+				image := testImage("locked-collection-source", "fvessel_clip07")
+				image.SourceVideo = "fvessel_clip05"
+				return image
+			}(),
+		},
+		{
 			name: "alias match",
 			yaml: "source_video_aliases:\n  Old_Clip_Name: Canonical_Clip\ntest:\n  clips: [Canonical_Clip]\n",
 			image: func() Image {
@@ -140,6 +158,23 @@ func TestValidateSplitsRejectsLockedRows(t *testing.T) {
 			rejected, err := ValidateSplits([]Image{test.image}, path)
 			if rejected != 1 || err == nil || !strings.Contains(err.Error(), test.image.ImageID) {
 				t.Fatalf("ValidateSplits = (%d, %v), want one rejection naming %q", rejected, err, test.image.ImageID)
+			}
+		})
+	}
+}
+
+func TestValidateSplitsDoesNotTreatCollectionIDsAsSources(t *testing.T) {
+	for _, split := range []string{"test", "quarantine"} {
+		t.Run(split, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "splits.yaml")
+			contents := split + ":\n  fvessel_clip10: [fvessel_clip07]\n"
+			if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+				t.Fatal(err)
+			}
+			image := testImage("dev-collection-row", "fvessel_clip07")
+			image.SourceVideo = "fvessel_clip11"
+			if rejected, err := ValidateSplits([]Image{image}, path); rejected != 0 || err != nil {
+				t.Fatalf("ValidateSplits = (%d, %v), want valid collection row accepted", rejected, err)
 			}
 		})
 	}

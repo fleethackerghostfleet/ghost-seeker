@@ -160,6 +160,9 @@ func ValidateSplits(images []Image, path string) (int, error) {
 				{field: "source_video", value: image.SourceVideo},
 				{field: "dataset_id", value: image.DatasetID},
 			} {
+				if candidate.field == "dataset_id" && !strings.HasPrefix(normalizeDatasetID(candidate.value), "video_") {
+					continue
+				}
 				source := policy.canonicalSource(candidate.value)
 				for split, locked := range policy.lockedSources {
 					for name := range locked {
