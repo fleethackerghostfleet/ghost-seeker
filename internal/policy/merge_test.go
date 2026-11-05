@@ -150,9 +150,9 @@ func TestActiveLocksFilterExpiredAndOffTargetRules(t *testing.T) {
 			want:   true,
 		},
 		{
-			name: "unknown node ignores target-scoped lock",
-			rule: &pb.InterestRule{Id: "unknown-node", Locked: true, Targets: []string{"USV-2"}},
-			want: false,
+			name: "empty node matches targeted lock",
+			rule: &pb.InterestRule{Id: "empty-node", Locked: true, Targets: []string{"USV-2"}},
+			want: true,
 		},
 		{
 			name: "unknown node keeps unscoped lock",

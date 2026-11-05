@@ -1,6 +1,7 @@
 package shorebridge
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -256,35 +257,89 @@ func TestSetPolicyWithoutCompilerUsesInterpret(t *testing.T) {
 	}
 }
 
-func TestPolicyLocksUsesShoreCommandLayer(t *testing.T) {
+func TestPolicyLocksUsesCachedEdgeNodeID(t *testing.T) {
 	active := &pb.Policy{Layers: []*pb.PolicyLayer{{
 		Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
 		Rules: []*pb.InterestRule{{
 			Id: "submarine-lock", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3,
+			Targets: []string{"EDGE-1"},
 		}},
 	}}}
-	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != consolePath+"GetPolicy" {
-			http.NotFound(w, r)
-			return
-		}
-		raw, err := protojson.Marshal(&pb.GetPolicyResponse{Policy: active})
-		if err != nil {
-			t.Errorf("marshal policy: %v", err)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(raw)
-	}))
-	defer shore.Close()
+	newBridge := func(edgeID string) *Bridge {
+		t.Helper()
+		shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var response proto.Message
+			switch r.URL.Path {
+			case consolePath + "GetStatus":
+				response = &pb.GetStatusResponse{NodeId: "SHORE-1"}
+			case consolePath + "GetPolicy":
+				response = &pb.GetPolicyResponse{Policy: active}
+			case consolePath + "ListItems":
+				response = &pb.ListItemsResponse{}
+			default:
+				http.NotFound(w, r)
+				return
+			}
+			raw, err := protojson.Marshal(response)
+			if err != nil {
+				t.Errorf("marshal shore response: %v", err)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(raw)
+		}))
+		t.Cleanup(shore.Close)
+		edge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != consolePath+"GetStatus" {
+				http.NotFound(w, r)
+				return
+			}
+			raw, err := protojson.Marshal(&pb.GetStatusResponse{NodeId: edgeID})
+			if err != nil {
+				t.Errorf("marshal edge status: %v", err)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(raw)
+		}))
+		t.Cleanup(edge.Close)
 
-	bridge := New(shore.URL, "", nil)
-	warnings, blocked := bridge.PolicyLocks().CheckLocks([]command.Rule{{
-		Type: "suppress", Classes: []string{"submarine"},
-	}})
-	if !blocked || !reflect.DeepEqual(warnings, []string{
-		"Locked by CTF-72 — submarine can't be overridden at ship level",
-	}) {
-		t.Fatalf("shore lock result = %v, blocked=%t", warnings, blocked)
+		bridge := New(shore.URL, edge.URL, nil)
+		bridge.refresh(context.Background())
+		return bridge
+	}
+
+	for _, tt := range []struct {
+		name    string
+		edgeID  string
+		blocked bool
+	}{
+		{name: "targeted edge is blocked", edgeID: "EDGE-1", blocked: true},
+		{name: "different cached edge is not blocked", edgeID: "EDGE-2"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			bridge := newBridge(tt.edgeID)
+			bridge.mu.Lock()
+			cachedID := bridge.edgeNodeID
+			bridge.mu.Unlock()
+			if cachedID != tt.edgeID {
+				t.Fatalf("cached edge ID = %q, want %q", cachedID, tt.edgeID)
+			}
+
+			warnings, blocked := bridge.PolicyLocks().CheckLocks([]command.Rule{{
+				Type: "suppress", Classes: []string{"submarine"},
+			}})
+			if blocked != tt.blocked {
+				t.Fatalf("shore lock blocked=%t, want %t (warnings: %v)", blocked, tt.blocked, warnings)
+			}
+			if tt.blocked && !reflect.DeepEqual(warnings, []string{
+				"Locked by CTF-72 — submarine can't be overridden at ship level",
+			}) {
+				t.Fatalf("shore lock warnings = %v", warnings)
+			}
+			if !tt.blocked && len(warnings) != 0 {
+				t.Fatalf("unexpected shore lock warnings = %v", warnings)
+			}
+		})
 	}
 }

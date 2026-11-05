@@ -56,10 +56,11 @@ type Bridge struct {
 	// nil keeps the simple Interpret path.
 	Compiler *command.Compiler
 
-	mu      sync.Mutex
-	snap    []byte
-	subs    map[chan []byte]struct{}
-	records map[string]int // RECORD item id -> n_frames
+	mu         sync.Mutex
+	snap       []byte
+	subs       map[chan []byte]struct{}
+	records    map[string]int // RECORD item id -> n_frames
+	edgeNodeID string
 }
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
@@ -273,6 +274,11 @@ func (b *Bridge) refresh(ctx context.Context) {
 			snap.Edge.Error = "upstream edge error"
 		} else {
 			snap.Edge = nodeStatus(&est)
+			if nodeID := est.GetNodeId(); nodeID != "" {
+				b.mu.Lock()
+				b.edgeNodeID = nodeID
+				b.mu.Unlock()
+			}
 		}
 	}
 
