@@ -157,6 +157,7 @@ type Object struct {
 	Reports     int     `json:"reports"`
 	FirstMs     int64   `json:"firstMs"`
 	LastMs      int64   `json:"lastMs"`
+	Score       float64 `json:"score"`
 	Priority    string  `json:"priority"`
 	Best        *Card   `json:"best"`
 	Items       []*Card `json:"items"`
@@ -576,7 +577,7 @@ func assignTiers(objs []*Object) {
 			o.Priority = "P4"
 		}
 	}
-	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].Best.Score > ranked[j].Best.Score })
+	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].Score > ranked[j].Score })
 	n := float64(len(ranked))
 	for i, o := range ranked {
 		pos := float64(i+1) / n
@@ -757,6 +758,7 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]con
 		}
 		if c.CapturedMs >= o.LastMs {
 			o.LastMs = c.CapturedMs
+			o.Score = c.Score
 			if st := c.Tags["subtype"]; st != "" {
 				o.Subtype = st
 			}
