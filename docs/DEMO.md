@@ -40,8 +40,24 @@ sidecar, `-dedup sightings`). A one-shot `init` container writes the operator to
 key and the edge's 24 h JWT into the `demo-secrets` volume, so there is nothing to configure; the
 three Go containers run as the distroless `nonroot` user and bind to `127.0.0.1` on the host only.
 `MODELS=/path/to/D make compose-demo` if the models live elsewhere; `make compose-demo-logs` tails
-all four. Shore/edge consoles are also on `127.0.0.1:8080` / `:8081` (bearer: `docker run --rm -v
-ghost-seeker-demo_demo-secrets:/s:ro alpine cat /s/operator.token`).
+all four. Shore/edge consoles are also on `127.0.0.1:8080` / `:8081`.
+
+Plain `make compose-demo` requires the real operator token at the UI login page;
+it does **not** enable trusted-peer auto-login or arbitrary-token login. Retrieve
+the generated token locally, then paste it into **Operator token** at
+`http://localhost:8090/login` and click **Sign in**:
+
+```sh
+docker run --rm --entrypoint cat \
+  -v ghost-seeker-demo_demo-secrets:/s:ro \
+  ghost-seeker/demo-init:0.1.0 /s/operator.token
+```
+
+This is a credential: do not paste it into logs, screenshots or chat. It is stored
+in the stack's named volume, not the native `data/operator.token` file.
+`make compose-demo-down` deletes that volume; retrieve the new token after the
+next fresh start. After login, the browser uses an HttpOnly, SameSite=Strict
+session cookie. No relaxed override is required to view or operate the feed.
 
 This is a laptop demo, not the fielding topology — `deploy/compose/docker-compose.yml` (Toxiproxy
 link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, production posture) is unchanged.
@@ -54,21 +70,32 @@ for supported classes, native startup, and validation limits.
 
 ## 0. One-time setup
 
-### Demo-only login fallback
+### Optional relaxed local presentation override
 
-Normal launch targets require the real operator token. To opt into insecure local
-presenter conveniences, use `docker compose -f deploy/compose/demo.compose.yml
--f deploy/compose/demo.local.compose.yml up --build -d` (with the same GS_MODELS and
-GS_DEMO_SCENARIO as the normal stack). This override enables trusted peers,
-presenter link control and `-demo-accept-any-token`. Only in that override,
-enter **any non-empty token** on the login screen
-to get **operator** access. Empty or whitespace-only tokens are rejected.
-This deliberately insecure mode is off by default, emits a loud startup warning,
-and must never be used in production or on an untrusted network. It cannot be
-combined with `-auth-mode piv` (startup fails). For a manual demo launch, add
-`-demo-accept-any-token` to the `ghost-seeker` command; omit it for normal token
-validation. The real operator token is still required for shore/edge bearer
-authentication; only the UI's login form accepts arbitrary tokens.
+Use the secure token login above for the normal Compose stack. For a deliberately
+relaxed local presentation, explicitly add the override after preparing the data
+and models. Keep the same model directory and generated scenario as the normal
+stack:
+
+```sh
+GS_MODELS="$HOME/models/D" GS_DEMO_SCENARIO=scenario.generated.json \
+  docker compose -f deploy/compose/demo.compose.yml \
+  -f deploy/compose/demo.local.compose.yml up -d
+```
+
+This replaces the UI command only, reuses the same project/data/secrets, and
+keeps published ports bound to `127.0.0.1`. It enables `-dev-trust-peers` for
+local Docker browser auto-login, `-demo-link-control` for presenter link controls,
+and `-demo-accept-any-token` as an insecure login fallback. Only in this mode
+does any non-empty login token grant **operator** access. Empty tokens are rejected;
+PIV plus arbitrary-token login is rejected at startup. Never use this override
+in production or on an untrusted network. Real operator credentials are still
+required between the services; their bearer authentication is not relaxed.
+
+Run `make compose-demo` again to restore the base UI command. Previously issued
+browser sessions do not prove auto-login is enabled: use a fresh/private browser
+session when checking the secure login screen. The override is not used by
+`make demo-ui`; do not assume a native launch accepts arbitrary tokens.
 
 ```sh
 # toolchain: Go 1.26.10, Python >= 3.10, GitHub CLI signed in (gh auth login) for the demo data
@@ -174,19 +201,28 @@ shore store regardless of mode.
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
 make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
-make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/live.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
+make demo-edge         # replays scenario.generated.json, or scenario.json if nothing has been generated
 open http://localhost:8090
 ```
 
-**Auth (no extra steps):** the three Go processes share one operator token, and the edge↔shore
+**Native authentication:** the three Go processes share one operator token, and the edge↔shore
 link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/unit.key`;
 `make demo-edge` mints a 24 h edge token from it into `data/edge.jwt` on every start). With no
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
-(0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
-SameSite=Strict session cookie). `make demo-ui` binds the UI to `127.0.0.1` only (it runs with
-`-demo-accept-any-token`); for a browser on another machine, run the same `make demo-ui` command line
-(all live flags: `-shore`, `-edge`, `-link-listen`, `-dev-token-file`) but with `-addr :8090` and
-without `-demo-accept-any-token`, then enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
+(0600) and the others read it. `make demo-ui` binds to `127.0.0.1` and does **not**
+enable arbitrary-token login or trusted peers. To sign in when prompted, run
+`make -s demo-token` (or read `data/operator.token`), paste that credential into
+the token field at `http://localhost:8090/login`, and click **Sign in**. Keep it
+private. Do not use the Docker volume token for this separate native stack.
+
+The existing native development-token mode can auto-authenticate a direct,
+non-forwarded loopback browser request. That exception is not guaranteed through
+a proxy or Docker bridge, and is disabled when an explicit `GS_OPERATOR_TOKEN`
+or `GS_OPERATOR_TOKEN_FILE` is configured; then use that configured credential.
+Do not depend on automatic sign-in for a presentation. Browser sessions use an
+HttpOnly, SameSite=Strict cookie after authentication.
+
+For `curl` against the native shore/edge API use
 `-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
