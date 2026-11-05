@@ -66,6 +66,12 @@ dev videos plus onboard MVI_0790 and MVI_0799. Other existing split entries have
 not changed. Train also includes FVessel dev clips and Ghost Fleet 5fps dev GT;
 PR #50 teacher-only frames and synthetic assets are excluded.
 
+RF-DETR 1.3.0 constructs its `test` loader unconditionally in `main.py`, even
+with `run_test=False`. Before a later training run, provide a **local dev-only**
+`dataset/test -> valid` alias (or adapt the loader) and set `run_test=False`.
+Never satisfy that loader requirement by copying a locked set into the training
+directory. No such alias or training run is part of this freeze/baseline.
+
 Example reproduction (choose a NEW prefix and NEW local directories):
 
 ```
