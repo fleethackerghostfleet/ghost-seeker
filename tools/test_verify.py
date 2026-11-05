@@ -1,9 +1,11 @@
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import tempfile
 import sys
+import time
 import unittest
 from unittest.mock import patch
 
@@ -77,19 +79,51 @@ class VerifyTests(unittest.TestCase):
             self.assertTrue((self.root / result["log"]).read_text())
 
     def test_timeout_kills_child_processes(self):
+        with patch.object(verify.subprocess, "Popen") as start, patch.object(verify.os, "killpg") as kill:
+            process = start.return_value
+            process.wait.side_effect = [subprocess.TimeoutExpired(["fake"], 3600), -signal.SIGKILL]
+            result = verify.run_check("timeout", ["fake"], self.root)
+            self.assertEqual(result["status"], "failed")
+            self.assertTrue(start.call_args.kwargs["start_new_session"])
+            kill.assert_called_once_with(process.pid, signal.SIGKILL)
+            self.assertEqual(process.wait.call_count, 2)
+
+    def test_sigterm_kills_running_check_and_writes_failed_report(self):
+        ready = self.root / "ready"
         command = [sys.executable, "-c",
-                   "import subprocess,sys,time; "
+                   "import pathlib,subprocess,sys,time; "
                    "p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); "
-                   "print(p.pid,flush=True); time.sleep(60)"]
-        result = verify.run_check("timeout", command, self.root, timeout=1)
-        self.assertEqual(result["status"], "failed")
-        child = int((self.root / "timeout.log").read_text().splitlines()[0])
-        try:
-            os.kill(child, 0)
-        except ProcessLookupError:
-            return
-        # A reparented zombie is terminated and cannot keep consuming resources.
-        self.assertEqual(Path(f"/proc/{child}/stat").read_text().split()[2], "Z")
+                   f"pathlib.Path({str(ready)!r}).write_text(str(p.pid)); time.sleep(60)"]
+        runner = (
+            "import pathlib,sys; "
+            f"sys.path.insert(0,{str(Path(verify.__file__).parent)!r}); import verify; "
+            f"verify.ROOT=pathlib.Path({str(self.root)!r}); "
+            f"verify.git=lambda *args: {self.commit!r} if args==('rev-parse','HEAD') else ''; "
+            "verify.shutil.which=lambda name: '/bin/tool'; "
+            f"verify.checks=lambda: [('waiting',{command!r})]; "
+            "sys.exit(verify.main())"
+        )
+        with subprocess.Popen([sys.executable, "-c", runner], stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL) as process:
+            try:
+                deadline = time.monotonic() + 30
+                while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists(), "check did not start")
+                process.send_signal(signal.SIGTERM)
+                self.assertEqual(process.wait(timeout=10), 1)
+                self.assertEqual(self.report()["status"], "failed")
+                self.assertIn("signal", self.report()["error"])
+                child = int(ready.read_text())
+                try:
+                    # Reparented zombies are terminated; already-reaped children have no entry.
+                    self.assertEqual(Path(f"/proc/{child}/stat").read_text().split()[2], "Z")
+                except FileNotFoundError:
+                    pass
+            finally:
+                if process.poll() is None:
+                    process.send_signal(signal.SIGTERM)
+                    process.wait(timeout=10)
 
     def test_generated_comparison_includes_staged_changes(self):
         with patch.object(verify.subprocess, "run") as run:

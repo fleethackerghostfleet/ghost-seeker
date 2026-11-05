@@ -104,10 +104,19 @@ def verify():
     return 0 if report["status"] == "passed" else 1
 
 
-if __name__ == "__main__":
+def terminate(signum, frame):
+    raise KeyboardInterrupt(f"Terminated by signal {signum}")
+
+
+def main():
+    signal.signal(signal.SIGTERM, terminate)
     if sys.argv[1:] == ["--check-generated"]:
         check_generated()
+        return 0
     elif sys.argv[1:]:
-        sys.exit("Usage: python3 tools/verify.py")
-    else:
-        sys.exit(verify())
+        return "Usage: python3 tools/verify.py"
+    return verify()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
