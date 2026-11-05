@@ -48,11 +48,12 @@
     <div class="spacer"></div>
     <div class="dirbar" id="dirBar"></div>
   </div>
+  <div class="upload-summary" id="uploadSummary" role="status"></div>
   <div class="strip" id="simStrip">
     <div class="st" id="st1" title="Images captured by sensors">Captured <b id="cCap">0</b></div><span class="ar">›</span>
     <div class="st" id="st2" title="Ship-side filtering keeps useful images and filters out low-value frames">Kept on ship <b id="cKeep">0</b> · filtered out <b id="cDrop">0</b></div><span class="ar">›</span>
     <div class="st" id="st3" title="Image data transmitted from ship to shore">Sent to shore <b id="cKB">0</b> MB</div><span class="ar">›</span>
-    <div class="st" id="st4" title="Images saved in storage">Stored <b id="cDb">0</b></div><span class="ar">›</span>
+    <div class="st" id="st4" title="Cumulative images saved on the ship since startup, including images later evicted from the retained feed">Saved on ship (total) <b id="cDb">0</b></div><span class="ar">›</span>
     <div class="st" id="st5" title="The scoring model ranks images using the base model and active directives">Scoring model: <b id="cModel"></b> · <b id="cP1">0</b> P1 Critical</div>
     <span class="sv"><span id="cSaved">0%</span> of low-value frames filtered on the ship to save bandwidth</span>
   </div>
