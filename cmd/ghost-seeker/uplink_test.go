@@ -75,6 +75,43 @@ func TestSimulationUplinkBackpressure(t *testing.T) {
 	}
 }
 
+func TestSimulationUplinkSmallRetainBackpressure(t *testing.T) {
+	for _, retain := range []int{0, 1, 2, 3, 5, 6, 7} {
+		t.Run(fmt.Sprint(retain), func(t *testing.T) {
+			data := store.New(retain)
+			u := newSimulationUplink(data, -1, func() float64 { return 0 })
+			limit := min(6, max(1, retain)-1)
+			for i := 0; i < limit; i++ {
+				items, _, _, _ := data.Snapshot()
+				if !u.canGenerate(items) {
+					t.Fatalf("blocked before pending cap: %d", i)
+				}
+				data.Add(&command.Item{ID: fmt.Sprint(i), KB: 32}, 0)
+			}
+			items, _, _, _ := data.Snapshot()
+			if u.canGenerate(items) {
+				t.Fatalf("admitted at pending cap %d", limit)
+			}
+			if limit == 0 {
+				return
+			}
+			u.advance(20 * time.Second)
+			items, _, _, _ = data.Snapshot()
+			if !u.canGenerate(items) {
+				t.Fatal("did not resume after upload completion")
+			}
+			if _, evicted := data.Add(&command.Item{ID: "new", KB: 32}, 0); evicted != "" {
+				t.Fatalf("unexpected eviction: %s", evicted)
+			}
+			for i := 1; i < limit; i++ {
+				if _, ok := data.GetItem(fmt.Sprint(i)); !ok {
+					t.Fatalf("pending upload %d was evicted", i)
+				}
+			}
+		})
+	}
+}
+
 func TestSimulationUplinkUsesCurrentBandwidthAndOutages(t *testing.T) {
 	data := store.New(1)
 	samples := []float64{0, -2, 0}

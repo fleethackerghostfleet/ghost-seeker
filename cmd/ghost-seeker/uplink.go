@@ -40,7 +40,7 @@ func (u *simulationUplink) canGenerate(items []command.Item) bool {
 			pending++
 		}
 	}
-	return pending < 6
+	return pending < min(6, u.data.RetainLimit()-1)
 }
 
 func (u *simulationUplink) advance(elapsed time.Duration) []command.Item {

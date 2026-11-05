@@ -53,6 +53,10 @@ func New(retain int) *Store {
 	return &Store{retain: retain, model: "maritime", linkBPS: 256_000}
 }
 
+func (s *Store) RetainLimit() int {
+	return s.retain
+}
+
 func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

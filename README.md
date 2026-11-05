@@ -420,7 +420,8 @@ intervals are outages. The synthetic 18–45 KiB images take roughly 10–24 sec
 of uninterrupted airtime near the mean rate; queueing, priority and outages can
 extend elapsed time. Upload chips report the applied slow rate.
 
-Historical backfill starts uploaded. At six outstanding uploads the automatic
+Historical backfill starts uploaded. At six outstanding uploads (or `retain-1`,
+whichever is smaller) the automatic
 sim pauses new frame generation until an upload finishes, keeping a visible
 shared queue without unbounded growth (including during outages or holds).
 `-sim-link-bps N` still selects a fixed bits/second rate (`0` means outage),
