@@ -69,6 +69,7 @@
  }
  new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true});
  window.addEventListener('resize',schedule);
+ window.addEventListener('load',schedule,true);
  document.fonts?.ready.then(schedule);
  window.gsTextLayout=schedule;
  schedule();

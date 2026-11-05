@@ -969,6 +969,13 @@ test('live active and pending forms take precedence over a received preview',()=
  assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
  assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
 });
+test('feed images and detection planes share an intrinsic-size wrapper',()=>{
+ const c=setup();
+ vm.runInContext("imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';it={src:{id:'EO'},tier:3,central:.5,ts:new Date(),dets:[],det:[]}",c);
+ const markup=vm.runInContext('cardHTML(it,true)',c);
+ assert.match(markup,/<div class="thumb-image"><img src="\/frame.jpg" alt=""><div class="bx"><\/div><\/div><span class="tier/);
+});
+
 test('detail selection rejects removed images and never leaves an empty drawer open',()=>{
  const c=setup();
  vm.runInContext(`
