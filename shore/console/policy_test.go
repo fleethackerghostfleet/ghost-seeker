@@ -2,6 +2,8 @@ package console
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -58,5 +60,48 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	}
 	if err := policy.Verify(next.Msg.Policy, policy.Keyring{"shore": pub}); err != nil {
 		t.Fatalf("second signature failed verification: %v", err)
+	}
+}
+
+func TestSetPolicyConcurrentVersionsAreDistinct(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	svc := &Service{St: st, Clk: clock.NewVirtual(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))}
+	const count = 20
+	versions := make(chan int64, count)
+	errs := make(chan error, count)
+	var wg sync.WaitGroup
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			response, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{
+				Policy: &pb.Policy{Id: fmt.Sprintf("policy-%d", i)},
+			}))
+			if err != nil {
+				errs <- err
+				return
+			}
+			versions <- response.Msg.Policy.Version
+		}(i)
+	}
+	wg.Wait()
+	close(versions)
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	seen := make(map[int64]bool, count)
+	for version := range versions {
+		if seen[version] {
+			t.Fatalf("duplicate policy version %d", version)
+		}
+		seen[version] = true
+	}
+	if len(seen) != count {
+		t.Fatalf("got %d unique versions, want %d", len(seen), count)
 	}
 }

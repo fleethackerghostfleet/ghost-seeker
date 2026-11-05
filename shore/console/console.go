@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
@@ -23,9 +24,10 @@ import (
 
 type Service struct {
 	ghostseekerv1connect.UnimplementedConsoleServiceHandler
-	NodeID string
-	St     *store.Store
-	Clk    clock.Clock
+	policyMu sync.Mutex
+	NodeID   string
+	St       *store.Store
+	Clk      clock.Clock
 	// Embedder compiles natural-language interest into vectors; optional.
 	Embedder inference.Analyzer
 	Signer   *policy.SigningKey
@@ -93,6 +95,8 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	if p == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("policy required"))
 	}
+	s.policyMu.Lock()
+	defer s.policyMu.Unlock()
 	now := s.Clk.Now()
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())

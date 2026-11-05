@@ -16,6 +16,7 @@ type Rule struct {
 	Sources     []string `json:"sources,omitempty"`
 	WithinMin   int      `json:"withinMin,omitempty"`
 	Edited      bool     `json:"edited,omitempty"`
+	Blocked     string   `json:"blocked,omitempty"`
 }
 
 type Directive struct {

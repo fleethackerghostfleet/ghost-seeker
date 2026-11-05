@@ -197,7 +197,7 @@ func (s *Store) ClearDirectives() {
 	s.rescoreLocked()
 }
 
-func (s *Store) SetPolicyDirectives(sourceDirectives []command.Directive, blocked map[string]string) {
+func (s *Store) SetPolicyDirectives(sourceDirectives []command.Directive, blocked map[string]map[int]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := cloneDirectives(sourceDirectives)
@@ -205,7 +205,28 @@ func (s *Store) SetPolicyDirectives(sourceDirectives []command.Directive, blocke
 		if directive.Source != "" {
 			continue
 		}
-		directive.Blocked = blocked[directive.ID]
+		for i := range directive.Rules {
+			directive.Rules[i].Blocked = ""
+		}
+		ruleBlocks := blocked[directive.ID]
+		blockedCount := 0
+		reason := ""
+		for i, blockReason := range ruleBlocks {
+			if i >= 0 && i < len(directive.Rules) && blockReason != "" {
+				blockedCount++
+				reason = blockReason
+			}
+		}
+		directive.Blocked = ""
+		if len(directive.Rules) > 0 && blockedCount == len(directive.Rules) {
+			directive.Blocked = reason
+		} else {
+			for i, blockReason := range ruleBlocks {
+				if i >= 0 && i < len(directive.Rules) {
+					directive.Rules[i].Blocked = blockReason
+				}
+			}
+		}
 		next = append(next, directive)
 	}
 	s.directives = next

@@ -325,10 +325,27 @@ func TestRejectedPolicyDownlinkAdvancesCursorAndStaleVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.AcceptPolicy(context.Background(), &pb.Policy{Id: "accepted", Version: 4}, "console"); err != nil {
+	pub, priv, err := policy.GenerateKey("command")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.AcceptPolicy(context.Background(), &pb.Policy{Id: "stale", Version: 4}, "console"); !errors.Is(err, policy.ErrStaleVersion) {
+	s.cfg.PolicyKeys = policy.Keyring{"command": pub}
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{Keys: s.cfg.PolicyKeys, RequireSigned: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := &pb.Policy{Id: "accepted", Version: 4}
+	if err := policy.Sign(accepted, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), accepted, "console"); err != nil {
+		t.Fatal(err)
+	}
+	stale := &pb.Policy{Id: "stale", Version: 4}
+	if err := policy.Sign(stale, "command", priv); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AcceptPolicy(context.Background(), stale, "console"); !errors.Is(err, policy.ErrStaleVersion) {
 		t.Fatalf("stale version error=%v", err)
 	}
 	sh.downlink = []*pb.Downlink{{Seq: 7, Msg: &pb.Downlink_Policy{Policy: &pb.Policy{Id: "unsigned", Version: 5}}}}

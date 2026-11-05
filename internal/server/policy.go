@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,12 +43,15 @@ func WithNodeID(nodeID string) Option {
 
 type policyRuntime struct {
 	mu            sync.Mutex
+	timerMu       sync.Mutex
 	store         *store.Store
 	guard         *policy.Store
 	admin         bool
 	nodeID        string
 	higherLayers  []*pb.PolicyLayer
 	operatorEMCON *pb.EmconSetting
+	expiryTimer   *time.Timer
+	onChange      func()
 	err           error
 }
 
@@ -76,6 +80,7 @@ func newPolicyRuntime(options serverOptions, data *store.Store) *policyRuntime {
 			}
 		}
 		rt.syncStore(active, time.Now())
+		rt.armExpiry(active)
 		return rt
 	}
 	if !seedPolicy {
@@ -98,8 +103,12 @@ func (rt *policyRuntime) restoreOperatorLayer(layer *pb.PolicyLayer) {
 	byID := make(map[string]*command.Directive)
 	var order []string
 	for _, rule := range layer.Rules {
-		id, _, ok := strings.Cut(rule.Id, ":")
+		id, _, scoped, ok := parsePolicyRuleID(rule.Id)
 		if !ok || id == "" {
+			continue
+		}
+		if scoped {
+			log.Printf("policy: skipping scoped operator rule %q during restore", rule.Id)
 			continue
 		}
 		directive := byID[id]
@@ -120,9 +129,23 @@ func (rt *policyRuntime) restoreOperatorLayer(layer *pb.PolicyLayer) {
 	}
 	directives := make([]command.Directive, 0, len(order))
 	for _, id := range order {
-		directives = append(directives, *byID[id])
+		if len(byID[id].Rules) > 0 {
+			directives = append(directives, *byID[id])
+		}
 	}
 	rt.store.RestoreDirectives(directives)
+}
+
+func parsePolicyRuleID(ruleID string) (string, int, bool, bool) {
+	parts := strings.SplitN(ruleID, ":", 3)
+	if len(parts) < 2 || parts[0] == "" {
+		return "", 0, false, false
+	}
+	index, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", 0, false, false
+	}
+	return parts[0], index, len(parts) == 3 && parts[2] == "scoped", true
 }
 
 func (rt *policyRuntime) apply(source, who, text string, now time.Time) (*pb.Policy, error) {
@@ -144,7 +167,47 @@ func (rt *policyRuntime) apply(source, who, text string, now time.Time) (*pb.Pol
 		return accepted, err
 	}
 	rt.syncStore(accepted, now)
+	rt.armExpiry(accepted)
 	return accepted, nil
+}
+
+func (rt *policyRuntime) armExpiry(p *pb.Policy) {
+	rt.timerMu.Lock()
+	defer rt.timerMu.Unlock()
+	if rt.expiryTimer != nil {
+		rt.expiryTimer.Stop()
+		rt.expiryTimer = nil
+	}
+	if p == nil || p.ExpiresAtUnixMs == 0 {
+		return
+	}
+	delay := time.Until(time.UnixMilli(p.ExpiresAtUnixMs))
+	if delay < 0 {
+		delay = 0
+	}
+	rt.expiryTimer = time.AfterFunc(delay, func() {
+		rt.expire(time.Now())
+	})
+}
+
+func (rt *policyRuntime) expire(now time.Time) {
+	rt.mu.Lock()
+	if rt.guard == nil {
+		rt.mu.Unlock()
+		return
+	}
+	_, expired := rt.guard.Active(now)
+	if !expired {
+		rt.mu.Unlock()
+		return
+	}
+	_ = rt.guard.MarkExpired(context.Background(), now)
+	rt.higherLayers = nil
+	rt.store.SetPolicyDirectives(nil, nil)
+	rt.mu.Unlock()
+	if rt.onChange != nil {
+		rt.onChange()
+	}
 }
 
 func (rt *policyRuntime) operatorLayer() *pb.PolicyLayer {
@@ -156,8 +219,12 @@ func (rt *policyRuntime) operatorLayer() *pb.PolicyLayer {
 		}
 		for i, rule := range directive.Rules {
 			labels := append(append([]string(nil), rule.Classes...), rule.Attrs...)
+			id := fmt.Sprintf("%s:%d", directive.ID, i)
+			if rule.Only || len(rule.Sources) > 0 || rule.WithinMin != 0 {
+				id += ":scoped"
+			}
 			interestRule := &pb.InterestRule{
-				Id: fmt.Sprintf("%s:%d", directive.ID, i), Author: "TAO", Text: directive.Text, Weight: rule.Weight,
+				Id: id, Author: "TAO", Text: directive.Text, Weight: rule.Weight,
 			}
 			if rule.Type == "suppress" {
 				interestRule.SuppressLabels = append([]string(nil), labels...)
@@ -190,14 +257,17 @@ func (rt *policyRuntime) syncStore(p *pb.Policy, now time.Time) {
 			source = append(source, command.Directive{ID: id, Text: text, Rules: []command.Rule{rule}, Source: issuer, Locked: item.Rule.Locked, LockedBy: issuer})
 		}
 	}
-	blocked := make(map[string]string)
+	blocked := make(map[string]map[int]string)
 	for _, conflict := range conflicts {
 		if conflict == nil || conflict.RuleId == "emcon" {
 			continue
 		}
-		id, _, ok := strings.Cut(conflict.RuleId, ":")
+		id, index, _, ok := parsePolicyRuleID(conflict.RuleId)
 		if ok {
-			blocked[id] = conflict.Reason
+			if blocked[id] == nil {
+				blocked[id] = make(map[int]string)
+			}
+			blocked[id][index] = conflict.Reason
 		}
 	}
 	rt.store.SetPolicyDirectives(source, blocked)
@@ -461,6 +531,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	s.policy.mu.Lock()
 	defer s.policy.mu.Unlock()
+	prev := s.policy.higherLayers
 	s.policy.higherLayers = nil
 	for _, layer := range p.Layers {
 		if layer.Echelon == pb.Echelon_ECHELON_SHIP && layer.IssuedBy == "TAO" {
@@ -470,6 +541,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	accepted, err := s.policy.apply("admin", "super-admin", fallback(p.Text, "raw policy edit"), now)
 	if err != nil {
+		s.policy.higherLayers = prev
 		s.policy.guard.Reject(r.Context(), p, "admin", err.Error(), now)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

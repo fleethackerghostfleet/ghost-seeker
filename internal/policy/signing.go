@@ -81,6 +81,7 @@ func LoadKeyring(path string) (Keyring, error) {
 		return nil, fmt.Errorf("decode keyring: %w", err)
 	}
 	keys := make(Keyring, len(encoded))
+	idsByKey := make(map[string]string, len(encoded))
 	for id, value := range encoded {
 		key, err := decodeBase64(value)
 		if err != nil {
@@ -89,6 +90,11 @@ func LoadKeyring(path string) (Keyring, error) {
 		if len(key) != ed25519.PublicKeySize {
 			return nil, fmt.Errorf("key %q must be %d bytes", id, ed25519.PublicKeySize)
 		}
+		keyID := string(key)
+		if existingID, ok := idsByKey[keyID]; ok {
+			return nil, fmt.Errorf("keys %q and %q contain the same public key", existingID, id)
+		}
+		idsByKey[keyID] = id
 		keys[id] = ed25519.PublicKey(key)
 	}
 	return keys, nil

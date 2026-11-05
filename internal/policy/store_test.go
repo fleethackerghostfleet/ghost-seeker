@@ -105,6 +105,9 @@ func TestStoreExplicitExpiryAndSignedRequirements(t *testing.T) {
 		t.Fatal(err)
 	}
 	previous := &pb.Policy{Id: "previous", IssuedAtUnixMs: now.UnixMilli()}
+	if err := Sign(previous, "k", priv); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.Accept(ctx, previous, "console", now); err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +118,16 @@ func TestStoreExplicitExpiryAndSignedRequirements(t *testing.T) {
 	if active, _ := store.Active(now); active.Id != "previous" {
 		t.Fatalf("rejected policy replaced last good: %v", active)
 	}
-	if _, err := store.Accept(ctx, unsigned, "console", now); err != nil {
-		t.Fatalf("console unsigned rejected: %v", err)
+	if _, err := store.Accept(ctx, unsigned, "console", now); !errors.Is(err, ErrUnsigned) {
+		t.Fatalf("unsigned console error=%v", err)
+	}
+	if active, _ := store.Active(now); active == nil || active.Id != "previous" {
+		t.Fatalf("console unsigned policy replaced last good: %v", active)
 	}
 	expired := &pb.Policy{Id: "explicit", IssuedAtUnixMs: now.UnixMilli(), ExpiresAtUnixMs: now.UnixMilli()}
+	if err := Sign(expired, "k", priv); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.Accept(ctx, expired, "console", now); !errors.Is(err, ErrExpired) {
 		t.Fatalf("explicit expiry error=%v", err)
 	}
@@ -160,5 +169,32 @@ func TestStoreAuditAppliedRejectedExpiredNewestFirst(t *testing.T) {
 	}
 	if audit[1].Reason != "rule conflict" || audit[2].Reason != ErrStaleVersion.Error() {
 		t.Fatalf("audit reasons=%+v", audit)
+	}
+}
+
+type failingAuditBackend struct {
+	Backend
+}
+
+func (failingAuditBackend) AppendPolicyAudit(context.Context, AuditEntry) error {
+	return errors.New("audit unavailable")
+}
+
+func TestStoreAcceptSucceedsWhenAppliedAuditFails(t *testing.T) {
+	ctx := context.Background()
+	backend := failingAuditBackend{Backend: NewMemBackend()}
+	store, err := NewStore(ctx, backend, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	p := &pb.Policy{Id: "accepted", Version: 1, IssuedAtUnixMs: now.UnixMilli()}
+	accepted, err := store.Accept(ctx, p, "console", now)
+	if err != nil || accepted == nil || accepted.Id != p.Id {
+		t.Fatalf("Accept=%v err=%v", accepted, err)
+	}
+	active, expired := store.Active(now)
+	if expired || active == nil || active.Id != p.Id {
+		t.Fatalf("Active=%v expired=%v", active, expired)
 	}
 }

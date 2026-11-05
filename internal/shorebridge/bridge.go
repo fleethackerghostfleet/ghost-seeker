@@ -781,8 +781,9 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		Mode     string `json:"mode"`
 		IssuedBy string `json:"issuedBy"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 	mode, ok := parseEMCON(in.Mode)

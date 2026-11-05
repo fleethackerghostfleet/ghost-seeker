@@ -36,6 +36,7 @@ func New(data *store.Store, options ...Option) *Server {
 	}
 	s := &Server{store: data, hub: newHub(), mux: http.NewServeMux()}
 	s.policy = newPolicyRuntime(opts, data)
+	s.policy.onChange = s.publishSnapshot
 	s.mux.HandleFunc("GET /api/config", s.config)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
 	s.mux.HandleFunc("GET /api/policy", s.getPolicy)
@@ -185,8 +186,11 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	_, _, conflicts := policy.MergeRules(candidate.Layers, s.policy.nodeID, time.Now())
 	blocked := make(map[string]bool)
 	for _, conflict := range conflicts {
-		if conflict != nil && strings.HasPrefix(conflict.RuleId, "new:") {
-			blocked[conflict.RuleId] = true
+		if conflict != nil {
+			id, index, _, ok := parsePolicyRuleID(conflict.RuleId)
+			if ok && id == "new" {
+				blocked[fmt.Sprintf("new:%d", index)] = true
+			}
 		}
 	}
 	kept := make([]command.Rule, 0, len(rules))

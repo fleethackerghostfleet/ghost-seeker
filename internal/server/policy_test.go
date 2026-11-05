@@ -4,16 +4,50 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"google.golang.org/protobuf/encoding/protojson"
 )
+
+type failingSaveBackend struct {
+	policy.Backend
+}
+
+func (failingSaveBackend) SavePolicyState(context.Context, *pb.Policy, int64) error {
+	return errors.New("save failed")
+}
+
+func TestAdminPolicyApplyFailureRestoresHigherLayers(t *testing.T) {
+	app := New(store.New(10), WithAdmin(true), WithNodeID("DDG-51"),
+		WithPolicyBackend(failingSaveBackend{Backend: policy.NewMemBackend()}))
+	previous := app.policy.higherLayers
+	if len(previous) == 0 {
+		t.Fatal("expected seeded higher policy layer")
+	}
+	raw, err := protojson.Marshal(&pb.Policy{Layers: []*pb.PolicyLayer{{
+		Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-99",
+		Rules: []*pb.InterestRule{{Id: "new-lock", Locked: true, BoostLabels: []string{"aircraft"}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := rawPolicyRequest(app, http.MethodPut, "/api/policy", string(raw))
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("PUT status=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(app.policy.higherLayers) != len(previous) || app.policy.higherLayers[0] != previous[0] {
+		t.Fatalf("higher layers changed after failure: got=%v want=%v", app.policy.higherLayers, previous)
+	}
+}
 
 func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	data := store.New(10)
@@ -97,6 +131,88 @@ func TestSimulationPolicySeedLocksAndPartialConflict(t *testing.T) {
 	}
 	if !foundRejected {
 		t.Fatalf("audit entries %#v do not include rejected directive", audit.Entries)
+	}
+}
+
+func TestSimulationPolicyExpiryClearsLocksAndSourceDirectives(t *testing.T) {
+	data := store.New(10)
+	app := New(data, WithAdmin(true))
+	input := map[string]any{"text": "ignore submarines", "rules": []command.Rule{
+		{Type: "suppress", Classes: []string{"submarine"}},
+	}}
+	if response := request(app, http.MethodPost, "/api/directives", input); response.Code != http.StatusConflict {
+		t.Fatalf("pre-expiry directive status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	app.policy.expire(time.Now().Add(13 * time.Hour))
+	for _, directive := range data.Directives() {
+		if directive.Source == "CTF-72" {
+			t.Fatalf("expired source directive remains: %+v", directive)
+		}
+	}
+	audit, err := app.policy.guard.Audit(context.Background(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundExpired := false
+	for _, entry := range audit {
+		foundExpired = foundExpired || entry.Result == "expired"
+	}
+	if !foundExpired {
+		t.Fatalf("expired audit entry missing: %+v", audit)
+	}
+	if response := request(app, http.MethodPost, "/api/directives", input); response.Code != http.StatusCreated {
+		t.Fatalf("post-expiry directive status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRestoreOperatorLayerSkipsScopedRules(t *testing.T) {
+	data := store.New(10)
+	rt := &policyRuntime{store: data}
+	rt.restoreOperatorLayer(&pb.PolicyLayer{Rules: []*pb.InterestRule{
+		{Id: "directive:0", BoostLabels: []string{"tanker"}},
+		{Id: "directive:1:scoped", BoostLabels: []string{"submarine"}},
+	}})
+	directives := data.Directives()
+	if len(directives) != 1 || len(directives[0].Rules) != 1 ||
+		len(directives[0].Rules[0].Classes) != 1 || directives[0].Rules[0].Classes[0] != "tanker" {
+		t.Fatalf("restored directives=%+v", directives)
+	}
+}
+
+func TestPartialHigherPolicyConflictKeepsUnblockedRuleEffective(t *testing.T) {
+	data := store.New(10)
+	data.RestoreDirectives([]command.Directive{{
+		ID: "operator", Rules: []command.Rule{
+			{Type: "suppress", Classes: []string{"submarine"}},
+			{Type: "boost", Classes: []string{"tanker"}, Weight: 2},
+		},
+	}})
+	rt := &policyRuntime{store: data, nodeID: "DDG-51"}
+	rt.syncStore(&pb.Policy{Layers: []*pb.PolicyLayer{
+		{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
+			{Id: "locked-submarine", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
+		}},
+		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO", Rules: []*pb.InterestRule{
+			{Id: "operator:0", SuppressLabels: []string{"submarine"}},
+			{Id: "operator:1", BoostLabels: []string{"tanker"}, Weight: 2},
+		}},
+	}}, time.Now())
+	directives := data.Directives()
+	var operator *command.Directive
+	for i := range directives {
+		if directives[i].ID == "operator" {
+			operator = &directives[i]
+			break
+		}
+	}
+	if operator == nil || operator.Blocked != "" ||
+		operator.Rules[0].Blocked == "" || operator.Rules[1].Blocked != "" {
+		t.Fatalf("partial conflict state=%+v", directives)
+	}
+	weights := command.EffectiveWeights("maritime", directives)
+	if weights["tanker"].Effective <= weights["tanker"].Base {
+		t.Fatalf("unblocked tanker rule did not affect weights: %+v", weights["tanker"])
 	}
 }
 

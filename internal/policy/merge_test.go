@@ -163,9 +163,40 @@ func TestMergeWeightExpiryTargetsLocksAndFlatten(t *testing.T) {
 		t.Fatal("flatten mutated input")
 	}
 	if flattened.Interest.BoostLabels[0] != "new" || flattened.Interest.SuppressLabels[0] != "avoid" ||
-		flattened.Interest.SuppressFactor != 0.25 || flattened.Interest.PositiveEmbedding[1] != 2 ||
+		flattened.Interest.SuppressFactor != 0.25 || flattened.Interest.PositiveEmbedding != nil ||
 		flattened.Thresholds.UnknownMin != 0.3 || len(flattened.Conflicts) != 0 {
 		t.Fatalf("flattened=%+v", flattened)
+	}
+}
+
+func TestFlattenEmbeddingsAndExpiredBoost(t *testing.T) {
+	same := &pb.Policy{Interest: &pb.Interest{
+		BoostLabels: []string{" Submarine "}, SuppressLabels: []string{" AVOID "},
+		PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
+	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
+		rule("same", []string{"submarine"}, []string{"avoid"}, 2))}}
+	got := Flatten(same, "USV-1", mergeNow)
+	if got.Interest.PositiveEmbedding == nil || got.Interest.NegativeEmbedding == nil {
+		t.Fatal("normalized-equivalent labels cleared embeddings")
+	}
+
+	expired := &pb.Policy{Interest: &pb.Interest{
+		BoostLabels: []string{"submarine"}, PositiveEmbedding: []float32{1}, NegativeEmbedding: []float32{2},
+	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
+		&pb.InterestRule{Id: "short", BoostLabels: []string{"submarine"}, Weight: 7, ExpiresAtUnixMs: mergeNow.UnixMilli()})}}
+	got = Flatten(expired, "USV-1", mergeNow)
+	if len(got.Interest.BoostLabels) != 0 || got.Interest.BoostFactor != 0 ||
+		got.Interest.PositiveEmbedding != nil || got.Interest.NegativeEmbedding != nil {
+		t.Fatalf("expired rule retained stale interest: %+v", got.Interest)
+	}
+
+	targeted := &pb.Policy{Interest: &pb.Interest{
+		BoostLabels: []string{"submarine"}, PositiveEmbedding: []float32{1},
+	}, Layers: []*pb.PolicyLayer{layer(pb.Echelon_ECHELON_SHIP, "TAO",
+		&pb.InterestRule{Id: "other-node", BoostLabels: []string{"submarine"}, Targets: []string{"USV-2"}, Weight: 2})}}
+	got = Flatten(targeted, "USV-1", mergeNow)
+	if got.Interest.PositiveEmbedding != nil || len(got.Interest.BoostLabels) != 0 {
+		t.Fatalf("other-node rule retained stale embedding: %+v", got.Interest)
 	}
 }
 
