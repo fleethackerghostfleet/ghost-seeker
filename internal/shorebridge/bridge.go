@@ -981,8 +981,8 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 			if c.DurationMin > 0 {
 				ruleExpiryUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
+				pol.ExpiresAtUnixMs = ruleExpiryUnixMs
 				if !b.hasOperatorJWT() {
-					pol.ExpiresAtUnixMs = ruleExpiryUnixMs
 					ruleExpiryUnixMs = 0
 				}
 			}
@@ -998,6 +998,9 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	warnings, err := b.layerPolicy(r.Context(), pol, mode)
 	if err != nil {
 		log.Printf("shorebridge: set policy: %v", err)
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
@@ -1122,11 +1125,20 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 }
 
 // layerPolicy folds a freshly built operator policy into the current shore
-// policy (#57): an EMCON phrase changes the ship-echelon EMCON unless a higher
-// echelon locked it, and the operator's rule replaces their ship layer so
+// policy (#57): an EMCON phrase changes the caller-echelon EMCON unless a
+// higher echelon locked it, and the operator's rule replaces their layer so
 // higher-echelon layers, locks and signatures survive. Returns warnings for
 // the readback.
 func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
+	if id := b.operatorSub(); id != "" {
+		pol.IssuedBy = id
+	}
+	echelon := b.echelon()
+	var ruleExpiryUnixMs int64
+	if b.hasOperatorJWT() {
+		ruleExpiryUnixMs = pol.GetExpiresAtUnixMs()
+		pol.ExpiresAtUnixMs = 0
+	}
 	current, err := b.getPolicy(ctx)
 	if err != nil {
 		// Shore policy unreadable: don't apply blind. Keep the last EMCON the
@@ -1139,8 +1151,9 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 		}
 		current = nil
 	}
+	emconLocked := false
 	if current != nil {
-		emconLocked := current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP
+		emconLocked = current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > echelon
 		if mode == "" || emconLocked {
 			if mode != "" {
 				warnings = append(warnings, "EMCON locked by "+current.EmconSetting.SetBy+"; not changed.")
@@ -1150,14 +1163,14 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
 			}
 		} else {
-			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
 		}
 		if len(current.Layers) > 0 {
 			pol.Layers = cloneLayers(current.Layers)
-			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy)
+			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy, echelon)
 			// Labels another layer already boosts/suppresses (same polarity) are
-			// inherited, not repeated in the ship rule; an operator suppressing a
-			// label a higher layer boosts is a real override and stays.
+			// inherited, not repeated in the caller rule; an operator suppressing
+			// a label another layer boosts is a real override and stays.
 			inheritedBoost, inheritedSuppress := map[string]bool{}, map[string]bool{}
 			for i, layer := range pol.Layers {
 				if i == operatorLayer || layer == nil {
@@ -1182,17 +1195,29 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 				return out
 			}
 			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
-				BoostLabels: own(pol.GetInterest().GetBoostLabels(), inheritedBoost), SuppressLabels: own(pol.GetInterest().GetSuppressLabels(), inheritedSuppress), Text: pol.Text}
+				BoostLabels: own(pol.GetInterest().GetBoostLabels(), inheritedBoost), SuppressLabels: own(pol.GetInterest().GetSuppressLabels(), inheritedSuppress),
+				Text: pol.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
 			if operatorLayer >= 0 {
 				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
 			} else {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}})
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: echelon, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}})
 				operatorLayer = len(pol.Layers) - 1
 			}
 			if mode != "" && !emconLocked {
-				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
 			}
 		}
+	}
+	if b.hasOperatorJWT() && (current == nil || len(current.Layers) == 0) {
+		rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
+			BoostLabels:    append([]string(nil), pol.GetInterest().GetBoostLabels()...),
+			SuppressLabels: append([]string(nil), pol.GetInterest().GetSuppressLabels()...),
+			Text:           pol.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
+		layer := &pb.PolicyLayer{Echelon: echelon, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}}
+		if mode != "" && !emconLocked {
+			layer.Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon}
+		}
+		pol.Layers = []*pb.PolicyLayer{layer}
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	return warnings, nil
@@ -1235,6 +1260,9 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	}
 	current, err := b.getPolicy(r.Context())
 	if err != nil {
+		if writeShoreAuthError(w, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
@@ -1262,6 +1290,9 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: in.IssuedBy})
 				operatorLayer = len(pol.Layers) - 1
 			}
+		}
+		if b.hasOperatorJWT() {
+			pol.Layers[operatorLayer].IssuedBy = in.IssuedBy
 		}
 		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: b.echelon()}
 	} else if b.hasOperatorJWT() {

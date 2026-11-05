@@ -440,3 +440,131 @@ func TestShoreAuthorizationFailureIsReturnedAsJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestConsoleDirectiveUsesOperatorJWTAndSendsHeaderOnlyToShore(t *testing.T) {
+	jwtToken := mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)
+	var mu sync.Mutex
+	var submitted *pb.Policy
+	var shoreJWTs []string
+	var edgeJWT string
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		shoreJWTs = append(shoreJWTs, r.Header.Get(unitauth.OperatorJWTHeader))
+		mu.Unlock()
+		switch r.URL.Path {
+		case consolePath + "GetPolicy":
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: &pb.Policy{Interest: &pb.Interest{}}})
+		case consolePath + "SetPolicy":
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var request pb.SetPolicyRequest
+			if err := protojson.Unmarshal(raw, &request); err != nil {
+				t.Errorf("decode SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			mu.Lock()
+			submitted = proto.Clone(request.Policy).(*pb.Policy)
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.SetPolicyResponse{Policy: request.Policy})
+		case consolePath + "GetStatus":
+			writeProtoResponse(t, w, &pb.GetStatusResponse{NodeId: "SHORE-1"})
+		case consolePath + "ListItems":
+			writeProtoResponse(t, w, &pb.ListItemsResponse{})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer shore.Close()
+	edge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		edgeJWT = r.Header.Get(unitauth.OperatorJWTHeader)
+		mu.Unlock()
+		if r.URL.Path != consolePath+"GetStatus" {
+			http.NotFound(w, r)
+			return
+		}
+		writeProtoResponse(t, w, &pb.GetStatusResponse{NodeId: "EDGE-1"})
+	}))
+	defer edge.Close()
+
+	bridge := New(shore.URL, edge.URL, nil)
+	if err := bridge.SetOperatorJWT(jwtToken); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewConsole(bridge).Handler()
+	rec := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/directives",
+		strings.NewReader(`{"text":"prioritize tanker","rules":[{"type":"boost","classes":["tanker"]}]}`))
+	handler.ServeHTTP(rec, request)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	mu.Lock()
+	policy := proto.Clone(submitted).(*pb.Policy)
+	mu.Unlock()
+	if len(policy.Layers) != 1 || policy.Layers[0].Echelon != pb.Echelon_ECHELON_SHIP ||
+		policy.Layers[0].IssuedBy != "ops-1" {
+		t.Fatalf("policy layers=%+v", policy.Layers)
+	}
+	if len(policy.Layers[0].Rules) != 1 || policy.Layers[0].Rules[0].Author != "ops-1" {
+		t.Fatalf("policy rules=%+v", policy.Layers[0].Rules)
+	}
+
+	bridge.refresh(context.Background())
+	mu.Lock()
+	defer mu.Unlock()
+	if len(shoreJWTs) == 0 {
+		t.Fatal("no shore ConsoleService calls observed")
+	}
+	for _, token := range shoreJWTs {
+		if token != jwtToken {
+			t.Fatalf("shore %s=%q, want raw operator JWT", unitauth.OperatorJWTHeader, token)
+		}
+	}
+	if edgeJWT != "" {
+		t.Fatalf("edge %s=%q, want no operator JWT", unitauth.OperatorJWTHeader, edgeJWT)
+	}
+}
+
+func TestConsoleDirectiveSurfacesShoreAuthorizationFailure(t *testing.T) {
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == consolePath+"GetPolicy" {
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: &pb.Policy{Interest: &pb.Interest{}}})
+			return
+		}
+		if r.URL.Path != consolePath+"SetPolicy" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"code":"permission_denied","message":"operator layer denied by shore"}`))
+	}))
+	defer shore.Close()
+
+	bridge := New(shore.URL, "", nil)
+	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/directives",
+		strings.NewReader(`{"text":"ignore submarines","rules":[{"type":"suppress","classes":["submarine"]}]}`))
+	NewConsole(bridge).Handler().ServeHTTP(rec, request)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode error response: %v body=%s", err, rec.Body.String())
+	}
+	if response.Error != "operator layer denied by shore" {
+		t.Fatalf("error=%q", response.Error)
+	}
+}
