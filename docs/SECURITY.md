@@ -119,25 +119,44 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 | Scan | Commit | High | Medium | Low |
 |---|---|---|---|---|
 | Baseline ([scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@548487e` | 4 | 4 | 10 |
-| After PR #60 ([scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | branch `655e371` | 1 | 3 | 6 |
+| After PR #60, branch ([scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | branch `655e371` | 1 | 3 | 6 |
+| **Final: after PR #60 merged** (incremental re-run of the baseline [scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@a9bd43e` | 3 | 0 | 5 |
 
-Remaining open findings after the re-scan (7 further findings were auto-dismissed as duplicates):
+The final run re-validated the 18 baseline findings on `main@a9bd43e`: 13 are resolved, 2 new
+medium findings (per-unit item ownership) were auto-dismissed as duplicates of the open highs,
+and 8 remain open. All open highs are the same root cause — the unit-auth default on the
+ship-to-shore link — and none of them is reachable through the operator console any more.
 
-* **High** — SyncService accepts unauthenticated edges by default (`-require-auth` is opt-in since
-  PR #53). Decision: the Go default stays opt-in for the local `make demo-*` path; **production
+* **High ×3 (one root cause: unit auth is opt-in in the Go default)** — `SyncService` accepts any
+  caller as any edge (`shore/sync/sync.go`), so an unauthenticated uplink sender can rewrite or
+  relabel items, replace delivered FULL/FACT forms, and read queued operator orders; the third
+  high is the downlink side of the same link (an edge applies an unsigned shore policy). Decision
+  (owner): the Go default stays opt-in so `make demo-*` needs no credentials; **production
   enforces it** — `deploy/compose` sets `GS_REQUIRE_AUTH=true` with `${GS_SIGNING_KEY:?}` /
-  `${GS_UNIT_TOKEN:?}` and Zarf defaults `SHORE_REQUIRE_AUTH=true` with required (non-optional)
-  `shore-auth`/`edge-auth` secrets, so they refuse to start without credentials. Shore logs a
-  WARN at startup when unit auth is off.
-* **Medium (residual, documented)** — shore items carry no owning edge, so one enrolled unit can
-  overwrite or relabel another ship's contacts. Design for the follow-up: bind item ownership to
-  the authenticated unit id (`sub` of the unit JWT) at `WriteManifest`/`WriteChunk`/override time
-  and reject writes from a different unit (shore-side overrides by operators stay allowed).
-* **Medium (dev-only, documented)** — DNS-rebinding variants of the dev-mode loopback auto-login
-  and of the same-host CORS rule: dev mode requires a loopback peer *and* a loopback `Host`, and
-  production (`GS_DEV_TOKEN_FILE=none`) has no auto-login at all.
-* **Low** — one-byte chunks make the shore re-hash a large file per chunk; chunk uploads have no
-  per-edge item-count/disk cap; the `original` full-size pull handler body is bounded only by the
-  Connect read cap. (Fixed in the same PR after the scan: tab/newline in `/login?next`, the
-  key-frame crop re-decode now goes through `imglimit`, JPEG fill bytes in the sidecar header
-  parser.)
+  `${GS_UNIT_TOKEN:?}` and Zarf defaults `SHORE_REQUIRE_AUTH=true` with required
+  `shore-auth`/`edge-auth` Secrets, so they refuse to start without credentials; shore logs a WARN
+  at startup when unit auth is off. Downlink policies are Ed25519-signed since PR #57 and the edge
+  can pin them with `-require-signed-policy` / `-policy-keys` (`GS_REQUIRE_SIGNED_POLICY`,
+  `GS_POLICY_KEYS`); fielded edges should set both. Follow-up: bind item ownership to the
+  authenticated unit id (`sub` of the unit JWT) at `UpsertManifest`/`WriteChunk`/override time
+  and reject writes from a different unit (operator overrides stay allowed); take the expected
+  chunk hash from the owning edge's manifest, not the chunk.
+* **Low — dev-mode auto-login behind a same-host reverse proxy.** The web app defaults to
+  `-dev-token-file data/operator.token`; a proxy on the same host that forwards to `127.0.0.1`
+  with a loopback `Host` and no forwarding headers passes the loopback check. Dev mode must never
+  sit behind a proxy; production sets `GS_DEV_TOKEN_FILE=none` (compose, Zarf) and has no
+  auto-login at all. Candidate fix: make dev mode an explicit flag the Makefile passes.
+* **Low — EMCON SILENT expires with the policy TTL** (`edge/scheduler`, 12 h default): the edge
+  falls back to the default policy and resumes transmitting. Candidate fix: keep the expired
+  policy's EMCON mode and only reset interests/thresholds.
+* **Low — DoS residuals**: sidecar `image_dims` treats `FF 00` as a segment and can be steered
+  to a decoy SOF (fix: `OPENCV_IO_MAX_IMAGE_PIXELS=50000000` in the sidecar env plus failing
+  closed on stray marker bytes); night-lights analysis cost grows with bright spots × pixels;
+  directive preview can trigger very large rescoring loops. None is reachable without operator
+  auth except the sidecar, which binds `127.0.0.1` by default.
+
+Resolved by PR #60 (verified by the re-run): unauthenticated shore/edge consoles and blob
+downloads, wildcard CORS and cross-site console actions, sender-chosen blob `Content-Type`
+(shore, edge and operator UI), unbounded `ListItems` page sizes and the negative page-token
+panic, chunk-bounds overflow, image pixel caps (edge, thumbnails, sidecar), unbounded
+`EmbedText`, sidecar bind-all default, directive body caps, simulation operator API CSRF.
