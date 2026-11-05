@@ -134,7 +134,7 @@ Checks: `GOTOOLCHAIN=local go vet ./... && GOTOOLCHAIN=local go test ./...`.
 
 ## rnd-500-v2 — diverse set
 
-Built with `rnd-testset -plan rnd/testsets/rnd-500-v2/plan.json -sources ~/rnd-data/sources`.
+Built with `rnd-testset -plan rnd/testsets/rnd-500-v2/plan.json -sources ~/rnd-data/sources -out ~/rnd-data/rnd-500-v2`.
 The plan lists every source and its frame count; sources are the 42 ingested
 video clips (5 frames each, 6 for the five night clips) plus five labeled public
 datasets from the catalog. Catalog images are picked evenly over sorted
