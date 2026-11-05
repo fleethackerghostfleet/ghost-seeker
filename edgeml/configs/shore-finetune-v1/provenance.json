@@ -1,0 +1,28 @@
+{
+  "created_utc": "2026-11-05T19:13:19.414475+00:00",
+  "source_tree_commit": "950223e860b6d46b4500c274e218b0cd2aa4c838",
+  "selection_commit": "950223e",
+  "source_sha256": {
+    "edgeml/tools/shore_train.py": "d48453bc2bf942674252dc951b3a3ee6990d00c61fc94232e0838db590455d11",
+    "edgeml/tools/shore_predict.py": "47a8d175ada6926102428d625059f55a4c92d326dfa92c9da0e9603fdfd89ded",
+    "edgeml/tools/shore_eval.py": "3e7acd75fbc78173295287d153827c7d1db734fbdfbf4534923b4478fc2a5a72"
+  },
+  "dataset_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/shore/frozen-20261105-v2/",
+  "completed_training_seconds": 8919.075819697,
+  "completed_training_epochs": {
+    "A": 7,
+    "B": 4
+  },
+  "device": "NVIDIA A100-SXM4-40GB",
+  "vm": "shore-det-a100",
+  "zone": "us-central1-c",
+  "environment": {
+    "rfdetr": "1.3.0",
+    "torch": "2.9.1+cu129",
+    "transformers": "4.57.1",
+    "peft": "0.17.1"
+  },
+  "locked_pass_audit": "audit.json",
+  "locked_posthoc_analysis_uses_cached_predictions_only": true,
+  "no_push": true
+}

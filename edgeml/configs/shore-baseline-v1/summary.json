@@ -1,0 +1,354 @@
+{
+  "valid_manifest": "edgeml/configs/shore-frozen-v2/valid.json",
+  "predictions_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/shore/runs/zeroshot-20261105-v1/",
+  "checkpoint_sha256": "d81979a9213a2109345158ce9232668df4c1ae52e9b8db3f2ec0a8cbad959b33",
+  "source_sha256": {
+    "edgeml/tools/shore_baseline.py": "2318a57db50390087f0f515f818f634a14abcb441e9665e594614a3545551de5",
+    "edgeml/tools/shore_eval.py": "3e7acd75fbc78173295287d153827c7d1db734fbdfbf4534923b4478fc2a5a72"
+  },
+  "host": "shore-det-a100",
+  "zone": "us-central1-c",
+  "locked_test_inference": false,
+  "modes": {
+    "native": {
+      "tau": 0.4311056137084961,
+      "metrics": {
+        "tau": 0.4311056137084961,
+        "strata": {
+          "all": {
+            "vessels": 17633,
+            "detected": 11618,
+            "recall": 0.6588782396642658,
+            "recall_cp95_lower": 0.652958325928213,
+            "precision": 0.9000619770684847,
+            "false_positives": 1290,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 7,
+            "AP50": 0.7667715252276909
+          },
+          "day": {
+            "vessels": 14098,
+            "detected": 9057,
+            "recall": 0.6424315505745496,
+            "recall_cp95_lower": 0.6357351759822097,
+            "precision": 0.884386290401328,
+            "false_positives": 1184,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.7501492770730231
+          },
+          "low_light": {
+            "vessels": 3535,
+            "detected": 2561,
+            "recall": 0.7244695898161244,
+            "recall_cp95_lower": 0.7118331407321188,
+            "precision": 0.9602549681289839,
+            "false_positives": 106,
+            "empty_frames": 0,
+            "fp_per_empty_frame": null,
+            "sources": 1,
+            "AP50": 0.8384973115800246
+          },
+          "tiny": {
+            "vessels": 17,
+            "detected": 0,
+            "recall": 0.0,
+            "recall_cp95_lower": 0.0,
+            "precision": 0.0,
+            "false_positives": 117,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 1,
+            "AP50": 3.6892371118807274e-05
+          },
+          "small": {
+            "vessels": 1989,
+            "detected": 1007,
+            "recall": 0.5062845651080945,
+            "recall_cp95_lower": 0.4875958256632258,
+            "precision": 0.6459268762026941,
+            "false_positives": 552,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 5,
+            "AP50": 0.3792762441187471
+          },
+          "medium": {
+            "vessels": 7943,
+            "detected": 3781,
+            "recall": 0.4760166184061438,
+            "recall_cp95_lower": 0.4667439451381199,
+            "precision": 0.886934083978419,
+            "false_positives": 482,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 7,
+            "AP50": 0.653887609208811
+          },
+          "large": {
+            "vessels": 7684,
+            "detected": 6830,
+            "recall": 0.8888599687662676,
+            "recall_cp95_lower": 0.882787637627543,
+            "precision": 0.9800545271918496,
+            "false_positives": 139,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 7,
+            "AP50": 0.9733279491103365
+          },
+          "day_tiny": {
+            "vessels": 17,
+            "detected": 0,
+            "recall": 0.0,
+            "recall_cp95_lower": 0.0,
+            "precision": 0.0,
+            "false_positives": 117,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 1,
+            "AP50": 3.720282787995422e-05
+          },
+          "day_small": {
+            "vessels": 1626,
+            "detected": 1007,
+            "recall": 0.6193111931119312,
+            "recall_cp95_lower": 0.5990487811328777,
+            "precision": 0.6492585428755642,
+            "false_positives": 544,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 4,
+            "AP50": 0.4504774795136857
+          },
+          "day_medium": {
+            "vessels": 6791,
+            "detected": 3077,
+            "recall": 0.45309969076719186,
+            "recall_cp95_lower": 0.44310633529366744,
+            "precision": 0.8773880809808954,
+            "false_positives": 430,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.6327881816711274
+          },
+          "day_large": {
+            "vessels": 5664,
+            "detected": 4973,
+            "recall": 0.8780014124293786,
+            "recall_cp95_lower": 0.8706156065546906,
+            "precision": 0.9816423213580734,
+            "false_positives": 93,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.9747217217582351
+          },
+          "day_medium_large": {
+            "vessels": 12455,
+            "detected": 8050,
+            "recall": 0.6463267763950221,
+            "recall_cp95_lower": 0.6392152022527848,
+            "precision": 0.9389945176717602,
+            "false_positives": 523,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.7975595321105723
+          }
+        },
+        "AP50": 0.7667715252276909,
+        "R4": {
+          "windows": 0,
+          "detected_windows": 0,
+          "eligible_tracks": 0,
+          "recall": null,
+          "window_seconds": 2,
+          "sliding": true
+        }
+      },
+      "latency": {
+        "n_1080p": 2423,
+        "p50_ms": 72.44645900004798,
+        "p95_ms": 73.60252070002389,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "torch": "2.9.1+cu129",
+        "valid_coco_sha256": "695c77a453d9ced442dab8401d42b958f2a87cff2f9e5ccb38b6a160f7c51b2f",
+        "scope": "synchronized decode-excluded preprocessing+inference+NMS; five warmup frames excluded"
+      }
+    },
+    "tiled": {
+      "tau": 0.8618552088737488,
+      "metrics": {
+        "tau": 0.8618552088737488,
+        "strata": {
+          "all": {
+            "vessels": 17633,
+            "detected": 2777,
+            "recall": 0.15748879941019678,
+            "recall_cp95_lower": 0.15299032294422724,
+            "precision": 0.900162074554295,
+            "false_positives": 308,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 7,
+            "AP50": 0.6089135966349208
+          },
+          "day": {
+            "vessels": 14098,
+            "detected": 2777,
+            "recall": 0.19697829479358775,
+            "recall_cp95_lower": 0.19147976476738943,
+            "precision": 0.902502437439064,
+            "false_positives": 300,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.6118799278138676
+          },
+          "low_light": {
+            "vessels": 3535,
+            "detected": 0,
+            "recall": 0.0,
+            "recall_cp95_lower": 0.0,
+            "precision": 0.0,
+            "false_positives": 8,
+            "empty_frames": 0,
+            "fp_per_empty_frame": null,
+            "sources": 1,
+            "AP50": 0.6358783798263231
+          },
+          "tiny": {
+            "vessels": 17,
+            "detected": 0,
+            "recall": 0.0,
+            "recall_cp95_lower": 0.0,
+            "precision": null,
+            "false_positives": 0,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 1,
+            "AP50": 0.000373539811779448
+          },
+          "small": {
+            "vessels": 1989,
+            "detected": 0,
+            "recall": 0.0,
+            "recall_cp95_lower": 0.0,
+            "precision": null,
+            "false_positives": 0,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 5,
+            "AP50": 0.3425189249784706
+          },
+          "medium": {
+            "vessels": 7943,
+            "detected": 679,
+            "recall": 0.08548407402744555,
+            "recall_cp95_lower": 0.08037394302676812,
+            "precision": 0.8498122653316645,
+            "false_positives": 120,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 7,
+            "AP50": 0.48766358243227526
+          },
+          "large": {
+            "vessels": 7684,
+            "detected": 2098,
+            "recall": 0.2730348776678813,
+            "recall_cp95_lower": 0.26467455113350713,
+            "precision": 0.9177602799650044,
+            "false_positives": 188,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 7,
+            "AP50": 0.8232053876863495
+          },
+          "day_tiny": {
+            "vessels": 17,
+            "detected": 0,
+            "recall": 0.0,
+            "recall_cp95_lower": 0.0,
+            "precision": null,
+            "false_positives": 0,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 1,
+            "AP50": 0.0004099598140338062
+          },
+          "day_small": {
+            "vessels": 1626,
+            "detected": 0,
+            "recall": 0.0,
+            "recall_cp95_lower": 0.0,
+            "precision": null,
+            "false_positives": 0,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 4,
+            "AP50": 0.3999455587820364
+          },
+          "day_medium": {
+            "vessels": 6791,
+            "detected": 679,
+            "recall": 0.09998527462818436,
+            "recall_cp95_lower": 0.09405187315233196,
+            "precision": 0.8498122653316645,
+            "false_positives": 120,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.46161237090001395
+          },
+          "day_large": {
+            "vessels": 5664,
+            "detected": 2098,
+            "recall": 0.370409604519774,
+            "recall_cp95_lower": 0.35981796351171774,
+            "precision": 0.9209833187006146,
+            "false_positives": 180,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.8620701227841199
+          },
+          "day_medium_large": {
+            "vessels": 12455,
+            "detected": 2777,
+            "recall": 0.22296266559614614,
+            "recall_cp95_lower": 0.21683610606574322,
+            "precision": 0.902502437439064,
+            "false_positives": 300,
+            "empty_frames": 17,
+            "fp_per_empty_frame": 0.0,
+            "sources": 6,
+            "AP50": 0.6524273257533164
+          }
+        },
+        "AP50": 0.6089135966349208,
+        "R4": {
+          "windows": 0,
+          "detected_windows": 0,
+          "eligible_tracks": 0,
+          "recall": null,
+          "window_seconds": 2,
+          "sliding": true
+        }
+      },
+      "latency": {
+        "n_1080p": 2423,
+        "p50_ms": 367.0246589999806,
+        "p95_ms": 377.27780700006406,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "torch": "2.9.1+cu129",
+        "valid_coco_sha256": "695c77a453d9ced442dab8401d42b958f2a87cff2f9e5ccb38b6a160f7c51b2f",
+        "scope": "synchronized decode-excluded preprocessing+inference+NMS; five warmup frames excluded"
+      }
+    }
+  }
+}

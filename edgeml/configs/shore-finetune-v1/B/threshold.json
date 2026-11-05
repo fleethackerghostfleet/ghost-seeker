@@ -1,0 +1,17 @@
+{
+  "tau": 0.33542555570602417,
+  "feasible": true,
+  "minimum_precision": 0.9,
+  "selection": "max recall; ties max precision then threshold",
+  "valid_coco_sha256": "695c77a453d9ced442dab8401d42b958f2a87cff2f9e5ccb38b6a160f7c51b2f",
+  "configuration": {
+    "model": "RFDETRSmall",
+    "weights_sha256": "c68087d91c5a05414d4446d9be72b091efc901742493c37f24ef482e3c98696b",
+    "resolution": 1024,
+    "mode": "high_res",
+    "candidate_score_floor": 0.001,
+    "training_class_id": 0,
+    "evaluation_class_id": 1,
+    "max_det": 300
+  }
+}
