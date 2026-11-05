@@ -321,5 +321,30 @@
     "edgeml/src/edgeml/tracking/embed.py": "7dadca46407881974dabf8df702c8bf8ee4d61a16ea2d1f82f8d759070b7763b",
     "edgeml/src/edgeml/types.py": "1df35bd3c67867e26ca51ef5ad9691691fb6899a25d5149a236d42b73d22af26"
   },
-  "bigquery": "ghost_fleet.edgeml_results lookup returned Not found; no shared schema/table created or rows inserted."
+  "bigquery": "ghost_fleet.edgeml_results lookup returned Not found; no shared schema/table created or rows inserted.",
+  "post_review": {
+    "fixes": [
+      "ac89dfa: clarify disjoint size buckets",
+      "be369ac: refresh/retry expired HTTP401 once",
+      "c18f9a0: default raw-response path to benchmark run; preserve overrides"
+    ],
+    "measurement_impact": "None. Original runs succeeded with valid tokens and explicit raw paths. No scored test rerun.",
+    "verification": {
+      "pytest_edgeml": {
+        "passed": 35,
+        "returncode": 0
+      },
+      "focused_ruff": 0,
+      "compileall": 0,
+      "clean_test_only_venv_pytest": {
+        "passed": 35,
+        "returncode": 0
+      }
+    },
+    "source_sha256": {
+      "edgeml/tools/bakeoff.py": "f2fbf4b83153efaa2751e3e28a4ce11dce9e811538ccbde8d6f14112175e6b4d",
+      "edgeml/src/edgeml/detectors/bakeoff.py": "918dc1ec2addc4e9179305281b6a4be3ac62206866df4bb946c527dac41cadfe",
+      "edgeml/tests/test_bakeoff.py": "31f75a44492c2f6a9a46d7bf69e5e1659843d861dd60320b716fa357e39f05c1"
+    }
+  }
 }
