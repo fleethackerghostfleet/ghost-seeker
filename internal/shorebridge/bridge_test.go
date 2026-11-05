@@ -513,10 +513,14 @@ func TestTimedFlatNonJWTKeepsPolicyExpiryWithoutCompiler(t *testing.T) {
 	}
 }
 
-func TestEMCONWithConfiguredIssuerDoesNotAdoptAnotherShipLayer(t *testing.T) {
+func TestEMCONWithConfiguredIssuerReusesSameEchelonLayer(t *testing.T) {
 	otherLayer := &pb.PolicyLayer{
 		Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "ops-2",
 		Rules: []*pb.InterestRule{{Id: "ops-2-rule", Author: "ops-2", BoostLabels: []string{"tanker"}}},
+		Emcon: &pb.EmconSetting{
+			Mode: pb.EmconMode_EMCON_MODE_NORMAL, Locked: true,
+			SetBy: "ops-2", Echelon: pb.Echelon_ECHELON_SHIP,
+		},
 	}
 	var submitted *pb.Policy
 	shore := shorePolicyTestServer(t, &pb.Policy{Interest: &pb.Interest{}, Layers: []*pb.PolicyLayer{otherLayer}},
@@ -528,13 +532,15 @@ func TestEMCONWithConfiguredIssuerDoesNotAdoptAnotherShipLayer(t *testing.T) {
 	if rec.Code != http.StatusOK || submitted == nil {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if len(submitted.Layers) != 2 || !proto.Equal(submitted.Layers[0], otherLayer) {
-		t.Fatalf("layers=%+v, want ops-2 layer unchanged plus ops-1 layer", submitted.Layers)
+	if len(submitted.Layers) != 1 {
+		t.Fatalf("layers=%+v, want the existing ship layer to be reused", submitted.Layers)
 	}
-	own := submitted.Layers[1]
-	if own.Echelon != pb.Echelon_ECHELON_SHIP || own.IssuedBy != "ops-1" ||
-		own.GetEmcon().GetSetBy() != "ops-1" || own.GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT {
-		t.Fatalf("new operator layer=%+v", own)
+	reused := submitted.Layers[0]
+	if reused.Echelon != pb.Echelon_ECHELON_SHIP || reused.IssuedBy != "ops-2" ||
+		len(reused.Rules) != 1 || !proto.Equal(reused.Rules[0], otherLayer.Rules[0]) ||
+		reused.GetEmcon().GetSetBy() != "ops-1" ||
+		reused.GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT || reused.GetEmcon().GetLocked() {
+		t.Fatalf("reused ship layer=%+v", reused)
 	}
 }
 
