@@ -725,12 +725,13 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	if in.IssuedBy == "" {
 		in.IssuedBy = "operator-ui"
 	}
+	mode, ruleText := command.SplitEmcon(in.Text)
 	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
 	var compiled *command.Compiled
 	if len(in.Suppress) == 0 && len(in.Boost) == 0 && in.Text != "" {
 		droppedScopedRules := false
 		if b.Compiler != nil {
-			c := b.Compiler.Compile(r.Context(), in.Text)
+			c := b.Compiler.Compile(r.Context(), ruleText)
 			if c.Blocked {
 				http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
 				return
@@ -744,17 +745,20 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if droppedScopedRules {
+				priorWarnings := c.Warnings
 				path := c.Path
-				c = b.Compiler.Review(in.Text, kept, c.DurationMin)
+				c = b.Compiler.Review(ruleText, kept, c.DurationMin)
 				c.Path = path
-				c.Warnings = append(c.Warnings, "Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.")
+				c.Warnings = mergeWarnings(priorWarnings, c.Warnings, []string{
+					"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.",
+				})
 				if c.Blocked {
 					http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
 					return
 				}
 			}
 			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
-			if mode := command.ParseEmcon(in.Text); mode != "" {
+			if mode != "" {
 				pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 				c.Readback = strings.TrimSuffix(c.Readback, "No rules recognized.") + " EMCON " + mode + "."
 				c.Readback = strings.TrimSpace(c.Readback)
@@ -766,7 +770,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
 			if !droppedScopedRules && pol.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(in.Text)
+				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
 				compiled = nil
 			}
 		}
@@ -807,6 +811,20 @@ func rulesToLabels(rules []command.Rule) (suppress, boost []string) {
 		}
 	}
 	return suppress, boost
+}
+
+func mergeWarnings(groups ...[]string) []string {
+	merged := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, group := range groups {
+		for _, warning := range group {
+			if !seen[warning] {
+				seen[warning] = true
+				merged = append(merged, warning)
+			}
+		}
+	}
+	return merged
 }
 
 func blockedMessage(c command.Compiled) string {

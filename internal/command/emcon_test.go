@@ -1,6 +1,9 @@
 package command
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseEmcon(t *testing.T) {
 	cases := map[string]string{
@@ -19,5 +22,18 @@ func TestParseEmcon(t *testing.T) {
 		if got := ParseEmcon(text); got != want {
 			t.Errorf("ParseEmcon(%q) = %q, want %q", text, got, want)
 		}
+	}
+}
+
+func TestSplitEmcon(t *testing.T) {
+	mode, rest := SplitEmcon("prioritize submarines and go dark")
+	if mode != "SILENT" {
+		t.Fatalf("mode = %q, want SILENT", mode)
+	}
+	if strings.Contains(strings.ToLower(rest), "dark") || strings.Contains(strings.ToLower(rest), "go") {
+		t.Fatalf("rest still contains EMCON phrase: %q", rest)
+	}
+	if rest != "prioritize submarines and" {
+		t.Fatalf("rest = %q", rest)
 	}
 }

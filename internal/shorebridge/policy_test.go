@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -147,6 +148,95 @@ func TestSetPolicyInterpretFallbackOmitsCompiled(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Interest.SuppressLabels, []string{"sailboat"}) {
 		t.Fatalf("interpret suppression labels = %v", got.Interest.SuppressLabels)
+	}
+}
+
+func TestSetPolicyStripsEmconBeforeRuleCompilation(t *testing.T) {
+	var got pb.Policy
+	shore := fakeShore(t, &got)
+	defer shore.Close()
+	b := New(shore.URL, "", nil)
+	b.Compiler = &command.Compiler{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"prioritize submarines and go dark"}`))
+	b.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	if !reflect.DeepEqual(got.Interest.BoostLabels, []string{"submarine"}) {
+		t.Fatalf("boost labels = %v", got.Interest.BoostLabels)
+	}
+	if got.Emcon != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("EMCON = %v", got.Emcon)
+	}
+	var resp struct {
+		Compiled *command.Compiled `json:"compiled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil || resp.Compiled == nil {
+		t.Fatalf("no compiled block in %s (%v)", rec.Body, err)
+	}
+	if !strings.Contains(resp.Compiled.Readback, "EMCON SILENT") {
+		t.Fatalf("readback = %q", resp.Compiled.Readback)
+	}
+}
+
+func TestSetPolicyEmconReadbackSurvivesEmptyInterpret(t *testing.T) {
+	var got pb.Policy
+	shore := fakeShore(t, &got)
+	defer shore.Close()
+	b := New(shore.URL, "", nil)
+	b.Compiler = &command.Compiler{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"go quiet"}`))
+	b.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	if got.Emcon != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("EMCON = %v", got.Emcon)
+	}
+	var resp struct {
+		Compiled *command.Compiled `json:"compiled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil || resp.Compiled == nil {
+		t.Fatalf("no compiled block in %s (%v)", rec.Body, err)
+	}
+	if !strings.Contains(resp.Compiled.Readback, "EMCON SILENT") {
+		t.Fatalf("readback = %q", resp.Compiled.Readback)
+	}
+}
+
+func TestSetPolicyPreservesWarningsWhenReviewingScopedRules(t *testing.T) {
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer llm.Close()
+	var got pb.Policy
+	shore := fakeShore(t, &got)
+	defer shore.Close()
+	b := New(shore.URL, "", nil)
+	b.Compiler = &command.Compiler{LLM: command.NewLLMClient(llm.URL, "m", time.Second)}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"ignore cargo ships from EO-P7; prioritize submarines"}`))
+	b.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	var resp struct {
+		Compiled *command.Compiled `json:"compiled"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil || resp.Compiled == nil {
+		t.Fatalf("no compiled block in %s (%v)", rec.Body, err)
+	}
+	var fallbackWarning, scopeWarning bool
+	for _, warning := range resp.Compiled.Warnings {
+		fallbackWarning = fallbackWarning ||
+			(strings.Contains(warning, "Local LLM unavailable") && strings.Contains(warning, "HTTP 500"))
+		scopeWarning = scopeWarning ||
+			warning == "Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer."
+	}
+	if !fallbackWarning || !scopeWarning {
+		t.Fatalf("warnings = %v", resp.Compiled.Warnings)
 	}
 }
 
