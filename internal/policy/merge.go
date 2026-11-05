@@ -79,7 +79,7 @@ func MergeRules(layers []*pb.PolicyLayer, nodeID string, now time.Time) (accepte
 		}
 	}
 
-	emcon, emconConflicts := mergeEmcon(ordered)
+	emcon, emconConflicts := mergeEmcon(ordered, now)
 	conflicts = append(conflicts, emconConflicts...)
 	return accepted, emcon, conflicts
 }
@@ -145,6 +145,14 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	if emcon != nil {
 		out.Emcon = emcon.Mode
 		out.EmconSetting = emcon
+	} else {
+		for _, layer := range out.Layers {
+			if layer != nil && layer.Emcon != nil && layer.Emcon.Mode != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+				out.Emcon = pb.EmconMode_EMCON_MODE_NORMAL
+				out.EmconSetting = nil
+				break
+			}
+		}
 	}
 	out.Conflicts = conflicts
 	return out
@@ -196,7 +204,7 @@ func ActiveLocks(layers []*pb.PolicyLayer, nodeID string, now time.Time) []Lock 
 			}
 			locks = append(locks, ruleLock(layer, rule))
 		}
-		if layer.Emcon != nil && layer.Emcon.Locked {
+		if layer.Emcon != nil && layer.Emcon.Locked && !expiredEmcon(layer.Emcon, now) {
 			locks = append(locks, emconLock(layer, layer.Emcon))
 		}
 	}
@@ -278,10 +286,11 @@ func acceptedLocks(accepted []Accepted) []Lock {
 	return locks
 }
 
-func mergeEmcon(layers []*pb.PolicyLayer) (*pb.EmconSetting, []*pb.MergeConflict) {
+func mergeEmcon(layers []*pb.PolicyLayer, now time.Time) (*pb.EmconSetting, []*pb.MergeConflict) {
 	lockIndex := -1
 	for i, layer := range layers {
-		if layer != nil && layer.Emcon != nil && layer.Emcon.Locked && layer.Emcon.Mode != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+		if layer != nil && layer.Emcon != nil && layer.Emcon.Locked &&
+			layer.Emcon.Mode != pb.EmconMode_EMCON_MODE_UNSPECIFIED && !expiredEmcon(layer.Emcon, now) {
 			lockIndex = i
 			break
 		}
@@ -292,7 +301,8 @@ func mergeEmcon(layers []*pb.PolicyLayer) (*pb.EmconSetting, []*pb.MergeConflict
 		fillEmcon(setting, winner)
 		var conflicts []*pb.MergeConflict
 		for _, layer := range layers[lockIndex+1:] {
-			if layer == nil || layer.Emcon == nil || layer.Emcon.Mode == pb.EmconMode_EMCON_MODE_UNSPECIFIED || layer.Emcon.Mode == setting.Mode {
+			if layer == nil || layer.Emcon == nil || layer.Emcon.Mode == pb.EmconMode_EMCON_MODE_UNSPECIFIED ||
+				expiredEmcon(layer.Emcon, now) || layer.Emcon.Mode == setting.Mode {
 				continue
 			}
 			conflicts = append(conflicts, &pb.MergeConflict{RuleId: "emcon", Reason: "Locked by " + emconLockBy(winner), BlockedBy: "emcon"})
@@ -302,7 +312,8 @@ func mergeEmcon(layers []*pb.PolicyLayer) (*pb.EmconSetting, []*pb.MergeConflict
 
 	for i := len(layers) - 1; i >= 0; i-- {
 		layer := layers[i]
-		if layer == nil || layer.Emcon == nil || layer.Emcon.Mode == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+		if layer == nil || layer.Emcon == nil || layer.Emcon.Mode == pb.EmconMode_EMCON_MODE_UNSPECIFIED ||
+			expiredEmcon(layer.Emcon, now) {
 			continue
 		}
 		setting := proto.Clone(layer.Emcon).(*pb.EmconSetting)
@@ -310,6 +321,10 @@ func mergeEmcon(layers []*pb.PolicyLayer) (*pb.EmconSetting, []*pb.MergeConflict
 		return setting, nil
 	}
 	return nil, nil
+}
+
+func expiredEmcon(setting *pb.EmconSetting, now time.Time) bool {
+	return setting != nil && setting.ExpiresAtUnixMs > 0 && !now.Before(time.UnixMilli(setting.ExpiresAtUnixMs))
 }
 
 func fillEmcon(setting *pb.EmconSetting, layer *pb.PolicyLayer) {

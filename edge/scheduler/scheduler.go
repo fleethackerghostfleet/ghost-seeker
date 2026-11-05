@@ -252,17 +252,25 @@ func nextRuleExpiry(p *pb.Policy, now time.Time) time.Time {
 	if p == nil {
 		return next
 	}
+	consider := func(expiryUnixMs int64) {
+		if expiryUnixMs <= 0 {
+			return
+		}
+		expires := time.UnixMilli(expiryUnixMs)
+		if expires.After(now) && (next.IsZero() || expires.Before(next)) {
+			next = expires
+		}
+	}
 	for _, layer := range p.Layers {
 		if layer == nil {
 			continue
 		}
+		if layer.Emcon != nil {
+			consider(layer.Emcon.ExpiresAtUnixMs)
+		}
 		for _, rule := range layer.Rules {
-			if rule == nil || rule.ExpiresAtUnixMs <= 0 {
-				continue
-			}
-			expires := time.UnixMilli(rule.ExpiresAtUnixMs)
-			if expires.After(now) && (next.IsZero() || expires.Before(next)) {
-				next = expires
+			if rule != nil {
+				consider(rule.ExpiresAtUnixMs)
 			}
 		}
 	}
