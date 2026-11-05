@@ -15,7 +15,6 @@ func TestScenesBelowEveryContact(t *testing.T) {
 	ctx := context.Background()
 	scene := addImage(t, s, st, clk, "scene", 0, 1, 8)
 	scene.Item.Features.Tags = map[string]string{"event": "scene"}
-	scene.PullBoost, scene.PullForm = 100, pb.FormKind_FORM_KIND_FULL
 	if err := s.ScoreItem(ctx, scene); err != nil {
 		t.Fatal(err)
 	}
@@ -42,5 +41,82 @@ func TestScenesBelowEveryContact(t *testing.T) {
 		if len(plan.Manifest) != 2 || plan.Manifest[0].ItemId != contact.Item.Id {
 			t.Fatalf("manifest order: %+v", plan.Manifest)
 		}
+	}
+}
+
+func TestPulledSceneFullKeepsOperatorPriorityAtLowRate(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	ctx := context.Background()
+	scene := addImage(t, s, st, clk, "scene", 0, 0, 5000)
+	scene.Item.Features.Tags = map[string]string{"event": "scene"}
+	if err := st.UpdateItem(ctx, scene.Item); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ScoreItem(ctx, scene); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []pb.FormKind{pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB} {
+		f := scene.Form(kind)
+		if err := st.SetAcked(ctx, scene.Item.Id, kind, f.Bytes, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ship := addImage(t, s, st, clk, "submarine", .9, .8, 30000)
+	if err := st.MarkManifestAcked(ctx, []string{scene.Item.Id, ship.Item.Id}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: scene.Item.Id, Form: pb.FormKind_FORM_KIND_FULL, RequestedBy: "operator-ui"}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.All(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pulled *store.Row
+	for _, row := range rows {
+		if row.Item.Id == scene.Item.Id {
+			pulled = row
+		}
+	}
+	if pulled == nil || pulled.Score.Priority <= ship.Score.Priority || pulled.Score.Priority != .0001+s.cfg.PullBoost {
+		t.Fatalf("scene lost operator boost: %+v", pulled)
+	}
+	for _, shipForm := range []pb.FormKind{pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIND_FULL} {
+		for _, row := range rows {
+			if row.Item.Id == ship.Item.Id {
+				for i := range row.Forms {
+					row.Forms[i].Complete = row.Forms[i].Kind < shipForm
+				}
+			}
+		}
+		plan := s.BuildPlan(rows, 9600, clk.Now())
+		first := scene.Item.Id
+		if shipForm == pb.FormKind_FORM_KIND_FACT {
+			first = ship.Item.Id
+		}
+		if len(plan.Queue) != 2 || plan.Queue[0].ItemId != first {
+			t.Fatalf("pending ship %v outranked operator scene pull: %+v", shipForm, plan.Queue)
+		}
+		sentScene := false
+		for _, chunk := range plan.Chunks {
+			sentScene = sentScene || chunk.ItemId == scene.Item.Id && chunk.Form == pb.FormKind_FORM_KIND_FULL
+		}
+		if !sentScene {
+			t.Fatalf("low-rate budget did not send scene FULL: %+v", plan.Chunks)
+		}
+	}
+	for i := 0; i < 10 && !pulled.Form(pb.FormKind_FORM_KIND_FULL).Complete; i++ {
+		plan := s.BuildPlan(rows, 9600, clk.Now())
+		for _, chunk := range plan.Chunks {
+			if chunk.ItemId == scene.Item.Id {
+				form := pulled.Form(chunk.Form)
+				form.AckedThrough = chunk.Offset + int64(len(chunk.Data))
+				form.Complete = form.AckedThrough == form.Bytes
+			}
+		}
+		clk.Advance(s.cfg.Tick)
+	}
+	if !pulled.Form(pb.FormKind_FORM_KIND_FULL).Complete {
+		t.Fatal("scene FULL did not finish at 9.6 kbps")
 	}
 }

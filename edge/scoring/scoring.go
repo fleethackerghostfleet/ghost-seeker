@@ -79,6 +79,10 @@ func (e *Engine) Score(it *pb.Item, ctx *Context, pullBoost float64) *pb.Score {
 	if it.GetFeatures().GetTags()["event"] == "scene" {
 		out.Priority = 0.0001
 		out.Reasons = []*pb.Reason{{Scorer: "scene", Value: out.Priority, Note: "object-free camera overview"}}
+		if pullBoost > 0 {
+			out.Priority += pullBoost
+			out.Reasons = append(out.Reasons, &pb.Reason{Scorer: "pull", Value: pullBoost, Note: "requested by shore"})
+		}
 		return out
 	}
 	sum, mult := 0.0, 1.0

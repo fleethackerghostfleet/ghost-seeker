@@ -160,8 +160,9 @@ stays at 60 s for ship cameras; the live-only `Open_ocean_watch` set overrides i
 `"scene_every_s": 4`. An omitted override inherits the global setting; 0 disables scene
 handling for that source (ordinary hash/new-item behavior), negative intervals are rejected.
 FACT+THUMB ship only after contact traffic; FULL stays on the edge, pull-only. Scenes
-always score below contacts, including suppressed contacts, and never gain contact priority
-from directives or pulls. The Imagery Feed includes **P4 Low / Open ocean · no contacts**
+automatically score below contacts, including suppressed contacts, and directives do not
+boost them. An explicit operator pull overrides that background priority using the normal
+pull boost, so requested scene FULLs can precede pending contact forms. The Imagery Feed includes **P4 Low / Open ocean · no contacts**
 scene cards, interleaved with other cameras within the same tier. They carry empty
 detection arrays and do not change contact scoring, normalization, object counts, review,
 Commander, escalation or alerts. No contact actions appear on their drawer. The **Cameras**
