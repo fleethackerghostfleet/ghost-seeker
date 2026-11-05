@@ -9,7 +9,11 @@ seven `frames/*_frames.zip` clips and three
 frames are naturally sorted by original path. Allocate 50 per source, then
 redistribute any shortfall round-robin in source order. Within each clip take
 evenly spaced indices including both endpoints (integer floor; singleton uses
-the midpoint). IDs follow this order; SHA-256 and dimensions identify the bytes.
+the midpoint). A candidate whose SHA-256 was already selected anywhere in the
+set is skipped in favor of the nearest byte-unique frame in the same clip.
+Search by increasing index distance, preferring the later frame on equal
+distance; fail explicitly if a clip cannot supply enough unique frames.
+IDs follow this order; SHA-256 and dimensions identify the bytes.
 Selection is deterministic, without a random seed. A new output directory is
 required so interrupted runs cannot silently mix data.
 
@@ -20,6 +24,14 @@ no-detection scene images are P4, giving 371 P4 overall. The real
 `yolo11n-fp32-640-ort+mobileclip-s1-ort-fp32` run returned 219 detections,
 no non-tentative subtypes, and zero unknownness on every independent first
 frame. These are the actual API outputs, not filled-in maritime assumptions.
+
+The refreshed set has 500 distinct SHA-256 hashes. The source ZIP itself
+contains identical all-black JPEG bytes at Cargo_Ship_Uncut_View
+`sec_0001.jpg` and `sec_9000.jpg`; endpoint sampling previously selected both.
+The latter (rnd-0220) now selects the nearest unused `sec_8999.jpg` instead.
+All 500 images were rerun through real inference after deduplication; source,
+detection and tier counts above are unchanged. GCS images are checksum-synced
+with stale objects removed within this testset's `images/` prefix.
 
 ## Algorithm
 
@@ -89,12 +101,13 @@ Stop the grader first and archive existing journals before changing tiers.
 ```
 
 Open through a localhost tunnel; this lightweight tool has no login. Bind only
-to loopback or a trusted development network. Keys: 1–4 grade, Enter/Space accept,
+to loopback or a trusted development network.
 All requests require a loopback Host (localhost, 127.0.0.1 or ::1), or a
 hostname explicitly permitted by repeatable `-allow-host <hostname>` flags.
 Rejected Hosts and accepted request Hosts are logged; forwarded-host headers
 do not grant access. For a trusted preview proxy, allow its exact hostname.
-Z undo, left/right navigate. A negative signed mean delta means the human
+Keys: 1–4 grade, Enter/Space accept, Z undo, left/right navigate.
+A negative signed mean delta means the human
 assigns higher priority than the model (the model under-prioritizes).
 
 The displayed position is one-based; graded progress counts distinct effective
