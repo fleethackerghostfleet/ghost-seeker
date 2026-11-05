@@ -1297,19 +1297,18 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		pol.Layers = cloneLayers(pol.Layers)
 		operatorLayer := findOperatorLayer(pol.Layers, issuedBy, b.echelon())
 		if operatorLayer < 0 {
-			for i, layer := range pol.Layers {
-				if layer.Echelon == b.echelon() {
-					operatorLayer = i
-					break
+			if !b.hasOperatorJWT() {
+				for i, layer := range pol.Layers {
+					if layer.Echelon == b.echelon() {
+						operatorLayer = i
+						break
+					}
 				}
 			}
 			if operatorLayer < 0 {
 				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: b.echelon(), IssuedBy: issuedBy})
 				operatorLayer = len(pol.Layers) - 1
 			}
-		}
-		if b.hasOperatorJWT() {
-			pol.Layers[operatorLayer].IssuedBy = issuedBy
 		}
 		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
 	} else if b.hasOperatorJWT() {

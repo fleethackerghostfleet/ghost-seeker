@@ -550,6 +550,72 @@ func TestOperatorEMCONWrapPreservesFlatBoostFactor(t *testing.T) {
 	}
 }
 
+func TestOperatorEMCONWithJWTDoesNotAdoptAnotherShipLayer(t *testing.T) {
+	otherLayer := &pb.PolicyLayer{
+		Echelon:  pb.Echelon_ECHELON_SHIP,
+		IssuedBy: "ops-2",
+		Rules: []*pb.InterestRule{{
+			Id: "ops-2-rule", Author: "ops-2", BoostLabels: []string{"tanker"},
+		}},
+	}
+	var mu sync.Mutex
+	var submitted *pb.Policy
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetPolicy":
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{Policy: &pb.Policy{
+				Interest: &pb.Interest{BoostLabels: []string{"tanker"}},
+				Layers:   []*pb.PolicyLayer{otherLayer},
+			}})
+		case consolePath + "SetPolicy":
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var request pb.SetPolicyRequest
+			if err := protojson.Unmarshal(raw, &request); err != nil {
+				t.Errorf("decode SetPolicy request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			mu.Lock()
+			submitted = proto.Clone(request.Policy).(*pb.Policy)
+			mu.Unlock()
+			writeProtoResponse(t, w, &pb.SetPolicyResponse{Policy: request.Policy})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer shore.Close()
+
+	bridge := New(shore.URL, "", nil)
+	if err := bridge.SetOperatorJWT(mintBridgeOperator(t, "ops-1", pb.Echelon_ECHELON_SHIP)); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/shore/emcon", strings.NewReader(`{"mode":"SILENT"}`))
+	bridge.Handler().ServeHTTP(rec, request)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	mu.Lock()
+	policy := proto.Clone(submitted).(*pb.Policy)
+	mu.Unlock()
+	if len(policy.Layers) != 2 || !proto.Equal(policy.Layers[0], otherLayer) {
+		t.Fatalf("layers=%+v, want the existing ops-2 layer unchanged plus an ops-1 layer", policy.Layers)
+	}
+	ownLayer := policy.Layers[1]
+	if ownLayer.Echelon != pb.Echelon_ECHELON_SHIP || ownLayer.IssuedBy != "ops-1" ||
+		ownLayer.Emcon == nil || ownLayer.Emcon.SetBy != "ops-1" ||
+		ownLayer.Emcon.Echelon != pb.Echelon_ECHELON_SHIP ||
+		ownLayer.Emcon.Mode != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("new operator layer=%+v", ownLayer)
+	}
+}
+
 func TestShoreAuthorizationFailureIsReturnedAsJSON(t *testing.T) {
 	for _, tc := range []struct {
 		name, path, body string
