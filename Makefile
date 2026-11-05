@@ -41,15 +41,17 @@ demo-ui: build   ## operator UI on live shore data + the shaped link the edge ta
 	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
 
 MODELS ?= $(HOME)/models/D
+DET_MODEL ?= yolo11n-ft-640-v1   # workstream G fine-tune (edgeml/reports/G_detector.md); D's COCO export: yolo11n-640
+DET_GCS   ?= gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/G/$(DET_MODEL)
 PY ?= python
 
-demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) for the sidecar
+demo-models:     ## fetch the sidecar models: G's fine-tuned YOLO11n ($(DET_MODEL)) + D's MobileCLIP-S1
 	mkdir -p $(MODELS)/mobileclip-s1
-	gcloud storage cp -r gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/yolo11n-640 $(MODELS)/
+	gcloud storage cp -r $(DET_GCS) $(MODELS)/
 	gcloud storage cp gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/meta.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/model.onnx gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/text_cache.json $(MODELS)/mobileclip-s1/
 
 demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first)
-	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5
+	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/$(DET_MODEL)/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5
 
 demo-edge: build ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub)
 	$(BIN)/edge -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO)/scenario.json -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings)

@@ -7,6 +7,7 @@ Calibration frames must be DEV frames (g_build_dataset.py train/val images), nev
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -22,6 +23,8 @@ def main() -> None:
     ap.add_argument("--calib", required=True, help="dir of dev .jpg frames for NNCF calibration")
     ap.add_argument("--n-calib", type=int, default=300)
     ap.add_argument("--out", default="~/models/G")
+    ap.add_argument("--class-names", nargs="+", default=["boat"],
+                    help="single_cls training names the class 'item'; the sidecar keeps COCO-style 'boat'")
     a = ap.parse_args()
     d = Path(a.out).expanduser() / a.name
     if not (d / "model.onnx").exists():
@@ -31,6 +34,11 @@ def main() -> None:
     calib = sorted(Path(a.calib).expanduser().glob("*.jpg"))
     if not (d / "int8" / "model.xml").exists():
         quantize_int8(d / "model.onnx", d / "int8", calib, n_calib=a.n_calib)
+    for meta in d.rglob("meta.json"):
+        m = json.loads(meta.read_text())
+        m["class_names"] = list(a.class_names)
+        m["model"] = a.name
+        meta.write_text(json.dumps(m, indent=1))
     print("exported", d)
 
 

@@ -47,29 +47,45 @@ def _write(out: Path, split: str, stem: str, img: Path, boxes: list[list[float]]
     (out / "labels" / split / f"{stem}.txt").write_text("\n".join(lines) + ("\n" if lines else ""))
 
 
-def add_seaships(catalog: Path, datasets: Path, out: Path, stats: Counter) -> None:
+SMD_VESSEL_LABELS = {"Vessel/ship", "Ferry", "Speed boat", "Kayak", "Sail boat", "Boat"}  # not Buoy/Other/bird
+
+
+def add_catalog_dataset(ds_id: str, split_map: dict[str, str], catalog: Path, datasets: Path, out: Path,
+                        stats: Counter, labels: set[str] | None = None) -> None:
+    """Catalog image/annotation JSONL -> YOLO. Splits not in split_map (the upstream test split) are LOCKED and skipped."""
     anns: dict[str, list[list[float]]] = {}
-    for line in (catalog / "annotations" / "seaships7000.jsonl").read_text().splitlines():
+    for line in (catalog / "annotations" / f"{ds_id}.jsonl").read_text().splitlines():
         if line.strip():
             a = json.loads(line)
-            anns.setdefault(a["image_id"], []).append(a["box"])
-    for line in (catalog / "images" / "seaships7000.jsonl").read_text().splitlines():
+            if labels is None or a.get("label") in labels:
+                anns.setdefault(a["image_id"], []).append(a["box"])
+    for line in (catalog / "images" / f"{ds_id}.jsonl").read_text().splitlines():
         if not line.strip():
             continue
         r = json.loads(line)
-        split = {"train": "train", "valid": "val"}.get(r["split"])
+        split = split_map.get(r["split"])
         if split is None:
-            stats["seaships_skipped_test"] += 1
-            continue  # upstream test split is LOCKED
+            stats[f"{ds_id}_skipped_test"] += 1
+            continue
         rel = r["gcs_uri"].split("/datasets/", 1)[1]
         img = datasets / rel
         if not img.exists():
-            stats["seaships_missing"] += 1
+            stats[f"{ds_id}_missing"] += 1
             continue
         boxes = anns.get(r["image_id"], [])
-        _write(out, split, "seaships_" + r["image_id"].replace("/", "_"), img, boxes, r["width"], r["height"])
-        stats[f"seaships_{split}_imgs"] += 1
-        stats[f"seaships_{split}_boxes"] += len(boxes)
+        _write(out, split, f"{ds_id}_" + r["image_id"].replace("/", "_"), img, boxes, r["width"], r["height"])
+        stats[f"{ds_id}_{split}_imgs"] += 1
+        stats[f"{ds_id}_{split}_boxes"] += len(boxes)
+
+
+def add_seaships(catalog: Path, datasets: Path, out: Path, stats: Counter) -> None:
+    add_catalog_dataset("seaships7000", {"train": "train", "valid": "val"}, catalog, datasets, out, stats)
+
+
+def add_smd(catalog: Path, datasets: Path, out: Path, stats: Counter) -> None:
+    """Singapore Maritime (VIS onshore) dev splits; its test split (and smd_vis_onboard_sample) stay locked."""
+    add_catalog_dataset("singapore_maritime", {"train": "train", "validation": "val"}, catalog, datasets, out, stats,
+                        labels=SMD_VESSEL_LABELS)
 
 
 def add_mot_set(eval_root: Path, set_name: str, vessel_classes: set[int], out: Path, holdout: set[str],
@@ -110,12 +126,15 @@ def main() -> None:
     ap.add_argument("--out", default=os.path.expanduser("~/data/yolo_g"))
     ap.add_argument("--holdout", nargs="*", default=DEFAULT_HOLDOUT)
     ap.add_argument("--every", type=int, default=1, help="use every Nth MOT frame")
+    ap.add_argument("--with-smd", action="store_true", help="also add Singapore Maritime dev splits (v2)")
     ap.add_argument("--splits", default=str(Path(__file__).resolve().parents[1] / "configs" / "splits.yaml"))
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     stats: Counter = Counter()
     add_seaships(Path(a.catalog), Path(a.datasets), out, stats)
+    if a.with_smd:
+        add_smd(Path(a.catalog), Path(a.datasets), out, stats)
     add_mot_set(Path(a.eval_root), "fvessel_clip10", FV_VESSEL_CLASSES, out, set(a.holdout), a.every, Path(a.splits), stats)
     add_mot_set(Path(a.eval_root), "ghost_fleet_5fps", GF_VESSEL_CLASSES, out, set(a.holdout), a.every, Path(a.splits), stats)
     data = {"path": str(out), "train": "images/train", "val": "images/val", "names": {0: "boat"}}

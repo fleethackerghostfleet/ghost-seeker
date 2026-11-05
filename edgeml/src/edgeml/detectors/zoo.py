@@ -29,6 +29,20 @@ def names() -> list[str]:
     return list(_REG)
 
 
+def register_extra(spec: str | None = None) -> list[str]:
+    """Register fine-tuned ultralytics checkpoints from ``EDGEML_ZOO_EXTRA="name=/path/best.pt,..."``
+    (workstream G) so the B harness can score them next to the zoo models."""
+    import os
+    spec = spec if spec is not None else os.environ.get("EDGEML_ZOO_EXTRA", "")
+    added = []
+    for item in filter(None, (x.strip() for x in spec.split(","))):
+        name, _, path = item.partition("=")
+        if path:
+            _reg(name, "finetune")(_ul(path, name, training="SeaShips-train+FVessel-dev+GF-dev (G)"))
+            added.append(name)
+    return added
+
+
 def build(name: str, **kw):
     if name not in _REG:
         raise KeyError(f"unknown detector {name}; known: {names()}")
@@ -137,3 +151,5 @@ def _argus_11l(imgsz=1280, **kw):
 
     return UltralyticsZooDetector(_hf_pt("alimkacar/argus-maritime-yolo11l", "argus-v2.pt")(), name="argus-yolo11l", imgsz=imgsz,
                                training_data="Marine Surveillance + Ship Detection (Roboflow) + SeaShips7000 + WaterScenes", **kw)
+
+register_extra()
