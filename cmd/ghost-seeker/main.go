@@ -221,7 +221,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 				log.Fatalf("shaper: %v", err)
 			}
 		}()
-		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–50 Mbps, mean 25 Mbps, stddev 8.33 Mbps, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–50 Mbps, mean 8 Mbps, stddev 8.33 Mbps, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)

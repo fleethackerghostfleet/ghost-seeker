@@ -46,11 +46,11 @@ test('image versions explain summary-only, waiting, transfer and received states
 
 test('automatic bandwidth shows the applied rate and distribution without manual controls',()=>{
  const c=setup();
- c.LIVE.link={controllable:true,bps:12500000,bytes:900,distribution:{minBps:0,maxBps:50000000,meanBps:25000000,stdDevBps:50000000/6,intervalMs:5000}};
+ c.LIVE.link={controllable:true,bps:12500000,bytes:900,distribution:{minBps:0,maxBps:50000000,meanBps:8000000,stdDevBps:50000000/6,intervalMs:5000}};
  c.LIVE.edge.estimateBps=2000000;
  vm.runInContext('renderLiveStrip()',c);
  let html=vm.runInContext("$('liveStrip').innerHTML",c);
- for(const text of ['<b>12500000 bps</b>','Automatic · normal · 0 bps–50000000 bps · every 5s','mean 25000000 bps','ship estimates 2000000 bps'])assert.ok(html.includes(text),text);
+ for(const text of ['<b>12500000 bps</b>','Automatic · normal · 0 bps–50000000 bps · every 5s','mean 8000000 bps','ship estimates 2000000 bps'])assert.ok(html.includes(text),text);
  assert.doesNotMatch(html,/linkPresets|data-bps|<button/);
  c.LIVE.link.bps=0;
  vm.runInContext('renderLiveStrip()',c);

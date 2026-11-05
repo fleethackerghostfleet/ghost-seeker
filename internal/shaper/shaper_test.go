@@ -15,7 +15,7 @@ import (
 func TestNormalDistributionBounds(t *testing.T) {
 	s := NewNormal("unused")
 	d := s.Distribution()
-	if d.MinBps != 0 || d.MaxBps != 50_000_000 || d.MeanBps != 25_000_000 || d.StdDevBps != 50_000_000.0/6 || d.IntervalMS != 5000 {
+	if d.MinBps != 0 || d.MaxBps != 50_000_000 || d.MeanBps != 8_000_000 || d.StdDevBps != 50_000_000.0/6 || d.IntervalMS != 5000 {
 		t.Fatalf("unexpected distribution: %+v", d)
 	}
 	if s.Bps() < d.MinBps || s.Bps() > d.MaxBps {
@@ -24,7 +24,7 @@ func TestNormalDistributionBounds(t *testing.T) {
 	for _, tc := range []struct {
 		z    float64
 		want int64
-	}{{-20, 0}, {-3, 0}, {0, 25_000_000}, {3, 50_000_000}, {20, 50_000_000}} {
+	}{{-20, 0}, {-3, 0}, {0, 8_000_000}, {3, 33_000_000}, {20, 50_000_000}} {
 		if got := d.rate(tc.z); got != tc.want {
 			t.Errorf("rate(%v) = %d, want %d", tc.z, got, tc.want)
 		}
@@ -53,17 +53,27 @@ func TestNormalDistributionShape(t *testing.T) {
 		sum += x
 		squared += x * x
 		switch {
-		case rate < 10_000_000:
+		case rate >= 1_000_000 && rate < 3_000_000:
 			low++
-		case rate >= 20_000_000 && rate <= 30_000_000:
+		case rate >= 6_000_000 && rate <= 10_000_000:
 			center++
-		case rate > 40_000_000:
+		case rate > 13_000_000 && rate <= 15_000_000:
 			high++
 		}
 	}
 	mean := sum / n
 	stddev := math.Sqrt(squared/n - mean*mean)
-	if math.Abs(mean-d.MeanBps) > 100_000 || math.Abs(stddev-d.StdDevBps) > 150_000 || center <= low+high {
+	// Clipping changes the observed moments, especially near the lower bound.
+	cdf := func(z float64) float64 { return (1 + math.Erf(z/math.Sqrt2)) / 2 }
+	pdf := func(z float64) float64 { return math.Exp(-z*z/2) / math.Sqrt(2*math.Pi) }
+	lo, hi := float64(d.MinBps), float64(d.MaxBps)
+	a, b := (lo-d.MeanBps)/d.StdDevBps, (hi-d.MeanBps)/d.StdDevBps
+	p := cdf(b) - cdf(a)
+	wantMean := lo*cdf(a) + d.MeanBps*p + d.StdDevBps*(pdf(a)-pdf(b)) + hi*(1-cdf(b))
+	wantSquared := lo*lo*cdf(a) + (d.MeanBps*d.MeanBps+d.StdDevBps*d.StdDevBps)*p +
+		2*d.MeanBps*d.StdDevBps*(pdf(a)-pdf(b)) + d.StdDevBps*d.StdDevBps*(a*pdf(a)-b*pdf(b)) + hi*hi*(1-cdf(b))
+	wantStddev := math.Sqrt(wantSquared - wantMean*wantMean)
+	if math.Abs(mean-wantMean) > 100_000 || math.Abs(stddev-wantStddev) > 150_000 || center <= low+high {
 		t.Fatalf("not the expected bell curve: mean %.0f, stddev %.0f, bins %d/%d/%d", mean, stddev, low, center, high)
 	}
 }
@@ -74,7 +84,7 @@ func TestNormalRateUpdatesAndCancellation(t *testing.T) {
 		s.SetBps(1)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		zs := []float64{-4, 0, 4}
+		zs := []float64{-4, 0, 6}
 		n := 0
 		go s.varyRate(ctx, func() float64 {
 			z := zs[n]
@@ -92,7 +102,7 @@ func TestNormalRateUpdatesAndCancellation(t *testing.T) {
 		if s.Bps() != 0 {
 			t.Fatalf("expected clipped outage, got %d", s.Bps())
 		}
-		for _, want := range []int64{25_000_000, 50_000_000} {
+		for _, want := range []int64{8_000_000, 50_000_000} {
 			time.Sleep(5 * time.Second)
 			synctest.Wait()
 			if s.Bps() != want {
