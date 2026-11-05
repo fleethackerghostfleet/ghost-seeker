@@ -95,28 +95,34 @@
     } catch { setTimeout(() => factCache.delete(card.id), 5000); }
   }
   // Cameras strip: per-source heartbeat built from object-free "scene" items
-  // (and the latest contact), instead of scene tiles in the feed.
-  function renderCameras(objs) {
+  // (falling back to the latest contact's image), instead of scene tiles in the feed.
+  function renderCameras(objs, sightingMode) {
     const cams = new Map();
     for (const o of objs) {
       const src = o.best.source || 'camera';
-      const c = cams.get(src) || { src, lastMs: 0, scene: null, contacts: 0 };
+      const c = cams.get(src) || { src, lastMs: 0, scene: null, latest: null, contacts: 0 };
       c.lastMs = Math.max(c.lastMs, o.lastMs);
-      if (o.scene) { if (!c.scene || o.lastMs > c.scene.lastMs) c.scene = o; } else c.contacts++;
+      if (o.scene) { if (!c.scene || o.lastMs > c.scene.lastMs) c.scene = o; }
+      else {
+        if (!c.latest || o.lastMs > c.latest.lastMs) c.latest = o;
+        if (o.sightingId || !sightingMode) c.contacts++; // untagged per-frame items are not contacts in sightings mode
+      }
       cams.set(src, c);
     }
     const el = $('#cameras');
-    if (!cams.size) { el.innerHTML = ''; return; }
+    if (!cams.size) { el.innerHTML = ''; return 0; }
     el.innerHTML = [...cams.values()].sort((a, b) => a.src.localeCompare(b.src)).map(c => {
-      const b = c.scene?.best;
+      const v = c.scene || c.latest; // prefer the object-free context frame; else the newest contact's image
+      const b = v?.best;
       const img = b?.image ? `<img src="${b.image}?v=${b.forms[b.imageForm]?.bytes || 0}" alt="">` : '<div class="noimg">no view yet</div>';
       const full = b?.forms.full?.state;
       const pull = b ? `<button class="btn mini" data-act="pull" data-id="${esc(b.id)}" ${pulling.has(b.id) || full === 'received' ? 'disabled' : ''}>${full === 'received' ? 'full frame received' : full === 'partial' ? 'full frame…' : pulling.has(b.id) ? 'requested…' : 'Pull full frame'}</button>` : '';
-      return `<div class="cam" title="Latest object-free context frame from this camera (edge heartbeat, ~2 KB/min). Not a contact.">
+      return `<div class="cam" title="${c.scene ? 'Latest object-free context frame from this camera (edge heartbeat, ~2 KB/min). Not a contact.' : 'Latest contact image from this camera (no heartbeat frame received yet).'}">
         ${img}
-        <div class="meta"><div class="k">${esc(c.src)}</div><div class="u">seen ${ago(c.lastMs)} · ${c.contacts} contact${c.contacts === 1 ? '' : 's'}${b ? ` · view ${ago(c.scene.lastMs)}` : ''}</div>${pull}</div>
+        <div class="meta"><div class="k">${esc(c.src)}</div><div class="u">seen ${ago(c.lastMs)} · ${c.contacts} contact${c.contacts === 1 ? '' : 's'}${v ? ` · view ${ago(v.lastMs)}` : ''}</div>${pull}</div>
       </div>`;
     }).join('');
+    return cams.size;
   }
   function objectCard(o) {
     const b = o.best;
@@ -161,15 +167,17 @@
     renderStrip();
     const objs = snap.objects;
     if (view === 'feed') {
-      renderCameras(objs);
+      const sightingMode = snap.counts.grouped > 0;
+      const ncams = renderCameras(objs, sightingMode);
       let list = objs.filter(o => !o.scene); // scenes live in the cameras strip
-      const onlySightings = $('#only-sightings').checked && snap.counts.grouped > 0;
+      const onlySightings = $('#only-sightings').checked && sightingMode;
       if (onlySightings) list = list.filter(o => o.sightingId);
       if ($('#hide-suppressed').checked) list = list.filter(o => !o.suppressed);
       if ($('#only-image').checked) list = list.filter(o => o.hasImage);
       const hidden = objs.filter(o => !o.scene).length - list.length;
       $('#feed-note').textContent = `${list.length} objects · newest first${onlySightings && hidden ? ` · ${hidden} object-free frames hidden` : ''}`;
-      $('#feed').innerHTML = list.length ? list.map(objectCard).join('') : '<div class="empty">No items on shore yet. Start the edge and open the link.</div>';
+      const empty = ncams ? `No contacts yet. ${ncams} camera${ncams === 1 ? '' : 's'} reporting${hidden ? `; ${hidden} item${hidden === 1 ? '' : 's'} hidden by filters` : ''}.` : 'No items on shore yet. Start the edge and open the link.';
+      $('#feed').innerHTML = list.length ? list.map(objectCard).join('') : `<div class="empty">${empty}</div>`;
     } else if (view === 'review') {
       const order = { P1: 0, P2: 1, P3: 2, P4: 3 };
       const list = objs.filter(o => !o.suppressed && !o.scene && (o.sightingId || snap.counts.grouped === 0)).sort((a, b) => (decided.has(a.key) - decided.has(b.key)) || (b.unknown - a.unknown) || (order[a.priority] - order[b.priority]) || (b.lastMs - a.lastMs));
