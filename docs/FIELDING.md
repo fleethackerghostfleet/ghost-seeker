@@ -8,7 +8,7 @@ SQLite databases.
 
 ## Stage a release
 
-Build on a connected Linux host with Go 1.23+, Node 22 (for its tests), Python
+Build on a connected Linux host with Go 1.26.10+, Node 22 (for its tests), Python
 3.11 (for edgeml tests), Docker, and Make. Go builds and the core containers
 do not need Node or Python at runtime.
 
@@ -27,7 +27,7 @@ mirrors for base images:
 
 ```sh
 make images \
-  GO_IMAGE=public.ecr.aws/docker/library/golang:1.23-alpine \
+  GO_IMAGE=public.ecr.aws/docker/library/golang:1.26.10-alpine \
   PY_IMAGE=public.ecr.aws/docker/library/python:3.11-slim
 ```
 

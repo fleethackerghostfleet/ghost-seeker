@@ -1,5 +1,5 @@
 # CPU-only static binaries, no CGO (SQLite is pure Go).
-ARG GO_IMAGE=golang:1.23-alpine
+ARG GO_IMAGE=golang:1.26.10-alpine
 FROM ${GO_IMAGE} AS build
 WORKDIR /src
 COPY go.mod go.sum ./
