@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"log"
 	"math/rand"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	reviewdataset "github.com/fleethackerghostfleet/ghost-seeker/internal/dataset"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/pivauth"
@@ -40,6 +42,8 @@ func main() {
 	}
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
+	datasetManifest := flag.String("dataset", "", "simulation mode: replay a clean-v2 review manifest")
+	datasetDir := flag.String("dataset-dir", "data/review_set/images", "simulation mode: dataset image directory")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
@@ -73,6 +77,15 @@ func main() {
 	flag.Parse()
 	if *demoAcceptAnyToken && *authMode != "token" {
 		log.Fatal("-demo-accept-any-token requires -auth-mode token; incompatible with PIV")
+	}
+	reviewLogSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "review-log" {
+			reviewLogSet = true
+		}
+	})
+	if !reviewLogSet && *datasetManifest != "" {
+		*reviewPath = "data/reviews-real.jsonl"
 	}
 	if err := validateAuthMode(*authMode, *tlsCert, *tlsKey, *ca, *crls, *users); err != nil {
 		log.Fatal(err)
@@ -122,15 +135,39 @@ func main() {
 	}
 
 	if *shoreURL != "" {
+		if *datasetManifest != "" {
+			log.Fatal("-dataset cannot be used with -shore")
+		}
 		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport)
 		return
 	}
 
 	data := store.New(*retain)
-	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
-	generator := sensor.NewGenerator()
-	fillBacklog(data, generator, *backfill)
+	var generator *sensor.Generator
+	var replay *reviewdataset.Replay
+	var uplink *simulationUplink
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
+	if *datasetManifest != "" {
+		images, err := reviewdataset.LoadManifest(*datasetManifest)
+		if err != nil {
+			log.Fatalf("load dataset manifest: %v", err)
+		}
+		replay, err = reviewdataset.NewReplay(images, *datasetDir, reviewdataset.Seed)
+		if err != nil {
+			log.Fatalf("load dataset images: %v", err)
+		}
+		sources := reviewdataset.Sources(images)
+		options = append(options, server.WithDataset(*datasetDir, sources))
+		summary := reviewdataset.Summarize(images)
+		distribution, _ := json.Marshal(summary.DetectionsByClass)
+		log.Printf("real clean-v2 dev dataset: %d images; detections=%s; images with person=%d; person-driven P1=%d",
+			len(images), distribution, summary.ImagesWithPerson, summary.PersonDrivenP1)
+		fillDatasetBacklog(data, replay, *backfill)
+	} else {
+		uplink = newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
+		generator = sensor.NewGenerator()
+		fillBacklog(data, generator, *backfill)
+	}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
 		if err != nil {
@@ -149,9 +186,13 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
-	go runSimulation(data, generator, app, uplink)
+	if replay != nil {
+		go runDatasetSimulation(data, replay, app)
+	} else {
+		go runSimulation(data, generator, app, uplink)
+	}
 	go refreshTimeScopes(app)
-	if *autoCDR > 0 {
+	if replay == nil && *autoCDR > 0 {
 		for i := 0; i < 4; i++ {
 			data.AutoEscalate()
 		}
@@ -199,6 +240,38 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 		} else {
 			data.Add(nil, extra)
 		}
+	}
+}
+
+func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count int) {
+	start := time.Now().Add(-45 * time.Minute)
+	for index := 0; index < count; index++ {
+		item := replay.Next(start.Add(time.Duration(index) * 18 * time.Second))
+		if item.Edge < sensor.EdgeKeep {
+			data.Add(nil, 0)
+			continue
+		}
+		data.Add(&item, 0)
+	}
+}
+
+func runDatasetSimulation(data *store.Store, replay *reviewdataset.Replay, app *server.Server) {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
+		_, _, _, state := data.Snapshot()
+		item := replay.Next(time.Now())
+		if item.Edge < sensor.EdgeKeep {
+			data.Add(nil, 0)
+			stats, _ := data.Stats()
+			app.PublishStats(stats)
+			continue
+		}
+		command.Rescore(&item, state.Model, data.Directives())
+		stored, evicted := data.Add(&item, 0)
+		app.PublishEvict(evicted)
+		stats, _ := data.Stats()
+		app.PublishItem(stored, stats)
 	}
 }
 

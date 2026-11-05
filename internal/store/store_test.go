@@ -80,6 +80,22 @@ func TestDirectiveIDIsPresentOnRulesAndRescoredNotes(t *testing.T) {
 	t.Fatalf("rescored notes %#v do not contain directive id %q", stored.Det[0].Notes, directive.ID)
 }
 
+func TestPolicyDirectiveIDIsPresentOnRescoredNotes(t *testing.T) {
+	data := New(2)
+	data.SetPolicyDirectives([]command.Directive{{
+		ID: "policy:ctf72-tanker", Text: "CTF-72: report tankers", Source: "CTF-72",
+		Rules: []command.Rule{{Type: "boost", Classes: []string{"tanker"}}},
+	}}, nil)
+	item := command.Item{
+		ID:   "policy-tanker",
+		Dets: []command.Detection{{Class: "tanker", Conf: .9}},
+	}
+	stored, _ := data.Add(&item, 0)
+	if got := stored.Det[0].Notes[0].DirectiveID; got != "policy:ctf72-tanker" {
+		t.Fatalf("policy directive note id = %q, want %q", got, "policy:ctf72-tanker")
+	}
+}
+
 func TestPartialPolicyConflictBlocksOnlyOneRule(t *testing.T) {
 	data := New(2)
 	data.RestoreDirectives([]command.Directive{{

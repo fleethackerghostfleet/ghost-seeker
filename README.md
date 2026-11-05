@@ -327,6 +327,8 @@ go run ./cmd/ghost-seeker -addr :8090
 ```
 
 The app imagery is AI-generated synthetic imagery; see [tools/imagegen](tools/imagegen/README.md).
+For real Operator Review, build and replay the guarded clean-v2 development set with
+[`docs/HUMAN_REVIEW.md`](docs/HUMAN_REVIEW.md); test and quarantine imagery is never reviewed.
 
 Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention, and number of historical items generated at startup. Pages:
 

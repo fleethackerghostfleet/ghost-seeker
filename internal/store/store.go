@@ -204,6 +204,11 @@ func (s *Store) SetPolicyDirectives(sourceDirectives []command.Directive, blocke
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := cloneDirectives(sourceDirectives)
+	for i := range next {
+		for j := range next[i].Rules {
+			next[i].Rules[j].DirectiveID = next[i].ID
+		}
+	}
 	for _, directive := range s.directives {
 		if directive.Source != "" {
 			continue
