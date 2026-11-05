@@ -124,7 +124,8 @@ type Object struct {
 type NodeStatus struct {
 	OK          bool    `json:"ok"`
 	ItemsTotal  int64   `json:"itemsTotal"`
-	Deduped     int64   `json:"itemsDeduped"` // edge: captures folded into an existing item (hash/sighting duplicates)
+	Deduped     int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
+	Prioritizer string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
 	Evicted     int64   `json:"itemsEvicted"`
 	ItemsUnique int64   `json:"itemsComplete"`
 	Unknown     int64   `json:"itemsUnknown"`
@@ -398,6 +399,7 @@ func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 		OK:          true,
 		ItemsTotal:  st.GetItemsTotal(),
 		Deduped:     st.GetItemsDeduped(),
+		Prioritizer: st.GetPrioritizer(),
 		Evicted:     st.GetItemsEvicted(),
 		ItemsUnique: st.GetItemsComplete(),
 		Unknown:     st.GetItemsUnknown(),
