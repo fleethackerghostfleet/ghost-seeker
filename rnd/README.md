@@ -131,3 +131,49 @@ Logs default to `rnd/logs/` (ignored by Git). Preserve the raw journal plus
 `*-summary.json`; the latter is a derived view, not the source of truth.
 
 Checks: `GOTOOLCHAIN=local go vet ./... && GOTOOLCHAIN=local go test ./...`.
+
+## rnd-500-v2 — diverse set
+
+Built with `rnd-testset -plan rnd/testsets/rnd-500-v2/plan.json -sources ~/rnd-data/sources`.
+The plan lists every source and its frame count; sources are the 42 ingested
+video clips (5 frames each, 6 for the five night clips) plus five labeled public
+datasets from the catalog. Catalog images are picked evenly over sorted
+`image_id` (see `select_catalog.py` notes below), clip frames evenly through the
+clip, byte-duplicates skipped as in v1. Images:
+`gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/rnd/testsets/rnd-500-v2/images/`.
+
+| Source | Images | Tags |
+|---|---:|---|
+| 42 video clips | 215 | surface, rgb, unlabeled |
+| SeaShips7000 | 75 | surface, rgb, labeled |
+| Singapore Maritime | 75 | surface, rgb, labeled |
+| SeaDronesSee | 50 | aerial, rgb, labeled |
+| IR maritime vessels | 50 | surface, ir, labeled |
+| SMD VIS onboard sample | 35 | surface, rgb, labeled |
+
+Each manifest row carries `tags` (viewpoint, modality, labeled, lighting) and,
+for labeled sources, `ground_truth` boxes in pixel x/y/w/h. The grader draws
+them dashed yellow under the model's green detections.
+
+Model output (same detector and live rank bands as v1):
+
+| Has detections | Images | P1 | P2 | P3 | P4 |
+|---|---:|---:|---:|---:|---:|
+| Yes | 293 | 29 | 73 | 103 | 88 |
+| No | 207 | 0 | 0 | 0 | 207 |
+
+Detector vs. ground truth, per labeled source (images with at least one truth box):
+
+| Source | GT-positive images | Detector found nothing | GT boxes | Detected boxes |
+|---|---:|---:|---:|---:|
+| seaships7000 | 75 | 19 | 98 | 66 |
+| singapore_maritime | 75 | 3 | 4139 | 223 |
+| seadronessee | 50 | 13 | 351 | 82 |
+| ir_maritime_vessels | 44 | 20 | 169 | 44 |
+| smd_vis_onboard_sample | 32 | 9 | 60 | 30 |
+
+Overall the detector returned nothing on 64 of 276 GT-positive images. As in
+v1, frames are scored independently, so no subtypes or unknownness appear.
+Catalog candidates were selected and downloaded with a small script (evenly
+spaced over sorted `image_id`, `count + 6` candidates per dataset to allow
+duplicate skipping) into `~/rnd-data/sources/datasets/<dataset>/index.jsonl`.
