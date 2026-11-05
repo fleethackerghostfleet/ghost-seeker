@@ -34,6 +34,41 @@ test('live ocean scenes are P4 feed imagery, not contact review or actions',asyn
  vm.runInContext('items=[]',c);
  assert.equal(vm.runInContext('rvQueue().length',c),0);
 });
+test('live scene FULLs stay on ship until pulled, separately from the upload queue',()=>{
+ const c=setup();
+ vm.runInContext(`
+  ocean={id:'ocean',live:{itemId:'ocean',event:'scene',imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},full:{state:'pending',bytes:1000,received:0}}}};
+  contact={id:'contact',upload:{bytes:100,sent:0}};
+  items=[ocean,contact];fullRenderStats();
+ `,c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 0 uploading · 1 queued · 0 held · 0 uploaded · 1 kept on ship');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/Empty water · kept on ship/);
+ assert.equal(vm.runInContext('uploadState(ocean).queued',c),false);
+ for(const forms of ['{}',"{full:{state:'offered',bytes:1000}}"]){
+  assert.equal(vm.runInContext(`uploadState({...ocean,live:{...ocean.live,forms:${forms}}}).background`,c),true);
+ }
+ vm.runInContext("pulling.add('ocean');fullRenderStats()",c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 0 uploading · 2 queued · 0 held · 0 uploaded');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/Queued for shore · Full image/);
+ vm.runInContext("pulling.delete('ocean');ocean.live.forms.full={state:'partial',bytes:1000,received:250};fullRenderStats()",c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 1 uploading · 1 queued · 0 held · 0 uploaded');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/Uploading to shore · 25% · Full image/);
+ vm.runInContext("ocean.live.forms.full={state:'received',bytes:1000,received:1000};ocean.live.imageForm='full';fullRenderStats()",c);
+ assert.equal(c.$('uploadSummary').textContent,'Shore uploads: 0 uploading · 1 queued · 0 held · 1 uploaded');
+ assert.match(vm.runInContext('uploadHTML(ocean)',c),/✓ Uploaded · Full image/);
+});
+test('scene repeats never enter scoped repeat counts or disappear with duplicates hidden',()=>{
+ const c=feedContext();
+ vm.runInContext(`items=[frame('repeat',{tier:4,filtered:'duplicate'}),frame('ocean',{tier:4,filtered:'duplicate',live:{event:'scene'}})];filters.showDuplicates=false`,c);
+ assert.equal(vm.runInContext('repeatCount()',c),1);
+ assert.equal(vm.runInContext('ids()',c),'ocean');
+ vm.runInContext("state.tier='1'",c);
+ assert.equal(vm.runInContext('repeatCount()',c),0);
+ vm.runInContext("state.tier='4';filters.review='unreviewed'",c);
+ assert.equal(vm.runInContext('repeatCount()',c),1);
+ vm.runInContext("state.src='IR-U1'",c);
+ assert.equal(vm.runInContext('repeatCount()',c),0);
+});
 test('scene sources interleave inside P4 without moving contact tiers',()=>{
  const c=setup();
  vm.runInContext(`
@@ -283,6 +318,13 @@ test('shown repeats sit right after their original across sensors and sorts; hid
  assert.match(vm.runInContext('ids()',context),/b,rb/);
  vm.runInContext("state.sort='pri';filters.showDuplicates=false",context);
  assert.equal(vm.runInContext('ids()',context),'a,b,c,low');
+ vm.runInContext("state.tier='1'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),0);
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),3);
+ vm.runInContext("state.tier='all';filters.review='reviewed'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),0);
+ vm.runInContext("filters.review='all'",context);
  assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
 });
 test('a later boost keeps the stored priority despite an earlier suppression flag',()=>{
@@ -963,7 +1005,7 @@ test('review buttons name their effect and key on screen',()=>{
 test('after a re-rank the next-step line confirms the save and names the keys',()=>{
  const context=setup();
  context.$('rvNext').classList={remove(){},add(){}};
- vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};rv.last='';renderNext(rv.cur)",context);
+ vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};items=[rv.cur];rv.last='';renderNext(rv.cur)",context);
  let html=context.$('rvNext').innerHTML;
  assert.match(html,/<b>Next:<\/b> Press <kbd>Space<\/kbd> to agree with P3 Routine, or <kbd>1<\/kbd>–<kbd>4<\/kbd>/);
  assert.doesNotMatch(html,/rvnext-done/);

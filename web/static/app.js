@@ -27,8 +27,10 @@ function uploadState(it){
   u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(LIVE?.link?.controllable?LIVE.link.bps>0:!!(LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.linkUp!==false&&LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
- const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
- const background=!it.live&&it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
+ const full=it.live?.forms?.full;
+ const sceneHeld=isScene(it)&&!['partial','received'].includes(full?.state)&&!(full?.received>0)&&!pulling.has(it.live.itemId);
+ const done=!sceneHeld&&!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
+ const background=sceneHeld||!it.live&&it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
  const queued=!done&&!held&&!background&&sent===0;
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
  const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
@@ -188,7 +190,7 @@ function applySnapshot(data){
  stats=data.stats;cdr=data.cdr;weightData=data.weights||{};
  state.sel=items.some(item=>item.id===selection)?selection:null;
  if(!state.sel){document.body.classList.remove('drawer-open');$('drawer').innerHTML='';closeZoom()}
- rv.cur=rv.cur&&items.find(item=>item.id===rv.cur.id)||null;
+ rv.cur=rv.cur&&(findItem(rv.cur.id)||rv.cur);
  renderAll();
 }
 function applyLive(live){
@@ -230,7 +232,7 @@ function renderLive(){
 }
 function toggleHold(){
  state.paused=!state.paused;renderLive();
- if(!state.paused){if(heldSnapshotIDs){const keep=heldSnapshotIDs;for(const item of items)if(!keep.has(item.id)){imageCache.delete(item.id);if(state.sel===item.id)closeDetail();if(rv.cur?.id===item.id){rv.cur=null;rv.shown=null}}items=items.filter(item=>keep.has(item.id));pendingItems=pendingItems.filter(event=>keep.has(event.item.id));heldSnapshotIDs=null}for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}
+ if(!state.paused){if(heldSnapshotIDs){const keep=heldSnapshotIDs;for(const item of items)if(!keep.has(item.id)){imageCache.delete(item.id);if(state.sel===item.id)closeDetail()}items=items.filter(item=>keep.has(item.id));pendingItems=pendingItems.filter(event=>keep.has(event.item.id));heldSnapshotIDs=null}for(const event of pendingItems)mergeItem(event.item);pendingItems=[];renderAll()}
 }
 function openStream(){
  const stream=new EventSource('/api/stream');
@@ -255,7 +257,6 @@ function openStream(){
   const {id}=JSON.parse(event.data);evictedIDs.add(id);imageCache.delete(id);pendingItems=pendingItems.filter(data=>data.item.id!==id);
   items=items.filter(item=>item.id!==id);
   if(state.sel===id)closeDetail();
-  if(rv.cur?.id===id){rv.cur=null;rv.shown=null}
   renderAll();
  });
 }
@@ -271,7 +272,7 @@ async function init(){
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
- $('srcSel').onchange=e=>{state.src=e.target.value;closeDetail();renderFeed(true);renderStats();renderRp()};
+ $('srcSel').onchange=e=>{state.src=e.target.value;rv.navigation++;rv.cur=null;rv.shown=null;rv.displayed=null;closeDetail();renderFeed(true);renderStats();renderRp()};
  const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showDuplicates').checked=f.showDuplicates;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';closeDetail();renderFeed(true)};
  $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
  $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent'});state.tier='all';syncFeedFilters();location.hash='#feed'};
@@ -310,7 +311,7 @@ async function init(){
   if(state.sel&&['arrowright','arrowdown','arrowleft','arrowup'].includes(k)){e.preventDefault();step(k==='arrowright'||k==='arrowdown'?1:-1)}});
  $('rvKeys').onclick=e=>{const b=e.target.closest('.kb');if(b&&(!rv.ask||b.dataset.a==='undo')){b.blur();rvAct(b.dataset.a)}};
  $('rvAsk').onclick=e=>{const b=e.target.closest('[data-ask]');if(!b)return;if(b.dataset.ask==='why')answerWhy(b.dataset.choice);else if(b.dataset.ask==='team')answerTeamProposal(b.dataset.answer);else answerSuggestion(b.dataset.answer)};
- $('rvOrder').onclick=e=>{const b=e.target.closest('button');if(!b)return;rv.order=b.dataset.o;[...$('rvOrder').children].forEach(x=>x.classList.toggle('on',x===b));rv.cur=null;renderReview()};
+ $('rvOrder').onclick=e=>{const b=e.target.closest('button');if(!b||rv.busy)return;rv.order=b.dataset.o;[...$('rvOrder').children].forEach(x=>x.classList.toggle('on',x===b));rv.cur=null;rv.shown=null;renderReview()};
  $('nightBtn').onclick=toggleNight;
  window.addEventListener('hashchange',route);
  setInterval(()=>$('clock').textContent=zulu(new Date()),1000);$('clock').textContent=zulu(new Date());
@@ -323,7 +324,7 @@ function route(){
  $('pgDetails').classList.toggle('on',state.page==='details');
  $('navFeed').classList.toggle('on',state.page==='feed');$('navRp').classList.toggle('on',state.page==='rp');
  if(state.page!=='rv'&&rv.ask){rv.ask=null;rv.askBusy=false;renderAsk()}
- if(state.page==='feed')renderFeed(true);else if(state.page==='details'){closeDetail();renderDetails()}else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.cur=null;rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
+ if(state.page==='feed')renderFeed(true);else if(state.page==='details'){closeDetail();renderDetails()}else if(state.page==='brief'){closeDetail();briefing.render()}else if(state.page==='rv'){closeDetail();rv.shown=null;renderReview()}else{closeDetail();renderRp();workbench.activate();setTimeout(()=>$('nlIn').focus(),50)}
 }
 
 function humanReviewed(it){return !isScene(it)&&!!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed)||humanSent(it))}
@@ -344,8 +345,8 @@ function visible(){
  if(f.showDuplicates&&f.review!=='sent')l=pairRepeats(l);
  return{l,counts};
 }
-function hideableRepeat(it){return it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
-function repeatCount(){return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.dismissed&&hideableRepeat(i)).length}
+function hideableRepeat(it){return !isScene(it)&&it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
+function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)).length}
 /* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
 function pairRepeats(l){
  const ids=new Set(l.map(i=>i.id)),after=new Map();
@@ -567,7 +568,7 @@ function renderDetailContent(){
  const it=items.find(i=>i.id===state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Open ocean · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${formChipsHTML(it)}<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p></div>`;
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Open ocean · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
@@ -632,7 +633,7 @@ async function setManual(id,t){if(!findItem(id)||isScene(findItem(id)))return;tr
 function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
-let rv={cur:null,shown:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
+let rv={cur:null,shown:null,displayed:null,navigation:0,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
 const teamSync={available:false,on:false,proposals:[],hidden:new Set(),resolved:new Set(),local:new Map(),accepting:new Map(),revision:0,posting:false};
 function setupTeamSync(available){
  teamSync.available=available;
@@ -769,6 +770,8 @@ function renderNext(it){
  const box=$('rvNext');if(!box)return;
  let step;
  if(!reviewerName)step='Enter your reviewer name above to start reviewing.';
+ else if(rv.busy)step='Saving review… Please wait before reviewing another image.';
+ else if(it&&!findItem(it.id))step='This image is unavailable. Press <kbd>S</kbd> to skip, or <kbd>Z</kbd> to undo your last decision.';
  else if(rv.ask?.kind==='why')step='Answer the question above to continue: press the number of your choice, or <kbd>Esc</kbd> to skip.';
  else if(rv.ask)step='Answer the yellow question to continue.';
  else if(!it)step='No images left to review. New images will appear here.';
@@ -779,18 +782,22 @@ function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)retur
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
- let it=rv.cur;if(!it||it.reviewed||it.dismissed||!items.includes(it))it=rv.cur=rvQueue()[0]||null;
+ if(isScene(rv.cur)){rv.cur=null;rv.shown=null;rv.displayed=null}
+ const current=rv.cur?findItem(rv.cur.id):rv.busy?null:rvQueue()[0];
+ if(current)rv.cur=current;
+ const it=rv.cur,unavailable=!!it&&!current;
  rvProgress();renderAsk();
- [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||(!it&&b.dataset.a!=='undo')});
- if(!it){rv.shown=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>All caught up</b><div>New images will appear here as sensors report.</div></div><div class="rvflash" id="rvFlash"></div>`;return}
- const key=it.id+':'+it.centralTier+':'+it.central;if(rv.shown===key)return;rv.shown=key;
+ [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||rv.busy||(!it&&b.dataset.a!=='undo')||(unavailable&&!['skip','undo'].includes(b.dataset.a))});
+ if(!it){rv.shown=null;rv.displayed=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>${rv.busy?'Saving review…':'All caught up'}</b><div>${rv.busy?'The next image will appear when the save completes.':'New images will appear here as sensors report.'}</div></div><div class="rvflash" id="rvFlash"></div>`;return}
+ const {el,fresh,...displayed}=it;
+ const key=JSON.stringify([displayed,unavailable]);if(rv.shown===key)return;rv.shown=key;rv.displayed=displayed;
  const sug=it.centralTier,rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s),why=buildWhy(it,rows).slice(0,4);
  const age=Math.max(0,Math.round((Date.now()-it.ts)/60000));
  const classifications=rows.filter(([d])=>d.ship).slice(0,3).map(([d])=>shipLine(d));
  [...$('rvKeys').querySelectorAll('[data-a]')].forEach(b=>b.classList.toggle('sugg',b.dataset.a===String(sug)));
  $('accLbl').textContent=`Agree (P${sug} ${TNAME[sug]}) & next`;
  $('rvMain').innerHTML=`<div class="rvimg"><div class="rvframe p${sug}">${largeImage(it)}</div></div>
- <div class="rvside">
+ <div class="rvside">${unavailable?'<div class="rvcard" role="status"><b>This image is no longer available on the server.</b><p>Review paused for this image. Press Skip (S) to move to the next image, or Undo (Z) to return to your last decision. The live feed is still updating.</p></div>':''}
   <div class="rvcard"><div class="lbl">Model suggests</div><div class="rvsug"><span class="tier t${sug}">P${sug} ${TNAME[sug]}</span></div><div class="rvsub" title="Command score is the shore-side priority estimate; edge score is the ship-side estimate.">Shore score ${it.central.toFixed(2)} · ship score ${it.edge.toFixed(2)}${state.directives.length?` · ${state.directives.length} directive${state.directives.length>1?'s':''} active`:''}</div></div>
   <div class="rvcard"><div class="lbl" style="margin-bottom:4px">Why</div><ul class="why">${why.map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   <div class="rvcard rvmeta"><span>Source</span><b>${esc(it.src.name)}</b><span>Captured</span><b class="mono">${zulu(it.ts)} <span style="color:var(--muted);font-family:inherit;font-weight:500">(${age} min ago)</span></b><span>Objects</span><b>${rows.map(([d])=>esc(clsOf(d.cls).lab)).join(', ')||'—'}</b>${classifications.length?`<span>Classification</span><b class="rvclassification">${classifications.join('<br>')}</b>`:''}</div>
@@ -801,10 +808,12 @@ function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)r
 function rvAct(a){
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it;rv.shown=null;rv.busy=false;setLast('↶ Undone: you are back on that image.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
- const it=rv.cur;if(!it||isScene(it))return;
- if(a==='skip'){rv.skipped[it.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
- const sug=it.centralTier,p={id:it.id,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;setLast(rv.navigation===navigation?'↶ Undone: you are back on that image.':'↶ Undone: previous review was restored.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});return}
+ if(!rv.cur||isScene(rv.cur))return;
+ if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
+ const it=rv.displayed;if(!it||isScene(it)||it.id!==rv.cur.id)return;
+ if(!findItem(it.id)){renderReview();toast('This image is no longer available. Skip to continue.');return}
+ const sug=it.centralTier,p={id:it.id,item:it,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
  let msg,col,receipt;
  let changes={reviewed:true};
  if('1234'.includes(a)){changes.manual=+a;msg=`P${a} ${TNAME[+a]}`;col=tcol(+a);p.agreed=+a===sug;receipt=p.agreed?`✓ Saved: last image kept at P${a} ${TNAME[+a]}.`:`✓ Saved: last image changed P${sug} ${TNAME[sug]} → P${a} ${TNAME[+a]}.`}
@@ -813,7 +822,7 @@ function rvAct(a){
  else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--human)';receipt='✓ Saved: last image sent to the Commander.'}
  else return;
  rv.busy=true;
- submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}setLast(receipt+' Press Z to undo.');rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
+ submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}setLast(receipt+' Press Z to undo.');rvFlash(msg,col);setTimeout(()=>{rv.busy=false;if(rv.cur?.id===it.id){rv.cur=null;rv.shown=null}renderReview()},280)}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').trim().slice(0,80)}catch{}
