@@ -171,10 +171,12 @@ Earlier residuals (post-#60 run), kept for history:
   shore signs only when `-policy-signing-key` (`GS_POLICY_SIGNING_KEY`) is set and the edge
   verifies only with `-require-signed-policy` / `-policy-keys` (`GS_REQUIRE_SIGNED_POLICY`,
   `GS_POLICY_KEYS`); compose and Zarf do not configure a policy key yet, so their downlink
-  policies are unsigned by default — fielded deployments should set all three. Follow-up: bind item ownership to the
-  authenticated unit id (`sub` of the unit JWT) at `UpsertManifest`/`WriteChunk`/override time
-  and reject writes from a different unit (operator overrides stay allowed); take the expected
-  chunk hash from the owning edge's manifest, not the chunk.
+  policies are unsigned by default — fielded deployments should set all three. Shore items are
+  bound to the authenticated unit (`sub` of the unit JWT / `ExchangeRequest.edge_id`): manifests,
+  chunks and sync overrides from another unit are rejected and not acked; chunk-created stubs
+  belong to the sender; legacy unowned items are adopted by the first writer; operator console
+  overrides stay cross-edge; and pulls/overrides route to the owning edge when `-edge` is unset.
+  Follow-up: take the expected chunk hash from the owning edge's manifest, not the chunk.
 * **Low — dev-mode auto-login behind a same-host reverse proxy.** The web app defaults to
   `-dev-token-file data/operator.token`; a proxy on the same host that forwards to `127.0.0.1`
   with a loopback `Host` and no forwarding headers passes the loopback check. Dev mode must never

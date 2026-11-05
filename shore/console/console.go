@@ -204,7 +204,7 @@ func (s *Service) OverrideLabel(ctx context.Context, req *connect.Request[pb.Ove
 	if err := s.St.SetOverride(ctx, o.ItemId, o.Label, o.By); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_LabelOverride{LabelOverride: o}}, s.Clk.Now()); err != nil {
+	if _, err := s.St.EnqueueDownlink(ctx, s.downlinkTarget(ctx, o.ItemId), &pb.Downlink{Msg: &pb.Downlink_LabelOverride{LabelOverride: o}}, s.Clk.Now()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&pb.OverrideLabelResponse{}), nil
@@ -218,10 +218,20 @@ func (s *Service) RequestPull(ctx context.Context, req *connect.Request[pb.Reque
 	if req.Msg.Pull.Original && strings.TrimSpace(req.Msg.Pull.RequestedBy) == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("original (full-size) pull is an operator override: requestedBy is required"))
 	}
-	if _, err := s.St.EnqueueDownlink(ctx, s.EdgeID, &pb.Downlink{Msg: &pb.Downlink_Pull{Pull: p}}, s.Clk.Now()); err != nil {
+	if _, err := s.St.EnqueueDownlink(ctx, s.downlinkTarget(ctx, p.ItemId), &pb.Downlink{Msg: &pb.Downlink_Pull{Pull: p}}, s.Clk.Now()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&pb.RequestPullResponse{}), nil
+}
+
+func (s *Service) downlinkTarget(ctx context.Context, itemID string) string {
+	if s.EdgeID != "" {
+		return s.EdgeID
+	}
+	if owner, err := s.St.Owner(ctx, itemID); err == nil && owner != "" {
+		return owner
+	}
+	return s.EdgeID
 }
 
 func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatusRequest]) (*connect.Response[pb.GetStatusResponse], error) {

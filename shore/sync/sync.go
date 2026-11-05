@@ -5,6 +5,7 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"log/slog"
 
@@ -32,10 +33,16 @@ func New(st *store.Store, clk clock.Clock, log *slog.Logger) *Service {
 
 // Exchange is the in-process entry point (used directly by the simulator).
 func (s *Service) Exchange(ctx context.Context, req *pb.ExchangeRequest) (*pb.ExchangeResponse, error) {
+	// req.EdgeId is the authenticated unit: the unitauth interceptor enforces
+	// ExchangeRequest.edge_id == the unit JWT sub.
 	now := s.clk.Now()
 	resp := &pb.ExchangeResponse{ShoreTimeUnixMs: now.UnixMilli()}
 	for _, me := range req.Manifest {
 		if err := s.st.UpsertManifest(ctx, req.EdgeId, me, now); err != nil {
+			if errors.Is(err, store.ErrNotOwner) {
+				s.log.Warn("manifest rejected", "edge", req.EdgeId, "item", me.ItemId, "err", err)
+				continue
+			}
 			return nil, err
 		}
 		resp.Acks = append(resp.Acks, &pb.Ack{ItemId: me.ItemId, Manifest: true})
@@ -43,7 +50,7 @@ func (s *Service) Exchange(ctx context.Context, req *pb.ExchangeRequest) (*pb.Ex
 	var bytes int64
 	for _, c := range req.Chunks {
 		bytes += int64(len(c.Data))
-		recv, done, err := s.st.WriteChunk(ctx, c, now)
+		recv, done, err := s.st.WriteChunk(ctx, req.EdgeId, c, now)
 		if err != nil {
 			s.log.Warn("chunk", "item", c.ItemId, "err", err)
 			continue
@@ -62,7 +69,7 @@ func (s *Service) Exchange(ctx context.Context, req *pb.ExchangeRequest) (*pb.Ex
 		if !ids.Valid(o.ItemId) {
 			continue
 		}
-		if err := s.st.SetOverride(ctx, o.ItemId, o.Label, o.By); err != nil {
+		if err := s.st.SetOverrideFrom(ctx, req.EdgeId, o.ItemId, o.Label, o.By); err != nil {
 			s.log.Warn("override", "item", o.ItemId, "err", err)
 		}
 	}

@@ -22,6 +22,7 @@ import (
 )
 
 var ErrNotFound = errors.New("not found")
+var ErrNotOwner = errors.New("item belongs to another edge")
 
 type Store struct {
 	db      *sql.DB
@@ -123,6 +124,9 @@ func (it *Item) Form(k pb.FormKind) *FormState {
 
 // UpsertManifest records that an item exists on an edge. Idempotent.
 func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.ManifestEntry, at time.Time) error {
+	if edgeID == "" {
+		return fmt.Errorf("%w: empty edge id", ErrNotOwner)
+	}
 	if !ids.Valid(me.ItemId) {
 		return fmt.Errorf("invalid item id %q", me.ItemId)
 	}
@@ -135,11 +139,20 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at,priority,unknownness,top_label)
+	res, err := tx.ExecContext(ctx, `INSERT INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at,priority,unknownness,top_label)
 		VALUES(?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(id) DO UPDATE SET manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label`,
-		me.ItemId, edgeID, int(me.Type), me.CapturedAtUnixMs, me.Source, raw, at.UnixMilli(), me.Priority, me.Unknownness, me.TopLabel); err != nil {
+		ON CONFLICT(id) DO UPDATE SET edge_id=excluded.edge_id, manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label
+		WHERE items.edge_id=excluded.edge_id OR items.edge_id=''`,
+		me.ItemId, edgeID, int(me.Type), me.CapturedAtUnixMs, me.Source, raw, at.UnixMilli(), me.Priority, me.Unknownness, me.TopLabel)
+	if err != nil {
 		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("%w: item %s", ErrNotOwner, me.ItemId)
 	}
 	for _, f := range me.Forms {
 		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO forms(item_id,kind,total) VALUES(?,?,?)`, me.ItemId, int(f.Kind), f.Bytes); err != nil {
@@ -159,7 +172,7 @@ const MaxChunkBytes = 4 << 20
 // receive count and whether the form is complete. Out-of-order or duplicate
 // chunks are safe: bytes are written in place and "received" only advances
 // contiguously (chunks arrive in order from one edge in practice).
-func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int64, bool, error) {
+func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at time.Time) (int64, bool, error) {
 	if !ids.Valid(c.ItemId) {
 		return 0, false, fmt.Errorf("invalid item id %q", c.ItemId)
 	}
@@ -167,11 +180,36 @@ func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int6
 	if c.TotalBytes <= 0 || c.TotalBytes > MaxBlobBytes || n > MaxChunkBytes || c.Offset < 0 || c.Offset > c.TotalBytes || n > c.TotalBytes-c.Offset {
 		return 0, false, fmt.Errorf("chunk out of bounds: off=%d len=%d total=%d", c.Offset, len(c.Data), c.TotalBytes)
 	}
+	if edgeID == "" {
+		return 0, false, fmt.Errorf("%w: empty edge id", ErrNotOwner)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at) VALUES(?,?,0,?,'',x'',0)`,
+		c.ItemId, edgeID, at.UnixMilli()); err != nil {
+		return 0, false, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE items SET edge_id=? WHERE id=? AND edge_id=''`, edgeID, c.ItemId); err != nil {
+		return 0, false, err
+	}
+	var owner string
+	if err := tx.QueryRowContext(ctx, `SELECT edge_id FROM items WHERE id=?`, c.ItemId).Scan(&owner); err != nil {
+		return 0, false, err
+	}
+	if owner != edgeID {
+		return 0, false, fmt.Errorf("%w: item %s", ErrNotOwner, c.ItemId)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, false, err
+	}
 	path := filepath.Join(s.blobDir, c.ItemId, fmt.Sprintf("%d", c.Form))
 	var received int64
 	var complete int
 	var hash string
-	err := s.db.QueryRowContext(ctx, `SELECT received, complete, hash FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash)
+	err = s.db.QueryRowContext(ctx, `SELECT received, complete, hash FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash)
 	if err == nil && complete == 1 && (c.ContentHash == "" || c.ContentHash == hash) {
 		return c.TotalBytes, true, nil
 	}
@@ -195,11 +233,8 @@ func (s *Store) WriteChunk(ctx context.Context, c *pb.Chunk, at time.Time) (int6
 	}
 	f.Close()
 	if errors.Is(err, sql.ErrNoRows) {
-		// Payload before manifest (FIFO baseline, or lost manifest): create a stub.
-		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at) VALUES(?,?,?,?,?,?,?)`,
-			c.ItemId, "", 0, at.UnixMilli(), "", []byte{}, 0); err != nil {
-			return 0, false, err
-		}
+		// Payload before manifest (FIFO baseline, or lost manifest): the
+		// ownership check above already created the item stub.
 		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO forms(item_id,kind,total) VALUES(?,?,?)`, c.ItemId, int(c.Form), c.TotalBytes); err != nil {
 			return 0, false, err
 		}
@@ -248,9 +283,45 @@ func (s *Store) SetFeatures(ctx context.Context, itemID string, f *pb.Features, 
 	return err
 }
 
+// SetOverride is operator-only and may update an item owned by any edge.
 func (s *Store) SetOverride(ctx context.Context, itemID, label, by string) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE items SET label_override=?, override_by=? WHERE id=?`, label, by, itemID)
 	return err
+}
+
+func (s *Store) SetOverrideFrom(ctx context.Context, edgeID, itemID, label, by string) error {
+	if edgeID == "" {
+		return fmt.Errorf("%w: empty edge id", ErrNotOwner)
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE items SET label_override=?, override_by=? WHERE id=? AND (edge_id=? OR edge_id='')`,
+		label, by, itemID, edgeID)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 0 {
+		return nil
+	}
+	var exists bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM items WHERE id=?)`, itemID).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("%w: item %s", ErrNotOwner, itemID)
+	}
+	return nil
+}
+
+func (s *Store) Owner(ctx context.Context, itemID string) (string, error) {
+	var edgeID string
+	err := s.db.QueryRowContext(ctx, `SELECT edge_id FROM items WHERE id=?`, itemID).Scan(&edgeID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return edgeID, err
 }
 
 func (s *Store) ReadForm(itemID string, kind pb.FormKind) ([]byte, error) {
