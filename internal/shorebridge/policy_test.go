@@ -62,8 +62,13 @@ func TestSetPolicyCompilesWithReadback(t *testing.T) {
 	if len(got.Interest.SuppressLabels) == 0 || len(got.Interest.BoostLabels) == 0 {
 		t.Fatalf("labels not forwarded: %v", got.Interest)
 	}
-	if got.ExpiresAtUnixMs == 0 {
-		t.Fatalf("duration not applied")
+	// The duration times the directive's own rule, never the whole policy
+	// (which would send the edge back to its default policy on expiry).
+	if got.ExpiresAtUnixMs != 0 {
+		t.Fatalf("whole-policy expiry=%d, want 0", got.ExpiresAtUnixMs)
+	}
+	if len(got.Layers) != 1 || len(got.Layers[0].Rules) != 1 || got.Layers[0].Rules[0].ExpiresAtUnixMs == 0 {
+		t.Fatalf("duration not applied to the directive rule: %+v", got.Layers)
 	}
 }
 

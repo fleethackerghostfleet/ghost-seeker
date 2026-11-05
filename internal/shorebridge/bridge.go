@@ -65,6 +65,7 @@ type Bridge struct {
 	edgeNodeID string
 
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
+	nextExpiry time.Time                   // earliest timed rule/EMCON/policy deadline seen by the poller
 	onSnapshot func(*Snapshot, *pb.Policy) // Console hook, called with every fresh snapshot and the policy it was built from
 }
 
@@ -329,11 +330,30 @@ func (b *Bridge) Run(ctx context.Context, every time.Duration) {
 	defer t.Stop()
 	for {
 		b.refresh(ctx)
+		// A timed directive or EMCON lapsing is refreshed as it happens, so the
+		// console (and its SSE stream) drops it without waiting for the next
+		// tick or an operator action.
+		var lapse <-chan time.Time
+		var timer *time.Timer
+		b.mu.Lock()
+		next := b.nextExpiry
+		b.mu.Unlock()
+		if !next.IsZero() {
+			timer = time.NewTimer(time.Until(next) + 100*time.Millisecond)
+			lapse = timer.C
+		}
 		select {
 		case <-ctx.Done():
+			if timer != nil {
+				timer.Stop()
+			}
 			return
 		case <-t.C:
 		case <-b.poke:
+		case <-lapse:
+		}
+		if timer != nil {
+			timer.Stop()
 		}
 	}
 }
@@ -378,9 +398,16 @@ func (b *Bridge) refresh(ctx context.Context) {
 			}
 		}
 	}
-	currentPolicy := policy.Flatten(storedPolicy, b.currentEdgeID(), time.Now())
+	now := time.Now()
+	currentPolicy := viewPolicy(storedPolicy, b.currentEdgeID(), now)
+	b.mu.Lock()
+	b.nextExpiry = nextPolicyExpiry(storedPolicy, now)
+	b.mu.Unlock()
 	if currentPolicy != nil {
 		snap.Policy = currentPolicy.GetText()
+		if len(currentPolicy.Layers) > 0 {
+			snap.Policy = directivesText(b.directives(currentPolicy, now))
+		}
 		snap.Emcon = emconName(currentPolicy.GetEmcon())
 		snap.PolicyID = currentPolicy.GetId()
 		suppressed = currentPolicy.GetInterest().GetSuppressLabels()
@@ -964,7 +991,8 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	if durationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(durationMin) * time.Minute).UnixMilli()
 	}
-	warnings, err := b.layerPolicy(r.Context(), pol, mode)
+	directiveSuppress, directiveBoost := pol.Interest.SuppressLabels, pol.Interest.BoostLabels
+	warnings, err := b.layerPolicy(r.Context(), pol, mode, true)
 	if err != nil {
 		log.Printf("shorebridge: set policy: %v", err)
 		if writeShoreAuthError(w, err) {
@@ -992,7 +1020,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	if json.Unmarshal(raw, &policy) != nil {
 		policy = map[string]any{}
 	}
-	readback := Readback(pol.Interest.SuppressLabels, pol.Interest.BoostLabels)
+	readback := Readback(directiveSuppress, directiveBoost)
 	if compiled != nil && compiled.Readback != "" {
 		readback = compiled.Readback
 	}
@@ -1103,7 +1131,7 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 	if pol.Emcon != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		mode = emconName(pol.Emcon)
 	}
-	if _, err := b.layerPolicy(ctx, pol, mode); err != nil {
+	if _, err := b.layerPolicy(ctx, pol, mode, true); err != nil {
 		return nil, err
 	}
 	var out pb.SetPolicyResponse
@@ -1112,97 +1140,6 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 	}
 	b.Poke()
 	return &out, nil
-}
-
-// layerPolicy folds a freshly built operator policy into the current shore
-// policy (#57): an EMCON phrase changes the caller-echelon EMCON unless a
-// higher echelon locked it, and the operator's rule replaces their layer so
-// higher-echelon layers, locks and signatures survive. Returns warnings for
-// the readback.
-func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
-	pol.IssuedBy = b.issuer()
-	echelon := b.echelon()
-	durationExpiryUnixMs := pol.GetExpiresAtUnixMs()
-	var ruleExpiryUnixMs int64
-	current, err := b.getPolicy(ctx)
-	if err != nil {
-		// Shore policy unreadable: don't apply blind. Keep the last EMCON the
-		// poller saw so an ordinary directive cannot reset BURST/SILENT to NORMAL.
-		warnings = append(warnings, "Current shore policy could not be read; higher-echelon layers were not merged.")
-		if mode == "" {
-			if cached, ok := parseEMCON(b.cachedEmcon()); ok {
-				pol.Emcon = cached
-			}
-		}
-		current = nil
-	} else if current != nil {
-		current = policy.Flatten(current, b.currentEdgeID(), time.Now())
-	}
-	if durationExpiryUnixMs > 0 && current != nil && len(current.Layers) > 0 {
-		ruleExpiryUnixMs = durationExpiryUnixMs
-		pol.ExpiresAtUnixMs = 0
-	}
-	emconLocked := false
-	if current != nil {
-		emconLocked = current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > echelon
-		if mode == "" || emconLocked {
-			if mode != "" {
-				warnings = append(warnings, "EMCON locked by "+current.EmconSetting.SetBy+"; not changed.")
-			}
-			pol.Emcon = current.Emcon
-			if current.EmconSetting != nil {
-				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
-			}
-		} else {
-			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon,
-				ExpiresAtUnixMs: ruleExpiryUnixMs}
-		}
-		if len(current.Layers) > 0 {
-			pol.Layers = cloneLayers(current.Layers)
-			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy, echelon)
-			// Labels another layer already boosts/suppresses (same polarity) are
-			// inherited, not repeated in the caller rule; an operator suppressing
-			// a label another layer boosts is a real override and stays.
-			inheritedBoost, inheritedSuppress := map[string]bool{}, map[string]bool{}
-			for i, layer := range pol.Layers {
-				if i == operatorLayer || layer == nil {
-					continue
-				}
-				for _, r := range layer.GetRules() {
-					for _, l := range r.GetBoostLabels() {
-						inheritedBoost[l] = true
-					}
-					for _, l := range r.GetSuppressLabels() {
-						inheritedSuppress[l] = true
-					}
-				}
-			}
-			own := func(labels []string, inherited map[string]bool) []string {
-				out := make([]string, 0, len(labels))
-				for _, l := range labels {
-					if !inherited[l] {
-						out = append(out, l)
-					}
-				}
-				return out
-			}
-			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
-				BoostLabels: own(pol.GetInterest().GetBoostLabels(), inheritedBoost), SuppressLabels: own(pol.GetInterest().GetSuppressLabels(), inheritedSuppress),
-				Text: pol.Text, ExpiresAtUnixMs: ruleExpiryUnixMs}
-			if operatorLayer >= 0 {
-				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
-			} else {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: echelon, IssuedBy: pol.IssuedBy, Rules: []*pb.InterestRule{rule}})
-				operatorLayer = len(pol.Layers) - 1
-			}
-			if mode != "" && !emconLocked {
-				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: pol.IssuedBy, Echelon: echelon,
-					ExpiresAtUnixMs: ruleExpiryUnixMs}
-			}
-		}
-	}
-	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
-	return warnings, nil
 }
 
 // cachedEmcon is the EMCON label of the last snapshot the poller built ("" if none).
@@ -1276,10 +1213,26 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 				operatorLayer = len(pol.Layers) - 1
 			}
 		}
+		pol.Layers[operatorLayer].Rules = withoutEmconOnlyRules(pol.Layers[operatorLayer].Rules)
 		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
 	} else {
-		pol.Emcon = mode
-		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()}
+		rules := make([]*pb.InterestRule, 0, 2)
+		if pol.Interest != nil && len(pol.Interest.BoostLabels) > 0 {
+			var weight float64
+			if pol.Interest.BoostFactor > 0 {
+				weight = pol.Interest.BoostFactor
+			}
+			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-boost", time.Now().UnixMilli()), Author: issuedBy,
+				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), Weight: weight})
+		}
+		if pol.Interest != nil && len(pol.Interest.SuppressLabels) > 0 {
+			rules = append(rules, &pb.InterestRule{Id: fmt.Sprintf("ui-%d-suppress", time.Now().UnixMilli()), Author: issuedBy,
+				SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...)})
+		}
+		pol.Layers = []*pb.PolicyLayer{{
+			Echelon: b.echelon(), IssuedBy: issuedBy, Rules: rules,
+			Emcon: &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: b.echelon()},
+		}}
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse

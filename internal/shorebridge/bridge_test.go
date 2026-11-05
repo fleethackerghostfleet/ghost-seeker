@@ -505,11 +505,20 @@ func TestTimedLayeredNonJWTEMCONUsesPerLayerExpiryWithoutCompiler(t *testing.T) 
 	}
 }
 
-func TestTimedFlatNonJWTKeepsPolicyExpiryWithoutCompiler(t *testing.T) {
+func TestTimedFlatNonJWTUsesPerDirectiveExpiry(t *testing.T) {
 	policy, _, _ := submitTimedDirectiveWithoutJWT(t, &pb.Policy{Interest: &pb.Interest{}})
-	if policy.GetExpiresAtUnixMs() <= time.Now().Add(29*time.Minute).UnixMilli() ||
-		policy.GetExpiresAtUnixMs() > time.Now().Add(31*time.Minute).UnixMilli() || len(policy.Layers) != 0 {
-		t.Fatalf("flat policy expiry/layers=%d/%+v", policy.GetExpiresAtUnixMs(), policy.Layers)
+	if policy.GetExpiresAtUnixMs() != 0 {
+		t.Fatalf("flat policy expiry=%d, want 0", policy.GetExpiresAtUnixMs())
+	}
+	wantAfter, wantBefore := time.Now().Add(29*time.Minute).UnixMilli(), time.Now().Add(31*time.Minute).UnixMilli()
+	if len(policy.Layers) != 1 || policy.Layers[0].IssuedBy != DefaultOperator ||
+		policy.Layers[0].Echelon != pb.Echelon_ECHELON_SHIP || len(policy.Layers[0].Rules) != 1 ||
+		policy.Layers[0].GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT ||
+		policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() < wantAfter ||
+		policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() > wantBefore ||
+		policy.Layers[0].Rules[0].GetExpiresAtUnixMs() < wantAfter ||
+		policy.Layers[0].Rules[0].GetExpiresAtUnixMs() > wantBefore {
+		t.Fatalf("flat non-JWT timed policy=%+v", policy)
 	}
 }
 
@@ -544,7 +553,7 @@ func TestEMCONWithConfiguredIssuerReusesSameEchelonLayer(t *testing.T) {
 	}
 }
 
-func TestFlatEMCONKeepsBoostFactorWithoutJWT(t *testing.T) {
+func TestFlatEMCONWrapsBoostFactorAsDirectiveWithoutJWT(t *testing.T) {
 	current := &pb.Policy{Interest: &pb.Interest{BoostFactor: 3, BoostLabels: []string{"tanker"}}}
 	var submitted *pb.Policy
 	shore := shorePolicyTestServer(t, current, 0, func(p *pb.Policy) { submitted = p })
@@ -555,9 +564,15 @@ func TestFlatEMCONKeepsBoostFactorWithoutJWT(t *testing.T) {
 	if rec.Code != http.StatusOK || submitted == nil {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if len(submitted.Layers) != 0 || submitted.GetInterest().GetBoostFactor() != 3 ||
-		submitted.Emcon != pb.EmconMode_EMCON_MODE_SILENT {
-		t.Fatalf("flat policy changed shape or weight: %+v", submitted)
+	if len(submitted.Layers) != 1 {
+		t.Fatalf("flat policy was not wrapped in a layer: %+v", submitted)
+	}
+	layer := submitted.Layers[0]
+	if layer.Echelon != pb.Echelon_ECHELON_SHIP || layer.IssuedBy != DefaultOperator ||
+		layer.GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT ||
+		len(layer.Rules) != 1 || layer.Rules[0].GetWeight() != 3 ||
+		len(layer.Rules[0].GetBoostLabels()) != 1 || layer.Rules[0].GetBoostLabels()[0] != "tanker" {
+		t.Fatalf("flat policy boost/EMCON was not preserved in the new layer: %+v", layer)
 	}
 }
 

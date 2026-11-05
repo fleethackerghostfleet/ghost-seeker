@@ -3,6 +3,7 @@ package shorebridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,7 +18,6 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -29,7 +29,9 @@ import (
 // the shore does not keep (manual tier, reviewed, dismissed, sent to the
 // commander, the commander's decision) is an in-memory overlay keyed by object.
 type Console struct {
-	b *Bridge
+	pol     *pb.Policy        // flattened shore policy the current view was built from
+	ruleFor map[string]string // lowercased label -> id of the directive that boosts/suppresses it
+	b       *Bridge
 
 	mu      sync.Mutex
 	base    map[string]*command.Item // last built items without the overlay, by id
@@ -362,11 +364,11 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		if label == "" {
 			label = cls
 		}
-		score.Notes = append(score.Notes, command.Rule{Type: "suppress", Classes: []string{strings.ToLower(label)}, Attrs: []string{}, DirectiveID: "policy"})
+		score.Notes = append(score.Notes, command.Rule{Type: "suppress", Classes: []string{strings.ToLower(label)}, Attrs: []string{}, DirectiveID: c.directiveFor(label)})
 	}
 	if l := matchLabel(c.policy.Boost, b.Override, o.Subtype, o.Label); l != "" {
 		score.Matched = true
-		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: "policy"})
+		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: c.directiveFor(l)})
 	}
 	item.Dets = append(item.Dets, det)
 	item.Det = append(item.Det, score)
@@ -579,19 +581,71 @@ func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
 		NodeID: "shore", EMCON: EmconSummary{Mode: "NORMAL"}, Locks: []PolicyLock{}, Conflicts: []PolicyConflict{},
 	}
 	p.Readback = Readback(p.Suppress, p.Boost)
+	c.pol, c.ruleFor = nil, nil
 	if pol == nil {
 		return p
 	}
-	pol = policy.Flatten(pol, c.b.currentEdgeID(), time.Now())
+	return c.policyView(pol, time.Now())
+}
+
+// policyView renders the stored policy as it applies at now: expired rules and
+// EMCON are dropped (policy.Flatten), each directive is listed with its own
+// deadline and the readback says when each rule lapses. It also caches the
+// policy and the label -> directive index the item notes use.
+func (c *Console) policyView(pol *pb.Policy, now time.Time) LivePolicy {
+	pol = viewPolicy(pol, c.b.currentEdgeID(), now)
 	info := policyInfo(pol, c.b.echelon()) // same merge/lock view as the F2 strip (#57)
-	p.Version, p.ExpiresAtUnixMs = info.Version, pol.GetExpiresAtUnixMs()
-	p.EMCON = EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy}
-	p.Locks, p.Conflicts = info.Locks, info.Conflicts
+	p := LivePolicy{
+		ID: pol.GetId(), Text: strings.TrimSpace(pol.GetText()), NodeID: "shore", Version: info.Version,
+		Suppress: dedupe(pol.GetInterest().GetSuppressLabels()), Boost: dedupe(pol.GetInterest().GetBoostLabels()),
+		EMCON: EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy},
+		Locks: info.Locks, Conflicts: info.Conflicts,
+	}
+	directives := c.b.directives(pol, now)
+	c.pol, c.ruleFor = pol, map[string]string{}
+	for _, d := range directives {
+		for _, r := range d.Rules {
+			for _, class := range r.Classes {
+				if _, seen := c.ruleFor[class]; !seen {
+					c.ruleFor[class] = d.ID
+				}
+			}
+		}
+	}
+	if next := nextPolicyExpiry(pol, now); !next.IsZero() {
+		p.ExpiresAtUnixMs = next.UnixMilli()
+	}
+	if len(pol.Layers) > 0 {
+		p.Text = directivesText(directives)
+		p.Readback = directivesReadback(directives)
+		return p
+	}
+	p.Readback = Readback(p.Suppress, p.Boost)
 	if p.ExpiresAtUnixMs > 0 {
 		until := time.UnixMilli(p.ExpiresAtUnixMs).UTC().Format("15:04Z")
 		p.Readback = strings.Replace(p.Readback, "Until cleared.", "Until "+until+".", 1)
 	}
 	return p
+}
+
+// adoptPolicy replaces the cached view with the policy the shore just applied,
+// so the next directive and GET /api/policy see it before the poller does.
+func (c *Console) adoptPolicy(pol *pb.Policy) {
+	if pol == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.policy = c.policyView(pol, time.Now())
+	c.live.Policy = c.policy
+	c.publish("snapshot", c.snapshotLocked())
+}
+
+func (c *Console) directiveFor(label string) string {
+	if id, ok := c.ruleFor[strings.ToLower(strings.TrimSpace(label))]; ok {
+		return id
+	}
+	return flatDirectiveID
 }
 
 func emconLabel(mode pb.EmconMode) string {
@@ -652,26 +706,18 @@ func (c *Console) cdrLocked() int {
 }
 
 func (c *Console) directivesLocked() []command.Directive {
-	rules := policyRules(c.policy.Suppress, c.policy.Boost)
-	if len(rules) == 0 {
-		return []command.Directive{}
+	if c.pol == nil {
+		rules := policyRules(flatDirectiveID, c.policy.Suppress, c.policy.Boost)
+		if len(rules) == 0 {
+			return []command.Directive{}
+		}
+		text := c.policy.Text
+		if strings.TrimSpace(text) == "" {
+			text = c.policy.Readback
+		}
+		return []command.Directive{{ID: flatDirectiveID, Text: text, Rules: rules}}
 	}
-	text := c.policy.Text
-	if strings.TrimSpace(text) == "" {
-		text = c.policy.Readback
-	}
-	return []command.Directive{{ID: "policy", Text: text, Rules: rules}}
-}
-
-func policyRules(suppress, boost []string) []command.Rule {
-	rules := []command.Rule{}
-	for _, l := range boost {
-		rules = append(rules, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: "policy"})
-	}
-	for _, l := range suppress {
-		rules = append(rules, command.Rule{Type: "suppress", Classes: []string{l}, Attrs: []string{}, DirectiveID: "policy"})
-	}
-	return rules
+	return c.b.directives(c.pol, time.Now())
 }
 
 func (c *Console) statsLocked() command.Stats {
@@ -1026,7 +1072,7 @@ func rulesFromBody(text string, rules *[]command.Rule) (suppress, boost []string
 		suppress, boost = Interpret(text)
 	}
 	suppress, boost = dedupe(suppress), dedupe(boost)
-	return suppress, boost, policyRules(suppress, boost)
+	return suppress, boost, policyRules(flatDirectiveID, suppress, boost)
 }
 
 // compiled runs the shared NL compiler (#54) when the bridge has one, so the
@@ -1092,14 +1138,14 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 		}
 		out.Suppress, out.Boost = rulesToLabels(comp.Rules)
 		out.Suppress, out.Boost = dedupe(out.Suppress), dedupe(out.Boost)
-		out.Rules = policyRules(out.Suppress, out.Boost)
+		out.Rules = policyRules(flatDirectiveID, out.Suppress, out.Boost)
 		out.Compiled = &comp
 		out.Path, out.Warnings, out.Blocked, out.DurationMin = comp.Path, comp.Warnings, comp.Blocked, comp.DurationMin
 		out.Readback = strings.TrimSpace(comp.Readback)
 		if len(out.Rules) == 0 && !out.Blocked && mode == "" && !strings.Contains(strings.Join(comp.Warnings, "\n"), "Not applied") {
 			out.Suppress, out.Boost = Interpret(ruleText)
 			out.Suppress, out.Boost = dedupe(out.Suppress), dedupe(out.Boost)
-			out.Rules = policyRules(out.Suppress, out.Boost)
+			out.Rules = policyRules(flatDirectiveID, out.Suppress, out.Boost)
 			if len(out.Rules) > 0 {
 				out.Readback = Readback(out.Suppress, out.Boost)
 			}
@@ -1168,21 +1214,14 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects — try \"ignore cargo ships\" or \"prioritize submarines\".")
 		return
 	}
-	c.mu.Lock()
-	cur := c.policy
-	c.mu.Unlock()
-	text := body.Text
-	if cur.Text != "" && text != "" {
-		text = cur.Text + "; " + text
-	} else if text == "" {
-		text = cur.Text
-	}
-	merged := mergePolicy(cur, suppress, boost)
-	pol := &pb.Policy{IssuedBy: c.b.issuer(), Text: text, Interest: &pb.Interest{SuppressLabels: merged.Suppress, BoostLabels: merged.Boost}, Emcon: cd.Emcon}
+	pol := &pb.Policy{IssuedBy: c.b.issuer(), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost}, Emcon: cd.Emcon}
 	if cd.DurationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(cd.DurationMin) * time.Minute).UnixMilli()
 	}
-	out, err := c.b.applyPolicyProto(r.Context(), pol)
+	// The directive is layered onto the policy the shore holds right now (read
+	// inside addDirective), never onto this console's cached view, so two
+	// directives posted seconds apart both survive.
+	out, ruleID, err := c.b.addDirective(r.Context(), pol)
 	if err != nil {
 		log.Printf("console: set policy upstream: %v", err)
 		if writeShoreAuthError(w, err) {
@@ -1191,13 +1230,21 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "upstream shore error")
 		return
 	}
-	readback := withDuration(Readback(merged.Suppress, merged.Boost), cd.DurationMin)
+	c.adoptPolicy(out.GetPolicy())
+	if ruleID == "" {
+		ruleID = flatDirectiveID
+	}
+	for i := range rules {
+		rules[i].DirectiveID = ruleID
+	}
+	readback := withDuration(Readback(suppress, boost), cd.DurationMin)
 	if cd.Compiled != nil || cd.Emcon != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		readback = cd.Readback
 	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, map[string]any{
-		"id": "policy", "text": text, "rules": rules, "readback": readback, "warnings": cd.Warnings, "path": cd.Path, "compiled": cd.Compiled,
+		"id": ruleID, "text": body.Text, "rules": rules, "readback": readback, "warnings": cd.Warnings, "path": cd.Path, "compiled": cd.Compiled,
+		"expiresAtUnixMs": pol.GetExpiresAtUnixMs(),
 		"suppressedCount": out.GetSuppressedCount(), "boostedCount": out.GetBoostedCount(), "conflicts": conflictList(out.GetConflicts()),
 	})
 }
@@ -1210,26 +1257,20 @@ func conflictList(conflicts []*pb.MergeConflict) []PolicyConflict {
 	return out
 }
 
-// mergePolicy adds labels to the standing policy; a label cannot be both
-// boosted and suppressed, the newest directive wins.
-func mergePolicy(cur LivePolicy, suppress, boost []string) LivePolicy {
-	drop := func(from []string, remove []string) []string {
-		out := []string{}
-		for _, l := range from {
-			if matchLabel(remove, l) == "" {
-				out = append(out, l)
-			}
-		}
-		return out
-	}
-	next := LivePolicy{}
-	next.Suppress = dedupe(append(drop(cur.Suppress, boost), suppress...))
-	next.Boost = dedupe(append(drop(cur.Boost, suppress), boost...))
-	return next
-}
-
+// clearDirectives removes the operator's own directives: all of them on
+// DELETE /api/directives, one on DELETE /api/directives/{id}. Other operators'
+// and higher-echelon layers are never touched.
 func (c *Console) clearDirectives(w http.ResponseWriter, r *http.Request) {
-	if _, err := c.b.applyPolicy(r.Context(), "", nil, nil); err != nil {
+	var ids []string
+	if id := strings.TrimSpace(r.PathValue("id")); id != "" {
+		ids = []string{id}
+	}
+	out, err := c.b.removeDirectives(r.Context(), ids)
+	if err != nil {
+		if errors.Is(err, errDirectiveNotFound) {
+			writeError(w, http.StatusNotFound, "That directive is no longer active, or it was issued by another echelon and cannot be removed here.")
+			return
+		}
 		log.Printf("console: clear policy upstream: %v", err)
 		if writeShoreAuthError(w, err) {
 			return
@@ -1237,6 +1278,7 @@ func (c *Console) clearDirectives(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "upstream shore error")
 		return
 	}
+	c.adoptPolicy(out.GetPolicy())
 	w.WriteHeader(http.StatusNoContent)
 }
 
