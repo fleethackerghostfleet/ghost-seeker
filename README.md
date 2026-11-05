@@ -94,12 +94,15 @@ dev mode). CORS is same-origin unless `-cors-origins` / `GS_CORS_ORIGINS` lists 
 
 ## Configuration: unit sync authentication and edge storage caps
 
-Both features are opt-in. Defaults preserve existing compose/simulator behavior:
-sync auth is off, and edge storage is unlimited (no age/staleness deletion).
+Unit sync authentication is **on by default**: shore refuses to start without a
+signing key unless `-require-auth=false` is passed explicitly (isolated lab links
+only; it logs a warning). `make demo-shore` / `make demo-edge` share a generated
+`data/unit.key` and mint the edge token automatically. Edge storage is unlimited
+by default (no age/staleness deletion).
 
 | Process | Flag | Environment | Default |
 |---|---|---|---|
-| shore | `-require-auth` | `GS_REQUIRE_AUTH` | `false` |
+| shore | `-require-auth` | `GS_REQUIRE_AUTH` | `true` |
 | shore / mint tool | `-signing-key` | `GS_SIGNING_KEY` | unset |
 | shore / mint tool | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset |
 | edge | `-unit-token` | `GS_UNIT_TOKEN` | unset |
@@ -116,7 +119,7 @@ With the same signing key securely provisioned to shore and the offline mint too
 
 ```sh
 # GS_SIGNING_KEY is supplied by your secret manager, or use GS_SIGNING_KEY_FILE.
-go run ./cmd/shore -require-auth
+go run ./cmd/shore
 GS_UNIT_TOKEN=$(go run ./cmd/mint-unit-token -id edge-1 -ttl 1h)
 export GS_UNIT_TOKEN
 go run ./cmd/edge -id edge-1 -max-bytes 1073741824 -max-items 10000
