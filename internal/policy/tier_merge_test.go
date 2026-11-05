@@ -66,3 +66,17 @@ func TestTierFlattenExpiryAndTargets(t *testing.T) {
 		t.Fatalf("flatten must clear stale pins without mutating input: %v", got)
 	}
 }
+
+func TestFlatShorePinsSurviveShipConsoleOverlay(t *testing.T) {
+	base := &pb.Policy{Interest: &pb.Interest{TierLabels: map[string]int32{"tanker": 2, "submarine": 1}}}
+	local := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: LocalIssuer, Rules: []*pb.InterestRule{{Id: "bird", BoostLabels: []string{"bird"}}}}
+	got := Flatten(WithLocalLayer(base, local), "edge", time.Now())
+	if got.Interest.TierLabels["tanker"] != 2 || got.Interest.TierLabels["submarine"] != 1 || len(got.Interest.BoostLabels) != 1 {
+		t.Fatalf("local overlay lost shore pins: %v", got)
+	}
+	local.Rules = append(local.Rules, &pb.InterestRule{Id: "suppress", SuppressLabels: []string{"tanker"}})
+	got = Flatten(WithLocalLayer(base, local), "edge", time.Now())
+	if got.Interest.TierLabels["tanker"] != 0 || got.Interest.TierLabels["submarine"] != 1 {
+		t.Fatalf("new generic must cancel only its matching pin: %v", got)
+	}
+}

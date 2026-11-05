@@ -157,6 +157,28 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 		// A flat (layer-less) shore policy plus the ship console's own rules: keep both.
 		interest.BoostLabels = unionLabels(out.GetInterest().GetBoostLabels(), interest.BoostLabels)
 		interest.SuppressLabels = unionLabels(out.GetInterest().GetSuppressLabels(), interest.SuppressLabels)
+		pins := map[string]int32{}
+		for label, tier := range out.GetInterest().GetTierLabels() {
+			pins[normalizeLabel(label)] = tier
+		}
+		for _, layer := range out.Layers {
+			for _, rule := range layer.Rules {
+				if rule == nil || expiredRule(rule, now) || !targetsNode(rule.Targets, nodeID) {
+					continue
+				}
+				for _, label := range append(append([]string(nil), rule.BoostLabels...), rule.SuppressLabels...) {
+					delete(pins, normalizeLabel(label))
+				}
+			}
+		}
+		for label, tier := range interest.TierLabels {
+			pins[label] = tier
+		}
+		interest.TierLabels = pins
+		for label := range pins {
+			interest.BoostLabels = trimLabels(interest.BoostLabels, map[string]bool{label: true})
+			interest.SuppressLabels = trimLabels(interest.SuppressLabels, map[string]bool{label: true})
+		}
 	}
 	if out.Interest == nil {
 		out.Interest = &pb.Interest{}
