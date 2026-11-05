@@ -135,9 +135,11 @@ ship-to-shore link — and none of them is reachable through the operator consol
   enforces it** — `deploy/compose` sets `GS_REQUIRE_AUTH=true` with `${GS_SIGNING_KEY:?}` /
   `${GS_UNIT_TOKEN:?}` and Zarf defaults `SHORE_REQUIRE_AUTH=true` with required
   `shore-auth`/`edge-auth` Secrets, so they refuse to start without credentials; shore logs a WARN
-  at startup when unit auth is off. Downlink policies are Ed25519-signed since PR #57 and the edge
-  can pin them with `-require-signed-policy` / `-policy-keys` (`GS_REQUIRE_SIGNED_POLICY`,
-  `GS_POLICY_KEYS`); fielded edges should set both. Follow-up: bind item ownership to the
+  at startup when unit auth is off. PR #57 added Ed25519 policy signing, but it is **opt-in**:
+  shore signs only when `-policy-signing-key` (`GS_POLICY_SIGNING_KEY`) is set and the edge
+  verifies only with `-require-signed-policy` / `-policy-keys` (`GS_REQUIRE_SIGNED_POLICY`,
+  `GS_POLICY_KEYS`); compose and Zarf do not configure a policy key yet, so their downlink
+  policies are unsigned by default — fielded deployments should set all three. Follow-up: bind item ownership to the
   authenticated unit id (`sub` of the unit JWT) at `UpsertManifest`/`WriteChunk`/override time
   and reject writes from a different unit (operator overrides stay allowed); take the expected
   chunk hash from the owning edge's manifest, not the chunk.
