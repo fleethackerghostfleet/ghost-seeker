@@ -105,6 +105,9 @@ func TestStoreExplicitExpiryAndSignedRequirements(t *testing.T) {
 		t.Fatal(err)
 	}
 	previous := &pb.Policy{Id: "previous", IssuedAtUnixMs: now.UnixMilli()}
+	if err := Sign(previous, "k", priv); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.Accept(ctx, previous, "console", now); err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +118,16 @@ func TestStoreExplicitExpiryAndSignedRequirements(t *testing.T) {
 	if active, _ := store.Active(now); active.Id != "previous" {
 		t.Fatalf("rejected policy replaced last good: %v", active)
 	}
-	if _, err := store.Accept(ctx, unsigned, "console", now); err != nil {
-		t.Fatalf("console unsigned rejected: %v", err)
+	if _, err := store.Accept(ctx, unsigned, "console", now); !errors.Is(err, ErrUnsigned) {
+		t.Fatalf("unsigned console error=%v", err)
+	}
+	if active, _ := store.Active(now); active == nil || active.Id != "previous" {
+		t.Fatalf("console unsigned policy replaced last good: %v", active)
 	}
 	expired := &pb.Policy{Id: "explicit", IssuedAtUnixMs: now.UnixMilli(), ExpiresAtUnixMs: now.UnixMilli()}
+	if err := Sign(expired, "k", priv); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.Accept(ctx, expired, "console", now); !errors.Is(err, ErrExpired) {
 		t.Fatalf("explicit expiry error=%v", err)
 	}

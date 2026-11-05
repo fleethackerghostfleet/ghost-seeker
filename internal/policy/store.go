@@ -72,7 +72,7 @@ func (s *Store) Accept(ctx context.Context, p *pb.Policy, source string, now tim
 			_ = s.appendAudit(ctx, auditEntry(p, source, now, "rejected", err.Error()))
 			return nil, err
 		}
-	} else if s.options.RequireSigned && source == "downlink" {
+	} else if s.options.RequireSigned {
 		_ = s.appendAudit(ctx, auditEntry(p, source, now, "rejected", ErrUnsigned.Error()))
 		return nil, ErrUnsigned
 	}
