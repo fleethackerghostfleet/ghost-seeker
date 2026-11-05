@@ -72,11 +72,20 @@ func TestUploadEvictionAndFullSize(t *testing.T) {
 		t.Fatalf("evicted upload: %+v", got)
 	}
 	it, _, err := s.RequestFullRes("new", "operator")
-	if err != nil || it.Upload.Done || it.Upload.Bytes < 4*1024*1024 {
+	if err != nil || it.Upload.Done || it.Upload.Sent != 0 || it.Upload.Bytes < 4*1024*1024 {
 		t.Fatalf("full size: %+v %v", it, err)
 	}
 	if _, _, err = s.RequestFullRes("missing", "operator"); err != ErrNotFound {
 		t.Fatal(err)
+	}
+	s.AdvanceUploads(time.Second)
+	it, _, err = s.RequestFullRes("new", "operator")
+	if err != nil || it.Upload.Sent != 32_000 {
+		t.Fatalf("repeat request reset progress: %+v %v", it, err)
+	}
+	stats, _ := s.Stats()
+	if stats.Bytes != 1536+32_000 {
+		t.Fatalf("compressed transfer was lost: %+v", stats)
 	}
 }
 
