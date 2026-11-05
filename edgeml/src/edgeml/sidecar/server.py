@@ -12,6 +12,8 @@ from .service import InferenceService, RpcError
 
 log = logging.getLogger("edgeml.sidecar")
 
+MAX_BODY_BYTES = 32 << 20  # a 4K JPEG is ~2-3 MB base64; anything near this is not a frame
+
 # connect error code -> HTTP status (connect protocol spec)
 STATUS = {"canceled": 499, "unknown": 500, "invalid_argument": 400, "deadline_exceeded": 504, "not_found": 404,
           "already_exists": 409, "permission_denied": 403, "resource_exhausted": 429, "failed_precondition": 412,
@@ -52,6 +54,9 @@ def make_handler(svc: InferenceService, quiet: bool = True):
                 return self._send(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"code": "unknown", "message": f"unsupported content-type {ctype!r}; this sidecar speaks application/json (connect.WithProtoJSON)"})
             try:
                 n = int(self.headers.get("Content-Length", "0"))
+                if n < 0 or n > MAX_BODY_BYTES:
+                    self.close_connection = True
+                    return self._send(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"code": "resource_exhausted", "message": f"body {n} bytes exceeds {MAX_BODY_BYTES}"})
                 req = json.loads(self.rfile.read(n) or b"{}")
                 resp = svc.dispatch(self.path[len(prefix):], req)
             except RpcError as e:
@@ -67,8 +72,10 @@ def make_handler(svc: InferenceService, quiet: bool = True):
 
 
 def parse_listen(listen: str) -> tuple[str, int]:
+    """':9090' binds loopback (the edge runs beside the sidecar and the service is unauthenticated);
+    pass '0.0.0.0:9090' explicitly to expose it."""
     host, _, port = listen.rpartition(":")
-    return (host or "0.0.0.0", int(port or 9090))
+    return (host or "127.0.0.1", int(port or 9090))
 
 
 def make_server(engine, listen: str = ":9090", quiet: bool = True) -> ThreadingHTTPServer:

@@ -102,6 +102,7 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		up = int(math.Round(randBetween(rng, 40, 160)))
 	}
 	item := &command.Item{
+		Bands:    append([]string(nil), source.Bands...),
 		ID:       fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1)),
 		Img:      imageFile,
 		Frame:    frame,

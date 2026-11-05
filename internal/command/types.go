@@ -69,6 +69,7 @@ type Item struct {
 	Night       *bool      `json:"night,omitempty"`
 	Basis       string     `json:"basis,omitempty"`
 	Lum         float64    `json:"lum,omitempty"`
+	Bands       []string   `json:"bands,omitempty"`
 	ID          string     `json:"id"`
 	Img         string     `json:"img,omitempty"`
 	DBID        int        `json:"dbId"`
