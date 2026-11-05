@@ -146,8 +146,24 @@ func clone(m map[string]float64) map[string]float64 {
 func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 	groups := map[string][]reviews.Record{}
 	r.Reviewers = map[string]int{}
+	latestRecords := map[string]reviews.Record{}
 	for _, v := range rs {
 		r.Reviewers[v.Reviewer]++
+		key := ModelKey(v)
+		if key == "" || v.ItemID == "" {
+			if v.Reason == "wrong_detection" || v.HumanTier == 0 {
+				r.Excluded++
+				continue
+			}
+			return nil, fmt.Errorf("record %s: invalid item or unknown mission model", v.ID)
+		}
+		pair := key + "\x00" + v.ItemID + "\x00" + v.Reviewer
+		old, ok := latestRecords[pair]
+		if !ok || v.ReviewedAt.After(old.ReviewedAt) || (v.ReviewedAt.Equal(old.ReviewedAt) && v.ID > old.ID) {
+			latestRecords[pair] = v
+		}
+	}
+	for _, v := range latestRecords {
 		if v.Reason == "wrong_detection" || v.HumanTier == 0 {
 			r.Excluded++
 			continue

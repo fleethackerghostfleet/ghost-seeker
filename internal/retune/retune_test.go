@@ -6,11 +6,40 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 )
+
+func TestLatestExclusionSuppressesOlderTier(t *testing.T) {
+	for _, reason := range []string{"dismiss", "wrong_detection"} {
+		t.Run(reason, func(t *testing.T) {
+			old := reviews.Record{ID: "old", ItemID: "item", Reviewer: "A", ModelKey: "maritime", HumanTier: 1, Detections: []command.Detection{{Class: "debris", Conf: 1}}, ReviewedAt: time.Unix(1, 0)}
+			excluded := old
+			excluded.ID = "excluded"
+			excluded.ReviewedAt = time.Unix(2, 0)
+			if reason == "dismiss" {
+				excluded.HumanTier = 0
+			} else {
+				excluded.Reason = "wrong_detection"
+			}
+			other := old
+			other.ID = "other"
+			other.Reviewer = "B"
+			other.HumanTier = 4
+			var r Result
+			data, err := prepare([]reviews.Record{excluded, other, old}, &r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(data["maritime"]) != 1 || data["maritime"][0].Human != 4 || r.Conflicts != 0 || r.Usable != 1 {
+				t.Fatalf("old label resurrected: %+v %+v", r, data)
+			}
+		})
+	}
+}
 
 func TestUnsafeCandidateRejected(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "log")
