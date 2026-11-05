@@ -9,6 +9,43 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('live ocean scenes are P4 feed imagery, not contact review or actions',async()=>{
+ const c=setup();
+ vm.runInContext(`
+  scene=normalizeItem({...raw('ocean',4),background:true,central:0,base:0,edge:0,live:{event:'scene',forms:{}},dets:[],det:[]});
+  ship=normalizeItem({...raw('ship',4),live:{event:'open'},dets:[],det:[]});
+  items=[scene,ship];state.src='ALL';state.tier='all';state.sort='pri';state.sel='ocean';
+  calls=[];request=async(...args)=>{calls.push(args)};
+  zulu=()=> '12:00:00Z';largeImage=()=> '<img src="/ocean.jpg">';
+ `,c);
+ assert.equal(vm.runInContext('visible().l.length',c),2);
+ assert.equal(vm.runInContext('rvQueue().length',c),1);
+ assert.equal(vm.runInContext('rvQueue()[0].id',c),'ship');
+ assert.equal(vm.runInContext('topLine(scene)',c),'Open ocean · no contacts');
+ assert.equal(vm.runInContext('boxesHTML(scene,true)',c),'');
+ assert.equal(vm.runInContext('humanSent({...scene,sent:true,fullRes:true})',c),false);
+ for(const filter of ['reviewed','unreviewed','sent'])assert.equal(vm.runInContext(`reviewMatch(scene,'${filter}')`,c),false);
+ await vm.runInContext("setManual('ocean',1);requestFullRes(scene)",c);
+ assert.equal(vm.runInContext('calls.length',c),0);
+ vm.runInContext('renderDetailContent()',c);
+ const html=c.$('drawer').innerHTML;
+ assert.match(html,/Open ocean · no contacts/);
+ assert.doesNotMatch(html,/id="aCdr"|id="aFull"|data-t=|Detections<|Ship score/);
+ vm.runInContext('items=[]',c);
+ assert.equal(vm.runInContext('rvQueue().length',c),0);
+});
+test('scene sources interleave inside P4 without moving contact tiers',()=>{
+ const c=setup();
+ vm.runInContext(`
+  items=[normalizeItem(raw('critical',1)),...Array.from({length:12},(_,i)=>normalizeItem({...raw('ship-'+i,4),central:.1})),
+   ...Array.from({length:4},(_,i)=>normalizeItem({...raw('ocean-'+i,4),src:'Open_ocean_watch',central:0,live:{event:'scene'}}))];
+  state.src='ALL';state.tier='all';state.sort='pri';
+ `,c);
+ const ids=JSON.parse(vm.runInContext('JSON.stringify(visible().l.map(i=>i.id))',c));
+ assert.equal(ids[0],'critical');
+ assert.ok(ids.findIndex(id=>id.startsWith('ocean-'))<=8);
+ assert.equal(ids.length,17);
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);

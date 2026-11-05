@@ -17,9 +17,14 @@ Prerequisites: **Docker Desktop** (Apple silicon or Intel; ~6 GB free for the im
 while the repo is private, the **GitHub CLI** signed in once (`brew install gh && gh auth login`)
 so `make demo-clips demo-models` can pull the ~225 MB of clips + models from the
 [`demo-data-v1` release](https://github.com/fleethackerghostfleet/ghost-seeker/releases/tag/demo-data-v1)
-(`deploy/demo-data.sh`; it falls back to the lab GCS bucket via gcloud). No Go, Python or venv needed.
+(`deploy/demo-data.sh`; it falls back to the lab GCS bucket via gcloud). No Go needed.
+Generating the live ocean crops once also requires Python + Pillow (see below) and the
+existing LFS source: `git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'`.
 
 ```sh
+python3 -m venv ~/edgeml-venv
+~/edgeml-venv/bin/pip install Pillow==12.3.0
+export PY=~/edgeml-venv/bin/python
 make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (GitHub release; gh auth)
 make compose-demo             # builds the four images (first time ~5-10 min), starts the stack
 open http://localhost:8090    # signed in automatically; the edge starts replaying once the sidecar is healthy (~30 s)
@@ -57,16 +62,32 @@ authentication; only the UI's login form accepts arbitrary tokens.
 ```sh
 # toolchain: Go 1.26.10, Python >= 3.10, GitHub CLI signed in (gh auth login) for the demo data
 make build
-make demo-clips        # -> scenarios/ghostfleet_demo/frames/<clip>/{img1,gt,seqinfo.ini}  (gitignored)
-make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB) + mobileclip-s1/unknown_calib.npz (H: dev-fitted unknownness calibration + kNN bank, auto-loaded by the sidecar)
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
 pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
+pip install Pillow==12.3.0
+git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'
+make demo-clips        # three released ship clips + generated Open_ocean_watch/img1 (all gitignored)
+make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports + H's unknown_calib.npz)
 ```
 
 Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/ghost_fleet_5fps/`):
 `Submarine_surfacing` (372 f, 2 GT objects), `Cruise_ship_Mediterranean_sunset_off_Italy`
 (153 f, 3), `Spotted_A_Submarine` (745 f, 1). Change `CLIPS=` in `download.sh` / the
-`sets` in `scenarios/ghostfleet_demo/scenario.json` to use others.
+`sets` in `scenarios/ghostfleet_demo/live.json` to use others in the live demo.
+`scenario.json` remains the unchanged three-ship input to the headless comparison.
+
+`make demo-clips` also runs `ocean.py`: 32 manually inspected, real-sidecar-screened
+688×516 side-region crops of the existing `30_Days_at_Sea_Timelapse_frames.zip`.
+Clear, overcast, glare and dusk views contain no external contacts or camera-ship
+structure. `ocean-manifest.json` records source ZIP/GCS generation, crop coordinates,
+source/output SHA-256 and licence/usage provenance. Only crops returning **zero
+detections and zero sightings** were selected; ingestion still runs real inference
+and never bypasses detections. Crops are generated deterministically (Pillow 12.3.0,
+fixed JPEG parameters; checksum mismatch fails closed), not bundled as new imagery.
+The 32 crops cycle through 420 MOT-style frames, names 000001–001258, proportionally
+spread over the entire replay (one ocean input per ~3 ship inputs). The four-set live
+replay has 1690 inputs at 200 ms (~338 s before processing); ship clips and their
+relative interleaving are unchanged. The released three-clip archive is unchanged.
 
 ## 1. Headless comparison (`make demo`)
 
@@ -105,7 +126,7 @@ shore store regardless of mode.
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
 make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
-make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
+make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/live.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
 open http://localhost:8090
 ```
 
@@ -132,14 +153,19 @@ the UI shows one card per sighting with the crop, and the strip's "N duplicate f
 the edge" is `GetStatus.items_deduped`. When a sighting closes, the edge sends a ~200 B contact
 report (RECORD item); the card then shows "n frames seen" from it.
 
-**Object-free frames.** In `-dedup sightings` mode the edge folds frames with no tracked object
-into one **scene** item per source per `-scene-every` (default 60 s; `tags.event: "scene"`).
-Only FACT+THUMB ship; the FULL frame stays on the edge and is pull-only. The UI does not show
-them in the feed: they feed the **Cameras** strip above it (one entry per camera: latest view,
-last seen, contact count, "Pull full frame" for the current view). They are not objects, so they
-are excluded from the unique-object count, the review queue and the commander view (the strip
-says "N camera heartbeats not counted"). Any per-frame leftovers
-(`-scene-every 0`) are hidden by the "sightings only" toggle.
+**Object-free frames.** In `-dedup sightings` mode, only responses with neither detections
+nor sightings produce **scene** items (`tags.event: "scene"`). Detections without a tracked
+object are not empty-water scenes. Scene cadence is per source: global `-scene-every`
+stays at 60 s for ship cameras; the live-only `Open_ocean_watch` set overrides it with
+`"scene_every_s": 4`. An omitted override inherits the global setting; 0 disables scene
+handling for that source (ordinary hash/new-item behavior), negative intervals are rejected.
+FACT+THUMB ship only after contact traffic; FULL stays on the edge, pull-only. Scenes
+always score below contacts, including suppressed contacts, and never gain contact priority
+from directives or pulls. The Imagery Feed includes **P4 Low / Open ocean · no contacts**
+scene cards, interleaved with other cameras within the same tier. They carry empty
+detection arrays and do not change contact scoring, normalization, object counts, review,
+Commander, escalation or alerts. No contact actions appear on their drawer. The **Cameras**
+strip remains unchanged (latest view, last seen, contact count, "Pull full frame").
 
 **Send full size.** The operator override in the image drawer asks for a name,
 then calls `/api/items/{id}/full-res`. In live mode the bridge calls shore

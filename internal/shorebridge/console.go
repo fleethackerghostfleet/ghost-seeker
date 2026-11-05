@@ -183,7 +183,7 @@ func (c *Console) onSnapshot(snap *Snapshot, pol *pb.Policy) {
 	sightingMode := snap.Counts.Grouped > 0
 	objects := make([]*Object, 0, len(snap.Objects))
 	for _, o := range snap.Objects {
-		if o.Best == nil || o.Scene || (sightingMode && o.SightingID == "") {
+		if o.Best == nil || (!o.Scene && sightingMode && o.SightingID == "") {
 			continue
 		}
 		objects = append(objects, o)
@@ -233,6 +233,15 @@ type objectScore struct {
 // objects sink to the bottom band but stay on the board).
 func scoreObjects(objs []*Object) map[*Object]objectScore {
 	out := make(map[*Object]objectScore, len(objs))
+	contacts := make([]*Object, 0, len(objs))
+	for _, o := range objs {
+		if o.Scene {
+			out[o] = objectScore{centralTier: 4, baseTier: 4}
+		} else {
+			contacts = append(contacts, o)
+		}
+	}
+	objs = contacts
 	maxScore := 0.0
 	for _, o := range objs {
 		maxScore = math.Max(maxScore, o.Best.Score)
@@ -308,8 +317,10 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		cls = "unknown"
 	}
 	cls = strings.ToLower(cls)
-	c.ensureClass(cls)
-	if o.Label != "" {
+	if !o.Scene {
+		c.ensureClass(cls)
+	}
+	if !o.Scene && o.Label != "" {
 		c.ensureClass(strings.ToLower(o.Label))
 	}
 	src := c.ensureSource(b.Source)
@@ -348,7 +359,7 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		Unknownness: b.Unknownness, Unknown: o.Unknown, Score: b.Score, Priority: o.Priority,
 		Suppressed: o.Suppressed, Frames: o.Frames, FramesKnown: o.FramesKnown, Reports: o.Reports,
 		FirstMs: o.FirstMs, LastMs: o.LastMs, Forms: forms, ImageForm: b.ImageForm, FactURL: b.FactURL,
-		Pull: pullState(b.Forms["full"], false),
+		Pull: pullState(b.Forms["full"], o.Scene),
 	}
 	for _, card := range o.Items {
 		if card.Suppressed && card.SuppressedBy != "" {
@@ -357,6 +368,13 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		}
 	}
 	item.Live = live
+	if o.Scene {
+		item.Background = true
+		live.Event, live.Priority = "scene", "P4"
+		live.Label, live.Subtype, live.Override = "", "", ""
+		live.Unknown, live.Unknownness, live.Suppressed = false, 0, false
+		return item
+	}
 
 	det := command.Detection{Class: cls, Conf: b.Conf, Attrs: command.Attributes{}}
 	if b.Box != nil && b.ImageForm != "crop" { // a crop has no frame to place the box in
@@ -677,6 +695,9 @@ func dedupe(labels []string) []string {
 
 func (c *Console) withOverlay(base *command.Item) command.Item {
 	item := *base
+	if isScene(base) {
+		return item
+	}
 	if o := c.overlay[item.ID]; o != nil {
 		item.Manual, item.Reviewed, item.Dismissed, item.Sent, item.SentAt = o.Manual, o.Reviewed, o.Dismissed, o.Sent, o.SentAt
 		item.Decision, item.DecisionNote, item.DecidedAt = o.Decision, o.DecisionNote, o.DecidedAt
@@ -686,6 +707,10 @@ func (c *Console) withOverlay(base *command.Item) command.Item {
 		item.Tier = item.Manual
 	}
 	return item
+}
+
+func isScene(item *command.Item) bool {
+	return item != nil && item.Live != nil && item.Live.Event == "scene"
 }
 
 func (c *Console) itemsLocked() []command.Item {
@@ -699,7 +724,7 @@ func (c *Console) itemsLocked() []command.Item {
 func (c *Console) cdrLocked() int {
 	n := 0
 	for id, o := range c.overlay {
-		if o.Sent && c.base[id] != nil {
+		if o.Sent && c.base[id] != nil && !isScene(c.base[id]) {
 			n++
 		}
 	}
@@ -895,6 +920,11 @@ func (c *Console) patchItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
 		return
 	}
+	if isScene(base) {
+		c.mu.Unlock()
+		writeError(w, http.StatusConflict, "camera overviews cannot be reviewed or escalated")
+		return
+	}
 	o := c.overlayFor(id)
 	if body.Manual != nil {
 		o.Manual = *body.Manual
@@ -955,6 +985,11 @@ func (c *Console) decide(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
 		return
 	}
+	if isScene(base) {
+		c.mu.Unlock()
+		writeError(w, http.StatusConflict, "camera overviews cannot be escalated")
+		return
+	}
 	o := c.overlayFor(id)
 	if !o.Sent && o.Decision != store.DecisionReturn {
 		c.mu.Unlock()
@@ -1000,6 +1035,10 @@ func (c *Console) fullRes(w http.ResponseWriter, r *http.Request) {
 	c.mu.Unlock()
 	if base == nil || base.Live == nil {
 		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
+		return
+	}
+	if isScene(base) {
+		writeError(w, http.StatusConflict, "pull camera overviews from Cameras")
 		return
 	}
 	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: base.Live.ItemID, Form: pb.FormKind_FORM_KIND_FULL, RequestedBy: by, Original: true}}
@@ -1312,7 +1351,7 @@ func (c *Console) predictLocked(suppress, boost []string) ([]previewItem, [4]int
 		item := c.withOverlay(c.base[id])
 		live := item.Live
 		tier, central := item.Tier, item.Central
-		if item.Manual == 0 {
+		if item.Manual == 0 && !isScene(&item) {
 			switch {
 			case !live.Unknown && matchLabel(suppress, live.Override, live.Subtype, live.Label) != "":
 				tier, central = 4, round2(0.05+0.1*item.Edge)
