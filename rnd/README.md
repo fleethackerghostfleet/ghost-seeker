@@ -111,6 +111,8 @@ are validated against predictions; summaries are regenerated on startup and
 atomically replaced after every grade/undo. A torn final line is saved to a
 `.partial-<timestamp>` file before recovery; complete corrupt lines fail closed.
 Do not change metadata underneath an existing session.
+At startup every local image is hashed and compared with the manifest SHA-256;
+missing images or mismatches abort before a grading session can open.
 
 Logs default to `rnd/logs/` (ignored by Git). Preserve the raw journal plus
 `*-summary.json`; the latter is a derived view, not the source of truth.
