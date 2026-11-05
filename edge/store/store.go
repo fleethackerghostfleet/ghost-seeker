@@ -563,7 +563,10 @@ func (s *Store) PutOriginal(ctx context.Context, itemID string, data []byte) err
 	if _, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=? WHERE id=?`, len(data), itemID); err != nil {
 		return err
 	}
-	return os.WriteFile(s.originalPath(itemID), data, 0o644)
+	if err := os.WriteFile(s.originalPath(itemID), data, 0o644); err != nil {
+		return errors.Join(err, s.dropOriginal(ctx, itemID))
+	}
+	return nil
 }
 
 func (s *Store) dropOriginal(ctx context.Context, itemID string) error {
