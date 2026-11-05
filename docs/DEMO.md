@@ -113,8 +113,9 @@ link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/un
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
 (0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
 SameSite=Strict session cookie). `make demo-ui` binds the UI to `127.0.0.1` only (it runs with
-`-demo-accept-any-token`); for a browser on another machine, run `bin/ghost-seeker` with
-`-addr :8090` and without that flag, and enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
+`-demo-accept-any-token`); for a browser on another machine, run the same `make demo-ui` command line
+(all live flags: `-shore`, `-edge`, `-link-listen`, `-dev-token-file`) but with `-addr :8090` and
+without `-demo-accept-any-token`, then enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
 `-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
