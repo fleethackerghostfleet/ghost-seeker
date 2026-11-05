@@ -27,6 +27,8 @@ type Directive struct {
 	Locked   bool   `json:"locked,omitempty"`
 	LockedBy string `json:"lockedBy,omitempty"`
 	Blocked  string `json:"blocked,omitempty"`
+	// ExpiresAtUnixMs is when a timed directive lapses; 0 = until cleared.
+	ExpiresAtUnixMs int64 `json:"expiresAtUnixMs,omitempty"`
 }
 
 type Box struct {

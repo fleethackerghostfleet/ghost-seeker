@@ -538,14 +538,19 @@ func TestTimedLayeredNonJWTEMCONUsesPerLayerExpiryWithoutCompiler(t *testing.T) 
 	}
 }
 
-func TestTimedFlatNonJWTKeepsPolicyExpiry(t *testing.T) {
+func TestTimedFlatNonJWTUsesPerDirectiveExpiry(t *testing.T) {
+	// Without a JWT and starting from a flat policy the directive is still
+	// layered: its EMCON and rule carry the deadline, the policy does not.
 	policy, _, _ := submitTimedDirective(t, &pb.Policy{Interest: &pb.Interest{}}, &command.Compiler{}, false)
-	if policy.GetExpiresAtUnixMs() <= time.Now().Add(29*time.Minute).UnixMilli() ||
-		policy.GetExpiresAtUnixMs() > time.Now().Add(31*time.Minute).UnixMilli() {
-		t.Fatalf("flat policy expiry=%d, want about 30 minutes from now", policy.GetExpiresAtUnixMs())
+	if policy.GetExpiresAtUnixMs() != 0 {
+		t.Fatalf("flat non-JWT policy expiry=%d, want 0", policy.GetExpiresAtUnixMs())
 	}
-	if len(policy.Layers) != 0 {
-		t.Fatalf("flat non-JWT policy unexpectedly gained layers: %+v", policy.Layers)
+	wantAfter := time.Now().Add(29 * time.Minute).UnixMilli()
+	wantBefore := time.Now().Add(31 * time.Minute).UnixMilli()
+	if len(policy.Layers) != 1 || policy.Layers[0].IssuedBy != DefaultOperator || policy.Layers[0].Echelon != pb.Echelon_ECHELON_SHIP ||
+		policy.Layers[0].GetEmcon().GetMode() != pb.EmconMode_EMCON_MODE_SILENT ||
+		policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() < wantAfter || policy.Layers[0].GetEmcon().GetExpiresAtUnixMs() > wantBefore {
+		t.Fatalf("flat non-JWT timed policy=%+v", policy)
 	}
 }
 
