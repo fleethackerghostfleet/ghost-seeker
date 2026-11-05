@@ -5,6 +5,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,6 +32,9 @@ type Service struct {
 	// Embedder compiles natural-language interest into vectors; optional.
 	Embedder inference.Analyzer
 	Signer   *policy.SigningKey
+	// Keys trusts policies signed by higher echelons: a SetPolicy that changes
+	// layers above ECHELON_SHIP must itself verify against this keyring.
+	Keys policy.Keyring
 	// Edge to address downlink to; "" = broadcast to all edges.
 	EdgeID string
 }
@@ -98,14 +102,25 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	s.policyMu.Lock()
 	defer s.policyMu.Unlock()
 	now := s.Clk.Now()
+	prev, err := s.St.GetPolicy(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// The shore signs what the ship console submits, so it must not certify
+	// higher-echelon layers it did not already hold: those only change when
+	// the submitted policy carries a valid signature from a trusted key.
+	if higherLayersChanged(prev, p) {
+		if p.Signature == nil || len(s.Keys) == 0 {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon layers can only be set by a policy signed with a trusted key"))
+		}
+		if err := policy.Verify(p, s.Keys); err != nil {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
+		}
+	}
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
 	}
 	if p.Version == 0 {
-		prev, err := s.St.GetPolicy(ctx)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
 		version := now.UnixMilli()
 		if prev != nil && prev.Version+1 > version {
 			version = prev.Version + 1
@@ -250,4 +265,33 @@ func (s *Service) BlobHandler() http.Handler {
 		w.Header().Set("Content-Disposition", "inline")
 		_, _ = w.Write(data)
 	})
+}
+
+// higherLayersChanged reports whether next carries layers above
+// ECHELON_SHIP that differ from the ones prev already held.
+func higherLayersChanged(prev, next *pb.Policy) bool {
+	var was, now []*pb.PolicyLayer
+	if prev != nil {
+		was = higherLayers(prev.Layers)
+	}
+	now = higherLayers(next.Layers)
+	if len(was) != len(now) {
+		return true
+	}
+	for i := range now {
+		if !proto.Equal(was[i], now[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func higherLayers(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
+	var out []*pb.PolicyLayer
+	for _, l := range layers {
+		if l != nil && l.Echelon > pb.Echelon_ECHELON_SHIP {
+			out = append(out, l)
+		}
+	}
+	return out
 }
