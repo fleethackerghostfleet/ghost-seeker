@@ -7,10 +7,13 @@ window.gsSettings=(()=>{
  const PARTS=[['hstats','Header counts'],['live','Feed status'],['clock','Clock'],['user','Watch station'],['strip','Pipeline strip'],['dirbar','Active directives'],['ov','Thumbnail source & score'],['cl','Thumbnail captions'],['tbox','Thumbnail detection boxes']];
  const DENSITIES=['m','l'];
  const REVIEWS=['all','reviewed','sent','unreviewed'];
- const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:{showDuplicates:false,review:'all'}});
- function cleanFeed(value){return {showDuplicates:value?.showDuplicates===true,review:REVIEWS.includes(value?.review)?value.review:'all'}}
+ const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:{showDuplicates:false,review:'all',dupDefault:'off'}});
+ function cleanFeed(value){return {showDuplicates:value?.showDuplicates===true,review:REVIEWS.includes(value?.review)?value.review:'all',dupDefault:'off'}}
  // "Sent by a person" is a temporary view; a reload must not leave the main feed stuck on it.
- function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';return feed}
+ function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';
+  // Reset legacy auto-saved defaults once; marked settings preserve later user choices.
+  if(value?.dupDefault!=='off')feed.showDuplicates=false;
+  return feed}
  const WIDTHS={controls:[240,480],drawer:[340,780],review:[260,600],priorities:[260,540],briefing:[240,480],commanderQueue:[240,480],commanderBrief:[280,540]};
  function cleanWidths(value){
   const result={};

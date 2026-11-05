@@ -162,19 +162,19 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
 });
 test('feed filters default to hiding duplicates, persist, validate, and return defensive copies',()=>{
  for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
-  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":false,"review":"all"}');
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":false,"review":"all","dupDefault":"off"}');
  }
  const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
  settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
  settings.setFeed({review:'sent'});
- assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',dupDefault:'off'});
  assert.equal(saved().bar,'right');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'all','a reload must not keep the main feed on sent-only');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,false);
  settings.setFeed({review:'unreviewed'});
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
  settings.setFeed({showDuplicates:true,review:'bad'});
- assert.deepEqual(saved().feed,{showDuplicates:true,review:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',dupDefault:'off'});
 });
 function feedContext(){
  const context=setup();
@@ -191,7 +191,7 @@ test('duplicate display defaults off, preserves explicit choices, and resets off
   assert.equal(settingsContext(value).settings.get().feed.showDuplicates,false);
  }
  for(const choice of [true,false]){
-  const {settings,saved,reset}=settingsContext(JSON.stringify({bar:'right',feed:{showDuplicates:choice}}));
+  const {settings,saved,reset}=settingsContext(JSON.stringify({bar:'right',feed:{showDuplicates:choice,dupDefault:'off'}}));
   assert.equal(settings.get().feed.showDuplicates,choice);
   settings.resize('controls',300);
   assert.equal(saved().bar,'right');
@@ -199,6 +199,23 @@ test('duplicate display defaults off, preserves explicit choices, and resets off
   reset();
   assert.equal(settings.get().feed.showDuplicates,false);
   assert.equal(saved().feed.showDuplicates,false);
+  assert.equal(saved().feed.dupDefault,'off');
+ }
+});
+test('legacy duplicate defaults reset once without changing other display preferences',()=>{
+ const prefs={density:'l',theme:'day',prev:'day',bar:'right',hide:['clock','ov'],widths:{controls:300,drawer:400}};
+ for(const choice of [true,false]){
+  const {settings,saved}=settingsContext(JSON.stringify({...prefs,feed:{showDuplicates:choice,review:'reviewed'}}));
+  assert.equal(settings.get().feed.showDuplicates,false);
+  for(const [key,value] of Object.entries(prefs))assert.equal(JSON.stringify(settings.get()[key]),JSON.stringify(value),key);
+  assert.equal(settings.get().feed.review,'reviewed');
+  settings.density('l');
+  assert.equal(saved().feed.dupDefault,'off');
+  assert.equal(saved().feed.showDuplicates,false);
+  settings.setFeed({showDuplicates:true});
+  const reloaded=settingsContext(JSON.stringify(saved())).settings;
+  assert.equal(reloaded.get().feed.showDuplicates,true);
+  for(const [key,value] of Object.entries(prefs))assert.equal(JSON.stringify(reloaded.get()[key]),JSON.stringify(value),key);
  }
 });
 test('duplicate checkbox enables repeats while unique unsent images stay visible when off',()=>{
