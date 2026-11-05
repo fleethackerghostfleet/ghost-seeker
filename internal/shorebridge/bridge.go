@@ -823,6 +823,9 @@ func better(a, b *Card) bool {
 	if formRank[a.ImageForm] != formRank[b.ImageForm] {
 		return formRank[a.ImageForm] > formRank[b.ImageForm]
 	}
+	if (a.Forms["fact"].State == "received") != (b.Forms["fact"].State == "received") {
+		return a.Forms["fact"].State == "received"
+	}
 	return a.CapturedMs > b.CapturedMs
 }
 

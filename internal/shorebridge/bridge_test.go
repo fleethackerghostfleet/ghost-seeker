@@ -64,6 +64,26 @@ func view(id string, ms int64, tags map[string]string, forms map[pb.FormKind]boo
 	return v
 }
 
+func TestGroupKeepsReceivedSummaryWhileNewerSummaryIsPending(t *testing.T) {
+	old := view("old", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true})
+	newer := view("new", 2000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})
+	for _, views := range [][]*pb.ItemView{{old, newer}, {newer, old}} {
+		objects, _ := Group(views, nil, nil)
+		if len(objects) != 1 || objects[0].Best.ID != "old" || objects[0].Best.Forms["fact"].State != "received" || objects[0].LastMs != 2000 || objects[0].Reports != 2 {
+			t.Fatalf("new pending summary hid receipt: %+v", objects)
+		}
+	}
+	newer.FormStates[0].Complete = true
+	objects, _ := Group([]*pb.ItemView{old, newer}, nil, nil)
+	if objects[0].Best.ID != "new" || objects[0].Best.Forms["fact"].State != "received" {
+		t.Fatalf("new received summary did not replace earlier one: %+v", objects[0].Best)
+	}
+	objects, _ = Group([]*pb.ItemView{view("pending", 3000, nil, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: false})}, nil, nil)
+	if objects[0].Best.Forms["fact"].State == "received" {
+		t.Fatal("partial-only sighting gained a receipt")
+	}
+}
+
 func TestGroupBySighting(t *testing.T) {
 	views := []*pb.ItemView{
 		view("a", 1000, map[string]string{"sighting_id": "s1"}, map[pb.FormKind]bool{pb.FormKind_FORM_KIND_FACT: true, pb.FormKind_FORM_KIND_THUMB: true}),
