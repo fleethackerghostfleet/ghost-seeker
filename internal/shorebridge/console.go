@@ -401,6 +401,11 @@ func pullState(full FormStatus, scene bool) command.LivePull {
 		}
 		return command.LivePull{Enabled: false, Label: fmt.Sprintf("Full %s %d%%", what, pct), Reason: fmt.Sprintf("FULL is streaming over the link (%s of %s, resumable).", fmtBytes(full.Received), fmtBytes(full.Bytes))}
 	case "pending":
+		if scene && full.Received == 0 {
+			// Scene FULL is pull-only: the edge holds it (so it shows as a pending form) but never
+			// schedules it. Only an explicit pull releases it.
+			return command.LivePull{Enabled: true, Label: "Pull full frame", Reason: fmt.Sprintf("The edge holds the FULL frame (%s) but scene frames never ship unless asked for; pulling requests it now.", fmtBytes(full.Bytes))}
+		}
 		return command.LivePull{Enabled: false, Label: "Full " + what + " queued", Reason: "FULL is already queued on the edge; it lands when the link allows."}
 	case "offered":
 		if scene {
