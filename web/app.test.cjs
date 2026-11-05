@@ -43,6 +43,18 @@ test('feed density defaults, validates, persists and reloads all sizes',()=>{
  assert.equal(settings.get().density,'xl');
  assert.equal(saved().density,'xl');
 });
+test('feed filters toggle synchronizes expansion and accessibility state',()=>{
+ const context=setup();
+ vm.runInContext(`
+  let expanded=false;
+  $('feedHead').classList.toggle=name=>{if(name!=='filters-open')throw Error(name);return expanded=!expanded};
+  $('feedFilters').setAttribute=(name,value)=>{if(name!=='aria-expanded')throw Error(name);filterExpanded=value};
+  toggleFeedFilters();
+ `,context);
+ assert.equal(vm.runInContext('filterExpanded',context),'true');
+ vm.runInContext('toggleFeedFilters()',context);
+ assert.equal(vm.runInContext('filterExpanded',context),'false');
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);

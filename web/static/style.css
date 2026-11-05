@@ -374,6 +374,7 @@ header{min-width:0;overflow:hidden}
 .theme-day .kb.k4{background:#eef2f5;color:#4c5f6d}
 .theme-day .wb textarea,.theme-day .wb input[type=text]{background:#fff;color:var(--text);border-color:#b6c5d1}
 #pgFeed{overflow:hidden;min-height:0}
+#feedFilters{display:none}
 @media(max-width:900px){
  #pgFeed .strip .st{flex-shrink:0}
 }
@@ -391,6 +392,23 @@ header{min-width:0;overflow:hidden}
  body:has(#pgFeed.on) header :is(.logo,.user,#emconControl){display:none}
  body:has(#pgFeed.on) header nav{flex:1}
  body:has(#pgFeed.on) .banner{font-size:9px;letter-spacing:.08em}
+}
+@media(max-width:700px),(max-width:1023px) and (max-height:500px){
+ #pgFeed .fhead{max-height:60%;overflow-y:auto}
+ #pgFeed .toolbar{gap:8px;padding:4px 10px}
+ #pgFeed .toolbar>*{order:1}
+ #pgFeed #densSeg{order:-2;flex-wrap:nowrap}
+ #pgFeed #feedFilters{display:inline-flex;order:-1}
+ #pgFeed .toolbar button,#pgFeed .toolbar .btn{min-height:44px;min-width:44px}
+ #pgFeed .fhead:not(.filters-open) .toolbar>:not(#densSeg):not(#feedFilters),
+ #pgFeed .fhead:not(.filters-open)>:not(.toolbar){display:none}
+ #pgFeed .density-label{display:none}
+ #pgFeed .feed{padding:8px 10px}
+ body:has(#pgFeed.on) header{height:32px;gap:6px;padding:0 6px}
+ body:has(#pgFeed.on) header :is(.logo,.user,#emconControl){display:none}
+ body:has(#pgFeed.on) header nav{flex:1}
+ body:has(#pgFeed.on) header nav a{font-size:11px;padding:0 8px}
+ body:has(#pgFeed.on) .banner{font-size:9px;letter-spacing:.05em;padding:1px 0}
 }
 .theme-day .wb-chip{background:#f2f6f9;border-color:#b6c5d1;border-left-color:var(--accent)}.theme-day .wb-chip.suppress{border-left-color:var(--p2)}
 .theme-day #wbProposal{background:#fbf4e1;border-color:#c9a24a}
