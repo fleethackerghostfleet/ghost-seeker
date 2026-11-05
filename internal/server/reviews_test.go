@@ -64,3 +64,30 @@ func TestReviews(t *testing.T) {
 		t.Fatal("undo did not restore")
 	}
 }
+
+func TestReviewPreservesEscalation(t *testing.T) {
+	for _, action := range []string{"tier", "accept", "dismiss"} {
+		t.Run(action, func(t *testing.T) {
+			l, err := reviews.Open(filepath.Join(t.TempDir(), "log"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer l.Close()
+			d := store.New(10)
+			d.Add(&command.Item{ID: "i"}, 0)
+			yes := true
+			d.PatchItem("i", nil, nil, nil, &yes)
+			s := New(d)
+			s.SetReviewLog(l)
+			w := httptest.NewRecorder()
+			s.ServeHTTP(w, httptest.NewRequest("POST", "/api/items/i/review", strings.NewReader(`{"reviewer":"A","action":"`+action+`","tier":2}`)))
+			if w.Code != 200 {
+				t.Fatal(w.Body.String())
+			}
+			item, _ := d.GetItem("i")
+			if !item.Sent || !item.Reviewed {
+				t.Fatalf("review lost escalation: %+v", item)
+			}
+		})
+	}
+}

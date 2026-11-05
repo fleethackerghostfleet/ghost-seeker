@@ -53,7 +53,8 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tier := b.Tier
-	dismissed, sent := old.Dismissed, old.Sent
+	var dismissed, sent *bool
+	yes := true
 	switch b.Action {
 	case "tier":
 		if tier < 1 || tier > 4 {
@@ -64,10 +65,10 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		tier = old.CentralTier
 	case "dismiss":
 		tier = 4
-		dismissed = true
+		dismissed = &yes
 	case "cdr":
 		tier = 1
-		sent = true
+		sent = &yes
 	default:
 		writeError(w, 400, "unknown review action")
 		return
@@ -85,8 +86,7 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "cannot persist review")
 		return
 	}
-	yes := true
-	item, cdr, ok := s.store.PatchItem(old.ID, &tier, &yes, &dismissed, &sent)
+	item, cdr, ok := s.store.PatchItem(old.ID, &tier, &yes, dismissed, sent)
 	if !ok {
 		writeError(w, 409, "item evicted after review was logged")
 		return
