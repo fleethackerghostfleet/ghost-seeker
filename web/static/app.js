@@ -487,6 +487,10 @@ function setupTeamSync(available){
   teamSync.on=available&&$('reviewSync').checked;
   try{localStorage.setItem('gs.reviewSync',String(teamSync.on))}catch{}
   if(!teamSync.on&&rv.ask?.team){rv.ask=null;rv.askBusy=false}
+  if(teamSync.on&&rv.ask?.kind==='sug'&&!rv.ask.team){
+   if(reviewerName){const s=rv.ask.s;rv.ask=null;rv.askBusy=false;proposeTeamSuggestion(s)}
+   else toast('Set your reviewer name to share suggestions with the team');
+  }
   renderAsk();if(teamSync.on)refreshTeamProposals();
  };
 }

@@ -115,6 +115,25 @@ test('failed rule after winning resolve defers learning and shows only the actio
  assert.match(vm.runInContext('messages[0]',context),/Accepted, but adding the rule failed: offline — add it on Collection Priorities/);
  assert.equal(context.$('rvAsk').hidden,true);
 });
+test('enabling team sync promotes an open local suggestion only with a reviewer name',async()=>{
+ for(const name of ['Alice','']){
+  const context=setup();
+  vm.runInContext(`reviewerName=${JSON.stringify(name)};messages=[];toast=m=>messages.push(m);calls=[];
+   setupTeamSync(true);rv.ask={kind:'sug',s:{cls:'bird',dir:'raise',n:4,of:5}};
+   request=async(path,method,body)=>{calls.push(path);if(path==='/api/review-sync')return {proposals:[]};return {proposal:{...body,id:'p',status:'pending',proposedBy:reviewerName,votes:{}}}};
+   $('reviewSync').checked=true;$('reviewSync').onchange();`,context);
+  await new Promise(resolve=>setImmediate(resolve));
+  if(name){
+   assert.equal(vm.runInContext('rv.ask.team',context),'p');
+   assert.equal(vm.runInContext("calls.filter(p=>p==='/api/review-sync/proposals').length",context),1);
+   assert.match(context.$('rvAsk').innerHTML,/TEAM DISCUSSION/);
+  }else{
+   assert.equal(vm.runInContext('!!rv.ask&&!rv.ask.team',context),true);
+   assert.equal(vm.runInContext("calls.includes('/api/review-sync/proposals')",context),false);
+   assert.match(vm.runInContext('messages[0]',context),/Set your reviewer name/);
+  }
+ }
+});
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
  const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
