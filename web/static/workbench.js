@@ -220,5 +220,10 @@ const workbench=(()=>{
   };
  }
  function focusInput(){const input=$('nlIn');input.focus();input.setSelectionRange(input.value.length,input.value.length)}
- return {init,live,activate,textChanged};
+ function clearItems(){
+  ++sequence;draft.pins={};versions.forEach(v=>{v.draft.pins={};v.result=[]});
+  after=[];candidates=[];comparison=null;proposal=null;selected=null;confirmedDraft=null;previewReady=false;compiling=null;interpretationPending=false;
+  if(initialized){$('wbConfirm').close();$('wbGrid').innerHTML='';$('wbWhy').innerHTML='';$('wbDropped').innerHTML='';$('wbProposal').hidden=true;updateApply()}
+ }
+ return {init,live,activate,textChanged,clearItems};
 })();

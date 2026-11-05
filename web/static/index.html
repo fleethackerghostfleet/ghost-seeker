@@ -52,6 +52,7 @@
     <button type="button" class="btn sm" id="feedFilters" aria-expanded="false" aria-controls="feedControls">Filters</button>
     <button type="button" class="btn sm primary" id="clearFeedFilters" hidden>Clear filters</button>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
+    <button class="btn sm" id="resetDemoBtn" hidden>Reset demo</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
     <button class="btn sm" id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing (0)</button>
     <a class="btn sm" href="#briefing">Open briefing</a>
@@ -164,6 +165,7 @@
 <div class="cardmenu" id="cardMenu" role="menu" hidden><button role="menuitem" class="cm-send" id="cmSendNow"><span>➤ Send now</span><small id="cmSendNowSub">Moves this image to the top of the send queue</small></button><button role="menuitem" id="cmOpen"><span>Open image details</span></button></div>
 <div class="toast" id="toast"></div>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
+<dialog id="resetDemoDialog" aria-labelledby="resetDemoTitle"><h3 id="resetDemoTitle">Reset demo?</h3><p>This clears all images, the ship-to-shore upload queue, the Commander list and decisions, and session counters.</p><p>Collection priorities, model, link settings and the review log are kept. New captures keep arriving.</p><div class="wb-row"><button class="btn" id="resetDemoCancel" autofocus>Cancel</button><button class="btn danger" id="resetDemoConfirm">Reset demo</button></div></dialog>
 <dialog id="settings" class="setdlg"></dialog>
 <script src="/settings.js" defer></script>
 <script src="/text-layout.js" defer></script>

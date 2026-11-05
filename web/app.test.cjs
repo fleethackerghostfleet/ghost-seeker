@@ -1267,6 +1267,74 @@ test('empty paused snapshot preserves visible items and queue',()=>{
  assert.equal(vm.runInContext("items.length===1&&pendingItems.length===1",context),true);
 });
 
+for(const paused of [false,true])test(`reset snapshot clears all item state while ${paused?'paused':'live'}`,()=>{
+ const context=setup();
+ vm.runInContext(`
+  applySnapshot({...snapshot([]),epoch:0});state.paused=${paused};
+  items=[normalizeItem(raw('old'))];pendingItems=[{item:raw('queued')}];
+  evictedIDs.add('gone');heldSnapshotIDs=new Set(['old','queued']);imageCache.set('old','image');selectedBands.set('old','EO');
+  state.sel='old';rv.cur=items[0];rv.displayed=items[0];rv.undo=[{id:'old'}];rv.busy=true;lastReview={id:'review'};
+  applySnapshot({...snapshot([]),epoch:1,reset:true});
+ `,context);
+ assert.equal(vm.runInContext(`state.paused===${paused}&&items.length===0&&pendingItems.length===0&&evictedIDs.size===0&&heldSnapshotIDs===null&&imageCache.size===0&&selectedBands.size===0&&state.sel===null&&rv.cur===null&&rv.displayed===null&&rv.undo.length===0&&!rv.busy&&lastReview===null`,context),true);
+ vm.runInContext(`openStream();streamHandlers.item({data:JSON.stringify({item:raw('new'),stats:{}})})`,context);
+ assert.equal(vm.runInContext(paused?"items.length===0&&pendingItems[0].item.id==='new'":"items.length===1&&findItem('new').id==='new'",context),true);
+});
+
+test('epoch change on reconnect clears paused state but same epoch preserves hold',()=>{
+ const context=setup();
+ vm.runInContext(`applySnapshot({...snapshot([raw('old')]),epoch:3});state.paused=true;pendingItems=[{item:raw('queued')}];applySnapshot({...snapshot([]),epoch:3})`,context);
+ assert.equal(vm.runInContext("items.length===1&&pendingItems.length===1",context),true);
+ vm.runInContext(`applySnapshot({...snapshot([raw('reconnected')]),epoch:4})`,context);
+ assert.equal(vm.runInContext("state.paused&&items.length===1&&items[0].id==='reconnected'&&pendingItems.length===0&&heldSnapshotIDs===null&&rv.cur===null",context),true);
+});
+
+test('item write responses cannot resurrect images across reset or insert unknown images',async()=>{
+ for(const path of ['/api/items/old','/api/items/old/review','/api/reviews/r/undo','/api/reviews/r/reason','/api/items/old/upload-override','/api/items/old/full-res','/api/items/old/decision']){
+  const context=setup();
+  vm.runInContext(`applySnapshot({...snapshot([raw('old')]),epoch:0});fetch=()=>new Promise(resolve=>{finish=resolve})`,context);
+  const pending=vm.runInContext(`request(${JSON.stringify(path)},'POST',{})`,context);
+  const rejected=assert.rejects(pending,/no longer available/);
+  vm.runInContext(`applySnapshot({...snapshot([]),epoch:1,reset:true});finish({ok:true,status:200,json:async()=>({item:raw('old'),cdr:1})})`,context);
+  await rejected;
+  assert.equal(vm.runInContext('items.length===0&&pendingItems.length===0',context),true);
+ }
+ const context=setup();
+ vm.runInContext(`fetch=async()=>({ok:true,status:200,json:async()=>({item:raw('unknown')})})`,context);
+ await assert.rejects(vm.runInContext("patchItem('unknown',{manual:1})",context),/no longer available/);
+ assert.equal(vm.runInContext('items.length===0',context),true);
+});
+
+test('reset control is capability gated, viewer hidden, and uses confirmation helper',async()=>{
+ const context=setup();
+ vm.runInContext(`setupDemoReset(false)`,context);
+ assert.equal(context.$('resetDemoBtn').hidden,true);
+ vm.runInContext(`setupDemoReset(true)`,context);
+ assert.equal(context.$('resetDemoBtn').hidden,false);
+ vm.runInContext(`gsAuth={viewer:()=>true};setupDemoReset(true)`,context);
+ assert.equal(context.$('resetDemoBtn').hidden,true);
+ vm.runInContext(`gsAuth={viewer:()=>false};setupDemoReset(true);calls=[];request=async(...args)=>calls.push(args);toast=()=>{};$('resetDemoDialog').close=()=>{};`,context);
+ await context.$('resetDemoConfirm').onclick();
+ assert.equal(vm.runInContext('JSON.stringify(calls)',context),JSON.stringify([['/api/demo/reset','POST',{confirm:'reset'}]]));
+ assert.match(html,/id="resetDemoBtn" hidden/);
+ assert.match(html,/id="resetDemoCancel" autofocus/);
+ assert.match(source,/document.querySelector\('dialog\[open\]'\).*return/);
+});
+
+test('Commander reset clears selection, undo, busy state and rejects delayed writes',async()=>{
+ const elements=new Map(),context=vm.createContext({imageCache:new Map(),setTimeout:()=>{},clearTimeout:()=>{},document:{querySelector:()=>null},$:id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id)}});
+ const cdrSource=fs.readFileSync(path.join(__dirname,'static/cdr.js'),'utf8');
+ vm.runInContext(cdrSource.replace(/init\(\)\.catch\([^\n]+\);\s*$/,''),context);
+ vm.runInContext(`render=()=>{};renderLearned=()=>{};function snap(epoch,reset=false){return {epoch,reset,state:{model:'maritime',directives:[]},items:[]}};applySnapshot(snap(0));items.set('old',{id:'old'});view.sel='old';view.undo=['old'];view.busy=true;imageCache.set('old','image');fetch=()=>new Promise(resolve=>{finish=resolve})`,context);
+ const pending=vm.runInContext("api('/api/items/old/decision','POST',{decision:'close'})",context);
+ const rejected=assert.rejects(pending,/no longer available/);
+ vm.runInContext(`applySnapshot(snap(1,true));finish({ok:true,json:async()=>({item:{id:'old'}})})`,context);
+ await rejected;
+ assert.equal(vm.runInContext('items.size===0&&view.sel===null&&view.undo.length===0&&!view.busy&&imageCache.size===0',context),true);
+ vm.runInContext(`items.set('old',{});view.undo=['old'];applySnapshot(snap(2))`,context);
+ assert.equal(vm.runInContext('items.size===0&&view.undo.length===0',context),true);
+});
+
 test('toggle hold pauses and resume drains pending items',()=>{
  const context=setup();
  vm.runInContext("pendingItems=[{item:raw('queued')}];toggleHold()",context);

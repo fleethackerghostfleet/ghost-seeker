@@ -200,6 +200,7 @@ func main() {
 			len(images), distribution, summary.ImagesWithPerson, summary.PersonDrivenP1)
 		fillDatasetBacklog(data, replay, *backfill, *negativesRate)
 	} else {
+		options = append(options, server.WithDemoReset())
 		generator = sensor.NewGenerator()
 		fillBacklog(data, generator, *backfill)
 	}

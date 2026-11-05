@@ -9,6 +9,7 @@ const FEED_PAGE_SIZE=120;
 let feedLimit=FEED_PAGE_SIZE,feedOrdered=[],renderedFeedIDs=[],renderedFeedReasons=new Map();
 /* LIVE is the shore block of the snapshot when the console runs on a shore node (-shore); null on the simulation. */
 let LIVE=null;
+let snapshotEpoch=null,resetRevision=0;
 let feedReasons=new Map();
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
@@ -210,11 +211,14 @@ function mergeItem(raw,fresh=true){
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
+ const reset=data.reset===true||(snapshotEpoch!==null&&data.epoch!==undefined&&data.epoch!==snapshotEpoch);
+ if(data.epoch!==undefined)snapshotEpoch=data.epoch;
+ if(reset)clearDemoItems();
  data.items=data.items.map(normalizeItem);
  const selection=state.sel;
  for(const item of data.items)dirtyItems.add(item.id);
  const elements=new Map(items.map(item=>[item.id,item.el]));
- if(state.paused){
+ if(state.paused&&!reset){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
   heldSnapshotIDs=new Set(snapshot.keys());
   items=items.map(item=>{const raw=snapshot.get(item.id);return raw?{...normalizeItem(raw),el:item.el}:item});
@@ -235,6 +239,25 @@ function applySnapshot(data){
  rv.cur=rv.cur&&(findItem(rv.cur.id)||rv.cur);
  renderAll();
 }
+function clearDemoItems(){
+ ++resetRevision;items=[];pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
+ dirtyItems.clear();feedOrdered=[];renderedFeedIDs=[];renderedFeedReasons.clear();resetFeedWindow();
+ imageCache.clear();selectedBands.clear();feedReasons.clear();pulling.clear();
+ closeDetail();closeCardMenu();$('drawer').innerHTML='';
+ rv={cur:null,shown:null,displayed:null,navigation:rv.navigation+1,order:rv.order,done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
+ lastReview=null;$('reviewNoteBox').hidden=true;
+ if(typeof workbench!=='undefined')workbench.clearItems();
+}
+function setupDemoReset(enabled){
+ $('resetDemoBtn').hidden=!enabled||(typeof gsAuth!=='undefined'&&gsAuth.viewer());
+ $('resetDemoBtn').onclick=()=>{$('resetDemoDialog').showModal();$('resetDemoCancel').focus()};
+ $('resetDemoCancel').onclick=()=>$('resetDemoDialog').close();
+ $('resetDemoConfirm').onclick=async()=>{
+  const button=$('resetDemoConfirm');button.disabled=true;
+  try{await request('/api/demo/reset','POST',{confirm:'reset'});$('resetDemoDialog').close();toast('Demo reset — new captures keep arriving')}
+  catch(error){toast(error.message)}finally{button.disabled=false}
+ };
+}
 function applyLive(live){
  LIVE=live||null;const cl=document.body?.classList;if(cl?.toggle)cl.toggle('live',!!LIVE);
  if(!LIVE)return;
@@ -252,10 +275,12 @@ function applyItemUpdate(raw){
  mergeItem(raw,false);scheduleFeedFlush();
 }
 async function request(path,method='GET',body){
+ const revision=resetRevision,itemWrite=method!=='GET'&&/^\/api\/(items|reviews)\//.test(path);
  if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method,path);
  const response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const data=response.status===204?null:await response.json();
  if(!response.ok){const error=new Error(data?.message||data?.error||`Request failed (${response.status})`);error.status=response.status;if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
+ if(itemWrite&&(revision!==resetRevision||(data?.item&&!findItem(data.item.id))))throw new Error('Image is no longer available — the feed changed');
  return data;
 }
 async function patchItem(id,changes){
@@ -306,6 +331,7 @@ function openStream(){
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
  const config=await request('/api/config');
+ setupDemoReset(config.demoReset===true);
  setupTeamSync(!!config.reviewSync);
  DATASET_MODE=!!config.datasetMode;
  SOURCES=[{id:'ALL',name:DATASET_MODE?'All sources (combined)':'All sensors (combined)'},...config.sources];
@@ -929,9 +955,10 @@ function renderReviewContent(){
 function rvFlash(msg,col){const f=$('rvFlash');if(!f)return;f.textContent=msg;f.style.color=col;f.classList.add('on');setTimeout(()=>f.classList.remove('on'),300)}
 function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)return;b.classList.add('pressed');setTimeout(()=>b.classList.remove('pressed'),140)}
 function rvAct(a){
+ const revision=resetRevision;
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;setLast(rv.navigation===navigation?'↶ Undone: you are back on that image.':'↶ Undone: previous review was restored.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});return}
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{if(revision!==resetRevision)return;rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;setLast(rv.navigation===navigation?'↶ Undone: you are back on that image.':'↶ Undone: previous review was restored.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{if(revision!==resetRevision)return;rv.busy=false;renderReview();toast(error.message)});return}
  if(!rv.cur||isScene(rv.cur))return;
  if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
  const it=rv.displayed;if(!it||isScene(it)||it.id!==rv.cur.id)return;
@@ -945,7 +972,7 @@ function rvAct(a){
  else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--human)';receipt='✓ Saved: last image sent to the Commander.'}
  else return;
  rv.busy=true;
- submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(!it.detectorNegative&&typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}setLast(receipt+' Press Z to undo.');rvFlash(msg,col);setTimeout(()=>{rv.busy=false;if(rv.cur?.id===it.id){rv.cur=null;rv.shown=null}renderReview()},280)}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});
+ submitReview(it.id,a,changes,p).then(updated=>{if(revision!==resetRevision)return;rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(!it.detectorNegative&&typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}setLast(receipt+' Press Z to undo.');rvFlash(msg,col);setTimeout(()=>{if(revision!==resetRevision)return;rv.busy=false;if(rv.cur?.id===it.id){rv.cur=null;rv.shown=null}renderReview()},280)}).catch(error=>{if(revision!==resetRevision)return;rv.busy=false;renderReview();toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').trim().slice(0,80)}catch{}
