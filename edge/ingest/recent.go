@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"maps"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -33,7 +34,7 @@ func (g *Ingester) remember(c *Capture, hash string) {
 		}
 	}
 	ring := append(g.recent[c.Source], recentFrame{at: c.CapturedAt, data: append([]byte(nil), c.Data...), hash: hash,
-		geo: c.Geo, tags: c.Tags})
+		geo: c.Geo, tags: maps.Clone(c.Tags)}) // snapshot: newItem aliases a capture's Tags into the item's features
 	size := 0
 	for _, f := range ring {
 		size += len(f.data)
@@ -75,7 +76,7 @@ func (g *Ingester) keyCapture(c *Capture, hash string, s *pb.Sighting) (*Capture
 		return c, hash
 	}
 	kc := *c
-	kc.Data, kc.CapturedAt, kc.Geo, kc.Tags = f.data, f.at, f.geo, f.tags
+	kc.Data, kc.CapturedAt, kc.Geo, kc.Tags = f.data, f.at, f.geo, maps.Clone(f.tags)
 	g.LateKeyFrames++
 	return &kc, f.hash
 }

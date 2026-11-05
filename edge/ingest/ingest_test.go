@@ -794,7 +794,7 @@ func TestLateOpenUsesBufferedFrame(t *testing.T) {
 	var caps []*Capture
 	for shade := uint8(10); shade <= 30; shade += 10 {
 		c := capture(clk, shade)
-		c.Geo = &pb.Geo{Lat: float64(shade)}
+		c.Geo, c.Tags = &pb.Geo{Lat: float64(shade)}, map[string]string{"cam": "a"}
 		caps = append(caps, c)
 		if _, err := g.Ingest(ctx, c); err != nil {
 			t.Fatal(err)
@@ -822,6 +822,9 @@ func TestLateOpenUsesBufferedFrame(t *testing.T) {
 	}
 	if got := rows[0].Item.GetGeo().GetLat(); got != seen.Geo.Lat {
 		t.Fatalf("item geo lat = %v, want the buffered frame's %v", got, seen.Geo.Lat)
+	}
+	if _, leaked := g.recent["cam-a"][1].tags["subtype"]; leaked {
+		t.Fatal("the item's feature tags leaked into the buffered frame")
 	}
 	if full := mustRead(t, st, rows[0].Item.Id, pb.FormKind_FORM_KIND_FULL); len(full) == 0 {
 		t.Fatal("no FULL form")
