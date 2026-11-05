@@ -1,9 +1,8 @@
-# Unmerged demo integration
+# Opt-in demo integration
 
 This opt-in HTTP adapter connects IBM Granite to the demo's existing **Collection
-Priorities** workbench. It lives on a separate branch/PR based on `demo`; neither
-`demo` nor `prod` is modified or merged. Product packages do not import research
-packages or load model weights.
+Priorities** workbench on `demo`. Production promotion remains separate. Product
+packages do not import research packages or load model weights.
 
 ## Launch
 
@@ -69,4 +68,4 @@ node --test web/*.test.cjs
 
 Tests cover preview/apply agreement through the existing scorer, exact category
 adaptation, policy isolation, timeouts, malformed output, and pending/blocked/stale
-preview protection. Merging the integration PR requires a separate user decision.
+preview protection. Promotion to production requires a separate user decision.

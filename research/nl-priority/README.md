@@ -5,7 +5,7 @@ Instruct (Q4_K_M)** for language and **Apple MobileCLIP-S1** for visual matching
 The page compares the existing production scorer and scheduler before and after
 an instruction. Apply and undo are explicit; production services are untouched.
 
-For the unmerged integration with the existing demo console, see
+For the opt-in integration with the existing demo console, see
 [DEMO_INTEGRATION.md](DEMO_INTEGRATION.md).
 
 ## Start on a Mac
