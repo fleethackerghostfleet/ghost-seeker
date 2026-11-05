@@ -436,11 +436,8 @@ class InferenceService:
         captured = _get(req, "capturedAtUnixMs", "captured_at_unix_ms")
         captured = int(captured) if captured not in (None, "", 0, "0") else None
         source = str(_get(req, "source", "source", "") or "")
-        if self.mode == "tomer":
-            resp = {"detections": [], "unknownness": 0.0, "modelId": "none", "latencyMs": "0", "sightings": []}
-        else:
-            resp = self.engine.analyze(source, img, captured, list(_get(req, "knownLabels", "known_labels", []) or []),
-                                       bool(_get(req, "wantEmbedding", "want_embedding", False)))
+        resp = self.engine.analyze(source, img, captured, list(_get(req, "knownLabels", "known_labels", []) or []),
+                                   bool(_get(req, "wantEmbedding", "want_embedding", False)))
         if self.prioritizer is not None:
             resp["imagePriority"] = self.prioritizer.score(source, img)
         return resp

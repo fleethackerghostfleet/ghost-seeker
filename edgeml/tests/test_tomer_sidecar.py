@@ -83,6 +83,12 @@ def test_tomer_only_sidecar_reports_health_and_capabilities():
                                      headers={"Content-Type": "application/json"})
         caps = json.load(urllib.request.urlopen(req))
         assert caps["modelId"] == "none" and caps["prioritizer"] == "tomer"
+        a, _ = _frames()
+        req = urllib.request.Request(f"{base}/ghostseeker.v1.InferenceService/Analyze",
+                                     data=json.dumps({"image": _jpeg(a), "source": "cam"}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        assert "imagePriority" in json.load(urllib.request.urlopen(req))
+        assert json.load(urllib.request.urlopen(f"{base}/healthz"))["frames"] == 1
     finally:
         srv.shutdown()
 
