@@ -116,6 +116,12 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		if err := policy.Verify(p, s.Keys); err != nil {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
 		}
+		// The signed version is part of the signed bytes; requiring it to rise
+		// above the stored policy stops an old (revoked) command policy from
+		// being replayed and re-signed by the shore.
+		if p.Version == 0 || (prev != nil && p.Version <= prev.Version) {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", prev.GetVersion()))
+		}
 	}
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())

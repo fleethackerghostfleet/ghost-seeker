@@ -36,7 +36,7 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	command := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72", Rules: []*pb.InterestRule{
 		{Id: "locked", Locked: true, BoostLabels: []string{"submarine"}, Weight: 3},
 	}}
-	layered := &pb.Policy{Id: "layered", IssuedBy: "TAO", Layers: []*pb.PolicyLayer{
+	layered := &pb.Policy{Id: "layered", IssuedBy: "TAO", Version: 10, Layers: []*pb.PolicyLayer{
 		command,
 		{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO", Rules: []*pb.InterestRule{
 			{Id: "blocked", SuppressLabels: []string{"submarine"}},
@@ -50,6 +50,7 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	if err := policy.Sign(layered, "ctf72", cmdPriv); err != nil {
 		t.Fatal(err)
 	}
+	signedCommand := proto.Clone(layered).(*pb.Policy)
 	response, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: layered}))
 	if err != nil {
 		t.Fatal(err)
@@ -75,8 +76,22 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: &pb.Policy{Id: "drop"}})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("dropping the command layer accepted: %v", err)
 	}
-	if next.Msg.Policy.Version != firstVersion+1 {
-		t.Fatalf("next version=%d, want %d", next.Msg.Policy.Version, firstVersion+1)
+	// Command revokes its layer with a newer signed policy...
+	revoke := &pb.Policy{Id: "revoke", IssuedBy: "CTF-72", Version: next.Msg.Policy.Version + 1,
+		Layers: []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "TAO"}}}
+	if err := policy.Sign(revoke, "ctf72", cmdPriv); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: revoke})); err != nil {
+		t.Fatalf("signed revoke refused: %v", err)
+	}
+	// ...and replaying the old signed command policy (lower version) is refused,
+	// so revoked command rules cannot be restored by re-submitting them.
+	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: proto.Clone(signedCommand).(*pb.Policy)})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("replayed signed command policy accepted: %v", err)
+	}
+	if next.Msg.Policy.Version <= firstVersion {
+		t.Fatalf("next version=%d, want > %d", next.Msg.Policy.Version, firstVersion)
 	}
 	if err := policy.Verify(next.Msg.Policy, policy.Keyring{"shore": pub}); err != nil {
 		t.Fatalf("second signature failed verification: %v", err)
