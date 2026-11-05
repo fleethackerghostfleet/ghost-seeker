@@ -59,6 +59,7 @@ func main() {
 	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
 	devTrustPeers := flag.Bool("dev-trust-peers", envBool("GS_DEV_TRUST_PEERS"), "local demo in containers only: with -dev-token-file, also sign in browsers that address localhost from a non-loopback peer (a port published on the host's 127.0.0.1 arrives from the bridge gateway); publish the port on 127.0.0.1 only")
 	authMode := flag.String("auth-mode", envOr("GS_AUTH_MODE", "token"), "web authentication: token or piv")
+	demoAcceptAnyToken := flag.Bool("demo-accept-any-token", false, "INSECURE demo only: accept any non-empty login token as operator (incompatible with PIV)")
 	tlsCert := flag.String("tls-cert", os.Getenv("GS_TLS_CERT"), "HTTPS server certificate")
 	tlsKey := flag.String("tls-key", os.Getenv("GS_TLS_KEY"), "HTTPS server private key")
 	ca := flag.String("piv-ca-bundle", os.Getenv("GS_PIV_CA_BUNDLE"), "local PIV CA bundle")
@@ -69,6 +70,9 @@ func main() {
 	oids := flag.String("piv-policy-oids", os.Getenv("GS_PIV_POLICY_OIDS"), "comma-separated policy OIDs")
 	users := flag.String("piv-users", os.Getenv("GS_PIV_USERS"), "PIV user role mapping")
 	flag.Parse()
+	if *demoAcceptAnyToken && *authMode != "token" {
+		log.Fatal("-demo-accept-any-token requires -auth-mode token; incompatible with PIV")
+	}
 	if err := validateAuthMode(*authMode, *tlsCert, *tlsKey, *ca, *crls, *users); err != nil {
 		log.Fatal(err)
 	}
@@ -85,7 +89,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sessions := opauth.NewSessions(operator, devMode).TrustPeers(*devTrustPeers)
+	sessions := opauth.NewSessions(operator, devMode).TrustPeers(*devTrustPeers).DemoAcceptAnyToken(*demoAcceptAnyToken)
+	if *demoAcceptAnyToken {
+		log.Print("WARNING: INSECURE DEMO MODE (-demo-accept-any-token): ANY non-empty login token grants OPERATOR access. Never enable in production or on an untrusted network.")
+	}
 	if *authMode == "piv" {
 		var policies []string
 		for _, oid := range strings.Split(*oids, ",") {
