@@ -27,3 +27,18 @@ func TestValidateAuthMode(t *testing.T) {
 		t.Fatal("invalid mode accepted")
 	}
 }
+
+func TestValidateReviewLinkAuthMode(t *testing.T) {
+	if err := validateReviewLinkAuthMode("token", "review-link.key"); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReviewLinkAuthMode("token", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReviewLinkAuthMode("piv", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReviewLinkAuthMode("piv", "review-link.key"); err == nil || !strings.Contains(err.Error(), "incompatible with -auth-mode piv") {
+		t.Fatalf("PIV + review link error = %v", err)
+	}
+}

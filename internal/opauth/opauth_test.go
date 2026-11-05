@@ -1,6 +1,7 @@
 package opauth
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -65,6 +66,24 @@ func TestLoadConcurrentDevStart(t *testing.T) {
 		} else if tok != first {
 			t.Fatalf("processes disagree: %q vs %q", tok, first)
 		}
+	}
+}
+
+func TestLoadOrCreateReviewLinkKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "keys", "review-link.key")
+	key, err := LoadOrCreateReviewLinkKey(path)
+	if err != nil || len(key) != 64 {
+		t.Fatalf("generated review key = %q, %v", key, err)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("review key mode = %v, %v", info, err)
+	}
+	loaded, err := LoadOrCreateReviewLinkKey(path)
+	if err != nil || loaded != key {
+		t.Fatalf("loaded review key = %q, %v; want same as generated", loaded, err)
+	}
+	if _, err := LoadOrCreateReviewLinkKey(""); err == nil {
+		t.Fatal("empty review key path accepted")
 	}
 }
 
@@ -205,6 +224,137 @@ func TestSessionsProductionFlow(t *testing.T) {
 	}
 }
 
+func TestReviewJoinLinkIssuesReviewerSession(t *testing.T) {
+	s := NewSessions("secret-token-12345", false).WithReviewJoinKey("review-link-secret")
+	h := s.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, ok := PrincipalFrom(r.Context())
+		if !ok || p.Role != "reviewer" || p.Mode != "token" {
+			t.Errorf("principal = %+v, present = %v", p, ok)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	joined := do(h, http.MethodGet, "/join/review-link-secret", "10.0.0.9:5", nil)
+	cookies := joined.Result().Cookies()
+	if joined.Code != http.StatusSeeOther || joined.Header().Get("Location") != "/#review" {
+		t.Fatalf("join = %d, %q", joined.Code, joined.Header().Get("Location"))
+	}
+	if joined.Header().Get("Cache-Control") != "no-store" || joined.Header().Get("Referrer-Policy") != "no-referrer" {
+		t.Fatalf("join headers = %#v", joined.Header())
+	}
+	if len(cookies) != 1 || cookies[0].Name != CookieName || !cookies[0].HttpOnly {
+		t.Fatalf("join cookies = %+v", cookies)
+	}
+	cookie := cookies[0]
+	auth := do(h, http.MethodGet, "/api/auth", "10.0.0.9:5", nil, cookie)
+	var identity struct {
+		Authenticated bool   `json:"authenticated"`
+		Mode          string `json:"mode"`
+		Role          string `json:"role"`
+	}
+	if err := json.Unmarshal(auth.Body.Bytes(), &identity); err != nil {
+		t.Fatal(err)
+	}
+	if !identity.Authenticated || identity.Mode != "token" || identity.Role != "reviewer" {
+		t.Fatalf("reviewer auth identity = %+v", identity)
+	}
+	if stream := do(h, http.MethodGet, "/api/stream", "10.0.0.9:5", nil, cookie); stream.Code != http.StatusNoContent {
+		t.Fatalf("reviewer stream = %d", stream.Code)
+	}
+}
+
+func TestReviewJoinWrongKeyAndDisabled(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	enabled := NewSessions("secret-token-12345", false).WithReviewJoinKey("review-link-secret").Wrap(next)
+	wrong := do(enabled, http.MethodGet, "/join/wrong-key", "10.0.0.9:5", nil)
+	if wrong.Code != http.StatusNotFound || len(wrong.Result().Cookies()) != 0 {
+		t.Fatalf("wrong key = %d, cookies %+v", wrong.Code, wrong.Result().Cookies())
+	}
+
+	disabled := NewSessions("secret-token-12345", false).Wrap(next)
+	ordinary := do(disabled, http.MethodGet, "/join/anything", "10.0.0.9:5", nil)
+	if ordinary.Code != http.StatusFound || ordinary.Header().Get("Location") != "/login?next=%2Fjoin%2Fanything" {
+		t.Fatalf("disabled join path = %d %q", ordinary.Code, ordinary.Header().Get("Location"))
+	}
+	if len(ordinary.Result().Cookies()) != 0 {
+		t.Fatalf("disabled join issued cookies: %+v", ordinary.Result().Cookies())
+	}
+}
+
+func TestReviewerMethodAllowlistAndOperatorAccess(t *testing.T) {
+	s := NewSessions("secret-token-12345", false).WithReviewJoinKey("review-link-secret")
+	h := s.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, ok := PrincipalFrom(r.Context())
+		if !ok {
+			t.Errorf("no principal for %s %s", r.Method, r.URL.Path)
+		}
+		wantRole := "reviewer"
+		if r.URL.Path == "/api/directives" {
+			wantRole = "operator"
+		}
+		if p.Role != wantRole || p.Mode != "token" {
+			t.Errorf("principal = %+v, want role %s", p, wantRole)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	joined := do(h, http.MethodGet, "/join/review-link-secret", "10.0.0.9:5", nil)
+	cookie := joined.Result().Cookies()[0]
+
+	for _, path := range []string{
+		"/api/items/x/review",
+		"/api/items/x%2Fy/review",
+		"/api/reviews/r/reason",
+		"/api/reviews/r/undo",
+	} {
+		if w := do(h, http.MethodPost, path, "10.0.0.9:5", nil, cookie); w.Code != http.StatusNoContent {
+			t.Errorf("reviewer POST %s = %d: %s", path, w.Code, w.Body.String())
+		}
+	}
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPut, "/api/model"},
+		{http.MethodPost, "/api/directives"},
+		{http.MethodPost, "/api/items/x/upload-override"},
+		{http.MethodPost, "/api/items/x/decision"},
+		{http.MethodPost, "/api/review-sync/proposals"},
+		{http.MethodPost, "/api/auth"},
+		{http.MethodPost, "/login"},
+	} {
+		w := do(h, tc.method, tc.path, "10.0.0.9:5", nil, cookie)
+		if w.Code != http.StatusForbidden || w.Header().Get("Content-Type") != "application/json" {
+			t.Errorf("reviewer %s %s = %d, %s", tc.method, tc.path, w.Code, w.Header().Get("Content-Type"))
+		}
+	}
+	if w := do(h, http.MethodHead, "/api/stream", "10.0.0.9:5", nil, cookie); w.Code != http.StatusNoContent {
+		t.Errorf("reviewer HEAD stream = %d", w.Code)
+	}
+	if w := do(h, http.MethodPost, "/logout", "10.0.0.9:5", nil, cookie); w.Code != http.StatusSeeOther {
+		t.Errorf("reviewer logout = %d", w.Code)
+	}
+	if w := do(h, http.MethodPost, "/api/directives", "10.0.0.9:5", map[string]string{"Authorization": "Bearer secret-token-12345"}); w.Code != http.StatusNoContent {
+		t.Errorf("operator POST directives = %d: %s", w.Code, w.Body.String())
+	}
+	form := map[string]string{
+		"Content-Type": "application/x-www-form-urlencoded",
+		"form":         url.Values{"token": {"secret-token-12345"}}.Encode(),
+	}
+	operatorLogin := do(h, http.MethodPost, "/login", "10.0.0.9:5", form)
+	operatorCookies := operatorLogin.Result().Cookies()
+	if operatorLogin.Code != http.StatusSeeOther || len(operatorCookies) != 1 {
+		t.Fatalf("operator login = %d, cookies %+v", operatorLogin.Code, operatorCookies)
+	}
+	if w := do(h, http.MethodPost, "/api/directives", "10.0.0.9:5", nil, operatorCookies[0]); w.Code != http.StatusNoContent {
+		t.Errorf("operator cookie POST directives = %d: %s", w.Code, w.Body.String())
+	}
+	if w := do(h, http.MethodGet, "/api/auth", "10.0.0.9:5", nil, operatorCookies[0]); !strings.Contains(w.Body.String(), `"role":"operator"`) {
+		t.Errorf("operator cookie identity = %s", w.Body.String())
+	}
+}
+
 func TestSessionsDevTrustPeers(t *testing.T) {
 	s, h := newApp(true)
 	s.TrustPeers(true)
@@ -270,6 +420,29 @@ func TestSessionsDevLoopbackAutoLogin(t *testing.T) {
 	}
 	if w := do(h, http.MethodGet, "/login", "127.0.0.1:1", nil); w.Code != http.StatusFound || w.Header().Get("Location") != "/" {
 		t.Fatalf("dev /login should bounce home: %d %q", w.Code, w.Header().Get("Location"))
+	}
+}
+
+func TestDevLoopbackSessionRoleRemainsOperator(t *testing.T) {
+	s := NewSessions("secret-token-12345", true)
+	h := s.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, ok := PrincipalFrom(r.Context())
+		if !ok || p.Role != "operator" || p.Mode != "token" {
+			t.Errorf("loopback principal = %+v, present = %v", p, ok)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	w := do(h, http.MethodGet, "/api/stream", "127.0.0.1:4242", nil)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("loopback request = %d", w.Code)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("loopback cookies = %+v", cookies)
+	}
+	auth := do(h, http.MethodGet, "/api/auth", "10.0.0.9:5", nil, cookies[0])
+	if !strings.Contains(auth.Body.String(), `"role":"operator"`) {
+		t.Fatalf("loopback session identity = %s", auth.Body.String())
 	}
 }
 

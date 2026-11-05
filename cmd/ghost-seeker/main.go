@@ -67,6 +67,7 @@ func main() {
 	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
 	devTrustPeers := flag.Bool("dev-trust-peers", envBool("GS_DEV_TRUST_PEERS"), "local demo in containers only: with -dev-token-file, also sign in browsers that address localhost from a non-loopback peer (a port published on the host's 127.0.0.1 arrives from the bridge gateway); publish the port on 127.0.0.1 only")
 	authMode := flag.String("auth-mode", envOr("GS_AUTH_MODE", "token"), "web authentication: token or piv")
+	reviewLinkKeyFile := flag.String("review-link-key-file", os.Getenv("GS_REVIEW_LINK_KEY_FILE"), "enable review-only bearer link using this private key file (empty = disabled)")
 	demoAcceptAnyToken := flag.Bool("demo-accept-any-token", false, "INSECURE demo only: accept any non-empty login token as operator (incompatible with PIV)")
 	tlsCert := flag.String("tls-cert", os.Getenv("GS_TLS_CERT"), "HTTPS server certificate")
 	tlsKey := flag.String("tls-key", os.Getenv("GS_TLS_KEY"), "HTTPS server private key")
@@ -83,6 +84,9 @@ func main() {
 	}
 	if math.IsNaN(*negativesRate) || *negativesRate < 0 || *negativesRate > 1 {
 		log.Fatal("-negatives-rate must be in [0,1]")
+	}
+	if err := validateReviewLinkAuthMode(*authMode, *reviewLinkKeyFile); err != nil {
+		log.Fatal(err)
 	}
 	reviewLogSet := false
 	flag.Visit(func(f *flag.Flag) {
@@ -110,6 +114,14 @@ func main() {
 		log.Fatal(err)
 	}
 	sessions := opauth.NewSessions(operator, devMode).TrustPeers(*devTrustPeers).DemoAcceptAnyToken(*demoAcceptAnyToken)
+	if *reviewLinkKeyFile != "" {
+		key, err := opauth.LoadOrCreateReviewLinkKey(*reviewLinkKeyFile)
+		if err != nil {
+			log.Fatalf("review link key: %v", err)
+		}
+		sessions.WithReviewJoinKey(key)
+		log.Printf("review link enabled; key file: %s", *reviewLinkKeyFile)
+	}
 	if *demoAcceptAnyToken {
 		log.Print("WARNING: INSECURE DEMO MODE (-demo-accept-any-token): ANY non-empty login token grants OPERATOR access. Never enable in production or on an untrusted network.")
 	}

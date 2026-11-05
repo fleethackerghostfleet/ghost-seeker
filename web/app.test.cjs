@@ -189,6 +189,13 @@ test('enabling team sync promotes an open local suggestion only with a reviewer 
   }
  }
 });
+test('reviewer sessions keep team sync disabled',()=>{
+ const context=setup();
+ vm.runInContext(`gsAuth={reviewer:()=>true};reviewerName='Alice';setupTeamSync(true);$('reviewSync').checked=true;$('reviewSync').onchange()`,context);
+ assert.equal(vm.runInContext('teamSync.available',context),false);
+ assert.equal(vm.runInContext('teamSync.on',context),false);
+ assert.equal(context.$('reviewSyncLabel').hidden,true);
+});
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
  const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
@@ -486,6 +493,28 @@ test('global keyboard shortcuts ignore input while a dialog is open',()=>{
  assert.equal(vm.runInContext('nightToggles',context),0);
  vm.runInContext(`document.querySelector=()=>null;handlers.keydown({key:'n',target:{tagName:'BODY',closest:selector=>selector.includes('#policyAdmin')?{}:null}})`,context);
  assert.equal(vm.runInContext('nightToggles',context),0);
+});
+test('reviewers cannot use feed priority shortcuts but retain review hotkeys',()=>{
+ const context=setup();
+ vm.runInContext(`
+  handlers={};actions=[];
+  document.querySelector=()=>null;
+  document.addEventListener=(type,handler)=>{if(type==='keydown')handlers[type]=handler};
+  gsPolicy.isPolicyHotkeyTarget=()=>false;
+  gsAuth={viewer:()=>false,reviewer:()=>true};
+  setManual=(id,tier)=>actions.push('feed:'+tier);rvAct=action=>actions.push('review:'+action);
+  state.page='feed';state.sel='item';location={hash:''};
+ `,context);
+ const start=source.indexOf(" document.addEventListener('keydown'");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext(`handlers.keydown({key:'1',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false});
+  handlers.keydown({key:'r',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false})`,context);
+ assert.equal(vm.runInContext('actions.length',context),0);
+ assert.equal(vm.runInContext('location.hash',context),'#review');
+ vm.runInContext(`state.page='rv';handlers.keydown({key:'1',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false})`,context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(actions)',context)),['review:1']);
 });
 test('a blocked lock warning disables workbench confirmation',()=>{
  const context=setup();
