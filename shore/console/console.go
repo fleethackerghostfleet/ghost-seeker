@@ -128,6 +128,24 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 			log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
 			return nil, err
 		}
+		higher := false
+		if prev != nil {
+			for _, layer := range prev.Layers {
+				if layer != nil && layer.Echelon > op.Echelon {
+					higher = true
+					break
+				}
+			}
+		}
+		if higher {
+			deadline := policy.Expiry(prev, 0)
+			if !deadline.After(now) {
+				err := connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("stored policy with higher-echelon layers has expired; it must be reissued by that echelon"))
+				log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
+				return nil, err
+			}
+			p.ExpiresAtUnixMs = deadline.UnixMilli()
+		}
 	}
 	// The shore signs what the ship console submits, so it must not certify
 	// higher-echelon layers it did not already hold: those only change when
@@ -147,21 +165,6 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		}
 	}
 	if s.Operators != nil {
-		preserveExpiry := false
-		if prev != nil {
-			for _, layer := range prev.Layers {
-				if layer != nil && layer.Echelon > op.Echelon {
-					preserveExpiry = true
-					break
-				}
-			}
-		}
-		if preserveExpiry {
-			previousExpiry := prev.GetExpiresAtUnixMs()
-			if previousExpiry == 0 || previousExpiry > now.UnixMilli() {
-				p.ExpiresAtUnixMs = previousExpiry
-			}
-		}
 		p.IssuedBy = op.ID
 		for _, layer := range p.Layers {
 			if layer == nil {

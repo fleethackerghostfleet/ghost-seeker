@@ -100,7 +100,7 @@ func TestSetPolicyOperatorAuthentication(t *testing.T) {
 	})
 
 	t.Run("ship token preserves command layer and sets its own issuer", func(t *testing.T) {
-		initial := &pb.Policy{Layers: []*pb.PolicyLayer{commandLayer()}}
+		initial := &pb.Policy{IssuedAtUnixMs: time.Now().UnixMilli(), Layers: []*pb.PolicyLayer{commandLayer()}}
 		svc, st := makeOperatorService(t, initial)
 		requestPolicy := &pb.Policy{Layers: []*pb.PolicyLayer{commandLayer(), shipLayer("spoof")}}
 		got := call(t, svc, operatorRequest(t, requestPolicy, "operator", "TAO-DDG51", pb.Echelon_ECHELON_SHIP), 0)
@@ -245,16 +245,49 @@ func TestShipOperatorCannotShortenPolicyExpiry(t *testing.T) {
 	}
 }
 
-func TestShipOperatorKeepsRequestedExpiryWhenPreviousExpiryExpired(t *testing.T) {
+func TestShipOperatorCannotReviveExpiredHigherEchelonPolicy(t *testing.T) {
 	commandLayer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
 		Rules: []*pb.InterestRule{{Id: "command", Locked: true, BoostLabels: []string{"submarine"}}}}
-	svc, st := makeOperatorService(t, &pb.Policy{
+	initial := &pb.Policy{
 		ExpiresAtUnixMs: time.Now().Add(-time.Hour).UnixMilli(),
 		Layers:          []*pb.PolicyLayer{commandLayer},
-	})
+	}
+	svc, st := makeOperatorService(t, initial)
+	before, err := st.GetPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 	requestedExpiry := time.Now().Add(time.Hour).UnixMilli()
 	request := operatorRequest(t, &pb.Policy{
 		ExpiresAtUnixMs: requestedExpiry,
+		Layers: []*pb.PolicyLayer{
+			proto.Clone(commandLayer).(*pb.PolicyLayer),
+			{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "spoof",
+				Rules: []*pb.InterestRule{{Id: "ship", BoostLabels: []string{"tanker"}}}},
+		},
+	}, "operator", "TAO-DDG51", pb.Echelon_ECHELON_SHIP)
+	if _, err := svc.SetPolicy(context.Background(), request); connect.CodeOf(err) != connect.CodeFailedPrecondition ||
+		!strings.Contains(err.Error(), "stored policy with higher-echelon layers has expired") {
+		t.Fatalf("SetPolicy error=%v, want expired higher-echelon FailedPrecondition", err)
+	}
+	stored, err := st.GetPolicy(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(stored, before) {
+		t.Fatalf("stored policy changed on rejected request: got=%+v want=%+v", stored, before)
+	}
+}
+
+func TestShipOperatorPreservesDefaultDeadlineForHigherEchelonPolicy(t *testing.T) {
+	commandLayer := &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF-72",
+		Rules: []*pb.InterestRule{{Id: "command", Locked: true, BoostLabels: []string{"submarine"}}}}
+	issuedAt := time.Now().Add(-time.Hour).UnixMilli()
+	svc, st := makeOperatorService(t, &pb.Policy{
+		IssuedAtUnixMs: issuedAt,
+		Layers:         []*pb.PolicyLayer{commandLayer},
+	})
+	request := operatorRequest(t, &pb.Policy{
 		Layers: []*pb.PolicyLayer{
 			proto.Clone(commandLayer).(*pb.PolicyLayer),
 			{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: "spoof",
@@ -268,8 +301,9 @@ func TestShipOperatorKeepsRequestedExpiryWhenPreviousExpiryExpired(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := stored.GetExpiresAtUnixMs(); got != requestedExpiry {
-		t.Fatalf("stored expiry=%d, want requested expiry %d", got, requestedExpiry)
+	wantExpiry := issuedAt + policy.DefaultTTL.Milliseconds()
+	if got := stored.GetExpiresAtUnixMs(); got != wantExpiry {
+		t.Fatalf("stored expiry=%d, want effective default deadline %d", got, wantExpiry)
 	}
 }
 
@@ -304,7 +338,7 @@ func TestOperatorAttributionAndEMCONUseCallerEchelon(t *testing.T) {
 		Rules:    []*pb.InterestRule{{Id: "ship", Author: "spoof", BoostLabels: []string{"tanker"}}},
 		Emcon:    &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_SILENT, SetBy: "spoof", Echelon: pb.Echelon_ECHELON_COMMAND},
 	}
-	svc, _ := makeOperatorService(t, &pb.Policy{Layers: []*pb.PolicyLayer{commandLayer}})
+	svc, _ := makeOperatorService(t, &pb.Policy{IssuedAtUnixMs: time.Now().UnixMilli(), Layers: []*pb.PolicyLayer{commandLayer}})
 	request := operatorRequest(t, &pb.Policy{
 		IssuedBy: "spoof",
 		Layers: []*pb.PolicyLayer{
