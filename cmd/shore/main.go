@@ -43,6 +43,7 @@ func main() {
 	key := flag.String("signing-key", env("GS_SIGNING_KEY", ""), "HS256 signing key (prefer env or file)")
 	keyFile := flag.String("signing-key-file", env("GS_SIGNING_KEY_FILE", ""), "signing key file")
 	signingKey := flag.String("policy-signing-key", env("GS_POLICY_SIGNING_KEY", ""), "JSON Ed25519 policy signing key")
+	policyKeysPath := flag.String("policy-keys", env("GS_POLICY_KEYS", ""), "JSON public keyring; higher-echelon layers must be signed by one of these keys")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
@@ -65,6 +66,10 @@ func main() {
 	con := &console.Service{NodeID: "shore", St: st, Clk: clk, Embedder: emb, EdgeID: *edgeID}
 	if *signingKey != "" {
 		con.Signer, err = policy.LoadSigningKey(*signingKey)
+		fatal(err)
+	}
+	if *policyKeysPath != "" {
+		con.Keys, err = policy.LoadKeyring(*policyKeysPath)
 		fatal(err)
 	}
 
