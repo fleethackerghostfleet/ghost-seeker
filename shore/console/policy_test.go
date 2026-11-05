@@ -91,8 +91,8 @@ func TestSetPolicyFlattensVersionsAndSigns(t *testing.T) {
 	if _, err := svc.SetPolicy(context.Background(), connect.NewRequest(&pb.SetPolicyRequest{Policy: proto.Clone(signedCommand).(*pb.Policy)})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("replayed signed command policy accepted: %v", err)
 	}
-	if next.Msg.Policy.Version != firstVersion+1 {
-		t.Fatalf("next version=%d, want %d (ship edits continue from the signed command version)", next.Msg.Policy.Version, firstVersion+1)
+	if next.Msg.Policy.Version <= firstVersion || next.Msg.Policy.Version < clk.Now().UnixMilli() {
+		t.Fatalf("next version=%d, want > %d and >= clock ms", next.Msg.Policy.Version, firstVersion)
 	}
 	if err := policy.Verify(next.Msg.Policy, policy.Keyring{"shore": pub}); err != nil {
 		t.Fatalf("second signature failed verification: %v", err)

@@ -127,14 +127,14 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
 	}
 	if p.Version == 0 {
-		// Shore-assigned versions continue from the stored one so a signed
-		// higher-echelon issuer can always go one above what GetPolicy shows;
-		// only the very first policy starts from the clock.
-		if prev != nil {
-			p.Version = prev.Version + 1
-		} else {
-			p.Version = now.UnixMilli()
+		// Shore-assigned versions are wall-clock ms (so they stay above any
+		// ms-scale version the edge accepted directly) and strictly above the
+		// stored one; a signed higher-echelon issuer goes one above GetPolicy.
+		version := now.UnixMilli()
+		if prev != nil && prev.Version+1 > version {
+			version = prev.Version + 1
 		}
+		p.Version = version
 	}
 	p.IssuedAtUnixMs = now.UnixMilli()
 	if len(p.Layers) > 0 {
