@@ -275,6 +275,7 @@ async function init(){
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
  $('srcSel').onchange=e=>{gsSettings.setFeed({sensor:e.target.value});syncFeedFilters()};
  $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
+ $('hideUploaded').onchange=e=>{const on=e.target.checked,n=uploadedCount();gsSettings.setFeed({hideUploaded:on});syncFeedFilters();toast(on?n?`Hid ${n} image${n===1?'':'s'} already uploaded to shore. Queued and uploading images stay.`:'No uploaded images to hide yet. Images leave the feed once they reach shore.':`Showing ${n} uploaded image${n===1?'':'s'} again`)};
  $('rvSent').onclick=()=>{gsSettings.setFeed({review:'sent',tier:'all'});syncFeedFilters();location.hash='#feed'};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
  $('clearFeedFilters').onclick=resetFeedFilters;
@@ -334,11 +335,11 @@ function syncFeedFilters(){
  state.src=f.sensor&&SRC[f.sensor]?f.sensor:'ALL';state.tier=f.tier||'all';
  if(state.src!==previousSource){rv.navigation++;rv.cur=null;rv.shown=null;rv.displayed=null}
  if(f.sensor&&state.src!==f.sensor)gsSettings.setFeed({sensor:state.src});
- $('srcSel').value=state.src;$('showDuplicates').checked=f.showDuplicates;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';
- $('clearFeedFilters').hidden=state.src==='ALL'&&state.tier==='all'&&f.review==='all'&&f.showDuplicates;
+ $('srcSel').value=state.src;$('showDuplicates').checked=f.showDuplicates;$('hideUploaded').checked=f.hideUploaded;$('reviewFilter').value=f.review;$('sentOrder').hidden=f.review!=='sent';
+ $('clearFeedFilters').hidden=state.src==='ALL'&&state.tier==='all'&&f.review==='all'&&f.showDuplicates&&!f.hideUploaded;
  closeDetail();renderFeed(true);renderStats();renderRp();
 }
-function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:true});syncFeedFilters()}
+function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:true,hideUploaded:false});syncFeedFilters()}
 function humanReviewed(it){return !isScene(it)&&!!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed))}
 function humanSent(it){return !isScene(it)&&!!(it.sent&&!it.autoSent||it.fullRes)}
 function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
@@ -348,7 +349,7 @@ function feedTier(it){return it.tier}
 function reviewMatch(it,review){return isScene(it)?review==='all':review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
  const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};
- let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i)));
+ let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&!(f.hideUploaded&&uploadState(i).done));
  feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
@@ -358,6 +359,7 @@ function visible(){
  return{l,counts};
 }
 function hideableRepeat(it){return !isScene(it)&&it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
+function uploadedCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&uploadState(i).done).length}
 function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)).length}
 /* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
 function pairRepeats(l){
@@ -441,7 +443,7 @@ function toggleFeedFilters(){
  $('feedFilters').setAttribute('aria-expanded',String(expanded));
 }
 function renderFeed(noAnim){
- const{l,counts}=visible();renderTierSeg(counts);const dc=$('dupCount');if(dc)dc.textContent=String(repeatCount());$('empty').style.display=l.length?'none':'block';
+ const{l,counts}=visible();renderTierSeg(counts);const dc=$('dupCount');if(dc)dc.textContent=String(repeatCount());const uc=$('uploadedCount');if(uc)uc.textContent=String(uploadedCount());$('empty').style.display=l.length?'none':'block';
  if(state.page!=='feed')noAnim=true;
  const grid=$('grid'),first=new Map();
  if(!noAnim)[...grid.children].forEach(c=>first.set(c.dataset.id,c.getBoundingClientRect()));

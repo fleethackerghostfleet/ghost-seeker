@@ -299,19 +299,19 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
 });
 test('feed filters default to showing duplicates, persist, validate, and return defensive copies',()=>{
  for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
-  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all","sensor":"ALL","tier":"all"}');
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all","sensor":"ALL","tier":"all","hideUploaded":false}');
  }
  const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
  settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
  settings.setFeed({review:'sent'});
- assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all',hideUploaded:false});
  assert.equal(saved().bar,'right');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'all','a reload must not keep the main feed on sent-only');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,false);
  settings.setFeed({review:'unreviewed'});
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
  settings.setFeed({showDuplicates:true,review:'bad'});
- assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all',hideUploaded:false});
 });
 test('sensor and priority filters persist, validate, and clear with all feed filters',()=>{
  const stored=settingsContext('{}');
@@ -323,7 +323,7 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  assert.equal(sentReload.sensor,'EO-P7');
  assert.equal(sentReload.tier,'2');
  assert.equal(sentReload.showDuplicates,false);
- assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
+ assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false,hideUploaded:false});
  const context=setup();context.gsSettings=reloaded.settings;
  vm.runInContext("SRC={ALL:{id:'ALL'},'EO-P7':{id:'EO-P7'}};closeDetail=()=>{};syncFeedFilters()",context);
  assert.equal(vm.runInContext('state.src',context),'EO-P7');
@@ -335,7 +335,7 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  assert.equal(vm.runInContext('state.src',context),'ALL');
  assert.equal(vm.runInContext('state.tier',context),'all');
  assert.equal(context.$('clearFeedFilters').hidden,true);
- assert.deepEqual(reloaded.saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ assert.deepEqual(reloaded.saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all',hideUploaded:false});
  reloaded.settings.setFeed({sensor:'missing',tier:'1'});
  vm.runInContext('syncFeedFilters()',context);
  assert.equal(vm.runInContext('state.src',context),'ALL');
@@ -356,6 +356,41 @@ test('sensor persistence accepts exactly the ValidName character set and length'
   const stored=settingsContext('{}');stored.settings.setFeed({sensor});
   assert.equal(settingsContext(JSON.stringify(stored.saved())).settings.get().feed.sensor,'ALL');
  }
+});
+test('hide uploaded filter persists, validates, defaults off and clears with all feed filters',()=>{
+ for(const value of [null,'{}','{"feed":{"hideUploaded":"yes"}}','{"feed":{"hideUploaded":1}}'])assert.equal(settingsContext(value).settings.get().feed.hideUploaded,false);
+ const stored=settingsContext('{}');stored.settings.setFeed({hideUploaded:true});
+ assert.equal(stored.saved().feed.hideUploaded,true);
+ const reloaded=settingsContext(JSON.stringify(stored.saved()));
+ assert.equal(reloaded.settings.get().feed.hideUploaded,true);
+ const context=setup();context.gsSettings=reloaded.settings;
+ vm.runInContext("SRC={ALL:{id:'ALL'}};closeDetail=()=>{};syncFeedFilters()",context);
+ assert.equal(context.$('hideUploaded').checked,true);
+ assert.equal(context.$('clearFeedFilters').hidden,false);
+ vm.runInContext('resetFeedFilters()',context);
+ assert.equal(reloaded.saved().feed.hideUploaded,false);
+ assert.equal(context.$('hideUploaded').checked,false);
+ assert.equal(context.$('clearFeedFilters').hidden,true);
+ assert.match(html,/<label class="feed-check"[^>]*><input type="checkbox" id="hideUploaded"> Hide uploaded <span class="c" id="uploadedCount"[^>]*>0<\/span><\/label>/);
+});
+test('hide uploaded keeps queued, uploading, held and kept-on-ship images and drops completed ones on the next render',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('queued',{upload:{bytes:100,sent:0}}),frame('partial',{upload:{bytes:100,sent:40}}),
+  frame('held',{upload:{bytes:100,sent:0,override:'hold'}}),frame('next',{upload:{bytes:100,sent:10,override:'next'}}),
+  frame('done',{upload:{bytes:100,sent:100,done:true}}),frame('cdr',{sent:true,upload:{bytes:100,sent:100,done:true}}),
+  frame('scene',{tier:4,live:{itemId:'scene',event:'scene',imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},full:{state:'pending',bytes:1000,received:0}}}}),
+  frame('liveDone',{live:{itemId:'liveDone',event:'open',imageForm:'crop',forms:{crop:{state:'received',bytes:50}}}}),
+  frame('livePartial',{live:{itemId:'livePartial',event:'open',imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},crop:{state:'partial',bytes:50,received:20}}}})]`,context);
+ const sorted=()=>vm.runInContext('ids()',context).split(',').sort().join(',');
+ assert.equal(sorted(),'cdr,done,held,liveDone,livePartial,next,partial,queued,scene','default off shows uploaded images');
+ assert.equal(vm.runInContext('uploadedCount()',context),3);
+ vm.runInContext('filters.hideUploaded=true',context);
+ assert.equal(sorted(),'held,livePartial,next,partial,queued,scene');
+ assert.equal(vm.runInContext('uploadedCount()',context),3);
+ vm.runInContext("items.find(i=>i.id==='partial').upload={bytes:100,sent:100,done:true}",context);
+ assert.equal(sorted(),'held,livePartial,next,queued,scene','an image that finishes uploading leaves the feed');
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('uploadedCount()',context),0);
 });
 function feedContext(){
  const context=setup();
