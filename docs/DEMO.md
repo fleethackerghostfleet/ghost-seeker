@@ -40,6 +40,18 @@ link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, product
 
 ## 0. One-time setup
 
+### Demo-only login fallback
+
+`make demo-ui` and `make compose-demo` explicitly enable `-demo-accept-any-token`.
+If automatic sign-in fails, enter **any non-empty token** on the login screen
+to get **operator** access. Empty or whitespace-only tokens are rejected.
+This deliberately insecure mode is off by default, emits a loud startup warning,
+and must never be used in production or on an untrusted network. It cannot be
+combined with `-auth-mode piv` (startup fails). For a manual demo launch, add
+`-demo-accept-any-token` to the `ghost-seeker` command; omit it for normal token
+validation. The real operator token is still required for shore/edge bearer
+authentication; only the UI's login form accepts arbitrary tokens.
+
 ```sh
 # toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
 make build

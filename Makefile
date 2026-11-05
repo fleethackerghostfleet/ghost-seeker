@@ -73,7 +73,7 @@ demo-shore: build demo-key
 	$(BIN)/shore -data data/shore -listen :8080 -dev-token-file $(DEV_TOKEN) -signing-key-file $(DEV_KEY)
 
 demo-ui: build   ## Patrick's operator console (index.html / cdr.html) on live shore data + the shaped link the edge talks through (:18080)
-	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN)
+	$(BIN)/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN) -demo-accept-any-token
 
 MODELS ?= $(or $(GS_MODELS),$(HOME)/models/D)
 PY ?= python
