@@ -7,8 +7,12 @@ const read=name=>fs.readFileSync(path.join(__dirname,'static',name),'utf8');
 test('operator navigation and empty briefing explain the next step',()=>{
  const html=read('index.html'),briefing=read('briefing.js');
  for(const label of ['P1 Critical','P2 High','P3 Routine','P4 Low','⚙ Settings','Size','Collection Priorities','Briefing builder','Open briefing'])assert.ok(html.includes(label),label);
- assert.match(html,/id="briefCreate" title="Select ships in image details before creating a briefing" disabled>Create briefing \(0\)/);
- assert.match(briefing,/selected.size\?'Build a briefing from the selected ship images':'Select ships in image details first'/);
+ assert.match(html,/id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing \(0\)/);
+ assert.match(briefing,/selected.size\?'Create a briefing from the selected ship detections':'Open an image and use Add detection to select ships for the briefing'/);
+ assert.match(briefing,/if\(CLS\[d.cls\]\?\.g!=='vessel'\)return/);
+ assert.match(briefing,/button.textContent=`\$\{selected.has\(key\)\?'Remove':'Add'\} detection/);
+ assert.match(html,/id="pgBrief" aria-label="Briefing workspace"/);
+ assert.match(html,/>Tactical Action Officer<br>/);
  assert.match(briefing,/No briefing snapshot yet/);
 });
 
@@ -19,6 +23,7 @@ test('advanced collection settings are together and collapsed, with active direc
  for(const label of ['Base prioritization model','Effective object weights','Super admin · raw policy (protojson)','Policy audit'])assert.ok(advanced.includes(label),label);
  assert.doesNotMatch(advanced,/<details[^>]*\bopen\b|<h3>Active directives<\/h3>/);
  assert.match(advanced,/id="policyAdmin" hidden/);
+ assert.match(advanced,/<h3>Effective object weights<\/h3><p class="hint" id="wNote"><\/p>/);
  assert.match(html,/>↶ Undo<.*>↷ Redo</);
 });
 

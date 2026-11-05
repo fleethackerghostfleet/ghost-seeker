@@ -27,7 +27,7 @@
     <div class="hstat"><b id="hsCdr" style="color:var(--good)">0</b><span>Sent to Commander</span></div>
   </div>
   <div class="clock mono" id="clock">--:--:--Z</div>
-  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer ·<br><span style="font-size:11px">Watch officer</span></div></div>
+  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:11px">Watch officer</span></div></div>
 </header>
 
 <section class="page on" id="pgFeed">
@@ -40,7 +40,7 @@
     <span class="lbl">Size</span><div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button></div>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
-    <button class="btn sm" id="briefCreate" title="Select ships in image details before creating a briefing" disabled>Create briefing (0)</button>
+    <button class="btn sm" id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing (0)</button>
     <a class="btn sm" href="#briefing">Open briefing</a>
     <div class="spacer"></div>
     <div class="dirbar" id="dirBar"></div>
@@ -87,7 +87,7 @@
    <section class="panel"><div class="wb-row"><h3>Active directives</h3><div class="spacer"></div><button class="btn sm" id="clearDir">Clear all</button></div><p class="hint">The base model sets starting scores. These directives adjust them to reflect what matters to you.</p><div class="dirs" id="directives"></div><div id="policyConflicts"></div></section>
    <details class="panel"><summary>Advanced settings</summary>
    <section class="panel sim-only"><h3>Base prioritization model</h3><p class="hint">The base model gives each object a starting score. Active directives adjust those scores to reflect your priorities; image-specific exceptions override the resulting priority.</p><div class="mrow"><select id="modelSel"></select></div><div class="modeldesc" id="modelDesc"></div></section>
-   <section class="panel sim-only"><h3>Effective object weights <span id="wNote"></span></h3><div id="weights"></div></section>
+   <section class="panel sim-only"><h3>Effective object weights</h3><p class="hint" id="wNote"></p><div id="weights"></div></section>
    <section class="panel" id="policyAdmin" hidden><h3>Super admin · raw policy (protojson)</h3><textarea id="polRaw" spellcheck="false" rows="14"></textarea><div class="wb-row"><button id="polRawValidate">Validate</button><button id="polRawApply" class="primary">Apply</button><button id="polRawReload">Reload</button></div><div id="polRawMsg" role="status"></div></section>
    <section class="panel sim-only" id="policyAudit"><h3>Policy audit · newest 50</h3><div class="policy-table-wrap"><table class="policy-audit"><thead><tr><th>Time</th><th>Who</th><th>Source</th><th>Version</th><th>Text</th><th>Result</th><th>Reason</th></tr></thead><tbody id="policyAuditRows"></tbody></table></div></section>
    </details>
@@ -121,7 +121,7 @@
   </div>
 </section>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
-<section class="page" id="pgBrief" aria-label="Open briefing workspace">
+<section class="page" id="pgBrief" aria-label="Briefing workspace">
  <div class="toolbar"><div><b>Briefing builder</b><div class="hint">Local evidence snapshot · no changes to review or command decisions</div></div><div class="spacer"></div><a class="btn" href="#feed">Back to imagery</a><button class="btn" id="briefRebuild">New snapshot from selection</button><button class="btn" id="briefPDF">Print / Save PDF</button><button class="btn primary" id="briefPPTX">Export PowerPoint</button></div>
  <div id="briefStatus" role="status" aria-live="polite"></div>
  <div class="brief-workspace">

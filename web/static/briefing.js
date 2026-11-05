@@ -23,7 +23,7 @@ const briefing=(()=>{
  function renderSelection(){
   $('briefCount').textContent=selected.size;
   $('briefCreate').textContent=`Create briefing (${selected.size})`;
-  $('briefCreate').title=selected.size?'Build a briefing from the selected ship images':'Select ships in image details first';
+  $('briefCreate').title=selected.size?'Create a briefing from the selected ship detections':'Open an image and use Add detection to select ships for the briefing';
   $('briefCreate').disabled=busy||!selected.size;$('briefRebuild').disabled=busy||!selected.size;
   $('briefClear').disabled=busy||!selected.size;
   const area=$('briefSelection');area.replaceChildren();
