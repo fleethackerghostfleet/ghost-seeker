@@ -27,6 +27,9 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 		if !u.Done && u.Override != override {
 			now := time.Now()
 			u.Override, u.OverrideBy, u.OverrideAt = override, by, &now
+			if override == "hold" {
+				u.Active = false
+			}
 			u.NextOrder = 0
 			if override == "next" {
 				s.uploadOrder++
@@ -42,12 +45,16 @@ func (s *Store) SetLinkBPS(bps int64) []command.Item {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.linkBPS = max(0, bps)
+	s.stats.LinkBPS = s.linkBPS
 	s.uploadRemainder = 0
 	var changed []command.Item
 	for i := range s.items {
 		u := &s.items[i].Upload
 		previous := u.BPS
 		u.BPS = s.linkBPS
+		if s.linkBPS == 0 {
+			u.Active = false
+		}
 		if previous != u.BPS && u.Sent > 0 && !u.Done && u.Override != "hold" {
 			changed = append(changed, cloneItem(s.items[i]))
 		}
@@ -56,7 +63,7 @@ func (s *Store) SetLinkBPS(bps int64) []command.Item {
 }
 
 // AdvanceUploads spends one shared link budget in priority order.
-func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
+func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if elapsed <= 0 || s.linkBPS == 0 {
@@ -70,6 +77,9 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 	budget := int64(math.MaxInt64)
 	if quotient.IsInt64() {
 		budget = quotient.Int64()
+	}
+	if budget == 0 {
+		return nil // sub-byte tick: keep Active so the UI does not flicker
 	}
 	queue := make([]int, 0, len(s.items))
 	for i := range s.items {
@@ -90,17 +100,32 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) []command.Item {
 		}
 		return a.Central > b.Central
 	})
-	var changed []command.Item
+	wasActive := map[int]bool{}
+	for i := range s.items {
+		if s.items[i].Upload.Active {
+			wasActive[i] = true
+			s.items[i].Upload.Active = false
+		}
+	}
+	defer func() {
+		for i := range s.items {
+			if wasActive[i] {
+				changed = append(changed, cloneItem(s.items[i]))
+			}
+		}
+	}()
 	for _, i := range queue {
 		if budget == 0 {
 			break
 		}
+		delete(wasActive, i)
 		u := &s.items[i].Upload
 		n := min(budget, u.Bytes-u.Sent)
 		u.Sent += n
 		s.stats.Bytes += int(n)
 		budget -= n
 		u.Done = u.Sent == u.Bytes
+		u.Active = !u.Done
 		if u.Done {
 			u.Override = ""
 			u.NextOrder = 0

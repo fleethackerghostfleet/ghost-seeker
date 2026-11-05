@@ -15,17 +15,17 @@ func TestSimulationUplinkUsesCurrentBandwidthAndOutages(t *testing.T) {
 	data.Add(&command.Item{ID: "image", KB: 20000}, 0)
 	u.advance(5 * time.Second)
 	it, _ := data.GetItem("image")
-	if it.Upload.Sent != 5_000_000 || it.Upload.BPS != 0 {
+	if it.Upload.Sent != 2_500_000 || it.Upload.BPS != 0 {
 		t.Fatalf("outage: %+v", it.Upload)
 	}
 	u.advance(4 * time.Second)
 	it, _ = data.GetItem("image")
-	if it.Upload.Sent != 5_000_000 {
+	if it.Upload.Sent != 2_500_000 {
 		t.Fatalf("uploaded during outage: %+v", it.Upload)
 	}
 	u.advance(3 * time.Second)
 	it, _ = data.GetItem("image")
-	if it.Upload.Sent != 7_000_000 || it.Upload.BPS != 8_000_000 {
+	if it.Upload.Sent != 3_500_000 || it.Upload.BPS != 4_000_000 {
 		t.Fatalf("recovery: %+v", it.Upload)
 	}
 }
@@ -103,7 +103,7 @@ func TestSimulationUplinkResampleUpdatesOnlyTransferringItems(t *testing.T) {
 	}
 	u := newSimulationUplink(data, -1, func() float64 { return 0 })
 	updates := u.advance(5 * time.Second)
-	if len(updates) != 1 || updates[0].ID != "active" || updates[0].Upload.Sent != 5_000_000 {
+	if len(updates) != 1 || updates[0].ID != "active" || updates[0].Upload.Sent != 2_500_000 {
 		t.Fatalf("expected only moving upload, got %+v", updates)
 	}
 }
@@ -132,7 +132,7 @@ func TestSimulationUplinkRateChangesPublishOnlyPartialUploads(t *testing.T) {
 	}{
 		{"outage", 0, 1},
 		{"unchanged outage", 0, 0},
-		{"recovery", 8_000_000, 1},
+		{"recovery", 4_000_000, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			updates := u.advance(u.untilSample)
@@ -145,5 +145,67 @@ func TestSimulationUplinkRateChangesPublishOnlyPartialUploads(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestSimulatedBandwidthGovernsSendTime: the console's simulated uplink sends
+// an image in exactly bytes ÷ current rate, and nothing during an outage.
+func TestSimulatedBandwidthGovernsSendTime(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		z    float64
+		mbps float64 // MB/s
+	}{{"mean", 0, 0.5}, {"cap", 100, 2}, {"outage", -100, 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := store.New(1)
+			u := newSimulationUplink(data, -1, func() float64 { return tc.z })
+			data.Add(&command.Item{ID: "image", KB: 1000}, 0) // 1,024,512 bytes on the wire
+			if stats, _ := data.Stats(); stats.LinkBPS != int64(tc.mbps*8e6) {
+				t.Fatalf("link rate %d", stats.LinkBPS)
+			}
+			var elapsed time.Duration
+			for step := 100 * time.Millisecond; elapsed < time.Minute; elapsed += step {
+				if it, _ := data.GetItem("image"); it.Upload.Done {
+					break
+				}
+				u.advance(step)
+			}
+			it, _ := data.GetItem("image")
+			if tc.mbps == 0 {
+				if it.Upload.Sent != 0 || it.Upload.Active {
+					t.Fatalf("sent during outage: %+v", it.Upload)
+				}
+				return
+			}
+			want := time.Duration(float64(it.Upload.Bytes) / (tc.mbps * 1e6) * float64(time.Second))
+			t.Logf("%.2f MB image at %.1f MB/s: done after %v (bytes/rate = %v)", float64(it.Upload.Bytes)/1e6, tc.mbps, elapsed, want.Round(time.Millisecond))
+			if !it.Upload.Done || elapsed < want || elapsed > want+100*time.Millisecond {
+				t.Fatalf("done=%v after %v, want %v", it.Upload.Done, elapsed, want)
+			}
+		})
+	}
+}
+
+func TestUploadActiveFlagTracksTheItemOnTheWire(t *testing.T) {
+	data := store.New(10)
+	data.SetLinkBPS(8_000) // 1000 B/s
+	data.Add(&command.Item{ID: "low", KB: 1, Tier: 4}, 0)
+	data.AdvanceUploads(time.Second)
+	if it, _ := data.GetItem("low"); !it.Upload.Active {
+		t.Fatal("moving upload is not marked active")
+	}
+	data.Add(&command.Item{ID: "high", KB: 1, Tier: 1}, 0)
+	updates := data.AdvanceUploads(time.Second)
+	low, _ := data.GetItem("low")
+	high, _ := data.GetItem("high")
+	if low.Upload.Active || !high.Upload.Active {
+		t.Fatalf("pre-empted upload should stop being active: low=%+v high=%+v", low.Upload, high.Upload)
+	}
+	if len(updates) != 2 {
+		t.Fatalf("want updates for the new and the paused upload, got %d", len(updates))
+	}
+	data.SetLinkBPS(0)
+	if it, _ := data.GetItem("high"); it.Upload.Active {
+		t.Fatal("outage must clear active")
 	}
 }

@@ -50,7 +50,7 @@ func New(retain int) *Store {
 	if retain < 1 {
 		retain = 1
 	}
-	return &Store{retain: retain, model: "maritime", linkBPS: 256_000}
+	return &Store{retain: retain, model: "maritime", linkBPS: 256_000, stats: command.Stats{LinkBPS: 256_000}}
 }
 
 func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {

@@ -5,7 +5,7 @@ let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendin
 let LIVE=null;
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
-const fmtRate=bps=>bps>=1e6?`${(bps/1e6).toFixed(1)} Mbps`:`${(bps/1000).toFixed(bps<10000?1:0)} kbps`;
+const fmtRate=bps=>bps>=8e5||bps<=0?`${(Math.max(0,bps)/8e6).toFixed(2)} MB/s`:`${(bps/8e3).toFixed(bps<8e3?1:0)} KB/s`;
 const ago=ms=>{const s=Math.max(0,(Date.now()-ms)/1000);return s<60?`${s|0}s ago`:s<3600?`${(s/60)|0}m ago`:`${(s/3600)|0}h ago`};
 const FORMS=['fact','thumb','crop','full'];
 const FORM_NAME={fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'};
@@ -23,18 +23,27 @@ function uploadState(it){
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
   const f=forms[key]||{};
-  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
+  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
  const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next',queued=!done&&!held&&sent===0;
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
  const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
  const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:queued?'Queued: waiting for bandwidth':paused?transfer:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
- return{bytes,sent,done,queued,label,form,held,next,paused};
+ const sending=!done&&!held&&!paused&&!!u?.active;
+ return{bytes,sent,done,queued,label,form,held,next,paused,sending};
 }
 function uploadHTML(it){
  const u=uploadState(it);
  return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.paused?'Link outage, paused':(u.queued?'Queued for shore':`Uploading to shore · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+}
+function sendMark(it){
+ const u=uploadState(it);
+ return u.done?{cls:'sendmark done',text:'✓',title:'Sent to shore'}:u.sending?{cls:'sendmark sending',text:'↑',title:'Sending to shore now'}:{cls:'sendmark',text:'',title:''};
+}
+function applySendMark(el,it){
+ const m=el.querySelector('.sendmark');if(!m)return;const k=sendMark(it);m.className=k.cls;m.textContent=k.text;m.title=k.title;
+ el.classList?.toggle('sending',k.cls.endsWith('sending'));el.classList?.toggle('uploaded',k.cls.endsWith('done'));
 }
 function uploadControlsHTML(it){
  const u=uploadState(it),live=!!(LIVE||it.live),viewer=typeof gsAuth!=='undefined'&&gsAuth.viewer();
@@ -328,14 +337,14 @@ function topLine(it){
 function cardHTML(it,mini){
  return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;el.className=`card p${it.tier}${it.fresh?' fresh':''}${it.sent?' sent':''}${it.reviewed?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
  el.querySelector('.night-badge')?.remove();el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
  const t=el.querySelector('.tier');t.className='tier t'+it.tier;t.textContent=`P${it.tier} ${TNAME[it.tier]}`;t.title=it.tier===1?'Notify Commander':'Image priority';
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
  el.querySelector('.cs').textContent=it.central.toFixed(2);
- const upload=el.querySelector('.upload-slot');if(upload)upload.innerHTML=uploadHTML(it);
+ const upload=el.querySelector('.upload-slot');if(upload)upload.innerHTML=uploadHTML(it);applySendMark(el,it);
  if(it.live){el.classList.toggle('sup',!!it.live.suppressed);const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?FORM_NAME[it.live.imageForm]:'Summary only';ft.title=it.live.imageForm?`Image shown is the ${FORM_NAME[it.live.imageForm]} (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the image-version labels below for transfer status.`:'Only the object summary has arrived. Images follow as bandwidth becomes available.';el.querySelector('.suptag').title=liveSuppressReason(it).replace(/<[^>]+>/g,'');el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
  const dl=it.central-it.base,de=el.querySelector('.delta');de.className='delta '+(dl>.04?'up':dl<-.04?'dn':'');de.textContent=dl>.04?`▲${dl.toFixed(2).slice(1)}`:dl<-.04?`▼${(-dl).toFixed(2).slice(1)}`:'';
 }
@@ -363,6 +372,7 @@ function renderStats(){
  $('hsImgs').textContent=vis.length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
  const unrevLive=vis.filter(i=>!i.reviewed&&!i.dismissed).length;
  if(LIVE){renderLiveStrip();$('rvCount').textContent=unrevLive||'';if(state.page==='rv')rvProgress();return}
+ renderSimLink();
  $('cCap').textContent=stats.cap.toLocaleString();$('cKeep').textContent=stats.keep;$('cDrop').textContent=stats.drop.toLocaleString();
  $('cKB').textContent=(stats.bytes/1048576).toFixed(1);$('cDb').textContent=stats.db.toLocaleString();$('cP1').textContent=items.filter(i=>i.tier===1).length;
  $('cModel').textContent=(MODELS[state.model]?.name||'').replace(' (default)','')+(state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:'');
@@ -375,23 +385,28 @@ function renderLiveStrip(){
  const L=LIVE;if(!L)return;const sim=$('simStrip'),el=$('liveStrip');if(sim)sim.hidden=true;if(!el)return;el.hidden=false;
  const {shore,edge,link,counts,policy,prioritization}=L;
  const rate=link.controllable?link.bps:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
- const est=edge.ok?edge.estimateBps:shore.estimateBps;
- const relearn=edge.ok&&edge.consecutiveFailures>0?` · estimating speed again: ${edge.consecutiveFailures} failed transfer${edge.consecutiveFailures===1?'':'s'}`:'';
  const d=link.distribution;
- const distribution=d?`<span class="hint">Automatic · normal · ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)} · every ${d.intervalMs/1000}s</span>`:'';
- const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds. The ship's measured estimate may take several transfers to catch up.`:'Ship-to-shore speed is controlled outside this console. Showing the measured estimate.';
+ const linkNote=d?`Simulated · changes every ${d.intervalMs/1000} s`:'Measured by the ship';
+ const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds.`:'Ship-to-shore speed is controlled outside this console.';
  const sightingMode=counts.grouped>0;
  const objsShown=sightingMode?counts.sightings:counts.objects,objsImg=sightingMode?counts.sightingsWithImage:counts.objectsWithImage;
  const preTrack=sightingMode?Math.max(0,counts.objects-counts.sightings):0;
  const dropPct=edge.ok&&(edge.itemsTotal+edge.itemsDeduped)>0?Math.round(100*edge.itemsDeduped/(edge.itemsTotal+edge.itemsDeduped)):0;
  el.innerHTML=`
-  <div class="st link" title="${esc(linkTitle)}">Ship-to-shore connection <b>${fmtRate(rate)}</b>${distribution}${link.controllable&&est?`<span class="hint">ship estimates ${fmtRate(est)}${relearn}</span>`:''}</div><span class="ar">›</span>
+  <div class="st link${rate>0?'':' down'}" title="${esc(linkTitle)}">${linkPanelHTML(rate,linkNote)}</div><span class="ar">›</span>
   <div class="st" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
   <div class="st" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
   <div class="st" title="Image and summary data sent over the connection${link.controllable?` (shore itself counted ${fmtBytes(shore.bytes||0)})`:''}. Compare with what ${edge.itemsDeduped||0} repeated views would have cost to send.">Data transferred <b>${fmtBytes(link.controllable?link.bytes:shore.bytes||0)}</b></div><span class="ar">›</span>
   <div class="st" title="${esc(policy.text?`Operator wrote: “${policy.text}”. The shore read it back as: ${policy.readback}`:policy.readback||'')}">Directive <b class="rb">${esc(policy.text?policy.readback:'none')}</b>${policy.emcon&&policy.emcon.mode&&policy.emcon.mode!=='NORMAL'?` · Transmission mode <b>${esc(policy.emcon.mode)}</b>`:''}</div><span class="ar">›</span>
   <div class="st" id="prioMode" title="Scoring model used on the ship. P1 Critical, P2 High, P3 Routine and P4 Low divide the current shore feed into priority groups (top 10%, next 25%, next 35%, then the rest). Deprioritized objects are P4 Low.">Scoring model <b>${esc(prioritization?.label||'Ship score')}</b>${prioritization?.source==='edge'?'':' <span class="hint">(built-in)</span>'}</div>
   <span class="sv" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span>`;
+}
+function linkPanelHTML(bps,note){
+ return`<span class="lk">Ship-to-shore connection</span> <b>${fmtRate(bps)}</b><span class="hint">${bps>0?esc(note):'Link down — sending paused'}</span>`;
+}
+function renderSimLink(){
+ const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
+ el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,'Simulated · changes every 5 s');
 }
 const pulling=new Set();
 function renderCameras(){

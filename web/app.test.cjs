@@ -430,7 +430,7 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
 test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
  const context=setup();
  assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
- assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 256 kbps/);
+ assert.match(vm.runInContext('uploadHTML({upload:{bytes:40960,sent:12288,bps:256000}})',context),/Uploading to shore: 12.0 KB of 40.0 KB at 32 KB\/s/);
  assert.match(vm.runInContext('uploadHTML({upload:{bytes:40,sent:40,done:true}})',context),/✓ Uploaded/);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:-1,sent:-2,done:true}}).done',context),false);
  assert.equal(vm.runInContext('uploadState({upload:{bytes:10,sent:20}}).sent',context),10);
@@ -627,4 +627,48 @@ test('shipLine formats classified ships and omits absent details',()=>{
  assert.equal(vm.runInContext("shipLine({ship:{type:'unknown',label:'Unknown',conf:0.41}})",context),'Type: Unknown (41%)');
  assert.equal(vm.runInContext("shipLine({ship:{type:'cargo',label:'Cargo',conf:0.7}})",context),'Type: Cargo (70%)');
  assert.equal(vm.runInContext("shipVisibleLine({ship:{features:['radar mast','cranes'],markings:'not visible'}})",context),'Visible: radar mast, cranes · markings not visible');
+});
+test('bandwidth reads in MB/s and the simulation shows one connection value',()=>{
+ const src=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+ const c=vm.createContext({});
+ vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),c);
+ assert.equal(vm.runInContext('fmtRate(4000000)',c),'0.50 MB/s');
+ assert.equal(vm.runInContext('fmtRate(16000000)',c),'2.00 MB/s');
+ assert.equal(vm.runInContext('fmtRate(0)',c),'0.00 MB/s');
+ assert.equal(vm.runInContext('fmtRate(256000)',c),'32 KB/s');
+ const el={innerHTML:'',classList:{on:new Set(),toggle(k,v){v?this.on.add(k):this.on.delete(k)}}};
+ const ctx=vm.createContext({$:id=>id==='stLink'?el:null,esc:s=>String(s),stats:{linkBps:4000000}});
+ vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),ctx);
+ vm.runInContext(src.slice(src.indexOf('function linkPanelHTML('),src.indexOf('const pulling=new Set();')),ctx);
+ vm.runInContext('renderSimLink()',ctx);
+ assert.match(el.innerHTML,/Ship-to-shore connection<\/span> <b>0.50 MB\/s<\/b>.*Simulated · changes every 5 s/);
+ assert.doesNotMatch(el.innerHTML,/estimat/i);
+ assert.equal(el.classList.on.has('down'),false);
+ vm.runInContext('stats.linkBps=0;renderSimLink()',ctx);
+ assert.match(el.innerHTML,/<b>0.00 MB\/s<\/b>.*Link down — sending paused/);
+ assert.equal(el.classList.on.has('down'),true);
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ assert.match(html,/id="simStrip">\s*<div class="st link" id="stLink"/);
+ assert.doesNotMatch(html,/type="range"|linkPresets/);
+});
+test('cards being sent show a blue arrow and sent cards a green check in the top-right corner',()=>{
+ const context=setup();
+ const mark={},classes=new Set();
+ vm.runInContext(source.slice(source.indexOf('function sendMark('),source.indexOf('function uploadControlsHTML(')),context);
+ context.card={querySelector:s=>s==='.sendmark'?mark:null,classList:{toggle(k,v){v?classes.add(k):classes.delete(k)}}};
+ const apply=u=>{context.it={upload:u};vm.runInContext('applySendMark(card,it)',context)};
+ apply({bytes:100,sent:40,bps:8000,active:true});
+ assert.equal(mark.className,'sendmark sending');assert.equal(mark.textContent,'↑');assert.ok(classes.has('sending'));
+ apply({bytes:100,sent:40,bps:8000,active:false});
+ assert.equal(mark.className,'sendmark');assert.equal(classes.size,0);
+ apply({bytes:100,sent:40,bps:0,active:true});
+ assert.equal(mark.className,'sendmark','outage pauses the sending mark');
+ apply({bytes:100,sent:100,done:true});
+ assert.equal(mark.className,'sendmark done');assert.equal(mark.textContent,'✓');assert.ok(classes.has('uploaded'));
+ context.it={live:{imageForm:'thumb',forms:{thumb:{state:'partial',bytes:100,received:10}}}};
+ vm.runInContext('applySendMark(card,it)',context);
+ assert.equal(mark.className,'sendmark sending');
+ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
+ assert.match(css,/\.sendmark\{[^}]*position:absolute;top:5px;right:5px/);
+ assert.match(css,/\.sendmark\.done\{[^}]*background:var\(--good\)/);
 });

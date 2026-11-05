@@ -23,6 +23,23 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .upload-next .upload-bar{border-top:2px solid var(--upload-next);height:7px}
 .upload-next .upload-bar::-webkit-progress-value{background:var(--upload-next)}
 .upload-next .upload-bar::-moz-progress-bar{background:var(--upload-next)}
+.strip .st.link{flex-wrap:nowrap;gap:10px;padding:6px 14px;margin-right:6px;border:1px solid #2f4a63;border-radius:6px;background:#10202d;font-size:13px;color:var(--text)}
+.strip .st.link .lk{font-weight:700}
+.strip .st.link b{font-size:22px;line-height:1.1;color:var(--good)}
+.strip .st.link .hint{font-size:11.5px;margin:0}
+.strip .st.link.down{border-color:var(--p1)}.strip .st.link.down b,.strip .st.link.down .hint{color:var(--p1);font-weight:700}
+.theme-day .strip .st.link{background:#e8f0f6;border-color:#9fb3c4}
+.sendmark{display:none;position:absolute;top:5px;right:5px;z-index:3;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;font-size:15px;font-weight:900;line-height:1;box-shadow:0 0 0 2px #0a0f14b0}
+.sendmark.done{display:flex;background:var(--good);color:#04160e}
+.sendmark.sending{display:flex;background:var(--accent);color:#04121c;animation:sendpulse 1s ease-in-out infinite}
+@keyframes sendpulse{50%{transform:translateY(-2px);opacity:.75}}
+.card.sending,.card.uploaded{--mark-gap:32px}
+.card.sending .newtag,.card.uploaded .newtag,.card.sending .band-badge,.card.uploaded .band-badge{right:var(--mark-gap)}
+.card.sending .night-badge,.card.uploaded .night-badge{top:33px}
+.card.sending{border-color:var(--accent)}
+.card.sending .upload-bar{height:8px}
+.card.sending .upload-label{color:var(--accent);font-weight:800}
+@media(prefers-reduced-motion:reduce){.sendmark.sending{animation:none}}
 .banner{position:relative;z-index:70;background:#007a33;color:#fff;text-align:center;font-weight:700;font-size:11px;letter-spacing:.18em;padding:3px 0;flex:none}
 header{flex:none;display:flex;align-items:center;gap:18px;padding:0 16px;height:54px;border-bottom:1px solid var(--line);background:var(--panel)}
 .logo{display:flex;align-items:center;gap:10px}

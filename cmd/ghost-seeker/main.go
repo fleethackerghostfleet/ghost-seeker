@@ -46,7 +46,7 @@ func main() {
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
-	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–50 Mbps ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
+	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–2 MB/s ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
 	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
@@ -223,7 +223,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 				log.Fatalf("shaper: %v", err)
 			}
 		}()
-		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–50 Mbps, mean 8 Mbps, stddev 4.86 Mbps, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)

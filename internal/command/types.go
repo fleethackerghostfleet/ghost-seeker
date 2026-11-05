@@ -128,6 +128,7 @@ type Upload struct {
 	Bytes      int64      `json:"bytes"`
 	Sent       int64      `json:"sent"`
 	Done       bool       `json:"done"`
+	Active     bool       `json:"active"` // received bytes in the latest link tick
 	BPS        int64      `json:"bps"`
 }
 
@@ -178,4 +179,6 @@ type Stats struct {
 	Drop  int `json:"drop"`
 	Bytes int `json:"bytes"`
 	DB    int `json:"db"`
+	// LinkBPS is the simulated ship-to-shore rate in bits/s (0 = outage).
+	LinkBPS int64 `json:"linkBps"`
 }

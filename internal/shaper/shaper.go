@@ -19,6 +19,12 @@ import (
 	"time"
 )
 
+// Simulated ship-to-shore bandwidth: mean 0.5 MB/s, clipped to 0–2 MB/s.
+const (
+	MeanBps = 4_000_000
+	MaxBps  = 16_000_000
+)
+
 type NormalDistribution struct {
 	MinBps     int64   `json:"minBps"`
 	MaxBps     int64   `json:"maxBps"`
@@ -75,13 +81,13 @@ func New(target string, bps int64) *Shaper {
 }
 
 // NewNormal samples a normal rate immediately, then every five seconds while
-// serving. The distribution is centered on 8 Mbps with 5% of samples at zero;
-// samples outside 0–50 Mbps are clipped (zero means a real link outage).
+// serving. The distribution is centered on 0.5 MB/s with 5% of samples at
+// zero; samples outside 0–2 MB/s are clipped (zero means a real link outage).
+// Rates stay in bits/s internally (1 MB/s = 8,000,000 bit/s).
 func NewNormal(target string) *Shaper {
-	const meanBps = 8_000_000
 	const outageProbability = 0.05
-	stddev := meanBps / (math.Sqrt2 * math.Erfcinv(2*outageProbability))
-	d := NormalDistribution{MinBps: 0, MaxBps: 50_000_000, MeanBps: meanBps, StdDevBps: stddev, IntervalMS: 5000}
+	stddev := MeanBps / (math.Sqrt2 * math.Erfcinv(2*outageProbability))
+	d := NormalDistribution{MinBps: 0, MaxBps: MaxBps, MeanBps: MeanBps, StdDevBps: stddev, IntervalMS: 5000}
 	s := New(target, d.rate(rand.NormFloat64()))
 	s.normal = &d
 	return s
