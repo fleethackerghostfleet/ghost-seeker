@@ -236,8 +236,21 @@ func TestDirectiveEmconPhraseUpdatesShipLayer(t *testing.T) {
 		setPolicy.Layers[1].Emcon == nil || setPolicy.Layers[1].Emcon.Mode != pb.EmconMode_EMCON_MODE_SILENT || setPolicy.Layers[1].Emcon.SetBy != "operator-ui" {
 		t.Fatalf("directive EMCON phrase must set the ship layer EMCON: %+v", setPolicy)
 	}
+	if len(setPolicy.Interest.BoostLabels) != 0 || len(setPolicy.Interest.SuppressLabels) != 0 {
+		t.Fatalf("EMCON-only directive unexpectedly gained labels: %+v", setPolicy.Interest)
+	}
 	if !strings.Contains(rec.Body.String(), "EMCON SILENT") {
 		t.Fatalf("readback missing EMCON: %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy",
+		strings.NewReader(`{"text":"go quiet","boost":["tanker"]}`)))
+	if rec.Code != http.StatusOK || setPolicy.Emcon != pb.EmconMode_EMCON_MODE_SILENT ||
+		setPolicy.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_SILENT ||
+		setPolicy.Layers[1].Emcon == nil || setPolicy.Layers[1].Emcon.Mode != pb.EmconMode_EMCON_MODE_SILENT ||
+		len(setPolicy.Interest.BoostLabels) != 1 || setPolicy.Interest.BoostLabels[0] != "tanker" {
+		t.Fatalf("explicit-label EMCON directive status=%d body=%s policy=%+v", rec.Code, rec.Body.String(), setPolicy)
 	}
 
 	current.EmconSetting.Locked = true
@@ -247,5 +260,13 @@ func TestDirectiveEmconPhraseUpdatesShipLayer(t *testing.T) {
 	if rec.Code != http.StatusOK || setPolicy.Emcon != pb.EmconMode_EMCON_MODE_NORMAL || setPolicy.Layers[1].Emcon != nil ||
 		!strings.Contains(rec.Body.String(), "EMCON locked by CTF-72") {
 		t.Fatalf("locked EMCON must be kept with a warning: status=%d body=%s policy=%+v", rec.Code, rec.Body.String(), setPolicy)
+	}
+
+	rec = httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy",
+		strings.NewReader(`{"text":"go quiet","boost":["tanker"]}`)))
+	if rec.Code != http.StatusOK || setPolicy.Emcon != pb.EmconMode_EMCON_MODE_NORMAL ||
+		setPolicy.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_NORMAL || setPolicy.Layers[1].Emcon != nil {
+		t.Fatalf("explicit-label locked EMCON must keep current mode: status=%d body=%s policy=%+v", rec.Code, rec.Body.String(), setPolicy)
 	}
 }
