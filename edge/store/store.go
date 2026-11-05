@@ -1,6 +1,6 @@
 // Package store is the edge's durable item store: SQLite for metadata and
-// scheduler state, plain files for form payloads. Nothing is ever deleted;
-// the scheduler only changes order.
+// scheduler state, plain files for form payloads. Retention is unlimited unless
+// an explicit cap permits eviction of fully delivered, unprotected items.
 package store
 
 import (
@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -27,6 +28,8 @@ var ErrNotFound = errors.New("not found")
 type Store struct {
 	db      *sql.DB
 	blobDir string
+	mu      sync.Mutex // serializes admission, blob replacement, protection and eviction
+	limits  Limits
 }
 
 // Row is an item plus its scheduler state, as the scheduler and console see it.
@@ -101,6 +104,16 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v BLOB);
 CREATE TABLE IF NOT EXISTS events (
   ts INTEGER NOT NULL, kind TEXT NOT NULL, item_id TEXT, detail TEXT
 );
+CREATE TABLE IF NOT EXISTS eviction_log (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  score REAL NOT NULL,
+  reason TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  cleanup_pending INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS pins (item_id TEXT PRIMARY KEY);
 `
 
 func Open(dataDir string) (*Store, error) {
@@ -113,9 +126,15 @@ func Open(dataDir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(schema); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
-	return &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}, nil
+	s := &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}
+	if err := s.cleanupEvictions(context.Background()); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -124,11 +143,36 @@ func (s *Store) Close() error { return s.db.Close() }
 // bytes of that form; Item.Forms is filled in (bytes, hash) from payloads.
 // Returns the assigned ingest sequence number.
 func (s *Store) Put(ctx context.Context, it *pb.Item, payloads map[pb.FormKind][]byte) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !safeBlobID(it.Id) {
+		return 0, errors.New("invalid item id")
+	}
+	var exists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM items WHERE id=?`, it.Id).Scan(&exists); err != nil {
+		return 0, err
+	}
+	if exists != 0 {
+		return 0, fmt.Errorf("item %s already exists", it.Id)
+	}
+	var bytes int64
+	for _, data := range payloads {
+		bytes += int64(len(data))
+	}
+	if err := s.makeRoom(ctx, bytes, 1, ""); err != nil {
+		return 0, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.RemoveAll(filepath.Join(s.blobDir, it.Id))
+		}
+	}()
 	var seq int64
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(ingest_seq),0)+1 FROM items`).Scan(&seq); err != nil {
 		return 0, err
@@ -172,7 +216,11 @@ func (s *Store) Put(ctx context.Context, it *pb.Item, payloads map[pb.FormKind][
 		it.Id, int(it.Type), it.CapturedAtUnixMs, it.Source, it.ContentHash, seq, raw); err != nil {
 		return 0, err
 	}
-	return seq, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	committed = true
+	return seq, nil
 }
 
 func mimeFor(k pb.FormKind, t pb.ItemType) string {
@@ -402,9 +450,17 @@ func (s *Store) execEach(ctx context.Context, q string, ids []string, lead ...an
 // state, so the new content is re-sent. Used when a FACT changes (label
 // override) after it has already reached shore.
 func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind, data []byte) (*pb.Form, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var path, mime string
-	if err := s.db.QueryRowContext(ctx, `SELECT path, mime FROM forms WHERE item_id=? AND kind=?`, itemID, int(kind)).Scan(&path, &mime); err != nil {
+	var oldBytes int64
+	if err := s.db.QueryRowContext(ctx, `SELECT path, mime, bytes FROM forms WHERE item_id=? AND kind=?`, itemID, int(kind)).Scan(&path, &mime, &oldBytes); err != nil {
 		return nil, err
+	}
+	if growth := int64(len(data)) - oldBytes; growth > 0 {
+		if err := s.makeRoom(ctx, growth, 0, itemID); err != nil {
+			return nil, err
+		}
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return nil, err
@@ -420,6 +476,8 @@ func (s *Store) ReplaceForm(ctx context.Context, itemID string, kind pb.FormKind
 
 // SetAcked records shore's contiguous receipt of a form.
 func (s *Store) SetAcked(ctx context.Context, itemID string, kind pb.FormKind, through int64, complete bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	c := 0
 	if complete {
 		c = 1
@@ -436,6 +494,8 @@ func (s *Store) SetAcked(ctx context.Context, itemID string, kind pb.FormKind, t
 }
 
 func (s *Store) SetPull(ctx context.Context, itemID string, kind pb.FormKind, boost float64, by string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err := s.db.ExecContext(ctx, `UPDATE items SET pull_boost=?, pull_form=?, pull_by=? WHERE id=?`, boost, int(kind), by, itemID)
 	return err
 }

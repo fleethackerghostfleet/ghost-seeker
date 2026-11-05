@@ -147,6 +147,10 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 	st := s.Sch.Stats()
 	resp := &pb.GetStatusResponse{NodeId: s.NodeID, Role: "edge", Link: s.Sch.Link().State(), PolicyId: s.Sch.Policy().Id,
 		BytesSent: st.BytesPayload + st.BytesManifest, ItemsTotal: int64(len(rows))}
+	resp.ItemsEvicted, err = s.St.ItemsEvicted(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	if s.Deduped != nil {
 		resp.ItemsDeduped = s.Deduped()
 	}

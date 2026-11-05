@@ -116,6 +116,7 @@ type NodeStatus struct {
 	OK          bool    `json:"ok"`
 	ItemsTotal  int64   `json:"itemsTotal"`
 	Deduped     int64   `json:"itemsDeduped"` // edge: captures folded into an existing item (hash/sighting duplicates)
+	Evicted     int64   `json:"itemsEvicted"`
 	ItemsUnique int64   `json:"itemsComplete"`
 	Unknown     int64   `json:"itemsUnknown"`
 	Bytes       int64   `json:"bytes"`
@@ -355,6 +356,7 @@ func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 		OK:          true,
 		ItemsTotal:  st.GetItemsTotal(),
 		Deduped:     st.GetItemsDeduped(),
+		Evicted:     st.GetItemsEvicted(),
 		ItemsUnique: st.GetItemsComplete(),
 		Unknown:     st.GetItemsUnknown(),
 		Bytes:       st.GetBytesSent(),

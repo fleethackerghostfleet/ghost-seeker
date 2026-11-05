@@ -659,7 +659,12 @@ func (s *Scheduler) applyResponse(ctx context.Context, resp *pb.ExchangeResponse
 		}
 	}
 	if maxSeq > 0 {
-		return s.st.SetCursor(ctx, maxSeq)
+		if err := s.st.SetCursor(ctx, maxSeq); err != nil {
+			return err
+		}
+	}
+	if err := s.st.EnforceLimits(ctx); err != nil && !errors.Is(err, store.ErrFull) {
+		return err
 	}
 	return nil
 }
