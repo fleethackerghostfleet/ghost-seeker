@@ -96,6 +96,7 @@ message SetPolicyResponse {
   // Preview of effect on the current backlog so the operator can confirm.
   int64 suppressed_count = 2;
   int64 boosted_count = 3;
+  repeated MergeConflict conflicts = 4;
 }
 
 message OverrideLabelRequest {
@@ -124,6 +125,7 @@ message GetStatusResponse {
   int64 bytes_sent = 9;
   string policy_id = 10;
   int64 items_deduped = 11; // edge: captures folded into an existing item (hash or sighting duplicates)
+  int64 items_evicted = 12; // edge: delivered items evicted by the storage cap
 }
 
 message LinkState {
