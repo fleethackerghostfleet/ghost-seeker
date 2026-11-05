@@ -80,7 +80,7 @@ func TestSimulationUplinkSmallRetainBackpressure(t *testing.T) {
 		t.Run(fmt.Sprint(retain), func(t *testing.T) {
 			data := store.New(retain)
 			u := newSimulationUplink(data, -1, func() float64 { return 0 })
-			limit := min(6, max(1, retain)-1)
+			limit := max(1, min(6, max(1, retain)-1))
 			for i := 0; i < limit; i++ {
 				items, _, _, _ := data.Snapshot()
 				if !u.canGenerate(items) {
@@ -92,15 +92,20 @@ func TestSimulationUplinkSmallRetainBackpressure(t *testing.T) {
 			if u.canGenerate(items) {
 				t.Fatalf("admitted at pending cap %d", limit)
 			}
-			if limit == 0 {
-				return
-			}
 			u.advance(20 * time.Second)
 			items, _, _, _ = data.Snapshot()
 			if !u.canGenerate(items) {
 				t.Fatal("did not resume after upload completion")
 			}
-			if _, evicted := data.Add(&command.Item{ID: "new", KB: 32}, 0); evicted != "" {
+			wantEvicted := ""
+			if retain <= 1 {
+				completed, _ := data.GetItem("0")
+				if !completed.Upload.Done {
+					t.Fatal("replacement would evict an unfinished upload")
+				}
+				wantEvicted = "0"
+			}
+			if _, evicted := data.Add(&command.Item{ID: "new", KB: 32}, 0); evicted != wantEvicted {
 				t.Fatalf("unexpected eviction: %s", evicted)
 			}
 			for i := 1; i < limit; i++ {
