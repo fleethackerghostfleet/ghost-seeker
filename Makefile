@@ -2,7 +2,7 @@ GO ?= go
 VERIFY_PYTHON ?= python3
 BIN := bin
 
-.PHONY: all gen build test sim run-shore run-edge compose compose-demo compose-demo-ship compose-demo-down compose-demo-logs clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
+.PHONY: all gen build test sim run-shore run-edge compose compose-demo compose-demo-ship compose-demo-down compose-demo-logs demo-link clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
 
 all: build
 
@@ -108,6 +108,10 @@ compose-demo:    ## build + start the live demo in Docker, then open http://loca
 
 compose-demo-ship: ## print the ship console URL (signs in with the demo's generated operator token)
 	@echo "ship console: http://localhost:8081/#token=$$(docker run --rm --entrypoint cat -v ghost-seeker-demo_demo-secrets:/s:ro ghost-seeker/demo-init:0.1.0 /s/operator.token)"
+
+demo-link:        ## live demo: pin the ship-to-shore link rate, e.g. make demo-link BPS=32000 (BPS=auto restores the automatic link)
+	@case "$(BPS)" in auto) body='{"auto":true}';; ''|*[!0-9]*) echo 'usage: make demo-link BPS=<bits/s>|auto' >&2; exit 2;; *) body='{"bps":$(BPS)}';; esac; \
+	curl -fsS -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8090' -d "$$body" http://localhost:8090/api/shore/link; echo
 
 compose-demo-logs:
 	$(DEMO_COMPOSE_CMD) logs -f
