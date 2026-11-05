@@ -6,6 +6,7 @@
 <title>Ghost Seeker · Commander View</title>
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/cdr.css">
+<link rel="stylesheet" href="/auth.css">
 </head>
 <body>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA · COMMANDER'S FINAL REVIEW</div>
@@ -22,6 +23,8 @@
   <div class="clock mono" id="clock">--:--:--Z</div>
   <a class="wf" href="/" target="_blank" rel="noopener">Watch floor ↗</a>
   <div class="who"><div class="av" title="Commander">CDR</div><div>Commander<br><small>CTF Maritime Ops</small></div></div>
+  <span id="readOnlyBadge" class="read-only-badge" hidden>Read-only</span>
+  <form id="authLogout" class="auth-logout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
 </header>
 <main>
   <aside class="queue">
@@ -36,6 +39,7 @@
 <div class="toast" id="toast"></div>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <script src="/render.js" defer></script>
+<script src="/auth.js"></script>
 <script src="/cdr.js" defer></script>
 </body>
 </html>

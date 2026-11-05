@@ -15,12 +15,16 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
 type Server struct {
+	reviews  *reviews.Log
+	reviewMu sync.Mutex
 	store    *store.Store
 	hub      *hub
 	mux      *http.ServeMux
@@ -56,6 +60,11 @@ func New(data *store.Store, options ...Option) *Server {
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
 	s.mux.HandleFunc("PUT /api/model", s.setModel)
 	s.mux.HandleFunc("PATCH /api/items/{id}", s.patchItem)
+	s.mux.HandleFunc("POST /api/items/{id}/review", s.reviewItem)
+	s.mux.HandleFunc("POST /api/reviews/{id}/reason", s.correctReview)
+	s.mux.HandleFunc("POST /api/reviews/{id}/undo", s.correctReview)
+	s.mux.HandleFunc("GET /api/reviews/summary", s.reviewSummary)
+	s.mux.HandleFunc("GET /api/reviews/export", s.reviewExport)
 	s.mux.HandleFunc("POST /api/items/{id}/decision", s.decide)
 	s.mux.HandleFunc("POST /api/items/{id}/full-res", s.fullRes)
 	s.mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
@@ -244,7 +253,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		if len(labels) == 0 {
 			labels = rule.Attrs
 		}
-		ir := &pb.InterestRule{Id: fmt.Sprintf("new:%d", i), Author: "TAO", Text: body.Text, Weight: rule.Weight}
+		ir := &pb.InterestRule{Id: fmt.Sprintf("new:%d", i), Author: opauth.Actor(r.Context(), "TAO"), Text: body.Text, Weight: rule.Weight}
 		if rule.Type == "suppress" {
 			ir.SuppressLabels = append([]string(nil), labels...)
 		} else {
@@ -276,7 +285,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		} else if len(conflicts) > 0 && conflicts[0] != nil {
 			reason = conflicts[0].Reason
 		}
-		candidate.Id, candidate.IssuedBy, candidate.Text = fmt.Sprintf("sim-%d", time.Now().UnixMilli()), "TAO", strings.TrimSpace(body.Text)
+		candidate.Id, candidate.IssuedBy, candidate.Text = fmt.Sprintf("sim-%d", time.Now().UnixMilli()), opauth.Actor(r.Context(), "TAO"), strings.TrimSpace(body.Text)
 		s.policy.guard.Reject(r.Context(), candidate, "ui", reason, time.Now())
 		writeJSON(w, http.StatusConflict, map[string]any{"error": reason, "conflicts": conflictSummaries(conflicts)})
 		return
@@ -286,7 +295,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
-	if _, err := s.policy.apply("ui", "TAO", directive.Text, time.Now()); err != nil {
+	if _, err := s.policy.apply("ui", opauth.Actor(r.Context(), "TAO"), directive.Text, time.Now()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -358,7 +367,7 @@ func (s *Server) deleteDirective(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, err := s.policy.apply("ui", "TAO", "Directive removed", time.Now()); err != nil {
+	if _, err := s.policy.apply("ui", opauth.Actor(r.Context(), "TAO"), "Directive removed", time.Now()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -371,7 +380,7 @@ func (s *Server) clearDirectives(w http.ResponseWriter, r *http.Request) {
 	s.policy.mu.Lock()
 	defer s.policy.mu.Unlock()
 	s.store.ClearDirectives()
-	if _, err := s.policy.apply("ui", "TAO", "Directives cleared", time.Now()); err != nil {
+	if _, err := s.policy.apply("ui", opauth.Actor(r.Context(), "TAO"), "Directives cleared", time.Now()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -475,7 +484,7 @@ func (s *Server) fullRes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	item, cdr, err := s.store.RequestFullRes(r.PathValue("id"), body.By)
+	item, cdr, err := s.store.RequestFullRes(r.PathValue("id"), opauth.Actor(r.Context(), body.By))
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		http.NotFound(w, r)
@@ -518,8 +527,10 @@ func writeRequestBodyError(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusBadRequest, "invalid JSON body")
 }
 
-// There is no authenticated identity yet, so the log records the source address only.
 func audit(r *http.Request, action string, args ...any) {
+	if p, ok := opauth.PrincipalFrom(r.Context()); ok && p.Mode == "piv" {
+		args = append(args, "actor", p.ID)
+	}
 	fields := make([]string, 0, (len(args)+1)/2)
 	for i := 0; i < len(args); i += 2 {
 		value := ""

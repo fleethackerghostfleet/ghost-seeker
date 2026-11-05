@@ -97,8 +97,9 @@ function renderBrief(it){
 function render(){ensureSel();renderKpis();renderQueue();renderStage()}
 
 async function api(path,method='GET',body){
+ if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
  const r=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
- const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.statusText);return j;
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.statusText);return j;
 }
 async function decide(decision,id=view.sel){
  const it=items.get(id);if(!it||view.busy)return;
@@ -136,12 +137,14 @@ function connect(){
  es.addEventListener('evict',e=>{const{id}=JSON.parse(e.data);if(items.delete(id))render()});
 }
 async function init(){
+ if(typeof gsAuth!=='undefined')await gsAuth.init();
  const c=await api('/api/config');
  SRC=Object.fromEntries(c.sources.map(s=>[s.id,s]));CLS=c.classes;MODELS=c.models;ATTR_LAB=c.attrLabels;
  $('tabs').onclick=e=>{const b=e.target.closest('button');if(b){setTab(b.dataset.t);view.sel=null;render()}};
  $('qlist').onclick=e=>{const r=e.target.closest('.row');if(r){view.sel=r.dataset.id;renderQueue();renderStage()}};
  $('brief').onclick=e=>{const b=e.target.closest('.dec');if(b)decide(b.dataset.d);else if(e.target.id==='reopen')decide('')};
  document.addEventListener('keydown',e=>{
+  if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;
   if(e.target.tagName==='TEXTAREA'){if(e.key==='Escape')e.target.blur();return}
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();

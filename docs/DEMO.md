@@ -11,10 +11,37 @@ Background numbers (edgeml reports C §9 / E headline): tracking + sighting aggr
 → ~0.2 duplicate reports per object vs ~64 naive / ~6.5 image-level dedup; at 72 KB/min
 shore gets an image of 10/10 dev objects vs 2/10 naive.
 
+## Run it in Docker (Mac or Linux laptop, one command)
+
+Prerequisites: **Docker Desktop** (Apple silicon or Intel; ~6 GB free for the images) and,
+once, **gcloud** signed in as a lab student account to pull the clips and models
+(the bucket is not public). No Go, Python or venv needed.
+
+```sh
+make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (gcloud)
+make compose-demo             # builds the four images (first time ~5-10 min), starts the stack
+open http://localhost:8090    # signed in automatically; the edge starts replaying once the sidecar is healthy (~30 s)
+make compose-demo-down        # stop + delete data and credentials -> next `make compose-demo` is a fresh replay
+```
+
+What runs (`deploy/compose/demo.compose.yml`, the same four processes as the native stack below):
+`sidecar` (edgeml image with the tracking extra, CPU torch + boxmot, `--prioritizer both`),
+`shore` (:8080), `ui` (Patrick's console on :8090 + the shaped link on :18080 — the bandwidth
+buttons work), `edge` (replays `scenarios/ghostfleet_demo` at 5 fps through the shaper into the
+sidecar, `-dedup sightings`). A one-shot `init` container writes the operator token, the HS256 unit
+key and the edge's 24 h JWT into the `demo-secrets` volume, so there is nothing to configure; the
+three Go containers run as the distroless `nonroot` user and bind to `127.0.0.1` on the host only.
+`MODELS=/path/to/D make compose-demo` if the models live elsewhere; `make compose-demo-logs` tails
+all four. Shore/edge consoles are also on `127.0.0.1:8080` / `:8081` (bearer: `docker run --rm -v
+ghost-seeker-demo_demo-secrets:/s:ro alpine cat /s/operator.token`).
+
+This is a laptop demo, not the fielding topology — `deploy/compose/docker-compose.yml` (Toxiproxy
+link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, production posture) is unchanged.
+
 ## 0. One-time setup
 
 ```sh
-# toolchain: Go 1.23 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
+# toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
 make build
 make demo-clips        # -> scenarios/ghostfleet_demo/frames/<clip>/{img1,gt,seqinfo.ini}  (gitignored)
 make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB) + mobileclip-s1/unknown_calib.npz (H: dev-fitted unknownness calibration + kNN bank, auto-loaded by the sidecar)

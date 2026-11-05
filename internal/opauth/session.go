@@ -1,15 +1,19 @@
 package opauth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"html"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/pivauth"
 )
 
 // CookieName is the operator session cookie the web app sets.
@@ -22,10 +26,15 @@ const CookieName = "gs_session"
 // zero-step. Everything else: /api/* and /blob/* answer 401 JSON, pages
 // redirect to /login.
 type Sessions struct {
-	token string
-	dev   bool
-	ttl   time.Duration
-	now   func() time.Time
+	token               string
+	dev                 bool
+	anyPeer             bool
+	ttl                 time.Duration
+	now                 func() time.Time
+	certs               *pivauth.Authenticator
+	certRecheckInterval time.Duration
+	audit               *slog.Logger
+	bindings            map[string]pivauth.Principal
 
 	mu       sync.Mutex
 	sessions map[string]time.Time
@@ -39,10 +48,35 @@ func NewSessions(token string, dev bool) *Sessions {
 // Dev reports whether loopback auto-login is on.
 func (s *Sessions) Dev() bool { return s.dev }
 
+// TrustPeers extends dev auto-login to browsers that address a loopback host
+// from any peer address. For containers only: a port published on the host's
+// 127.0.0.1 reaches the process from the bridge gateway, never from loopback,
+// so Loopback alone would send every demo browser to /login. Forwarded
+// headers still disqualify a request. No-op outside dev mode.
+func (s *Sessions) TrustPeers(on bool) *Sessions {
+	s.anyPeer = on
+	return s
+}
+
+// local reports whether r qualifies for dev auto-login.
+func (s *Sessions) local(r *http.Request) bool {
+	if !s.dev {
+		return false
+	}
+	if s.anyPeer {
+		return !forwarded(r) && isLoopbackHost(r.Host)
+	}
+	return Loopback(r)
+}
+
 // Wrap mounts /login, /logout and /api/auth in front of next and enforces
 // authentication on everything else.
 func (s *Sessions) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.certs != nil {
+			s.wrapCerts(next).ServeHTTP(w, r)
+			return
+		}
 		switch {
 		case r.URL.Path == "/login":
 			s.login(w, r)
@@ -55,14 +89,18 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			return
 		}
 		authed := s.authenticated(r)
-		if !authed && s.dev && Loopback(r) {
+		if !authed && s.local(r) {
 			s.issue(w, r)
 			authed = true
 		}
 		if r.URL.Path == "/api/auth" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
-			_ = json.NewEncoder(w).Encode(map[string]any{"authenticated": authed, "dev": s.dev})
+			role := ""
+			if authed {
+				role = "operator"
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"authenticated": authed, "dev": s.dev, "mode": "token", "id": "", "name": "", "role": role})
 			return
 		}
 		if !authed {
@@ -73,6 +111,7 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 			return
 		}
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, Principal{Role: "operator", Mode: "token"}))
 		next.ServeHTTP(w, r)
 	})
 }
@@ -98,7 +137,7 @@ func (s *Sessions) authenticated(r *http.Request) bool {
 	return true
 }
 
-func (s *Sessions) issue(w http.ResponseWriter, r *http.Request) {
+func (s *Sessions) issue(w http.ResponseWriter, r *http.Request, principal ...pivauth.Principal) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return
@@ -109,9 +148,13 @@ func (s *Sessions) issue(w http.ResponseWriter, r *http.Request) {
 	for k, exp := range s.sessions {
 		if now.After(exp) {
 			delete(s.sessions, k)
+			delete(s.bindings, k)
 		}
 	}
 	s.sessions[id] = now.Add(s.ttl)
+	if len(principal) > 0 {
+		s.bindings[id] = principal[0]
+	}
 	s.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{
 		Name: CookieName, Value: id, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode,
@@ -128,7 +171,7 @@ func (s *Sessions) login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	switch r.Method {
 	case http.MethodGet:
-		if s.authenticated(r) || (s.dev && Loopback(r)) {
+		if s.authenticated(r) || s.local(r) {
 			if !s.authenticated(r) {
 				s.issue(w, r)
 			}

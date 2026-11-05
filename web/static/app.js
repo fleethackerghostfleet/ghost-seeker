@@ -84,24 +84,25 @@ async function loadRawPolicy(force){
  if(policyRawTouched&&!force)return;
  try{
   const response=await fetch('/api/policy'),data=await response.json();
-  if(!response.ok)throw new Error(data.error||`Request failed (${response.status})`);
+  if(!response.ok)throw new Error(data.message||data.error||`Request failed (${response.status})`);
   if(force||!policyRawTouched)$('polRaw').value=JSON.stringify(data.policy,null,2);
   $('polRawMsg').textContent='';$('polRawMsg').className='';
  }catch(error){$('polRawMsg').textContent=error.message;$('polRawMsg').className='policy-error'}
 }
 let adminToken='';// super-admin re-auth: operator token, kept in memory only (never stored)
 async function rawPolicyAction(action){
+ if(typeof gsAuth!=='undefined'&&gsAuth.viewer()){toast('read-only role');return}
  const msg=$('polRawMsg');msg.textContent='';msg.className='';
  try{
   if(!adminToken){adminToken=(window.prompt('Super admin: paste the operator token to authorize this policy edit')||'').trim();if(!adminToken)throw new Error('Operator token required for super admin edits')}
   const response=await fetch(`/api/policy${action==='validate'?'/validate':''}`,{method:action==='validate'?'POST':'PUT',headers:{'Content-Type':'application/json',Authorization:`Bearer ${adminToken}`},body:$('polRaw').value});
   const data=await response.json();
   if(response.status===401){adminToken='';throw new Error('Operator token rejected; try again')}
-  if(!response.ok)throw new Error(data.error||`Request failed (${response.status})`);
+  if(!response.ok)throw new Error(data.message||data.error||`Request failed (${response.status})`);
   msg.className='policy-valid';msg.textContent=`Valid · ${(data.conflicts||[]).length} conflicts`;
   msg.insertAdjacentHTML('beforeend',gsPolicy.conflictsHTML(data.conflicts||[]));
   if(action==='apply')policyRawTouched=false;
- }catch(error){msg.textContent=error.message;msg.className='policy-error'}
+ }catch(error){msg.textContent=error.message;msg.className='policy-error';toast(error.message)}
 }
 function selectBand(it,band){
  const bands=it?bandsFor(it):[];if(bands.length<2||!bands.includes(band))return;
@@ -171,9 +172,10 @@ function applyItemUpdate(raw){
  renderFeed();renderStats();renderRp(true);if(state.page==='rv'&&!rv.busy)renderReview();
 }
 async function request(path,method='GET',body){
+ if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
  const response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const data=response.status===204?null:await response.json();
- if(!response.ok){const error=new Error(data?.error||`Request failed (${response.status})`);if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
+ if(!response.ok){const error=new Error(data?.message||data?.error||`Request failed (${response.status})`);if(data?.conflicts?.length){error.policyConflicts=data.conflicts;toast(gsPolicy.conflictToast(data.conflicts))}throw error}
  return data;
 }
 async function patchItem(id,changes){
@@ -219,6 +221,7 @@ function openStream(){
  });
 }
 async function init(){
+ if(typeof gsAuth!=='undefined')await gsAuth.init();
  const config=await request('/api/config');
  SOURCES=[{id:'ALL',name:'All sensors (combined)'},...config.sources];
  SRC=Object.fromEntries(SOURCES.map(source=>[source.id,source]));
@@ -242,9 +245,10 @@ async function init(){
  $('polRawValidate').onclick=()=>rawPolicyAction('validate');$('polRawApply').onclick=()=>rawPolicyAction('apply');$('polRawReload').onclick=()=>{policyRawTouched=false;loadRawPolicy(true)};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
- document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
+ document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
   if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
+  if(state.page==='rv'&&k==='w'){e.preventDefault();openReviewNote();return}
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
   if(k==='b'&&(state.page==='rv'||state.page==='feed')){const it=state.page==='rv'?rv.cur:findItem(state.sel);const bands=it?bandsFor(it):[];if(bands.length>1){e.preventDefault();if(!e.repeat)selectBand(it,bands[(bands.indexOf(bandFor(it))+1)%bands.length])}return}
@@ -490,8 +494,9 @@ function checkLearningSuggestion(){
  if(rv.ask||typeof gsLearn==='undefined')return;
  const s=gsLearn.suggestion();if(s){rv.ask={kind:'sug',s};rv.askBusy=false;renderAsk()}
 }
-function answerWhy(choice){
+async function answerWhy(choice){
  const ask=rv.ask;if(!ask||ask.kind!=='why'||rv.askBusy||typeof gsLearn==='undefined')return;
+ if(choice!=='skip'&&ask.record){rv.askBusy=true;renderAsk();try{await saveReviewReason(ask.record,choice==='wrong'?'wrong_detection':choice)}catch(error){rv.askBusy=false;renderAsk();toast(error.message);return}}
  if(choice==='wrong'){gsLearn.attribute(ask.id,'wrong');toast('Marked as wrong detection — not used for rule suggestions')}
  else gsLearn.attribute(ask.id,choice==='skip'?null:choice);
  rv.ask=null;rv.askBusy=false;renderAsk();checkLearningSuggestion();
@@ -518,9 +523,10 @@ function reviewAskKey(k){
 }
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
+ setupReviewData();
  let it=rv.cur;if(!it||it.reviewed||it.dismissed||!items.includes(it))it=rv.cur=rvQueue()[0]||null;
  rvProgress();renderAsk();
- [...$('rvKeys').children].forEach(b=>{if(b.dataset.a&&b.dataset.a!=='undo')b.disabled=!it});
+ [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||(!it&&b.dataset.a!=='undo')});
  if(!it){rv.shown=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>All caught up</b><div>New images will appear here as sensors report.</div></div><div class="rvflash" id="rvFlash"></div>`;return}
  const key=it.id+':'+it.centralTier+':'+it.central;if(rv.shown===key)return;rv.shown=key;
  const sug=it.centralTier,rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s),why=buildWhy(it,rows).slice(0,4);
@@ -538,8 +544,9 @@ function renderReviewContent(){
 function rvFlash(msg,col){const f=$('rvFlash');if(!f)return;f.textContent=msg;f.style.color=col;f.classList.add('on');setTimeout(()=>f.classList.remove('on'),300)}
 function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)return;b.classList.add('pressed');setTimeout(()=>b.classList.remove('pressed'),140)}
 function rvAct(a){
+ if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;patchItem(p.id,{manual:p.manual,reviewed:p.reviewed,dismissed:p.dismissed,sent:p.sent}).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;toast(error.message)});return}
  const it=rv.cur;if(!it)return;
  if(a==='skip'){rv.skipped[it.id]=Date.now();rv.cur=null;rv.shown=null;renderReview();return}
  const sug=it.centralTier,p={id:it.id,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
@@ -551,7 +558,15 @@ function rvAct(a){
  else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--good)'}
  else return;
  rv.busy=true;
- patchItem(it.id,changes).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
+ submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
+let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').trim().slice(0,80)}catch{}
+let reviewDataReady=false,lastReview=null;
+function refreshReviewData(){if(LIVE){$('reviewData').textContent='Durable review logging is unavailable in live shore mode.';return Promise.resolve()}return request('/api/reviews/summary').then(s=>{$('reviewData').textContent=`${s.count} reviews · ${Math.round(s.agreement*100)}% agreement · `+Object.entries(s.reviewers).map(([n,v])=>`${n}: ${v.count}`).join(', ')}).catch(error=>{$('reviewData').textContent=error.message})}
+function setupReviewData(){if(reviewDataReady)return;reviewDataReady=true;$('reviewerName').value=reviewerName;$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';$('reviewerSave').onclick=()=>{reviewerName=$('reviewerName').value.trim().slice(0,80);try{localStorage.setItem('gsReviewer',reviewerName)}catch{}$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';renderReview()};$('reviewNoteOpen').onclick=openReviewNote;$('reviewNote').onkeydown=async e=>{e.stopPropagation();if(e.key==='Escape'){$('reviewNoteBox').hidden=true;return}if(e.key!=='Enter')return;e.preventDefault();try{await saveReviewReason(lastReview.id,lastReview.reason||'',$('reviewNote').value);lastReview.note=$('reviewNote').value;$('reviewNoteBox').hidden=true;toast('Note saved')}catch(error){toast(error.message)}};refreshReviewData()}
+function openReviewNote(){if(!lastReview){toast('Review an image first');return}$('reviewNoteBox').hidden=false;$('reviewNote').value=lastReview.note||'';$('reviewNote').focus()}
+async function submitReview(id,action,changes,p){if(LIVE)return patchItem(id,changes);const r=await request(`/api/items/${encodeURIComponent(id)}/review`,'POST',{reviewer:reviewerName,action:'1234'.includes(action)?'tier':action,tier:changes.manual});p.record=r.record.id;lastReview=r.record;cdr=r.cdr;applyItemUpdate(r.item);refreshReviewData();return findItem(id)}
+async function undoReview(p){if(LIVE)return patchItem(p.id,{manual:p.manual,reviewed:p.reviewed,dismissed:p.dismissed,sent:p.sent});const r=await request(`/api/reviews/${encodeURIComponent(p.record)}/undo`,'POST',{reviewer:reviewerName});if(r.item){cdr=r.cdr;applyItemUpdate(r.item)}if(lastReview?.id===p.record)lastReview=null;refreshReviewData();return findItem(p.id)}
+async function saveReviewReason(id,reason,note){if(note===undefined)note=lastReview?.id===id?lastReview.note||'':'';await request(`/api/reviews/${encodeURIComponent(id)}/reason`,'POST',{reviewer:reviewerName,reason,note});if(lastReview?.id===id){lastReview.reason=reason;lastReview.note=note}}
 init();

@@ -51,6 +51,182 @@ so the cookie rides along by default (`credentials: 'same-origin'`). On a `401` 
 "Sign out" control is `POST /logout` (a form or `fetch` + reload). Do **not** put the token in
 JavaScript, query strings or `localStorage`.
 
+## 1a. CAC/PIV mode (offline)
+
+Optional `cmd/ghost-seeker` browser authentication uses mutual TLS; token mode remains the
+default. This is a synthetic/unclassified prototype, not a claim of DoD accreditation.
+Hardware smartcards and middleware were **not tested**: the browser needs the OS smartcard
+middleware / PKCS#11 provider to present the card certificate. Do not export operational
+private keys. Never commit real certificates, private keys, EDIPIs, or PII.
+
+| Flag | Environment | Default / purpose |
+|---|---|---|
+| `-auth-mode` | `GS_AUTH_MODE` | `token`; set `piv` for certificate login |
+| `-tls-cert` | `GS_TLS_CERT` | Required server PEM certificate in PIV mode |
+| `-tls-key` | `GS_TLS_KEY` | Required server private key in PIV mode |
+| `-piv-ca-bundle` | `GS_PIV_CA_BUNDLE` | Required PEM file or directory: self-signed roots + intermediates |
+| `-piv-crl-dir` | `GS_PIV_CRL_DIR` | Required directory of DER or PEM CRLs |
+| `-piv-crl-grace` | `GS_PIV_CRL_GRACE` | `0s`; optional stale-CRL grace duration |
+| `-piv-reload` | `GS_PIV_RELOAD` | `1m`; CRL/users names, size and mtime polling |
+| `-piv-ocsp-url` | `GS_PIV_OCSP_URL` | Empty/off; optional administrator-selected on-prem responder |
+| `-piv-policy-oids` | `GS_PIV_POLICY_OIDS` | Empty; comma-separated acceptable certificate policies |
+| `-piv-users` | `GS_PIV_USERS` | Required YAML/JSON identity-to-role file |
+
+**Handshake checks:** TLS 1.2+, a client certificate, local chain trust, validity, and signatures.
+Only the configured roots are trust anchors; bundled/presented intermediates are chain builders.
+Go's `RequireAndVerifyClientCert` requires clientAuth EKU and rejects Microsoft
+smartcard-logon-only certificates. We therefore use `RequireAnyClientCert` plus
+`VerifyConnection` and explicit local `x509.Verify` with `ExtKeyUsageAny`. The acceptable-CA
+list contains roots and intermediates. The server keypair and CA bundle require restart to change.
+
+**Every HTTP request except `/healthz`:** repeats chain verification, then requires digitalSignature
+key usage and either clientAuth or Microsoft smartcard-logon EKU (`Any` alone is insufficient),
+optional RFC 5280 certificate-policy chain validation, revocation for the leaf **and every
+non-root intermediate**, and a users-file lookup. A viewer may GET/HEAD but cannot mutate state;
+an operator has normal write access. Logout is permitted for both. UI controls/hotkeys reflect
+read-only status, but server authorization is authoritative. Invalid certificates fail the TLS
+handshake before HTTP; a trusted but unauthorized/revoked certificate receives a clear 403 page
+or API JSON reason.
+
+### Offline trust and revocation operations
+
+There is **no AIA chasing, public OCSP lookup, or automatic download**. With OCSP off, authentication
+does not fetch anything. If an explicit on-prem OCSP URL is configured, only that responder is
+contacted (POST, short timeout, no redirects). Issuer-verified, current Good/Revoked responses are
+authoritative; errors/Unknown fall back to CRLs. Configure only approved on-prem URLs and network
+egress controls; the app does not classify a URL as on-prem for you.
+
+A CRL must match the issuer and verify with the issuer certificate from the verified chain.
+Bad-signature CRLs are ignored/logged; if no usable CRL remains, authentication fails closed.
+Missing CRLs and stale CRLs reject access. `-piv-crl-grace` permits an expired CRL only through
+`NextUpdate + grace`, with a warning. A listed revoked serial always rejects. Do not use grace
+as a substitute for a reliable refresh process.
+
+On a connected, approved machine, obtain DISA's published DoD PKI bundles, for example
+**“PKI CA Certificate Bundles: PKCS#7 for DoD PKI Only”** from the
+[DoD Cyber Exchange public PKI page](https://public.cyber.mil/pki-pke/pkipke-document-library/),
+and the relevant issuers' published CRLs. Verify publisher checksums/signatures and provenance
+using your organization's approved procedures. Transfer using approved removable media into the
+air-gapped host. Convert the PKCS#7 bundle, then review and install only the intended CA trust:
+
+```sh
+openssl pkcs7 -inform DER -in dod-bundle.p7b -print_certs -out dod-bundle.pem
+# For a PEM-encoded PKCS#7 input, omit -inform DER.
+install -m 0644 dod-bundle.pem /etc/ghost-seeker/pki/ca-bundle/dod-bundle.pem
+```
+
+Use a scheduled sneakernet refresh (or cron copying from an approved local staging area).
+Copy CRLs outside the watched directory first, validate them, then atomically rename each
+complete file into the CRL directory **on the same filesystem**. Do not leave partial/temp files
+inside that directory: all files there are parsed. Mount the directory, rather than individual CRL
+files, into containers so renames are visible. Polling reloads CRLs/users without restart;
+invalid reloads retain the previous good snapshot and log an error. If refresh stops, existing
+sessions also lose access once their issuer's CRL goes stale (plus any explicit grace).
+
+Policy allowlists should use exact OIDs from the **current DoD/FPKI certificate policy documents**
+and the intended PIV-authentication certificate profiles. Different policy generations/profiles
+have different identifiers: do not infer an OID from a certificate name or copy an unverified
+example. Configure the selected dotted OIDs as a comma-separated allowlist; chain policy
+validation must succeed for at least one configured value, not merely find it on the leaf.
+
+### Identity, authorization, and audit
+
+ID extraction order: SAN otherName UPN (`1.3.6.1.4.1.311.20.2.3`, UTF8String); otherwise the
+trailing 10+ digits of a dotted subject CN; otherwise `sha256:<leaf DER fingerprint>`.
+Display names are derived from CN (for example synthetic `DOE.JANE.Q.1000000001` → Jane Q. Doe).
+The fingerprint is SHA-256 of leaf DER.
+
+Users files are YAML or JSON maps. Only `operator` and `viewer` roles are accepted. Unknown
+identities fail closed; invalid reloads retain the prior map. Fake example:
+
+```yaml
+"1000000001@mil": operator
+"1000000002": viewer
+```
+
+Equivalent JSON: `{"1000000001@mil":"operator","1000000002":"viewer"}`.
+The users file reloads on change at the polling interval; it is not a certificate enrollment service.
+
+The usual `gs_session` cookie is issued automatically (Secure, HttpOnly, SameSite=Strict), and
+its server-side record binds identity and certificate fingerprint. Replaying it with another
+certificate rejects with 401 and clears it. Certificates and roles are still checked on **every
+request**, including an existing session. `GET /login` displays identity and a Continue link;
+`GET /api/auth` returns mode/id/name/role plus authenticated/dev.
+
+`POST /logout` clears the cookie and shows: “Signed out. Remove your card or close the browser
+to end the certificate session; while the card is present the browser will sign you in again.”
+Removing a cookie cannot terminate the browser's smartcard/TLS credential selection.
+
+Authentication issuance/failures, fingerprint mismatches, and state-changing HTTP requests emit
+JSON audit lines to stderr (protect and retain logs as identity-bearing security records):
+
+```json
+{"level":"INFO","msg":"operator authentication","event":"request","id":"1000000001@mil","role":"operator","method":"POST","path":"/api/directives","result":"completed","status":201,"remote":"127.0.0.1:45000","reason":""}
+```
+
+Browser action `IssuedBy`/requester attribution uses the certificate ID instead of client-supplied
+or hardcoded actor values. The web app **does not accept the bearer token as login in PIV mode**.
+Super-admin raw policy edits still require the bearer token as a second re-auth factor on top of
+an operator certificate. Shore/edge links remain on the operator bearer token **behind the
+bridge**, unchanged; keep that credential server-side and protect those links as before.
+
+### Synthetic local demo and deployment
+
+```sh
+go run ./cmd/piv-testpki -out data/piv-demo
+# Prints the exact HTTPS ghost-seeker command and generates only short-lived fake PKI.
+# PEM client certificates/keys are produced; x/crypto/pkcs12 has no encoder, so no .p12 export.
+```
+
+`data/` is gitignored. The generator refuses an existing output directory. Use a disposable
+browser profile and import the synthetic root/client credentials using platform tooling if needed;
+never mix demonstration trust with operational trust. For containers, the nonroot UID 65532
+must be granted read/traverse access to mounted trust, users and server key files; generated
+private files are 0600, so arrange narrowly scoped ownership/ACLs before mounting (never  world-readable keys).
+
+Example systemd unit (paths and service account must be provisioned first):
+
+```ini
+[Unit]
+Description=Ghost Seeker PIV operator bridge
+After=network.target
+[Service]
+User=ghost-seeker
+Group=ghost-seeker
+EnvironmentFile=/etc/ghost-seeker/operator.env
+Environment=GS_AUTH_MODE=piv GS_DEV_TOKEN_FILE=none
+Environment=GS_TLS_CERT=/etc/ghost-seeker/tls/server.crt GS_TLS_KEY=/etc/ghost-seeker/tls/server.key
+Environment=GS_PIV_CA_BUNDLE=/etc/ghost-seeker/pki/ca-bundle GS_PIV_CRL_DIR=/etc/ghost-seeker/pki/crl
+Environment=GS_PIV_USERS=/etc/ghost-seeker/users.yaml GS_PIV_RELOAD=1m GS_PIV_CRL_GRACE=0s
+ExecStart=/usr/local/bin/ghost-seeker -addr :8443 -shore http://127.0.0.1:8080 -link-listen=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+```
+
+Keep `operator.env` restricted; it supplies `GS_OPERATOR_TOKEN` shared with shore/edge.
+The HTTPS server certificate must cover the actual deployed hostname (the generator covers
+localhost/127.0.0.1 only). Mount the server private key read-only and restrict read access.
+
+The existing Dockerfile `operator` target is used by the opt-in Compose service:
+
+```sh
+export GS_PIV_TLS_DIR=/etc/ghost-seeker/tls
+export GS_PIV_CA_DIR=/etc/ghost-seeker/pki/ca-bundle
+export GS_PIV_CRL_DIR=/etc/ghost-seeker/pki/crl
+export GS_PIV_USERS_FILE=/etc/ghost-seeker/users.yaml
+# Supply GS_OPERATOR_TOKEN, GS_SIGNING_KEY and GS_UNIT_TOKEN through approved secret handling.
+docker compose -f deploy/compose/docker-compose.yml --profile piv up --build
+```
+
+`ghost-seeker-piv` serves HTTPS on 8443, mounts TLS/CA/CRL/users read-only, and uses
+`-shore http://shore:8080` without inserting a second link shaper. The profile does not change
+shore/edge authentication or make their plain HTTP links suitable for untrusted networks.
+
 ## 2. CSRF / cross-origin
 
 * **Host header / DNS rebinding**: shore and edge reject requests with an unknown `Host` using
@@ -130,42 +306,51 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 | Baseline ([scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@548487e` | 4 | 4 | 10 |
 | After PR #60, branch ([scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | branch `655e371` | 1 | 3 | 6 |
 | After PR #60 merged (incremental re-run of the baseline [scan](https://app.devin.ai/code-scan/1ab9889fb66f418db035c105f68cecb5)) | `main@a9bd43e` | 3 | 0 | 5 |
-| **Latest recorded scan: after PR #75 (unit auth on by default) + #61–#74** (incremental re-run of the [post-#60 scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | `main@1a6382e` | **0** | 5 | 10 |
+| After PR #75 (unit auth on by default) + #61–#74 (incremental re-run of the [post-#60 scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | `main@1a6382e` | 0 | 5 | 10 |
+| **Current: after PR #77–#80 (remediation of the 5 mediums + 2 escape lows)** (incremental re-run of the same [scan](https://app.devin.ai/code-scan/21cd6c875f354480ba2a5b21d5a1d9f5)) | `main@7a0b048` | **0** | 1 | 10 |
 
 The post-#60 run re-validated the 18 baseline findings on `main@a9bd43e`: 13 resolved, 3 highs
 open (one root cause — the unit-auth default on the ship-to-shore link), 5 lows.
 
-The latest recorded run (after PR #75) covers the changes in #61–#75: Patrick's console on
-live shore data, policy layers / locks / signing, per-directive expiry, and frame ring buffer. All
-3 highs were resolved (the three duplicates were dismissed). The table preserves that scan's
-5 medium and 10 low findings; it is not a new scan of the current code. Subsequent
-resolutions are called out below, including item ownership (PR #78), the Host allowlist
-(PR #77), and display-identifier escaping and validation (PR #79).
+The post-#75 run covered #61–#75 (Patrick's console on live shore data, policy layers / locks /
+signing, per-directive expiry, frame ring buffer): all 3 highs resolved, 5 mediums + 10 lows open.
 
-* **Resolved by PR #79 — edge-supplied display identifiers rendered as raw HTML**:
-  the live feed, Commander View, and workbench now escape the affected source and item
-  identifiers. Shore normalizes invalid manifest sources to empty, and the bridge
-  validates source and sighting identifiers before using them for display or grouping.
-* **Medium ×2 — caller-chosen policy `Version`** on shore `SetPolicy` and the edge console: one
-  max-version policy from an operator-token holder makes the edge reject every later policy,
-  including signed command policies, until its DB is wiped. Fix: the server assigns
-  `max(now, prev+1)`; console policies must not move the high-water mark that guards downlinks.
-* **Resolved by PR #78 — shore items had no owning edge** (`UpsertManifest` / `WriteChunk`):
-  items now belong to the authenticated unit, and manifests, chunks, and sync overrides
-  from other units are rejected. Operator overrides stay cross-edge. Legacy unowned
-  items are adopted by the first writer.
-* **Resolved — `CORSAllow` trusted `Host`** (DNS rebinding against SyncService): shore and edge
-  now check the `-public-hosts` allowlist before CORS.
-* **Low ×10 at scan time** — SSE stream has no subscriber cap / stalled-client eviction; EMCON SILENT still
-  sends a heartbeat every tick; an attribute-only suppress directive can defeat a command-locked
-  priority rule; 1-byte chunks make the shore re-read and re-hash a 256 MiB blob per chunk;
-  full-res request handler reads an unbounded body; login `next=` check bypassed by a tab/newline;
-  JPEG fill bytes skip the sidecar's 50-megapixel cap; chunk uploads have no item-count / disk
-  cap; the two HTML-escape siblings above.
+The current run covers the remediation of those 5 mediums and the 2 HTML-escape lows:
 
-  The current live-console full-res handler (`internal/shorebridge/console.go`)
-  limits its body to 64 KiB, and PR #79 resolves the two HTML-escape siblings;
-  the list above retains the scan-time findings.
+* **Resolved by PR #79** — edge-supplied display identifiers rendered as raw HTML in the live
+  feed, Commander View and workbench (1 medium + 2 lows). Shore normalizes invalid manifest
+  sources to empty, `ids.ValidName` / `ids.ValidSightingID` allowlist `[A-Za-z0-9_.:/-]`, and every
+  edge-supplied string is escaped in the browser.
+* **Resolved by PR #80** — caller-chosen policy `Version` on shore `SetPolicy` and the edge console
+  (2 mediums). The server assigns bounded monotonic versions; unsigned console writes cannot move
+  the high-water mark that guards signed command downlinks; above-ship layers keep their deadline.
+* **Resolved by PR #78** — shore items had no owning edge (1 medium). Items belong to the
+  authenticated unit (`UpsertManifest`, `WriteChunk`, sync-path overrides); operator overrides stay
+  cross-edge; legacy unowned items are adopted by the first writer.
+* **Resolved by PR #77** — `CORSAllow` trusted `Host` (DNS rebinding, 1 medium). Shore and edge
+  check the `-public-hosts` / `GS_PUBLIC_HOSTS` allowlist before CORS; compose and Zarf set it.
+
+Open findings after the current run (the three new ones were introduced by the remediation /
+echelon changes themselves and are candidates for the next batch):
+
+* **Medium ×1 (new, from PR #80)** — if the shore's own policy-signing key is in its `-policy-keys`
+  keyring, a holder of the operator token can replay an old shore-signed policy to restore a
+  revoked command layer (e.g. EMCON SILENT) and move the stored command mark above command's next
+  versions. Fix: refuse signed above-ship submissions whose `KeyId` is the shore's own signer and
+  keep the command version inside the signed command layer.
+* **Low ×1 (new, from PR #78)** — first-writer ownership plus edge item ULIDs seeded from
+  `math/rand(hash(edge id))` lets a stolen unit token pre-claim another edge's predictable item
+  ids. Fix: `crypto/rand` entropy for the ULIDs.
+* **Low ×1 (new, from PR #73)** — removing the per-operator echelon check does not fail closed; a
+  deployment still setting `GS_REQUIRE_OPERATOR_AUTH=true` starts silently without it. Fix: exit
+  with an error when that variable is set.
+* **Low ×8 (carried over)** — SSE stream has no subscriber cap / stalled-client eviction; EMCON
+  SILENT still sends a heartbeat every tick; an attribute-only suppress directive can defeat a
+  command-locked priority rule; 1-byte chunks make the shore re-read and re-hash a 256 MiB blob per
+  chunk; full-res request handler reads an unbounded body (the live-console handler in
+  `internal/shorebridge/console.go` already limits its body to 64 KiB); login `next=` check
+  bypassed by a tab/newline; JPEG fill bytes skip the sidecar's 50-megapixel cap; chunk uploads
+  have no item-count / disk cap.
 
 Earlier residuals (post-#60 run), kept for history:
 

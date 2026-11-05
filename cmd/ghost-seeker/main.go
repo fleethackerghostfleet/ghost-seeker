@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +17,9 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/pivauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
@@ -35,6 +39,7 @@ func main() {
 		}
 	}
 	addr := flag.String("addr", ":8080", "HTTP listen address")
+	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
@@ -53,7 +58,22 @@ func main() {
 	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "operator token file")
 	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
+	devTrustPeers := flag.Bool("dev-trust-peers", envBool("GS_DEV_TRUST_PEERS"), "local demo in containers only: with -dev-token-file, also sign in browsers that address localhost from a non-loopback peer (a port published on the host's 127.0.0.1 arrives from the bridge gateway); publish the port on 127.0.0.1 only")
+	authMode := flag.String("auth-mode", envOr("GS_AUTH_MODE", "token"), "web authentication: token or piv")
+	tlsCert := flag.String("tls-cert", os.Getenv("GS_TLS_CERT"), "HTTPS server certificate")
+	tlsKey := flag.String("tls-key", os.Getenv("GS_TLS_KEY"), "HTTPS server private key")
+	ca := flag.String("piv-ca-bundle", os.Getenv("GS_PIV_CA_BUNDLE"), "local PIV CA bundle")
+	crls := flag.String("piv-crl-dir", os.Getenv("GS_PIV_CRL_DIR"), "local PIV CRL directory")
+	grace := flag.Duration("piv-crl-grace", envDuration("GS_PIV_CRL_GRACE", 0), "CRL grace period")
+	reload := flag.Duration("piv-reload", envDuration("GS_PIV_RELOAD", time.Minute), "PIV reload interval")
+	ocsp := flag.String("piv-ocsp-url", os.Getenv("GS_PIV_OCSP_URL"), "optional on-prem OCSP responder")
+	oids := flag.String("piv-policy-oids", os.Getenv("GS_PIV_POLICY_OIDS"), "comma-separated policy OIDs")
+	users := flag.String("piv-users", os.Getenv("GS_PIV_USERS"), "PIV user role mapping")
 	flag.Parse()
+	if err := validateAuthMode(*authMode, *tlsCert, *tlsKey, *ca, *crls, *users); err != nil {
+		log.Fatal(err)
+	}
+	var transport *tls.Config
 
 	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
 	if *llmURL == "" {
@@ -66,13 +86,36 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sessions := opauth.NewSessions(operator, devMode)
-	if devMode {
-		log.Printf("operator token auto-generated for a local demo (%s); loopback browsers are signed in automatically", *devTokenFile)
+	sessions := opauth.NewSessions(operator, devMode).TrustPeers(*devTrustPeers)
+	if *authMode == "piv" {
+		var policies []string
+		for _, oid := range strings.Split(*oids, ",") {
+			if oid = strings.TrimSpace(oid); oid != "" {
+				policies = append(policies, oid)
+			}
+		}
+		auth, err := pivauth.New(pivauth.Config{CABundle: *ca, CRLDir: *crls, CRLGrace: *grace, ReloadInterval: *reload, OCSPURL: *ocsp, PolicyOIDs: policies, UsersFile: *users})
+		if err != nil {
+			log.Fatalf("PIV authentication: %v", err)
+		}
+		transport, err = auth.TLSConfig(*tlsCert, *tlsKey)
+		if err != nil {
+			log.Fatalf("PIV HTTPS: %v", err)
+		}
+		auth.Start(context.Background())
+		sessions.WithCerts(auth, nil)
+		log.Print("PIV mode: dev loopback auto-login disabled; bridge bearer token unchanged")
+	}
+	if devMode && *authMode == "token" {
+		peers := "loopback browsers"
+		if *devTrustPeers {
+			peers = "browsers addressing localhost from any peer (-dev-trust-peers)"
+		}
+		log.Printf("operator token auto-generated for a local demo (%s); %s are signed in automatically", *devTokenFile, peers)
 	}
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID, transport)
 		return
 	}
 
@@ -88,6 +131,14 @@ func main() {
 		options = append(options, server.WithPolicyBackend(backend))
 	}
 	app := server.New(data, options...)
+	if *reviewPath != "" {
+		l, err := reviews.Open(*reviewPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer l.Close()
+		app.SetReviewLog(l)
+	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
 	go runSimulation(data, generator, app)
@@ -100,18 +151,23 @@ func main() {
 	}
 
 	log.Printf("Ghost Seeker listening on %s", *addr)
-	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(app)))))
+	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(app))), transport))
 }
 
-func serve(addr string, handler http.Handler) error {
-	return (&http.Server{
+func serve(addr string, handler http.Handler, transport ...*tls.Config) error {
+	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
-	}).ListenAndServe()
+	}
+	if len(transport) > 0 && transport[0] != nil {
+		srv.TLSConfig = transport[0]
+		return srv.ListenAndServeTLS("", "")
+	}
+	return srv.ListenAndServe()
 }
 
 func refreshTimeScopes(app *server.Server) {
@@ -151,7 +207,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -187,7 +243,12 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 	mux.Handle("GET /shore.html", http.RedirectHandler("/", http.StatusFound)) // retired F2 UI; same console at /
 	mux.Handle("/", web.Handler())
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
-	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(mux)))))
+	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(mux))), transport))
+}
+
+func envBool(k string) bool {
+	v, _ := strconv.ParseBool(os.Getenv(k))
+	return v
 }
 
 func envOr(k, def string) string {

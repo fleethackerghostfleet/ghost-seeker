@@ -156,12 +156,16 @@ func Unauthorized(w http.ResponseWriter) {
 // proxy hop is recorded, and the browser addressed a loopback host (so a
 // reverse proxy on the same box serving a public name does not qualify).
 func Loopback(r *http.Request) bool {
+	return !forwarded(r) && isLoopbackAddr(r.RemoteAddr) && isLoopbackHost(r.Host)
+}
+
+func forwarded(r *http.Request) bool {
 	for _, h := range []string{"X-Forwarded-For", "Forwarded", "X-Forwarded-Host", "X-Real-IP", "Via"} {
 		if r.Header.Get(h) != "" {
-			return false
+			return true
 		}
 	}
-	return isLoopbackAddr(r.RemoteAddr) && isLoopbackHost(r.Host)
+	return false
 }
 
 func isLoopbackAddr(addr string) bool {

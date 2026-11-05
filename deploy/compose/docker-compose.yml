@@ -1,6 +1,32 @@
 # Dev/demo topology: shore <- toxiproxy <- edge. Degrade the link with the
 # toxiproxy API (see README). Mount frames to replay.
 services:
+  ghost-seeker-piv:
+    profiles: ["piv"]
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: operator }
+    image: ghost-seeker/operator:0.1.0
+    command: ["-addr", ":8443", "-shore", "http://shore:8080", "-edge", "http://edge:8081", "-link-listen", ""]
+    environment:
+      GS_AUTH_MODE: piv
+      GS_TLS_CERT: /etc/ghost-seeker/tls/server.crt
+      GS_TLS_KEY: /etc/ghost-seeker/tls/server.key
+      GS_PIV_CA_BUNDLE: /etc/ghost-seeker/pki/ca-bundle
+      GS_PIV_CRL_DIR: /etc/ghost-seeker/pki/crl
+      GS_PIV_CRL_GRACE: "0s"
+      GS_PIV_RELOAD: "1m"
+      GS_PIV_OCSP_URL: ""
+      GS_PIV_POLICY_OIDS: ${GS_PIV_POLICY_OIDS:-}
+      GS_PIV_USERS: /etc/ghost-seeker/users.yaml
+      GS_OPERATOR_TOKEN: ${GS_OPERATOR_TOKEN:?set GS_OPERATOR_TOKEN (>=16 bytes) for the shore/edge consoles}
+      GS_DEV_TOKEN_FILE: none
+    ports: ["8443:8443"]
+    volumes:
+      - ${GS_PIV_TLS_DIR:-../../data/piv-demo}:/etc/ghost-seeker/tls:ro
+      - ${GS_PIV_CA_DIR:-../../data/piv-demo/ca-bundle}:/etc/ghost-seeker/pki/ca-bundle:ro
+      - ${GS_PIV_CRL_DIR:-../../data/piv-demo/crl}:/etc/ghost-seeker/pki/crl:ro
+      - ${GS_PIV_USERS_FILE:-../../data/piv-demo/users.yaml}:/etc/ghost-seeker/users.yaml:ro
+    depends_on: [shore]
+
   shore:
     build: { context: ../.., dockerfile: deploy/Dockerfile, target: shore }
     image: ghost-seeker/shore:0.1.0

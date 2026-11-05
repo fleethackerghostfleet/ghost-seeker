@@ -7,6 +7,12 @@ form*, so the most important information reaches shore first and nothing is
 lost. Images are the first data type; the item model is type-agnostic.
 
 See [Fielding](docs/FIELDING.md) for offline builds, container staging, and Zarf deployment.
+See [Human review](docs/HUMAN_REVIEW.md) for durable review capture, exports, and offline weight proposals.
+
+**Verification:** hosted CI is manual-only to conserve Actions allowance. Run
+`make verify` on a prepared Linux host for the complete fail-closed test/security/
+package/image suite. See [local verification](docs/VERIFY.md) for setup, commit-linked
+reports, and merge-policy limitations. No GitHub plan upgrade is needed.
 
 Key behaviours (all covered by `go test ./...` and the simulator):
 
@@ -51,7 +57,7 @@ scenarios/              replay scenarios (datasets + operator events)
 
 ## Quick start
 
-Requires Go 1.23+. No CGO, no GPU. The demo imagery in `frames/` is Git LFS: run `git lfs pull` after cloning, or the default replay scenario finds only pointer files.
+Requires Go 1.26.10+ (pinned in `go.mod` and the container builder). No CGO, no GPU. The demo imagery in `frames/` is Git LFS: run `git lfs pull` after cloning, or the default replay scenario finds only pointer files.
 
 ```sh
 make build                 # bin/edge bin/ghost-seeker bin/shore bin/sim
@@ -85,6 +91,10 @@ deploy/compose/degrade.sh satcom   # 64 kbps / 600 ms; also trickle | starlink |
 ```
 
 ## Configuration: operator authentication
+
+The operator web app also supports optional **offline CAC/PIV mutual-TLS login** with
+operator/viewer roles. See [CAC/PIV mode (offline)](docs/SECURITY.md#1a-cacpiv-mode-offline)
+for deployment, air-gap trust/CRL loading, and a synthetic demo PKI generator. Token mode remains the default.
 
 Shore ConsoleService, the edge console, `/blob/` on both and the operator web app share one
 **operator bearer token**: `-operator-token` / `GS_OPERATOR_TOKEN` or `-operator-token-file` /
@@ -310,7 +320,7 @@ every unknown, and puts the bytes it has into what the operator asked for.
 
 ## Operator web app
 
-The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.23+, stdlib only, synthetic imagery and its own in-memory simulation by default; `-shore` runs it on a live shore instead, see [docs/DEMO.md](docs/DEMO.md)). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
+The operator UI lives in `cmd/ghost-seeker` + `web/` (Go 1.26.10+, stdlib only, synthetic imagery and its own in-memory simulation by default; `-shore` runs it on a live shore instead, see [docs/DEMO.md](docs/DEMO.md)). It defaults to `:8080`, which the shore service also uses, so pick another port when running both:
 
 ```sh
 go run ./cmd/ghost-seeker -addr :8090
