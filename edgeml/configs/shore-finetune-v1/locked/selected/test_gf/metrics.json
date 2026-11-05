@@ -1,0 +1,158 @@
+{
+  "tau": 0.33542555570602417,
+  "strata": {
+    "all": {
+      "vessels": 7376,
+      "detected": 4563,
+      "recall": 0.6186279826464208,
+      "recall_cp95_lower": 0.6092240276154572,
+      "precision": 0.8959355978794423,
+      "false_positives": 530,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.039125431530494824,
+      "sources": 7,
+      "AP50": 0.8484901588843162
+    },
+    "day": {
+      "vessels": 7373,
+      "detected": 4563,
+      "recall": 0.618879696188797,
+      "recall_cp95_lower": 0.6094749127025798,
+      "precision": 0.8962875662934591,
+      "false_positives": 528,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.0378698224852071,
+      "sources": 7,
+      "AP50": 0.8499664513255987
+    },
+    "low_light": {
+      "vessels": 3,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": 0.0,
+      "false_positives": 2,
+      "empty_frames": 24,
+      "fp_per_empty_frame": 0.08333333333333333,
+      "sources": 1,
+      "AP50": 0.055065075528248374
+    },
+    "tiny": {
+      "vessels": 644,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.8862525829817086
+    },
+    "small": {
+      "vessels": 713,
+      "detected": 14,
+      "recall": 0.019635343618513323,
+      "recall_cp95_lower": 0.011908921371290852,
+      "precision": 1.0,
+      "false_positives": 0,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.0,
+      "sources": 3,
+      "AP50": 0.6996395493599815
+    },
+    "medium": {
+      "vessels": 3199,
+      "detected": 2105,
+      "recall": 0.658018130665833,
+      "recall_cp95_lower": 0.6439630477108174,
+      "precision": 0.922840859272249,
+      "false_positives": 176,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.012658227848101266,
+      "sources": 6,
+      "AP50": 0.8877863382660909
+    },
+    "large": {
+      "vessels": 2820,
+      "detected": 2444,
+      "recall": 0.8666666666666667,
+      "recall_cp95_lower": 0.8556777726448612,
+      "precision": 0.873481057898499,
+      "false_positives": 354,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.026467203682393557,
+      "sources": 6,
+      "AP50": 0.9241313407041013
+    },
+    "day_tiny": {
+      "vessels": 644,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.8862525829817086
+    },
+    "day_small": {
+      "vessels": 713,
+      "detected": 14,
+      "recall": 0.019635343618513323,
+      "recall_cp95_lower": 0.011908921371290852,
+      "precision": 1.0,
+      "false_positives": 0,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.0,
+      "sources": 3,
+      "AP50": 0.7003386636104532
+    },
+    "day_medium": {
+      "vessels": 3199,
+      "detected": 2105,
+      "recall": 0.658018130665833,
+      "recall_cp95_lower": 0.6439630477108174,
+      "precision": 0.9232456140350878,
+      "false_positives": 175,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.011834319526627219,
+      "sources": 6,
+      "AP50": 0.8884179957013616
+    },
+    "day_large": {
+      "vessels": 2817,
+      "detected": 2444,
+      "recall": 0.8675896343627973,
+      "recall_cp95_lower": 0.8566248202206532,
+      "precision": 0.8737933500178763,
+      "false_positives": 353,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.02603550295857988,
+      "sources": 6,
+      "AP50": 0.9250084338451928
+    },
+    "day_medium_large": {
+      "vessels": 6016,
+      "detected": 4549,
+      "recall": 0.7561502659574468,
+      "recall_cp95_lower": 0.7468700536507196,
+      "precision": 0.896001575733701,
+      "false_positives": 528,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.0378698224852071,
+      "sources": 7,
+      "AP50": 0.8966641060054358
+    }
+  },
+  "AP50": 0.8484901588843162,
+  "R4": {
+    "windows": 6947,
+    "detected_windows": 4741,
+    "eligible_tracks": 39,
+    "recall": 0.6824528573484957,
+    "window_seconds": 2,
+    "sliding": true
+  }
+}

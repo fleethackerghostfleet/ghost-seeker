@@ -1,0 +1,158 @@
+{
+  "tau": 0.4311056137084961,
+  "strata": {
+    "all": {
+      "vessels": 7376,
+      "detected": 5389,
+      "recall": 0.7306127982646421,
+      "recall_cp95_lower": 0.72198178362576,
+      "precision": 0.8817081151832461,
+      "false_positives": 723,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.04257767548906789,
+      "sources": 7,
+      "AP50": 0.8591908709420534
+    },
+    "day": {
+      "vessels": 7373,
+      "detected": 5389,
+      "recall": 0.7309100773091007,
+      "recall_cp95_lower": 0.7222801541557445,
+      "precision": 0.8817081151832461,
+      "false_positives": 723,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.04378698224852071,
+      "sources": 7,
+      "AP50": 0.8593378671705819
+    },
+    "low_light": {
+      "vessels": 3,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 24,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.7227722772277227
+    },
+    "tiny": {
+      "vessels": 644,
+      "detected": 32,
+      "recall": 0.049689440993788817,
+      "recall_cp95_lower": 0.036396299248089695,
+      "precision": 1.0,
+      "false_positives": 0,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.5841242681815991
+    },
+    "small": {
+      "vessels": 713,
+      "detected": 222,
+      "recall": 0.31136044880785413,
+      "recall_cp95_lower": 0.28275282579256805,
+      "precision": 0.7278688524590164,
+      "false_positives": 83,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.019562715765247412,
+      "sources": 3,
+      "AP50": 0.7391322265272143
+    },
+    "medium": {
+      "vessels": 3199,
+      "detected": 3036,
+      "recall": 0.9490465770553298,
+      "recall_cp95_lower": 0.942183650917198,
+      "precision": 0.8932038834951457,
+      "false_positives": 363,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.006904487917146145,
+      "sources": 6,
+      "AP50": 0.9409647199342942
+    },
+    "large": {
+      "vessels": 2820,
+      "detected": 2099,
+      "recall": 0.7443262411347518,
+      "recall_cp95_lower": 0.7304523379315169,
+      "precision": 0.8834175084175084,
+      "false_positives": 277,
+      "empty_frames": 869,
+      "fp_per_empty_frame": 0.01611047180667434,
+      "sources": 6,
+      "AP50": 0.8714374414029159
+    },
+    "day_tiny": {
+      "vessels": 644,
+      "detected": 32,
+      "recall": 0.049689440993788817,
+      "recall_cp95_lower": 0.036396299248089695,
+      "precision": 1.0,
+      "false_positives": 0,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.5841261071045043
+    },
+    "day_small": {
+      "vessels": 713,
+      "detected": 222,
+      "recall": 0.31136044880785413,
+      "recall_cp95_lower": 0.28275282579256805,
+      "precision": 0.7278688524590164,
+      "false_positives": 83,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.020118343195266272,
+      "sources": 3,
+      "AP50": 0.7400209990703939
+    },
+    "day_medium": {
+      "vessels": 3199,
+      "detected": 3036,
+      "recall": 0.9490465770553298,
+      "recall_cp95_lower": 0.942183650917198,
+      "precision": 0.8932038834951457,
+      "false_positives": 363,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.007100591715976331,
+      "sources": 6,
+      "AP50": 0.9410057302915735
+    },
+    "day_large": {
+      "vessels": 2817,
+      "detected": 2099,
+      "recall": 0.7451189208377706,
+      "recall_cp95_lower": 0.7312506033182333,
+      "precision": 0.8834175084175084,
+      "false_positives": 277,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.016568047337278107,
+      "sources": 6,
+      "AP50": 0.8717140335246323
+    },
+    "day_medium_large": {
+      "vessels": 6016,
+      "detected": 5135,
+      "recall": 0.8535571808510638,
+      "recall_cp95_lower": 0.8458496517068272,
+      "precision": 0.8891774891774892,
+      "false_positives": 640,
+      "empty_frames": 845,
+      "fp_per_empty_frame": 0.023668639053254437,
+      "sources": 7,
+      "AP50": 0.9045694475891717
+    }
+  },
+  "AP50": 0.8591908709420534,
+  "R4": {
+    "windows": 6947,
+    "detected_windows": 5272,
+    "eligible_tracks": 39,
+    "recall": 0.7588887289477473,
+    "window_seconds": 2,
+    "sliding": true
+  }
+}

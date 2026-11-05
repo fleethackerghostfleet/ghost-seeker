@@ -1,0 +1,90 @@
+[
+  {
+    "file": "sg_small_confidence.jpg",
+    "split": "test_sg",
+    "image_id": 1270,
+    "source_video": "mvi1644vis",
+    "file_name": "b9b065aad7e82e15bf7d382c.jpg",
+    "description": "small GT matched only below frozen threshold",
+    "target_bbox": [
+      689.8303303468672,
+      644.1827700898144,
+      30.742358078602592,
+      28.694747159920098
+    ],
+    "candidate_score": 0.3352711796760559,
+    "tau": 0.33542555570602417,
+    "crop_xyxy": [
+      385,
+      478,
+      1025,
+      838
+    ]
+  },
+  {
+    "file": "sg_small_unlocalized.jpg",
+    "split": "test_sg",
+    "image_id": 490,
+    "source_video": "mvi1609vis",
+    "file_name": "8779646743277cc311073104.jpg",
+    "description": "small GT without an IoU-qualified candidate at .001 floor",
+    "target_bbox": [
+      609.8371757925073,
+      529.4337175792507,
+      42.881844380403436,
+      22.132564841498606
+    ],
+    "candidate_score": null,
+    "tau": 0.33542555570602417,
+    "crop_xyxy": [
+      311,
+      360,
+      951,
+      720
+    ]
+  },
+  {
+    "file": "gf_tiny_miss.jpg",
+    "split": "test_gf",
+    "image_id": 575,
+    "source_video": "Arriving_In_Norfolk_seg1h10",
+    "file_name": "544f9589ae03509c639034b6.jpg",
+    "description": "tiny GT missed at frozen threshold",
+    "target_bbox": [
+      880.5,
+      592.8,
+      16.4,
+      15.6
+    ],
+    "candidate_score": null,
+    "tau": 0.33542555570602417,
+    "crop_xyxy": [
+      568,
+      420,
+      1208,
+      780
+    ]
+  },
+  {
+    "file": "gf_empty_fp.jpg",
+    "split": "test_gf",
+    "image_id": 1856,
+    "source_video": "Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats",
+    "file_name": "8369ebb47c398a67f48de669.jpg",
+    "description": "labelled-empty-frame false positive",
+    "target_bbox": [
+      1528.0760498046875,
+      387.3261413574219,
+      391.9239501953125,
+      333.8772277832031
+    ],
+    "candidate_score": 0.9246073365211487,
+    "tau": 0.33542555570602417,
+    "crop_xyxy": [
+      1280,
+      374,
+      1920,
+      734
+    ]
+  }
+]

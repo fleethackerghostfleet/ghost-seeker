@@ -1,0 +1,6 @@
+{
+  "images": 1984,
+  "split": "test_sg",
+  "threshold_sha256": "da6d843233891c42b1c9ac4fc49161ebc5d101e62cc03d66f1c4667967108841",
+  "weights_sha256": "d81979a9213a2109345158ce9232668df4c1ae52e9b8db3f2ec0a8cbad959b33"
+}
