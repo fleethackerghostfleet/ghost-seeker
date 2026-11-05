@@ -38,7 +38,10 @@ def test_burst_controller_request_expire_and_duty_cap():
     assert burst.duty(40) <= 0.2 + 1e-9
     fresh = BurstController(duration_s=3)
     assert fresh.request(0) and fresh.request(2, "extend")
-    assert fresh.active(4.5) and fresh.granted == 1
+    assert fresh.active(4.5) and fresh.granted == 1 and fresh.extensions == 1
+    no_op = BurstController(duration_s=3)
+    assert no_op.request(0) and no_op.request(0)
+    assert no_op.granted == 1 and no_op.extensions == 0
 
 
 def test_burst_degrades_when_source_cannot_go_faster(caplog):
@@ -154,3 +157,8 @@ def test_benchmark_smoke():
     result = module["evaluate"](split="dev", tier="easy", n=1)
     assert result["dark_contact"]["total"] == 4
     assert len(result["burst"]["scenarios"]) == 5
+    assert all(scenario["samples"] == 1 and scenario["requested"] in (0, 1)
+               for scenario in result["burst"]["scenarios"].values())
+    continuous = result["burst"]["continuous_triggers_120s_at_1fps"]
+    assert continuous["accepted"] == continuous["new_intervals"] + continuous["extensions"]
+    assert continuous["accepted"] + continuous["denied"] == 120

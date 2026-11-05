@@ -371,12 +371,21 @@ above-threshold dark-contact confidence and has a policy weight override
 normalizes “dark vessel(s),” “dark ship,” “running dark,” “vessel(s) running
 dark,” and “dark contacts” to `dark contact`.
 
-The deterministic, in-memory evaluation uses 28 examples per dark-contact
-scenario, with separate seeds for each split/tier. Easy samples use the
-existing `render`; hard samples use `hard_scene`/`hard_contact` without harbor
-lights, retaining hard optical noise and rendering variability. The hard
-positive is an unlit hull; lit-vessel negatives use random rules from
-`load_rules()`. These are synthetic counts, not field-performance estimates.
+The deterministic, in-memory evaluation uses 28 examples per dark-contact and
+burst scenario, with separate split/tier seeds and varied per-sample seeds,
+positions, and steady-pattern rules from `load_rules()`. Easy samples use the
+existing `render`; hard night samples use `hard_scene`/`hard_contact` without
+harbor lights, retaining hard optical noise and rendering variability (day
+samples use `render` in daylight). The hard positive is an unlit hull;
+lit-vessel negatives use random rules from `load_rules()`. These are synthetic
+counts, not field-performance estimates.
+
+The hard-tier lit-vessel false positives (12/28 in both splits) occur when
+rendered navigation lights are missed by `detect_lights` under hard degradation:
+spot checks found zero detections in the expanded window, including radius-0/1
+colored lights blurred into the noisy background and fully occluded lights, so
+the contact appears dark. This is a known limitation; the detector was not
+tuned.
 
 | Tier / split | Dark hull + vessel | Lit vessel + box | Day + box | Dark hull + buoy | TP / FP / FN | Precision / recall |
 |---|---:|---:|---:|---:|---:|---:|
@@ -385,12 +394,16 @@ positive is an unlit hull; lit-vessel negatives use random rules from
 | hard / dev | 28/28 | 12/28 | 0/28 | 0/28 | 28 / 12 / 0 | 70% / 100% |
 | hard / test2 | 28/28 | 12/28 | 0/28 | 0/28 | 28 / 12 / 0 | 70% / 100% |
 
-| Tier / split | Flashing yellow, 4 frames | Single-frame yellow | Complete steady pattern | Low-confidence pattern | Day | Continuous 120 s: granted / denied / duty |
+| Tier / split | Flashing yellow, 4 frames | Single-frame yellow | Complete steady pattern | Low-confidence pattern | Day | Continuous 120 s: accepted (new intervals + extensions) / denied / duty |
 |---|---:|---:|---:|---:|---:|---:|
-| easy / dev | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
-| easy / test2 | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
-| hard / dev | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
-| hard / test2 | 1/1 | 1/1 | 0/1 | 1/1 | 0/1 | 2 / 100 / 20% |
+| easy / dev | 28/28 | 28/28 | 0/28 | 28/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+| easy / test2 | 28/28 | 28/28 | 0/28 | 28/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+| hard / dev | 24/28 | 15/28 | 0/28 | 10/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+| hard / test2 | 22/28 | 16/28 | 0/28 | 12/28 | 0/28 | 20 (2 new + 18 extensions) / 100 / 20% |
+
+Continuous-sequence `accepted` counts calls returning true; `new_intervals`
+counts newly granted intervals, and `extensions` counts successful extensions.
+For this sequence, accepted equals new intervals plus extensions.
 
 The JSON reports retain per-scenario flagged/request counts and seeds:
 `edgeml/reports/nightlights/dark_burst_{easy,hard}_{dev,test2}.json`.

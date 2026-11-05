@@ -33,37 +33,44 @@
     "precision": 0.7,
     "recall": 1.0
   },
+  "burst_n_per_scenario": 28,
   "burst": {
     "scenarios": {
       "flashing yellow 4-frame (air_cushion)": {
-        "requested": true,
+        "requested": 22,
+        "samples": 28,
         "expected": true,
-        "requests": 1
+        "request_rate": 0.7857142857142857
       },
       "single-frame yellow": {
-        "requested": true,
+        "requested": 16,
+        "samples": 28,
         "expected": true,
-        "requests": 1
+        "request_rate": 0.5714285714285714
       },
       "complete steady pattern": {
-        "requested": false,
+        "requested": 0,
+        "samples": 28,
         "expected": false,
-        "requests": 0
+        "request_rate": 0.0
       },
       "partial/low-confidence pattern": {
-        "requested": true,
+        "requested": 12,
+        "samples": 28,
         "expected": true,
-        "requests": 1
+        "request_rate": 0.42857142857142855
       },
       "day": {
-        "requested": false,
+        "requested": 0,
+        "samples": 28,
         "expected": false,
-        "requests": 0
+        "request_rate": 0.0
       }
     },
     "continuous_triggers_120s_at_1fps": {
-      "requests": 20,
-      "granted": 2,
+      "accepted": 20,
+      "new_intervals": 2,
+      "extensions": 18,
       "denied": 100,
       "duty": 0.2,
       "duration_s": 120,

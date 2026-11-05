@@ -19,6 +19,7 @@ class BurstController:
     intervals: list[tuple[float, float]] = field(default_factory=list)
     reasons: list[tuple[float, str]] = field(default_factory=list)
     granted: int = 0
+    extensions: int = 0
     denied: int = 0
     degraded: int = 0
     _warned_rate: bool = False
@@ -53,6 +54,7 @@ class BurstController:
                 return False
             self.intervals[self.intervals.index(current)] = (current[0], end)
             self.reasons.append((now, reason))
+            self.extensions += 1
             return True
         if self.duty(now) + self.duration_s / self.window_s > self.max_duty:
             self.denied += 1
