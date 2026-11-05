@@ -73,7 +73,7 @@ test('team sharing posts suggestions, supports local Later, and keeps failed act
  vm.runInContext("rv.ask=null;teamSync.proposals=[];reviewerName='';checkLearningSuggestion()",context);
  assert.equal(vm.runInContext('!!rv.ask&&!rv.ask.team',context),true);
 });
-test('team acceptance adds directive before resolving and votes do not add rules',async()=>{
+test('team acceptance resolves before adding a directive and votes do not add rules',async()=>{
  const context=setup();
  vm.runInContext(`teamSync.on=true;teamSync.available=true;reviewerName='Alice';calls=[];toast=()=>{};
   proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
@@ -83,8 +83,36 @@ test('team acceptance adds directive before resolving and votes do not add rules
  assert.equal(vm.runInContext('calls.length',context),1);
  assert.equal(vm.runInContext('calls[0].path',context),'/api/review-sync/proposals/p/vote');
  await vm.runInContext("answerTeamProposal('accepted')",context);
- assert.equal(vm.runInContext('calls[1].path',context),'/api/directives');
- assert.equal(vm.runInContext('calls[2].path',context),'/api/review-sync/proposals/p/resolve');
+ assert.equal(vm.runInContext('calls[1].path',context),'/api/review-sync/proposals/p/resolve');
+ assert.equal(vm.runInContext('calls[2].path',context),'/api/directives');
+ assert.equal(context.$('rvAsk').hidden,true);
+});
+test('two team acceptors add only one directive when the second resolve returns 404',async()=>{
+ const contexts=[setup(),setup()];let winner=false,directives=0,resolves=0;
+ for(const context of contexts){
+  vm.runInContext(`teamSync.on=true;reviewerName='Alice';toast=()=>{};proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};receiveTeamProposal(proposal)`,context);
+  context.request=async(path)=>{
+   if(path==='/api/review-sync')return {proposals:[]};
+   if(path==='/api/directives'){directives++;return {}};
+   resolves++;if(winner)throw Object.assign(new Error('pending proposal not found'),{status:404});winner=true;
+   return {proposal:{id:'p',cls:'bird',dir:'raise',status:'accepted',resolvedBy:'Alice'}};
+  };
+ }
+ await Promise.all(contexts.map(context=>vm.runInContext("answerTeamProposal('accepted')",context)));
+ assert.equal(resolves,2);assert.equal(directives,1);
+ for(const context of contexts)assert.equal(context.$('rvAsk').hidden,true);
+});
+test('failed rule after winning resolve defers learning and shows only the actionable error',async()=>{
+ const context=setup();
+ vm.runInContext(`teamSync.on=true;reviewerName='Alice';messages=[];toast=m=>messages.push(m);learned=[];
+  gsLearn={suggestion:()=>({cls:'bird',dir:'raise'}),resolve:(s,a)=>learned.push(a)};
+  proposal={id:'p',cls:'bird',dir:'raise',n:4,of:5,proposedBy:'Alice',status:'pending',votes:{}};
+  receiveTeamProposal(proposal);teamSync.local.set('bird:raise',proposal);
+  request=async(path)=>{if(path==='/api/directives')throw Error('offline');const resolved={...proposal,status:'accepted',resolvedBy:'Alice'};receiveTeamProposal(resolved);return {proposal:resolved}};`,context);
+ await vm.runInContext("answerTeamProposal('accepted')",context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(learned)',context)),['later']);
+ assert.equal(vm.runInContext('messages.length',context),1);
+ assert.match(vm.runInContext('messages[0]',context),/Accepted, but adding the rule failed: offline — add it on Collection Priorities/);
  assert.equal(context.$('rvAsk').hidden,true);
 });
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
