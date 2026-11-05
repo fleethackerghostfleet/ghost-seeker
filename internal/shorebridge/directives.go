@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"sort"
 	"strings"
 	"time"
 
@@ -80,6 +82,7 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string, r
 	// label another layer boosts is a real override and stays.
 	inheritedBoost, inheritedSuppress := inheritedLabels(pol.Layers, operatorLayer)
 	rule := &pb.InterestRule{Id: newRuleID(layer.Rules, now), Author: pol.IssuedBy,
+		TierLabels:     maps.Clone(pol.Interest.TierLabels),
 		BoostLabels:    ownLabels(pol.Interest.BoostLabels, inheritedBoost),
 		SuppressLabels: ownLabels(pol.Interest.SuppressLabels, inheritedSuppress),
 		Text:           strings.TrimSpace(pol.Text), ExpiresAtUnixMs: ruleExpiryUnixMs}
@@ -262,8 +265,9 @@ func nextPolicyExpiry(p *pb.Policy, now time.Time) time.Time {
 func wrapFlatPolicy(current *pb.Policy, issuedBy string, echelon pb.Echelon) []*pb.PolicyLayer {
 	layer := &pb.PolicyLayer{Echelon: echelon, IssuedBy: issuedBy}
 	interest := current.GetInterest()
-	if len(interest.GetBoostLabels())+len(interest.GetSuppressLabels()) > 0 {
+	if len(interest.GetBoostLabels())+len(interest.GetSuppressLabels())+len(interest.GetTierLabels()) > 0 {
 		layer.Rules = []*pb.InterestRule{{Id: "ui-standing", Author: issuedBy, Text: current.GetText(),
+			TierLabels:     maps.Clone(interest.GetTierLabels()),
 			BoostLabels:    append([]string(nil), interest.GetBoostLabels()...),
 			SuppressLabels: append([]string(nil), interest.GetSuppressLabels()...),
 			Weight:         interest.GetBoostFactor(), ExpiresAtUnixMs: current.GetExpiresAtUnixMs()}}
@@ -340,6 +344,9 @@ func newRuleID(existing []*pb.InterestRule, now time.Time) string {
 // directive sets EMCON itself (setsEmcon), which supersedes it.
 func newestWins(rules []*pb.InterestRule, newest *pb.InterestRule, now time.Time, setsEmcon bool) []*pb.InterestRule {
 	trim := map[string]bool{}
+	for label := range newest.TierLabels {
+		trim[normLabel(label)] = true
+	}
 	for _, l := range append(append([]string(nil), newest.BoostLabels...), newest.SuppressLabels...) {
 		trim[normLabel(l)] = true
 	}
@@ -351,10 +358,15 @@ func newestWins(rules []*pb.InterestRule, newest *pb.InterestRule, now time.Time
 		if setsEmcon && emconOnlyRule(old) {
 			continue
 		}
-		had := len(old.BoostLabels) + len(old.SuppressLabels)
+		had := len(old.BoostLabels) + len(old.SuppressLabels) + len(old.TierLabels)
+		for label := range old.TierLabels {
+			if trim[normLabel(label)] {
+				delete(old.TierLabels, label)
+			}
+		}
 		old.BoostLabels = withoutLabels(old.BoostLabels, trim)
 		old.SuppressLabels = withoutLabels(old.SuppressLabels, trim)
-		if had > 0 && len(old.BoostLabels)+len(old.SuppressLabels) == 0 {
+		if had > 0 && len(old.BoostLabels)+len(old.SuppressLabels)+len(old.TierLabels) == 0 {
 			continue
 		}
 		out = append(out, old)
@@ -365,7 +377,7 @@ func newestWins(rules []*pb.InterestRule, newest *pb.InterestRule, now time.Time
 // emconOnlyRule is a directive that only set the transmit posture ("go quiet
 // for 1 minute"): no labels, an EMCON phrase in its words.
 func emconOnlyRule(rule *pb.InterestRule) bool {
-	if rule == nil || len(rule.BoostLabels)+len(rule.SuppressLabels) > 0 {
+	if rule == nil || len(rule.BoostLabels)+len(rule.SuppressLabels)+len(rule.TierLabels) > 0 {
 		return false
 	}
 	mode, _ := command.SplitEmcon(rule.Text)
@@ -446,13 +458,13 @@ func (b *Bridge) directives(pol *pb.Policy, now time.Time) []command.Directive {
 		return out
 	}
 	if len(pol.Layers) == 0 {
-		rules := policyRules(flatDirectiveID, pol.GetInterest().GetSuppressLabels(), pol.GetInterest().GetBoostLabels())
+		rules := policyRules(flatDirectiveID, pol.GetInterest().GetSuppressLabels(), pol.GetInterest().GetBoostLabels(), pol.GetInterest().GetTierLabels())
 		if len(rules) == 0 {
 			return out
 		}
 		text := strings.TrimSpace(pol.GetText())
 		if text == "" {
-			text = Readback(pol.GetInterest().GetSuppressLabels(), pol.GetInterest().GetBoostLabels())
+			text = tierReadback(pol.GetInterest().GetSuppressLabels(), pol.GetInterest().GetBoostLabels(), pol.GetInterest().GetTierLabels())
 		}
 		return append(out, command.Directive{ID: flatDirectiveID, Text: text, Rules: rules, ExpiresAtUnixMs: pol.GetExpiresAtUnixMs()})
 	}
@@ -466,13 +478,13 @@ func (b *Bridge) directives(pol *pb.Policy, now time.Time) []command.Directive {
 	}
 	entry := func(layer *pb.PolicyLayer, rule *pb.InterestRule) (command.Directive, bool) {
 		own := layer.Echelon == echelon && layer.IssuedBy == issuedBy
-		rules := policyRules(rule.Id, rule.SuppressLabels, rule.BoostLabels)
+		rules := policyRules(rule.Id, rule.SuppressLabels, rule.BoostLabels, rule.TierLabels)
 		if len(rules) == 0 && !(own && emconOwner(layer) != nil && emconOwner(layer).Id == rule.Id) {
 			return command.Directive{}, false
 		}
 		text := strings.TrimSpace(rule.Text)
 		if text == "" {
-			text = strings.TrimSuffix(Readback(rule.SuppressLabels, rule.BoostLabels), " Until cleared.")
+			text = strings.TrimSuffix(tierReadback(rule.SuppressLabels, rule.BoostLabels, rule.TierLabels), " Until cleared.")
 		}
 		d := command.Directive{ID: rule.Id, Text: text, Rules: rules, ExpiresAtUnixMs: rule.ExpiresAtUnixMs}
 		if !own {
@@ -528,13 +540,23 @@ func sortedLayersHighFirst(layers []*pb.PolicyLayer) []*pb.PolicyLayer {
 	return out
 }
 
-func policyRules(directiveID string, suppress, boost []string) []command.Rule {
+func policyRules(directiveID string, suppress, boost []string, pins ...map[string]int32) []command.Rule {
 	rules := []command.Rule{}
 	for _, l := range displayLabels(boost) {
 		rules = append(rules, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: directiveID})
 	}
 	for _, l := range displayLabels(suppress) {
 		rules = append(rules, command.Rule{Type: "suppress", Classes: []string{l}, Attrs: []string{}, DirectiveID: directiveID})
+	}
+	for _, tiers := range pins {
+		labels := make([]string, 0, len(tiers))
+		for label := range tiers {
+			labels = append(labels, label)
+		}
+		sort.Strings(labels)
+		for _, label := range labels {
+			rules = append(rules, command.Rule{Type: "boost", Classes: []string{label}, Attrs: []string{}, Tier: int(tiers[label]), DirectiveID: directiveID})
+		}
 	}
 	return rules
 }
@@ -554,7 +576,10 @@ func directivesText(ds []command.Directive) string {
 // each rule says when it lapses: "Deprioritize (not delete): cargo ship. Until
 // 05:47Z. Boost: submarine. Until cleared."
 func directivesReadback(ds []command.Directive) string {
-	type group struct{ suppress, boost []string }
+	type group struct {
+		suppress, boost []string
+		tiers           map[string]int32
+	}
 	var order []int64
 	groups := map[int64]*group{}
 	for _, d := range ds {
@@ -567,6 +592,15 @@ func directivesReadback(ds []command.Directive) string {
 				g = &group{}
 				groups[d.ExpiresAtUnixMs] = g
 				order = append(order, d.ExpiresAtUnixMs)
+			}
+			if r.Tier > 0 {
+				if g.tiers == nil {
+					g.tiers = map[string]int32{}
+				}
+				for _, label := range r.Classes {
+					g.tiers[normLabel(label)] = int32(r.Tier)
+				}
+				continue
 			}
 			switch r.Type {
 			case "suppress":
@@ -582,7 +616,7 @@ func directivesReadback(ds []command.Directive) string {
 	parts := make([]string, 0, len(order))
 	for _, at := range order {
 		g := groups[at]
-		rb := Readback(g.suppress, g.boost)
+		rb := tierReadback(g.suppress, g.boost, g.tiers)
 		if at > 0 {
 			rb = strings.Replace(rb, "Until cleared.", "Until "+time.UnixMilli(at).UTC().Format("15:04Z")+".", 1)
 		}

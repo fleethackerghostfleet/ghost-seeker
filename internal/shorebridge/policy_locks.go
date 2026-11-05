@@ -28,7 +28,7 @@ func (c shoreLockChecker) CheckLocks(rules []command.Rule) ([]string, bool) {
 	converted := make([]policy.RuleLabels, len(rules))
 	for i, rule := range rules {
 		converted[i] = policy.RuleLabels{
-			Type: rule.Type, Weight: rule.Weight,
+			Type: rule.Type, Weight: rule.Weight, Tier: rule.Tier,
 			Classes: transportLabels(rule.Classes), Attrs: rule.Attrs,
 		}
 	}
