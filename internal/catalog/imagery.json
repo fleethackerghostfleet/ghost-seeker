@@ -10,6 +10,18 @@
      "y": 115.5,
      "w": 114.7,
      "h": 27.3
+    },
+    "ship": {
+     "type": "container",
+     "label": "Container",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -25,6 +37,19 @@
      "y": 157.5,
      "w": 105.1,
      "h": 45.0
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "medium",
+     "features": [
+      "radar mast",
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -34,6 +59,18 @@
      "y": 100.5,
      "w": 125.3,
      "h": 23.4
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -49,6 +86,19 @@
      "y": 127.5,
      "w": 86.4,
      "h": 24.9
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "radar mast",
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -64,6 +114,18 @@
      "y": 115.5,
      "w": 120.0,
      "h": 87.3
+    },
+    "ship": {
+     "type": "submarine",
+     "label": "Submarine",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -145,6 +207,18 @@
      "y": 182,
      "w": 50,
      "h": 16
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "small",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -165,6 +239,19 @@
      "y": 102.6,
      "w": 117.1,
      "h": 29.1
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "large",
+     "features": [
+      "radar mast",
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -174,6 +261,18 @@
      "y": 192.3,
      "w": 95.0,
      "h": 48.6
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "small",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -183,6 +282,18 @@
      "y": 108.6,
      "w": 26.9,
      "h": 13.8
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.85,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -192,6 +303,18 @@
      "y": 98.4,
      "w": 82.1,
      "h": 16.5
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -201,6 +324,18 @@
      "y": 98.4,
      "w": 48.0,
      "h": 20.4
+    },
+    "ship": {
+     "type": "sailboat",
+     "label": "Sailboat/yacht",
+     "conf": 0.9,
+     "aspect": "beam",
+     "size": "medium",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -216,6 +351,15 @@
      "y": 175.2,
      "w": 168.5,
      "h": 34.5
+    },
+    "ship": {
+     "type": "container",
+     "label": "Container",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -243,6 +387,15 @@
      "y": 198.6,
      "w": 29.8,
      "h": 14.1
+    },
+    "ship": {
+     "type": "tug",
+     "label": "Tug",
+     "conf": 0.9,
+     "aspect": "quarter",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -252,6 +405,18 @@
      "y": 215.4,
      "w": 27.4,
      "h": 20.1
+    },
+    "ship": {
+     "type": "tug",
+     "label": "Tug",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "small",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -261,6 +426,19 @@
      "y": 200.4,
      "w": 20.2,
      "h": 12.3
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.85,
+     "aspect": "beam",
+     "size": "medium",
+     "features": [
+      "radar mast",
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -276,6 +454,18 @@
      "y": 70.8,
      "w": 31.7,
      "h": 21.0
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -285,6 +475,18 @@
      "y": 86.4,
      "w": 12.5,
      "h": 9.0
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.85,
+     "aspect": "bow",
+     "size": "medium",
+     "features": [
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -294,6 +496,18 @@
      "y": 162.0,
      "w": 16.3,
      "h": 20.4
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.95,
+     "aspect": "bow",
+     "size": "small",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -312,6 +526,15 @@
      "y": 111.0,
      "w": 23.5,
      "h": 15.0
+    },
+    "ship": {
+     "type": "tug",
+     "label": "Tug",
+     "conf": 0.8,
+     "aspect": "beam",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -321,6 +544,15 @@
      "y": 99.6,
      "w": 19.2,
      "h": 12.0
+    },
+    "ship": {
+     "type": "tug",
+     "label": "Tug",
+     "conf": 0.9,
+     "aspect": "beam",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -336,6 +568,18 @@
      "y": 81.6,
      "w": 189.6,
      "h": 44.4
+    },
+    "ship": {
+     "type": "tanker",
+     "label": "Tanker",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -345,6 +589,19 @@
      "y": 129.3,
      "w": 133.0,
      "h": 66.3
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "medium",
+     "features": [
+      "radar mast",
+      "cranes"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -354,6 +611,18 @@
      "y": 97.5,
      "w": 43.7,
      "h": 12.3
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.85,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -363,6 +632,18 @@
      "y": 99.6,
      "w": 38.9,
      "h": 15.6
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -372,6 +653,15 @@
      "y": 113.7,
      "w": 8.2,
      "h": 5.4
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.8,
+     "aspect": "beam",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -381,6 +671,18 @@
      "y": 96.0,
      "w": 46.1,
      "h": 15.0
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "bow",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -405,6 +707,18 @@
      "y": 148,
      "w": 55,
      "h": 27
+    },
+    "ship": {
+     "type": "container",
+     "label": "Container",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -414,6 +728,15 @@
      "y": 198,
      "w": 18,
      "h": 12
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.9,
+     "aspect": "quarter",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -423,6 +746,15 @@
      "y": 212,
      "w": 25,
      "h": 14
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.9,
+     "aspect": "quarter",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -432,6 +764,18 @@
      "y": 224,
      "w": 48,
      "h": 16
+    },
+    "ship": {
+     "type": "tug",
+     "label": "Tug",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "small",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -447,6 +791,18 @@
      "y": 120,
      "w": 148,
      "h": 108
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "small",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -456,6 +812,15 @@
      "y": 190,
      "w": 75,
      "h": 45
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.95,
+     "aspect": "bow",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -489,6 +854,18 @@
      "y": 75.0,
      "w": 47.0,
      "h": 29.1
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "medium",
+     "features": [
+      "cranes"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -498,6 +875,19 @@
      "y": 88.2,
      "w": 36.5,
      "h": 26.7
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "medium",
+     "features": [
+      "radar mast",
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -507,6 +897,19 @@
      "y": 79.2,
      "w": 48.0,
      "h": 44.4
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "medium",
+     "features": [
+      "radar mast",
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -516,6 +919,13 @@
      "y": 86.4,
      "w": 28.8,
      "h": 12.6
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -536,6 +946,13 @@
      "y": 146.4,
      "w": 7.7,
      "h": 7.2
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -545,6 +962,13 @@
      "y": 178.5,
      "w": 9.6,
      "h": 4.5
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -554,6 +978,13 @@
      "y": 185,
      "w": 20,
      "h": 17
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.8,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -569,6 +1000,18 @@
      "y": 138,
      "w": 60,
      "h": 50
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "bow",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -584,6 +1027,19 @@
      "y": 127.5,
      "w": 133.9,
      "h": 37.5
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "radar mast",
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -593,6 +1049,19 @@
      "y": 144.9,
      "w": 32.6,
      "h": 17.4
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "radar mast",
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -611,6 +1080,18 @@
      "y": 248,
      "w": 16,
      "h": 14
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.85,
+     "aspect": "bow",
+     "size": "large",
+     "features": [
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -650,6 +1131,19 @@
      "y": 133.8,
      "w": 44.6,
      "h": 46.2
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.95,
+     "aspect": "bow",
+     "size": "medium",
+     "features": [
+      "radar mast",
+      "cranes"
+     ],
+     "markings": "visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -683,6 +1177,18 @@
      "y": 106.2,
      "w": 111.4,
      "h": 100.2
+    },
+    "ship": {
+     "type": "tanker",
+     "label": "Tanker",
+     "conf": 0.95,
+     "aspect": "bow",
+     "size": "large",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -743,6 +1249,18 @@
      "y": 98.4,
      "w": 78.7,
      "h": 71.4
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "bow",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -761,6 +1279,18 @@
      "y": 166.8,
      "w": 46.1,
      "h": 25.2
+    },
+    "ship": {
+     "type": "coast_guard",
+     "label": "Coast guard",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "medium",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -776,6 +1306,18 @@
      "y": 145.5,
      "w": 28.8,
      "h": 33.9
+    },
+    "ship": {
+     "type": "tug",
+     "label": "Tug",
+     "conf": 0.95,
+     "aspect": "bow",
+     "size": "medium",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -836,6 +1378,15 @@
      "y": 128.7,
      "w": 32.2,
      "h": 8.1
+    },
+    "ship": {
+     "type": "container",
+     "label": "Container",
+     "conf": 0.85,
+     "aspect": "quarter",
+     "size": "large",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -845,6 +1396,14 @@
      "y": 82.5,
      "w": 10.6,
      "h": 27.9
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.8,
+     "aspect": "bow",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -854,6 +1413,13 @@
      "y": 200.1,
      "w": 10.6,
      "h": 33.6
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -869,6 +1435,15 @@
      "y": 138,
      "w": 63,
      "h": 17
+    },
+    "ship": {
+     "type": "submarine",
+     "label": "Submarine",
+     "conf": 0.9,
+     "aspect": "bow",
+     "size": "large",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -878,6 +1453,15 @@
      "y": 213,
      "w": 19,
      "h": 8
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.7,
+     "aspect": "beam",
+     "size": "medium",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -887,6 +1471,13 @@
      "y": 207,
      "w": 16,
      "h": 7
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.8,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -896,6 +1487,13 @@
      "y": 68,
      "w": 8,
      "h": 20
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.8,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -911,6 +1509,15 @@
      "y": 119.4,
      "w": 52.8,
      "h": 48.6
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.85,
+     "aspect": "bow",
+     "size": "large",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -920,6 +1527,13 @@
      "y": 60.6,
      "w": 11.5,
      "h": 4.8
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -929,6 +1543,13 @@
      "y": 230.4,
      "w": 11.5,
      "h": 4.8
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.8,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -938,6 +1559,13 @@
      "y": 51.0,
      "w": 9.1,
      "h": 4.8
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -953,6 +1581,13 @@
      "y": 128.4,
      "w": 10.6,
      "h": 18.6
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -962,6 +1597,18 @@
      "y": 191.4,
      "w": 10.1,
      "h": 18.6
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.85,
+     "aspect": "bow",
+     "size": "large",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -977,6 +1624,18 @@
      "y": 64.8,
      "w": 72.0,
      "h": 22.8
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "quarter",
+     "size": "large",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -986,6 +1645,15 @@
      "y": 153.6,
      "w": 21.6,
      "h": 12.6
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.9,
+     "aspect": "quarter",
+     "size": "medium",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -995,6 +1663,13 @@
      "y": 200.7,
      "w": 14.9,
      "h": 4.5
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1010,6 +1685,15 @@
      "y": 107.4,
      "w": 19.2,
      "h": 85.2
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "bow",
+     "size": "large",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -1019,6 +1703,15 @@
      "y": 111.9,
      "w": 19.7,
      "h": 85.2
+    },
+    "ship": {
+     "type": "cargo",
+     "label": "Cargo/bulk",
+     "conf": 0.9,
+     "aspect": "bow",
+     "size": "large",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1034,6 +1727,13 @@
      "y": 132.9,
      "w": 20.6,
      "h": 9.6
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.8,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1236,6 +1936,13 @@
      "y": 155.1,
      "w": 11.0,
      "h": 19.8
+    },
+    "ship": {
+     "type": "unknown",
+     "label": "Unknown",
+     "conf": 0.5,
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1251,6 +1958,15 @@
      "y": 135,
      "w": 195,
      "h": 37
+    },
+    "ship": {
+     "type": "container",
+     "label": "Container",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "large",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1266,6 +1982,18 @@
      "y": 110,
      "w": 36,
      "h": 118
+    },
+    "ship": {
+     "type": "fishing",
+     "label": "Fishing",
+     "conf": 0.9,
+     "aspect": "bow",
+     "size": "medium",
+     "features": [
+      "cranes"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -1275,6 +2003,15 @@
      "y": 135,
      "w": 22,
      "h": 25
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1314,6 +2051,20 @@
      "y": 111.0,
      "w": 210.2,
      "h": 57.0
+    },
+    "ship": {
+     "type": "warship",
+     "label": "Warship",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "large",
+     "features": [
+      "radar mast",
+      "helicopter deck",
+      "gun mount"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1329,6 +2080,18 @@
      "y": 28.8,
      "w": 61.9,
      "h": 242.4
+    },
+    "ship": {
+     "type": "tanker",
+     "label": "Tanker",
+     "conf": 0.95,
+     "aspect": "quarter",
+     "size": "large",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1344,6 +2107,18 @@
      "y": 132.0,
      "w": 183.8,
      "h": 24.9
+    },
+    "ship": {
+     "type": "submarine",
+     "label": "Submarine",
+     "conf": 0.95,
+     "aspect": "beam",
+     "size": "large",
+     "features": [
+      "radar mast"
+     ],
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
@@ -1359,6 +2134,15 @@
      "y": 118.8,
      "w": 19.2,
      "h": 53.7
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.95,
+     "aspect": "stern",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    },
    {
@@ -1368,6 +2152,15 @@
      "y": 116.7,
      "w": 16.3,
      "h": 53.1
+    },
+    "ship": {
+     "type": "small_boat",
+     "label": "Small boat",
+     "conf": 0.95,
+     "aspect": "bow",
+     "size": "small",
+     "markings": "not visible",
+     "model": "gemini-2.5-flash"
     }
    }
   ]
