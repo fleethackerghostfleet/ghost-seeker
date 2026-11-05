@@ -52,6 +52,10 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if b.Action == "accept" && b.Tier != 0 && b.Tier != old.CentralTier {
+		writeError(w, 409, "model priority changed — review the updated suggestion before accepting")
+		return
+	}
 	effect, err := reviews.ReviewEffect(b.Action, b.Tier, old.CentralTier)
 	if err != nil {
 		writeError(w, 400, err.Error())

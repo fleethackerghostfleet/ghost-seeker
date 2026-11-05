@@ -905,7 +905,7 @@ test('review buttons name their effect and key on screen',()=>{
 test('after a re-rank the next-step line confirms the save and names the keys',()=>{
  const context=setup();
  context.$('rvNext').classList={remove(){},add(){}};
- vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};rv.last='';renderNext(rv.cur)",context);
+ vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};items=[rv.cur];rv.last='';renderNext(rv.cur)",context);
  let html=context.$('rvNext').innerHTML;
  assert.match(html,/<b>Next:<\/b> Press <kbd>Space<\/kbd> to agree with P3 Routine, or <kbd>1<\/kbd>–<kbd>4<\/kbd>/);
  assert.doesNotMatch(html,/rvnext-done/);
