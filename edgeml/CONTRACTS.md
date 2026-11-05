@@ -22,7 +22,7 @@ file and explains why.
 - `Sighting` holds one record per object per continuous pass. JSONL, one line per *event*:
   `{sighting_id, clip_id, event: "open"|"update"|"close", t_s, frame_idx, label, label_scores{}, subtype?,
     unknownness, box, best_frame_idx, best_box, best_score, first_t_s, last_t_s, n_frames, track_ids[]}`.
-  `realness` (0..1 trajectory persistence/size/motion consistency) and `unknown_real` (unknownness and realness thresholds both passed) accompany every event as informational fields. The bonus gate is off by default: unknownness contributes after `unknown_bonus_age_s`, as before. Opting into `gate_unknown_bonus_on_realness` requires `unknown_real` for the bonus and enables the real-unknown value floor.
+  `realness` (0..1 trajectory persistence/size/motion consistency) and `unknown_real` (unknownness and realness thresholds both passed) accompany every event as informational fields. The bonus gate has two defaults: `AggregatorParams.gate_unknown_bonus_on_realness=False` for the dataclass and every offline tool (unknownness contributes after `unknown_bonus_age_s`, as before), while the live sidecar (`EdgemlEngine`, `python -m edgeml.sidecar`) sets it to `True` unless `--agg` overrides it. With the gate on, the bonus requires `unknown_real` and the real-unknown value floor is enabled (see `reports/H_unknown.md`).
   Optional lookout-report fields (see `reports/literature.md` §7): `bearing_deg` (box centre x + camera FOV, when
   known), `size_class` (by box-area bucket), `aspect` (bow/stern/beam, if the subtype model can say), `closing`
   (sign of box-area growth).
