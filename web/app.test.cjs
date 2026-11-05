@@ -256,7 +256,9 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  assert.equal(vm.runInContext('state.src',context),'EO-P7');
  assert.equal(vm.runInContext('state.tier',context),'2');
  assert.equal(context.$('clearFeedFilters').hidden,false);
+ vm.runInContext("rv.cur={id:'previous'};rv.shown='previous';rv.displayed={id:'previous'};filterNavigation=rv.navigation",context);
  vm.runInContext('resetFeedFilters()',context);
+ assert.equal(vm.runInContext('rv.navigation===filterNavigation+1&&rv.cur===null&&rv.shown===null&&rv.displayed===null',context),true);
  assert.equal(vm.runInContext('state.src',context),'ALL');
  assert.equal(vm.runInContext('state.tier',context),'all');
  assert.equal(context.$('clearFeedFilters').hidden,true);
@@ -353,6 +355,13 @@ test('shown repeats sit right after their original across sensors and sorts; hid
  assert.match(vm.runInContext('ids()',context),/b,rb/);
  vm.runInContext("state.sort='pri';filters.showDuplicates=false",context);
  assert.equal(vm.runInContext('ids()',context),'a,b,c,low');
+ vm.runInContext("state.tier='1'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),0);
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),3);
+ vm.runInContext("state.tier='all';filters.review='reviewed'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),0);
+ vm.runInContext("filters.review='all'",context);
  assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
 });
 test('a later boost keeps the stored priority despite an earlier suppression flag',()=>{
@@ -1033,7 +1042,7 @@ test('review buttons name their effect and key on screen',()=>{
 test('after a re-rank the next-step line confirms the save and names the keys',()=>{
  const context=setup();
  context.$('rvNext').classList={remove(){},add(){}};
- vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};rv.last='';renderNext(rv.cur)",context);
+ vm.runInContext("reviewerName='Ann';rv.cur={id:'a',centralTier:3};items=[rv.cur];rv.last='';renderNext(rv.cur)",context);
  let html=context.$('rvNext').innerHTML;
  assert.match(html,/<b>Next:<\/b> Press <kbd>Space<\/kbd> to agree with P3 Routine, or <kbd>1<\/kbd>–<kbd>4<\/kbd>/);
  assert.doesNotMatch(html,/rvnext-done/);
