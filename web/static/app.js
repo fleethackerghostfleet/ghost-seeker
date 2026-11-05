@@ -6,7 +6,6 @@ let LIVE=null;
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
 const fmtRate=bps=>bps>=1e6?`${(bps/1e6).toFixed(1)} Mbps`:`${(bps/1000).toFixed(bps<10000?1:0)} kbps`;
-const presetName=bps=>bps===0?'OFF':bps>=1e6?`${bps/1e6} Mbps`:`${bps/1000} kbps`;
 const ago=ms=>{const s=Math.max(0,(Date.now()-ms)/1000);return s<60?`${s|0}s ago`:s<3600?`${(s/60)|0}m ago`:`${(s/3600)|0}h ago`};
 const FORMS=['fact','thumb','crop','full'];
 const FORM_NAME={fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'};
@@ -375,20 +374,21 @@ function renderLiveStrip(){
  const rate=link.controllable?link.bps:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
  const est=edge.ok?edge.estimateBps:shore.estimateBps;
  const relearn=edge.ok&&edge.consecutiveFailures>0?` · estimating speed again: ${edge.consecutiveFailures} failed transfer${edge.consecutiveFailures===1?'':'s'}`:'';
- const presets=(link.presets||[]).map(p=>`<button data-bps="${p}" class="${link.controllable&&p===link.bps?'on':''}" ${link.controllable?'':'disabled'} title="${link.controllable?`Set the simulated ship-to-shore connection speed to ${presetName(p)}`:'Connection speed is controlled outside this console'}">${presetName(p)}</button>`).join('');
+ const d=link.distribution;
+ const distribution=d?`<span class="hint">Automatic · normal · ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)} · every ${d.intervalMs/1000}s</span>`:'';
+ const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds. The ship's measured estimate may take several transfers to catch up.`:'Ship-to-shore speed is controlled outside this console. Showing the measured estimate.';
  const sightingMode=counts.grouped>0;
  const objsShown=sightingMode?counts.sightings:counts.objects,objsImg=sightingMode?counts.sightingsWithImage:counts.objectsWithImage;
  const preTrack=sightingMode?Math.max(0,counts.objects-counts.sightings):0;
  const dropPct=edge.ok&&(edge.itemsTotal+edge.itemsDeduped)>0?Math.round(100*edge.itemsDeduped/(edge.itemsTotal+edge.itemsDeduped)):0;
  el.innerHTML=`
-  <div class="st link" title="Ship-to-shore connection. These buttons set its simulated speed. The ship measures the speed over several transfers, so its estimate may take time to catch up.">Ship-to-shore connection <div class="seg" id="linkPresets">${presets}</div><b>${fmtRate(rate)}</b>${link.controllable&&est?`<span class="hint">ship estimates ${fmtRate(est)}${relearn}</span>`:''}</div><span class="ar">›</span>
+  <div class="st link" title="${esc(linkTitle)}">Ship-to-shore connection <b>${fmtRate(rate)}</b>${distribution}${link.controllable&&est?`<span class="hint">ship estimates ${fmtRate(est)}${relearn}</span>`:''}</div><span class="ar">›</span>
   <div class="st" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
   <div class="st" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
   <div class="st" title="Image and summary data sent over the connection${link.controllable?` (shore itself counted ${fmtBytes(shore.bytes||0)})`:''}. Compare with what ${edge.itemsDeduped||0} repeated views would have cost to send.">Data transferred <b>${fmtBytes(link.controllable?link.bytes:shore.bytes||0)}</b></div><span class="ar">›</span>
   <div class="st" title="${esc(policy.text?`Operator wrote: “${policy.text}”. The shore read it back as: ${policy.readback}`:policy.readback||'')}">Directive <b class="rb">${esc(policy.text?policy.readback:'none')}</b>${policy.emcon&&policy.emcon.mode&&policy.emcon.mode!=='NORMAL'?` · Transmission mode <b>${esc(policy.emcon.mode)}</b>`:''}</div><span class="ar">›</span>
   <div class="st" id="prioMode" title="Scoring model used on the ship. P1 Critical, P2 High, P3 Routine and P4 Low divide the current shore feed into priority groups (top 10%, next 25%, next 35%, then the rest). Deprioritized objects are P4 Low.">Scoring model <b>${esc(prioritization?.label||'Ship score')}</b>${prioritization?.source==='edge'?'':' <span class="hint">(built-in)</span>'}</div>
   <span class="sv" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span>`;
- const seg=$('linkPresets');if(seg)seg.onclick=async e=>{const b=e.target.closest('button[data-bps]');if(!b||b.disabled)return;try{await request('/api/shore/link','POST',{bps:+b.dataset.bps});toast(`Link → ${presetName(+b.dataset.bps)} — the ship updates its speed estimate over the next transfers`)}catch(error){toast(error.message)}};
 }
 const pulling=new Set();
 function renderCameras(){

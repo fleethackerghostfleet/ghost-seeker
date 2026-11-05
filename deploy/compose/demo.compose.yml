@@ -11,7 +11,7 @@
 # This is NOT the fielding topology (docker-compose.yml): auth is the dev
 # token path (`init` writes the operator token, unit key and edge JWT into
 # the `demo-secrets` volume), the link is the operator UI's in-process
-# shaper (bandwidth buttons), and ports bind to 127.0.0.1 only.
+# shaper (automatic 0–50 Mbps bandwidth), and ports bind to 127.0.0.1 only.
 name: ghost-seeker-demo
 
 x-build: &go-build
