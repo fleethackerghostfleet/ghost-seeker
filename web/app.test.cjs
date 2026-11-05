@@ -605,6 +605,21 @@ function setup(){
  return context;
 }
 
+test('processing timeline formats latencies outside the detail renderer',()=>{
+ const context=setup();
+ vm.runInContext(`
+  MODELS={maritime:{name:'Maritime'}};
+  const html=processingHTML({
+   src:{hw:'EO-P7',em:'EO'},edge:.4,kb:12,fullRes:false,
+   lat:{edge:100,up:1500,cen:2000}
+  });
+ `,context);
+ const html=vm.runInContext('html',context);
+ assert.match(html,/>100 ms</);
+ assert.match(html,/>1\\.5 s</);
+ assert.match(html,/>2\\.0 s</);
+});
+
 test('unknown contact labels, distinct boxes and persistence explanations',()=>{
  const context=setup();
  vm.runInContext(`
