@@ -24,7 +24,7 @@ func Readback(suppress, boost []string) string {
 func joinLabels(labels []string) string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(labels))
-	for _, l := range labels {
+	for _, l := range displayLabels(labels) {
 		l = strings.TrimSpace(strings.ToLower(l))
 		if l == "" || seen[l] {
 			continue

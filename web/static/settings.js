@@ -7,8 +7,8 @@ window.gsSettings=(()=>{
  const PARTS=[['hstats','Header counts'],['live','Feed status'],['clock','Clock'],['user','Watch station'],['strip','Pipeline strip'],['dirbar','Active directives'],['ov','Thumbnail source & score'],['cl','Thumbnail captions'],['tbox','Thumbnail detection boxes']];
  const DENSITIES=['m','l'];
  const REVIEWS=['all','reviewed','sent','unreviewed'];
- const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:{showDuplicates:false,review:'all',dupDefault:'off'}});
- function cleanFeed(value){return {showDuplicates:value?.showDuplicates===true,review:REVIEWS.includes(value?.review)?value.review:'all',dupDefault:'off'}}
+ const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:cleanFeed()});
+ function cleanFeed(value){return {showDuplicates:value?.showDuplicates===true,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all',dupDefault:'off'}}
  // "Sent by a person" is a temporary view; a reload must not leave the main feed stuck on it.
  function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';
   // Reset legacy auto-saved defaults once; marked settings preserve later user choices.

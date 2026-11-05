@@ -1,0 +1,79 @@
+{
+  "system": "Read the visual object phrase. First list any extra visual qualifiers (size, color, material) that are not part of a known category. Then choose the equivalent known category, or NONE. Synonyms for a known category do not create extra qualifiers. If there are no extra qualifiers, return [\"NONE\"] as the entire qualifiers array. The words boat, ship, vessel and craft can refer to the same functional category. Equipment is different from the vehicle using it.\nKnown categories: [\"cargo ship\",\"tanker\",\"container ship\",\"fishing boat\",\"sailboat\",\"speedboat\",\"passenger ship\",\"warship\",\"submarine\",\"coast guard\",\"buoy\",\"aircraft\",\"marine mammal\",\"boat\",\"ship\",\"person\",\"bird\",\"airplane\",\"helicopter\",\"drone\",\"debris\",\"unknown\"]\nInput: cargo vessel\nOutput: {\"qualifiers\":[\"NONE\"],\"label\":\"cargo ship\"}\nInput: large cargo vessel\nOutput: {\"qualifiers\":[\"large\"],\"label\":\"cargo ship\"}\nInput: red cargo ship\nOutput: {\"qualifiers\":[\"red\"],\"label\":\"cargo ship\"}\nInput: rescue boat\nOutput: {\"qualifiers\":[\"NONE\"],\"label\":\"NONE\"}\nInput: cargo net\nOutput: {\"qualifiers\":[\"NONE\"],\"label\":\"NONE\"}",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "qualifiers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "maxItems": 4
+      },
+      "label": {
+        "type": "string",
+        "enum": [
+          "cargo ship",
+          "tanker",
+          "container ship",
+          "fishing boat",
+          "sailboat",
+          "speedboat",
+          "passenger ship",
+          "warship",
+          "submarine",
+          "coast guard",
+          "buoy",
+          "aircraft",
+          "marine mammal",
+          "boat",
+          "ship",
+          "person",
+          "bird",
+          "airplane",
+          "helicopter",
+          "drone",
+          "debris",
+          "unknown",
+          "NONE"
+        ]
+      }
+    },
+    "required": [
+      "qualifiers",
+      "label"
+    ],
+    "additionalProperties": false
+  },
+  "results": [
+    {
+      "input": "cargo vessel",
+      "raw": "{\"qualifiers\":[\"cargo ship\",\"vessel\",\"boat\",\"ship\"],\"label\":\"cargo ship\"}",
+      "seconds": 0.7638660829979926
+    },
+    {
+      "input": "big ship",
+      "raw": "{\"qualifiers\":[\"big\"],\"label\":\"ship\"}",
+      "seconds": 0.11517679202370346
+    },
+    {
+      "input": "fishing vessel",
+      "raw": "{\"qualifiers\":[\"fishing\"],\"label\":\"fishing boat\"}",
+      "seconds": 0.14029079204192385
+    },
+    {
+      "input": "red fishing boat",
+      "raw": "{\"qualifiers\":[\"red\"],\"label\":\"fishing boat\"}",
+      "seconds": 0.14215308299753815
+    }
+  ],
+  "evaluationStage": "targeted-development-probe",
+  "model": "IBM Granite4.0-350M Q4_K_M",
+  "implemented": false,
+  "notes": [
+    "Exactly four requested cases tested.",
+    "Sentinel experiment failed cargo vessel: returned invented qualifier list instead of no-modifier sentinel.",
+    "No changes made to Go implementation or fixtures for this failed experiment."
+  ]
+}

@@ -1,12 +1,37 @@
 package store
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
+
+func TestUploadNextRecordsOperatorSend(t *testing.T) {
+	for _, automatic := range []bool{false, true} {
+		s := New(1)
+		s.items = []command.Item{{ID: "image", Sent: automatic, AutoSent: automatic, Upload: command.Upload{Bytes: 1000}}}
+		if automatic {
+			s.cdr = 1
+		}
+		item, cdr, err := s.SetUploadOverride("image", "next", "Alice")
+		if err != nil || !item.Sent || item.AutoSent || item.HumanReviewed || item.Reviewed || item.SentAt == nil || cdr != 1 {
+			t.Fatalf("operator send: %+v, cdr=%d err=%v", item, cdr, err)
+		}
+		_, cdr, err = s.SetUploadOverride("image", "next", "Alice")
+		if err != nil || cdr != 1 {
+			t.Fatal("repeat upload next double counted send")
+		}
+	}
+	s := New(1)
+	s.items = []command.Item{{ID: "held", Upload: command.Upload{Bytes: 1000}}}
+	item, _, _ := s.SetUploadOverride("held", "hold", "Alice")
+	if item.Sent {
+		t.Fatal("holding image recorded a send")
+	}
+}
 
 func TestUploadHighRateBudget(t *testing.T) {
 	for _, tc := range []struct {
@@ -207,5 +232,49 @@ func TestUploadNextReturnsToPriorityOrder(t *testing.T) {
 	got := s.AdvanceUploads(time.Second)
 	if len(got) != 1 || got[0].ID != "critical" {
 		t.Fatalf("priority order not restored: %+v", got)
+	}
+}
+
+func TestSeedUploadedMarksOnlyTopP1(t *testing.T) {
+	s := New(10)
+	for i, manual := range []int{1, 1, 1, 2} {
+		s.Add(&command.Item{ID: fmt.Sprint(i), KB: 10, Manual: manual, Dets: []command.Detection{{Conf: 0.5 + 0.1*float64(i)}}}, 0)
+	}
+	s.SeedUploaded(2)
+	items, _, _, _ := s.Snapshot()
+	done, minDone, maxQueuedP1 := 0, 2.0, -1.0
+	for _, it := range items {
+		switch {
+		case it.Upload.Done:
+			done++
+			if it.Tier != 1 || it.Upload.Sent != it.Upload.Bytes {
+				t.Fatalf("seeded %+v", it)
+			}
+			minDone = min(minDone, it.Central)
+		case it.Tier == 1:
+			maxQueuedP1 = max(maxQueuedP1, it.Central)
+		}
+	}
+	if done != 2 || maxQueuedP1 > minDone {
+		t.Fatalf("done=%d, lowest seeded central %.3f, highest queued P1 %.3f", done, minDone, maxQueuedP1)
+	}
+}
+
+func TestSeedUploadedPrefersCommanderSendsAndCountsBytes(t *testing.T) {
+	s := New(10)
+	s.Add(&command.Item{ID: "p1", KB: 10, Manual: 1, Dets: []command.Detection{{Conf: 0.9}}}, 0)
+	s.Add(&command.Item{ID: "p2", KB: 10, Manual: 2, Dets: []command.Detection{{Conf: 0.9}}}, 0)
+	if _, _, ok := s.AutoEscalate(); !ok {
+		t.Fatal("nothing escalated")
+	}
+	s.SeedUploaded(1)
+	items, stats, _, _ := s.Snapshot()
+	for _, it := range items {
+		if it.Upload.Done != it.Sent {
+			t.Fatalf("%s: sent=%v but upload done=%v", it.ID, it.Sent, it.Upload.Done)
+		}
+		if it.Upload.Done && int64(stats.Bytes) != it.Upload.Bytes {
+			t.Fatalf("stats.Bytes %d, want %d", stats.Bytes, it.Upload.Bytes)
+		}
 	}
 }

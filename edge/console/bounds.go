@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -63,6 +64,20 @@ func ValidateLabel(s string) error {
 func ValidateInterest(in *pb.Interest) error {
 	if in == nil {
 		return nil
+	}
+	if len(in.TierLabels) > MaxLabels {
+		return fmt.Errorf("tier_labels: at most %d labels", MaxLabels)
+	}
+	for label, tier := range in.TierLabels {
+		if strings.TrimSpace(label) == "" {
+			return errors.New("tier_labels: empty label")
+		}
+		if err := ValidateLabel(label); err != nil {
+			return fmt.Errorf("tier_labels: %w", err)
+		}
+		if tier < 1 || tier > 4 {
+			return errors.New("tier_labels: tier must be between 1 and 4")
+		}
 	}
 	for name, list := range map[string][]string{"boost_labels": in.BoostLabels, "suppress_labels": in.SuppressLabels} {
 		if len(list) > MaxLabels {

@@ -18,6 +18,28 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
+func TestFeedbackDirectiveTargetsWholeClass(t *testing.T) {
+	data := store.New(3)
+	for _, id := range []string{"first", "second"} {
+		data.Add(&command.Item{ID: id, Dets: []command.Detection{{Class: "tanker", Conf: .95}}}, 0)
+	}
+	app := New(data)
+	response := request(app, http.MethodPost, "/api/directives", map[string]any{"text": "Operator feedback: lower Tanker to P2 High", "rules": []command.Rule{{Type: "suppress", Classes: []string{"tanker"}, Tier: 2}}})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("feedback: %d %s", response.Code, response.Body.String())
+	}
+	for _, id := range []string{"first", "second"} {
+		item, _ := data.GetItem(id)
+		if item.Tier != 2 {
+			t.Fatalf("%s tier = %d, want 2", id, item.Tier)
+		}
+	}
+	response = request(app, http.MethodPost, "/api/directives", map[string]any{"text": "invalid", "rules": []command.Rule{{Type: "suppress", Classes: []string{"tanker"}, Tier: 5}}})
+	if response.Code < 400 {
+		t.Fatalf("invalid tier accepted: %d", response.Code)
+	}
+}
+
 func TestUploadOverrideAPI(t *testing.T) {
 	data := store.New(2)
 	data.Add(&command.Item{ID: "queued", KB: 10}, 0)

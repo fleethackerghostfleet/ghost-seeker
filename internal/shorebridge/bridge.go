@@ -22,6 +22,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/scoring"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -126,6 +128,7 @@ type FormStatus struct {
 }
 
 type Card struct {
+	item         *pb.Item
 	ID           string                `json:"id"`
 	Type         string                `json:"type"` // image | record | telemetry
 	CapturedMs   int64                 `json:"capturedMs"`
@@ -147,23 +150,25 @@ type Card struct {
 }
 
 type Object struct {
-	Key         string  `json:"key"`
-	SightingID  string  `json:"sightingId,omitempty"`
-	Subtype     string  `json:"subtype,omitempty"`
-	Event       string  `json:"event,omitempty"`
-	Label       string  `json:"label"`
-	Frames      int     `json:"frames"` // reports on shore, or n_frames from the edge's contact report when known
-	FramesKnown bool    `json:"framesKnown"`
-	Reports     int     `json:"reports"`
-	FirstMs     int64   `json:"firstMs"`
-	LastMs      int64   `json:"lastMs"`
-	Priority    string  `json:"priority"`
-	Best        *Card   `json:"best"`
-	Items       []*Card `json:"items"`
-	HasImage    bool    `json:"hasImage"`
-	Unknown     bool    `json:"unknown"`
-	Suppressed  bool    `json:"suppressed"`
-	Scene       bool    `json:"scene"` // object-free context frame (tags.event == "scene"), not an object
+	detectionMin float32
+	Key          string  `json:"key"`
+	SightingID   string  `json:"sightingId,omitempty"`
+	Subtype      string  `json:"subtype,omitempty"`
+	Event        string  `json:"event,omitempty"`
+	Label        string  `json:"label"`
+	Frames       int     `json:"frames"` // reports on shore, or n_frames from the edge's contact report when known
+	FramesKnown  bool    `json:"framesKnown"`
+	Reports      int     `json:"reports"`
+	FirstMs      int64   `json:"firstMs"`
+	LastMs       int64   `json:"lastMs"`
+	Score        float64 `json:"score"`
+	Priority     string  `json:"priority"`
+	Best         *Card   `json:"best"`
+	Items        []*Card `json:"items"`
+	HasImage     bool    `json:"hasImage"`
+	Unknown      bool    `json:"unknown"`
+	Suppressed   bool    `json:"suppressed"`
+	Scene        bool    `json:"scene"` // object-free context frame (tags.event == "scene"), not an object
 }
 
 type NodeStatus struct {
@@ -186,18 +191,19 @@ type NodeStatus struct {
 }
 
 type Snapshot struct {
-	TS         int64       `json:"ts"`
-	Shore      NodeStatus  `json:"shore"`
-	Edge       NodeStatus  `json:"edge"`
-	Link       LinkStatus  `json:"link"`
-	Policy     string      `json:"policy"`
-	PolicyID   string      `json:"policyId,omitempty"`
-	Emcon      string      `json:"emcon,omitempty"`
-	Suppress   []string    `json:"suppress,omitempty"`
-	Boost      []string    `json:"boost,omitempty"`
-	PolicyInfo *PolicyInfo `json:"policyInfo,omitempty"`
-	Objects    []*Object   `json:"objects"`
-	Counts     Counts      `json:"counts"`
+	TS         int64            `json:"ts"`
+	Shore      NodeStatus       `json:"shore"`
+	Edge       NodeStatus       `json:"edge"`
+	Link       LinkStatus       `json:"link"`
+	Policy     string           `json:"policy"`
+	PolicyID   string           `json:"policyId,omitempty"`
+	Emcon      string           `json:"emcon,omitempty"`
+	Suppress   []string         `json:"suppress,omitempty"`
+	Boost      []string         `json:"boost,omitempty"`
+	TierLabels map[string]int32 `json:"tierLabels,omitempty"`
+	PolicyInfo *PolicyInfo      `json:"policyInfo,omitempty"`
+	Objects    []*Object        `json:"objects"`
+	Counts     Counts           `json:"counts"`
 }
 
 type PolicyInfo struct {
@@ -411,6 +417,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 		suppressed = currentPolicy.GetInterest().GetSuppressLabels()
 		snap.Suppress = suppressed
 		snap.Boost = currentPolicy.GetInterest().GetBoostLabels()
+		snap.TierLabels = currentPolicy.GetInterest().GetTierLabels()
 		snap.PolicyInfo = policyInfo(currentPolicy, b.echelon())
 	}
 
@@ -432,6 +439,12 @@ func (b *Bridge) refresh(ctx context.Context) {
 		}
 	}
 	snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
+	for _, o := range snap.Objects {
+		o.detectionMin = currentPolicy.GetThresholds().GetDetectionMinConf()
+	}
+	if len(snap.TierLabels) > 0 {
+		assignTiers(snap.Objects, snap.TierLabels)
+	}
 	if b.onSnapshot != nil {
 		b.onSnapshot(snap, currentPolicy)
 	}
@@ -564,19 +577,67 @@ var formNames = map[pb.FormKind]string{
 	pb.FormKind_FORM_KIND_FULL:  "full",
 }
 
+func objectTierPin(o *Object, tiers map[string]int32) (string, int32) {
+	policy := &pb.Policy{Interest: &pb.Interest{TierLabels: tiers}, Thresholds: &pb.Thresholds{DetectionMinConf: o.detectionMin}}
+	var label string
+	var tier int32
+	match := func(item *pb.Item) {
+		candidate, target := scoring.TierPin(item, policy)
+		if target > 0 && (tier == 0 || target < tier || target == tier && candidate < label) {
+			label, tier = candidate, target
+		}
+	}
+	displayed := &pb.Features{Tags: map[string]string{"subtype": o.Subtype}}
+	if o.Label != "" {
+		displayed.Detections = []*pb.Detection{{Label: o.Label, Confidence: 1}}
+	}
+	if o.Best != nil {
+		displayed.LabelOverride = o.Best.Override
+	}
+	match(&pb.Item{Features: displayed})
+	matchCard := func(card *Card) {
+		if card == nil {
+			return
+		}
+		if card.item != nil {
+			match(card.item)
+			return
+		}
+		features := &pb.Features{LabelOverride: card.Override, Tags: card.Tags}
+		if card.Label != "" {
+			features.Detections = []*pb.Detection{{Label: card.Label, Confidence: 1}}
+		}
+		match(&pb.Item{Features: features})
+	}
+	matchCard(o.Best)
+	for _, card := range o.Items {
+		matchCard(card)
+	}
+	return label, tier
+}
+
 // assignTiers maps the edge's unbounded priority score onto the P1..P4
 // tiers the operator UI uses by rank within the current shore picture:
 // top 10% P1, next 25% P2, next 35% P3, rest P4. Suppressed objects are P4.
-func assignTiers(objs []*Object) {
+func assignTiers(objs []*Object, pins ...map[string]int32) {
+	tiers := map[string]int32{}
+	if len(pins) > 0 {
+		tiers = pins[0]
+	}
 	ranked := make([]*Object, 0, len(objs))
 	for _, o := range objs {
+		if _, tier := objectTierPin(o, tiers); tier >= 1 && tier <= 4 {
+			o.Priority = fmt.Sprintf("P%d", tier)
+			o.Suppressed = tier == 4
+			continue
+		}
 		if o.Best != nil && !o.Suppressed && !o.Scene {
 			ranked = append(ranked, o)
 		} else {
 			o.Priority = "P4"
 		}
 	}
-	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].Best.Score > ranked[j].Best.Score })
+	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].Score > ranked[j].Score })
 	n := float64(len(ranked))
 	for i, o := range ranked {
 		pos := float64(i+1) / n
@@ -603,6 +664,7 @@ func assignTiers(objs []*Object) {
 func ToCard(v *pb.ItemView) *Card {
 	it := v.GetItem()
 	c := &Card{
+		item:        it,
 		ID:          it.GetId(),
 		Type:        itemTypeName(it.GetType()),
 		CapturedMs:  it.GetCapturedAtUnixMs(),
@@ -757,6 +819,7 @@ func Group(views []*pb.ItemView, suppressLabels []string, reports map[string]con
 		}
 		if c.CapturedMs >= o.LastMs {
 			o.LastMs = c.CapturedMs
+			o.Score = c.Score
 			if st := c.Tags["subtype"]; st != "" {
 				o.Subtype = st
 			}
@@ -1079,7 +1142,7 @@ func emconReadback(readback, mode string, durationMin int) string {
 func rulesToLabels(rules []command.Rule) (suppress, boost []string) {
 	seen := map[string]bool{}
 	for _, rule := range rules {
-		for _, class := range rule.Classes {
+		for _, class := range transportLabels(rule.Classes) {
 			key := rule.Type + "/" + class
 			if class == "" || seen[key] {
 				continue
