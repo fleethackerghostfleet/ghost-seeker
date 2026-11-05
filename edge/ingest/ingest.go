@@ -250,6 +250,12 @@ func (g *Ingester) rememberTomer(resp *pb.AnalyzeResponse, itemID string) {
 	}
 	g.tomerItems[ip.FrameId] = itemID
 	g.tomerRing = append(g.tomerRing, ip.FrameId)
+	// A flagged near-duplicate only gets this far in hash mode when its
+	// reference item is gone (evicted or outside the ring). The sidecar keeps
+	// naming that frame, so re-point it at the item we just stored.
+	if ip.NearDuplicate && ip.NearestPriorId != "" && g.cfg.Dedup == DedupHash {
+		g.tomerItems[ip.NearestPriorId] = itemID
+	}
 }
 
 // existing returns the item already holding this exact content, if any.

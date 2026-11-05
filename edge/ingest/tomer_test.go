@@ -51,6 +51,31 @@ func TestTomerNearDuplicatesFoldUnderHashDedup(t *testing.T) {
 	}
 }
 
+func TestTomerFoldRebindsAfterReferenceEvicted(t *testing.T) {
+	ctx := context.Background()
+	g, _, clk := newIngester(t, DedupHash, &tomerStub{})
+	g.cfg.Prioritizer = scoring.PrioritizerTomer
+	first, err := g.Ingest(ctx, capture(clk, 1))
+	if err != nil || first == nil {
+		t.Fatalf("first: %v %v", first, err)
+	}
+	// the reference falls out of the frame->item ring (same path as an evicted item: lookup fails)
+	delete(g.tomerItems, "cam-a#1")
+	// frame 2 is flagged as a duplicate of frame 1, whose item is gone -> stored as a new item
+	second, err := g.Ingest(ctx, capture(clk, 80))
+	if err != nil || second == nil || second.Item.Id == first.Item.Id {
+		t.Fatalf("second: %v %v", second, err)
+	}
+	// frame 3 still names frame 1 -> folds onto the item that replaced it
+	third, err := g.Ingest(ctx, capture(clk, 120))
+	if err != nil || third == nil || third.Item.Id != second.Item.Id {
+		t.Fatalf("third: %v %v (want fold onto %s)", third, err, second.Item.Id)
+	}
+	if g.Deduped() != 1 {
+		t.Fatalf("dups=%d, want 1", g.Deduped())
+	}
+}
+
 func TestTomerNearDuplicatesStayUnderNaive(t *testing.T) {
 	ctx := context.Background()
 	g, st, clk := newIngester(t, DedupNaive, &tomerStub{})
