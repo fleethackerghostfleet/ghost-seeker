@@ -144,6 +144,7 @@ class EdgemlEngine:
     def analyze(self, source: str, image_bgr: np.ndarray, captured_ms: Optional[int], known_labels: list[str], want_embedding: bool) -> dict:
         src = self._source(source or "default")
         t_start = time.perf_counter()
+        night_report = None
         with src.lock:
             src.frame_idx += 1
             fi = src.frame_idx
@@ -166,15 +167,18 @@ class EdgemlEngine:
                         if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
                         and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
             unknownness = max((float(ev.get("unknownness") or 0.0) for ev in events), default=0.0)
-        ms = (time.perf_counter() - t_start) * 1e3
+            ms = (time.perf_counter() - t_start) * 1e3
+            try:
+                night_report = frame_report(image_bgr, [(d.label, d.score, d.box) for d in kept],
+                                            burst=src.burst, t=t_s)
+            except Exception:
+                logger.exception("night-lights frame analysis failed; skipping optional results")
         self.frames += 1
         self.ms_total += ms
         reported_dets = [{"label": d.label, "confidence": _f(d.score), "box": _norm_box(d.box, W, H)} for d in kept]
         resp = {"detections": reported_dets,
                 "unknownness": _f(unknownness), "modelId": self.model_id, "latencyMs": str(int(ms)), "sightings": sightings}
-        try:
-            night_report = frame_report(image_bgr, [(d.label, d.score, d.box) for d in kept],
-                                        burst=src.burst, t=t_s)
+        if night_report is not None:
             for index, confidence in night_report["dark"]:
                 box = dict(reported_dets[index]["box"])
                 resp["detections"].append({"label": "dark contact", "confidence": confidence, "box": box})
@@ -182,8 +186,6 @@ class EdgemlEngine:
                 burst_result = night_report["burst"]
                 resp["burst"] = {"fps": burst_result["fps"], "durationS": burst_result["duration_s"],
                                  "reason": burst_result["reason"]}
-        except Exception:
-            logger.exception("night-lights frame analysis failed; skipping optional results")
         if emb is not None:
             resp["embedding"] = [round(float(v), 5) for v in np.asarray(emb).ravel()]
         return resp
