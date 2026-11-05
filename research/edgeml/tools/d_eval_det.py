@@ -145,7 +145,7 @@ def main():
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "edgeml" / "src"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "edgeml" / "src"))
     from edgeml.runtime.threads import pin_threads
 
     pin_threads(args.threads)

@@ -123,7 +123,7 @@ func (t *tomerAnalyzer) EmbedText(ctx context.Context, texts []string) ([][]floa
 
 func main() {
 	traceName := flag.String("trace", "satcom_contested", "link trace: steady_64k|trickle_2k4|starlink_turns|satcom_contested|los_bursty")
-	frames := flag.String("frames", "frames", "frame zip directory (for the default scenario)")
+	frames := flag.String("frames", "research/frames", "frame zip directory (for the default scenario)")
 	scen := flag.String("scenario", "", "scenario JSON (default: built-in from -frames)")
 	dur := flag.Duration("duration", 90*time.Minute, "simulated duration")
 	strategies := flag.String("strategies", "fifo,prioritized", "comma list")

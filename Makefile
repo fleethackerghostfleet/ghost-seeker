@@ -29,6 +29,7 @@ test-product: test check-layout
 	$(VERIFY_PYTHON) -m pytest -q edgeml/tests
 
 test-research:
+	$(VERIFY_PYTHON) -m compileall -q research
 	$(GO) vet ./research/...
 	$(GO) test ./research/...
 	PYTHONPATH=algorithm $(VERIFY_PYTHON) -m pytest -q research/edgeml/tests algorithm/tests

@@ -39,6 +39,7 @@ def checks():
         ("go-vulnerabilities", ["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.9.0", "./..."]),
         ("web", ["node", "--test", *[str(p.relative_to(ROOT)) for p in sorted((ROOT / "web").glob("*.test.cjs"))]]),
         ("edgeml", [sys.executable, "-m", "pytest", "-q", "edgeml/tests"]),
+        ("research-syntax", [sys.executable, "-m", "compileall", "-q", "research"]),
         ("research", [sys.executable, "-m", "pytest", "-q", "research/edgeml/tests"]),
         ("algorithm", [sys.executable, "-m", "unittest", "discover", "-s", "algorithm/tests"]),
         ("proto-lint", ["buf", "lint"]),

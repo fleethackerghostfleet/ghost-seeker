@@ -47,6 +47,7 @@ jobs:
       - run: pip install -e 'edgeml[test]' -e research/edgeml
       - run: python -m unittest discover -s tools -p test_layout.py
       - run: pytest -q edgeml/tests
+      - run: python -m compileall -q research
       - run: PYTHONPATH=algorithm pytest -q research/edgeml/tests algorithm/tests
 
   proto:

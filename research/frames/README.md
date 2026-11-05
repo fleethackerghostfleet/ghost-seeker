@@ -13,3 +13,7 @@ independent immutable upload is verified. No Git history rewrite is needed.
 For new large datasets, prefer versioned GCS objects and a checksum/generation
 manifest rather than adding more LFS payloads. Existing originals remain intact.
 See `research/edgeml/reports/DATA_CLEANUP.md` for the audit and clean selection manifests.
+
+The manifest retains the original `frames/` paths as provenance. The same
+archive names now live here under `research/frames/`; their Git LFS OIDs and
+checksums are unchanged.

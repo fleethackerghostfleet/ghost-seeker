@@ -12,7 +12,7 @@ file and explains why.
 - Stay **model-agnostic**. Every model sits behind an adapter that implements the protocols below. Licensing
   doesn't matter for now.
 - Do not modify `algorithm/`, `edge/`, `shore/`, `proto/`, `web/`, `cmd/`. PRs target the `edgeml/main` branch.
-- **No overfitting.** Tune thresholds and pick models on `dev` only. `test` sources in `configs/splits.yaml` are
+- **No overfitting.** Tune thresholds and pick models on `dev` only. `test` sources in `research/edgeml/configs/splits.yaml` are
   evaluated once per candidate at the end, and the test numbers are reported but never tuned on.
 
 ## 1. Types (`edgeml/src/edgeml/types.py`)
@@ -22,8 +22,8 @@ file and explains why.
 - `Sighting` holds one record per object per continuous pass. JSONL, one line per *event*:
   `{sighting_id, clip_id, event: "open"|"update"|"close", t_s, frame_idx, label, label_scores{}, subtype?,
     unknownness, box, best_frame_idx, best_box, best_score, first_t_s, last_t_s, n_frames, track_ids[]}`.
-  `realness` (0..1 trajectory persistence/size/motion consistency) and `unknown_real` (unknownness and realness thresholds both passed) accompany every event as informational fields. The bonus gate has two defaults: `AggregatorParams.gate_unknown_bonus_on_realness=False` for the dataclass and every offline tool (unknownness contributes after `unknown_bonus_age_s`, as before), while the live sidecar (`EdgemlEngine`, `python -m edgeml.sidecar`) sets it to `True` unless `--agg` overrides it. With the gate on, the bonus requires `unknown_real` and the real-unknown value floor is enabled (see `reports/H_unknown.md`).
-  Optional lookout-report fields (see `reports/literature.md` §7): `bearing_deg` (box centre x + camera FOV, when
+  `realness` (0..1 trajectory persistence/size/motion consistency) and `unknown_real` (unknownness and realness thresholds both passed) accompany every event as informational fields. The bonus gate has two defaults: `AggregatorParams.gate_unknown_bonus_on_realness=False` for the dataclass and every offline tool (unknownness contributes after `unknown_bonus_age_s`, as before), while the live sidecar (`EdgemlEngine`, `python -m edgeml.sidecar`) sets it to `True` unless `--agg` overrides it. With the gate on, the bonus requires `unknown_real` and the real-unknown value floor is enabled (see `research/edgeml/reports/H_unknown.md`).
+  Optional lookout-report fields (see `research/edgeml/reports/literature.md` §7): `bearing_deg` (box centre x + camera FOV, when
   known), `size_class` (by box-area bucket), `aspect` (bow/stern/beam, if the subtype model can say), `closing`
   (sign of box-area growth).
   `open` is the first report. `update` is sent only on a *material* change: a change in `size_class`, `aspect` or
@@ -99,7 +99,7 @@ ranks `priority × ladder_weight / bytes`). edgeml provides
 reference selector for evaluation only. It must not grow into a second scheduler. `ladder_decay` multiplies the value
 of each successive form of the same sighting (fact→crop→thumb→full) so bytes spread across objects before upgrading
 one; `max_bytes_per_object` caps what one sighting may consume in a window. Both exist because plain value/byte
-breaks at 72 KB/min, where a single `full` frame is the whole budget (`reports/literature.md` §2.4); report results
+breaks at 72 KB/min, where a single `full` frame is the whole budget (`research/edgeml/reports/literature.md` §2.4); report results
 with and without them.
 
 Headline system metric: **unique GT objects delivered to shore vs budget.** An object counts as delivered when a

@@ -250,7 +250,8 @@ class Audit:
                 if expected != row.get("split"):
                     self.issue("qa_split_mismatch", key, actual=row.get("split"), expected=expected)
         self.metrics["qa_index_sequences"] = n
-        for path in sorted((self.repo / "scenarios").rglob("*.json")):
+        for path in sorted([*(self.repo / "scenarios").rglob("*.json"),
+                            *(self.repo / "research/scenarios").rglob("*.json")]):
             row = json.loads(path.read_text())
             for i, record in enumerate(row.get("sets", [])):
                 lowered = {k.lower(): v for k, v in record.items()}
