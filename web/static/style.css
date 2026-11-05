@@ -417,5 +417,4 @@ body.drawer-open .drawer{visibility:visible}
  :is(.bar-left,.bar-right) .fhead{width:var(--width-controls,280px)}
  .rvmain{grid-template-columns:minmax(0,1fr) var(--width-review,340px)}
  .wb-layout{grid-template-columns:var(--width-priorities,340px) minmax(0,1fr)}
- .brief-workspace{grid-template-columns:var(--width-briefing,290px) minmax(0,1fr)}
 }
