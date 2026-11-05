@@ -26,16 +26,24 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 .setdlg::backdrop{background:transparent}
 .setparts{grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))}
 .setfoot{gap:8px}
-.thumb{display:grid;width:100%;min-width:0;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto 1fr;gap:2px;min-height:9rem}
+.thumb{display:grid;width:100%;min-width:0;aspect-ratio:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto auto auto 1fr;gap:2px;min-height:9rem}
+.thumb::before{content:"";grid-area:1/1/-1/2;padding-top:62.5%;pointer-events:none}
+.thumb>:not(img):not(.bx){grid-column:1}
+.grid:is(.l,.xl) .thumb{aspect-ratio:auto;container-type:inline-size}
+.grid:is(.l,.xl) .thumb>.bx{width:100%;height:auto;aspect-ratio:16/10;bottom:auto;right:auto}
 .thumb>img{position:absolute;inset:0}
 .thumb>.bx{position:absolute;inset:0}
-.thumb>:is(.tier,.cdrtag,.newtag,.night-badge,.band-badge,.ov){position:relative;inset:auto;z-index:1;margin:0 5px;width:fit-content;max-width:calc(100% - 10px)}
+.thumb>:is(.tier,.cdrtag,.hsenttag,.newtag,.night-badge,.band-badge,.suptag,.formtag,.ov){position:relative;inset:auto;z-index:1;margin:0 5px;width:fit-content;max-width:calc(100% - 10px)}
 .thumb>.tier{grid-row:1;margin-top:6px;justify-self:start}
-.thumb>.cdrtag{grid-row:2;justify-self:start}
+.thumb>:is(.cdrtag,.hsenttag){grid-row:2;justify-self:start}
 .thumb>.newtag{grid-row:3;justify-self:end}
 .thumb>.band-badge{grid-row:3;justify-self:start}
 .thumb>.night-badge{grid-row:4;justify-self:end}
-.thumb>.ov{grid-row:5;align-self:end;flex-wrap:wrap;width:100%;max-width:100%;margin:0}
+.thumb>.suptag{grid-row:5;white-space:normal;overflow-wrap:anywhere}
+.thumb>.formtag{grid-row:6;justify-self:end}
+.thumb>.ov{grid-row:7;align-self:end;flex-wrap:wrap;width:100%;max-width:100%;margin:0}
+.card:is(.sending,.uploaded) :is(.band-badge,.newtag){right:auto}
+.card:is(.sending,.uploaded) .thumb>.tier{max-width:calc(100% - 42px)}
 .thumb>.ov>*{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .strip>*{flex:none}
 .tier,.cdrtag,.night-badge,.tg{max-width:calc(100% - 10px);white-space:normal;overflow-wrap:anywhere}
