@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS items (
   pull_boost REAL NOT NULL DEFAULT 0,
   pull_form INTEGER NOT NULL DEFAULT 0,
   pull_by TEXT NOT NULL DEFAULT '',
-  pull_original INTEGER NOT NULL DEFAULT 0
+  pull_original INTEGER NOT NULL DEFAULT 0,
+  original_bytes INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS items_seq ON items(ingest_seq);
 CREATE INDEX IF NOT EXISTS items_hash ON items(content_hash);
@@ -133,10 +134,13 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
-	// Databases created before pull_original existed.
-	if _, err := db.Exec(`ALTER TABLE items ADD COLUMN pull_original INTEGER NOT NULL DEFAULT 0`); err != nil &&
-		!strings.Contains(err.Error(), "duplicate column") {
-		return nil, fmt.Errorf("schema: %w", err)
+	// Databases created before pull_original / original_bytes existed.
+	for _, col := range []string{"pull_original", "original_bytes"} {
+		if _, err := db.Exec(`ALTER TABLE items ADD COLUMN ` + col + ` INTEGER NOT NULL DEFAULT 0`); err != nil &&
+			!strings.Contains(err.Error(), "duplicate column") {
+			db.Close()
+			return nil, fmt.Errorf("schema: %w", err)
+		}
 	}
 	s := &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}
 	if err := s.cleanupEvictions(context.Background()); err != nil {
@@ -541,15 +545,29 @@ func (s *Store) originalPath(itemID string) string {
 
 // PutOriginal keeps the capture's original bytes when FULL was re-encoded,
 // so an operator can still have the original sent (RestoreOriginal). nil
-// means FULL is the original (e.g. after a key-frame replacement).
-func (s *Store) PutOriginal(itemID string, data []byte) error {
-	if data == nil {
-		if err := os.Remove(s.originalPath(itemID)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		return nil
+// means FULL is the original (e.g. after a key-frame replacement). The
+// bytes count against Limits.MaxBytes; ErrFull means no original is kept.
+func (s *Store) PutOriginal(ctx context.Context, itemID string, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.dropOriginal(ctx, itemID); err != nil || data == nil {
+		return err
+	}
+	if err := s.makeRoom(ctx, int64(len(data)), 0, itemID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=? WHERE id=?`, len(data), itemID); err != nil {
+		return err
 	}
 	return os.WriteFile(s.originalPath(itemID), data, 0o644)
+}
+
+func (s *Store) dropOriginal(ctx context.Context, itemID string) error {
+	if err := os.Remove(s.originalPath(itemID)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=0 WHERE id=?`, itemID)
+	return err
 }
 
 // RestoreOriginal makes FULL the original capture bytes again, resetting its
@@ -565,7 +583,9 @@ func (s *Store) RestoreOriginal(ctx context.Context, itemID string) (bool, error
 	if _, err := s.ReplaceForm(ctx, itemID, pb.FormKind_FORM_KIND_FULL, data); err != nil {
 		return false, err
 	}
-	return true, os.Remove(s.originalPath(itemID))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return true, s.dropOriginal(ctx, itemID)
 }
 
 // ReadForm returns up to n bytes of a form starting at offset.

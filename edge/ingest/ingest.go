@@ -249,7 +249,7 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 		}
 	}
 	if _, full := payloads[pb.FormKind_FORM_KIND_FULL]; original != nil && full {
-		if err := g.st.PutOriginal(it.Id, original); err != nil {
+		if err := g.keepOriginal(ctx, it.Id, original); err != nil {
 			return nil, err
 		}
 	}
@@ -389,4 +389,15 @@ func entropyFor(edgeID string) io.Reader {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(edgeID))
 	return rand.New(rand.NewSource(int64(h.Sum64())))
+}
+
+// keepOriginal stores the pre-re-encode capture for an operator's original
+// pull. At the storage cap it is skipped: FULL (re-encoded) still goes out.
+func (g *Ingester) keepOriginal(ctx context.Context, itemID string, original []byte) error {
+	err := g.st.PutOriginal(ctx, itemID, original)
+	if errors.Is(err, store.ErrFull) {
+		g.log.Warn("storage cap: original capture not kept", "item_id", itemID, "bytes", len(original))
+		return nil
+	}
+	return err
 }

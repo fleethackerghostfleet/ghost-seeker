@@ -390,3 +390,30 @@ func TestPendingCorrectionSurvivesRestartAndCaps(t *testing.T) {
 	}
 	hasTest(t, s, "corrected", false)
 }
+
+func TestOriginalCountsAgainstByteCap(t *testing.T) {
+	s := openTest(t)
+	putTest(t, s, "a", 1, 1, true)
+	putTest(t, s, "b", 1, 2, false)
+	if err := s.SetLimits(ctx, Limits{MaxBytes: 40}); err != nil {
+		t.Fatal(err)
+	}
+	// 14+14+20 > 40: the delivered item makes room.
+	if err := s.PutOriginal(ctx, "b", make([]byte, 20)); err != nil {
+		t.Fatal(err)
+	}
+	hasTest(t, s, "a", false)
+	if _, err := s.Put(ctx, &pb.Item{Id: "c"}, map[pb.FormKind][]byte{pb.FormKind_FORM_KIND_FULL: make([]byte, 10)}); !errors.Is(err, ErrFull) {
+		t.Fatalf("put over cap with kept original: %v", err)
+	}
+	// Too big to fit: refused, and no stale original is left to restore.
+	if err := s.PutOriginal(ctx, "b", make([]byte, 50)); !errors.Is(err, ErrFull) {
+		t.Fatalf("oversized original: %v", err)
+	}
+	if changed, err := s.RestoreOriginal(ctx, "b"); err != nil || changed {
+		t.Fatalf("restore after refused original: changed=%v err=%v", changed, err)
+	}
+	if _, err := s.Put(ctx, &pb.Item{Id: "c"}, map[pb.FormKind][]byte{pb.FormKind_FORM_KIND_FULL: make([]byte, 10)}); err != nil {
+		t.Fatalf("put after original dropped: %v", err)
+	}
+}

@@ -154,7 +154,7 @@ func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Captu
 	it.ContentHash = hash
 	g.applyFeatures(it, resp, s)
 	payloads, original := g.imageForms(c.Data, resp, s)
-	if err := g.st.PutOriginal(it.Id, original); err != nil {
+	if err := g.keepOriginal(ctx, it.Id, original); err != nil {
 		return nil, err
 	}
 	if _, ok := payloads[pb.FormKind_FORM_KIND_CROP]; !ok && row.Form(pb.FormKind_FORM_KIND_CROP) != nil {
