@@ -135,14 +135,22 @@ func Open(dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("schema: %w", err)
 	}
 	// Databases created before pull_original / original_bytes existed.
+	added := map[string]bool{}
 	for _, col := range []string{"pull_original", "original_bytes"} {
-		if _, err := db.Exec(`ALTER TABLE items ADD COLUMN ` + col + ` INTEGER NOT NULL DEFAULT 0`); err != nil &&
-			!strings.Contains(err.Error(), "duplicate column") {
+		_, err := db.Exec(`ALTER TABLE items ADD COLUMN ` + col + ` INTEGER NOT NULL DEFAULT 0`)
+		if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			db.Close()
+			return nil, fmt.Errorf("schema: %w", err)
+		}
+		added[col] = err == nil
+	}
+	s := &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}
+	if added["original_bytes"] {
+		if err := s.backfillOriginalBytes(context.Background()); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("schema: %w", err)
 		}
 	}
-	s := &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}
 	if err := s.cleanupEvictions(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -565,6 +573,40 @@ func (s *Store) PutOriginal(ctx context.Context, itemID string, data []byte) err
 	}
 	if err := os.WriteFile(s.originalPath(itemID), data, 0o644); err != nil {
 		return errors.Join(err, s.dropOriginal(ctx, itemID))
+	}
+	return nil
+}
+
+// backfillOriginalBytes counts originals kept before original_bytes existed.
+func (s *Store) backfillOriginalBytes(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM items`)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		fi, err := os.Stat(s.originalPath(id))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE items SET original_bytes=? WHERE id=?`, fi.Size(), id); err != nil {
+			return err
+		}
 	}
 	return nil
 }

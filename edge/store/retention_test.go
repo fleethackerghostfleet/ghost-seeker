@@ -436,3 +436,28 @@ func TestRestoreOriginalAtFullCap(t *testing.T) {
 		t.Fatalf("original_bytes after restore = %d, %v", n, err)
 	}
 }
+
+func TestUpgradeBackfillsOriginalBytes(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	putTest(t, s, "b", 1, 1, false)
+	if err := s.PutOriginal(ctx, "b", make([]byte, 20)); err != nil {
+		t.Fatal(err)
+	}
+	// A database from before original_bytes, with an original already kept.
+	if _, err := s.db.Exec(`ALTER TABLE items DROP COLUMN original_bytes`); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if s, err = Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var n int64
+	if err := s.db.QueryRow(`SELECT original_bytes FROM items WHERE id='b'`).Scan(&n); err != nil || n != 20 {
+		t.Fatalf("original_bytes after upgrade = %d, %v", n, err)
+	}
+}
