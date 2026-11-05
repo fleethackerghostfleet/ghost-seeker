@@ -149,12 +149,15 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
+	if *autoCDR > 0 {
+		for i := 0; i < startSent; i++ {
+			data.AutoEscalate()
+		}
+	}
+	data.SeedUploaded(startSent)
 	go runSimulation(data, generator, app, uplink)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
-		for i := 0; i < 4; i++ {
-			data.AutoEscalate()
-		}
 		go runWatchOfficer(data, app, *autoCDR)
 	}
 
@@ -185,6 +188,10 @@ func refreshTimeScopes(app *server.Server) {
 		app.RescoreTimeScoped(now)
 	}
 }
+
+// startSent is how many top P1 backlog images open already uploaded and
+// auto-sent to the Commander; everything else starts queued.
+const startSent = 2
 
 func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
