@@ -18,19 +18,21 @@ from .tiled import estimate_horizon_y
 
 class SeaAnomalyProposer:
     def __init__(self, work_width: int = 480, z_thr: float = 3.5, win: int = 61, min_area: int = 6, max_area_frac: float = 0.02,
-                 max_props: int = 8, horizon_ema: float = 0.8, score_lo: float = 0.3, score_hi: float = 0.9,
+                 max_props: int = 8, horizon_ema: float = 0.8, horizon_jitter: float = 0.06, score_lo: float = 0.3, score_hi: float = 0.9,
                  bright_achromatic_penalty: float = 0.5, aspect: tuple[float, float] = (0.25, 12.0), name: str = "sea-anomaly"):
         self.work_width, self.z_thr, self.win = work_width, z_thr, win | 1
         self.min_area, self.max_area_frac, self.max_props = min_area, max_area_frac, max_props
-        self.horizon_ema, self.score_lo, self.score_hi = horizon_ema, score_lo, score_hi
+        self.horizon_ema, self.horizon_jitter, self.score_lo, self.score_hi = horizon_ema, horizon_jitter, score_lo, score_hi
         self.bright_achromatic_penalty, self.aspect = bright_achromatic_penalty, aspect
         self.name = name
         self.horizon_y: float | None = None
         self.last_z: np.ndarray | None = None
 
     def horizon(self, image_bgr: np.ndarray) -> float:
+        """EMA over frame-to-frame jitter only; a jump beyond ``horizon_jitter`` (another camera/source sharing this
+        proposer, a cut) resets instead of blending."""
         y = estimate_horizon_y(image_bgr)
-        if self.horizon_y is None or abs(y - self.horizon_y) > 0.25 * image_bgr.shape[0]:
+        if self.horizon_y is None or abs(y - self.horizon_y) > self.horizon_jitter * image_bgr.shape[0]:
             self.horizon_y = y
         else:
             self.horizon_y = self.horizon_ema * self.horizon_y + (1 - self.horizon_ema) * y
@@ -101,9 +103,12 @@ def _iou(a, b) -> float:
 
 
 class AnomalyFusionDetector:
-    """Closed-set detections first; anomaly proposals only where nothing (score >= ``cover_thr``) already covers them."""
+    """Closed-set detections first; anomaly proposals only where nothing (score >= ``cover_thr``) already covers them.
 
-    def __init__(self, base, proposer: SeaAnomalyProposer | None = None, iou_suppress: float = 0.2, cover_thr: float = 0.05,
+    ``cover_thr`` defaults to the sidecar's track-start score (0.25): a weaker YOLO box cannot open a ByteTrack track,
+    so it must not hide the proposal either."""
+
+    def __init__(self, base, proposer: SeaAnomalyProposer | None = None, iou_suppress: float = 0.2, cover_thr: float = 0.25,
                  pad: float = 0.15):
         self.base, self.proposer = base, proposer or SeaAnomalyProposer()
         self.iou_suppress, self.cover_thr, self.pad = iou_suppress, cover_thr, pad
