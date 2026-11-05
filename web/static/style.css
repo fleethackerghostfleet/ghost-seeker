@@ -45,6 +45,7 @@ header{flex:none;display:flex;align-items:center;gap:18px;padding:0 16px;height:
 .logo{display:flex;align-items:center;gap:10px}
 .logo b{font-weight:800;letter-spacing:.08em;font-size:0.9375rem}
 .logo small{display:block;color:var(--muted);font-size:0.6875rem}
+.logo .wordmark{flex:none;display:block;width:85px;height:46px;border-radius:3px}
 nav{display:flex;height:100%;margin-left:10px}
 nav a{display:flex;align-items:center;gap:7px;padding:0 16px;color:var(--muted);text-decoration:none;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
 nav a:hover{color:var(--text)}
