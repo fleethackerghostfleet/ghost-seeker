@@ -76,7 +76,11 @@ Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/e
 `sets` in `scenarios/ghostfleet_demo/live.json` to use others in the live demo.
 `scenario.json` remains the unchanged three-ship input to the headless comparison.
 
-`make demo-clips` also runs `ocean.py`: 32 manually inspected, real-sidecar-screened
+`make demo-clips` prepares all live inputs via `demo-ship-clips` and `demo-ocean`.
+The live `demo-edge` and `compose-demo` targets also depend on `demo-ocean`.
+Only live setup requires the LFS ocean ZIP and Pillow; headless `make demo` fetches
+the three ship clips via `demo-ship-clips`, and `demo-compare` uses those clips directly.
+`demo-ocean` runs `ocean.py`: 32 manually inspected, real-sidecar-screened
 688×516 side-region crops of the existing `30_Days_at_Sea_Timelapse_frames.zip`.
 Clear, overcast, glare and dusk views contain no external contacts or camera-ship
 structure. `ocean-manifest.json` records source ZIP/GCS generation, crop coordinates,
@@ -92,7 +96,7 @@ relative interleaving are unchanged. The released three-clip archive is unchange
 ## 1. Headless comparison (`make demo`)
 
 ```sh
-make demo              # = make demo-clips demo-compare
+make demo              # = make demo-ship-clips demo-compare (no ocean ZIP or Pillow needed)
 # or directly, for the three modes that do not need a sidecar:
 ./bin/sim -scenario scenarios/ghostfleet_demo/scenario.json -dedup naive,hash,sightings \
           -bps 9600,64000,256000,2000000 -strategies prioritized -duration 6m -sample 1m \
