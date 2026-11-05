@@ -18,6 +18,7 @@ function setup(interpret){
   if(url==='/api/directives')return{};
   return{items:items.map(i=>({id:i.id,tier:body.rules.length?1:3,central:body.rules.length?.9:.4,contrib:[]})),counts:[0,0,1,0],candidates:[]};
  };
+ ctx.isScene=i=>i?.live?.event==='scene';
  vm.runInContext(source+'\nworkbench.init();',ctx);
  return{$,calls,ctx,timers,async type(text){$('nlIn').value=text;$('nlIn').oninput();},async preview(){const [id,cb]=timers.entries().next().value;timers.delete(id);cb();await tick()}};
 }
@@ -30,6 +31,15 @@ test('research interpretation is shown and changes require explicit confirmation
  assert.equal(h.calls.filter(c=>c.url==='/api/directives').length,0);
  await h.$('wbConfirmApply').onclick();assert.equal(h.calls.filter(c=>c.url==='/api/directives').length,1);
  assert.equal(h.calls.find(c=>c.url==='/api/directives').body.rules[0].weight,2);
+});
+test('Granite preview and Apply cannot offer scenes as exception targets',async()=>{
+ const h=setup(()=>({rules:[rule()],path:'research/granite',readback:'Prioritize fishing vessel',warnings:[],unknown:[]}));
+ vm.runInContext("items.push({...items[0],id:'scene',live:{event:'scene'},dets:[]})",h.ctx);
+ await h.type('look for fishing vessels');await h.preview();
+ assert.doesNotMatch(h.$('wbGrid').innerHTML,/data-id="scene"/);
+ await h.$('wbApply').onclick();await h.$('wbConfirmApply').onclick();
+ assert.equal(h.calls.filter(c=>c.url==='/api/directives').length,1);
+ assert.equal(h.calls.some(c=>c.method==='PATCH'),false);
 });
 test('unsupported qualifier blocks both Apply paths and shows clarification',async()=>{
  const h=setup(()=>({rules:[],unknown:['big ship'],path:'research/granite',readback:'Clarify the requested category',blocked:true,warnings:['Blocked: big ship is not a supported demo category.']}));

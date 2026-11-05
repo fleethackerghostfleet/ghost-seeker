@@ -39,6 +39,7 @@ import (
 
 // Capture is one thing a source produced.
 type Capture struct {
+	SceneEvery *time.Duration
 	Type       pb.ItemType
 	Data       []byte // image bytes, record JSON, telemetry blob
 	CapturedAt time.Time
@@ -242,7 +243,7 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 			if len(resp.Sightings) > 0 {
 				return g.applySightings(ctx, c, hash, resp)
 			}
-			if g.cfg.SceneEvery > 0 {
+			if g.sceneEvery(c) > 0 {
 				return g.sceneItem(ctx, c, hash, resp)
 			}
 			if row, err := g.existing(ctx, hash); row != nil || err != nil {

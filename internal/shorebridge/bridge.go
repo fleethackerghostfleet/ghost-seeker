@@ -578,6 +578,9 @@ var formNames = map[pb.FormKind]string{
 }
 
 func objectTierPin(o *Object, tiers map[string]int32) (string, int32) {
+	if o.Scene {
+		return "", 0
+	}
 	policy := &pb.Policy{Interest: &pb.Interest{TierLabels: tiers}, Thresholds: &pb.Thresholds{DetectionMinConf: o.detectionMin}}
 	var label string
 	var tier int32

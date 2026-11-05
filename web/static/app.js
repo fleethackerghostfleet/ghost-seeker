@@ -27,8 +27,10 @@ function uploadState(it){
   u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(!LIVE||!!(LIVE?.link?.controllable?LIVE.link.bps>0:LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.linkUp!==false&&LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
- const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
- const background=it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
+ const full=it.live?.forms?.full;
+ const sceneHeld=isScene(it)&&!['partial','received'].includes(full?.state)&&!(full?.received>0)&&!pulling.has(it.live.itemId);
+ const done=!sceneHeld&&!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
+ const background=sceneHeld||!it.live&&it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
  const sending=!done&&!held&&!paused&&!background&&!!u?.active;
  const queued=!done&&!held&&!background&&!sending;
@@ -337,13 +339,13 @@ function syncFeedFilters(){
  closeDetail();renderFeed(true);renderStats();renderRp();
 }
 function resetFeedFilters(){gsSettings.setFeed({sensor:'ALL',tier:'all',review:'all',showDuplicates:false});syncFeedFilters()}
-function humanReviewed(it){return !!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed))}
-function humanSent(it){return !!(it.sent&&!it.autoSent||it.fullRes)}
+function humanReviewed(it){return !isScene(it)&&!!(it.humanReviewed||!it.autoSent&&(it.reviewed||it.manual||it.dismissed))}
+function humanSent(it){return !isScene(it)&&!!(it.sent&&!it.autoSent||it.fullRes)}
 function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
 const FILTERED_NAME={duplicate:'Repeat of an earlier image','low-value':'Low value'};
 function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':FILTERED_NAME[it.filtered]||(it.tier===4&&(it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup))?'Lowered by directive':'')}
 function feedTier(it){return it.tier}
-function reviewMatch(it,review){return review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
+function reviewMatch(it,review){return isScene(it)?review==='all':review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
  const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:false,review:'all'};
  let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i)));
@@ -355,7 +357,7 @@ function visible(){
  if(f.showDuplicates&&f.review!=='sent')l=pairRepeats(l);
  return{l,counts};
 }
-function hideableRepeat(it){return it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
+function hideableRepeat(it){return !isScene(it)&&it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
 function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)).length}
 /* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
 function pairRepeats(l){
@@ -389,7 +391,9 @@ function boxesHTML(it,labels){
  return it.dets.map((d,i)=>{const sd=it.det[i];if(!d.b||!(d.b.w>0))return'';const c=sd.sup?'sup':sd.matched?'match':sd.s>=.6?'hi':sd.s>=.3?'md':'lo';const b=d.b;
   return`<div class="box ${c}${d.cls==='unknown'?' unknown':''}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${esc(clsOf(d.cls).lab)} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
+function isScene(it){return it?.live?.event==='scene'}
 function topLine(it){
+	if(isScene(it))return 'Empty water · no contacts';
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return it.background?'No contacts · empty water':'—';
  if(it.live){const l=it.live,[d,sd]=r[0];const det=l.label&&l.label.toLowerCase()!==d.cls?` <span style="opacity:.6">· computer label: ${esc(l.label)}</span>`:'';const frames=l.sightingId?(l.framesKnown?` · ${l.frames} frames`:` · ${l.reports} report${l.reports===1?'':'s'}`):'';
   return`<span class="${l.suppressed?'s':sd.matched?'m':l.unknown?'a':''}">${esc(clsOf(d.cls).lab)}${l.unknown?' (unknown)':''}</span>${det}<span style="opacity:.6">${frames}</span>`}
@@ -402,6 +406,7 @@ function cardHTML(it,mini){
 function sendNowBlocked(it){const u=uploadState(it);return it.live||LIVE?'Not available on the live shore connection':typeof gsAuth!=='undefined'&&gsAuth.viewer()?'Viewer role is read-only':u.done?'Already uploaded to shore':u.next?'Already at the top of the send queue':''}
 function openCardMenu(e){
  const c=e.target.closest('.card'),it=c&&findItem(c.dataset.id);if(!it)return;
+	if(isScene(it)){e.preventDefault();return}
  e.preventDefault();
  const m=$('cardMenu'),blocked=sendNowBlocked(it);
  m.dataset.id=it.id;$('cmSendNow').disabled=!!blocked;$('cmSendNowSub').textContent=blocked||'Moves this image to the top of the send queue';
@@ -426,7 +431,7 @@ function updateCard(it){
  el.querySelector('.night-badge')?.remove();el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
  const t=el.querySelector('.tier');t.className='tier t'+tier;t.textContent=`P${tier} ${TNAME[tier]}`;t.title=reason?status.title:it.tier===1?'Notify Commander':'Image priority';
  el.querySelector('.bx').innerHTML=boxesHTML(it,false);el.querySelector('.cl').innerHTML=topLine(it);
- el.querySelector('.cs').textContent=it.central.toFixed(2);
+ el.querySelector('.cs').textContent=isScene(it)?'':it.central.toFixed(2);
  const upload=el.querySelector('.upload-slot');if(upload)upload.innerHTML=uploadHTML(it);applySendMark(el,it);
  if(it.live){const ft=el.querySelector('.formtag');ft.textContent=it.live.imageForm?FORM_NAME[it.live.imageForm]:'Summary only';ft.title=it.live.imageForm?`Image shown is the ${FORM_NAME[it.live.imageForm]} (${fmtBytes(it.live.forms[it.live.imageForm]?.bytes||0)}). Hover the image-version labels below for transfer status.`:'Only the object summary has arrived. Images follow as bandwidth becomes available.';el.querySelector('.fchips').innerHTML=formChipsHTML(it)}
  const dl=it.central-it.base,de=el.querySelector('.delta');de.className='delta '+(dl>.04?'up':dl<-.04?'dn':'');de.textContent=dl>.04?`▲${dl.toFixed(2).slice(1)}`:dl<-.04?`▼${(-dl).toFixed(2).slice(1)}`:'';
@@ -458,7 +463,7 @@ function renderStats(){
  const sending=uploads.filter(u=>u.sending).length;
  const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
  $('hsImgs').textContent=vis.length;$('rvSentN').textContent=vis.filter(humanSent).length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
- const unrevLive=vis.filter(i=>!i.reviewed&&!i.dismissed).length;
+ const unrevLive=vis.filter(i=>!isScene(i)&&!i.reviewed&&!i.dismissed).length;
  if(LIVE){renderLiveStrip();$('rvCount').textContent=unrevLive||'';if(state.page==='rv')rvProgress();if(state.page==='details')renderDetails();return}
  renderSimLink();
  $('cCap').textContent=stats.cap.toLocaleString();$('cKeep').textContent=stats.keep;$('cDrop').textContent=stats.drop.toLocaleString();
@@ -575,6 +580,10 @@ function renderDetail(){preserveBandFocus(renderDetailContent)}
 function renderDetailContent(){
  const it=items.find(i=>i.id===state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';return}
+	if(isScene(it)){
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
+	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;
+	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
  const why=buildWhy(it,rows);
  const fmtMs=ms=>ms>=1000?(ms/1000).toFixed(1)+' s':ms+' ms';const dl=it.central-it.base;
@@ -626,13 +635,14 @@ function renderDirectives(){
  $('directives').querySelectorAll('.x').forEach(b=>b.onclick=async()=>{try{await request(`/api/directives/${encodeURIComponent(b.dataset.id)}`,'DELETE');toast('Directive removed')}catch(error){toast(error.message)}});
 }
 async function requestFullRes(it){
+	if(isScene(it))return;
  if(it.fullRes)return;
  const by=prompt('Operator override: send this image at FULL SIZE with NO compression.\nThis uses much more link bandwidth than the usual thumbnail/crop.\n\nEnter your name or operator ID to confirm:');
  if(by===null)return;
  if(!by.trim()){toast('Not sent: enter your name or operator ID in the confirmation box');return}
  try{await request(`/api/items/${encodeURIComponent(it.id)}/full-res`,'POST',{by:by.trim()});toast(`Full-size send requested by ${by.trim()}`)}catch(error){toast(error.message)}
 }
-async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} ${TNAME[t]} — logged as model feedback`)}catch(error){toast(error.message)}}
+async function setManual(id,t){if(!findItem(id)||isScene(findItem(id)))return;try{await patchItem(id,{manual:t,reviewed:true});toast(`Operator set P${t} ${TNAME[t]} — logged as model feedback`)}catch(error){toast(error.message)}}
 function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
@@ -706,7 +716,7 @@ async function answerTeamProposal(answer){
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
  finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
-function rvQueue(){const l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
+function rvQueue(){const l=items.filter(i=>!isScene(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
@@ -786,6 +796,7 @@ function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)retur
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
+ if(isScene(rv.cur)){rv.cur=null;rv.shown=null;rv.displayed=null}
  const current=rv.cur?findItem(rv.cur.id):rv.busy?null:rvQueue()[0];
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
@@ -812,9 +823,9 @@ function rvAct(a){
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
  if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;setLast(rv.navigation===navigation?'↶ Undone: you are back on that image.':'↶ Undone: previous review was restored.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});return}
- if(!rv.cur)return;
+ if(!rv.cur||isScene(rv.cur))return;
  if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
- const it=rv.displayed;if(!it||it.id!==rv.cur.id)return;
+ const it=rv.displayed;if(!it||isScene(it)||it.id!==rv.cur.id)return;
  if(!findItem(it.id)){renderReview();toast('This image is no longer available. Skip to continue.');return}
  const sug=it.centralTier,p={id:it.id,item:it,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
  let msg,col,receipt;
