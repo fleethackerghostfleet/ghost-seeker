@@ -36,6 +36,24 @@ function active(h,id='active'){
  assert.match(h.context.$('rvMain').innerHTML,new RegExp(`data-review-id="${id}"`));
 }
 
+test('scene arrivals do not replace stable Review selection or become its next item',()=>{
+ const h=setup();h.run(`start();emit('item',{item:{...raw('ocean',4),live:{event:'scene'}},stats:{}})`);active(h);
+ assert.equal(h.run('rvQueue().some(isScene)'),false);
+ h.run("rvAct('skip')");active(h,'next');
+ h.run("rvAct('skip')");assert.equal(h.run('isScene(rv.cur)'),false);
+ h.run("items=items.filter(isScene);rv.cur=null;renderReview()");
+ assert.equal(h.run('rv.cur'),null);
+ assert.match(h.context.$('rvMain').innerHTML,/All caught up/);
+});
+test('a stale pinned or displayed scene cannot be reviewed',()=>{
+ const h=setup();h.run(`start();scene={...findItem('active'),live:{event:'scene'}};rv.cur=scene;rv.displayed=scene;
+  requests=[];submitReview=(...args)=>{requests.push(args);return Promise.resolve()};rvAct('accept')`);
+ assert.equal(h.run('requests.length'),0);
+ h.run('renderReview()');active(h);
+ assert.equal(h.run('isScene(rv.cur)'),false);
+ h.run('rv.displayed=scene;rvAct("accept")');
+ assert.equal(h.run('requests.length'),0);
+});
 test('new high-priority arrivals and score reordering never replace the active image',()=>{
  const h=setup();h.run('start()');active(h);
  h.run("emit('item',{item:raw('urgent',1),stats:{cap:3}})");active(h);

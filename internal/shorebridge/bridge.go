@@ -50,11 +50,20 @@ type LinkControl interface {
 	Distribution() *shaper.NormalDistribution
 }
 
+// LinkSetter is the optional demo override of the link rate.
+type LinkSetter interface {
+	SetFixed(bps int64)
+	SetAuto()
+	Fixed() bool
+}
+
 type Bridge struct {
-	token       string
-	shore, edge string
-	link        LinkControl
-	client      *http.Client
+	// linkOverride registers POST /api/shore/link (demo only; the link is automatic otherwise).
+	linkOverride bool
+	token        string
+	shore, edge  string
+	link         LinkControl
+	client       *http.Client
 	// Compiler, when set, turns a free-text directive into rules (local LLM
 	// with the rules parser as fallback) and gives the operator a readback;
 	// nil keeps the simple Interpret path.
@@ -233,6 +242,7 @@ type LinkStatus struct {
 	Bps          int64                      `json:"bps"`
 	Bytes        int64                      `json:"bytes"`
 	Distribution *shaper.NormalDistribution `json:"distribution,omitempty"`
+	Fixed        bool                       `json:"fixed,omitempty"`
 }
 
 type Counts struct {
@@ -578,6 +588,9 @@ var formNames = map[pb.FormKind]string{
 }
 
 func objectTierPin(o *Object, tiers map[string]int32) (string, int32) {
+	if o.Scene {
+		return "", 0
+	}
 	policy := &pb.Policy{Interest: &pb.Interest{TierLabels: tiers}, Thresholds: &pb.Thresholds{DetectionMinConf: o.detectionMin}}
 	var label string
 	var tier int32
@@ -921,6 +934,9 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
+	if b.linkOverride {
+		mux.HandleFunc("POST /api/shore/link", b.setLink)
+	}
 	if u, err := url.Parse(b.shore); err == nil {
 		rp := httputil.NewSingleHostReverseProxy(u)
 		director := rp.Director
@@ -949,11 +965,45 @@ func (b *Bridge) Handler() http.Handler {
 	return mux
 }
 
+// WithLinkOverride lets a presenter pin the demo link rate (POST /api/shore/link).
+func (b *Bridge) WithLinkOverride(on bool) *Bridge {
+	b.linkOverride = on
+	return b
+}
+
+// setLink pins the demo link rate ({"bps": N}) or restores the automatic
+// distribution ({"auto": true}), so a presenter can make a backlog build.
+func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
+	s, ok := b.link.(LinkSetter)
+	if !ok {
+		http.Error(w, "link is not controlled by this process", http.StatusConflict)
+		return
+	}
+	var in struct {
+		Bps  *int64 `json:"bps"`
+		Auto bool   `json:"auto"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil || (!in.Auto && (in.Bps == nil || *in.Bps < 0)) {
+		http.Error(w, `body must be {"bps": N>=0} or {"auto": true}`, http.StatusBadRequest)
+		return
+	}
+	if in.Auto {
+		s.SetAuto()
+	} else {
+		s.SetFixed(*in.Bps)
+	}
+	writeJSON(w, b.linkStatus())
+}
+
 func (b *Bridge) linkStatus() LinkStatus {
 	ls := LinkStatus{}
 	if b.link != nil {
 		ls.Controllable, ls.Bps, ls.Bytes = true, b.link.Bps(), b.link.Bytes()
 		ls.Distribution = b.link.Distribution()
+		if s, ok := b.link.(LinkSetter); ok {
+			ls.Fixed = s.Fixed()
+		}
 	}
 	return ls
 }

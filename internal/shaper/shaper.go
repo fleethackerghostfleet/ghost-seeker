@@ -49,6 +49,7 @@ type Shaper struct {
 	ln     net.Listener
 	pacers [2]pacer // 0 = ship->shore, 1 = shore->ship; shared by all connections
 	normal *NormalDistribution
+	fixed  atomic.Bool // a demo override pins the rate; the automatic distribution pauses
 }
 
 // pacer is a per-direction leaky bucket: every chunk books its airtime at
@@ -112,10 +113,28 @@ func (s *Shaper) varyRate(ctx context.Context, sample func() float64) {
 			if ctx.Err() != nil {
 				return
 			}
-			s.SetBps(s.normal.rate(sample()))
+			if !s.fixed.Load() {
+				s.SetBps(s.normal.rate(sample()))
+			}
 		}
 	}
 }
+
+// SetFixed pins the rate at bps until SetAuto, pausing the automatic distribution.
+func (s *Shaper) SetFixed(bps int64) {
+	s.fixed.Store(true)
+	s.SetBps(bps)
+}
+
+// SetAuto returns a SetFixed shaper to its automatic distribution (no-op without one).
+func (s *Shaper) SetAuto() {
+	s.fixed.Store(false)
+	if s.normal != nil {
+		s.SetBps(s.normal.rate(rand.NormFloat64()))
+	}
+}
+
+func (s *Shaper) Fixed() bool { return s.fixed.Load() }
 
 func (s *Shaper) Bps() int64   { return s.bps.Load() }
 func (s *Shaper) Bytes() int64 { return s.bytes.Load() }

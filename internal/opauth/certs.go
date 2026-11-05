@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/pivauth"
 )
 
@@ -82,7 +83,7 @@ func certPage(w http.ResponseWriter, status int, message, next string) {
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.WriteHeader(status)
-	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title><style>body{font:15px system-ui,sans-serif;background:#0b1118;color:#d6e2ee;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}main{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{font-size:18px}p{color:#8aa0b6}a{color:#64b5f6}</style></head><body><main><h1>Ghost Seeker</h1><p>%s</p>`, html.EscapeString(message))
+	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title><style>body{font:15px system-ui,sans-serif;background:#0b1118;color:#d6e2ee;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}main{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{font-size:18px}p{color:#8aa0b6}a{color:#64b5f6}header{display:flex;align-items:center;gap:16px}</style><style>%s</style></head><body><main><header><h1>Ghost Seeker</h1>%s</header><p>%s</p>`, httpx.DocsLinkCSS, httpx.DocsLinkHTML, html.EscapeString(message))
 	if next != "" {
 		_, _ = fmt.Fprintf(w, `<a href="%s">Continue</a>`, html.EscapeString(safeNext(next)))
 	}
