@@ -167,11 +167,14 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	if body.Rules != nil {
 		rules = *body.Rules
 		compiled = compiler.Review(body.Text, rules, durationMin)
+		durationMin = compiled.DurationMin
 	} else {
 		compiled = compiler.Compile(r.Context(), body.Text)
 		rules = compiled.Rules
+		if durationMin == 0 {
+			durationMin = compiled.DurationMin
+		}
 	}
-	durationMin = compiled.DurationMin
 	if compiled.Blocked {
 		message := ""
 		for _, warning := range compiled.Warnings {

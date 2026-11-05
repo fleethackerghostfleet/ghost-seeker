@@ -212,6 +212,19 @@ func TestBlockedDirectiveAndDurationExpiry(t *testing.T) {
 	}
 }
 
+func TestExplicitDurationForTextDirective(t *testing.T) {
+	app := New(store.New(10))
+	var delay time.Duration
+	app.after = func(d time.Duration, _ func()) { delay = d }
+	response := request(app, http.MethodPost, "/api/directives", map[string]any{"text": "small boats", "durationMin": 60})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed add status = %d: %s", response.Code, response.Body.String())
+	}
+	if delay != time.Hour {
+		t.Fatalf("expiry delay = %s, want 1h", delay)
+	}
+}
+
 func TestEditedDirectiveExtractsDurationForExpiry(t *testing.T) {
 	app := New(store.New(10))
 	var delay time.Duration
