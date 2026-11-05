@@ -121,6 +121,11 @@ def detect_lights(image, box, pad=0.2, max_candidates=8, *, associate=True):
                 lights.append(dict(x=float(cx), y=float(cy)))
             continue
         sharp_id = sharp_labels[cy0, cx0]
+        _, core_labels, core_stats, core_centers = cv2.connectedComponentsWithStats(
+            (patch >= max(45, peak*.5)).astype(np.uint8))
+        core_id = core_labels[cy0-ly, cx0-lx]
+        _, _, core_w, core_h, _ = core_stats[core_id]
+        compact = max(core_w, core_h) <= 13 and abs(core_centers[core_id][0]-(cx0-lx)) <= 2
         sharp = False
         if sharp_id:
             _, _, sw, sh, sa = sharp_stats[sharp_id]
@@ -179,6 +184,7 @@ def detect_lights(image, box, pad=0.2, max_candidates=8, *, associate=True):
                            relative=[float((cx-x)/w), float((cy-y)/h)], flashing=False,
                            reflection=support,
                            sharp=bool(sharp),
+                           compact=bool(compact),
                            colour_margin=float(margin),
                            conf=float(np.clip(min((peak-float(np.median(background)))/160, margin), 0, 1)),
                            sodium_ambiguous=bool(sat >= 85 and 10 <= np.median(pixels[:, 0]) < 27),
@@ -200,12 +206,22 @@ def detect_lights(image, box, pad=0.2, max_candidates=8, *, associate=True):
                   p['reflection'] >= 5 and any(q is not p and q['colour'] == p['colour']
                                               and abs(q['x']-p['x']) <= 2
                                               and abs(q['y']-p['y']) >= 3 for q in lights))]
-    lights = associated or [p for p in lights if p['sharp'] and not p['sodium_ambiguous'] and not pier_row(p)
-                            and sum(abs(p['y']-q['y']) < 4 for q in lights) < 4]
+    def independent(light):
+        if light['sodium_ambiguous'] or pier_row(light):
+            return False
+        if sum(abs(light['y']-q['y']) < 4 for q in lights) >= 4:
+            return False
+        return light['sharp'] or (light['compact'] and light['colour_margin'] >= .8 and light['contrast'] >= 100
+               and any(q is not light and q['colour'] == light['colour']
+                       and q['compact'] and q['colour_margin'] >= .8 and q['contrast'] >= 100
+                       and not q['sodium_ambiguous'] and not pier_row(q)
+                       and abs(q['x']-light['x']) <= max(2, w*.04)
+                       and abs(q['y']-light['y']) >= 3 for q in lights))
+    lights = [p for p in lights if p in associated or independent(p)]
     for p in lights:
         column = [q for q in lights if abs(q['x']-p['x']) <= max(2, w*.04)]
         stack = min(1., len(column)/3)
-        association = min(1., p['reflection']/40) if associated else float(p['sharp'])
+        association = max(min(1., p['reflection']/40), float(p['sharp']))
         p['conf'] = float(np.clip(.25*p['colour_margin'] + .25*min(1., p['contrast']/180)
                                  + .15*association + .35*stack, 0, 1))
         # A resolved, bright, colour-pure pair is not weaker merely because it

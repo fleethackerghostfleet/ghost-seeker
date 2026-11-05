@@ -272,6 +272,35 @@ def test_hard_renderer_is_deterministic_and_labels_nuisances():
     assert twilight.mean() > image.mean()
 
 
+def test_reflected_sibling_does_not_drop_unreflected_light():
+    image = np.zeros((180, 200, 3), np.uint8)
+    for x, y in [(60, 40), (66, 65)]:
+        cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
+    box = (20, 20, 160, 100)
+    before = detect_lights(image, box)
+    assert len(before) == 2
+    cv2.line(image, (60, 120), (60, 150), (0, 0, 80), 2)
+    cv2.circle(image, (110, 50), 2, (20, 105, 235), -1)
+    lights = detect_lights(image, box)
+    assert [(p['x'], p['y']) for p in lights] == [(60, 40), (66, 65)]
+    assert lights[0]['reflection'] >= 12 and lights[1]['reflection'] == 0
+    assert all(p['colour'] == 'red' and p['conf'] >= .85 for p in lights)
+    assert interpret(lights, True)['boost'] == .9
+
+
+def test_unreflected_bloomed_pair_uses_colour_and_grouping():
+    image = np.zeros((180, 200, 3), np.uint8)
+    for y in (40, 65):
+        cv2.circle(image, (60, y), 3, (0, 0, 255), -1)
+    image = cv2.GaussianBlur(image, (0, 0), 2)
+    lights = detect_lights(image, (20, 20, 160, 100))
+    assert len(lights) == 2
+    assert all(not p['sharp'] and p['reflection'] == 0 for p in lights)
+    assert interpret(lights, True)['boost'] == .9
+    image[53:] = 0
+    assert detect_lights(image, (20, 20, 160, 100)) == []
+
+
 def test_saturated_core_uses_chromatic_halo():
     image = np.zeros((120, 160, 3), np.uint8)
     cv2.circle(image, (80, 40), 4, (10, 60, 220), -1)
