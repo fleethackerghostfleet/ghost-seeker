@@ -95,6 +95,15 @@ func TestValidateSplitsRejectsLockedRows(t *testing.T) {
 			}(),
 		},
 		{
+			name: "dataset id match",
+			yaml: "test:\n  clips: [Spotted_A_Submarine]\n",
+			image: func() Image {
+				image := testImage("locked-dataset-row", "video_spotted_a_submarine")
+				image.SourceVideo = "Different_Clip"
+				return image
+			}(),
+		},
+		{
 			name: "alias match",
 			yaml: "source_video_aliases:\n  Old_Clip_Name: Canonical_Clip\ntest:\n  clips: [Canonical_Clip]\n",
 			image: func() Image {

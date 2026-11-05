@@ -151,11 +151,19 @@ func ValidateSplits(images []Image, path string) (int, error) {
 		if _, ok := policy.pathDatasets[normalizeDatasetID(image.DatasetID)]; ok && hasTestPathSegment(image.ImageID) {
 			reason = "image_id contains a locked /test/ path segment"
 		} else {
-			source := policy.canonicalSource(image.SourceVideo)
-			for split, locked := range policy.lockedSources {
-				for name := range locked {
-					if sourceMatches(source, name) {
-						reason = fmt.Sprintf("source_video matches %s split source %q", split, name)
+			for _, candidate := range []struct{ field, value string }{
+				{field: "source_video", value: image.SourceVideo},
+				{field: "dataset_id", value: image.DatasetID},
+			} {
+				source := policy.canonicalSource(candidate.value)
+				for split, locked := range policy.lockedSources {
+					for name := range locked {
+						if sourceMatches(source, name) {
+							reason = fmt.Sprintf("%s matches %s split source %q", candidate.field, split, name)
+							break
+						}
+					}
+					if reason != "" {
 						break
 					}
 				}
