@@ -149,14 +149,15 @@ def main():
     ap.add_argument("--sds-sequences", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
     a = ap.parse_args()
-    out = a.output
-    if out.exists():
+    if a.output.exists():
         ap.error("output exists; clean versions are never rebuilt in place")
     raw_ds = {r["dataset_id"]: r for c in (a.ir_catalog, a.sds_catalog) if (c / "datasets.jsonl").exists()
               for r in read_jsonl(c / "datasets.jsonl")}
     missing = {"ir_maritime_vessels", "seadronessee"} - raw_ds.keys()
     if missing:
         ap.error(f"datasets.jsonl rows missing for {sorted(missing)} in --ir-catalog/--sds-catalog")
+    out = a.output.with_name(a.output.name + ".partial")  # renamed to --output only after a complete build
+    shutil.rmtree(out, ignore_errors=True)
     shutil.copytree(a.v2, out / "catalog")
     issues, recordings = [], []
     ir_img, ir_ann, ir_groups = clean_ir(a.ir_raw, a.ir_catalog, issues, recordings)
@@ -192,6 +193,7 @@ def main():
         "issues": dict(Counter(i["reason"] for i in issues)),
     }
     (out / "audit.json").write_text(json.dumps(summary, indent=2, sort_keys=True))
+    out.rename(a.output)
     print(json.dumps(summary, indent=2))
 
 
