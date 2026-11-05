@@ -215,6 +215,12 @@ zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
   --set-variables=FRAMES_HOSTPATH=/srv/ghost-seeker,SCENARIO=/frames/ghostfleet_demo/scenario.json
 ```
 
+Changing ConfigMap-backed settings (`SCENARIO`, `FRAMES_DIR`, edge caps, and
+`SHORE_REQUIRE_AUTH`) or rotating Secret-backed credentials requires restarting
+the affected workload because environment variables are read at pod startup:
+run `kubectl -n ghost-seeker rollout restart statefulset/edge` for edge changes,
+or use `statefulset/shore` for shore auth.
+
 Shore and edge StatefulSets have independent RWO PVCs. Keep these PVCs when
 upgrading or rolling back; changing image tags does not migrate the schema or
 restore deleted storage. Stop the service before making a SQLite backup, and
