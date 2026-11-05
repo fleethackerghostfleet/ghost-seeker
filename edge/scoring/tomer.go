@@ -35,14 +35,17 @@ func ForPrioritizer(name string) (*Engine, error) {
 	return nil, fmt.Errorf("unknown prioritizer %q (edgeml | tomer)", name)
 }
 
-// Tomer scores image items by Tomer's whole-frame priority alone; operator
-// interest, freshness and shore pull boosts (platform features) still apply.
-// The weight puts his [0,1] score on the same scale as Default()'s image
-// priorities so policy thresholds (min_priority_for_images) keep working.
+// Tomer scores image items by Tomer's whole-frame priority instead of
+// Default()'s base/unknown/confidence terms; operator interest, the dark-contact
+// boost, freshness and shore pull boosts (platform features) still apply with
+// their Default() weights. The tomer weight puts his [0,1] score on the same
+// scale as Default()'s image priorities so policy thresholds
+// (min_priority_for_images) keep working.
 func Tomer() *Engine {
+	d := Default()
 	return &Engine{
-		Scorers: []Scorer{TomerScore{}, Interest{}},
-		Weights: map[string]float64{"tomer": 3, "interest": 1},
+		Scorers: []Scorer{TomerScore{}, Interest{}, DarkContact{}},
+		Weights: map[string]float64{"tomer": 3, "interest": d.Weights["interest"], "dark": d.Weights["dark"]},
 	}
 }
 

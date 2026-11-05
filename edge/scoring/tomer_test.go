@@ -8,7 +8,7 @@ import (
 )
 
 func TestForPrioritizer(t *testing.T) {
-	if e, err := ForPrioritizer("edgeml"); err != nil || len(e.Scorers) != 4 {
+	if e, err := ForPrioritizer("edgeml"); err != nil || len(e.Scorers) != len(Default().Scorers) {
 		t.Fatalf("edgeml: %v %d", err, len(e.Scorers))
 	}
 	if e, err := ForPrioritizer("tomer"); err != nil || e.Scorers[0].Name() != "tomer" {
