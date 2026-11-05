@@ -38,6 +38,7 @@ func main() {
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
 	autoCDR := flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
+	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
 	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
@@ -58,7 +59,7 @@ func main() {
 	}
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, *operatorID)
 		return
 	}
 
@@ -137,7 +138,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operatorID string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -155,7 +156,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		log.Printf("link shaper on %s -> %s at %d bit/s (start the edge with -shore http://localhost%s)", linkListen, target, linkBps, linkListen)
 		link = sh
 	}
-	bridge := shorebridge.New(shoreURL, edgeURL, link)
+	bridge := shorebridge.New(shoreURL, edgeURL, link).WithOperator(operatorID)
 	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
 	go bridge.Run(ctx, poll)
@@ -206,4 +207,11 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 			app.PublishStats(stats)
 		}
 	}
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

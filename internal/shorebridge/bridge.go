@@ -65,13 +65,28 @@ type Bridge struct {
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	return &Bridge{
-		shore:   strings.TrimRight(shoreURL, "/"),
-		edge:    strings.TrimRight(edgeURL, "/"),
-		link:    link,
-		client:  &http.Client{Timeout: 10 * time.Second},
-		subs:    map[chan []byte]struct{}{},
-		records: map[string]int{},
+		shore:    strings.TrimRight(shoreURL, "/"),
+		edge:     strings.TrimRight(edgeURL, "/"),
+		link:     link,
+		client:   &http.Client{Timeout: 10 * time.Second},
+		subs:     map[chan []byte]struct{}{},
+		records:  map[string]int{},
+		operator: DefaultOperator,
 	}
+}
+
+// DefaultOperator is the issuer recorded on policies this console edits when
+// no -operator-id is configured.
+const DefaultOperator = "operator-ui"
+
+// WithOperator sets the identity recorded as IssuedBy / rule Author / EMCON
+// SetBy on policies this console submits. It is server configuration (the
+// authenticated console instance), never taken from the browser request.
+func (b *Bridge) WithOperator(id string) *Bridge {
+	if id = strings.TrimSpace(id); id != "" {
+		b.operator = id
+	}
+	return b
 }
 
 // ---- wire model (what the browser sees) ----
@@ -739,7 +754,6 @@ type policyBody struct {
 	Text     string   `json:"text"`
 	Suppress []string `json:"suppress"`
 	Boost    []string `json:"boost"`
-	IssuedBy string   `json:"issuedBy"`
 }
 
 // setPolicy forwards an operator directive to shore. A free-text directive is
@@ -758,11 +772,9 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "text exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
-	if in.IssuedBy == "" {
-		in.IssuedBy = "operator-ui"
-	}
+	issuedBy := b.operator
 	mode, ruleText := command.SplitEmcon(in.Text)
-	pol := &pb.Policy{IssuedBy: in.IssuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
+	pol := &pb.Policy{IssuedBy: issuedBy, Text: in.Text, Interest: &pb.Interest{SuppressLabels: in.Suppress, BoostLabels: in.Boost}}
 	if mode != "" {
 		pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
 	}
@@ -827,21 +839,21 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				pol.EmconSetting = proto.Clone(current.EmconSetting).(*pb.EmconSetting)
 			}
 		} else {
-			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+			pol.EmconSetting = &pb.EmconSetting{Mode: pol.Emcon, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
 		}
 		if len(current.Layers) > 0 {
 			pol.Layers = cloneLayers(current.Layers)
-			operatorLayer := findOperatorLayer(pol.Layers, in.IssuedBy)
-			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: in.IssuedBy,
+			operatorLayer := findOperatorLayer(pol.Layers, issuedBy)
+			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: issuedBy,
 				BoostLabels: append([]string(nil), pol.Interest.BoostLabels...), SuppressLabels: append([]string(nil), pol.Interest.SuppressLabels...), Text: in.Text}
 			if operatorLayer >= 0 {
 				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
 			} else {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: in.IssuedBy, Rules: []*pb.InterestRule{rule}})
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: issuedBy, Rules: []*pb.InterestRule{rule}})
 				operatorLayer = len(pol.Layers) - 1
 			}
 			if mode != "" && !emconLocked {
-				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+				pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: pol.Emcon, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
 			}
 		}
 	}
@@ -912,8 +924,7 @@ func blockedMessage(c command.Compiled) string {
 
 func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Mode     string `json:"mode"`
-		IssuedBy string `json:"issuedBy"`
+		Mode string `json:"mode"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
@@ -925,9 +936,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mode must be NORMAL, BURST, or SILENT", http.StatusBadRequest)
 		return
 	}
-	if in.IssuedBy == "" {
-		in.IssuedBy = "operator-ui"
-	}
+	issuedBy := b.operator
 	current, err := b.getPolicy(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -942,10 +951,10 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pol := proto.Clone(current).(*pb.Policy)
-	pol.IssuedBy = in.IssuedBy
+	pol.IssuedBy = issuedBy
 	if len(pol.Layers) > 0 {
 		pol.Layers = cloneLayers(pol.Layers)
-		operatorLayer := findOperatorLayer(pol.Layers, in.IssuedBy)
+		operatorLayer := findOperatorLayer(pol.Layers, issuedBy)
 		if operatorLayer < 0 {
 			for i, layer := range pol.Layers {
 				if layer.Echelon == pb.Echelon_ECHELON_SHIP {
@@ -954,14 +963,14 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if operatorLayer < 0 {
-				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: in.IssuedBy})
+				pol.Layers = append(pol.Layers, &pb.PolicyLayer{Echelon: pb.Echelon_ECHELON_SHIP, IssuedBy: issuedBy})
 				operatorLayer = len(pol.Layers) - 1
 			}
 		}
-		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+		pol.Layers[operatorLayer].Emcon = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
 	} else {
 		pol.Emcon = mode
-		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: in.IssuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
+		pol.EmconSetting = &pb.EmconSetting{Mode: mode, SetBy: issuedBy, Echelon: pb.Echelon_ECHELON_SHIP}
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
 	var out pb.SetPolicyResponse

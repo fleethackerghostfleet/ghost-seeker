@@ -144,14 +144,15 @@ func TestPolicyInfoAndLayeredDirectiveEMCON(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	bridge := New(server.URL, "", nil)
+	bridge := New(server.URL, "", nil).WithOperator("TAO")
 	rec := httptest.NewRecorder()
+	// A request-body issuedBy is ignored: the identity is the configured operator.
 	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy",
-		strings.NewReader(`{"issuedBy":"TAO","text":"ignore submarines","suppress":["submarine"]}`)))
+		strings.NewReader(`{"issuedBy":"CTF-72","text":"ignore submarines","suppress":["submarine"]}`)))
 	if rec.Code != http.StatusOK || setPolicy == nil {
 		t.Fatalf("directive status=%d body=%s policy=%v", rec.Code, rec.Body.String(), setPolicy)
 	}
-	if len(setPolicy.Layers) != 2 || setPolicy.Layers[1].Rules[0].Id[:3] != "ui-" ||
+	if len(setPolicy.Layers) != 2 || setPolicy.Layers[1].Rules[0].Id[:3] != "ui-" || setPolicy.Layers[1].IssuedBy != "TAO" || setPolicy.IssuedBy != "TAO" ||
 		setPolicy.Layers[1].Emcon.Mode != pb.EmconMode_EMCON_MODE_BURST ||
 		setPolicy.EmconSetting.Mode != pb.EmconMode_EMCON_MODE_SILENT ||
 		setPolicy.Id != "" || setPolicy.Version != 0 || setPolicy.Signature != nil {
@@ -168,7 +169,7 @@ func TestPolicyInfoAndLayeredDirectiveEMCON(t *testing.T) {
 	rec = httptest.NewRecorder()
 	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/emcon", strings.NewReader(`{"mode":"BURST"}`)))
 	if rec.Code != http.StatusOK || setPolicy.Layers[1].Emcon.Mode != pb.EmconMode_EMCON_MODE_BURST ||
-		setPolicy.Layers[1].Emcon.SetBy != "operator-ui" || setPolicy.Id != "" || setPolicy.Version != 0 {
+		setPolicy.Layers[1].Emcon.SetBy != "TAO" || setPolicy.Id != "" || setPolicy.Version != 0 {
 		t.Fatalf("EMCON update status=%d body=%s policy=%+v", rec.Code, rec.Body.String(), setPolicy)
 	}
 
