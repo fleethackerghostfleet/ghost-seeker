@@ -1,0 +1,60 @@
+{
+  "local_weights": {
+    "yolo12n.pt": {
+      "sha256": "419ff3dca37d69bacc93a50fa0c186a1c6f9fe62fae0f108b0872829689e9ca6",
+      "bytes": 5595063
+    },
+    "yolo12s.pt": {
+      "sha256": "e915c2c4286e3f6f8610ef106fa3f94a7b8c19b30eccede5887e22c33ef75f58",
+      "bytes": 19006455
+    },
+    "yolov10n.pt": {
+      "sha256": "11287ed0735678e7ba1ac2a9b3098c049155b3fde123992e724c1264bcc16b6f",
+      "bytes": 5860383
+    },
+    "yolov10s.pt": {
+      "sha256": "65fa8332c38a7189597a268897bce6c1026f9499711b9761fb0c2c639b91d4d6",
+      "bytes": 16623111
+    },
+    "yolov9s.pt": {
+      "sha256": "67731fc88bb6782fbb4f32703a2cac052acd65148b65c9e67161fe13536c2ffc",
+      "bytes": 15389259
+    },
+    "yolov9t.pt": {
+      "sha256": "410e3caca789aa8fec19971c05577616cbb963a416bcd0228171b2dff7f718f7",
+      "bytes": 4969803
+    },
+    "rf-detr-base.pth": {
+      "sha256": "d8f70210e425a4a4234d547737f57500bcc4ac24a333b99e33d9d5a371e0b80f",
+      "bytes": 372578043
+    },
+    "rf-detr-nano.pth": {
+      "sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+      "bytes": 366287238
+    },
+    "rf-detr-small.pth": {
+      "sha256": "d81979a9213a2109345158ce9232668df4c1ae52e9b8db3f2ec0a8cbad959b33",
+      "bytes": 386045550
+    }
+  },
+  "huggingface_refs_main": {
+    "apple/MobileCLIP-S2-OpenCLIP": "8e8a808316aeb7c24d0400e1cf8f74b6937832aa",
+    "laion/CLIP-ViT-B-16-laion2B-s34B-b88K": "7288da5a0d6f0b51c4a2b27c624837a9236d0112",
+    "apple/MobileCLIP-S1-OpenCLIP": "59d35241939f6942255489b83c9068e48ebf57f8",
+    "facebook/dinov2-small": "ed25f3a31f01632728cabb09d1542f84ab7b0056",
+    "microsoft/conditional-detr-resnet-50": "8f8795fb7c319c7862d4f4cd699e76bb09cf2593",
+    "IDEA-Research/grounding-dino-base": "12bdfa3120f3e7ec7b434d90674b3396eccf88eb",
+    "facebook/detr-resnet-50": "1d5f47bd3bdd2c4bbfa585418ffe6da5028b4c0b",
+    "florence-community/Florence-2-base-ft": "0b03b6f15a4a211370fb204aee4e7dd48887ea37",
+    "google/owlvit-base-patch16": "4b420debb9c806fc4caf9ecc8efb72208c0db892",
+    "timm/vit_base_patch32_clip_224.openai": "a6f597a30f7b82c51704746581f9a4e41421e878",
+    "facebook/dinov2-base": "f9e44c814b77203eaa57a6bdbbd535f21ede1415",
+    "SenseTime/deformable-detr": "83ecd26945199939cb82806f988debdb71e6f43e",
+    "PekingU/rtdetr_v2_r34vd": "5d60d8fb5eb2a3ee5575bf200ecbce4e2cfa420c",
+    "timm/vit_base_patch16_clip_224.openai": "977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d",
+    "google/owlvit-base-patch32": "cbc355fb364588351c5d51c7f74465e8e7ec6f72",
+    "timm/resnet50.a1_in1k": "767268603ca0cb0bfe326fa87277f19c419566ef",
+    "timm/ViT-B-16-SigLIP2": "eee10eff6dd8cabae2d7f379d4e8cfcd352030aa",
+    "laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K": "f0e2ffa09cbadab3db6a261ec1ec56407ce42912"
+  }
+}

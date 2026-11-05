@@ -63,7 +63,8 @@ Live, two processes, replaying the frame zips through the mock analyzer:
 ```sh
 make run-shore             # :8080  SyncService + shore console + ui/
 make run-edge              # :8081  edge console; syncs to shore
-curl -s -H content-type:application/json -d '{}' localhost:8080/ghostseeker.v1.ConsoleService/GetStatus
+TOKEN=$(make -s demo-token)   # or: cat data/operator.token
+curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{}' localhost:8080/ghostseeker.v1.ConsoleService/GetStatus
 curl -s -H content-type:application/json -d '{"limit":10}' localhost:8081/ghostseeker.v1.ConsoleService/GetQueue
 # operator on shore: "ignore cargo ships" -> downlinked on the next exchange, edge re-ranks
 curl -s -H content-type:application/json -d '{"policy":{"issuedBy":"ops","text":"ignore cargo ships","interest":{"suppressLabels":["cargo ship"]}}}' \
@@ -79,6 +80,17 @@ With a shaped network instead of the in-process simulator:
 make compose                       # shore, toxiproxy, edge
 deploy/compose/degrade.sh satcom   # 64 kbps / 600 ms; also trickle | starlink | down | up
 ```
+
+## Configuration: operator authentication
+
+Shore ConsoleService, the edge console, `/blob/` on both and the operator web app share one
+**operator bearer token**: `-operator-token` / `GS_OPERATOR_TOKEN` or `-operator-token-file` /
+`GS_OPERATOR_TOKEN_FILE` (production, required), or `-dev-token-file` / `GS_DEV_TOKEN_FILE`
+(default `data/operator.token`, auto-generated for a local demo; `none` to require an explicit
+token). API calls need `Authorization: Bearer <token>` (401 otherwise); the web app exchanges it
+for an `HttpOnly; SameSite=Strict` session cookie at `/login` (automatic for a loopback browser in
+dev mode). CORS is same-origin unless `-cors-origins` / `GS_CORS_ORIGINS` lists an origin. See
+`docs/SECURITY.md` for the full control list and the Deep-scan before/after.
 
 ## Configuration: unit sync authentication and edge storage caps
 

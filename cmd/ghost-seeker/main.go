@@ -14,6 +14,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
@@ -49,6 +50,9 @@ func main() {
 	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
 	llmModel := flag.String("llm-model", os.Getenv("GS_LLM_MODEL"), "local LLM model name")
 	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
+	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
+	opTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "operator token file")
+	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
 	flag.Parse()
 
 	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
@@ -58,15 +62,24 @@ func main() {
 		log.Printf("NL compiler: local LLM at %s", *llmURL)
 	}
 
+	operator, devMode, err := opauth.Load(*opToken, *opTokenFile, *devTokenFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sessions := opauth.NewSessions(operator, devMode)
+	if devMode {
+		log.Printf("operator token auto-generated for a local demo (%s); loopback browsers are signed in automatically", *devTokenFile)
+	}
+
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, *operatorID)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID)
 		return
 	}
 
 	data := store.New(*retain)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
-	options := []server.Option{server.WithAdmin(*admin), server.WithNodeID("DDG-51")}
+	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
 		if err != nil {
@@ -87,7 +100,7 @@ func main() {
 	}
 
 	log.Printf("Ghost Seeker listening on %s", *addr)
-	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(app))))
+	log.Fatal(serve(*addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(app)))))
 }
 
 func serve(addr string, handler http.Handler) error {
@@ -138,7 +151,7 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operatorID string) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -156,7 +169,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		log.Printf("link shaper on %s -> %s at %d bit/s (start the edge with -shore http://localhost%s)", linkListen, target, linkBps, linkListen)
 		link = sh
 	}
-	bridge := shorebridge.New(shoreURL, edgeURL, link).WithOperator(operatorID)
+	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)
 	compiler.Locks = bridge.PolicyLocks()
 	bridge.Compiler = compiler
 	go bridge.Run(ctx, poll)
@@ -172,7 +185,14 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		static.ServeHTTP(w, r)
 	})
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
-	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(mux))))
+	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(mux)))))
+}
+
+func envOr(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
 }
 
 func shaperTarget(shoreURL string) (string, error) {
@@ -207,11 +227,4 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 			app.PublishStats(stats)
 		}
 	}
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }

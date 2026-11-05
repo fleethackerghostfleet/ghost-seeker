@@ -13,7 +13,6 @@ import (
 	"hash/fnv"
 	"image"
 	"image/jpeg"
-	_ "image/png"
 	"io"
 	"log/slog"
 	"maps"
@@ -35,6 +34,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 )
 
 // Capture is one thing a source produced.
@@ -403,7 +403,7 @@ func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Si
 // capture when FULL was re-encoded, else nil.
 func (g *Ingester) imageForms(data []byte, resp *pb.AnalyzeResponse, s *pb.Sighting) (payloads map[pb.FormKind][]byte, original []byte) {
 	payloads = map[pb.FormKind][]byte{pb.FormKind_FORM_KIND_FULL: data}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := imglimit.Decode(data, 0)
 	if err != nil {
 		g.log.Warn("decode", "err", err)
 		return payloads, nil
@@ -441,7 +441,7 @@ func (g *Ingester) imageForms(data []byte, resp *pb.AnalyzeResponse, s *pb.Sight
 // a CROP from the previous frame would be wrong, so the usual gates (unknown,
 // smaller than FULL) don't apply; with no box at all the whole frame is used.
 func (g *Ingester) replacementCrop(data []byte, resp *pb.AnalyzeResponse, s *pb.Sighting) ([]byte, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := imglimit.Decode(data, 0)
 	if err != nil {
 		return nil, err
 	}

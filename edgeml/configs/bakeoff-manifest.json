@@ -1,0 +1,350 @@
+{
+  "workstream": "b; additional classifier evaluation uses D harness",
+  "base_git_sha": "3699324507a9a1cbbc336705a0cc85b70d27d3a9",
+  "support_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-0319-b-bakeoff-summary/",
+  "runs": {
+    "20261105-bakeoff-cpu-dev": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-cpu-dev/",
+    "20261105-bakeoff-cpu-test": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-cpu-test/",
+    "20261105-bakeoff-selected-seaships-test": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-selected-seaships-test/",
+    "20261105-bakeoff-classifiers-dev4": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-classifiers-dev4/",
+    "20261105-bakeoff-classifiers-test4": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-classifiers-test4/",
+    "20261105-bakeoff-api-dev": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-api-dev/",
+    "20261105-bakeoff-api-dev-schema": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-api-dev-schema/",
+    "20261105-bakeoff-api-pro-dev": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-api-pro-dev/",
+    "20261105-bakeoff-api-test": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/runs/20261105-bakeoff-api-test/"
+  },
+  "cpu_threads": 4,
+  "new_gpu_measurements": false,
+  "detector_rank_rule": "Mean AP50 over SeaShips and SMD DEV; see frozen selection",
+  "thresholds": {
+    "yolov9t": {
+      "seaships7000": 0.2,
+      "smd_vis_onboard_sample": 0.15
+    },
+    "yolov9s": {
+      "seaships7000": 0.35,
+      "smd_vis_onboard_sample": 0.25
+    },
+    "yolov10n": {
+      "seaships7000": 0.15,
+      "smd_vis_onboard_sample": 0.3
+    },
+    "yolov10s": {
+      "seaships7000": 0.2,
+      "smd_vis_onboard_sample": 0.2
+    },
+    "yolo12n": {
+      "seaships7000": 0.25,
+      "smd_vis_onboard_sample": 0.15
+    },
+    "yolo12s": {
+      "seaships7000": 0.35,
+      "smd_vis_onboard_sample": 0.25
+    },
+    "detr-r50": {
+      "seaships7000": 0.95,
+      "smd_vis_onboard_sample": 0.95
+    },
+    "conditional-detr-r50": {
+      "seaships7000": 0.4,
+      "smd_vis_onboard_sample": 0.55
+    },
+    "deformable-detr": {
+      "seaships7000": 0.45,
+      "smd_vis_onboard_sample": 0.6
+    },
+    "rtdetrv2-r34": {
+      "seaships7000": 0.65,
+      "smd_vis_onboard_sample": 0.75
+    },
+    "owlvit-b32": {
+      "seaships7000": 0.1,
+      "smd_vis_onboard_sample": 0.05
+    },
+    "owlvit-b16": {
+      "seaships7000": 0.05,
+      "smd_vis_onboard_sample": 0.05
+    },
+    "gdino-base": {
+      "seaships7000": 0.35,
+      "smd_vis_onboard_sample": 0.4
+    },
+    "rfdetr-nano": {
+      "seaships7000": 0.5,
+      "smd_vis_onboard_sample": 0.4
+    },
+    "rfdetr-small": {
+      "seaships7000": 0.6,
+      "smd_vis_onboard_sample": 0.3
+    },
+    "rfdetr-base": {
+      "seaships7000": 0.65,
+      "smd_vis_onboard_sample": 0.35
+    },
+    "florence2-base-ft": {
+      "seaships7000": 0.05,
+      "smd_vis_onboard_sample": 0.05
+    }
+  },
+  "api_thresholds": {
+    "cloud-vision": {
+      "smd_vis_onboard_sample": 0.6
+    },
+    "gemini-2.5-flash": {
+      "smd_vis_onboard_sample": 0.95
+    },
+    "gemini-2.5-pro": {
+      "smd_vis_onboard_sample": 0.9
+    }
+  },
+  "detector_selection": {
+    "frozen_at_utc": "2026-11-05T01:57:36.921684+00:00",
+    "source": "20261105-bakeoff-cpu-dev",
+    "rank_rule": "mean vessel AP50 across SeaShips and SMD DEV only",
+    "ranked": [
+      "rfdetr-small",
+      "rfdetr-nano",
+      "gdino-base",
+      "rtdetrv2-r34",
+      "rfdetr-base",
+      "owlvit-b32",
+      "conditional-detr-r50",
+      "deformable-detr",
+      "yolov9s",
+      "owlvit-b16",
+      "yolo12s",
+      "yolov10s",
+      "detr-r50",
+      "yolo12n",
+      "yolov9t",
+      "yolov10n",
+      "florence2-base-ft"
+    ],
+    "shore_candidate": "rfdetr-small",
+    "teacher_known_vessel_boxes": "rfdetr-small",
+    "edge": "Retain inherited D optimized YOLO11n + MobileCLIP-S1 pending matched classifier results",
+    "note": "Locked test started automatically but its numbers have not been read when freezing this recommendation. No test-based selection."
+  },
+  "new_classifier_selection": {
+    "recorded_at_utc": "2026-11-05T02:19:41.546788+00:00",
+    "source": "20261105-bakeoff-classifiers-dev4",
+    "rank_rule": "SeaShips DEV 13-way accuracy only; no test metrics read",
+    "new_models": [
+      {
+        "model": "mobileclip-s2",
+        "acc13": 0.6041666666666666,
+        "acc4": 0.6972222222222222,
+        "cpu_ms_per_crop": 81.23716841944568
+      },
+      {
+        "model": "siglip2-b16",
+        "acc13": 0.5958333333333333,
+        "acc4": 0.7166666666666667,
+        "cpu_ms_per_crop": 84.33237637083393
+      },
+      {
+        "model": "clip-b16-openai",
+        "acc13": 0.5666666666666667,
+        "acc4": 0.7055555555555556,
+        "cpu_ms_per_crop": 92.73039383333273
+      },
+      {
+        "model": "openclip-b32-datacomp",
+        "acc13": 0.5486111111111112,
+        "acc4": 0.6888888888888889,
+        "cpu_ms_per_crop": 23.29382711666565
+      },
+      {
+        "model": "openclip-b16-laion",
+        "acc13": 0.46944444444444444,
+        "acc4": 0.6625,
+        "cpu_ms_per_crop": 91.04097126944453
+      },
+      {
+        "model": "clip-b32-openai",
+        "acc13": 0.4013888888888889,
+        "acc4": 0.6708333333333333,
+        "cpu_ms_per_crop": 23.55741969444504
+      }
+    ],
+    "shore_classifier_candidate": "mobileclip-s2",
+    "edge": "Retain inherited MobileCLIP-S1; matched baseline is still queued"
+  },
+  "classifier_freeze": {
+    "models": [
+      "clip-b32-openai",
+      "clip-b16-openai",
+      "openclip-b16-laion",
+      "openclip-b32-datacomp",
+      "siglip2-b16",
+      "mobileclip-s2"
+    ],
+    "context": 1.5,
+    "max_per_class_test": 10000,
+    "tool_sha256": "8e8e4c8e0b7d23f52440268d9e28e9fd97e702acbbc5a30ad50530f5b036dff8",
+    "zeroshot_sha256": "9464aa47b1685c48ceb75e0c94a3708f07b91aff41666383709ab793cea26dc1",
+    "note": "All prompts unchanged from D. No test-based prompt/model/threshold selection."
+  },
+  "matched_s1_freeze": {
+    "model": "mobileclip-s1",
+    "reason": "Matched baseline: same dev crops/cap and CPU as new models; D used a different cap.",
+    "source_sha256": "8e8e4c8e0b7d23f52440268d9e28e9fd97e702acbbc5a30ad50530f5b036dff8"
+  },
+  "matched_s1_reason_correction": "D also used cap120 but archived actual crop count was604 vs720 here. Matched rerun justified by different actual sample, not a different cap.",
+  "api_freeze": {
+    "threshold_sha256": "5d8cfa54cb24e7d1b235ec8ceedbf576689d665b5e2df5d0ef67009ae21a1e13",
+    "adapter_sha256": "14edb24bc22adcd10cd019e8054c899c8e714d7ea1f976e86acad57597f2fbc6"
+  },
+  "metadata_only_source_deltas": [
+    "Hosted response logging adds attempts count after API freeze; predictions unchanged.",
+    "OWL-ViT training_data description corrected from an unaudited dataset list; use official model card."
+  ],
+  "not_authoritative": [
+    "20261105-bakeoff-dev4",
+    "20261105-bakeoff-dev640",
+    "20261105-bakeoff-florence-dev",
+    "20261105-bakeoff-classifiers-dev (empty pilot)",
+    "Gemini error entries in api-dev and partial Pro in api-dev-schema"
+  ],
+  "validation": [
+    {
+      "command": [
+        "/home/ubuntu/go/bin/go",
+        "build",
+        "./..."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/home/ubuntu/go/bin/go",
+        "vet",
+        "./..."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/home/ubuntu/go/bin/go",
+        "test",
+        "./..."
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/home/ubuntu/.nvm/versions/node/v24.22.2/bin/node",
+        "--test",
+        "/home/ubuntu/repos/ghost-seeker/web/learn.test.cjs",
+        "/home/ubuntu/repos/ghost-seeker/web/briefing.test.cjs",
+        "/home/ubuntu/repos/ghost-seeker/web/app.test.cjs"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/home/ubuntu/venv-bakeoff/bin/python",
+        "-m",
+        "pytest",
+        "edgeml/tests",
+        "-q"
+      ],
+      "returncode": 0
+    }
+  ],
+  "input_provenance": "bakeoff-data.json",
+  "model_weights": "bakeoff-weights.json",
+  "source_sha256": {
+    "edgeml/tools/bakeoff.py": "8e8e4c8e0b7d23f52440268d9e28e9fd97e702acbbc5a30ad50530f5b036dff8",
+    "edgeml/tools/bakeoff_dinov2.py": "d0e401387f02163404c47b0da51d01afa85dfc2f0c4fe81f8fa4e35fe410a78f",
+    "edgeml/tools/bench_detectors.py": "61396acc1dc63d6a2a256d555a2fd2e9aab0171eea9f9afd1bcbe13a6df7dea2",
+    "edgeml/tools/c_tables.py": "605ce9646773aab7c4ca88241dd48399ef88057b283b64ac8fbbd305951fbb05",
+    "edgeml/tools/contact_sheets.py": "54d07493f7b1e57bf404ed890d07175439ab6c23d99dbefbfc5639abf955b0ec",
+    "edgeml/tools/d_eval_det.py": "fea47ad709634a482e3e7b86c9bc7141acd878786b5702746459c71e0be0540e",
+    "edgeml/tools/d_eval_gate.py": "229656783a70bf360af46381be5282b3b07c6259bcb2e72a44cfaf40ad9eae84",
+    "edgeml/tools/d_eval_zeroshot.py": "526844bb862268d25d04f973b581851e5eed09a3e1977081eede8d45ff379f74",
+    "edgeml/tools/d_export_embed.py": "262509121c672e995ea19b7a96e812033bbab90e3a956d1e548582e4ea1db8c9",
+    "edgeml/tools/d_report_tables.py": "3129ac52bcf5fe12ee9880d2b04f919feda0812cc4c3c36f0c469ebec3e2c555",
+    "edgeml/tools/export_onnx.py": "8ff7546fc56db0a07ef1f846b37f419a10df0ba0d0df29cac8da6b32d348bb38",
+    "edgeml/tools/report_c.py": "c16af3d317871f7ffd3b712f38e5de53c191af57c1cb1e462618e9b4cc993a39",
+    "edgeml/tools/report_tables.py": "8dec1bba8d7e5b00310e6332dcf4b765a2914954ab2b7cdc9d628f64c83c13c2",
+    "edgeml/tools/run_c.py": "07919f3506f82888aa4a238290472f69e559323347b70b6d97a40d95aeb3b7b3",
+    "edgeml/src/edgeml/__init__.py": "91447944015cec709e8aa7655f7e9d64e1e4508e7023a57fe3746911c0fc6fed",
+    "edgeml/src/edgeml/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "edgeml/src/edgeml/data/catalog.py": "351bdd336bcad6ed9647e0fceb046575434d215899efacd0c872a168eebc1916",
+    "edgeml/src/edgeml/data/convert.py": "eeb562ea242c56bd125d3390f6a17876b86bc22f88965804f941c59d345b66cd",
+    "edgeml/src/edgeml/data/mot.py": "1c805da3a4d8c65d8ee334d0c48f38c7c9c370c2253dcc2de37f11da5ffc4919",
+    "edgeml/src/edgeml/data/seqs.py": "888e7b65b974e79314fc382002bd9176b14b6b7f0af3c4ec802cd00d122dd09a",
+    "edgeml/src/edgeml/detectors/__init__.py": "c0202452834c85ced64d504bc29208ada0789cf81dea3dcdd950f9491f11521c",
+    "edgeml/src/edgeml/detectors/bakeoff.py": "77097035b9b5cfbfcdae1947b2c31dd839a310e442bffb799d64e4bde3ad64b0",
+    "edgeml/src/edgeml/detectors/base.py": "8b3eceab1c34e63d82903718a3329c9472b6b7de1619603b768c4c7db2aab4cd",
+    "edgeml/src/edgeml/detectors/cached.py": "eb95da69f271f24b3084b826494e97d2e5a120482733c7c0a314d507c4fe04ac",
+    "edgeml/src/edgeml/detectors/hf_det.py": "433d8710d0bc4bf6c81266465f06f845c571901fc0b2e8b472b98342313f02b3",
+    "edgeml/src/edgeml/detectors/labels.py": "1635e550359b2b3ffc6089d6bd9842da6271521f55c82988da2adce162d065e1",
+    "edgeml/src/edgeml/detectors/onnx_det.py": "685ca7dd651c384a3bb1d981478101133be6b2bfdb6e4abd73a915f1b87a5de0",
+    "edgeml/src/edgeml/detectors/oracle.py": "b1775979176eab7ac18cb901d3fc37325ef739f7eba2fbe0309ce999ba9e693c",
+    "edgeml/src/edgeml/detectors/tiled.py": "e9444962e928f475f9ae5d0178917deaecae83f1fbb6bf5ec20528437f0a472b",
+    "edgeml/src/edgeml/detectors/ultralytics_det.py": "344aecee63f80a5917700711cc87e7409f76f6b68dfea06612fc40333dfee2bb",
+    "edgeml/src/edgeml/detectors/ultralytics_zoo.py": "dc550a14e532ed2f9cedb8ab640340e4b3688fe126de56d37e10f5a92d0c3c59",
+    "edgeml/src/edgeml/detectors/zoo.py": "734e6ba18c1266b4cb186a09bd9dfac9172a19fe0490e3c116795d06fc542f77",
+    "edgeml/src/edgeml/embed/__init__.py": "4e90256a06e48a43356d24aadc4022f35e3fca844bc226519e5d8138e51501e0",
+    "edgeml/src/edgeml/embed/clip_embedder.py": "9ba860fa96212a1865f5dd09633a15492620d416178ea3a197669850a55c78f6",
+    "edgeml/src/edgeml/embed/zeroshot.py": "9464aa47b1685c48ceb75e0c94a3708f07b91aff41666383709ab793cea26dc1",
+    "edgeml/src/edgeml/eval/__init__.py": "c5df494b541339be830486f4f7f1a7ad29c46dca4a21ebd4bd2d405813045b90",
+    "edgeml/src/edgeml/eval/baselines.py": "63bf1e52894ac2c2cfbc3783dfff734e985da0d830ae68d5d7631f3768788f40",
+    "edgeml/src/edgeml/eval/delivery.py": "a61dd7b03a328e1d7eb753d623c9272f96d27624eaefef7c4c85b09ad8a71906",
+    "edgeml/src/edgeml/eval/detection.py": "7bb910ff8a1c3c3224f410e54c5d0e04b8b63edcd1bee5b36479f382630fd77f",
+    "edgeml/src/edgeml/eval/sightings.py": "f733b726ad2c91e895b8d8b42fe5495ff85910ee5b102f789d1b246e7f310221",
+    "edgeml/src/edgeml/eval/trackeval_wrapper.py": "354262638a85daca6508adc8a8a753733048055a473c751930ca5cd82e0fc597",
+    "edgeml/src/edgeml/forms.py": "b0d98c7147537c3af0b8d8007f13ebd96fc98c6f5daa9c7311da9eb700d1790b",
+    "edgeml/src/edgeml/interfaces.py": "81fdb3b4c6376e542d47bf3b6463c894f8b25392f5436a7e7e757be92dd2f915",
+    "edgeml/src/edgeml/pipeline.py": "254b8be1422a6dace7d88069c6c87734ac63f85dee4754f99a001ef61dc1698c",
+    "edgeml/src/edgeml/runtime/__init__.py": "9de4fb74c159c59ea8a2423671b58ab06322a8b9cd36c738e7b31e1359da36c9",
+    "edgeml/src/edgeml/runtime/backends.py": "4209fd0ae26f3511240ee9825c7946a022fd90548fb8dae562679d869ae2e816",
+    "edgeml/src/edgeml/runtime/bench.py": "1ddc71f72007c59414b85b217905b579ca9123f6fb318dc79e3e0ff70a78fd5a",
+    "edgeml/src/edgeml/runtime/detectors.py": "2c368b28c7813a80b3da1c72680d890ad79ec0358c165df15b07b8a87395d26a",
+    "edgeml/src/edgeml/runtime/e2e.py": "6f818c176949125b449e3d9a555d68973d730f5211721cc4b41df509975b2d82",
+    "edgeml/src/edgeml/runtime/export.py": "c3c8cee759db90f29e632eade0ed0a6b6b6573959b03a901c9c0621093edfa5a",
+    "edgeml/src/edgeml/runtime/gate.py": "f4ed90cbb4c42898aa207d8dc174c134efa0b4efe78c6dec865230eb298e94a0",
+    "edgeml/src/edgeml/runtime/sightings.py": "ff425e9cbfa8bb4130a9ea6b505faff11077bd1f064b4270d03bf42c7c2ff6cd",
+    "edgeml/src/edgeml/runtime/threads.py": "7ab2b0e36044d5093de132588e2dcae207901a68321e809d5a553a26e3d9dc26",
+    "edgeml/src/edgeml/runtime/tracker.py": "17a8f1a683bc512432ce80ad9ae719d2a6cb8db2f8e61ce41bac810394374fe7",
+    "edgeml/src/edgeml/select.py": "e467c00435e72cc7849765e380279ada3f1fc4fcce8082cc53e17e9319cbf4c9",
+    "edgeml/src/edgeml/sidecar/__init__.py": "dc3aeccb536d678c530d94db1e097fbcb36ea45b42f5f4d83150e4a23176eafc",
+    "edgeml/src/edgeml/sidecar/__main__.py": "00ea239b1e7aa77b6b4da71fb1142d043a3187279e1091c17839e8b7e84d12b0",
+    "edgeml/src/edgeml/sidecar/server.py": "5aca4407d5a2415fc99afb86b94c0b72704e0d680bb273f2b8e51d2698e1ead5",
+    "edgeml/src/edgeml/sidecar/service.py": "125817d67a5014424bd225a7cc83c7203f63656192a50399729181bdbc0db4d9",
+    "edgeml/src/edgeml/stabilize.py": "8cd15cd5ae0c61f853be25cd655bb3ee99faa91e4efb2c326b997f2e181f82c4",
+    "edgeml/src/edgeml/tracking/__init__.py": "f81ae9ebbbcc6ce258f32718989122aacfb8d6e69a1cb520ea6854c70180fdba",
+    "edgeml/src/edgeml/tracking/aggregator.py": "35df677c8e91752fb85d88248cfbe351b6a6c3cc7c8842f8536c93956039156f",
+    "edgeml/src/edgeml/tracking/boxmot_adapter.py": "72ce1ce8050f2d3aad6c48e006bc1fcef753c1d20d488e8b380ccfcb9d3e2387",
+    "edgeml/src/edgeml/tracking/embed.py": "7dadca46407881974dabf8df702c8bf8ee4d61a16ea2d1f82f8d759070b7763b",
+    "edgeml/src/edgeml/types.py": "1df35bd3c67867e26ca51ef5ad9691691fb6899a25d5149a236d42b73d22af26"
+  },
+  "bigquery": "ghost_fleet.edgeml_results lookup returned Not found; no shared schema/table created or rows inserted.",
+  "post_review": {
+    "fixes": [
+      "ac89dfa: clarify disjoint size buckets",
+      "be369ac: refresh/retry expired HTTP401 once",
+      "c18f9a0: default raw-response path to benchmark run; preserve overrides"
+    ],
+    "measurement_impact": "None. Original runs succeeded with valid tokens and explicit raw paths. No scored test rerun.",
+    "verification": {
+      "pytest_edgeml": {
+        "passed": 35,
+        "returncode": 0
+      },
+      "focused_ruff": 0,
+      "compileall": 0,
+      "clean_test_only_venv_pytest": {
+        "passed": 35,
+        "returncode": 0
+      }
+    },
+    "source_sha256": {
+      "edgeml/tools/bakeoff.py": "f2fbf4b83153efaa2751e3e28a4ce11dce9e811538ccbde8d6f14112175e6b4d",
+      "edgeml/src/edgeml/detectors/bakeoff.py": "918dc1ec2addc4e9179305281b6a4be3ac62206866df4bb946c527dac41cadfe",
+      "edgeml/tests/test_bakeoff.py": "31f75a44492c2f6a9a46d7bf69e5e1659843d861dd60320b716fa357e39f05c1"
+    }
+  }
+}
