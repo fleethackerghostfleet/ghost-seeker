@@ -58,7 +58,7 @@
     $('#obj-note').textContent = sightingMode ? `sightings (by sighting_id)${counts.scenes ? ` · ${counts.scenes} camera heartbeats not counted` : ''}` : `(no sighting_ids yet: ${counts.items} items, 1 object each)`;
     $('#bytes').textContent = fmtBytes(link.controllable ? link.bytes : shore.bytes);
     $('#bytes-src').textContent = link.controllable ? `through the shaper · shore counted ${fmtBytes(shore.bytes)}` : 'received by shore';
-    $('#policy').textContent = policy ? `“${policy}”` : 'none set';
+    $('#policy').textContent = (policy ? `“${policy}”` : 'none set') + (snap.emcon ? ` · EMCON ${snap.emcon}` : '');
     const review = snap.objects.filter(o => !decided.has(o.key) && !o.suppressed && !o.scene && (o.sightingId || !sightingMode));
     $('#review-n').textContent = review.length;
   }

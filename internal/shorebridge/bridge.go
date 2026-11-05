@@ -144,6 +144,7 @@ type Snapshot struct {
 	Edge    NodeStatus `json:"edge"`
 	Link    LinkStatus `json:"link"`
 	Policy  string     `json:"policy"`
+	Emcon   string     `json:"emcon,omitempty"`
 	Objects []*Object  `json:"objects"`
 	Counts  Counts     `json:"counts"`
 }
@@ -232,6 +233,9 @@ func (b *Bridge) refresh(ctx context.Context) {
 	var suppressed []string
 	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &pol); err == nil {
 		snap.Policy = pol.GetPolicy().GetText()
+		if m := pol.GetPolicy().GetEmcon(); m != pb.EmconMode_EMCON_MODE_UNSPECIFIED && m != pb.EmconMode_EMCON_MODE_NORMAL {
+			snap.Emcon = strings.TrimPrefix(m.String(), "EMCON_MODE_")
+		}
 		suppressed = pol.GetPolicy().GetInterest().GetSuppressLabels()
 	}
 	if b.edge != "" {
@@ -731,6 +735,11 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			pol.Interest.SuppressLabels, pol.Interest.BoostLabels = rulesToLabels(c.Rules)
+			if mode := command.ParseEmcon(in.Text); mode != "" {
+				pol.Emcon = pb.EmconMode(pb.EmconMode_value["EMCON_MODE_"+mode])
+				c.Readback = strings.TrimSuffix(c.Readback, "No rules recognized.") + " EMCON " + mode + "."
+				c.Readback = strings.TrimSpace(c.Readback)
+			}
 			if c.DurationMin > 0 {
 				pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(c.DurationMin) * time.Minute).UnixMilli()
 			}

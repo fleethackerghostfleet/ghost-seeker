@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
@@ -26,7 +27,7 @@ func fakeShore(t *testing.T, got *pb.Policy) *httptest.Server {
 		if err := protojson.Unmarshal(body, &req); err != nil {
 			t.Errorf("unmarshal: %v", err)
 		}
-		*got = *req.Policy
+		proto.Merge(got, req.Policy)
 		raw, _ := protojson.Marshal(&pb.SetPolicyResponse{Policy: req.Policy})
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(raw)
@@ -92,5 +93,25 @@ func TestSetPolicyWithoutCompilerUsesInterpret(t *testing.T) {
 	}
 	if len(got.Interest.SuppressLabels) != 1 {
 		t.Fatalf("interpret not used: %v", got.Interest)
+	}
+}
+
+func TestSetPolicyEmconPhrase(t *testing.T) {
+	var got pb.Policy
+	shore := fakeShore(t, &got)
+	defer shore.Close()
+	b := New(shore.URL, "", nil)
+	b.Compiler = &command.Compiler{}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"go quiet"}`))
+	b.Handler().ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	if got.Emcon != pb.EmconMode_EMCON_MODE_SILENT {
+		t.Fatalf("emcon = %v", got.Emcon)
+	}
+	if !strings.Contains(rec.Body.String(), "EMCON SILENT") {
+		t.Fatalf("readback lacks EMCON: %s", rec.Body)
 	}
 }
