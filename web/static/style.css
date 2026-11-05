@@ -59,7 +59,15 @@ body.drawer-open .feed{padding-right:calc(var(--dw) + 16px)}
 .grid{display:grid;gap:8px}
 .grid.s{grid-template-columns:repeat(auto-fill,minmax(max(120px,(100% - 48px)/7),1fr))}
 .grid.m{grid-template-columns:repeat(auto-fill,minmax(max(160px,(100% - 32px)/5),1fr))}
-.grid.l{grid-template-columns:repeat(auto-fill,minmax(max(240px,(100% - 8px)/2),1fr));max-width:max(500px,calc(((100cqh - 58px)/2 - var(--cap,34px))*3.2 + 8px));margin:0 auto}
+.grid.l{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid.xl{grid-template-columns:minmax(0,1fr)}
+.grid:is(.l,.xl){grid-auto-rows:100cqh}
+.grid:is(.l,.xl) .card{display:flex;flex-direction:column;min-width:0;min-height:0}
+.grid:is(.l,.xl) .thumb{flex:1;min-height:0;aspect-ratio:auto;container-type:size}
+.grid:is(.l,.xl) .thumb img{object-fit:contain}
+.grid:is(.l,.xl) .bx{position:absolute;width:min(100cqw,160cqh);height:min(100cqh,62.5cqw);left:50%;top:50%;transform:translate(-50%,-50%)}
+.grid:is(.l,.xl) :is(.cl,.fchips){flex:none}
+@media(max-width:900px){.grid.l{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;cursor:pointer;position:relative;will-change:transform}
 .card:hover{border-color:#4a6a88}
 .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}

@@ -29,6 +29,20 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
  settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
  settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
 });
+test('feed density defaults, validates, persists and reloads all sizes',()=>{
+ for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}']){
+  assert.equal(settingsContext(saved).settings.get().density,'m');
+ }
+ const {settings,saved}=settingsContext('{}');
+ for(const density of ['s','m','l','xl']){
+  settings.density(density);
+  assert.equal(saved().density,density);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().density,density);
+ }
+ settings.density('invalid');settings.density(null);
+ assert.equal(settings.get().density,'xl');
+ assert.equal(saved().density,'xl');
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);
