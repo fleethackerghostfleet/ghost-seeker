@@ -33,7 +33,7 @@ td img{width:72px;height:48px;object-fit:cover;border-radius:3px;background:#000
 <main>
 <div>
 <section><h2>Ship directives</h2>
-<p class="dim" style="margin:0 0 6px">Rules set here re-rank this ship's uplink queue immediately and survive new shore policies. Shore/command locks still win.</p>
+<p class="dim" style="margin:0 0 6px">Rules set here re-rank this ship's uplink queue immediately and survive new shore policies. Shore/command locks still win; unrecognised (unknown) contacts are never held back.</p>
 <div class="row"><div><label>Prioritize (boost)</label><input id="boost" list="classes" placeholder="e.g. submarine"></div><div><label>Hold back (suppress)</label><input id="supp" list="classes" placeholder="e.g. cruise ship"></div></div>
 <div class="row"><div><label>For</label><select id="dur"><option value="0">until cleared</option><option value="5">5 min</option><option value="30">30 min</option><option value="120">2 h</option></select></div><div><label>Why (optional)</label><input id="why" maxlength="280" placeholder="note for shore"></div></div>
 <p><button class="primary" id="add">Apply to uplink</button></p>
