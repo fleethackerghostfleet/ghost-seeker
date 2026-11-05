@@ -3,6 +3,7 @@ package ingest
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -81,6 +82,13 @@ func TestReplayLazyReadFailureAndEmpty(t *testing.T) {
 	if err := os.WriteFile(path, []byte("frame"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "002.jpg"), []byte("next frame"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	last := filepath.Join(dir, "003.jpg")
+	if err := os.WriteFile(last, []byte("last frame"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	r, err = NewReplay(clock.NewVirtual(time.Now()), time.Second, FrameSet{Path: dir})
 	if err != nil {
 		t.Fatal(err)
@@ -88,8 +96,19 @@ func TestReplayLazyReadFailureAndEmpty(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if c, done, err := r.Next(context.Background()); c != nil || done || !os.IsNotExist(err) {
-		t.Fatalf("missing frame = %v, %v, %v", c, done, err)
+	if err := os.Remove(last); err != nil {
+		t.Fatal(err)
+	}
+	if c, done, err := r.Next(context.Background()); err != nil || done || c == nil || string(c.Data) != "next frame" || c.Tags["frame"] != "002.jpg" {
+		t.Fatalf("capture after missing frame = %v, %v, %v", c, done, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if c, done, err := r.Next(ctx); c != nil || done || !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled replay = %v, %v, %v", c, done, err)
+	}
+	if c, done, err := r.Next(context.Background()); c != nil || !done || err != nil {
+		t.Fatalf("missing final frame = %v, %v, %v", c, done, err)
 	}
 }
 

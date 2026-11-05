@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -191,38 +192,46 @@ func (r *Replay) Burst(source string, fps float64, d time.Duration) {
 }
 
 func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
-	if r.i >= len(r.queue) {
-		return nil, true, nil
-	}
-	if r.i > 0 {
-		now := r.clk.Now()
-		r.mu.Lock()
-		period := r.period
-		source := r.queue[r.i].Source
-		if burst, ok := r.bursts[source]; ok {
-			if now.Before(burst.until) && burst.period > 0 {
-				period = burst.period
-			} else {
-				delete(r.bursts, source)
+	for r.i < len(r.queue) {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
+		if r.i > 0 {
+			now := r.clk.Now()
+			r.mu.Lock()
+			period := r.period
+			source := r.queue[r.i].Source
+			if burst, ok := r.bursts[source]; ok {
+				if now.Before(burst.until) && burst.period > 0 {
+					period = burst.period
+				} else {
+					delete(r.bursts, source)
+				}
+			}
+			r.mu.Unlock()
+			if err := r.clk.Sleep(ctx, period); err != nil {
+				return nil, false, err
 			}
 		}
-		r.mu.Unlock()
-		if err := r.clk.Sleep(ctx, period); err != nil {
-			return nil, false, err
+		f := r.queue[r.i]
+		c := f.Capture
+		if f.read != nil {
+			data, err := f.read()
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil, false, ctx.Err()
+				}
+				slog.Warn("skipping unreadable replay frame", "source", c.Source, "frame", c.Tags["frame"], "err", err)
+				r.i++
+				continue
+			}
+			c.Data = data
 		}
+		r.i++
+		c.CapturedAt = r.clk.Now()
+		return &c, false, nil
 	}
-	f := r.queue[r.i]
-	c := f.Capture
-	if f.read != nil {
-		data, err := f.read()
-		if err != nil {
-			return nil, false, err
-		}
-		c.Data = data
-	}
-	r.i++
-	c.CapturedAt = r.clk.Now()
-	return &c, false, nil
+	return nil, true, nil
 }
 
 func ftoa(f float64) string {
