@@ -351,10 +351,6 @@ func (s *Server) getPolicy(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) policyAudit(w http.ResponseWriter, r *http.Request) {
-	if !s.policy.admin {
-		writeError(w, http.StatusForbidden, "super admin only (start with -admin or GS_ADMIN=1)")
-		return
-	}
 	if s.policy.guard == nil {
 		writeError(w, http.StatusInternalServerError, s.policy.err.Error())
 		return

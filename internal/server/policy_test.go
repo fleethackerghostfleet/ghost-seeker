@@ -135,16 +135,19 @@ func TestSimulationPolicyAdminValidationAndEMCONLock(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/policy/validate", map[string]any{}},
 		{http.MethodPut, "/api/policy", map[string]any{}},
-		{http.MethodGet, "/api/policy/audit", nil},
 	} {
 		response := request(denied, endpoint.method, endpoint.path, endpoint.body)
 		if response.Code != http.StatusForbidden {
 			t.Errorf("%s %s status = %d, want %d", endpoint.method, endpoint.path, response.Code, http.StatusForbidden)
 		}
 	}
+	response := request(denied, http.MethodGet, "/api/policy/audit", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET audit without admin status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
 
 	app := New(store.New(10), WithAdmin(true))
-	response := rawPolicyRequest(app, http.MethodPost, "/api/policy/validate", `{}`)
+	response = rawPolicyRequest(app, http.MethodPost, "/api/policy/validate", `{}`)
 	if response.Code != http.StatusOK {
 		t.Fatalf("valid protojson validation status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
 	}
