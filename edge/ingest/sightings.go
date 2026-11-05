@@ -221,7 +221,7 @@ func setForm(it *pb.Item, nf *pb.Form) {
 //
 // Object-free frames become a "scene" item at most once per SceneEvery per
 // source; the rest fold (counted as deduped). A scene ships FACT+THUMB only;
-// its FULL stays on the edge and is pull-only (see scheduler.pullOnly).
+// its FULL stays on the edge and is pull-only (see scheduler.PullOnly).
 func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
 	if len(resp.Detections) > 0 {
 		if !g.stateful[c.Source] {

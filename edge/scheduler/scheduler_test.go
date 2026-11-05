@@ -355,6 +355,12 @@ func TestScenePullOnlyFull(t *testing.T) {
 	if hasFull() {
 		t.Fatal("scene FULL must not be offered on the ladder before a pull")
 	}
+	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Form: pb.FormKind_FORM_KIND_THUMB, RequestedBy: "shore"}); err != nil {
+		t.Fatal(err)
+	}
+	if hasFull() {
+		t.Fatal("pulling the THUMB must not release the scene FULL")
+	}
 	if err := s.Pull(ctx, &pb.Pull{ItemId: it.Id, Form: pb.FormKind_FORM_KIND_FULL, RequestedBy: "shore"}); err != nil {
 		t.Fatal(err)
 	}
