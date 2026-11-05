@@ -138,6 +138,7 @@ function selectBand(it,band){
  if(state.page==='rv'){rv.shown=null;renderReview()}else if(state.sel===it.id)renderDetail();
 }
 function normalizeItem(item){
+ item.dets=Array.isArray(item.dets)?item.dets:[];item.det=Array.isArray(item.det)?item.det:[];
  const sid=typeof item.src==='string'?item.src:item.src.id;
  item.ts=new Date(item.ts);item.src=SRC[sid]||{id:sid,name:String(sid).replace(/_/g,' '),scene:'open',mode:'eo',hw:'edge node',em:'edge detector',link:'ship→shore link'};
  const prev=findItem(item.id);if(prev&&prev.img!==item.img)imageCache.delete(item.id);
@@ -158,6 +159,7 @@ function mergeItem(raw,fresh=true){
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
+ data.items=data.items.map(normalizeItem);
  const selection=state.sel;
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
@@ -188,6 +190,7 @@ function applyLive(live){
  const banner=document.querySelector?.('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE';
 }
 function applyItemUpdate(raw){
+ raw=normalizeItem(raw);
  if(state.paused&&!findItem(raw.id)){
   if(evictedIDs.has(raw.id))return;
   heldSnapshotIDs?.add(raw.id);
@@ -230,6 +233,7 @@ function openStream(){
  stream.addEventListener('review-sync',event=>receiveTeamProposal(JSON.parse(event.data).proposal));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
+  data.item=normalizeItem(data.item);
   stats=data.stats;if(state.paused){pendingItems.push(data);heldSnapshotIDs?.add(data.item.id);renderStats()}else{mergeItem(data.item);renderFeed();renderStats();renderRp(true);if(state.page==='rv')renderReview()}
  });
  stream.addEventListener('stats',event=>{
@@ -288,7 +292,7 @@ async function init(){
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
   if(k==='b'&&(state.page==='rv'||state.page==='feed')){const it=state.page==='rv'?rv.cur:findItem(state.sel);const bands=it?bandsFor(it):[];if(bands.length>1){e.preventDefault();if(!e.repeat)selectBand(it,bands[(bands.indexOf(bandFor(it))+1)%bands.length])}return}
-  if(state.page==='rv'){if(k==='escape'){location.hash='#feed';return}const a=RVKEYS[k];if(a){e.preventDefault();if(!e.repeat)rvAct(a)}return}
+  if(state.page==='rv'){if(k==='escape'){location.hash='#feed';return}const a=reviewKeyAction(k);if(a){e.preventDefault();if(!e.repeat)rvAct(a)}return}
   if(state.page!=='feed')return;
   if(k==='r'){location.hash='#review';return}
   if(k==='escape'){if(state.zoom)closeZoom();else closeDetail();return}
@@ -347,8 +351,12 @@ function topLine(it){
  const[d,sd]=r[0];const tag=d.attrs.dark&&clsOf(d.cls).g!=='other'&&clsOf(d.cls).g!=='clutter'?' · no AIS':d.attrs.approaching?' · inbound':d.attrs.new?' · new':'';
  return`<span class="${sd.matched?'m':tag&&sd.s>.4?'a':''}">${esc(clsOf(d.cls).lab)}${tag}</span>${r.length>1?` <span style="opacity:.6">+${r.length-1}</span>`:''}`;
 }
+function detectorNegativeLabel(it){return it?.detectorNegative?'Detector found nothing — check for missed objects':''}
+function detectorNegativeHTML(it){const label=detectorNegativeLabel(it);return label?`<div class="detector-negative">${label}</div>`:''}
+function reviewAcceptLabel(it){return it.detectorNegative?'Nothing here':`Agree with suggested priority · P${it.centralTier} ${TNAME[it.centralTier]}`}
+function reviewKeyAction(key){return RVKEYS[key]}
 function cardHTML(it,mini){
- return`<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+ return`${detectorNegativeHTML(it)}<div class="thumb"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Sent to Commander</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
 function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
@@ -468,8 +476,8 @@ function buildWhy(it,rows){
  return why;
 }
 function processingHTML(it){
- if(DATASET_MODE)return `<div class="dsec"><h4>Processing</h4><ul class="tl">
-  <li class="edge"><i></i><div>Clean v2 dev image<br><small>Real detector output · score ${it.edge.toFixed(2)} ≥ 0.20</small></div></li>
+ if(DATASET_MODE)return `${detectorNegativeHTML(it)}<div class="dsec"><h4>Processing</h4><ul class="tl">
+  <li class="edge"><i></i><div>Clean v2 dev image<br><small>Real detector output · score ${it.edge.toFixed(2)} ${it.detectorNegative?'<':'≥'} 0.20</small></div></li>
   <li><i></i><div>Loaded for Operator Review<br><small>${esc(it.dataset_id)} · ${esc(it.image_id)}</small></div></li>
   <li><i></i><div>Priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div></li>
  </ul></div>`;
@@ -682,9 +690,9 @@ function renderReviewContent(){
  const age=Math.max(0,Math.round((Date.now()-it.ts)/60000));
  const classifications=rows.filter(([d])=>d.ship).slice(0,3).map(([d])=>shipLine(d));
  [...$('rvKeys').querySelectorAll('[data-a]')].forEach(b=>b.classList.toggle('sugg',b.dataset.a===String(sug)));
- $('accLbl').textContent=`Agree with suggested priority · P${sug} ${TNAME[sug]}`;
+ $('accLbl').textContent=reviewAcceptLabel(it);
  $('rvMain').innerHTML=`<div class="rvimg"><div class="rvframe p${sug}">${largeImage(it)}</div></div>
- <div class="rvside">
+ <div class="rvside">${detectorNegativeHTML(it)}
   <div class="rvcard"><div class="lbl">Model suggests</div><div class="rvsug"><span class="tier t${sug}">P${sug} ${TNAME[sug]}</span></div><div class="rvsub" title="${DATASET_MODE?'Command-model score and detector triage score':'Command score is the shore-side priority estimate; edge score is the ship-side estimate.'}">${DATASET_MODE?'Model score':'Shore score'} ${it.central.toFixed(2)} · ${DATASET_MODE?'detector score':'ship score'} ${it.edge.toFixed(2)}${state.directives.length?` · ${state.directives.length} directive${state.directives.length>1?'s':''} active`:''}</div></div>
   <div class="rvcard"><div class="lbl" style="margin-bottom:4px">Why</div><ul class="why">${why.map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   <div class="rvcard rvmeta"><span>Source</span><b>${esc(it.src.name)}</b><span>Captured</span><b class="mono">${zulu(it.ts)} <span style="color:var(--muted);font-family:inherit;font-weight:500">(${age} min ago)</span></b><span>Objects</span><b>${rows.map(([d])=>esc(clsOf(d.cls).lab)).join(', ')||'—'}</b>${classifications.length?`<span>Classification</span><b class="rvclassification">${classifications.join('<br>')}</b>`:''}</div>
@@ -707,7 +715,7 @@ function rvAct(a){
  else if(a==='cdr'){changes.manual=1;changes.sent=true;msg='➤ Sent to Commander';col='var(--good)'}
  else return;
  rv.busy=true;
- submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
+ submitReview(it.id,a,changes,p).then(updated=>{rv.done++;if(p.agreed)rv.agree++;rv.undo.push(p);if(rv.undo.length>50)rv.undo.shift();if(!it.detectorNegative&&typeof gsLearn!=='undefined'){const result=gsLearn.record({id:it.id,src:it.src.id,dets:it.dets,det:it.det,sug,tier:changes.manual});if(result?.ambiguous){rv.ask={kind:'why',id:it.id,record:p.record,classes:result.ambiguous};rv.askBusy=false;renderAsk()}else checkLearningSuggestion()}rvFlash(msg,col);setTimeout(()=>{rv.busy=false;rv.cur=null;renderReview()},280)}).catch(error=>{rv.busy=false;toast(error.message)});
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').trim().slice(0,80)}catch{}

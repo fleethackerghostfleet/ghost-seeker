@@ -464,3 +464,6 @@ body.drawer-open .drawer{visibility:visible}
  .rvmain{grid-template-columns:minmax(0,1fr) var(--width-review,340px)}
  .wb-layout{grid-template-columns:var(--width-priorities,340px) minmax(0,1fr)}
 }
+
+.detector-negative{padding:10px;border:2px solid var(--warn,#efc35b);color:var(--text,#fff);background:#423819;font-weight:700;line-height:1.4}
+.rvside>.detector-negative{font-size:18px}

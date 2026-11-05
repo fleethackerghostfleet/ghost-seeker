@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,18 @@ import (
 )
 
 const Seed int64 = 101
+
+// SampleNegative selects a stable subset without advancing the replay RNG.
+func SampleNegative(imageID string, rate float64) bool {
+	if rate <= 0 || math.IsNaN(rate) {
+		return false
+	}
+	if rate >= 1 {
+		return true
+	}
+	h := sha256.Sum256([]byte("detector-negative:" + imageID))
+	return float64(binary.BigEndian.Uint64(h[:])>>11)/(1<<53) < rate
+}
 
 type Image struct {
 	ImageID     string      `json:"image_id"`

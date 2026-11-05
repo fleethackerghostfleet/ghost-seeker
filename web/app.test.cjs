@@ -7,6 +7,60 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('clear priority preview preserves detector-negative P4 pinning',()=>{
+ const context=vm.createContext({});
+ vm.runInContext(`
+  const items=[{id:'negative',detectorNegative:true},{id:'positive'}];
+  const findItem=id=>items.find(it=>it.id===id);
+  const draft={pins:{negative:0,positive:0}};
+  const after=items.map(it=>({id:it.id,central:.9,tier:2}));
+  const sorted=rows=>rows;
+ `,context);
+ const rows=workbenchSource.split('\n').find(line=>line.includes('const rows=()=>'));
+ vm.runInContext(rows,context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),4);
+ assert.equal(vm.runInContext("rows()[1].tier",context),1);
+ vm.runInContext("draft.pins.negative=2",context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),2);
+});
+test('null detection arrays are normalized on snapshots, SSE and direct updates, including paused queues',()=>{
+ const context=setup();
+ vm.runInContext(`
+  function negative(id){return {...raw(id,4),detectorNegative:true,dets:null,det:null,centralTier:4,edge:0}}
+  applySnapshot(snapshot([negative('initial')]));
+  openStream();
+  streamHandlers.item({data:JSON.stringify({item:negative('item'),stats:{}})});
+  streamHandlers.update({data:JSON.stringify({item:negative('update'),cdr:0})});
+  applyItemUpdate(negative('direct'));
+  state.paused=true;
+  streamHandlers.item({data:JSON.stringify({item:negative('held-item'),stats:{}})});
+  applyItemUpdate(negative('held-update'));
+  applySnapshot(snapshot([...items,negative('held-snapshot')]));
+  for(const it of [...items,...pendingItems.map(e=>e.item)]){
+   if(!Array.isArray(it.dets)||!Array.isArray(it.det))throw Error('null detection arrays: '+it.id);
+   boxesHTML(it,true);topLine(it);
+  }
+  toggleHold();
+  reviewDataReady=true;reviewerName='devin-verify';DATASET_MODE=true;
+  imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';
+  $('rvKeys').children=[];$('rvKeys').querySelectorAll=()=>[];$('rvBarI').style={};
+  rv.cur=findItem('initial');rv.shown=null;
+  renderReviewContent();
+ `,context);
+ assert.match(context.$('rvMain').innerHTML,/Detector found nothing — check for missed objects/);
+ assert.equal(context.$('accLbl').textContent,'Nothing here');
+});
+test('detector negatives have clear labels and retain review keys',()=>{
+ const context=setup();
+ assert.equal(context.detectorNegativeLabel({detectorNegative:true}),'Detector found nothing — check for missed objects');
+ assert.equal(context.detectorNegativeLabel({}),'');
+ assert.equal(context.reviewAcceptLabel({detectorNegative:true,centralTier:4}),'Nothing here');
+ assert.match(context.reviewAcceptLabel({centralTier:2}),/P2/);
+ for(const key of ['1','2','3','4'])assert.equal(context.reviewKeyAction(key),key);
+ for(const key of [' ','enter'])assert.equal(context.reviewKeyAction(key),'accept');
+ assert.match(context.detectorNegativeHTML({detectorNegative:true}),/class="detector-negative"/);
+ assert.equal(context.detectorNegativeHTML({}),'');
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);
