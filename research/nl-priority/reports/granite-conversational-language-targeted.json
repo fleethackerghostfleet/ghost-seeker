@@ -1,0 +1,454 @@
+{
+  "evaluationStage": "targeted-development-probes",
+  "model": "IBM Granite4.0-350M Q4_K_M",
+  "modelRevision": "b8208a86a58427e1739265318028eb5895b74bf2",
+  "notes": [
+    "No Go code modified by this evaluator.",
+    "These targeted development probes are not heldout accuracy claims.",
+    "Direct single-label resolver broadens big ship to ship with generic core labels. Original-phrase option preserves qualifiers but fails fishing-vessel equivalence.",
+    "Qualifier-aware output identifies big/red/fishing explicitly. Proposed consumer retains input if a model-reported qualifier is absent from the candidate category; fishing is already present in fishing boat.",
+    "Model supplies the qualifier list. No static synonym map or lexical entity-kind rule is used.",
+    "JSON schema property order in the tested payload is qualifiers then label. Preserve this order when reproducing.",
+    "Intent-only negative examples remain unreliable for hello/weather; unrelated-chat handling needs separate verification."
+  ],
+  "probes": {
+    "search-language-current.json": {
+      "existingSystem": "Convert an operator sentence to JSON changes to image ranking in an image discovery tool. Operators may describe what they want to see in everyday language; they do not need to say prioritize. You are only extracting visual interests; do not perform actions or answer questions.\nUse boost for a request to look for, find, spot, watch for or see a visual category, or an expression of interest in it. Also use boost for more important/higher priority/favor. Use suppress for less important/lower priority/fewer or avoiding a category, remove to stop an existing preference, reset to clear all preferences. Keep the full visual category, including size, color and material. boost weight 2 by default, strong 3, slight 1.5; all other actions weight 1.\nReturn {\"operations\":[]} if the request has no clear supported operation or asks for behavior, location, time, deletion, or disabling unknown protection. Pronouns require a single clear active concept.\nExamples:\nInput: Give orange dinghies higher priority.\nOutput: {\"operations\":[{\"action\":\"boost\",\"concept\":\"orange dinghy\",\"weight\":2}]}\nInput: Put ferries lower in the list.\nOutput: {\"operations\":[{\"action\":\"suppress\",\"concept\":\"ferry\",\"weight\":1}]}\nInput: Stop favoring patrol boats.\nOutput: {\"operations\":[{\"action\":\"remove\",\"concept\":\"patrol boat\",\"weight\":1}]}\nInput: Why is the sea blue?\nOutput: {\"operations\":[]}\nCurrent active rules: ",
+      "updatedSystem": "Convert an operator sentence to JSON changes to image ranking in an image discovery tool. Operators may describe what they want to see in everyday language; they do not need to say prioritize. You are only extracting visual interests; do not perform actions or answer questions.\nUse boost for a request to look for, find, spot, watch for or see a visual category, or an expression of interest in it. Also use boost for more important/higher priority/favor. Use suppress for less important/lower priority/fewer or avoiding a category, remove to stop an existing preference, reset to clear all preferences. Keep the full visual category, including size, color and material. boost weight 2 by default, strong 3, slight 1.5; all other actions weight 1.\nReturn {\"operations\":[]} if the request has no clear supported operation or asks for behavior, location, time, deletion, or disabling unknown protection. Pronouns require a single clear active concept.\nIn this image-priority application, a request to look for, find, spot, watch for, or show a visual object expresses interest and means boost. A statement of visual interest or a bare visual object category also means boost. Preserve the complete object phrase, including size, color, material, and other visual qualifiers. Greetings, unrelated chat, and factual questions are not image-priority requests; return {\"operations\":[]} without inventing a category. A request not to look for a category means suppress; a request to stop looking for an already active category means remove that preference.\nExamples:\nInput: Give orange dinghies higher priority.\nOutput: {\"operations\":[{\"action\":\"boost\",\"concept\":\"orange dinghy\",\"weight\":2}]}\nInput: Put ferries lower in the list.\nOutput: {\"operations\":[{\"action\":\"suppress\",\"concept\":\"ferry\",\"weight\":1}]}\nInput: Stop favoring patrol boats.\nOutput: {\"operations\":[{\"action\":\"remove\",\"concept\":\"patrol boat\",\"weight\":1}]}\nInput: Why is the sea blue?\nOutput: {\"operations\":[]}\nCurrent active rules: ",
+      "addedInstruction": "In this image-priority application, a request to look for, find, spot, watch for, or show a visual object expresses interest and means boost. A statement of visual interest or a bare visual object category also means boost. Preserve the complete object phrase, including size, color, material, and other visual qualifiers. Greetings, unrelated chat, and factual questions are not image-priority requests; return {\"operations\":[]} without inventing a category. A request not to look for a category means suppress; a request to stop looking for an already active category means remove that preference.\n",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operations"
+        ],
+        "properties": {
+          "operations": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "action",
+                "concept",
+                "weight"
+              ],
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "boost",
+                    "suppress",
+                    "remove",
+                    "reset"
+                  ]
+                },
+                "concept": {
+                  "type": "string"
+                },
+                "weight": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 4
+                }
+              }
+            }
+          }
+        }
+      },
+      "results": [
+        {
+          "variant": "current-on-disk",
+          "input": "look for big ships",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"big ship\",\"weight\":2}]}",
+          "seconds": 0.8602859579841606
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "find fishing vessels",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"fishing vessel\",\"weight\":2}]}",
+          "seconds": 0.17529158398974687
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "I'm interested in cargo ships",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"cargo ship\",\"weight\":2}]}",
+          "seconds": 0.17476725002052262
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "watch for red boats",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"red boat\",\"weight\":2}]}",
+          "seconds": 0.1732675830135122
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "hello",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"hello\",\"weight\":2}]}",
+          "seconds": 0.15141112502897158
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "what's the weather",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"weather\",\"weight\":2}]}",
+          "seconds": 0.15908945800038055
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "don't look for cargo ships",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"suppress\",\"concept\":\"cargo ship\",\"weight\":1}]}",
+          "seconds": 0.17549454199615866
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "stop looking for fishing vessels",
+          "context": [
+            {
+              "concept": "fishing boat",
+              "action": "boost",
+              "weight": 2
+            }
+          ],
+          "raw": "{\"operations\":[{\"action\":\"suppress\",\"concept\":\"fishing vessel\",\"weight\":1}]}",
+          "seconds": 0.25138816598337144
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "big ships",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"big ship\",\"weight\":2}]}",
+          "seconds": 0.1981509589822963
+        },
+        {
+          "variant": "current-on-disk",
+          "input": "spot orange life rafts",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"orange life raft\",\"weight\":2}]}",
+          "seconds": 0.1839697080431506
+        }
+      ]
+    },
+    "search-fixes-probe.json": {
+      "intentSystem": "Convert an operator sentence to JSON changes to image ranking in an image discovery tool. Operators may describe what they want to see in everyday language; they do not need to say prioritize. You are only extracting visual interests; do not perform actions or answer questions.\nUse boost for a request to look for, find, spot, watch for or see a visual category, or an expression of interest in it. Also use boost for more important/higher priority/favor. Use suppress for less important/lower priority/fewer or avoiding a category, remove to stop an existing preference, reset to clear all preferences. Keep the full visual category, including size, color and material. boost weight 2 by default, strong 3, slight 1.5; all other actions weight 1.\nReturn {\"operations\":[]} if the request has no clear supported operation or asks for behavior, location, time, deletion, or disabling unknown protection. Pronouns require a single clear active concept.\nExamples:\nInput: Give orange dinghies higher priority.\nOutput: {\"operations\":[{\"action\":\"boost\",\"concept\":\"orange dinghy\",\"weight\":2}]}\nInput: Put ferries lower in the list.\nOutput: {\"operations\":[{\"action\":\"suppress\",\"concept\":\"ferry\",\"weight\":1}]}\nInput: Stop favoring patrol boats.\nOutput: {\"operations\":[{\"action\":\"remove\",\"concept\":\"patrol boat\",\"weight\":1}]}\nInput: Why is the sea blue?\nOutput: {\"operations\":[]}\nInput: Hello, how are you?\nOutput: {\"operations\":[]}\nInput: What is the weather like?\nOutput: {\"operations\":[]}\nInput: I am hungry.\nOutput: {\"operations\":[]}\nInput: Stop looking for patrol boats.\nOutput: {\"operations\":[{\"action\":\"remove\",\"concept\":\"patrol boat\",\"weight\":1}]}\nCurrent active rules: ",
+      "intentAddedExamples": "Input: Hello, how are you?\nOutput: {\"operations\":[]}\nInput: What is the weather like?\nOutput: {\"operations\":[]}\nInput: I am hungry.\nOutput: {\"operations\":[]}\nInput: Stop looking for patrol boats.\nOutput: {\"operations\":[{\"action\":\"remove\",\"concept\":\"patrol boat\",\"weight\":1}]}\n",
+      "resolverSystem": "Normalize an object category to the equivalent known category. Use general English meaning to recognize synonyms, singular/plural forms, and alternative wording. The generic words boat, ship, vessel and craft do not define a new subtype when the function is the same. Use NONE only for a genuinely different category or an additional distinguishing feature. Colors, sizes and materials must be retained, so return NONE if they are absent from the known label. A generic vessel is broader than a specific role, so keep it. Do not change rescue craft into an unrelated category. The input and label must be the same kind of physical object. Equipment, parts, clothing and tools are not the vehicles, animals or people using them. Associated objects are not synonyms. Return NONE for equipment when no equivalent equipment category exists.\nKnown categories: [\"cargo ship\",\"tanker\",\"container ship\",\"fishing boat\",\"sailboat\",\"speedboat\",\"passenger ship\",\"warship\",\"submarine\",\"coast guard\",\"buoy\",\"aircraft\",\"marine mammal\",\"boat\",\"ship\",\"person\",\"bird\",\"airplane\",\"helicopter\",\"drone\",\"debris\",\"unknown\"]\nInput: cargo vessel\nOutput: {\"label\":\"cargo ship\"}\nInput: sailing boat\nOutput: {\"label\":\"sailboat\"}\nInput: passenger vessel\nOutput: {\"label\":\"passenger ship\"}\nInput: container vessel\nOutput: {\"label\":\"container ship\"}\nInput: large cargo vessel\nOutput: {\"label\":\"NONE\"}\nInput: huge aircraft\nOutput: {\"label\":\"NONE\"}\nInput: red cargo ship\nOutput: {\"label\":\"NONE\"}\nInput: life raft\nOutput: {\"label\":\"NONE\"}\nInput: vessel\nOutput: {\"label\":\"NONE\"}\nInput: rescue boat\nOutput: {\"label\":\"NONE\"}\nInput: cargo net\nOutput: {\"label\":\"NONE\"}\nInput: small cargo vessel\nOutput: {\"label\":\"NONE\"}\nFinal check: if the input adds a size, color, or material that is not in the chosen category, output NONE. Never discard such a qualifier.",
+      "resolverChange": "Replace naval warship=>warship example with unrelated large cargo vessel=>NONE and huge aircraft=>NONE",
+      "knownCategories": [
+        "cargo ship",
+        "tanker",
+        "container ship",
+        "fishing boat",
+        "sailboat",
+        "speedboat",
+        "passenger ship",
+        "warship",
+        "submarine",
+        "coast guard",
+        "buoy",
+        "aircraft",
+        "marine mammal",
+        "boat",
+        "ship",
+        "person",
+        "bird",
+        "airplane",
+        "helicopter",
+        "drone",
+        "debris",
+        "unknown"
+      ],
+      "results": [
+        {
+          "kind": "intent",
+          "input": "look for big ships",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"big ship\",\"weight\":2}]}",
+          "seconds": 1.0545142080518417
+        },
+        {
+          "kind": "intent",
+          "input": "find fishing vessels",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"fishing vessel\",\"weight\":2}]}",
+          "seconds": 0.19768199999816716
+        },
+        {
+          "kind": "intent",
+          "input": "I'm interested in cargo ships",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"cargo ship\",\"weight\":2}]}",
+          "seconds": 0.179506084008608
+        },
+        {
+          "kind": "intent",
+          "input": "watch for red boats",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"red boat\",\"weight\":2}]}",
+          "seconds": 0.17225108295679092
+        },
+        {
+          "kind": "intent",
+          "input": "hello",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"hello\",\"weight\":2}]}",
+          "seconds": 0.15330400003585964
+        },
+        {
+          "kind": "intent",
+          "input": "what's the weather",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"boost\",\"concept\":\"weather\",\"weight\":2}]}",
+          "seconds": 0.1625338330049999
+        },
+        {
+          "kind": "intent",
+          "input": "I am hungry",
+          "context": [],
+          "raw": "{\"operations\":[]}",
+          "seconds": 0.09355429204879329
+        },
+        {
+          "kind": "intent",
+          "input": "don't look for cargo ships",
+          "context": [],
+          "raw": "{\"operations\":[{\"action\":\"suppress\",\"concept\":\"cargo ship\",\"weight\":1}]}",
+          "seconds": 0.18129570898599923
+        },
+        {
+          "kind": "intent",
+          "input": "stop looking for fishing vessels",
+          "context": [
+            {
+              "concept": "fishing boat",
+              "action": "boost",
+              "weight": 2
+            }
+          ],
+          "raw": "{\"operations\":[{\"action\":\"remove\",\"concept\":\"fishing boat\",\"weight\":1}]}",
+          "seconds": 0.26892679202137515
+        },
+        {
+          "kind": "resolver",
+          "input": "big ship",
+          "context": [],
+          "raw": "{\"label\":\"ship\"}",
+          "seconds": 1.1248491670121439
+        },
+        {
+          "kind": "resolver",
+          "input": "big ships",
+          "context": [],
+          "raw": "{\"label\":\"submarine\"}",
+          "seconds": 0.09706562501378357
+        },
+        {
+          "kind": "resolver",
+          "input": "fishing vessel",
+          "context": [],
+          "raw": "{\"label\":\"fishing boat\"}",
+          "seconds": 0.10109087504679337
+        },
+        {
+          "kind": "resolver",
+          "input": "fishing vessels",
+          "context": [],
+          "raw": "{\"label\":\"fishing boat\"}",
+          "seconds": 0.09579508402384818
+        },
+        {
+          "kind": "resolver",
+          "input": "red boat",
+          "context": [],
+          "raw": "{\"label\":\"boat\"}",
+          "seconds": 0.09146399999735877
+        },
+        {
+          "kind": "resolver",
+          "input": "rescue boat",
+          "context": [],
+          "raw": "{\"label\":\"person\"}",
+          "seconds": 0.29866820794995874
+        },
+        {
+          "kind": "resolver",
+          "input": "small fishing vessel",
+          "context": [],
+          "raw": "{\"label\":\"sailboat\"}",
+          "seconds": 0.1210307499859482
+        },
+        {
+          "kind": "resolver",
+          "input": "fishing net",
+          "context": [],
+          "raw": "{\"label\":\"NONE\"}",
+          "seconds": 0.08033699996303767
+        }
+      ]
+    },
+    "retention-probe.json": {
+      "system": "Normalize the user's visual object phrase to a known equivalent category, or copy the original phrase exactly. Preserve all size, color, material and role qualifiers. Never broaden a qualified phrase to its general parent category. Boat, ship, vessel and craft can be alternative wording for the same role. Equipment is not the vehicle using it. Known categories: [\"cargo ship\", \"tanker\", \"container ship\", \"fishing boat\", \"sailboat\", \"speedboat\", \"passenger ship\", \"warship\", \"submarine\", \"coast guard\", \"buoy\", \"aircraft\", \"marine mammal\", \"boat\", \"ship\", \"person\", \"bird\", \"airplane\", \"helicopter\", \"drone\", \"debris\", \"unknown\"]\nInput: cargo vessel\nOutput: {\"label\":\"cargo ship\"}\nInput: sailing boat\nOutput: {\"label\":\"sailboat\"}\nInput: large cargo vessel\nOutput: {\"label\":\"large cargo vessel\"}\nInput: red cargo ship\nOutput: {\"label\":\"red cargo ship\"}\nInput: rescue boat\nOutput: {\"label\":\"rescue boat\"}\nInput: cargo net\nOutput: {\"label\":\"cargo net\"}",
+      "results": [
+        {
+          "input": "big ship",
+          "raw": "{\"label\":\"big ship\"}",
+          "seconds": 0.6448240000172518
+        },
+        {
+          "input": "fishing vessel",
+          "raw": "{\"label\":\"fishing vessel\"}",
+          "seconds": 0.0927543340367265
+        },
+        {
+          "input": "red boat",
+          "raw": "{\"label\":\"red boat\"}",
+          "seconds": 0.08454458299092948
+        },
+        {
+          "input": "rescue boat",
+          "raw": "{\"label\":\"rescue boat\"}",
+          "seconds": 0.08687499997904524
+        },
+        {
+          "input": "fishing net",
+          "raw": "{\"label\":\"fishing net\"}",
+          "seconds": 0.08487779198912904
+        },
+        {
+          "input": "small fishing vessel",
+          "raw": "{\"label\":\"small fishing vessel\"}",
+          "seconds": 0.0908545830170624
+        }
+      ]
+    },
+    "retention-check-probe.json": {
+      "system": "Check a proposed category normalization. Choose the proposed category if it is another name for the same object. Choose the original phrase if the proposal drops a size, color, material, role or object kind. Do not broaden the meaning. Boat, ship, vessel and craft may be alternative names when the role is unchanged.\nOriginal: cargo vessel\nProposed: cargo ship\nOutput: {\"label\":\"cargo ship\"}\nOriginal: large cargo vessel\nProposed: cargo ship\nOutput: {\"label\":\"large cargo vessel\"}\nOriginal: red boat\nProposed: boat\nOutput: {\"label\":\"red boat\"}\nOriginal: rescue boat\nProposed: passenger ship\nOutput: {\"label\":\"rescue boat\"}",
+      "results": [
+        {
+          "input": "big ship",
+          "candidate": "ship",
+          "raw": "{\"label\":\"ship\"}",
+          "seconds": 0.3871650410001166
+        },
+        {
+          "input": "fishing vessel",
+          "candidate": "fishing boat",
+          "raw": "{\"label\":\"fishing boat\"}",
+          "seconds": 0.08730312500847504
+        },
+        {
+          "input": "red boat",
+          "candidate": "boat",
+          "raw": "{\"label\":\"boat\"}",
+          "seconds": 0.07923150004353374
+        },
+        {
+          "input": "rescue boat",
+          "candidate": "person",
+          "raw": "{\"label\":\"person\"}",
+          "seconds": 0.07967437501065433
+        },
+        {
+          "input": "small fishing vessel",
+          "candidate": "fishing boat",
+          "raw": "{\"label\":\"fishing boat\"}",
+          "seconds": 0.10003829200286418
+        },
+        {
+          "input": "fishing net",
+          "candidate": "fishing boat",
+          "raw": "{\"label\":\"fishing net\"}",
+          "seconds": 0.10519233404193074
+        }
+      ]
+    },
+    "qualifiers-probe.json": {
+      "system": "Read the visual object phrase. First list any extra visual qualifiers (size, color, material) that are not part of a known category. Then choose the equivalent known category, or NONE. Synonyms for a known category do not create extra qualifiers. The words boat, ship, vessel and craft can refer to the same functional category. Equipment is different from the vehicle using it.\nKnown categories: [\"cargo ship\", \"tanker\", \"container ship\", \"fishing boat\", \"sailboat\", \"speedboat\", \"passenger ship\", \"warship\", \"submarine\", \"coast guard\", \"buoy\", \"aircraft\", \"marine mammal\", \"boat\", \"ship\", \"person\", \"bird\", \"airplane\", \"helicopter\", \"drone\", \"debris\", \"unknown\"]\nInput: cargo vessel\nOutput: {\"qualifiers\":[],\"label\":\"cargo ship\"}\nInput: large cargo vessel\nOutput: {\"qualifiers\":[\"large\"],\"label\":\"cargo ship\"}\nInput: red cargo ship\nOutput: {\"qualifiers\":[\"red\"],\"label\":\"cargo ship\"}\nInput: rescue boat\nOutput: {\"qualifiers\":[],\"label\":\"NONE\"}\nInput: cargo net\nOutput: {\"qualifiers\":[],\"label\":\"NONE\"}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "qualifiers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "cargo ship",
+              "tanker",
+              "container ship",
+              "fishing boat",
+              "sailboat",
+              "speedboat",
+              "passenger ship",
+              "warship",
+              "submarine",
+              "coast guard",
+              "buoy",
+              "aircraft",
+              "marine mammal",
+              "boat",
+              "ship",
+              "person",
+              "bird",
+              "airplane",
+              "helicopter",
+              "drone",
+              "debris",
+              "unknown",
+              "NONE"
+            ]
+          }
+        },
+        "required": [
+          "qualifiers",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "results": [
+        {
+          "input": "big ship",
+          "raw": "{\"qualifiers\":[\"big\"],\"label\":\"ship\"}",
+          "seconds": 0.7134671250241809
+        },
+        {
+          "input": "fishing vessel",
+          "raw": "{\"qualifiers\":[\"fishing\"],\"label\":\"fishing boat\"}",
+          "seconds": 0.14273629104718566
+        },
+        {
+          "input": "red fishing boat",
+          "raw": "{\"qualifiers\":[\"red\"],\"label\":\"fishing boat\"}",
+          "seconds": 0.12709045899100602
+        },
+        {
+          "input": "red boat",
+          "raw": "{\"qualifiers\":[\"red\"],\"label\":\"boat\"}",
+          "seconds": 0.115822791995015
+        },
+        {
+          "input": "rescue boat",
+          "raw": "{\"qualifiers\":[\"rescue\"],\"label\":\"boat\"}",
+          "seconds": 0.12777433299925178
+        },
+        {
+          "input": "small fishing vessel",
+          "raw": "{\"qualifiers\":[\"small\"],\"label\":\"fishing boat\"}",
+          "seconds": 0.12901266594417393
+        }
+      ]
+    }
+  }
+}

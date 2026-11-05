@@ -1,0 +1,16 @@
+**
+!edgeml/
+!edgeml/src/
+!edgeml/src/edgeml/
+!edgeml/src/edgeml/embed/
+!edgeml/src/edgeml/embed/zeroshot.py
+!research/
+!research/edgeml/
+!research/edgeml/src/
+!research/edgeml/src/edgeml_research/
+!research/edgeml/src/edgeml_research/nl_priority/
+!research/edgeml/src/edgeml_research/nl_priority/*.py
+!research/nl-priority/
+!research/nl-priority/vision/
+!research/nl-priority/vision/requirements*.txt
+!research/nl-priority/vision/THIRD_PARTY_NOTICES.md

@@ -81,6 +81,11 @@ func TestRank(t *testing.T) {
 	if counts != [4]int{50, 125, 175, 150} {
 		t.Fatal(counts)
 	}
+	rev := []Prediction{{ID: "low", EdgePriority: .1, Detections: []Detection{{Label: "boat"}}}, {ID: "high", EdgePriority: .9, Detections: []Detection{{Label: "boat"}}}}
+	Rank(rev)
+	if rev[1].ModelTier != 1 || rev[0].ModelTier != 4 {
+		t.Fatal("tiers must follow scores, not input order", rev)
+	}
 	ties := []Prediction{}
 	for _, id := range []string{"z", "a", "b", "c"} {
 		ties = append(ties, Prediction{ID: id, EdgePriority: 1, Detections: []Detection{{Label: "boat"}}})

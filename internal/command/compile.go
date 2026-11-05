@@ -23,21 +23,26 @@ type LockChecker interface {
 
 type Compiler struct {
 	LLM          *LLMClient
+	Research     *ResearchClient
 	Capabilities CapabilityProvider
 	Locks        LockChecker
 }
 
 type Compiled struct {
-	Rules       []Rule   `json:"rules"`
-	Unknown     []string `json:"unknown"`
-	DurationMin int      `json:"durationMin,omitempty"`
-	Path        string   `json:"path"`
-	Readback    string   `json:"readback"`
-	Warnings    []string `json:"warnings"`
-	Blocked     bool     `json:"blocked"`
+	Rules       []Rule               `json:"rules"`
+	Unknown     []string             `json:"unknown"`
+	DurationMin int                  `json:"durationMin,omitempty"`
+	Path        string               `json:"path"`
+	Readback    string               `json:"readback"`
+	Warnings    []string             `json:"warnings"`
+	Blocked     bool                 `json:"blocked"`
+	Resolutions []ResearchResolution `json:"resolutions,omitempty"`
 }
 
 func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
+	if c != nil && c.Research != nil {
+		return c.compileResearch(ctx, text)
+	}
 	durationMin, rest := extractDuration(text)
 	warnings := make([]string, 0)
 	if c != nil && c.LLM != nil {

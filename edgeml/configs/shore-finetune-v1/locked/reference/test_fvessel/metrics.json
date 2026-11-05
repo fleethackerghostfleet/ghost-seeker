@@ -1,0 +1,158 @@
+{
+  "tau": 0.4311056137084961,
+  "strata": {
+    "all": {
+      "vessels": 1754,
+      "detected": 1071,
+      "recall": 0.6106043329532497,
+      "recall_cp95_lower": 0.5910413924910559,
+      "precision": 0.3555776892430279,
+      "false_positives": 1941,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 2.75,
+      "sources": 2,
+      "AP50": 0.5795417649772143
+    },
+    "day": {
+      "vessels": 1754,
+      "detected": 1071,
+      "recall": 0.6106043329532497,
+      "recall_cp95_lower": 0.5910413924910559,
+      "precision": 0.3555776892430279,
+      "false_positives": 1941,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 2.75,
+      "sources": 2,
+      "AP50": 0.5795417649772143
+    },
+    "low_light": {
+      "vessels": 0,
+      "detected": 0,
+      "recall": null,
+      "recall_cp95_lower": null,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 0,
+      "fp_per_empty_frame": null,
+      "sources": 0,
+      "AP50": null
+    },
+    "tiny": {
+      "vessels": 0,
+      "detected": 0,
+      "recall": null,
+      "recall_cp95_lower": null,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.0,
+      "sources": 0,
+      "AP50": null
+    },
+    "small": {
+      "vessels": 1,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": 0.0,
+      "false_positives": 343,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.5,
+      "sources": 1,
+      "AP50": 0.0
+    },
+    "medium": {
+      "vessels": 871,
+      "detected": 303,
+      "recall": 0.3478760045924225,
+      "recall_cp95_lower": 0.3211670763743505,
+      "precision": 0.1673108779679735,
+      "false_positives": 1508,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 1.75,
+      "sources": 2,
+      "AP50": 0.22779814594347111
+    },
+    "large": {
+      "vessels": 882,
+      "detected": 768,
+      "recall": 0.8707482993197279,
+      "recall_cp95_lower": 0.8506768994803565,
+      "precision": 0.8951048951048951,
+      "false_positives": 90,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.5,
+      "sources": 2,
+      "AP50": 0.9413720702790294
+    },
+    "day_tiny": {
+      "vessels": 0,
+      "detected": 0,
+      "recall": null,
+      "recall_cp95_lower": null,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.0,
+      "sources": 0,
+      "AP50": null
+    },
+    "day_small": {
+      "vessels": 1,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": 0.0,
+      "false_positives": 343,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.5,
+      "sources": 1,
+      "AP50": 0.0
+    },
+    "day_medium": {
+      "vessels": 871,
+      "detected": 303,
+      "recall": 0.3478760045924225,
+      "recall_cp95_lower": 0.3211670763743505,
+      "precision": 0.1673108779679735,
+      "false_positives": 1508,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 1.75,
+      "sources": 2,
+      "AP50": 0.22779814594347111
+    },
+    "day_large": {
+      "vessels": 882,
+      "detected": 768,
+      "recall": 0.8707482993197279,
+      "recall_cp95_lower": 0.8506768994803565,
+      "precision": 0.8951048951048951,
+      "false_positives": 90,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.5,
+      "sources": 2,
+      "AP50": 0.9413720702790294
+    },
+    "day_medium_large": {
+      "vessels": 1753,
+      "detected": 1071,
+      "recall": 0.6109526525955505,
+      "recall_cp95_lower": 0.5913866906496066,
+      "precision": 0.4012738853503185,
+      "false_positives": 1598,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 2.25,
+      "sources": 2,
+      "AP50": 0.5960743326937893
+    }
+  },
+  "AP50": 0.5795417649772143,
+  "R4": {
+    "windows": 1747,
+    "detected_windows": 1133,
+    "eligible_tracks": 7,
+    "recall": 0.6485403548941042,
+    "window_seconds": 2,
+    "sliding": true
+  }
+}

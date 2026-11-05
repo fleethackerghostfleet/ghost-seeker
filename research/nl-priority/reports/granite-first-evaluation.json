@@ -1,0 +1,3221 @@
+{
+  "schemaVersion": 1,
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "architecture": "arm64",
+  "corpusSha256": "c7f725ce6bd7fedccd67ec08449bf0029e74a72de5f00d50b2d79bb1a6fac57d",
+  "corpusVersion": 1,
+  "partialRun": false,
+  "notes": [
+    "Hand-authored expected outcomes frozen before execution; no model-generated answer key.",
+    "Research benchmark, not a statistically representative field evaluation.",
+    "Supported score includes direct/parser and Granite paths; report each separately.",
+    "Context is passed explicitly to compile and never mutates the active policy.",
+    "Weights: boost default2, strongly3, slightly1.5; suppress1 uses existing global suppression multiplier.",
+    "Multi-rule pronouns without an explicit focus are expected to request clarification; only unambiguous single-rule follow-ups change state."
+  ],
+  "summary": {
+    "all": {
+      "cases": 120,
+      "correct": 84,
+      "accuracy": 0.7,
+      "p50Ms": 0.25633402401581407,
+      "p95Ms": 457.17737497761846
+    },
+    "supported": {
+      "cases": 95,
+      "correct": 63,
+      "accuracy": 0.6631578947368421,
+      "p50Ms": 0.25949999690055847,
+      "p95Ms": 496.7421250184998
+    },
+    "path:rules": {
+      "cases": 67,
+      "correct": 63,
+      "accuracy": 0.9402985074626866,
+      "p50Ms": 0.23083295673131943,
+      "p95Ms": 0.4247499746270478
+    },
+    "category:direct": {
+      "cases": 32,
+      "correct": 32,
+      "accuracy": 1.0,
+      "p50Ms": 0.19762496231123805,
+      "p95Ms": 0.32525003189221025
+    },
+    "path:rejected": {
+      "cases": 53,
+      "correct": 21,
+      "accuracy": 0.39622641509433965,
+      "p50Ms": 326.66866696672514,
+      "p95Ms": 581.1888329917565
+    },
+    "category:paraphrase": {
+      "cases": 24,
+      "correct": 1,
+      "accuracy": 0.041666666666666664,
+      "p50Ms": 384.09458397654817,
+      "p95Ms": 806.7686249851249
+    },
+    "category:multiple": {
+      "cases": 12,
+      "correct": 11,
+      "accuracy": 0.9166666666666666,
+      "p50Ms": 0.262790999840945,
+      "p95Ms": 0.5385410040616989
+    },
+    "category:negation": {
+      "cases": 12,
+      "correct": 8,
+      "accuracy": 0.6666666666666666,
+      "p50Ms": 0.25633402401581407,
+      "p95Ms": 367.04520805506036
+    },
+    "category:context": {
+      "cases": 11,
+      "correct": 9,
+      "accuracy": 0.8181818181818182,
+      "p50Ms": 0.2561669680289924,
+      "p95Ms": 368.77429200103506
+    },
+    "unsupported": {
+      "cases": 25,
+      "correct": 21,
+      "accuracy": 0.84,
+      "p50Ms": 0.23925001733005047,
+      "p95Ms": 366.12408299697563
+    },
+    "category:ambiguous_context": {
+      "cases": 1,
+      "correct": 1,
+      "accuracy": 1.0,
+      "p50Ms": 0.27345900889486074,
+      "p95Ms": 0.27345900889486074
+    },
+    "category:reset": {
+      "cases": 4,
+      "correct": 2,
+      "accuracy": 0.5,
+      "p50Ms": 0.2745409728959203,
+      "p95Ms": 331.0615829541348
+    },
+    "category:unsupported": {
+      "cases": 24,
+      "correct": 20,
+      "accuracy": 0.8333333333333334,
+      "p50Ms": 0.23383297957479954,
+      "p95Ms": 366.12408299697563
+    }
+  },
+  "results": [
+    {
+      "id": "direct-01",
+      "category": "direct",
+      "text": "Prioritize cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 7.0335830096155405,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize cargo ship (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-02",
+      "category": "direct",
+      "text": "Boost fishing boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.32525003189221025,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-03",
+      "category": "direct",
+      "text": "Deprioritize tankers",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.24233298609033227,
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "tanker",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize tanker",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-04",
+      "category": "direct",
+      "text": "Prioritize sailboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.24799996754154563,
+      "expected": [
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "sailboats",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "sailboats"
+        ],
+        "readback": "Prioritize sailboats (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-05",
+      "category": "direct",
+      "text": "Suppress speedboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.24725002003833652,
+      "expected": [
+        {
+          "concept": "speedboat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "speedboats",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "speedboats"
+        ],
+        "readback": "Deprioritize speedboats",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-06",
+      "category": "direct",
+      "text": "Boost passenger ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.2138749696314335,
+      "expected": [
+        {
+          "concept": "passenger ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "passenger ship",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize passenger ship (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-07",
+      "category": "direct",
+      "text": "Prioritize submarines",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.21770800231024623,
+      "expected": [
+        {
+          "concept": "submarine",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "submarine",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize submarine (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-08",
+      "category": "direct",
+      "text": "Deprioritize buoys",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.23145898012444377,
+      "expected": [
+        {
+          "concept": "buoy",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "buoy",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize buoy",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-09",
+      "category": "direct",
+      "text": "Boost aircraft",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.19950000569224358,
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "aircraft",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize aircraft (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-10",
+      "category": "direct",
+      "text": "Prioritize marine mammals",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.20295800641179085,
+      "expected": [
+        {
+          "concept": "marine mammal",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "marine mammal",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize marine mammal (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-11",
+      "category": "direct",
+      "text": "Strongly prioritize fishing boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.2217079745605588,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 3
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 3
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (3.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-12",
+      "category": "direct",
+      "text": "Slightly prioritize cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.19762496231123805,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 1.5
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "boost",
+            "weight": 1.5
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize cargo ship (1.5\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-13",
+      "category": "direct",
+      "text": "Boost coast guard",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.19970897119492292,
+      "expected": [
+        {
+          "concept": "coast guard",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "coast guard",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize coast guard (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-14",
+      "category": "direct",
+      "text": "Deprioritize container ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.19354198593646288,
+      "expected": [
+        {
+          "concept": "container ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "container ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize container ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-15",
+      "category": "direct",
+      "text": "Prioritize rescue boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.20583299919962883,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-16",
+      "category": "direct",
+      "text": "Suppress tugboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.18933304818347096,
+      "expected": [
+        {
+          "concept": "tugboat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "tugboats",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "tugboats"
+        ],
+        "readback": "Deprioritize tugboats",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-17",
+      "category": "direct",
+      "text": "Boost inflatable boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.18241599900647998,
+      "expected": [
+        {
+          "concept": "inflatable boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "inflatable boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "inflatable boat"
+        ],
+        "readback": "Prioritize inflatable boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-18",
+      "category": "direct",
+      "text": "Prioritize orange life rafts",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.1926659606397152,
+      "expected": [
+        {
+          "concept": "orange life raft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "orange life raft",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "orange life raft"
+        ],
+        "readback": "Prioritize orange life raft (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-19",
+      "category": "direct",
+      "text": "Deprioritize cruise ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.25949999690055847,
+      "expected": [
+        {
+          "concept": "cruise ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cruise ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "cruise ship"
+        ],
+        "readback": "Deprioritize cruise ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-20",
+      "category": "direct",
+      "text": "Prioritize red boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.1937909983098507,
+      "expected": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "red boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "red boat"
+        ],
+        "readback": "Prioritize red boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-21",
+      "category": "direct",
+      "text": "Boost white sailboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.23229100042954087,
+      "expected": [
+        {
+          "concept": "white sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "white sailboats",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "white sailboats"
+        ],
+        "readback": "Prioritize white sailboats (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-22",
+      "category": "direct",
+      "text": "Deprioritize floating logs",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.18824997823685408,
+      "expected": [
+        {
+          "concept": "floating log",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "floating logs",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "floating logs"
+        ],
+        "readback": "Deprioritize floating logs",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-23",
+      "category": "direct",
+      "text": "Prioritize kayaks",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.17579103587195277,
+      "expected": [
+        {
+          "concept": "kayak",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "kayaks",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "kayaks"
+        ],
+        "readback": "Prioritize kayaks (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-24",
+      "category": "direct",
+      "text": "Boost jet skis",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.20033400505781174,
+      "expected": [
+        {
+          "concept": "jet ski",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "jet skis",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "jet skis"
+        ],
+        "readback": "Prioritize jet skis (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-25",
+      "category": "direct",
+      "text": "Suppress oil platforms",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.1818329910747707,
+      "expected": [
+        {
+          "concept": "oil platform",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "oil platforms",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "oil platforms"
+        ],
+        "readback": "Deprioritize oil platforms",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-26",
+      "category": "direct",
+      "text": "Prioritize ferry boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.19458297174423933,
+      "expected": [
+        {
+          "concept": "ferry boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "ferry boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "ferry boat"
+        ],
+        "readback": "Prioritize ferry boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-27",
+      "category": "direct",
+      "text": "Boost fishing nets",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.18974998965859413,
+      "expected": [
+        {
+          "concept": "fishing net",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing nets",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "fishing nets"
+        ],
+        "readback": "Prioritize fishing nets (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-28",
+      "category": "direct",
+      "text": "Deprioritize blue containers",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.1753749675117433,
+      "expected": [
+        {
+          "concept": "blue container",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "blue containers",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "blue containers"
+        ],
+        "readback": "Deprioritize blue containers",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-29",
+      "category": "direct",
+      "text": "Prioritize yellow buoys",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.1899590133689344,
+      "expected": [
+        {
+          "concept": "yellow buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "yellow buoy",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "yellow buoy"
+        ],
+        "readback": "Prioritize yellow buoy (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-30",
+      "category": "direct",
+      "text": "Boost rowboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.17091602785512805,
+      "expected": [
+        {
+          "concept": "rowboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rowboats",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "rowboats"
+        ],
+        "readback": "Prioritize rowboats (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-31",
+      "category": "direct",
+      "text": "Suppress wooden boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.1855829614214599,
+      "expected": [
+        {
+          "concept": "wooden boat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "wooden boat",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "wooden boat"
+        ],
+        "readback": "Deprioritize wooden boat",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "direct-32",
+      "category": "direct",
+      "text": "Prioritize rigid inflatable boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.18575001740828156,
+      "expected": [
+        {
+          "concept": "rigid inflatable boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rigid inflatable boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "rigid inflatable boat"
+        ],
+        "readback": "Prioritize rigid inflatable boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-01",
+      "category": "paraphrase",
+      "text": "Please give rescue boats higher priority",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 806.7686249851249,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI assistant and do not have a specific priority system. I am here to assist you with any questions or tasks you may have."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-02",
+      "category": "paraphrase",
+      "text": "I want fishing boats to be more important",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 1537.3607919900678,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "invalid structured Granite output"
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-03",
+      "category": "paraphrase",
+      "text": "Put cargo ships lower on the priority list",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 406.0493750148453,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI assistant and do not have a cargo ship. I am here to assist you with any questions or tasks you may have."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-04",
+      "category": "paraphrase",
+      "text": "Can you focus on sailboats?",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 331.115500011947,
+      "expected": [
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am a text-based AI assistant and do not have a sailboat."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-05",
+      "category": "paraphrase",
+      "text": "Make tankers a lower priority",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 504.78725001448765,
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI assistant and do not have a lower priority."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-06",
+      "category": "paraphrase",
+      "text": "Pay more attention to speedboats",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 581.1888329917565,
+      "expected": [
+        {
+          "concept": "speedboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I don't see any visual elements related to boats, so I don't have a specific response to this request."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-07",
+      "category": "paraphrase",
+      "text": "Give me fewer images of buoys",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 457.17737497761846,
+      "expected": [
+        {
+          "concept": "buoy",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI language model and do not have the ability to provide images. I can assist with text-based tasks and provide information on various topics."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-08",
+      "category": "paraphrase",
+      "text": "Increase the priority of coast guard",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 385.96183399204165,
+      "expected": [
+        {
+          "concept": "coast guard",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am currently unable to assist with this request as I am a text-based AI language model."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-09",
+      "category": "paraphrase",
+      "text": "Reduce the priority of container ships",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 300.77820899896324,
+      "expected": [
+        {
+          "concept": "container ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: The container ships are not currently in a high priority state."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-10",
+      "category": "paraphrase",
+      "text": "Put rescue boats first",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 495.54854101734236,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am a text-based AI assistant and do not have a built-in rescue boats feature."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-11",
+      "category": "paraphrase",
+      "text": "Treat aircraft as more important",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 387.7058340003714,
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI language model and do not have a specific concept related to treating aircraft."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-12",
+      "category": "paraphrase",
+      "text": "Show fewer passenger ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.4247499746270478,
+      "expected": [
+        {
+          "concept": "passenger ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "passenger ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize passenger ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-13",
+      "category": "paraphrase",
+      "text": "Make red boats more important",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 365.2741250116378,
+      "expected": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am a text-based AI assistant and do not have a color preference. I respond in black and white."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-14",
+      "category": "paraphrase",
+      "text": "I care more about inflatable boats",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 329.79604200227186,
+      "expected": [
+        {
+          "concept": "inflatable boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I care more about inflatable boats."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-15",
+      "category": "paraphrase",
+      "text": "I care less about cruise ships",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 299.7512079891749,
+      "expected": [
+        {
+          "concept": "cruise ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I don't care about cruise ships."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-16",
+      "category": "paraphrase",
+      "text": "Give orange life rafts more emphasis",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 288.9921250171028,
+      "expected": [
+        {
+          "concept": "orange life raft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: The orange life rafts are not being emphasized."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-17",
+      "category": "paraphrase",
+      "text": "Give cargo ships less emphasis",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 288.15862495684996,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I don't care about cargo ships."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-18",
+      "category": "paraphrase",
+      "text": "Move tugboats up in priority",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 296.51312495116144,
+      "expected": [
+        {
+          "concept": "tugboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: Please provide the specific tugboats you want to move up."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-19",
+      "category": "paraphrase",
+      "text": "Move oil platforms down in priority",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 384.09458397654817,
+      "expected": [
+        {
+          "concept": "oil platform",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI assistant and do not have the ability to move oil platforms in priority."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-20",
+      "category": "paraphrase",
+      "text": "Rank kayaks higher",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 367.8796670283191,
+      "expected": [
+        {
+          "concept": "kayak",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am a text-based AI assistant and do not have the ability to rank kayaks higher."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-21",
+      "category": "paraphrase",
+      "text": "Rank wooden boats lower",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 326.66866696672514,
+      "expected": [
+        {
+          "concept": "wooden boat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am a text-based AI assistant and do not have a rank function."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-22",
+      "category": "paraphrase",
+      "text": "I would like to emphasize ferry boats",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 389.9695410509594,
+      "expected": [
+        {
+          "concept": "ferry boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I understand the request, but I am not currently engaged in any visual tasks or conversations."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-23",
+      "category": "paraphrase",
+      "text": "Please favor fishing nets",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 496.7421250184998,
+      "expected": [
+        {
+          "concept": "fishing net",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI language model and do not have a fishing net. I am designed to assist with language tasks and provide information, but I do not have a fishing net."
+      },
+      "error": null
+    },
+    {
+      "id": "paraphrase-24",
+      "category": "paraphrase",
+      "text": "Please downrank floating logs",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 425.3912909771316,
+      "expected": [
+        {
+          "concept": "floating log",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am currently unable to assist with downranking floating logs as I do not have the ability to perform such tasks."
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-01",
+      "category": "multiple",
+      "text": "Prioritize rescue boats and deprioritize cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.44079095823690295,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "cargo ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (2.0\u00d7); Deprioritize cargo ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-02",
+      "category": "multiple",
+      "text": "Boost fishing boats and sailboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.2939170226454735,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "sailboats",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "sailboats"
+        ],
+        "readback": "Prioritize fishing boat (2.0\u00d7); Prioritize sailboats (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-03",
+      "category": "multiple",
+      "text": "Suppress tankers and container ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.5385410040616989,
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        },
+        {
+          "concept": "container ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "tanker",
+            "action": "suppress",
+            "weight": 1
+          },
+          {
+            "concept": "container ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize tanker; Deprioritize container ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-04",
+      "category": "multiple",
+      "text": "Prioritize red boats and yellow buoys",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.40200003422796726,
+      "expected": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "yellow buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "red boat",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "yellow buoy",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "red boat",
+          "yellow buoy"
+        ],
+        "readback": "Prioritize red boat (2.0\u00d7); Prioritize yellow buoy (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-05",
+      "category": "multiple",
+      "text": "Boost orange life rafts and suppress cruise ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.27891702484339476,
+      "expected": [
+        {
+          "concept": "orange life raft",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "cruise ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "orange life raft",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "cruise ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "cruise ship",
+          "orange life raft"
+        ],
+        "readback": "Prioritize orange life raft (2.0\u00d7); Deprioritize cruise ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-06",
+      "category": "multiple",
+      "text": "Prioritize kayaks and deprioritize jet skis",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.264582980889827,
+      "expected": [
+        {
+          "concept": "kayak",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "jet ski",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "kayaks",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "jet skis",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "jet skis",
+          "kayaks"
+        ],
+        "readback": "Prioritize kayaks (2.0\u00d7); Deprioritize jet skis",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-07",
+      "category": "multiple",
+      "text": "Boost aircraft and suppress buoys",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.251916004344821,
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "buoy",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "aircraft",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "buoy",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize aircraft (2.0\u00d7); Deprioritize buoy",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-08",
+      "category": "multiple",
+      "text": "Prioritize white sailboats and red boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.262790999840945,
+      "expected": [
+        {
+          "concept": "white sailboat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "white sailboats",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "red boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "red boat",
+          "white sailboats"
+        ],
+        "readback": "Prioritize white sailboats (2.0\u00d7); Prioritize red boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-09",
+      "category": "multiple",
+      "text": "Suppress floating logs and fishing nets",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.23858400527387857,
+      "expected": [
+        {
+          "concept": "floating log",
+          "action": "suppress",
+          "weight": 1
+        },
+        {
+          "concept": "fishing net",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "floating logs",
+            "action": "suppress",
+            "weight": 1
+          },
+          {
+            "concept": "fishing nets",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "fishing nets",
+          "floating logs"
+        ],
+        "readback": "Deprioritize floating logs; Deprioritize fishing nets",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-10",
+      "category": "multiple",
+      "text": "Boost tugboats and deprioritize oil platforms",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.2306249807588756,
+      "expected": [
+        {
+          "concept": "tugboat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "oil platform",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "tugboats",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "oil platforms",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "oil platforms",
+          "tugboats"
+        ],
+        "readback": "Prioritize tugboats (2.0\u00d7); Deprioritize oil platforms",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-11",
+      "category": "multiple",
+      "text": "Prioritize rescue boats, fishing boats, and sailboats",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.22670900216326118,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: name a visual object category without negation or conditions"
+      },
+      "error": null
+    },
+    {
+      "id": "multiple-12",
+      "category": "multiple",
+      "text": "Boost coast guard and deprioritize passenger ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.22500002523884177,
+      "expected": [
+        {
+          "concept": "coast guard",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "passenger ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "coast guard",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "passenger ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize coast guard (2.0\u00d7); Deprioritize passenger ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-01",
+      "category": "negation",
+      "text": "Remove cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.20920898532494903,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-02",
+      "category": "negation",
+      "text": "Stop prioritizing rescue boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.20341703202575445,
+      "expected": [],
+      "actual": {
+        "rules": [],
+        "vocabulary": [],
+        "readback": "Restore baseline priorities and remove added concepts.",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-03",
+      "category": "negation",
+      "text": "Do not prioritize cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.24887500330805779,
+      "expected": [],
+      "actual": {
+        "rules": [],
+        "vocabulary": [],
+        "readback": "Restore baseline priorities and remove added concepts.",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-04",
+      "category": "negation",
+      "text": "Don't boost fishing boats",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 367.04520805506036,
+      "expected": [],
+      "actual": {
+        "error": "clarification required: I don't boost fishing boats."
+      },
+      "error": null
+    },
+    {
+      "id": "negation-05",
+      "category": "negation",
+      "text": "Stop suppressing tankers",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 278.73979101423174,
+      "expected": [],
+      "actual": {
+        "error": "clarification required: Boost the tanker's speed."
+      },
+      "error": null
+    },
+    {
+      "id": "negation-06",
+      "category": "negation",
+      "text": "Remove the rule for sailboats",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.45716698514297605,
+      "expected": [],
+      "actual": {
+        "error": "clarification required: no active rule for sailboats"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-07",
+      "category": "negation",
+      "text": "Prioritize fishing boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.30679197516292334,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-08",
+      "category": "negation",
+      "text": "Deprioritize cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.28137501794844866,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize cargo ship",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-09",
+      "category": "negation",
+      "text": "Remove buoys",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.2289160038344562,
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "aircraft",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize aircraft (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-10",
+      "category": "negation",
+      "text": "Stop prioritizing red boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.25633402401581407,
+      "expected": [
+        {
+          "concept": "yellow buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "yellow buoy",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "yellow buoy"
+        ],
+        "readback": "Prioritize yellow buoy (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-11",
+      "category": "negation",
+      "text": "Remove orange life rafts",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.22741605062037706,
+      "expected": [],
+      "actual": {
+        "rules": [],
+        "vocabulary": [],
+        "readback": "Restore baseline priorities and remove added concepts.",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "negation-12",
+      "category": "negation",
+      "text": "Do not boost tugboats",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 260.67587500438094,
+      "expected": [],
+      "actual": {
+        "error": "clarification required: Please provide more context or details about what you are asking about tugboats."
+      },
+      "error": null
+    },
+    {
+      "id": "context-01",
+      "category": "context",
+      "text": "More of those",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.38233300438150764,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2.5
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2.5
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (2.5\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-02",
+      "category": "context",
+      "text": "Less of those",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.23687502834945917,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 1.5
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "boost",
+            "weight": 1.5
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize cargo ship (1.5\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-03",
+      "category": "ambiguous_context",
+      "text": "More of those",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.27345900889486074,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: name the concept to adjust"
+      },
+      "error": null
+    },
+    {
+      "id": "context-04",
+      "category": "context",
+      "text": "Less of those",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.21399999968707561,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2.5
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2.5
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (2.5\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-05",
+      "category": "context",
+      "text": "Prioritize sailboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.2401249948889017,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "sailboats",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "rescue boat",
+          "sailboats"
+        ],
+        "readback": "Prioritize rescue boat (2.0\u00d7); Prioritize sailboats (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-06",
+      "category": "context",
+      "text": "Also boost aircraft",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 368.77429200103506,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am an AI language model and do not have a specific concept related to aircraft."
+      },
+      "error": null
+    },
+    {
+      "id": "context-07",
+      "category": "context",
+      "text": "Also deprioritize cargo ships",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 365.13812496559694,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "error": "clarification required: I am not aware of any specific cargo ships that could be prioritized or boosted."
+      },
+      "error": null
+    },
+    {
+      "id": "context-08",
+      "category": "context",
+      "text": "Remove fishing boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.40374998934566975,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-09",
+      "category": "context",
+      "text": "Strongly prioritize cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.27954200049862266,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 3
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "boost",
+            "weight": 3
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize cargo ship (3.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-10",
+      "category": "context",
+      "text": "Slightly prioritize rescue boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.23237505229189992,
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 1.5
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "rescue boat",
+            "action": "boost",
+            "weight": 1.5
+          }
+        ],
+        "vocabulary": [
+          "rescue boat"
+        ],
+        "readback": "Prioritize rescue boat (1.5\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-11",
+      "category": "context",
+      "text": "Prioritize buoys",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.24295796174556017,
+      "expected": [
+        {
+          "concept": "buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "buoy",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize buoy (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "context-12",
+      "category": "context",
+      "text": "Deprioritize tankers",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.2561669680289924,
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "tanker",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize tanker",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "reset-01",
+      "category": "reset",
+      "text": "Reset",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.21999998716637492,
+      "expected": [],
+      "actual": {
+        "rules": [],
+        "vocabulary": [],
+        "readback": "Restore baseline priorities and remove added concepts.",
+        "path": "rules",
+        "operation": "reset"
+      },
+      "error": null
+    },
+    {
+      "id": "reset-02",
+      "category": "reset",
+      "text": "Clear all instructions",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 331.0615829541348,
+      "expected": [],
+      "actual": {
+        "error": "clarification required: No instructions provided."
+      },
+      "error": null
+    },
+    {
+      "id": "reset-03",
+      "category": "reset",
+      "text": "Reset priorities",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.36266702227294445,
+      "expected": [],
+      "actual": {
+        "rules": [],
+        "vocabulary": [],
+        "readback": "Restore baseline priorities and remove added concepts.",
+        "path": "rules",
+        "operation": "reset"
+      },
+      "error": null
+    },
+    {
+      "id": "reset-04",
+      "category": "reset",
+      "text": "Remove all rules",
+      "supported": true,
+      "correct": false,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.2745409728959203,
+      "expected": [],
+      "actual": {
+        "error": "clarification required: no active rule for all rules"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-01",
+      "category": "unsupported",
+      "text": "Prioritize boats approaching us",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.23383297957479954,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-02",
+      "category": "unsupported",
+      "text": "Only prioritize rescue boats within five miles",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.23925001733005047,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-03",
+      "category": "unsupported",
+      "text": "Boost cargo ships after sunset",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.21470902720466256,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-04",
+      "category": "unsupported",
+      "text": "Prioritize boats from camera two",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.22662500850856304,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-05",
+      "category": "unsupported",
+      "text": "Deprioritize boats that are moving away",
+      "supported": false,
+      "correct": false,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.23329199757426977,
+      "expected": "reject",
+      "actual": {
+        "rules": [
+          {
+            "concept": "boats that are moving away",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "boats that are moving away"
+        ],
+        "readback": "Deprioritize boats that are moving away",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-06",
+      "category": "unsupported",
+      "text": "Prioritize suspicious vessels",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.21620799088850617,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-07",
+      "category": "unsupported",
+      "text": "Boost ships with their AIS turned off",
+      "supported": false,
+      "correct": false,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.21962501341477036,
+      "expected": "reject",
+      "actual": {
+        "rules": [
+          {
+            "concept": "ships with their ais turned off",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "ships with their ais turned off"
+        ],
+        "readback": "Prioritize ships with their ais turned off (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-08",
+      "category": "unsupported",
+      "text": "Prioritize boats that need help",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.310958013869822,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-09",
+      "category": "unsupported",
+      "text": "Ignore everything except rescue boats",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.25750003987923265,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-10",
+      "category": "unsupported",
+      "text": "Prioritize cargo ships and suppress cargo ships",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.22229098249226809,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: conflicting or repeated changes to the same concept"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-11",
+      "category": "unsupported",
+      "text": "Boost fishing boats for the next ten minutes",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.20345801021903753,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-12",
+      "category": "unsupported",
+      "text": "Prioritize red boats if they are moving",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.19766698824241757,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-13",
+      "category": "unsupported",
+      "text": "More of those",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.19562500528991222,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: name the concept to adjust"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-14",
+      "category": "unsupported",
+      "text": "Less of those",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.20004203543066978,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: name the concept to adjust"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-15",
+      "category": "unsupported",
+      "text": "Make it better",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 349.7328749508597,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: Could you please provide more details about what you would like me to assist you with?"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-16",
+      "category": "unsupported",
+      "text": "Do something useful",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 366.12408299697563,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: I am a text-based AI assistant and do not have a built-in function for assisting with tasks or providing useful information."
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-17",
+      "category": "unsupported",
+      "text": "Prioritize",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 363.5859999922104,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: I am a text-based AI assistant and do not have a specific image-priority request."
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-18",
+      "category": "unsupported",
+      "text": "Suppress",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 337.3722920077853,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: No visual assistance provided."
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-19",
+      "category": "unsupported",
+      "text": "Give aircraft a weight of 9000",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 381.2669580220245,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: I am an AI assistant and do not have a weight. I am here to assist you with your questions and tasks."
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-20",
+      "category": "unsupported",
+      "text": "Delete all images",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 280.736250046175,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: No images were found."
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-21",
+      "category": "unsupported",
+      "text": "Prioritize boats near the harbor",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.37708296440541744,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: use visual object categories; conditions, behavior, location and timing are unsupported"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-22",
+      "category": "unsupported",
+      "text": "Boost boats that crossed the border",
+      "supported": false,
+      "correct": false,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.3100000321865082,
+      "expected": "reject",
+      "actual": {
+        "rules": [
+          {
+            "concept": "boats that crossed the border",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "boats that crossed the border"
+        ],
+        "readback": "Prioritize boats that crossed the border (2.0\u00d7)",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-23",
+      "category": "unsupported",
+      "text": "Suppress all unknown objects",
+      "supported": false,
+      "correct": false,
+      "status": 200,
+      "path": "rules",
+      "latencyMs": 0.23083295673131943,
+      "expected": "reject",
+      "actual": {
+        "rules": [
+          {
+            "concept": "all unknown object",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [
+          "all unknown object"
+        ],
+        "readback": "Deprioritize all unknown object",
+        "path": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "unsupported-24",
+      "category": "unsupported",
+      "text": "Disable unknown protection",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 287.6957079861313,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: I am currently unable to assist with this request."
+      },
+      "error": null
+    }
+  ],
+  "acceptance": {
+    "supportedAccuracyAtLeast95Percent": false,
+    "allUnsupportedRejected": false,
+    "completeCorpus": true
+  },
+  "evaluationStage": "diagnostic"
+}

@@ -49,8 +49,10 @@
   viewpoint: aerial
   modality: rgb
   synthetic: false
-  ingest_script: datasets/ingest/hf_generic.py
-  status: planned
+  ingest_script: datasets/ingest/seadronessee.py
+  source_revision: deb1f872ffe7efa4b7ee3a672562d16b6dc0ca5c
+  status: ingested
+  notes: HF mirror drops per-image video metadata and upstream train/val interleave frames; eval splits come from inferred recordings (datasets/seadronessee/sequences.jsonl, clean v3).
 - dataset_id: ir_maritime_vessels
   name: Real Infrared Maritime Vessel Dataset
   source_type: huggingface
@@ -59,8 +61,10 @@
   viewpoint: surface
   modality: ir
   synthetic: false
-  ingest_script: datasets/ingest/hf_generic.py
-  status: planned
+  ingest_script: datasets/ingest/hf_dataset.py
+  status: ingested
+  license_use: internal_dev_only
+  notes: HF card (rev 64a6646) declares no license and no upstream source; internal research/dev use only, never in a shipped model. Clean v3 splits by VOC <folder> recording (edgeml/tools/clean_v3.py).
 - dataset_id: boat_dataset_coco_2024
   name: Boat Dataset COCO 2024
   source_type: huggingface

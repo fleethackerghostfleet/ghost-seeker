@@ -1,5 +1,58 @@
 # Human review and offline retuning
 
+## Review the clean-v2 development set
+
+The committed `datasets/review/clean_v2_dev_review.jsonl` and `.sql` are the
+settled selection; do not recompute or expand them. Only `eval_split=dev` imagery
+is eligible. The locked `test` and `quarantine` sets must never be reviewed, so
+operator labels cannot leak into test scores. The builder refuses non-dev,
+Singapore Maritime, test, and quarantine rows before downloading anything.
+
+The dev review selection contains **2283** frames (previously 2294). It permanently
+excludes `video_sailing_drone_inside_a_hurricane/all/sec_0001`–`sec_0011`:
+the first three frames are SCIENCE BUZZ title cards and the next eight show a
+studio newscaster, not maritime footage. The boundary is zero-based
+`timestamp_s < 11` (0.0–10.0); all 38 at-sea frames `sec_0012`–`sec_0049`
+(starting at 11.0) remain. This exclusion is for the dev review selection only,
+not raw data, catalogs, or training sets, and is not a general person filter:
+deck personnel and person-in-water examples remain eligible. The builder rejects
+these excluded image IDs, and the SQL applies the same boundary after sampling
+so other selections are unaffected. Do not regenerate the settled selection.
+
+```sh
+export PATH="$HOME/google-cloud-sdk/bin:$PATH"
+python3 -m venv edgeml/.venv
+edgeml/.venv/bin/pip install -e 'edgeml[onnx,test]' open_clip_torch
+make demo-models
+edgeml/.venv/bin/python edgeml/tools/build_review_set.py
+go run ./cmd/ghost-seeker -dataset data/review_set/manifest.json \
+  -dataset-dir data/review_set/images
+```
+
+Images and the generated manifest stay under ignored `data/review_set/`.
+Detector class mapping: COCO `boat` uses MobileCLIP-S1 ship typing when mapped
+by `TYPE_TO_CATALOG`, otherwise `vessel`; `airplane` maps to `aircraft`;
+`bird` and `person` retain those classes; `surfboard`, `kite`, and other
+unmapped kept labels map to `unknown`. Ship type/aspect remains in ship info.
+
+## Reviewer-only join link
+
+Reviewers can open a shared link without an operator token or login page. The
+server still needs its normal operator token, supplied through
+`GS_OPERATOR_TOKEN` or `-operator-token-file`:
+
+```sh
+go run ./cmd/ghost-seeker -dataset data/review_set/manifest.json \
+  -review-link-key-file data/review-link.key -dev-token-file none
+```
+
+If absent, the key file is generated with mode `0600`. Share a URL of the form
+`https://<host>/join/<key>` using the key from that file. The URL is a bearer
+secret: anyone who has it can review, so share it privately and protect the key
+file. Reviewers can record and undo reviews but cannot change directives,
+models, policy, uploads, or Commander decisions. This option is incompatible
+with PIV authentication.
+
 Start the simulation console with durable capture:
 
 ```sh
@@ -8,6 +61,17 @@ go run ./cmd/ghost-seeker -review-log data/reviews.jsonl
 
 Open **Operator Review** and enter your reviewer name. It is saved locally;
 use **Set / change reviewer** to change it. Review keys stay disabled until set.
+
+Optional **Team sync** (simulation console only) shares model-adjustment proposals
+with other opted-in sessions. The checkbox is saved in this browser. Set a reviewer
+name before sharing; otherwise suggestions stay local. Discuss the yellow **TEAM
+DISCUSSION** popup before accepting: **Y** agrees, **N** disagrees (votes do not
+apply rules), **A** accepts for the team and adds the rule, **R** rejects for the
+team, and **L / Escape** hides it only in your session. Votes update live and the
+proposal closes for everyone when resolved. Pending proposals and votes are
+in-memory, limited to 20, and lost on server restart. Reviewer names are labels,
+not authenticated identities. With sync off, local Y/N/L suggestions are unchanged;
+the attribution (**why**) bar is unchanged in either mode.
 
 - **1–4**: choose a priority; **Space / Enter**: accept the suggested priority.
 - **X / Delete**: dismiss; **C**: send to Commander; **S / Right arrow**: skip.

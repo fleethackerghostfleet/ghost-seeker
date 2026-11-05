@@ -1,0 +1,20 @@
+{
+  "tau": 0.4311056137084961,
+  "feasible": true,
+  "minimum_precision": 0.9,
+  "selection": "max recall; ties max precision then threshold",
+  "valid_coco_sha256": "695c77a453d9ced442dab8401d42b958f2a87cff2f9e5ccb38b6a160f7c51b2f",
+  "configuration": {
+    "model": "RFDETRSmall",
+    "rfdetr": "1.3.0",
+    "weights": "COCO pretrained",
+    "resolution": 512,
+    "mode": "native",
+    "candidate_score_floor": 0.001,
+    "tile": null,
+    "overlap": null,
+    "include_full": true,
+    "merge_nms_iou": null,
+    "max_det": 300
+  }
+}

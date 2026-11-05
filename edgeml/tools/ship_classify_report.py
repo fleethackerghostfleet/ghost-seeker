@@ -33,13 +33,14 @@ def main():
     ap.add_argument("--out", default=str(Path.home() / "data/shipcls"))
     ap.add_argument("--sets", nargs="+", required=True)
     ap.add_argument("--confusion", nargs="*", default=[], help="model names to print confusion matrices for")
+    ap.add_argument("--subset-from", default=None, help="restrict every model to this model's item idx (e.g. gemini-2.5-flash)")
     a = ap.parse_args()
     out = Path(a.out)
     print("| model | " + " | ".join(f"{s} top-1 (macro-recall, n)" for s in a.sets) + " | ms/crop b1 | ms/crop b32 |")
     print("|" + "---|" * (len(a.sets) + 3))
-    models = sorted({f.name[5:].rsplit("_", 1)[0] for f in out.glob("pred_*.json")}, key=lambda m: (m.startswith("gemini"), m))
+    models = {f.name[5:-5].rsplit(f"_{s}", 1)[0] for f in out.glob("pred_*.json") for s in a.sets if f.name.endswith(f"_{s}.json")}
     mats = []
-    for m in sorted({x.split("_seaships")[0].split("_gf")[0].split("_synthetic")[0] for x in models}):
+    for m in sorted(models, key=lambda m: (m.startswith("gemini"), m)):
         cells, lat = [], ("", "")
         for s in a.sets:
             f = out / f"pred_{m}_{s}.json"
@@ -47,6 +48,11 @@ def main():
                 cells.append("–")
                 continue
             pr = json.load(open(f))
+            ref = out / f"pred_{a.subset_from}_{s}.json" if a.subset_from else None
+            if ref is not None and ref.exists():  # score every model on the (capped) items the reference model saw
+                keep = set(json.load(open(ref))["idx"])
+                pairs = [(i, r) for i, r in zip(pr["idx"], pr["preds"]) if i in keep]
+                pr = {**pr, "idx": [i for i, _ in pairs], "preds": [r for _, r in pairs]}
             acc, mr, y, p = score(json.load(open(out / f"items_{s}.json")), pr)
             cells.append(f"{acc:.1%} ({mr:.1%}, {len(y)})")
             lat = (pr.get("latency_ms_b1", pr.get("latency_ms_seq", "")), pr.get("latency_ms_b32", ""))
