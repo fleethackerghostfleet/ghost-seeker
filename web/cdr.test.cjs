@@ -17,7 +17,7 @@ function setup(){
  context.$=id=>{
   if(!elements.has(id))elements.set(id,{
    innerHTML:'',textContent:'',value:'',dataset:{},hidden:false,disabled:false,
-   classList:{toggle(){},add(){},remove(){}},
+   classList:{toggle(){},add(){},remove(){},contains(){return false}},
    querySelector:()=>null,querySelectorAll:()=>[],scrollIntoView(){},addEventListener(){},
   });
   return elements.get(id);
@@ -78,6 +78,33 @@ test('tab switches and next decisions reveal selection without scrolling page an
  assert.equal(queue.scrollTop,80);
  vm.runInContext('items.clear();ensureSel();renderQueue()',context);
  assert.match(queue.innerHTML,/No escalations/);
+});
+
+test('toasts avoid decision controls and fall back to document flow when no overlay fits',()=>{
+ const {context}=setup(),toast=context.$('toast'),classes=new Set();
+ toast.classList={contains:c=>classes.has(c),add:c=>classes.add(c),remove:c=>classes.delete(c)};
+ toast.style={};toast.getBoundingClientRect=()=>({height:80});context.innerHeight=390;
+ let controls=[];
+ context.document.querySelectorAll=()=>controls.map(r=>({getBoundingClientRect:()=>r}));
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,undefined);
+ classes.add('on');
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,'8px');
+ controls=[{top:0,bottom:200}];
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,'208px');
+ controls=[{top:-100,bottom:500}];
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),true);
+ controls=[{top:200,bottom:390}];
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),true);
+ context.setTimeout=()=>0;context.clearTimeout=()=>{};
+ vm.runInContext("toast('Next escalation')",context);
+ assert.equal(toast.textContent,'Next escalation');
+ assert.equal(classes.has('inline'),false);
+ assert.equal(toast.style.top,'8px');
 });
 
 test('commander queue and note templates escape item ids',()=>{

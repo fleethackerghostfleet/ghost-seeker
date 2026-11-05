@@ -90,7 +90,7 @@ function renderQueue(follow=false){
 function renderStage(){
  const it=items.get(view.sel),old=$('note'),keep=old&&old.dataset.id===view.sel?old.value:'';
  if(!it){
-  $('stage').innerHTML=`<div class="idle"><b>${view.tab==='received'?'Waiting for ship data':view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='received'?'Ship backlog is not a shore receipt.':view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';return;
+  $('stage').innerHTML=`<div class="idle"><b>${view.tab==='received'?'Waiting for ship data':view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='received'?'Ship backlog is not a shore receipt.':view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';placeToast();return;
  }
  $('stage').innerHTML=`<div class="frame"><img src="${imageFor(it)}" alt=""><div class="bx">${boxes(it)}</div></div>
  <div class="facts"><div><span>Source</span><b>${esc(it.src.name)}</b></div><div><span>Location</span><b>${esc(it.src.loc||'—')}</b></div>
@@ -99,6 +99,7 @@ function renderStage(){
  <table class="dets"><tr><th>Contact</th><th>Behavior</th><th class="n">Conf</th><th class="n">Score</th></tr>${contacts(it).map(([d,sd])=>`<tr><td>${esc(lab(d.cls))}</td><td>${Object.entries(d.attrs).filter(([,v])=>v).map(([k])=>esc(ATTR_LAB[k]||k)).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n">${sd.s.toFixed(2)}</td></tr>`).join('')}</table>`;
  renderBrief(it);
  if(keep&&$('note'))$('note').value=keep;
+ placeToast();
 }
 function renderBrief(it){
  const sug=tierFor(it.central),f=flags(it),d=it.decision&&DEC[it.decision];
@@ -143,7 +144,16 @@ async function undo(){
 function setTab(t){view.tab=t;[...$('tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
 function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue(true);renderStage()}}
 function setLive(on){$('live').classList.toggle('off',!on);$('live').querySelector('span').textContent=on?'LIVE':'RECONNECTING'}
-let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
+function placeToast(){
+ const t=$('toast');if(!t.classList.contains('on')||t.classList.contains('inline'))return;
+ const height=t.getBoundingClientRect().height;
+ const controls=[...document.querySelectorAll('#brief > :last-child,#brief #note,#brief h4:last-of-type,body>.banner')].map(e=>e.getBoundingClientRect()).filter(r=>r.bottom>0&&r.top<innerHeight);
+ const first=Math.min(innerHeight,...controls.map(r=>r.top)),last=Math.max(0,...controls.map(r=>r.bottom));
+ const top=height+16<=first?8:last+height+16<=innerHeight?last+8:null;
+ if(top===null){t.classList.add('inline');return}
+ t.classList.remove('inline');t.style.top=`${top}px`;
+}
+let tt;function toast(m){const t=$('toast');t.classList.remove('inline');t.textContent=m;t.classList.add('on');placeToast();clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 
 function connect(){
  const es=new EventSource('/api/stream');
@@ -157,6 +167,7 @@ function connect(){
  es.addEventListener('evict',e=>{const{id}=JSON.parse(e.data);if(items.delete(id))render()});
 }
 async function init(){
+ document.addEventListener('scroll',placeToast,true);window.addEventListener('resize',placeToast);
  if(typeof gsAuth!=='undefined')await gsAuth.init();
  const c=await api('/api/config');
  SRC=Object.fromEntries(c.sources.map(s=>[s.id,s]));CLS=c.classes;MODELS=c.models;ATTR_LAB=c.attrLabels;

@@ -72,6 +72,9 @@ textarea{width:100%;min-height:54px;resize:vertical;background:var(--panel2);bor
 .lnk{display:block;margin-top:8px;background:none;border:none;color:var(--gold);cursor:pointer;padding:0;font:inherit;font-size:0.75rem}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2640;border:1px solid var(--gold);color:var(--text);padding:9px 16px;border-radius:8px;opacity:0;transition:.25s;pointer-events:none;font-weight:600}
 .toast.on{opacity:1;transform:translateX(-50%)}
+#toast{top:8px;bottom:auto;width:max-content;max-width:calc(100vw - 16px);overflow-wrap:anywhere;z-index:40}
+#toast.inline{position:static;width:auto;max-width:100%;margin-top:12px;transform:none}
+#toast.inline:not(.on){display:none}
 /* Responsive: short and narrow windows */
 body{overflow:auto}
 main{min-height:420px}
