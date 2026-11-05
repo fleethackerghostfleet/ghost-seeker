@@ -1,7 +1,6 @@
 package policy
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"

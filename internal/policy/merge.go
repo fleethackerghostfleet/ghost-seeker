@@ -121,10 +121,14 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	if out.Interest == nil {
 		out.Interest = &pb.Interest{}
 	}
+	inputBoost := append([]string(nil), out.Interest.BoostLabels...)
+	inputSuppress := append([]string(nil), out.Interest.SuppressLabels...)
 	out.Interest.BoostLabels = interest.BoostLabels
 	out.Interest.SuppressLabels = interest.SuppressLabels
-	if interest.BoostFactor > 0 {
-		out.Interest.BoostFactor = interest.BoostFactor
+	out.Interest.BoostFactor = interest.BoostFactor
+	if !sameLabelSet(inputBoost, interest.BoostLabels) || !sameLabelSet(inputSuppress, interest.SuppressLabels) {
+		out.Interest.PositiveEmbedding = nil
+		out.Interest.NegativeEmbedding = nil
 	}
 	if emcon != nil {
 		out.Emcon = emcon.Mode
@@ -132,6 +136,19 @@ func Flatten(p *pb.Policy, nodeID string, now time.Time) *pb.Policy {
 	}
 	out.Conflicts = conflicts
 	return out
+}
+
+func sameLabelSet(a, b []string) bool {
+	left, right := labelSet(a), labelSet(b)
+	if len(left) != len(right) {
+		return false
+	}
+	for label := range left {
+		if !right[label] {
+			return false
+		}
+	}
+	return true
 }
 
 func Locks(layers []*pb.PolicyLayer) []Lock {
