@@ -120,7 +120,6 @@ function factPlaceholder(){
  return cv.toDataURL('image/png');
 }
 function imageFor(item){
- const key=item.img?`${item.id}|${item.img}`:item.id;
- if(!imageCache.has(key))imageCache.set(key,item.img?`/${item.img}`:item.live?factPlaceholder():renderImage(item));
- return imageCache.get(key);
+ if(!imageCache.has(item.id))imageCache.set(item.id,item.img?`/${item.img}`:item.live?factPlaceholder():renderImage(item));
+ return imageCache.get(item.id);
 }
