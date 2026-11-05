@@ -857,10 +857,14 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	for _, warning := range b.layerPolicy(r.Context(), pol, mode) {
-		if compiled != nil {
-			compiled.Warnings = append(compiled.Warnings, warning)
-		}
+	warnings, err := b.layerPolicy(r.Context(), pol, mode)
+	if err != nil {
+		log.Printf("shorebridge: set policy: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
+		return
+	}
+	if compiled != nil {
+		compiled.Warnings = append(compiled.Warnings, warnings...)
 	}
 	var out pb.SetPolicyResponse
 	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
@@ -964,7 +968,9 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 	if pol.Emcon != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		mode = emconName(pol.Emcon)
 	}
-	b.layerPolicy(ctx, pol, mode)
+	if _, err := b.layerPolicy(ctx, pol, mode); err != nil {
+		return nil, err
+	}
 	var out pb.SetPolicyResponse
 	if err := b.call(ctx, b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
 		return nil, err
@@ -978,8 +984,11 @@ func (b *Bridge) applyPolicyProto(ctx context.Context, pol *pb.Policy) (*pb.SetP
 // echelon locked it, and the operator's rule replaces their ship layer so
 // higher-echelon layers, locks and signatures survive. Returns warnings for
 // the readback.
-func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string) {
-	current, _ := b.getPolicy(ctx)
+func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (warnings []string, err error) {
+	current, err := b.getPolicy(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read current policy: %w", err) // never apply blind: a failed read would reset EMCON/layers
+	}
 	if current != nil {
 		emconLocked := current.EmconSetting != nil && current.EmconSetting.Locked && current.EmconSetting.Echelon > pb.Echelon_ECHELON_SHIP
 		if mode == "" || emconLocked {
@@ -996,21 +1005,24 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 		if len(current.Layers) > 0 {
 			pol.Layers = cloneLayers(current.Layers)
 			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy)
-			inherited := map[string]bool{}
+			// Labels another layer already boosts/suppresses (same polarity) are
+			// inherited, not repeated in the ship rule; an operator suppressing a
+			// label a higher layer boosts is a real override and stays.
+			inheritedBoost, inheritedSuppress := map[string]bool{}, map[string]bool{}
 			for i, layer := range pol.Layers {
 				if i == operatorLayer || layer == nil {
 					continue
 				}
 				for _, r := range layer.GetRules() {
 					for _, l := range r.GetBoostLabels() {
-						inherited[l] = true
+						inheritedBoost[l] = true
 					}
 					for _, l := range r.GetSuppressLabels() {
-						inherited[l] = true
+						inheritedSuppress[l] = true
 					}
 				}
 			}
-			own := func(labels []string) []string {
+			own := func(labels []string, inherited map[string]bool) []string {
 				out := make([]string, 0, len(labels))
 				for _, l := range labels {
 					if !inherited[l] {
@@ -1020,7 +1032,7 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 				return out
 			}
 			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
-				BoostLabels: own(pol.GetInterest().GetBoostLabels()), SuppressLabels: own(pol.GetInterest().GetSuppressLabels()), Text: pol.Text}
+				BoostLabels: own(pol.GetInterest().GetBoostLabels(), inheritedBoost), SuppressLabels: own(pol.GetInterest().GetSuppressLabels(), inheritedSuppress), Text: pol.Text}
 			if operatorLayer >= 0 {
 				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
 			} else {
@@ -1033,7 +1045,7 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 		}
 	}
 	pol.Id, pol.Version, pol.Signature, pol.Conflicts, pol.IssuedAtUnixMs = "", 0, nil, nil, 0
-	return warnings
+	return warnings, nil
 }
 
 func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
