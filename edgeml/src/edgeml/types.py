@@ -76,6 +76,7 @@ class Sighting:
     aspect: Optional[str] = None          # bow_stern | quarter | beam (box w/h)
     closing: Optional[str] = None         # closing | opening | steady (sign of box-area growth)
     key_q: float = 0.0                    # key-frame quality score of best_frame_idx
+    tentative: bool = False               # reported from a single (or unconfirmed) detection; cleared on confirmation
 
     def event(self, kind: str, t_s: float, frame_idx: int, value: Optional[float] = None,
               forms: Optional[list[Form]] = None, reason: Optional[str] = None) -> dict:
@@ -102,6 +103,7 @@ class Sighting:
             "aspect": self.aspect,
             "closing": self.closing,
             "key_q": float(self.key_q),
+            "tentative": bool(self.tentative),
         }
         if value is not None:
             ev["value"] = float(value)

@@ -83,10 +83,17 @@ class EdgemlEngine:
     """Detector + boxmot tracker + SightingAggregator (+ MobileCLIP zero-shot subtype) per source. CPU, no torch."""
 
     COARSE = {"aircraft": "aircraft", "buoy": "buoy", "marine mammal": "marine_mammal"}
+    # demo defaults (C.md §9 + I_tracking.md §7); `--agg` / `--trk` JSON override individual keys.
+    # I_tracking: tracks start at score >= score_thr (0.35) but continue through low-score detections (det_low_thr);
+    # per-size association (centroid gate 0.04 of the frame diagonal, re-id on jumps > 1.5 box diagonals, re-link capped at
+    # 2 diagonals); unmatched detections >= 0.5 become tentative tracks and are reported after 2 s if still unexplained.
+    AGG_DEFAULTS: dict = {"relink_gap_s": 20.0, "min_update_interval_s": 10.0, "relink_max_diag": 2.0, "tentative_after_s": 2.0}
+    TRK_DEFAULTS: dict = {"centroid_max_distance": 0.04, "max_jump_diag": 1.5, "tentative_thresh": 0.5}
 
     def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
-                 score_thr: float = 0.25, det_low_thr: float = 0.05, agg: Optional[dict] = None, text_tower: str = "cache"):
+                 score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
+                 text_tower: str = "cache"):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
@@ -106,7 +113,8 @@ class EdgemlEngine:
             self.embedder = _TextEmbedder(clip)
             self.classifier = ZeroShotClassifier(self.embedder)
             self.clip_name = getattr(clip, "name", meta["model"])
-        self.agg_params = AggregatorParams(**{"relink_gap_s": 20.0, "min_update_interval_s": 10.0, **(agg or {})})
+        self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
+        self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
         self.sources: dict[str, _Source] = {}
         self._lock = threading.Lock()
         self.model_id = self.detector.name + (f"+{self.clip_name}" if self.clip_name else "")
@@ -123,7 +131,7 @@ class EdgemlEngine:
                 from edgeml.tracking import make_tracker
 
                 tracker = make_tracker(self.tracker_variant, fps=self.fps, asso_func=self.asso, max_lost_s=self.max_lost_s,
-                                       det_thresh=self.score_thr, low_thresh=self.det_low_thr)
+                                       det_thresh=self.score_thr, low_thresh=self.det_low_thr, **self.trk_params)
                 agg = _ZeroShotAggregator(name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
                 src = self.sources[name] = _Source(tracker=tracker, agg=agg)
             return src
@@ -178,7 +186,7 @@ class EdgemlEngine:
         out = {"id": ev["sighting_id"], "event": EVENTS[ev["event"]],
                "keyDetection": {"label": label, "confidence": _f(ev.get("best_score")), "box": _norm_box(box, W, H)},
                "isKeyFrame": is_key, "unknownness": _f(ev.get("unknownness")),
-               "subtype": ev.get("subtype") or "", "value": _f(ev.get("value")),
+               "subtype": ev.get("subtype") or ("tentative" if ev.get("tentative") else ""), "value": _f(ev.get("value")),
                "forms": [_form_hint(f) for f in (ev.get("forms") or [])],
                "firstSeenUnixMs": str(base_ms + int(float(ev.get("first_t_s", 0.0)) * 1000)),
                "lastSeenUnixMs": str(base_ms + int(float(ev.get("last_t_s", ev.get("t_s", 0.0))) * 1000)),
