@@ -616,8 +616,8 @@ test('processing timeline formats latencies outside the detail renderer',()=>{
  `,context);
  const html=vm.runInContext('html',context);
  assert.match(html,/>100 ms</);
- assert.match(html,/>1\\.5 s</);
- assert.match(html,/>2\\.0 s</);
+ assert.match(html,/>1\.5 s</);
+ assert.match(html,/>2\.0 s</);
 });
 
 test('unknown contact labels, distinct boxes and persistence explanations',()=>{
