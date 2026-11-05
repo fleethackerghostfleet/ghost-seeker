@@ -2,9 +2,39 @@ package reviews
 
 import (
 	"bytes"
+	"encoding/csv"
 	"path/filepath"
 	"testing"
 )
+
+func TestCSVNeutralizesFormulas(t *testing.T) {
+	l, err := Open(filepath.Join(t.TempDir(), "log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	for _, prefix := range []string{"=", "+", "-", "@", "\t", "\r"} {
+		value := prefix + "formula"
+		if _, err = l.Append(Record{ItemID: value, Reviewer: value, Model: value, Reason: value, Note: value}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var b bytes.Buffer
+	if err = l.Export(&b, "csv"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(&b).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows[1:] {
+		for _, i := range []int{1, 2, 4, 8, 9} {
+			if row[i][0] != '\'' {
+				t.Fatalf("unsafe cell: %q", row[i])
+			}
+		}
+	}
+}
 
 func TestReplay(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "reviews.jsonl")

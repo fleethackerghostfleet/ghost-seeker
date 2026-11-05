@@ -245,7 +245,13 @@ func (l *Log) Export(w io.Writer, format string) error {
 	c.Write([]string{"id", "item_id", "reviewer", "reviewed_at", "model", "model_tier", "human_tier", "agreed", "reason", "note", "record_json"})
 	for _, r := range rs {
 		b, _ := json.Marshal(r)
-		c.Write([]string{r.ID, r.ItemID, r.Reviewer, r.ReviewedAt.Format(time.RFC3339Nano), r.Model, fmt.Sprint(r.ModelTier), fmt.Sprint(r.HumanTier), fmt.Sprint(r.Agreed), r.Reason, r.Note, string(b)})
+		row := []string{r.ID, r.ItemID, r.Reviewer, r.ReviewedAt.Format(time.RFC3339Nano), r.Model, fmt.Sprint(r.ModelTier), fmt.Sprint(r.HumanTier), fmt.Sprint(r.Agreed), r.Reason, r.Note, string(b)}
+		for i, cell := range row {
+			if strings.HasPrefix(cell, "=") || strings.HasPrefix(cell, "+") || strings.HasPrefix(cell, "-") || strings.HasPrefix(cell, "@") || strings.HasPrefix(cell, "\t") || strings.HasPrefix(cell, "\r") {
+				row[i] = "'" + cell
+			}
+		}
+		c.Write(row)
 	}
 	c.Flush()
 	return c.Error()
