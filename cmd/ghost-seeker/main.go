@@ -7,10 +7,13 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
@@ -29,6 +32,9 @@ func main() {
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
 	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
+	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
+	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
+	policyState := flag.String("policy-state", "", "persist simulation policy state at this path")
 	flag.Parse()
 
 	if *shoreURL != "" {
@@ -39,7 +45,15 @@ func main() {
 	data := store.New(*retain)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
-	app := server.New(data)
+	options := []server.Option{server.WithAdmin(*admin), server.WithNodeID("DDG-51")}
+	if *policyState != "" {
+		backend, err := policy.NewFileBackend(*policyState)
+		if err != nil {
+			log.Fatal(err)
+		}
+		options = append(options, server.WithPolicyBackend(backend))
+	}
+	app := server.New(data, options...)
 	go runSimulation(data, generator, app)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
@@ -157,7 +171,7 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
 		_, _, _, state := data.Snapshot()
-		item, extra := generator.Tick(nil, time.Now(), state.Model, state.Directives)
+		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
 		stored, evicted := data.Add(item, extra)
 		app.PublishEvict(evicted)
 		if item != nil {

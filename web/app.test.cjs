@@ -5,6 +5,7 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 
 const source=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
+const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
 test('spectral controls are metadata-driven and preserve the frame and boxes',()=>{
  const context=setup();
  vm.runInContext(`
@@ -120,10 +121,12 @@ function setup(){
  const elements=new Map();
  const context=vm.createContext({
   gsLights:require('./static/lights.js'),
-  setTimeout:()=>{},imageCache:new Map(),
-  document:{body:{classList:{remove(){}}}},
+  setTimeout:()=>{},clearTimeout:()=>{},imageCache:new Map(),
+   document:{body:{classList:{remove(){}}}},
   $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
  });
+ context.window=context;
+ vm.runInContext(policySource,context);
  vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
  vm.runInContext(`
   renderAll=()=>{};updateCard=()=>{};renderFeed=()=>{};renderStats=()=>{};renderRp=()=>{};renderDetail=()=>{};

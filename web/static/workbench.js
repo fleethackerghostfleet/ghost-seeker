@@ -152,10 +152,11 @@ const workbench=(()=>{
   $('wbConfirmApply').onclick=async()=>{
    busy=true;$('wbConfirmApply').disabled=true;
    try{
-    if(draft.rules.length){await request('/api/directives','POST',{text:draft.text||draft.rules.map(ruleText).join('; ').slice(0,500),rules:draft.rules});draft.rules=[]}
+    let conflicts=[];
+    if(draft.rules.length){const added=await request('/api/directives','POST',{text:draft.text||draft.rules.map(ruleText).join('; ').slice(0,500),rules:draft.rules});conflicts=added.conflicts||[];draft.rules=[]}
     for(const [id,manual]of Object.entries(draft.pins)){if(findItem(id))await patchItem(id,{manual});delete draft.pins[id]}
-    $('wbConfirm').close();await reset('Applied to live feed');toast('Workbench applied to live feed');
-   }catch(error){renderChips();$('wbConfirm').close();toast('Apply stopped: '+error.message+'; successful changes are already live.')}finally{busy=false;$('wbConfirmApply').disabled=false;live()}
+    $('wbConfirm').close();await reset('Applied to live feed');toast(conflicts.length?gsPolicy.conflictToast(conflicts):'Workbench applied to live feed');
+   }catch(error){renderChips();$('wbConfirm').close();if(!error.policyConflicts)toast('Apply stopped: '+error.message+'; successful changes are already live.')}finally{busy=false;$('wbConfirmApply').disabled=false;live()}
   };
  }
  return {init,live,activate,textChanged};

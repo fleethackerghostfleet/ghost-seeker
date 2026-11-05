@@ -79,3 +79,53 @@ func TestDirectiveIDIsPresentOnRulesAndRescoredNotes(t *testing.T) {
 	}
 	t.Fatalf("rescored notes %#v do not contain directive id %q", stored.Det[0].Notes, directive.ID)
 }
+
+func TestSourceDirectivesAreProtectedAndBlockedRulesAreNotScored(t *testing.T) {
+	data := New(2)
+	item := command.Item{
+		ID: "tanker",
+		Dets: []command.Detection{{
+			Class: "tanker",
+			Conf:  .9,
+		}},
+	}
+	data.Add(&item, 0)
+	directive, err := data.AddDirective("prioritize tankers", []command.Rule{
+		{Type: "boost", Classes: []string{"tanker"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data.SetPolicyDirectives([]command.Directive{{
+		ID: "command-rule", Text: "command rule", Source: "CTF-72", Locked: true, LockedBy: "CTF-72",
+	}}, map[string]string{directive.ID: "Locked by CTF-72"})
+	if data.DeleteDirective("command-rule") {
+		t.Fatal("DeleteDirective removed a source directive")
+	}
+	data.ClearDirectives()
+
+	directives := data.Directives()
+	if len(directives) != 1 || directives[0].ID != "command-rule" {
+		t.Fatalf("directives after clear = %#v, want only retained command directive", directives)
+	}
+	stored, ok := data.GetItem(item.ID)
+	if !ok {
+		t.Fatalf("item %q not found", item.ID)
+	}
+	for _, note := range stored.Det[0].Notes {
+		if note.DirectiveID == directive.ID {
+			t.Fatalf("blocked directive %q was still scored: %#v", directive.ID, stored.Det[0].Notes)
+		}
+	}
+}
+
+func TestSourceDirectivesDoNotCountTowardOperatorLimit(t *testing.T) {
+	data := New(2)
+	data.SetPolicyDirectives([]command.Directive{{ID: "command", Source: "CTF-72"}}, nil)
+	for i := 0; i < MaxActiveDirectives; i++ {
+		if _, err := data.AddDirective("birds", []command.Rule{{Type: "boost", Classes: []string{"bird"}}}); err != nil {
+			t.Fatalf("AddDirective %d: %v", i+1, err)
+		}
+	}
+}

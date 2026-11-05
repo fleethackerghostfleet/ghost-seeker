@@ -107,7 +107,7 @@ func (s *Server) previewDirectives(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, _, _, state := s.store.Snapshot()
+	items, _, _, state := s.store.SnapshotWithDirectives()
 	visible := items[:0]
 	for _, item := range items {
 		if !item.Dismissed {

@@ -81,13 +81,33 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 }
 
 func (s *Store) Snapshot() ([]command.Item, command.Stats, int, State) {
+	return s.snapshot(false)
+}
+
+func (s *Store) SnapshotWithDirectives() ([]command.Item, command.Stats, int, State) {
+	return s.snapshot(true)
+}
+
+func (s *Store) snapshot(includeSource bool) ([]command.Item, command.Stats, int, State) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	items := make([]command.Item, len(s.items))
 	for i, item := range s.items {
 		items[i] = cloneItem(item)
 	}
-	return items, s.stats, s.cdr, State{Model: s.model, Directives: cloneDirectives(s.directives)}
+	directives := make([]command.Directive, 0, len(s.directives))
+	for _, directive := range s.directives {
+		if includeSource || directive.Source == "" {
+			directives = append(directives, directive)
+		}
+	}
+	return items, s.stats, s.cdr, State{Model: s.model, Directives: cloneDirectives(directives)}
+}
+
+func (s *Store) Directives() []command.Directive {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return cloneDirectives(s.directives)
 }
 
 func (s *Store) Stats() (command.Stats, int) {
@@ -122,7 +142,13 @@ func (s *Store) SetModel(id string) {
 func (s *Store) AddDirective(text string, rules []command.Rule) (command.Directive, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.directives) >= MaxActiveDirectives {
+	active := 0
+	for _, current := range s.directives {
+		if current.Source == "" {
+			active++
+		}
+	}
+	if active >= MaxActiveDirectives {
 		return command.Directive{}, ErrTooManyActiveDirectives
 	}
 	directive := command.Directive{ID: time.Now().UTC().Format("d20060102150405.000000000"), Text: text, Rules: append([]command.Rule(nil), rules...)}
@@ -134,11 +160,22 @@ func (s *Store) AddDirective(text string, rules []command.Rule) (command.Directi
 	return cloneDirectives([]command.Directive{directive})[0], nil
 }
 
+func (s *Store) Directive(id string) (command.Directive, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, directive := range s.directives {
+		if directive.ID == id {
+			return cloneDirectives([]command.Directive{directive})[0], true
+		}
+	}
+	return command.Directive{}, false
+}
+
 func (s *Store) DeleteDirective(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, directive := range s.directives {
-		if directive.ID == id {
+		if directive.ID == id && directive.Source == "" {
 			s.directives = append(s.directives[:i], s.directives[i+1:]...)
 			s.rescoreLocked()
 			return true
@@ -150,7 +187,44 @@ func (s *Store) DeleteDirective(id string) bool {
 func (s *Store) ClearDirectives() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.directives = nil
+	kept := s.directives[:0]
+	for _, directive := range s.directives {
+		if directive.Source != "" {
+			kept = append(kept, directive)
+		}
+	}
+	s.directives = kept
+	s.rescoreLocked()
+}
+
+func (s *Store) SetPolicyDirectives(sourceDirectives []command.Directive, blocked map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := cloneDirectives(sourceDirectives)
+	for _, directive := range s.directives {
+		if directive.Source != "" {
+			continue
+		}
+		directive.Blocked = blocked[directive.ID]
+		next = append(next, directive)
+	}
+	s.directives = next
+	s.rescoreLocked()
+}
+
+func (s *Store) RestoreDirectives(directives []command.Directive) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := make([]command.Directive, 0, len(directives)+len(s.directives))
+	for _, directive := range s.directives {
+		if directive.Source != "" {
+			kept = append(kept, directive)
+		}
+	}
+	for _, directive := range directives {
+		kept = append(kept, directive)
+	}
+	s.directives = cloneDirectives(kept)
 	s.rescoreLocked()
 }
 
