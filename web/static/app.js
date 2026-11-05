@@ -429,7 +429,7 @@ function renderDetails(){
  vis.forEach(i=>groups[filteredKind(i)]?.push(i));
  const n=v=>Number(v).toLocaleString();
  const counts=LIVE?`<div class="strip det-strip">${$('liveStrip').innerHTML}</div>`:`<table class="det-counts">${[
-  ['Frames captured by sensors',n(stats.cap)],['Useful images sent to shore',n(stats.keep)],['Low-value and repeat frames kept on the ship (P4 Low)',n(stats.drop)],
+  ['Frames captured by sensors',n(stats.cap)],['Useful images kept',n(stats.keep)],['Low-value and repeat frames kept on the ship (P4 Low)',n(stats.drop)],
   ['Share of frames kept on the ship to save bandwidth',Math.round(stats.drop/Math.max(1,stats.cap)*100)+'%'],['Image data sent to shore',(stats.bytes/1048576).toFixed(1)+' MB'],['Records in imagery database',n(stats.db+180000)],
   ['Images in this feed',n(vis.length)],['Sent to Commander by a person',n(vis.filter(i=>i.sent&&!i.autoSent).length)],['Sent to Commander automatically',n(vis.filter(i=>i.sent&&i.autoSent).length)]
  ].map(([k,v])=>`<tr><td>${k}</td><td class="n">${v}</td></tr>`).join('')}</table>`;

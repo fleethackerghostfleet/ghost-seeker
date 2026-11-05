@@ -261,6 +261,8 @@ test('Details screen lists automatically filtered photos by kind with their orig
  assert.match(page(),/Low value \(1\)/);
  assert.match(page(),/Lowered by directive \(1\)/);
  assert.match(page(),/Low-value and repeat frames kept on the ship \(P4 Low\)<\/td><td class="n">80/);
+ assert.match(page(),/Useful images kept<\/td><td class="n">20/);
+ assert.doesNotMatch(page(),/Useful images sent to shore/);
  assert.match(page(),/src="\/img\/original"[^]*Original · P2 High[^]*src="\/img\/repeat"/);
  assert.doesNotMatch(page(),/data-id="chosen"/);
  vm.runInContext("state.detKind='low-value';renderDetails()",context);
