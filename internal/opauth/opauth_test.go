@@ -236,8 +236,8 @@ func TestReviewJoinLinkIssuesReviewerSession(t *testing.T) {
 
 	joined := do(h, http.MethodGet, "/join/review-link-secret", "10.0.0.9:5", nil)
 	cookies := joined.Result().Cookies()
-	if joined.Code != http.StatusSeeOther || joined.Header().Get("Location") != "/#review" {
-		t.Fatalf("join = %d, %q", joined.Code, joined.Header().Get("Location"))
+	if joined.Code != http.StatusOK || !strings.Contains(joined.Body.String(), `content="0;url=/#review"`) || joined.Header().Get("Location") != "" {
+		t.Fatalf("join = %d, %q, %q", joined.Code, joined.Header().Get("Location"), joined.Body.String())
 	}
 	if joined.Header().Get("Cache-Control") != "no-store" || joined.Header().Get("Referrer-Policy") != "no-referrer" {
 		t.Fatalf("join headers = %#v", joined.Header())

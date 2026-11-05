@@ -101,7 +101,11 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 				return
 			}
 			s.issue(w, r, pivauth.Principal{Role: "reviewer"})
-			http.Redirect(w, r, "/#review", http.StatusSeeOther)
+			// A same-origin refresh, not a 303: browsers drop SameSite=Strict
+			// cookies on redirects that continue a cross-site navigation
+			// (a link clicked in chat or email).
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(reviewJoinPage))
 			return
 		}
 		authed := s.authenticated(r)
@@ -331,3 +335,5 @@ func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 		`<button type="submit">Sign in</button></form></body></html>`)
 	_, _ = w.Write([]byte(b.String()))
 }
+
+const reviewJoinPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/#review"><title>Ghost Seeker review</title></head><body><p><a href="/#review">Start Operator Review</a></p></body></html>`
