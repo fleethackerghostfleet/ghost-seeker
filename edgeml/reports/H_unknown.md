@@ -1,14 +1,14 @@
 # H — unknown / unusual-object detection via synthetic data, and calibration of `unknownness`
 
-Branch `devin/1793846107-h-unknown-synth` (based on #46's `devin/1793833723-unknown-objects`). Everything here is
+Branch `devin/1793846107-h-unknown-synth` (started from #46's branch, rebased onto `main` after #46 merged). Everything here is
 dev-only except §6, which was run **once** at the end with every knob frozen.
 
 ## 0. TL;DR
 
 | | before (main + #46 defaults) | after (this PR's sidecar defaults) |
 |---|---|---|
-| live `unknownness` | MCM vs 11 subtype prompts, `sim_ref=0.30`, no kNN bank → **AUROC 0.49** known-vs-unknown on synth dev (coin flip) | dev-fitted `sim_ref/sim_width` + 98-crop kNN bank auto-loaded from `unknown_calib.npz` → **AUROC 0.75–0.85** dev (two halves), **TEST_AUROC** on the locked test |
-| unknown flag (`unknown_real`) | ungated: 4/13 known dev vessels flagged "unknown"; gate opt-in | realness-gated by default: 0/13 known vessels flagged, 5/6 surfaced synthetic unusual contacts still flagged |
+| live `unknownness` | MCM vs 11 subtype prompts, `sim_ref=0.30`, no kNN bank → **AUROC 0.49** known-vs-unknown on synth dev (coin flip) | dev-fitted `sim_ref/sim_width` + 98-crop kNN bank auto-loaded from `unknown_calib.npz` → **AUROC 0.75–0.85** dev (two halves), **0.87** on the locked test (held-out classes vs real test vessels; before 0.57) |
+| unknown flag (`unknown_real`) | ungated: 4/13 known dev vessels flagged "unknown"; gate opt-in | realness-gated by default: dev 0/13 known vessels flagged, 5/6 surfaced synthetic unusual contacts still flagged; locked test 9/21 known flagged (before 14/21), 5/8 surfaced synthetic flagged (before 3/8), 0 false unknown sightings (before 1) |
 | YOLO11n on unusual contacts | box recall@0.25: semi-sub 0.00, jet-ski 0.20, buoy 0.26, USV 0.34 | unchanged by default. Opt-in `--anomaly-fallback` (horizon-band colour anomaly proposer) doubles surfaced synth tracks (6→11/24) but adds 87 false sightings on 391 sea-only frames → **not** a default |
 | dataset | none | `edgeml_synth_unknown`: 35 MOT sequences / 1135 frames / 1208 synthetic boxes on dev footage, in the bucket + catalog |
 
@@ -160,13 +160,65 @@ is strictly better, so `gate_unknown_bonus_on_realness=True` becomes the sidecar
 
 ## 6. Locked TEST — run once (synthetic held-out classes + 9 locked `ghost_fleet_5fps` test clips)
 
-TEST_SECTION
+Every knob (artifact, τ=0.5, gate, prompt bank, proposer `z_thr`=3.5) was frozen before this ran. Outputs:
+`~/data/h_results/{recall_test,recall_test_fusion_z35,auroc_test,replay_test_before,replay_test_after,replay_test_fusion_after}.json`.
+
+### 6a. YOLO11n class-agnostic recall on the held-out synthetic classes (same matcher as §3a)
+
+| class | tracks | box recall any@0.05 | any@0.25 | `boat`@0.25 | track3 maritime@0.25 | labels fired @0.25 |
+|---|---|---|---|---|---|---|
+| debris_container | 8 | 0.52 | 0.35 | 0.31 | 0.38 | boat 83, person 5, bird 3, bench 1 |
+| life_raft | 7 | 0.88 | 0.56 | 0.53 | 0.71 | boat 111, kite 4, bird 2, frisbee 1 |
+| periscope_mast | 8 | 0.12 | **0.07** | 0.02 | 0.12 | person 6, boat 2 |
+| *opt-in `--anomaly-fallback`* debris_container | 8 | 0.70 | 0.53 | 0.31 | 0.75 | + anomaly 48 |
+| *opt-in* life_raft | 7 | 0.90 | 0.59 | 0.53 | 0.86 | + anomaly 5 |
+| *opt-in* periscope_mast | 8 | 0.42 | 0.37 | 0.02 | 0.50 | + anomaly 36 |
+
+Same picture as dev: the bigger, higher-contrast objects (life raft, container) get a `boat` box roughly half the
+time; a periscope mast is invisible to the closed-set detector (0.07) and only the anomaly proposer finds it.
+
+### 6b. `unknownness` AUROC on the locked test (crop level, bank frozen = the 98 dev crops shipped in `unknown_calib.npz`)
+
+Crops: 263 known GT vessel crops from the 9 real test clips, 137 synthetic unknown crops (held-out classes),
+171 noise crops (YOLO FPs ≥0.25 on sea-only test frames).
+
+| variant | AUROC unknown vs known | noise vs known | unknown vs noise | per class: debris / life_raft / periscope | median known / p90 known |
+|---|---|---|---|---|---|
+| before: sidecar default (MCM, `sim_ref` .30, no bank) | **0.57** | 0.43 | 0.63 | 0.66 / 0.48 / 0.56 | 0.58 / 0.88 |
+| **after: calibrated + kNN bank k=5 (shipped)** | **0.87** | 0.48 | 0.86 | 0.93 / 0.83 / 0.85 | 0.47 / 0.61 |
+
+The dev gain (0.49→0.75–0.85) transfers to unseen object classes and unseen real clips (0.57→0.87). Known-crop
+scores also drop below τ=0.5 at the median (0.58→0.47), but the p90 of known test crops (0.61) is still above τ —
+the 98-crop dev bank does not cover every test vessel type, which is what §6c shows at the sighting level.
+
+### 6c. Full replay (cached dets → ByteTrack → aggregator), 23 synthetic test tracks + 45 known tracks in the 9 locked clips
+
+21 of the 45 known tracks are ever surfaced by the sidecar path (many GT tracks are tiny/short); 214 sea-only frames.
+
+| config | synth surfaced / 23 | synth flagged unknown | known surfaced vessels flagged unknown / 21 | false unknown sightings | false sightings (any) |
+|---|---|---|---|---|---|
+| before: default classifier, no gate (= old sidecar default) | 8 | 3 | **14** | 1 | 2 |
+| before + gate | 8 | 1 | 2 | 0 | 2 |
+| after: calibrated artifact, no gate | 8 | **8** | 17 | 2 | 2 |
+| **after + gate (shipped default)** | 8 | **5** | **9** | **0** | 2 |
+| after + gate + opt-in anomaly fallback | 10 | 5 | 5 / 22 | 2 | **46** |
+
+Against the real baseline (old sidecar default, ungated) the shipped default flags more of the unusual contacts
+that the detector surfaces (5/8 vs 3/8), flags fewer known vessels as unknown (9/21 vs 14/21) and produces no
+false unknown sighting on sea-only frames (0 vs 1). It does **not** reproduce the dev result of 0 known vessels
+flagged: 9/21 surfaced known test vessels still cross τ with realness, consistent with the p90 in §6b (inference:
+the bank is 98 dev crops and lacks the test clips' vessel appearances — e.g. the submarine, destroyer and docked
+cruise-ship views exist only in test). The most conservative setting, `before + gate` (2/21 known flagged), only
+keeps 1/8 synthetic flags, so the calibrated artifact is the right trade for a "surface the unusual" workflow;
+growing the bank with more dev crops (§7) is the obvious next step. No synthetic periscope mast was surfaced at all
+without the anomaly fallback (6a). The fallback again buys +2 surfaced synthetic tracks for 44 extra false sightings
+on 214 sea-only frames, confirming the dev decision to ship it opt-in only.
 
 ## 7. Open items / next
 
 * The dev set is tiny (24 synthetic tracks, 13 known tracks, 98 bank crops); AUROC moves ±0.05 with the fit/eval
-  split. Growing the kNN bank with the remaining dev GT crops (fvessel/SMD/r2) is free and should tighten
-  `p90_known`.
+  split and 9/21 known test vessels still get flagged (§6c). Growing the kNN bank with the remaining dev GT crops
+  (fvessel/SMD/r2 dev, thousands of crops) is free, needs no test data, and should pull `p90_known` under τ.
 * Anomaly proposer: add a 1–2 s persistence filter (ByteTrack already does some of this; the 87 false sightings are
   mostly glint/foam tracks that live ≥3 frames) before considering it as a default.
 * `buoy` and `submarine` are *known* subtypes by prompt-bank design; if the product wants "buoy" flagged as unusual,
