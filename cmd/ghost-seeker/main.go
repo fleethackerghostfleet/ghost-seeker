@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +56,7 @@ func main() {
 	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "operator token file")
 	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
+	devTrustPeers := flag.Bool("dev-trust-peers", envBool("GS_DEV_TRUST_PEERS"), "local demo in containers only: with -dev-token-file, also sign in browsers that address localhost from a non-loopback peer (a port published on the host's 127.0.0.1 arrives from the bridge gateway); publish the port on 127.0.0.1 only")
 	flag.Parse()
 
 	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
@@ -68,9 +70,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sessions := opauth.NewSessions(operator, devMode)
+	sessions := opauth.NewSessions(operator, devMode).TrustPeers(*devTrustPeers)
 	if devMode {
-		log.Printf("operator token auto-generated for a local demo (%s); loopback browsers are signed in automatically", *devTokenFile)
+		peers := "loopback browsers"
+		if *devTrustPeers {
+			peers = "browsers addressing localhost from any peer (-dev-trust-peers)"
+		}
+		log.Printf("operator token auto-generated for a local demo (%s); %s are signed in automatically", *devTokenFile, peers)
 	}
 
 	if *shoreURL != "" {
@@ -198,6 +204,11 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 	mux.Handle("/", web.Handler())
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
 	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(sessions.Wrap(mux)))))
+}
+
+func envBool(k string) bool {
+	v, _ := strconv.ParseBool(os.Getenv(k))
+	return v
 }
 
 func envOr(k, def string) string {

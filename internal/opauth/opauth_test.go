@@ -205,6 +205,32 @@ func TestSessionsProductionFlow(t *testing.T) {
 	}
 }
 
+func TestSessionsDevTrustPeers(t *testing.T) {
+	s, h := newApp(true)
+	s.TrustPeers(true)
+	// Containers: the host's browser arrives from the bridge gateway, addressing localhost.
+	if w := do(h, http.MethodGet, "/api/shore/snapshot", "172.18.0.1:4242", nil); w.Code != http.StatusOK {
+		t.Fatalf("bridge peer with localhost Host should auto-login: %d", w.Code)
+	}
+	// Still never behind a proxy hop, and never for a non-loopback Host.
+	if w := do(h, http.MethodGet, "/api/shore/snapshot", "172.18.0.1:4242", map[string]string{"X-Forwarded-For": "192.168.1.20"}); w.Code != http.StatusUnauthorized {
+		t.Fatalf("proxied: %d", w.Code)
+	}
+	r := httptest.NewRequest(http.MethodGet, "http://ops.ship.mil/api/shore/snapshot", nil)
+	r.RemoteAddr = "172.18.0.1:4242"
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("public host: %d", w.Code)
+	}
+	// Production ignores the switch.
+	ps, ph := newApp(false)
+	ps.TrustPeers(true)
+	if w := do(ph, http.MethodGet, "/api/shore/snapshot", "172.18.0.1:4242", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("prod trust-peers: %d", w.Code)
+	}
+}
+
 func TestSessionsDevLoopbackAutoLogin(t *testing.T) {
 	_, h := newApp(true)
 	w := do(h, http.MethodGet, "/api/shore/snapshot", "127.0.0.1:4242", nil)

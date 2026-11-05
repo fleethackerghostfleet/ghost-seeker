@@ -9,7 +9,14 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir . onnxruntime \
     && if [ "$WITH_TRACKING" = "1" ]; then \
       /opt/venv/bin/pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision \
-      && /opt/venv/bin/pip install --no-cache-dir '.[tracking]'; \
+      && /opt/venv/bin/pip install --no-cache-dir '.[tracking]' \
+      # boxmot pins the GUI opencv build, whose cv2 needs libGL (absent in slim): keep the headless one at that version
+      && cv=$(/opt/venv/bin/pip show opencv-python 2>/dev/null | sed -n 's/^Version: //p') \
+      && if [ -n "$cv" ]; then \
+        /opt/venv/bin/pip uninstall -y opencv-python opencv-python-headless \
+        && /opt/venv/bin/pip install --no-cache-dir --no-deps "opencv-python-headless==$cv"; \
+      fi \
+      && rm -rf /opt/venv/lib/python*/site-packages/torch/include; \
     fi
 
 FROM ${PY_IMAGE} AS runtime

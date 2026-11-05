@@ -9,6 +9,11 @@ lost. Images are the first data type; the item model is type-agnostic.
 See [Fielding](docs/FIELDING.md) for offline builds, container staging, and Zarf deployment.
 See [Human review](docs/HUMAN_REVIEW.md) for durable review capture, exports, and offline weight proposals.
 
+**Verification:** hosted CI is manual-only to conserve Actions allowance. Run
+`make verify` on a prepared Linux host for the complete fail-closed test/security/
+package/image suite. See [local verification](docs/VERIFY.md) for setup, commit-linked
+reports, and merge-policy limitations. No GitHub plan upgrade is needed.
+
 Key behaviours (all covered by `go test ./...` and the simulator):
 
 - **Unknown-first.** Items the model can't classify score highest by default.
