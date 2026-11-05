@@ -5,6 +5,8 @@ scenarios/*/frames/
 edgeml/
 ui-mockup/
 bin/
+dist/
+.venv/
 data/
 sim-results.json
 **/*.db

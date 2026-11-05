@@ -1,9 +1,14 @@
 GO ?= go
+VERIFY_PYTHON ?= python3
 BIN := bin
 
 .PHONY: all gen build test sim run-shore run-edge compose compose-demo compose-demo-down compose-demo-logs clean demo demo-clips demo-compare demo-shore demo-ui demo-edge demo-models demo-sidecar images images-save images-load package-check zarf-package demo-token demo-key
 
 all: build
+
+.PHONY: verify
+verify:         ## all CI checks locally; fails on missing tools or dirty source
+	$(VERIFY_PYTHON) tools/verify.py
 
 GO_IMAGE ?=
 PY_IMAGE ?=
