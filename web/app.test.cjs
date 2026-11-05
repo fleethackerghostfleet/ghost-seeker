@@ -258,6 +258,16 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  }
  assert.match(html,/id="clearFeedFilters"[^>]*>Clear filters/);
 });
+test('sensor persistence accepts exactly the ValidName character set and length',()=>{
+ for(const sensor of ['deck/port','aZ09_.:/-','a'.repeat(128)]){
+  const stored=settingsContext('{}');stored.settings.setFeed({sensor});
+  assert.equal(settingsContext(JSON.stringify(stored.saved())).settings.get().feed.sensor,sensor);
+ }
+ for(const sensor of ['',null,42,'a'.repeat(129),'deck port','deck\\port','deck<port','deck"port','é','port\n']){
+  const stored=settingsContext('{}');stored.settings.setFeed({sensor});
+  assert.equal(settingsContext(JSON.stringify(stored.saved())).settings.get().feed.sensor,'ALL');
+ }
+});
 function feedContext(){
  const context=setup();
  vm.runInContext(`

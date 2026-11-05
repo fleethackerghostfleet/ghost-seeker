@@ -8,7 +8,7 @@ window.gsSettings=(()=>{
  const DENSITIES=['m','l'];
  const REVIEWS=['all','reviewed','sent','unreviewed'];
  const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:cleanFeed()});
- function cleanFeed(value){return {showDuplicates:value?.showDuplicates!==false,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[\w.:-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all'}}
+ function cleanFeed(value){return {showDuplicates:value?.showDuplicates!==false,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all'}}
  const WIDTHS={controls:[240,480],drawer:[340,780],review:[260,600],priorities:[260,540],briefing:[240,480],commanderQueue:[240,480],commanderBrief:[280,540]};
  function cleanWidths(value){
   const result={};
