@@ -87,10 +87,10 @@ class _Source:
 
 def _wire_subtype(ev: dict) -> str:
     """The proto has no tentative flag: a tentative sighting is tagged ``subtype="tentative"``; on confirmation the edge
-    only retags on a non-empty subtype, so a confirmation without a classifier subtype says ``"confirmed"``."""
+    only retags on a non-empty subtype, so a confirmation without a classifier subtype retags with the coarse label."""
     if ev.get("tentative"):
         return "tentative"
-    return ev.get("subtype") or ("confirmed" if ev.get("reason") == "confirmed" else "")
+    return ev.get("subtype") or ((ev.get("label") or "") if ev.get("reason") == "confirmed" else "")
 
 
 class EdgemlEngine:
@@ -101,34 +101,48 @@ class EdgemlEngine:
     # I_tracking: tracks start at score >= score_thr (0.35) but continue through low-score detections (det_low_thr);
     # per-size association (centroid gate 0.04 of the frame diagonal, re-id on jumps > 1.5 box diagonals, re-link capped at
     # 2 diagonals); unmatched detections >= 0.5 become tentative tracks and are reported after 2 s if still unexplained.
-    AGG_DEFAULTS: dict = {"relink_gap_s": 20.0, "min_update_interval_s": 10.0, "relink_max_diag": 2.0, "tentative_after_s": 2.0}
+    AGG_DEFAULTS: dict = {"relink_gap_s": 20.0, "min_update_interval_s": 10.0, "relink_max_diag": 2.0, "tentative_after_s": 2.0,
+                          "gate_unknown_bonus_on_realness": True}
     TRK_DEFAULTS: dict = {"centroid_max_distance": 0.04, "max_jump_diag": 1.5, "tentative_thresh": 0.5}
 
     def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
-                 text_tower: str = "cache"):
+                 text_tower: str = "cache", anomaly_fallback: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
         self.threads, self.fps, self.tracker_variant, self.asso = threads, fps, tracker, asso
         self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
         self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, det_low_thr))
+        if anomaly_fallback is not None:
+            # H: cheap "anything-on-water" proposer (horizon-band colour anomaly) fills in where YOLO11n is blind
+            # (semi-submersibles, small debris); proposals carry label "anomaly" and feed the tracker like detections.
+            from edgeml.detectors.anomaly import AnomalyFusionDetector, SeaAnomalyProposer
+
+            self.detector = AnomalyFusionDetector(self.detector, SeaAnomalyProposer(**anomaly_fallback))
         self.embedder = self.classifier = None
         self.clip_name = None
         self._text_tower, self._torch_clip = text_tower, None
         if embed and str(embed).lower() != "none":
             from edgeml.embed.clip_embedder import ClipEmbedder
-            from edgeml.embed.zeroshot import ZeroShotClassifier
+            from edgeml.embed.zeroshot import load_classifier
 
             d = Path(embed).expanduser()
             meta = json.loads((d / "meta.json").read_text())
             clip = ClipEmbedder(meta["model"], backend="ort", onnx_dir=d, threads=threads, precision=meta.get("precision", "fp32"))
             self.embedder = _TextEmbedder(clip)
-            self.classifier = ZeroShotClassifier(self.embedder)
+            # H: dev-fitted sim_ref/sim_width + kNN bank (unknown_calib.npz next to the export) make `unknownness`
+            # informative (AUROC known-vs-unknown 0.49 -> ~0.8 on synth_unknown dev); without the file: MCM defaults.
+            self.classifier = load_classifier(self.embedder, embed_dir=d)
+            self.unknown_calib = self.classifier.calibration_path
             self.clip_name = getattr(clip, "name", meta["model"])
+        # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
+        # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
         self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
         self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
+        # the detector floor must admit everything the tracker's low stage accepts (--trk may lower low_thresh)
+        self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
         self.sources: dict[str, _Source] = {}
         self._lock = threading.Lock()
         self.model_id = self.detector.name + (f"+{self.clip_name}" if self.clip_name else "")
