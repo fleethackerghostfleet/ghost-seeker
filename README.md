@@ -77,6 +77,80 @@ make compose                       # shore, toxiproxy, edge
 deploy/compose/degrade.sh satcom   # 64 kbps / 600 ms; also trickle | starlink | down | up
 ```
 
+## Configuration: unit sync authentication and edge storage caps
+
+Both features are opt-in. Defaults preserve existing compose/simulator behavior:
+sync auth is off, and edge storage is unlimited (no age/staleness deletion).
+
+| Process | Flag | Environment | Default |
+|---|---|---|---|
+| shore | `-require-auth` | `GS_REQUIRE_AUTH` | `false` |
+| shore / mint tool | `-signing-key` | `GS_SIGNING_KEY` | unset |
+| shore / mint tool | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset |
+| edge | `-unit-token` | `GS_UNIT_TOKEN` | unset |
+| edge | `-unit-token-file` | `GS_UNIT_TOKEN_FILE` | unset |
+| edge | `-max-bytes` | `GS_EDGE_MAX_BYTES` | `0` (unlimited) |
+| edge | `-max-items` | `GS_EDGE_MAX_ITEMS` | `0` (unlimited) |
+
+File credentials take precedence over literal/env credentials. Shore requires a
+non-default signing key of at least 32 bytes when auth is enabled; there is no
+built-in secret. Prefer environment injection or a protected, read-only secret
+mount over flags (flags can appear in process listings). Never log credentials.
+
+With the same signing key securely provisioned to shore and the offline mint tool:
+
+```sh
+# GS_SIGNING_KEY is supplied by your secret manager, or use GS_SIGNING_KEY_FILE.
+go run ./cmd/shore -require-auth
+GS_UNIT_TOKEN=$(go run ./cmd/mint-unit-token -id edge-1 -ttl 1h)
+export GS_UNIT_TOKEN
+go run ./cmd/edge -id edge-1 -max-bytes 1073741824 -max-items 10000
+```
+
+The mint tool defaults to the reference tooling's one-hour TTL; `-ttl` accepts a
+Go duration (e.g. `5m`). Tokens use **HS256** and require `sub` (edge node ID),
+`role: "unit"`, and `exp`. Missing/invalid/expired tokens return Connect
+`Unauthenticated`; an `ExchangeRequest.edge_id` different from `sub` returns
+`PermissionDenied`. The SyncService interceptor covers unary calls and checks
+every received message on streaming handlers (the current proto only defines
+unary Exchange). No relay role or three-tier relay is implemented. The edge reads
+its token at startup: provision a fresh token and restart before expiry. This is
+sync authentication only, not operator/ConsoleService auth or TLS; deploy behind
+an approved TLS boundary and restrict console access to a trusted network.
+
+Caps count retained item rows and the sum of their form payload sizes, not
+SQLite/WAL overhead or audit history. Negative caps are rejected; either cap may
+be set independently. To make room, the edge evicts **only fully delivered**
+items: manifest ACKed and **every stored form** ready, complete, and ACKed through
+its full byte length. A delivered FACT does not make an undelivered FULL safe.
+Eviction order is lowest persisted scheduler priority first, then oldest capture
+time (ingest sequence breaks ties). Pending shipboard corrections, active pull state, and persistent local pins
+(`edge/store.SetPinned`) protect items; pins are not a new console/proto API.
+
+Eviction removes the local item and its blobs, not shore's received copies.
+Every eviction emits a structured `slog` event and a durable `eviction_log` row
+in `edge.db` (`item_id`, `bytes`, `score`, `reason`, `ts` in Unix milliseconds).
+Cleanup markers resume interrupted blob removal after restart; audit history
+and the cumulative counter survive restart. SQLite reuses freed pages rather
+than necessarily shrinking its database file. Local hash deduplication covers
+retained items; a later capture of already-evicted content can become a new item.
+
+If only protected items remain, admission returns `store.ErrFull` and logs a
+warning instead of deleting them. The edge replay ingester waits on that capture
+and retries every five seconds, without consuming the next capture. Other store
+callers must retain/retry input on `ErrFull`. New admission is conservative for
+all values: an urgent new capture never justifies deleting an unACKed item. An
+existing oversized protected backlog is retained and drains normally; caps are
+rechecked after ACKs and downlink pulls are applied. A capture larger than the
+byte cap cannot fit: raise the cap or change intake, rather than dropping it.
+Growing an existing form is also checked before writing it.
+Sighting form updates wait/retry just like new-item intake. A downlinked
+correction blocked by the cap stops the downlink cursor before that correction
+for retry, while preserving progress through already-applied messages.
+
+`GetStatusResponse.items_evicted` reports cumulative evictions. The live-shore
+operator app displays it alongside the existing edge queue status.
+
 ## How ranking works
 
 ```

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -154,7 +155,7 @@ func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Captu
 	payloads := g.imageForms(c.Data, s)
 	payloads[pb.FormKind_FORM_KIND_FACT] = fact.FromItem(it).Marshal()
 	for k, data := range payloads {
-		nf, err := g.st.ReplaceForm(ctx, it.Id, k, data)
+		nf, err := g.replaceForm(ctx, it.Id, k, data)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -187,7 +188,7 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 	if s.Subtype != "" {
 		it.Features.Tags["subtype"] = s.Subtype
 	}
-	nf, err := g.st.ReplaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal())
+	nf, err := g.replaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal())
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +210,18 @@ func setForm(it *pb.Item, nf *pb.Form) {
 	}
 	it.Forms = append(it.Forms, nf)
 	sort.Slice(it.Forms, func(i, j int) bool { return it.Forms[i].Kind < it.Forms[j].Kind })
+}
+
+func (g *Ingester) replaceForm(ctx context.Context, id string, kind pb.FormKind, data []byte) (*pb.Form, error) {
+	for {
+		form, err := g.st.ReplaceForm(ctx, id, kind, data)
+		if !g.cfg.WaitForSpace || !errors.Is(err, store.ErrFull) {
+			return form, err
+		}
+		if err := g.clk.Sleep(ctx, 5*time.Second); err != nil {
+			return nil, err
+		}
+	}
 }
 
 // sceneItem handles a frame without sightings in sightings mode.
