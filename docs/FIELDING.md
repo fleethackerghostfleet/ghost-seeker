@@ -295,8 +295,8 @@ edge are deployed separately). Credentials are passed through Secret references,
 | `operator-auth` | `operator-token` | operator web app |
 
 ```sh
-# One operator token shared by shore, edge and the operator web app (>= 16 bytes)
-openssl rand -hex 32 > operator.token
+# One operator token shared by shore, edge and the operator web app (>= 16 bytes); owner-only file
+(umask 077; openssl rand -hex 32 > operator.token)
 
 # In the shore cluster
 kubectl -n ghost-seeker create secret generic shore-auth \
@@ -310,7 +310,7 @@ GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
 
 # In the edge cluster; remove the plaintext token after storing it
 kubectl -n ghost-seeker create secret generic edge-auth \
-  --from-file=unit-token=./unit.jwt --from-file=operator-token=./operator.token && rm unit.jwt
+  --from-file=unit-token=./unit.jwt --from-file=operator-token=./operator.token && rm unit.jwt operator.token
 
 zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
   --confirm \
