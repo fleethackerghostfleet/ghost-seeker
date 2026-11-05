@@ -303,7 +303,7 @@ async function init(){
  $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
  $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
- $('srcSel').onchange=e=>{state.src=e.target.value;rv.cur=null;rv.shown=null;rv.displayed=null;closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp()};
+ $('srcSel').onchange=e=>{state.src=e.target.value;rv.navigation++;rv.cur=null;rv.shown=null;rv.displayed=null;closeDetail();resetFeedWindow();renderFeed(true,true);renderStats();renderRp()};
  const syncFeedFilters=()=>{const f=gsSettings.get().feed;$('showFiltered').checked=f.showFiltered;$('reviewFilter').value=f.review;closeDetail();resetFeedWindow();renderFeed(true,true)};
  $('showFiltered').onchange=e=>{gsSettings.setFeed({showFiltered:e.target.checked});syncFeedFilters()};
  $('reviewFilter').onchange=e=>{gsSettings.setFeed({review:e.target.value});syncFeedFilters()};
@@ -631,7 +631,7 @@ async function setManual(id,t){if(!findItem(id))return;try{await patchItem(id,{m
 function toggleNight(){if(window.gsSettings)gsSettings.toggleRed();else document.body.classList.toggle('night')}
 const TNAME=['','Critical','High','Routine','Low'];
 const RVKEYS={'1':'1','2':'2','3':'3','4':'4',' ':'accept','enter':'accept','x':'dismiss','delete':'dismiss','c':'cdr','arrowright':'skip','s':'skip','z':'undo','backspace':'undo'};
-let rv={cur:null,shown:null,displayed:null,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
+let rv={cur:null,shown:null,displayed:null,navigation:0,order:'pri',done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false};
 const teamSync={available:false,on:false,proposals:[],hidden:new Set(),resolved:new Set(),local:new Map(),accepting:new Map(),revision:0,posting:false};
 function setupTeamSync(available){
  teamSync.available=available;
@@ -789,7 +789,7 @@ function rvPress(a){const b=$('rvKeys').querySelector(`[data-a="${a}"]`);if(!b)r
 function rvAct(a){
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
- if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();rv.cur=it||p.item;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});return}
+ if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{rv.busy=false;renderReview();toast(error.message)});return}
  if(!rv.cur)return;
  if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;renderReview();return}
  const it=rv.displayed;if(!it||it.id!==rv.cur.id)return;

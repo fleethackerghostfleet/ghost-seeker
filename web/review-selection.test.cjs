@@ -162,3 +162,30 @@ test('a sensor switch during a save waits, then selects once within the new sour
  h.run('complete()');await new Promise(setImmediate);h.finish(280);active(h,'other-image');
  h.run('flushFeed()');active(h,'other-image');assert.equal(h.run('rv.done'),1);
 });
+for(const empty of [false,true]){
+ test(`a sensor switch during undo does not restore the previous source (${empty?'empty':'nonempty'} queue)`,async()=>{
+  const h=setup();
+  const start=source.indexOf(" $('srcSel').onchange=");
+  vm.runInContext(source.slice(start,source.indexOf('\n',start)),h.context);
+  h.run(`state.src='sensor';start();SRC.other={id:'other',name:'Other sensor'};
+   applyItemUpdate({...raw('other-image',1),src:'other'});
+   if(${empty})applyItemUpdate({...raw('next',3),reviewed:true});
+   submitReview=(id,action,changes)=>{applyItemUpdate({...raw(id),...changes});return Promise.resolve(findItem(id))};rvAct('accept')`);
+  await new Promise(setImmediate);h.finish(280);
+  h.run(`undoReview=()=>new Promise(resolve=>completeUndo=()=>{applyItemUpdate(raw('active'));resolve(findItem('active'))});rvAct('undo');
+   state.page='feed';$('srcSel').onchange({target:{value:'other'}});location={hash:'#review'};route()`);
+  assert.equal(h.run('rv.cur'),null);
+  h.run('completeUndo()');await new Promise(setImmediate);active(h,'other-image');
+  assert.equal(h.run('rv.done'),0);assert.equal(h.run('rv.undo.length'),0);
+ });
+}
+test('a stale accept sends the displayed tier, then refreshes the same image on server rejection',async()=>{
+ const h=setup();h.run(`start();requests=[];
+  request=(url,method,body)=>{requests.push({url,body});return Promise.reject(new Error('model priority changed'))};
+  emit('update',{item:raw('active',1),cdr:0});rvAct('accept')`);
+ await new Promise(setImmediate);active(h);
+ assert.equal(h.run('requests.length'),1);assert.equal(h.run('requests[0].url'),'/api/items/active/review');
+ assert.equal(h.run('requests[0].body.tier'),2);assert.equal(h.run('requests[0].body.action'),'accept');
+ assert.equal(h.run('rv.displayed.centralTier'),1);assert.equal(h.run('rv.done'),0);assert.equal(h.run('rv.undo.length'),0);
+ assert.match(h.context.$('toast').textContent,/model priority changed/);
+});
