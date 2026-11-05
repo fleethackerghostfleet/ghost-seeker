@@ -164,6 +164,18 @@ func TestSessionsProductionFlow(t *testing.T) {
 	if w.Code != http.StatusFound || w.Header().Get("Location") != "/login?next=%2Fcdr" {
 		t.Fatalf("page redirect: %d %q", w.Code, w.Header().Get("Location"))
 	}
+	// The sign-in page's logo files are public; nothing else under /brand/ is, and no session is issued.
+	for _, path := range []string{"/brand/logo.png", "/brand/favicon-32.png", "/brand/apple-touch-icon.png"} {
+		if w := do(h, http.MethodGet, path, "10.0.0.9:5", nil); w.Code != http.StatusOK || w.Body.String() != "app:"+path || len(w.Result().Cookies()) != 0 {
+			t.Fatalf("public brand asset %s: %d %q", path, w.Code, w.Body.String())
+		}
+	}
+	if w := do(h, http.MethodGet, "/brand/other.png", "10.0.0.9:5", nil); w.Code != http.StatusFound {
+		t.Fatalf("non-allowlisted brand path must require auth: %d", w.Code)
+	}
+	if w := do(h, http.MethodPost, "/brand/logo.png", "10.0.0.9:5", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("brand POST must require auth: %d", w.Code)
+	}
 	if w := do(h, http.MethodGet, "/login", "10.0.0.9:5", nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `name="token"`) || !strings.Contains(w.Header().Get("Content-Security-Policy"), "form-action 'self'") {
 		t.Fatalf("login page: %d", w.Code)
 	}
