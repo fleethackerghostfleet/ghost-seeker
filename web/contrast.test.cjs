@@ -62,3 +62,9 @@ test('Commander note placeholders and completed decisions use theme text colours
  assert.ok(contrast(rgb('#8392a8'),rgb('#111b2b'))>=4.5);
  assert.ok(contrast(rgb('#4c5f6d'),rgb('#f2f5f8'))>=4.5);
 });
+
+test('night filter composes with IR white-hot and suppressed-card image filters',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'static/themes.css'),'utf8');
+ assert.match(css,/body\.night \.spectrum-ir\{filter:grayscale\(1\) invert\(1\)[^}]*var\(--night-filter\)!important\}/);
+ assert.match(css,/body\.night \.card\.sup \.thumb img\{filter:grayscale\(\.8\) brightness\(\.55\) var\(--night-filter\)!important\}/);
+});

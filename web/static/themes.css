@@ -1,6 +1,8 @@
 body{--night-filter:url('/red-light.svg#red')}
 body.night,body.night dialog{filter:none}
 body.night :is(img,canvas,svg){filter:var(--night-filter)!important}
+body.night .spectrum-ir{filter:grayscale(1) invert(1) contrast(1.7) brightness(1.1) var(--night-filter)!important}
+body.night .card.sup .thumb img{filter:grayscale(.8) brightness(.55) var(--night-filter)!important}
 .rvcard a{color:var(--accent)}
 .seg button .c,.tabs span,.btn.primary kbd,.cl span{opacity:1!important}
 .card.sup{opacity:1}
