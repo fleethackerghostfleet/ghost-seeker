@@ -485,7 +485,7 @@ test('consecutive Space and Enter and live renders retain band focus without rev
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
  vm.runInContext("press('B')",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='EO'&&document.activeElement.dataset.band==='IR'",context),true);
- vm.runInContext("originalButton=document.activeElement;applyItemUpdate({...rv.cur,src:'EO-P7',central:.95})",context);
+ vm.runInContext("originalButton=document.activeElement;applyItemUpdate({...rv.cur,src:'EO-P7',central:.95});flushFeed()",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
  vm.runInContext("press('Enter')",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&!!document.activeElement.closest('.band-controls button')",context),true);
