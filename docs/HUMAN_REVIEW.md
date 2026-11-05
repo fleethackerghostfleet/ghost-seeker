@@ -8,6 +8,17 @@ is eligible. The locked `test` and `quarantine` sets must never be reviewed, so
 operator labels cannot leak into test scores. The builder refuses non-dev,
 Singapore Maritime, test, and quarantine rows before downloading anything.
 
+The dev review selection contains **2283** frames (previously 2294). It permanently
+excludes `video_sailing_drone_inside_a_hurricane/all/sec_0001`–`sec_0011`:
+the first three frames are SCIENCE BUZZ title cards and the next eight show a
+studio newscaster, not maritime footage. The boundary is zero-based
+`timestamp_s < 11` (0.0–10.0); all 38 at-sea frames `sec_0012`–`sec_0049`
+(starting at 11.0) remain. This exclusion is for the dev review selection only,
+not raw data, catalogs, or training sets, and is not a general person filter:
+deck personnel and person-in-water examples remain eligible. The builder rejects
+these excluded image IDs, and the SQL applies the same boundary after sampling
+so other selections are unaffected. Do not regenerate the settled selection.
+
 ```sh
 export PATH="$HOME/google-cloud-sdk/bin:$PATH"
 python3 -m venv edgeml/.venv

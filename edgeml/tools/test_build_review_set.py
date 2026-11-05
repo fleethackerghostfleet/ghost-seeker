@@ -59,6 +59,31 @@ def test_selection_guard_accepts_dev_row():
     )
 
 
+@pytest.mark.parametrize("second", range(1, 12))
+def test_selection_guard_rejects_non_maritime_hurricane_frames(second):
+    with pytest.raises(ValueError, match="non-maritime studio/title frame"):
+        build.selection_guard(
+            [row(
+                dataset_id="video_sailing_drone_inside_a_hurricane",
+                image_id=f"video_sailing_drone_inside_a_hurricane/all/sec_{second:04d}",
+                source_video="Sailing_Drone_Inside_A_Hurricane",
+            )],
+            SPLITS,
+        )
+
+
+def test_selection_guard_accepts_at_sea_hurricane_boundary_and_empty_selection():
+    build.selection_guard([], SPLITS)
+    build.selection_guard(
+        [row(
+            dataset_id="video_sailing_drone_inside_a_hurricane",
+            image_id="video_sailing_drone_inside_a_hurricane/all/sec_0012",
+            source_video="Sailing_Drone_Inside_A_Hurricane",
+        )],
+        SPLITS,
+    )
+
+
 def test_detector_label_mapping_uses_shiptype_catalog_and_safe_fallbacks():
     assert build.map_detector_class("boat", "warship") == "warship"
     assert build.map_detector_class("boat", "passenger") == "vessel"
