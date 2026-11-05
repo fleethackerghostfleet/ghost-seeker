@@ -72,10 +72,13 @@ func New(target string, bps int64) *Shaper {
 }
 
 // NewNormal samples a normal rate immediately, then every five seconds while
-// serving. The normal distribution is centered on 8 Mbps;
+// serving. The distribution is centered on 8 Mbps with 5% of samples at zero;
 // samples outside 0–50 Mbps are clipped (zero means a real link outage).
 func NewNormal(target string) *Shaper {
-	d := NormalDistribution{MinBps: 0, MaxBps: 50_000_000, MeanBps: 8_000_000, StdDevBps: 50_000_000.0 / 6, IntervalMS: 5000}
+	const meanBps = 8_000_000
+	const outageProbability = 0.05
+	stddev := meanBps / (math.Sqrt2 * math.Erfcinv(2*outageProbability))
+	d := NormalDistribution{MinBps: 0, MaxBps: 50_000_000, MeanBps: meanBps, StdDevBps: stddev, IntervalMS: 5000}
 	s := New(target, d.rate(rand.NormFloat64()))
 	s.normal = &d
 	return s

@@ -46,7 +46,7 @@ test('image versions explain summary-only, waiting, transfer and received states
 
 test('automatic bandwidth shows the applied rate and distribution without manual controls',()=>{
  const c=setup();
- c.LIVE.link={controllable:true,bps:12500000,bytes:900,distribution:{minBps:0,maxBps:50000000,meanBps:8000000,stdDevBps:50000000/6,intervalMs:5000}};
+ c.LIVE.link={controllable:true,bps:12500000,bytes:900,distribution:{minBps:0,maxBps:50000000,meanBps:8000000,stdDevBps:4863654.66,intervalMs:5000}};
  c.LIVE.edge.estimateBps=2000000;
  vm.runInContext('renderLiveStrip()',c);
  let html=vm.runInContext("$('liveStrip').innerHTML",c);

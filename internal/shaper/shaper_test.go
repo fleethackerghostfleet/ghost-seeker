@@ -15,8 +15,11 @@ import (
 func TestNormalDistributionBounds(t *testing.T) {
 	s := NewNormal("unused")
 	d := s.Distribution()
-	if d.MinBps != 0 || d.MaxBps != 50_000_000 || d.MeanBps != 8_000_000 || d.StdDevBps != 50_000_000.0/6 || d.IntervalMS != 5000 {
+	if d.MinBps != 0 || d.MaxBps != 50_000_000 || d.MeanBps != 8_000_000 || d.IntervalMS != 5000 {
 		t.Fatalf("unexpected distribution: %+v", d)
+	}
+	if p := math.Erfc(d.MeanBps/(d.StdDevBps*math.Sqrt2)) / 2; math.Abs(p-0.05) > 1e-12 {
+		t.Fatalf("outage probability = %v, want 0.05", p)
 	}
 	if s.Bps() < d.MinBps || s.Bps() > d.MaxBps {
 		t.Fatalf("initial rate outside bounds: %d", s.Bps())
@@ -24,7 +27,7 @@ func TestNormalDistributionBounds(t *testing.T) {
 	for _, tc := range []struct {
 		z    float64
 		want int64
-	}{{-20, 0}, {-3, 0}, {0, 8_000_000}, {3, 33_000_000}, {20, 50_000_000}} {
+	}{{-20, 0}, {-3, 0}, {0, 8_000_000}, {20, 50_000_000}} {
 		if got := d.rate(tc.z); got != tc.want {
 			t.Errorf("rate(%v) = %d, want %d", tc.z, got, tc.want)
 		}
@@ -43,11 +46,14 @@ func TestNormalDistributionShape(t *testing.T) {
 	rng := rand.New(rand.NewPCG(42, 7))
 	const n = 100_000
 	var sum, squared float64
-	var low, center, high int
+	var low, center, high, outages int
 	for i := 0; i < n; i++ {
 		rate := d.rate(rng.NormFloat64())
 		if rate < d.MinBps || rate > d.MaxBps {
 			t.Fatalf("sample outside bounds: %d", rate)
+		}
+		if rate == 0 {
+			outages++
 		}
 		x := float64(rate)
 		sum += x
@@ -63,6 +69,11 @@ func TestNormalDistributionShape(t *testing.T) {
 	}
 	mean := sum / n
 	stddev := math.Sqrt(squared/n - mean*mean)
+	frequency := float64(outages) / n
+	t.Logf("zero-rate samples: %d/%d (%.2f%%)", outages, n, frequency*100)
+	if math.Abs(frequency-0.05) > 0.003 {
+		t.Fatalf("observed outage frequency = %.2f%%, want approximately 5%%", frequency*100)
+	}
 	// Clipping changes the observed moments, especially near the lower bound.
 	cdf := func(z float64) float64 { return (1 + math.Erf(z/math.Sqrt2)) / 2 }
 	pdf := func(z float64) float64 { return math.Exp(-z*z/2) / math.Sqrt(2*math.Pi) }
@@ -84,7 +95,7 @@ func TestNormalRateUpdatesAndCancellation(t *testing.T) {
 		s.SetBps(1)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		zs := []float64{-4, 0, 6}
+		zs := []float64{-4, 0, 20}
 		n := 0
 		go s.varyRate(ctx, func() float64 {
 			z := zs[n]
