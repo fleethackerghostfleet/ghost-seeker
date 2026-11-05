@@ -273,6 +273,62 @@ func TestSessionsDevLoopbackAutoLogin(t *testing.T) {
 	}
 }
 
+func TestDemoAcceptAnyToken(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		demo  bool
+		token string
+		want  int
+	}{
+		{"off wrong", false, "arbitrary-demo-token", http.StatusUnauthorized},
+		{"off valid", false, "secret-token-12345", http.StatusSeeOther},
+		{"on arbitrary", true, "arbitrary-demo-token", http.StatusSeeOther},
+		{"on empty", true, "", http.StatusUnauthorized},
+		{"on whitespace", true, "   ", http.StatusUnauthorized},
+		{"off empty", false, "", http.StatusUnauthorized},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSessions("secret-token-12345", false).DemoAcceptAnyToken(tc.demo)
+			h := s.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				p, ok := PrincipalFrom(r.Context())
+				if !ok || p.Role != "operator" || p.Mode != "token" {
+					t.Errorf("principal = %+v, present = %v", p, ok)
+				}
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			page := do(h, http.MethodGet, "/login", "10.0.0.9:5", nil)
+			if strings.Contains(page.Body.String(), "any non-empty token") != tc.demo {
+				t.Fatal("login hint does not match demo mode")
+			}
+			w := do(h, http.MethodPost, "/login", "10.0.0.9:5", map[string]string{
+				"Content-Type": "application/x-www-form-urlencoded", "form": url.Values{"token": {tc.token}}.Encode(),
+			})
+			if w.Code != tc.want {
+				t.Fatalf("login = %d, want %d", w.Code, tc.want)
+			}
+			cookies := w.Result().Cookies()
+			if tc.want == http.StatusUnauthorized {
+				if len(cookies) != 0 {
+					t.Fatal("rejected login issued a cookie")
+				}
+				return
+			}
+			if len(cookies) != 1 {
+				t.Fatalf("cookies = %v", cookies)
+			}
+			if w := do(h, http.MethodPost, "/api/operator", "10.0.0.9:5", nil, cookies...); w.Code != http.StatusNoContent {
+				t.Fatalf("operator access = %d", w.Code)
+			}
+			if w := do(h, http.MethodGet, "/api/auth", "10.0.0.9:5", nil, cookies...); !strings.Contains(w.Body.String(), `"role":"operator"`) {
+				t.Fatalf("auth identity = %s", w.Body.String())
+			}
+			if w := do(h, http.MethodPost, "/api/operator", "10.0.0.9:5", map[string]string{"Authorization": "Bearer arbitrary-demo-token"}); w.Code != http.StatusUnauthorized {
+				t.Fatalf("arbitrary bearer accepted: %d", w.Code)
+			}
+		})
+	}
+}
+
 func TestSafeNext(t *testing.T) {
 	for in, want := range map[string]string{"": "/", "/cdr": "/cdr", "//evil": "/", "/\\evil": "/", "http://evil": "/", "/login?next=/": "/", "/cdr\t": "/", "/x\ny": "/", "/a b": "/"} {
 		if got := safeNext(in); got != want {

@@ -26,8 +26,8 @@ make compose-demo-down        # stop + delete data and credentials -> next `make
 
 What runs (`deploy/compose/demo.compose.yml`, the same four processes as the native stack below):
 `sidecar` (edgeml image with the tracking extra, CPU torch + boxmot, `--prioritizer both`),
-`shore` (:8080), `ui` (Patrick's console on :8090 + the shaped link on :18080 — the bandwidth
-buttons work), `edge` (replays `scenarios/ghostfleet_demo` at 5 fps through the shaper into the
+`shore` (:8080), `ui` (Patrick's console on :8090 + the shaped link on :18080 — bandwidth
+varies automatically), `edge` (replays `scenarios/ghostfleet_demo` at 5 fps through the shaper into the
 sidecar, `-dedup sightings`). A one-shot `init` container writes the operator token, the HS256 unit
 key and the edge's 24 h JWT into the `demo-secrets` volume, so there is nothing to configure; the
 three Go containers run as the distroless `nonroot` user and bind to `127.0.0.1` on the host only.
@@ -39,6 +39,18 @@ This is a laptop demo, not the fielding topology — `deploy/compose/docker-comp
 link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, production posture) is unchanged.
 
 ## 0. One-time setup
+
+### Demo-only login fallback
+
+`make demo-ui` and `make compose-demo` explicitly enable `-demo-accept-any-token`.
+If automatic sign-in fails, enter **any non-empty token** on the login screen
+to get **operator** access. Empty or whitespace-only tokens are rejected.
+This deliberately insecure mode is off by default, emits a loud startup warning,
+and must never be used in production or on an untrusted network. It cannot be
+combined with `-auth-mode piv` (startup fails). For a manual demo launch, add
+`-demo-accept-any-token` to the `ghost-seeker` command; omit it for normal token
+validation. The real operator token is still required for shore/edge bearer
+authentication; only the UI's login form accepts arbitrary tokens.
 
 ```sh
 # toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
@@ -90,7 +102,7 @@ shore store regardless of mode.
 ```sh
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
-make demo-ui           # bin/ghost-seeker -addr :8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
+make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
 make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/scenario.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
 open http://localhost:8090
 ```
@@ -100,8 +112,10 @@ link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/un
 `make demo-edge` mints a 24 h edge token from it into `data/edge.jwt` on every start). With no
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
 (0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
-SameSite=Strict session cookie). From another machine the UI asks for the token at `/login`
-(`cat data/operator.token`). For `curl` against the shore/edge API use
+SameSite=Strict session cookie). `make demo-ui` binds the UI to `127.0.0.1` only (it runs with
+`-demo-accept-any-token`); for a browser on another machine, run the same `make demo-ui` command line
+(all live flags: `-shore`, `-edge`, `-link-listen`, `-dev-token-file`) but with `-addr :8090` and
+without `-demo-accept-any-token`, then enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
 `-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the
@@ -134,12 +148,12 @@ bytes as FULL with no re-encoding.
 
 | t | do | say |
 |---|---|---|
-| 0:00 | Stack already running, link preset **2 Mbps**, feed tab. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." Point at the strip: items on edge vs shore are equal, every card has a crop/thumb. |
-| 0:30 | Click **9.6 kbps**. | "Now a contested SATCOM trickle — 72 KB a minute." Watch the estimator adapt and the form chips advance. FACT and thumbnail precede larger images; actual delivery time depends on image sizes, backlog, and link overhead. FULL contains the complete capture. |
+| 0:00 | Stack already running, feed tab. Point to the automatic connection rate. | "Ship camera, 5 fps. Edge detects, tracks and aggregates into sightings; shore only ever sees what crosses this link." The strip shows the applied link rate and the ship's measured estimate. |
+| 0:30 | Watch the rate change without touching any controls. | "Bandwidth is sampled every five seconds from a normal distribution centered on 8 Mbps, with a 4.86 Mbps standard deviation, clipped to 0–50 Mbps. About 5% of intervals drop the link." Watch the estimator adapt and the form chips advance. FACT and thumbnail precede larger images; actual delivery time depends on image sizes, backlog, and link overhead. FULL contains the complete capture. |
 | 1:15 | Hover a card's chips; open the **Review queue**. | "Per object we get one card with its crop, the zero-shot subtype, and we know exactly which forms have landed; 'duplicate frames folded on the edge' in the strip is what we did *not* send. Naive delivery would have sent 64 near-identical frames per object and the queue would still be stuck on the first one." |
 | 1:45 | Type **`ignore cargo ships`** → Set. | "Operator intent goes back over the same link as a policy." Cargo cards grey out (suppressed; matched on the sidecar subtype, the detector class or an operator override), submarines keep arriving. Policy text shows in the strip. Cards the edge flagged *unknown* are never suppressed (same rule as `edge/scoring`), so a low-confidence "Cargo Ship (Unknown)" stays — say so, it is the point of the unknown gate. |
 | 2:15 | On a card whose FULL chip is still pending click **Pull full image**, or use **Pull full frame** in the Cameras strip. | "A pull gives this image priority." Ordinary contact FULL forms can drain automatically after the smaller forms; camera-overview FULL forms are pull-only. Watch pending → partial → received on the form chip. Use **Send full size** in the image drawer to request the original bytes. |
-| 2:45 | Click **2 Mbps**; switch to **Review queue** / **Commander view**. | "Link back; the backlog drains in seconds. Same software, every link." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the headless numbers. |
+| 2:45 | Switch to **Review queue** / **Commander view**. | "The scheduler keeps adapting as the link varies automatically." The review queue lists every sighting (zero-shot subtype, unknownness, chips). Show `scenarios/ghostfleet_demo/out/compare.md` for the separate fixed-rate headless numbers. |
 
 Historical dry run (2026-11-04, real sidecar, 8-core laptop-class VM; not rerun here with the current full-frame/form defaults): the three clips replay **interleaved** (same
 frame names, so `edge/ingest` sorts them together) and the sidecar tracks them as three sources; the

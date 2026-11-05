@@ -18,6 +18,35 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
+func TestUploadOverrideAPI(t *testing.T) {
+	data := store.New(2)
+	data.Add(&command.Item{ID: "queued", KB: 10}, 0)
+	app := New(data)
+	for _, override := range []string{"next", "hold", ""} {
+		response := request(app, http.MethodPost, "/api/items/queued/upload-override", map[string]string{"override": override})
+		if response.Code != http.StatusOK {
+			t.Fatalf("override %q: %d %s", override, response.Code, response.Body.String())
+		}
+		item, _ := data.GetItem("queued")
+		if item.Upload.Override != override || item.Upload.OverrideBy != "TAO" {
+			t.Fatalf("override not saved: %+v", item.Upload)
+		}
+	}
+	for _, tc := range []struct {
+		id, override string
+		status       int
+	}{{"queued", "invalid", 400}, {"missing", "next", 404}} {
+		response := request(app, http.MethodPost, "/api/items/"+tc.id+"/upload-override", map[string]string{"override": tc.override})
+		if response.Code != tc.status {
+			t.Fatalf("status = %d, want %d", response.Code, tc.status)
+		}
+	}
+	response := request(app, http.MethodPost, "/api/items/queued/upload-override", map[string]int{"override": 1})
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid body status = %d", response.Code)
+	}
+}
+
 func TestAPI(t *testing.T) {
 	data := store.New(10)
 	app := New(data)

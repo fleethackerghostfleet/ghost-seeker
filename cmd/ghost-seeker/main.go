@@ -46,8 +46,8 @@ func main() {
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
-	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
-	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
+	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–50 Mbps ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
+	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -60,6 +60,7 @@ func main() {
 	devTokenFile := flag.String("dev-token-file", envOr("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set and log loopback browsers in automatically ('none' = require an explicit token)")
 	devTrustPeers := flag.Bool("dev-trust-peers", envBool("GS_DEV_TRUST_PEERS"), "local demo in containers only: with -dev-token-file, also sign in browsers that address localhost from a non-loopback peer (a port published on the host's 127.0.0.1 arrives from the bridge gateway); publish the port on 127.0.0.1 only")
 	authMode := flag.String("auth-mode", envOr("GS_AUTH_MODE", "token"), "web authentication: token or piv")
+	demoAcceptAnyToken := flag.Bool("demo-accept-any-token", false, "INSECURE demo only: accept any non-empty login token as operator (incompatible with PIV)")
 	tlsCert := flag.String("tls-cert", os.Getenv("GS_TLS_CERT"), "HTTPS server certificate")
 	tlsKey := flag.String("tls-key", os.Getenv("GS_TLS_KEY"), "HTTPS server private key")
 	ca := flag.String("piv-ca-bundle", os.Getenv("GS_PIV_CA_BUNDLE"), "local PIV CA bundle")
@@ -70,6 +71,9 @@ func main() {
 	oids := flag.String("piv-policy-oids", os.Getenv("GS_PIV_POLICY_OIDS"), "comma-separated policy OIDs")
 	users := flag.String("piv-users", os.Getenv("GS_PIV_USERS"), "PIV user role mapping")
 	flag.Parse()
+	if *demoAcceptAnyToken && *authMode != "token" {
+		log.Fatal("-demo-accept-any-token requires -auth-mode token; incompatible with PIV")
+	}
 	if err := validateAuthMode(*authMode, *tlsCert, *tlsKey, *ca, *crls, *users); err != nil {
 		log.Fatal(err)
 	}
@@ -86,7 +90,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sessions := opauth.NewSessions(operator, devMode).TrustPeers(*devTrustPeers)
+	sessions := opauth.NewSessions(operator, devMode).TrustPeers(*devTrustPeers).DemoAcceptAnyToken(*demoAcceptAnyToken)
+	if *demoAcceptAnyToken {
+		log.Print("WARNING: INSECURE DEMO MODE (-demo-accept-any-token): ANY non-empty login token grants OPERATOR access. Never enable in production or on an untrusted network.")
+	}
 	if *authMode == "piv" {
 		var policies []string
 		for _, oid := range strings.Split(*oids, ",") {
@@ -115,11 +122,12 @@ func main() {
 	}
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *linkBps, *poll, compiler, operator, sessions, *operatorID, transport)
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport)
 		return
 	}
 
 	data := store.New(*retain)
+	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
 	options := []server.Option{server.WithAdmin(*admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}
@@ -141,7 +149,7 @@ func main() {
 	}
 	compiler.Locks = app.PolicyLocks()
 	app.SetCompiler(compiler)
-	go runSimulation(data, generator, app)
+	go runSimulation(data, generator, app, uplink)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {
 		for i := 0; i < 4; i++ {
@@ -206,8 +214,8 @@ func runWatchOfficer(data *store.Store, app *server.Server, every time.Duration)
 
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
-// link the edge talks through (so the bandwidth buttons are real).
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config) {
+// link the edge talks through, with an automatically varying normal rate.
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -216,13 +224,13 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 		if err != nil {
 			log.Fatalf("-shore: %v", err)
 		}
-		sh := shaper.New(target, linkBps)
+		sh := shaper.NewNormal(target)
 		go func() {
 			if err := sh.ListenAndServe(ctx, linkListen); err != nil {
 				log.Fatalf("shaper: %v", err)
 			}
 		}()
-		log.Printf("link shaper on %s -> %s at %d bit/s (start the edge with -shore http://localhost%s)", linkListen, target, linkBps, linkListen)
+		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–50 Mbps, mean 8 Mbps, stddev 4.86 Mbps, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
 		link = sh
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID)
@@ -233,8 +241,8 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 
 	// One site: Patrick's operator console (index.html / cdr.html) on live
 	// shore items. The console speaks the simulation's API (/api/config,
-	// /api/stream, /api/items, /api/directives); the shore-only actions (link
-	// presets, pulls, overrides) stay under /api/shore/ and blobs are proxied.
+	// /api/stream, /api/items, /api/directives); shore-only actions (pulls,
+	// overrides) and link status stay under /api/shore/ and blobs are proxied.
 	mux := http.NewServeMux()
 	mux.Handle("/api/shore/", bridge.Handler())
 	mux.Handle("/blob/", bridge.Handler())
@@ -274,10 +282,18 @@ func shaperTarget(shoreURL string) (string, error) {
 	return host, nil
 }
 
-func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server) {
+func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server, uplink *simulationUplink) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	last := time.Now()
 	for {
 		time.Sleep(time.Duration(1200+rng.Intn(1201)) * time.Millisecond)
+		now := time.Now()
+		updates := uplink.advance(now.Sub(last))
+		last = now
+		_, cdr := data.Stats()
+		for _, updated := range updates {
+			app.PublishUpdate(updated, cdr)
+		}
 		_, _, _, state := data.Snapshot()
 		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
 		stored, evicted := data.Add(item, extra)

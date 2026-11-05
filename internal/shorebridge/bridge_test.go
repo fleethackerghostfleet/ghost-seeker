@@ -14,9 +14,39 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestAutomaticLinkStatus(t *testing.T) {
+	link := shaper.NewNormal("unused")
+	bridge := New("", "", link)
+	rec := httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/shore/link", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var status LinkStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Controllable || status.Bps != link.Bps() || status.Distribution == nil || *status.Distribution != *link.Distribution() {
+		t.Fatalf("missing applied rate or distribution: %+v", status)
+	}
+	if strings.Contains(rec.Body.String(), "presets") {
+		t.Fatal("manual speed presets still advertised")
+	}
+	rec = httptest.NewRecorder()
+	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/link", strings.NewReader(`{"bps":1}`)))
+	if rec.Code != http.StatusMethodNotAllowed || link.Bps() != status.Bps {
+		t.Fatalf("manual rate changes must be rejected: status %d, bps %d", rec.Code, link.Bps())
+	}
+	external := New("", "", nil).linkStatus()
+	if external.Controllable || external.Distribution != nil {
+		t.Fatalf("externally shaped link advertised automation: %+v", external)
+	}
+}
 
 func TestNodeStatusEvictions(t *testing.T) {
 	if n := nodeStatus(&pb.GetStatusResponse{ItemsEvicted: 7}); n.Evicted != 7 {

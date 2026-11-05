@@ -11,7 +11,7 @@
 # This is NOT the fielding topology (docker-compose.yml): auth is the dev
 # token path (`init` writes the operator token, unit key and edge JWT into
 # the `demo-secrets` volume), the link is the operator UI's in-process
-# shaper (bandwidth buttons), and ports bind to 127.0.0.1 only.
+# shaper (automatic 0–50 Mbps bandwidth), and ports bind to 127.0.0.1 only.
 name: ghost-seeker-demo
 
 x-build: &go-build
@@ -67,7 +67,7 @@ services:
     build: { <<: *go-build, target: operator }
     image: ghost-seeker/operator:0.1.0
     command: ["-addr", ":8090", "-shore", "http://shore:8080", "-edge", "http://edge:8081", "-link-listen", ":18080",
-              "-dev-token-file", "/secrets/operator.token", "-dev-trust-peers"]
+              "-dev-token-file", "/secrets/operator.token", "-dev-trust-peers", "-demo-accept-any-token"]
     # 127.0.0.1 only: with -dev-trust-peers a browser on this Mac is signed in
     # automatically (its connection reaches the container from Docker's bridge
     # gateway, not loopback); nothing else can reach the port.
