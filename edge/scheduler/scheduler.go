@@ -615,7 +615,7 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 		if f == nil {
 			continue
 		}
-		if s.cfg.Strategy == Prioritized && !preview && !r.ManifestAcked && !containsManifest(plan.Manifest, r.Item.Id) {
+		if s.cfg.Strategy == Prioritized && !(preview && emcon == pb.EmconMode_EMCON_MODE_SILENT) && !r.ManifestAcked && !containsManifest(plan.Manifest, r.Item.Id) {
 			// Don't send payload for an item shore doesn't know about yet,
 			// unless it's a pull (shore knows, we just lost the ack).
 			if r.PullBoost == 0 {
