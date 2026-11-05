@@ -33,6 +33,14 @@ type Image struct {
 	SHA256   string `json:"sha256"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
+	// Tags describe the source (viewpoint, modality, labeled); GroundTruth
+	// carries dataset annotations when the source has them.
+	Tags        map[string]string `json:"tags,omitempty"`
+	GroundTruth []GTBox           `json:"ground_truth,omitempty"`
+}
+type GTBox struct {
+	Label string      `json:"label"`
+	Box   command.Box `json:"box"`
 }
 type Detection struct {
 	Label   string      `json:"label"`
@@ -54,10 +62,12 @@ type Prediction struct {
 type frame struct {
 	path string
 	read func() ([]byte, error)
+	gt   []GTBox
 }
 type clip struct {
 	name   string
 	frames []frame
+	tags   map[string]string
 }
 
 // Allocate gives each nonempty source an equal share, redistributing shortfalls
@@ -107,61 +117,82 @@ func discover(root string) ([]clip, error) {
 	paths = append(paths, dirs...)
 	clips := []clip{}
 	for _, p := range paths {
-		c := clip{name: strings.TrimSuffix(filepath.Base(p), "_frames.zip")}
+		var c clip
+		var err error
 		if filepath.Ext(p) == ".zip" {
-			z, err := zip.OpenReader(p)
-			if err != nil {
-				return nil, err
-			}
-			for _, f := range z.File {
-				if f.FileInfo().IsDir() || !imageFile(f.Name) {
-					continue
-				}
-				name := f.Name
-				c.frames = append(c.frames, frame{path: name, read: func() ([]byte, error) {
-					r, err := zip.OpenReader(p)
-					if err != nil {
-						return nil, err
-					}
-					defer r.Close()
-					for _, entry := range r.File {
-						if entry.Name == name {
-							rc, err := entry.Open()
-							if err != nil {
-								return nil, err
-							}
-							defer rc.Close()
-							var b bytes.Buffer
-							_, err = b.ReadFrom(rc)
-							return b.Bytes(), err
-						}
-					}
-					return nil, fmt.Errorf("missing ZIP entry %s", name)
-				}})
-			}
-			z.Close()
+			c, err = zipClip(strings.TrimSuffix(filepath.Base(p), "_frames.zip"), p)
 		} else {
-			c.name = filepath.Base(filepath.Dir(p))
-			entries, err := os.ReadDir(p)
-			if err != nil {
-				return nil, err
-			}
-			for _, e := range entries {
-				if e.IsDir() || !imageFile(e.Name()) {
-					continue
-				}
-				name := e.Name()
-				c.frames = append(c.frames, frame{path: filepath.ToSlash(filepath.Join("img1", name)), read: func() ([]byte, error) { return os.ReadFile(filepath.Join(p, name)) }})
-			}
+			c, err = dirClip(filepath.Base(filepath.Dir(p)), p, "img1")
 		}
-		sort.Slice(c.frames, func(i, j int) bool { return naturalLess(c.frames[i].path, c.frames[j].path) })
-		if len(c.frames) == 0 {
-			return nil, fmt.Errorf("empty clip %s", p)
+		if err != nil {
+			return nil, err
 		}
 		clips = append(clips, c)
 	}
 	sort.Slice(clips, func(i, j int) bool { return clips[i].name < clips[j].name })
 	return clips, nil
+}
+
+func zipClip(name, p string) (clip, error) {
+	c := clip{name: name}
+	z, err := zip.OpenReader(p)
+	if err != nil {
+		return c, err
+	}
+	defer z.Close()
+	for _, f := range z.File {
+		if f.FileInfo().IsDir() || !imageFile(f.Name) {
+			continue
+		}
+		entryName := f.Name
+		c.frames = append(c.frames, frame{path: entryName, read: func() ([]byte, error) {
+			r, err := zip.OpenReader(p)
+			if err != nil {
+				return nil, err
+			}
+			defer r.Close()
+			for _, entry := range r.File {
+				if entry.Name == entryName {
+					rc, err := entry.Open()
+					if err != nil {
+						return nil, err
+					}
+					defer rc.Close()
+					var b bytes.Buffer
+					_, err = b.ReadFrom(rc)
+					return b.Bytes(), err
+				}
+			}
+			return nil, fmt.Errorf("missing ZIP entry %s", entryName)
+		}})
+	}
+	return finishClip(c, p)
+}
+
+// dirClip lists the image files directly inside p; prefix is prepended to the
+// recorded original path.
+func dirClip(name, p, prefix string) (clip, error) {
+	c := clip{name: name}
+	entries, err := os.ReadDir(p)
+	if err != nil {
+		return c, err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !imageFile(e.Name()) {
+			continue
+		}
+		fileName := e.Name()
+		c.frames = append(c.frames, frame{path: filepath.ToSlash(filepath.Join(prefix, fileName)), read: func() ([]byte, error) { return os.ReadFile(filepath.Join(p, fileName)) }})
+	}
+	return finishClip(c, p)
+}
+
+func finishClip(c clip, p string) (clip, error) {
+	sort.Slice(c.frames, func(i, j int) bool { return naturalLess(c.frames[i].path, c.frames[j].path) })
+	if len(c.frames) == 0 {
+		return c, fmt.Errorf("empty clip %s", p)
+	}
+	return c, nil
 }
 
 func naturalLess(a, b string) bool {
@@ -307,6 +338,11 @@ func Build(ctx context.Context, root, out string, an inference.Analyzer) error {
 	if err != nil {
 		return err
 	}
+	return build(ctx, clips, counts, out, an)
+}
+
+func build(ctx context.Context, clips []clip, counts []int, out string, an inference.Analyzer) error {
+	var err error
 	if err = os.Mkdir(out, 0700); err != nil {
 		return fmt.Errorf("output must be new (parent must exist): %w", err)
 	}
@@ -331,7 +367,7 @@ func Build(ctx context.Context, root, out string, an inference.Analyzer) error {
 			if err = os.WriteFile(filepath.Join(out, "images", file), data, 0600); err != nil {
 				return err
 			}
-			manifest = append(manifest, Image{ID: id, Source: c.name, Original: f.path, File: file, SHA256: hex.EncodeToString(digest[:]), Width: cfg.Width, Height: cfg.Height})
+			manifest = append(manifest, Image{ID: id, Source: c.name, Original: f.path, File: file, SHA256: hex.EncodeToString(digest[:]), Width: cfg.Width, Height: cfg.Height, Tags: c.tags, GroundTruth: f.gt})
 			response, err := an.Analyze(ctx, inference.Frame{Image: data, Source: "rnd-" + run + "-" + id}, nil, nil)
 			if err != nil {
 				return fmt.Errorf("%s inference: %w", id, err)
