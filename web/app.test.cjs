@@ -191,9 +191,10 @@ test('enabling team sync promotes an open local suggestion only with a reviewer 
 });
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
- const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
+ const nodes={};
+ const context=vm.createContext({Event,window:{dispatchEvent(){}},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:id=>nodes[id]??=( {querySelectorAll:()=>[],dataset:{}})}});
  vm.runInContext(settingsSource,context);
- return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved)};
+ return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved),reset:()=>nodes.setReset.onclick()};
 }
 test('sidebar widths default empty, load valid settings, and clamp persisted values',()=>{
  for(const saved of [null,'broken','{}','{"widths":{"drawer":"bad","review":null}}']){
@@ -233,6 +234,40 @@ function feedContext(){
  `,context);
  return context;
 }
+test('duplicate display defaults off, preserves explicit choices, and resets off',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ assert.doesNotMatch(html.match(/<input[^>]*id="showFiltered"[^>]*>/)[0],/\bchecked\b/);
+ for(const value of [null,'broken','{}','{"feed":null}',...['null','0','1','"true"','"false"','[]','{}'].map(v=>`{"feed":{"showFiltered":${v}}}`)]){
+  assert.equal(settingsContext(value).settings.get().feed.showFiltered,false);
+ }
+ for(const choice of [true,false]){
+  const {settings,saved,reset}=settingsContext(JSON.stringify({bar:'right',feed:{showFiltered:choice}}));
+  assert.equal(settings.get().feed.showFiltered,choice);
+  settings.resize('controls',300);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showFiltered,choice);
+  reset();
+  assert.equal(settings.get().feed.showFiltered,false);
+  assert.equal(saved().feed.showFiltered,false);
+ }
+});
+test('duplicate checkbox enables repeats while unique unsent images stay visible when off',()=>{
+ const context=feedContext(),{settings,saved}=settingsContext('{}');
+ context.gsSettings=settings;context.addEventListener=()=>{};
+ vm.runInContext(`closeDetail=()=>{};resetFeedWindow=()=>{};
+  items=[frame('original',{tier:1,img:'/same.jpg'}),frame('repeat',{img:'/same.jpg'}),
+   frame('queued',{upload:{bytes:100,sent:0}}),frame('uploading',{upload:{bytes:100,sent:40}}),
+   frame('held',{upload:{bytes:100,sent:0,override:'hold'}})];`,context);
+ const start=source.indexOf(' const syncFeedFilters=');
+ vm.runInContext(source.slice(start,source.indexOf(" $('modelSel').onchange",start)),context);
+ assert.equal(context.$('showFiltered').checked,false);
+ assert.equal(vm.runInContext('ids()',context),'original,queued,uploading,held');
+ context.$('showFiltered').onchange({target:{checked:true}});
+ assert.equal(context.$('showFiltered').checked,true);
+ assert.equal(saved().feed.showFiltered,true);
+ assert.equal(vm.runInContext('ids()',context),'original,queued,uploading,held,repeat');
+ context.$('showFiltered').onchange({target:{checked:false}});
+ assert.equal(vm.runInContext('ids()',context),'original,queued,uploading,held');
+});
 test('human reviewed filter has native options with clear labels and themed popup colors',()=>{
  const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
  assert.match(html,/<label class="feed-review" for="reviewFilter">Human reviewed <select id="reviewFilter">/);
