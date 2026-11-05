@@ -110,6 +110,15 @@ test('manual priorities and escalations stay visible despite directive suppressi
  vm.runInContext("items.find(i=>i.id==='manual').dismissed=true;filters.showFiltered=false",context);
  assert.equal(vm.runInContext("visible().l.some(i=>i.id==='manual')",context),false);
 });
+test('shore rank uses all shore records by ship score regardless of review, sensor, tier or sort filters',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('highest',{live:{score:30},tier:1}),
+  frame('selected',{live:{score:20},reviewed:true}),frame('lowest',{live:{score:10}}),
+  frame('suppressed',{live:{score:40,suppressed:true}})];
+  filters.review='reviewed';state.sort='new';state.tier='2';state.src='IR-U1';
+ `,context);
+ assert.match(vm.runInContext("liveWhy(items[1])[0].t",context),/Rank 2 of 3 on shore by ship score \(20\.00\)/);
+});
 test('durable reviews use server actions, identity, corrections and typing guard',()=>{
  assert.match(source,/\/api\/items\/\$\{encodeURIComponent\(id\)\}\/review/);
  assert.match(source,/reviewer:reviewerName/);

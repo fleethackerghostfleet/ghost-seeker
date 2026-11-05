@@ -401,7 +401,7 @@ function liveLadderHTML(it){
 }
 function liveWhy(it){
  const l=it.live,why=[];if(!l)return why;
- const rank=visible().l.filter(x=>!x.live?.suppressed);const pos=rank.findIndex(x=>x.id===it.id);
+ const rank=items.filter(x=>x.live&&!x.live.suppressed).sort((a,b)=>b.live.score-a.live.score);const pos=rank.findIndex(x=>x.id===it.id);
  if(l.suppressed)why.push({c:'dn',t:liveSuppressReason(it)});
  else if(pos>=0)why.push({c:it.tier===1?'al':'',t:`Rank ${pos+1} of ${rank.length} on shore by ship score (${l.score.toFixed(2)}) → P${it.centralTier} ${TNAME[it.centralTier]}`});
  if(l.unknown)why.push({c:'al',t:`The ship marked this object <b>unknown</b> (unfamiliarity score ${l.unknownness.toFixed(2)}) — unknown objects are never deprioritized by a directive`});
