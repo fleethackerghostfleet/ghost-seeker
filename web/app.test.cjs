@@ -185,7 +185,7 @@ test('feed shows every pipeline image by default with low-value, repeat and dire
  const context=feedContext();
  vm.runInContext(`
   items=[frame('original',{tier:1,central:.9}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),
-   frame('low',{tier:4,filtered:'low-value',central:.1}),frame('directive',{det:[{sup:true}]}),
+   frame('low',{tier:4,filtered:'low-value',central:.1}),frame('directive',{tier:4,det:[{sup:true}]}),
    frame('mixed',{tier:3,det:[{sup:true},{sup:false}]}),frame('dismissed',{dismissed:true})];
   before=JSON.stringify(items);
  `,context);
@@ -199,6 +199,16 @@ test('feed shows every pipeline image by default with low-value, repeat and dire
  vm.runInContext("filters.showDuplicates=true;state.tier='4'",context);
  assert.equal(vm.runInContext('ids()',context),'repeat,directive,low');
  assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
+});
+test('a later boost keeps the stored priority despite an earlier suppression flag',()=>{
+ const context=feedContext();
+ vm.runInContext("items=[frame('boosted',{tier:2,central:.7998,det:[{sup:true,matched:true}]}),frame('low',{tier:4})]",context);
+ assert.equal(vm.runInContext('ids()',context),'boosted,low');
+ assert.equal(vm.runInContext('visible().counts[2]',context),1);
+ assert.equal(vm.runInContext('feedTier(items[0])',context),2);
+ assert.equal(vm.runInContext('filteredReason(items[0])',context),'');
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('ids()',context),'low');
 });
 test('operator-chosen repeats stay visible at their own priority even with duplicates hidden',()=>{
  const context=feedContext();
@@ -244,7 +254,7 @@ test('Details screen lists automatically filtered photos by kind with their orig
  vm.runInContext(`body={innerHTML:''};els={detailsBody:body,liveStrip:{innerHTML:''}};$=id=>els[id];imageFor=it=>'/img/'+it.id;zulu=()=>'12:00:00';
   stats={cap:100,keep:20,drop:80,bytes:2048,db:5};
   items=[frame('original',{tier:2}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),frame('low',{tier:4,filtered:'low-value'}),
-   frame('directive',{det:[{sup:true}]}),frame('chosen',{filtered:'duplicate',manual:2}),frame('gone',{dismissed:true,filtered:'low-value'})];
+   frame('directive',{tier:4,det:[{sup:true}]}),frame('chosen',{filtered:'duplicate',manual:2}),frame('gone',{dismissed:true,filtered:'low-value'})];
   renderDetails();`,context);
  const page=()=>vm.runInContext('body.innerHTML',context);
  assert.match(page(),/Repeats of earlier images \(1\)/);

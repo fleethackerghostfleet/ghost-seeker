@@ -325,8 +325,8 @@ function humanReviewed(it){return !!(it.humanReviewed||!it.autoSent&&(it.reviewe
 function humanSent(it){return !!(it.sent&&!it.autoSent||it.fullRes)}
 function sendTime(it){return Math.max(it.sent&&!it.autoSent&&it.sentAt?Date.parse(it.sentAt):0,it.fullRes&&it.fullResAt?Date.parse(it.fullResAt):0)}
 const FILTERED_NAME={duplicate:'Repeat of an earlier image','low-value':'Low value'};
-function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':FILTERED_NAME[it.filtered]||(it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup)?'Lowered by directive':'')}
-function feedTier(it){return feedReasons.has(it.id)?4:it.tier}
+function filteredReason(it){return it.dismissed?'Not relevant':it.manual||it.sent?'':FILTERED_NAME[it.filtered]||(it.tier===4&&(it.live?.suppressed||it.det?.length&&it.det.every(d=>d.sup))?'Lowered by directive':'')}
+function feedTier(it){return it.tier}
 function reviewMatch(it,review){return review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
  const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};

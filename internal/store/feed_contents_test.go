@@ -24,6 +24,24 @@ func TestFilteredImagesAreStoredAtP4AndCountedAsKeptOnShip(t *testing.T) {
 	}
 }
 
+func TestSuppressedThenBoostedImageUsesStoredTierForUpload(t *testing.T) {
+	data := New(5)
+	data.RestoreDirectives([]command.Directive{{Rules: []command.Rule{
+		{Type: "suppress", Classes: []string{"warship"}},
+		{Type: "boost", Classes: []string{"warship"}},
+	}}})
+	data.Add(&command.Item{ID: "low", KB: 100, Manual: 4}, 0)
+	item, _ := data.Add(&command.Item{ID: "boosted", KB: 100, Dets: []command.Detection{{Class: "warship", Conf: .9}}}, 0)
+	if len(item.Det) != 1 || !item.Det[0].Sup || item.Tier == 4 {
+		t.Fatalf("suppressed then boosted image: %+v", item)
+	}
+	t.Logf("suppressed=%v score=%.4f stored tier=P%d", item.Det[0].Sup, item.Central, item.Tier)
+	changed := data.AdvanceUploads(time.Second)
+	if len(changed) != 1 || changed[0].ID != "boosted" {
+		t.Fatalf("upload order: %+v", changed)
+	}
+}
+
 func TestEvictionRemovesOldestFilteredImageFirst(t *testing.T) {
 	data := New(2)
 	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
