@@ -28,10 +28,10 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 		blocked = true
 	}
 	for _, clause := range splitPattern.Split(strings.ToLower(text), -1) {
-		if negativePattern.MatchString(clause) {
-			continue
-		}
 		for _, match := range everythingPattern.FindAllStringIndex(clause, -1) {
+			if negativePattern.MatchString(clause[:match[0]]) {
+				continue
+			}
 			if strings.EqualFold(clause[match[0]:match[1]], "everything") &&
 				dropEverythingPrefixPattern.MatchString(clause[:match[0]]) {
 				continue
