@@ -240,6 +240,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .rvask-suggestion .rvask-actions{width:100%;flex-wrap:wrap;justify-content:center;gap:clamp(12px,2vw,28px)}
 .rvask.rvask-suggestion .rvask-btn{flex:1 1 120px;min-width:0;min-height:clamp(90px,14vh,140px);font-size:clamp(22px,2.5vw,36px);gap:10px;border-color:var(--suggestion-border)}
 .rvask.rvask-suggestion .rvask-btn kbd{font-size:clamp(16px,1.6vw,24px);padding:2px 12px}
+.rvask.rvask-suggestion::before{content:"";position:fixed;inset:0;z-index:-1}
 .theme-day .rvask-suggestion{--suggestion-border:#ac8700}
 .rvkeys{flex:none;display:flex;gap:10px;padding:12px 20px 18px;align-items:stretch}
 .kb{flex:1;min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-radius:12px;border:2px solid var(--line);background:var(--panel2);color:var(--text);font:inherit;font-size:16px;font-weight:800;cursor:pointer;position:relative;transition:transform .08s,filter .08s}
