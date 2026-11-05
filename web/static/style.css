@@ -415,6 +415,13 @@ header{min-width:0;overflow:hidden}
  body:has(#pgFeed.on #feedHead.filters-open) header #emconControl .seg{display:flex;flex-wrap:wrap}
  body:has(#pgFeed.on #feedHead.filters-open) header #emconControl button{min-height:44px;flex:1}
 }
+@media(max-width:700px),(max-width:1023px) and (max-height:500px){
+ body:not(:has(#pgFeed.on)) header{flex-wrap:wrap;height:auto}
+ body:not(:has(#pgFeed.on)) header nav{flex:0 0 100%;order:-1;height:44px;margin-left:0;overflow-x:auto}
+ body:not(:has(#pgFeed.on)) header #emconControl{flex-basis:100%;order:2}
+ body:not(:has(#pgFeed.on)) header #emconControl .seg{display:flex;flex-wrap:wrap}
+ body:not(:has(#pgFeed.on)) header #emconControl button{min-height:44px;flex:1}
+}
 .theme-day .wb-chip{background:#f2f6f9;border-color:#b6c5d1;border-left-color:var(--accent)}.theme-day .wb-chip.suppress{border-left-color:var(--p2)}
 .theme-day #wbProposal{background:#fbf4e1;border-color:#c9a24a}
 .theme-day .wb mark{background:#fbeec4;color:#6b4e00}
