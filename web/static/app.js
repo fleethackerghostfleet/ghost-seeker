@@ -344,7 +344,7 @@ function visible(){
  return{l,counts};
 }
 function hideableRepeat(it){return it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
-function repeatCount(){return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&!i.dismissed&&hideableRepeat(i)).length}
+function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)).length}
 /* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
 function pairRepeats(l){
  const ids=new Set(l.map(i=>i.id)),after=new Map();

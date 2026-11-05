@@ -226,6 +226,13 @@ test('shown repeats sit right after their original across sensors and sorts; hid
  assert.match(vm.runInContext('ids()',context),/b,rb/);
  vm.runInContext("state.sort='pri';filters.showDuplicates=false",context);
  assert.equal(vm.runInContext('ids()',context),'a,b,c,low');
+ vm.runInContext("state.tier='1'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),0);
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),3);
+ vm.runInContext("state.tier='all';filters.review='reviewed'",context);
+ assert.equal(vm.runInContext('repeatCount()',context),0);
+ vm.runInContext("filters.review='all'",context);
  assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
 });
 test('a later boost keeps the stored priority despite an earlier suppression flag',()=>{
