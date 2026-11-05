@@ -42,8 +42,20 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 #pgFeed:has(#feedHead.filters-open){overflow-y:auto}
 #pgFeed:has(#feedHead.filters-open) .feed{min-height:12rem;flex-shrink:0}
 .box em{white-space:normal;overflow-wrap:anywhere}
-.rvmain{min-height:24rem}
+.rvmain{flex:none;min-height:24rem;height:max(24rem,calc(100dvh - 24rem))}
 .rvimg{min-height:16rem}
+#pgRv,#pgBrief{flex:1 0 auto}
+.brief-workspace{flex:1 0 24rem;min-height:24rem}
+#pgRp .panel{overflow-wrap:normal;word-break:normal}
+#pgRp button{overflow-wrap:normal;word-break:normal}
+#pgRp .wrow{grid-template-columns:minmax(min-content,8.125rem) minmax(1rem,1fr) max-content}
+#pgRp .wrow .v{white-space:nowrap;min-width:max-content}
+#pgRp .policy-audit :is(th,td){overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:normal;word-break:normal}
+@media(max-width:900px){
+ .rvmain{height:auto;min-height:0;grid-template-rows:auto auto;overflow:visible}
+ .rvimg{container-type:inline-size;min-height:0;aspect-ratio:16/10}
+ .rvframe{width:100%;height:auto;aspect-ratio:16/10}
+}
 @media(max-width:1023px){
  header nav{flex:0 0 100%;order:-1;overflow-x:auto;flex-wrap:nowrap;margin-left:0}
  body:has(#pgFeed.on) header{height:auto;min-height:2rem;flex-wrap:wrap}
