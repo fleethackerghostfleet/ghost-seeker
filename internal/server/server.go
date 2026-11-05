@@ -19,18 +19,24 @@ import (
 )
 
 type Server struct {
-	store *store.Store
-	hub   *hub
-	mux   *http.ServeMux
+	store    *store.Store
+	hub      *hub
+	mux      *http.ServeMux
+	compiler *command.Compiler
+	after    func(time.Duration, func())
 }
 
 const maxStreamClients = 64
 
 func New(data *store.Store) *Server {
-	s := &Server{store: data, hub: newHub(), mux: http.NewServeMux()}
+	s := &Server{
+		store: data, hub: newHub(), mux: http.NewServeMux(),
+		compiler: &command.Compiler{}, after: func(delay time.Duration, fn func()) { time.AfterFunc(delay, fn) },
+	}
 	s.mux.HandleFunc("GET /api/config", s.config)
 	s.mux.HandleFunc("GET /api/stream", s.stream)
 	s.mux.HandleFunc("POST /api/directives", s.addDirective)
+	s.mux.HandleFunc("POST /api/directives/compile", s.compileDirective)
 	s.mux.HandleFunc("POST /api/directives/preview", s.previewDirectives)
 	s.mux.HandleFunc("DELETE /api/directives", s.clearDirectives)
 	s.mux.HandleFunc("DELETE /api/directives/{id}", s.deleteDirective)
@@ -41,6 +47,20 @@ func New(data *store.Store) *Server {
 	s.mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
 	s.mux.Handle("GET /", web.Handler())
 	return s
+}
+
+func (s *Server) SetCompiler(compiler *command.Compiler) {
+	if compiler == nil {
+		compiler = &command.Compiler{}
+	}
+	s.compiler = compiler
+}
+
+func (s *Server) directiveCompiler() *command.Compiler {
+	if s.compiler == nil {
+		return &command.Compiler{}
+	}
+	return s.compiler
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -124,8 +144,9 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Text  string          `json:"text"`
-		Rules *[]command.Rule `json:"rules"`
+		Text        string          `json:"text"`
+		Rules       *[]command.Rule `json:"rules"`
+		DurationMin int             `json:"durationMin"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
@@ -136,9 +157,41 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Directive text must be 500 characters or fewer")
 		return
 	}
-	rules := command.ParseDirective(body.Text)
+	if body.DurationMin < 0 || body.DurationMin > 10080 {
+		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+		return
+	}
+	compiler := s.directiveCompiler()
+	var compiled command.Compiled
+	var rules []command.Rule
+	durationMin := body.DurationMin
 	if body.Rules != nil {
 		rules = *body.Rules
+		compiled = compiler.Review(body.Text, rules, durationMin)
+		durationMin = compiled.DurationMin
+	} else {
+		compiled = compiler.Compile(r.Context(), body.Text)
+		rules = compiled.Rules
+		if durationMin == 0 {
+			durationMin = compiled.DurationMin
+		}
+	}
+	if compiled.Blocked {
+		message := ""
+		for _, warning := range compiled.Warnings {
+			if strings.HasPrefix(warning, "Blocked") {
+				message = warning
+				break
+			}
+		}
+		if message == "" && len(compiled.Warnings) > 0 {
+			message = compiled.Warnings[0]
+		}
+		if message == "" {
+			message = "Directive is blocked"
+		}
+		writeError(w, http.StatusUnprocessableEntity, message)
+		return
 	}
 	if err := validateRules(rules); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -148,6 +201,10 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects or behaviors — try ships, aircraft, drones, people, AIS, approaching…")
 		return
 	}
+	if durationMin < 0 || durationMin > 10080 {
+		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+		return
+	}
 	directive, err := s.store.AddDirective(strings.TrimSpace(body.Text), rules)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
@@ -155,7 +212,47 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	}
 	s.publishSnapshot()
 	audit(r, "directive.add", "id", directive.ID, "text", directive.Text)
+	if durationMin > 0 {
+		id := directive.ID
+		s.after(time.Duration(durationMin)*time.Minute, func() {
+			if s.store.DeleteDirective(id) {
+				s.publishSnapshot()
+			}
+		})
+	}
 	writeJSON(w, http.StatusCreated, directive)
+}
+
+func (s *Server) compileDirective(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Text        string          `json:"text"`
+		Rules       *[]command.Rule `json:"rules"`
+		DurationMin int             `json:"durationMin"`
+	}
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if utf8.RuneCountInString(body.Text) > 500 {
+		writeError(w, http.StatusBadRequest, "Directive text must be 500 characters or fewer")
+		return
+	}
+	compiler := s.directiveCompiler()
+	var compiled command.Compiled
+	if body.Rules != nil {
+		if err := validateRules(*body.Rules); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if body.DurationMin < 0 || body.DurationMin > 10080 {
+			writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
+			return
+		}
+		compiled = compiler.Review(body.Text, *body.Rules, body.DurationMin)
+	} else {
+		compiled = compiler.Compile(r.Context(), body.Text)
+	}
+	writeJSON(w, http.StatusOK, compiled)
 }
 
 func (s *Server) deleteDirective(w http.ResponseWriter, r *http.Request) {
