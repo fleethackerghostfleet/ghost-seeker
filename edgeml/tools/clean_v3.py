@@ -152,12 +152,15 @@ def main():
     out = a.output
     if out.exists():
         ap.error("output exists; clean versions are never rebuilt in place")
+    raw_ds = {r["dataset_id"]: r for c in (a.ir_catalog, a.sds_catalog) for r in read_jsonl(c / "datasets.jsonl")}
+    missing = {"ir_maritime_vessels", "seadronessee"} - raw_ds.keys()
+    if missing:
+        ap.error(f"datasets.jsonl rows missing for {sorted(missing)} in --ir-catalog/--sds-catalog")
     shutil.copytree(a.v2, out / "catalog")
     issues, recordings = [], []
     ir_img, ir_ann, ir_groups = clean_ir(a.ir_raw, a.ir_catalog, issues, recordings)
     sds_img, sds_ann, sds_groups = clean_sds(a.sds_catalog, a.sds_sequences)
     datasets = read_jsonl(a.v2 / "datasets.jsonl")
-    raw_ds = {r["dataset_id"]: r for r in read_jsonl(a.ir_catalog / "datasets.jsonl")}
     for ds, img, ann in (("ir_maritime_vessels", ir_img, ir_ann), ("seadronessee", sds_img, sds_ann)):
         write_jsonl(out / f"catalog/images/{ds}.jsonl", img)
         write_jsonl(out / f"catalog/annotations/{ds}.jsonl", ann)
