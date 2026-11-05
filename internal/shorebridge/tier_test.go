@@ -174,7 +174,7 @@ func TestLivePreviewHonorsTierPins(t *testing.T) {
 	c.onSnapshot(&Snapshot{Objects: []*Object{o}}, nil)
 	post := func(body string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		c.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/preview", strings.NewReader(body)))
+		c.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/directives/preview", strings.NewReader(body)))
 		return w
 	}
 	for tier := 1; tier <= 4; tier++ {
@@ -210,7 +210,7 @@ func TestLivePreviewHonorsTierPins(t *testing.T) {
 	}
 	empty := NewConsole(New("", "", nil))
 	w = httptest.NewRecorder()
-	empty.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/preview", strings.NewReader(`{"rules":[]}`)))
+	empty.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/directives/preview", strings.NewReader(`{"rules":[]}`)))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"items":[]`) {
 		t.Fatalf("empty preview: %d %s", w.Code, w.Body.String())
 	}
