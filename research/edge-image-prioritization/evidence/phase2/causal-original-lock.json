@@ -1,0 +1,152 @@
+{
+  "config": {
+    "methods": [
+      "full_fifo",
+      "full_priority",
+      "full_density",
+      "q50_density",
+      "overview640_density",
+      "overview320_density",
+      "predicted_detail16",
+      "progressive_density"
+    ],
+    "rates": [
+      9600,
+      64000,
+      256000,
+      2000000
+    ],
+    "schedules": [
+      "constant",
+      "outage20to40",
+      "bursty",
+      "bursty_offset"
+    ],
+    "batch_seconds": [
+      1,
+      5
+    ],
+    "ttl_seconds": 60,
+    "overhead_bytes": 64,
+    "propagation_seconds": 0.25,
+    "finish_tail_seconds": 0,
+    "detail_thresholds": [
+      0,
+      8,
+      16,
+      32
+    ],
+    "containment_fraction": 0.9,
+    "scope": "development exploratory; previous test set not reused",
+    "progressive_weights": {
+      "overview": 1.0,
+      "crop": 0.5,
+      "full": 0.1
+    }
+  },
+  "index_sha256": "a3f53ace153a287ac3de971362085c86b5c05334a583dc79d50bdf0d83a03f64",
+  "cached_records_sha256": "cc2322eda7adf787322f300a7ac4cc9a15ca89cf85004db8b53cac24ea522149",
+  "forms_sha256": "2db0362c0aaecfa85cd8e8b9a4657aa795cc971ecd0b0bd0c6dda21ca11aa79a",
+  "annotations": [
+    {
+      "path": "inputs/data/A_ship_in_the_distance/gt/gt.txt",
+      "sha256": "7bf71acf10c4feaac5a9ed227603bed730bf567070df787d7e96e9c3e1481011"
+    },
+    {
+      "path": "inputs/data/A_ship_in_the_distance/gt/labels.json",
+      "sha256": "02153c9a7c2dd147e661fa10b946bc5767e6ab13f83274d7834d55db8225e022"
+    },
+    {
+      "path": "inputs/data/Canadian_Coast_Guard_Helicopter_Landing/gt/gt.txt",
+      "sha256": "760506b92e5d13ef86e3142b07932653ca104b38c816e1367bf6e5a48b933ebd"
+    },
+    {
+      "path": "inputs/data/Canadian_Coast_Guard_Helicopter_Landing/gt/labels.json",
+      "sha256": "b1631790a023566c3bd2ec63ac182c919c92600f2a70ebd49f783e9db21c60b0"
+    },
+    {
+      "path": "inputs/data/Chase_N_Fish_Sharky/gt/gt.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "inputs/data/Chase_N_Fish_Sharky/gt/labels.json",
+      "sha256": "2730a47df8e3b0b8fe55fb1e132ee977cd22a461ad7fb125c830905e12c6b156"
+    },
+    {
+      "path": "inputs/data/Cruise_ship_Mediterranean_sunset_off_Italy/gt/gt.txt",
+      "sha256": "2ce629c72b6f7f4965821e35141c7540339fa8030e45082e48babaa0f8e6a7d9"
+    },
+    {
+      "path": "inputs/data/Cruise_ship_Mediterranean_sunset_off_Italy/gt/labels.json",
+      "sha256": "008fcfea99669adb4ca2201444061eb3a1edba227a8cbc214704e458ba4e6f20"
+    },
+    {
+      "path": "inputs/data/Far_away_but_did_you_see_that_splash/gt/gt.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "inputs/data/Far_away_but_did_you_see_that_splash/gt/labels.json",
+      "sha256": "8579cce1d165b73be76dc9e2a6204f25961b5c654d9ee9ec234d4f3ba69c33db"
+    },
+    {
+      "path": "inputs/data/Sailing_POV_Corfu_Paxos/gt/gt.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "inputs/data/Sailing_POV_Corfu_Paxos/gt/labels.json",
+      "sha256": "8a5761b653181d540a6f9b5c34af5450f3342e2e3e06597532753dcd8b3d651c"
+    },
+    {
+      "path": "inputs/data/Ship_in_the_Distance_Utopia_of_the_Seas/gt/gt.txt",
+      "sha256": "f3fbd09ec80dd6c770c3f17d652d5f9e7036f9049c8dbd36448a36c98380d09e"
+    },
+    {
+      "path": "inputs/data/Ship_in_the_Distance_Utopia_of_the_Seas/gt/labels.json",
+      "sha256": "9553e4d40c9a8b01936075ca0edf7930bc4237ec05f263ba64717dba00ae853f"
+    },
+    {
+      "path": "inputs/data/Submarine_surfacing/gt/gt.txt",
+      "sha256": "5cde947b2d5d085b555f1dce9378f63f2c3446766149156863045350e67c278c"
+    },
+    {
+      "path": "inputs/data/Submarine_surfacing/gt/labels.json",
+      "sha256": "0d2dc8fa0ee27fc18c237aeb285ee7708108460923d4827d46e96864fb9855ea"
+    },
+    {
+      "path": "inputs/data/Two_Dolphins_near_the_coast_of_Gibraltar/gt/gt.txt",
+      "sha256": "af69266d74504e65b8bb275ab0836b3730abd86d9be07ef4f9990a858479071b"
+    },
+    {
+      "path": "inputs/data/Two_Dolphins_near_the_coast_of_Gibraltar/gt/labels.json",
+      "sha256": "c8714a31d024ba3ff4ef1b326d426fdd3c89d529d503d9831e2340b21f42b276"
+    }
+  ],
+  "baseline_sources": {
+    "ghost_priority/__init__.py": "826c98a19f62d7451ec4147a8e1625b94ee8db1d993bc4d214a612105988a0b8",
+    "ghost_priority/__main__.py": "f38fd2f2c920c29c828645e87ed64743d567aaaef7fba7a15d2c7d7f8094f91f",
+    "ghost_priority/analysis.py": "4336d694e915c2ba554aa19d7930e769df97bbcf386c19830db22b0fbfd18d41",
+    "ghost_priority/bandwidth.py": "9bcbfd5b0d4df9e2d7478bc7d5c7d6cc4410d0a7ef193d5c64956ca6e8dff971",
+    "ghost_priority/cli.py": "a7aa16cf42bac239e6225fec1d6cde7605c96271e5a9ee37d2b4c105291f02e7",
+    "ghost_priority/contracts.py": "1bffa5a96a32f73f2c11f64ca4a49508b57c07b5f8c1f71a91aa8c2419ee8005",
+    "ghost_priority/evaluation.py": "bceb7259dc6e37cda3e167c269e66c1fc3a52f2dddf9c7a9a9d07b600ff83f63",
+    "ghost_priority/policy.py": "19c80da0e642845c6be5db3c550ce913e31653a7e855146afa8f530e99e1e981",
+    "ghost_priority/providers.py": "a025b7379150c97968fc7748c3ef25a6069552fc61b461fb68cfe4e868aabf62",
+    "ghost_priority/selection.py": "c79e3faef4dfbdf49c2d99aef259884fc44189991fcf73bef64fc5ce760b066d",
+    "ghost_priority/similarity.py": "da0d750138313d888dcb23bec7647daa76495adca8c5820a61815c821e0dacaa",
+    "ghost_priority/similarity_commands.py": "8f2ff131703fd3310a661d32f3c1d83e005aaabca8b19478a93cdcbd87b3ac9f",
+    "ghost_priority/similarity_evaluation.py": "91ac02838bd3aa5dc045c3bdc24663878f1162801ff438829941c2990d554c16",
+    "ghost_priority/similarity_features.py": "5cd189beaeefdc7e5c4b0294c86e25a5a3442fdb0148a1ecea30d2dbcec7ac73",
+    "ghost_priority/smd.py": "12ae6ad68aa91d17eb1af11871d906a76ab1e7b409863b6bf259709345bd74ff",
+    "ghost_priority/third_party/nanodet.py": "4fa19c613d5c3610d2428635eac5621f7c9c36b11b5b222adce2f578ba0d6416"
+  },
+  "source_files": {
+    "integration/experiment.py": "b145c2e1b31a399b56c682b31bd3d26c89646a54ce2113ecccccb28c911f0358",
+    "integration/test_experiment.py": "e155ea8203a7f8342ded54d010432591fcd609ea167dd31d2a8af7fb9c92032d",
+    "transport/link_simulator.py": "81b1132cddd3a91f19052846c8458f07e14ab7af6246ed649b4482713f9905e9",
+    "transport/test_link_simulator.py": "59b4d2d7d8e95334c577afb8df5a0053c70ed54ebd8c2a76dcae0b1cb6fb3d5e",
+    "representation/crop_opportunity_audit.py": "e5b594bfafae20be688aeca10fa5d517de9407178543a03fc496571c62787391",
+    "representation/encode_forms.py": "e5999e6d3ad5f28fb7e7d193e213c563b72081ac7ade0ed8314c100632faaea4",
+    "representation/test_crop_opportunity_audit.py": "d58f15662bbf25eba01b951050604e6d2a833806df7cf4dc7e1426f0a1b8ac31",
+    "representation/test_encode_forms.py": "41962e8c917ddb00f668d6d8ecbe3284c420c1c3ff3cc385e5f11c0be5968503"
+  }
+}

@@ -1,0 +1,203 @@
+{
+  "baseline_commit": "a9c2de09f24dc242d274b507c4eeb7110d14db79",
+  "delivery_base_commit": "1a6382ed554c63466c6fc34fafa1bbf0bb70b659",
+  "files": [
+    {
+      "path": "phase1/candidates/candidate_methods.py",
+      "original_sha256": "5ebd15ad7ebfc145223898ab64814316f64b619b03c28eab7e71e874bd400081",
+      "delivery_sha256": "5ebd15ad7ebfc145223898ab64814316f64b619b03c28eab7e71e874bd400081",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/candidates/benchmark_scale.py",
+      "original_sha256": "444860fdcd46c7b1c2cad620e5ac15aac45b3633cef8a5027dff9f7c6a4343cf",
+      "delivery_sha256": "444860fdcd46c7b1c2cad620e5ac15aac45b3633cef8a5027dff9f7c6a4343cf",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/candidates/benchmark_real.py",
+      "original_sha256": "da2693abe02bc2f57663c589477c7710b58d5fc393a9c2686a50cf8eaf56fb3d",
+      "delivery_sha256": "48add749db3a28359e5dc701a985b7cad81571153d3899924e80fd58cb188f9c",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase1/candidates/synthetic_audit.py",
+      "original_sha256": "14f5dd5973fb1c251e7a05323c9e37f8833faf591869a96b6ec648ba1dfed0b1",
+      "delivery_sha256": "14f5dd5973fb1c251e7a05323c9e37f8833faf591869a96b6ec648ba1dfed0b1",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/candidates/border_audit.py",
+      "original_sha256": "c4d8e56d7c99de3f3c8c685f95f5c8efd8278adfb0a0ea78a74e2c8d166d2527",
+      "delivery_sha256": "c4d8e56d7c99de3f3c8c685f95f5c8efd8278adfb0a0ea78a74e2c8d166d2527",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/candidates/test_candidate_methods.py",
+      "original_sha256": "c25ea3dc2b0855d11eba86fab6d92e9c16029f8f78dbe5fe02ab9975eed70c08",
+      "delivery_sha256": "b6abf9b564946394f823d501bbd92d5ad5ad0c98e53bf7f936e308cf62695b68",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase1/candidates/test_real_benchmark.py",
+      "original_sha256": "f7329841997f7185257c47b4ef807826d948a7c71913c217af94fff905a87cec",
+      "delivery_sha256": "28b3ab676094249b15b57712ff1436f471f02c691186693237dc852b6229ebdd",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase1/candidates/test_scale_benchmark.py",
+      "original_sha256": "8fed712997c9044600cca533a223a673801e569e6975da251511b10e175c6abd",
+      "delivery_sha256": "8fed712997c9044600cca533a223a673801e569e6975da251511b10e175c6abd",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/evaluation/run_benchmark.py",
+      "original_sha256": "5d4e0f748829d864f0975d8d4eba16dd7eebf8d3a87d8049b3bece5ae70943a0",
+      "delivery_sha256": "5d4e0f748829d864f0975d8d4eba16dd7eebf8d3a87d8049b3bece5ae70943a0",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/evaluation/replay_audit.py",
+      "original_sha256": "08de57f78f9aac2a721937506d5aee1fd9bcfd2c5486b9849938556206a2e444",
+      "delivery_sha256": "4181aa6a3f7c5e2d721de4509d03c9001e9b094f1d07ec93c205fbed6610be45",
+      "modified_for_portability": true,
+      "delivery_note": "Path portability edits and removal of trailing whitespace; AST unchanged by whitespace cleanup."
+    },
+    {
+      "path": "phase1/evaluation/annotation_sensitivity.py",
+      "original_sha256": "819c7c6a71fd659c949aebdc0fe59235eb1877d42416b649428ff1fad1261ce8",
+      "delivery_sha256": "819c7c6a71fd659c949aebdc0fe59235eb1877d42416b649428ff1fad1261ce8",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/evaluation/exact_cluster_bootstrap.py",
+      "original_sha256": "329e36f854dc727a0856f7dff36d6c9d73a2301eda4d2f740223d0c83b6c3120",
+      "delivery_sha256": "329e36f854dc727a0856f7dff36d6c9d73a2301eda4d2f740223d0c83b6c3120",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/evaluation/test_benchmark.py",
+      "original_sha256": "ed235b0900e082718d5e4b26b176a6814cda31a5ff4e84fb9cd65d895e0f6666",
+      "delivery_sha256": "39d84972098fd490b660f872634d1a1e8f4fdd6013c72f4fd91f3e7cb5263baa",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase1/evaluation/test_lock.py",
+      "original_sha256": "588114e0f0d41e876e515f3de603d9657f08e691fd030b51e415103aa72a65a4",
+      "delivery_sha256": "589db0c6f787b51103be0b51872f7bd40f0b4f351e3a27f57379c01039aec10c",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase1/evaluation/test_annotation_sensitivity.py",
+      "original_sha256": "1ee83faf5565bf3fc2397f178b68910f28811de03e4a213970c4dd7babb564bc",
+      "delivery_sha256": "1ee83faf5565bf3fc2397f178b68910f28811de03e4a213970c4dd7babb564bc",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase1/evaluation/test_exact_cluster_bootstrap.py",
+      "original_sha256": "d19aa8293476b9cb18f3f53d5b042d9cc1290dee2a3f6e4044e54eab85285965",
+      "delivery_sha256": "d19aa8293476b9cb18f3f53d5b042d9cc1290dee2a3f6e4044e54eab85285965",
+      "modified_for_portability": false
+    },
+    {
+      "path": "evidence/phase1/locks/default.json",
+      "original_sha256": "0e5cdc728c10a1c4e8725c6309420f0d55af86537592ae9f2fd7e5dba4ee3cfe",
+      "delivery_sha256": "0e5cdc728c10a1c4e8725c6309420f0d55af86537592ae9f2fd7e5dba4ee3cfe",
+      "modified_for_portability": false
+    },
+    {
+      "path": "evidence/phase1/locks/nanodet.json",
+      "original_sha256": "2983ec4f2e49195b18b2675c9255d0332be100c46bdadb3a97c83dc2b3e13748",
+      "delivery_sha256": "2983ec4f2e49195b18b2675c9255d0332be100c46bdadb3a97c83dc2b3e13748",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/representation/encode_forms.py",
+      "original_sha256": "e5999e6d3ad5f28fb7e7d193e213c563b72081ac7ade0ed8314c100632faaea4",
+      "delivery_sha256": "e5999e6d3ad5f28fb7e7d193e213c563b72081ac7ade0ed8314c100632faaea4",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/representation/crop_opportunity_audit.py",
+      "original_sha256": "e5b594bfafae20be688aeca10fa5d517de9407178543a03fc496571c62787391",
+      "delivery_sha256": "e5b594bfafae20be688aeca10fa5d517de9407178543a03fc496571c62787391",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/representation/test_encode_forms.py",
+      "original_sha256": "41962e8c917ddb00f668d6d8ecbe3284c420c1c3ff3cc385e5f11c0be5968503",
+      "delivery_sha256": "41962e8c917ddb00f668d6d8ecbe3284c420c1c3ff3cc385e5f11c0be5968503",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/representation/test_crop_opportunity_audit.py",
+      "original_sha256": "d58f15662bbf25eba01b951050604e6d2a833806df7cf4dc7e1426f0a1b8ac31",
+      "delivery_sha256": "d58f15662bbf25eba01b951050604e6d2a833806df7cf4dc7e1426f0a1b8ac31",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/transport/link_simulator.py",
+      "original_sha256": "81b1132cddd3a91f19052846c8458f07e14ab7af6246ed649b4482713f9905e9",
+      "delivery_sha256": "81b1132cddd3a91f19052846c8458f07e14ab7af6246ed649b4482713f9905e9",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/transport/chunk_simulator.py",
+      "original_sha256": "05538e89898feeac1a5d8f1f3d6470c4780e526f102f943f8e537b230f676e35",
+      "delivery_sha256": "05538e89898feeac1a5d8f1f3d6470c4780e526f102f943f8e537b230f676e35",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/transport/chunk_simulator_completion.py",
+      "original_sha256": "03136d686376a696d5c4dd01b40fbb70278e6336161f44aff7930e83557ad540",
+      "delivery_sha256": "03136d686376a696d5c4dd01b40fbb70278e6336161f44aff7930e83557ad540",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/transport/test_link_simulator.py",
+      "original_sha256": "59b4d2d7d8e95334c577afb8df5a0053c70ed54ebd8c2a76dcae0b1cb6fb3d5e",
+      "delivery_sha256": "59b4d2d7d8e95334c577afb8df5a0053c70ed54ebd8c2a76dcae0b1cb6fb3d5e",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/transport/test_chunk_simulator.py",
+      "original_sha256": "cb6f250e1e04c4d8813feeddabe0027774835050fa7c936dad92129830390a6a",
+      "delivery_sha256": "cb6f250e1e04c4d8813feeddabe0027774835050fa7c936dad92129830390a6a",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/transport/test_chunk_completion.py",
+      "original_sha256": "3fe6ce9712fbbf6fe945589e4b85b961d0d0a9628871003b3b9f279ff0e1fb3d",
+      "delivery_sha256": "3fe6ce9712fbbf6fe945589e4b85b961d0d0a9628871003b3b9f279ff0e1fb3d",
+      "modified_for_portability": false
+    },
+    {
+      "path": "phase2/run_study.py",
+      "original_sha256": "b145c2e1b31a399b56c682b31bd3d26c89646a54ce2113ecccccb28c911f0358",
+      "delivery_sha256": "4ec954a92aca7626f1ac30193f4c225469c42bd3368d53209dca8e644b638627",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase2/test_run_study.py",
+      "original_sha256": "e155ea8203a7f8342ded54d010432591fcd609ea167dd31d2a8af7fb9c92032d",
+      "delivery_sha256": "453e9044bcb5abf037c64464976cfe29030b1fa9564aac09dab07112cc102d93",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase2/run_chunks.py",
+      "original_sha256": "2bc548f29839c1d691179786a6867540e308ac0cdd357d96aa4eb9679d3ccc96",
+      "delivery_sha256": "806385589b17da19e2b71bf9177ab02d7b62d8a9d926d9b2ffc3ffd6f38c5f59",
+      "modified_for_portability": true
+    },
+    {
+      "path": "phase2/run_completion.py",
+      "original_sha256": "71f3bb99ce98c08de6b19cda66659ce32dcbbb0c163dd991aac0695b396da71c",
+      "delivery_sha256": "aac1dc1f180527ad4950ff287b0724ca7a03ff2ff7cc750b32b6eb12a5ae42db",
+      "modified_for_portability": true
+    }
+  ],
+  "notes": [
+    "original_sha256 hashes the local research source used as the delivery input, which can include post-run validation guards. Frozen execution hashes remain in original study locks.",
+    "delivery_sha256 identifies the portable copy. Study results are not recomputed by changing those historical locks."
+  ]
+}
