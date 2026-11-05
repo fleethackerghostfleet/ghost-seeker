@@ -219,20 +219,20 @@ func setForm(it *pb.Item, nf *pb.Form) {
 // engine may be stateless (inference.Mock, an older sidecar) and the frame
 // keeps hash behaviour, so detected images are never lost.
 //
-// Object-free frames become a FACT+THUMB "scene" item at most once per
-// SceneEvery per source; the rest fold (counted as deduped). A scene item
-// carries no FULL: shore can pull the next scene.
+// Object-free frames become a "scene" item at most once per SceneEvery per
+// source; the rest fold (counted as deduped). A scene ships FACT+THUMB only;
+// its FULL stays on the edge and is pull-only (see scheduler.pullOnly).
 func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse) (*store.Row, error) {
 	if len(resp.Detections) > 0 {
 		if !g.stateful[c.Source] {
-			// Hash behaviour, except that a scene item (no FULL) holding the
-			// same bytes must not swallow a frame that now shows an object.
+			// Hash behaviour, except that a scene item holding the same
+			// bytes must not swallow a frame that now shows an object.
 			ids, err := g.st.IDsByHash(ctx, hash)
 			if err != nil {
 				return nil, err
 			}
 			for _, id := range ids {
-				if row, err := g.st.Get(ctx, id); err == nil && row.Form(pb.FormKind_FORM_KIND_FULL) != nil {
+				if row, err := g.st.Get(ctx, id); err == nil && row.Item.GetFeatures().GetTags()["event"] != "scene" {
 					atomic.AddInt64(&g.Dups, 1)
 					return row, nil
 				}
@@ -257,7 +257,7 @@ func (g *Ingester) sceneItem(ctx context.Context, c *Capture, hash string, resp 
 	tags["event"] = "scene"
 	sc := *c
 	sc.Tags = tags
-	row, err := g.newItem(ctx, &sc, hash, resp, nil, pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB)
+	row, err := g.newItem(ctx, &sc, hash, resp, nil, pb.FormKind_FORM_KIND_FACT, pb.FormKind_FORM_KIND_THUMB, pb.FormKind_FORM_KIND_FULL)
 	if err == nil {
 		g.lastScene[c.Source] = ts
 	}
