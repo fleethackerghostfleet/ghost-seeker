@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -45,15 +46,23 @@ def checks():
     ]
 
 
-def run_check(name, command, output):
+def run_check(name, command, output, timeout=3600):
     started = time.monotonic()
     log = output / f"{name}.log"
     print(f"Running {name}: {shlex.join(command)}", flush=True)
     with log.open("w") as stream:
         try:
-            result = subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
-                                    env={**os.environ, "STRICT_CHECKS": "1"}, timeout=3600)
-            code = result.returncode
+            process = subprocess.Popen(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
+                                       env={**os.environ, "STRICT_CHECKS": "1"}, start_new_session=True)
+            try:
+                code = process.wait(timeout=timeout)
+            except (subprocess.TimeoutExpired, KeyboardInterrupt):
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+                raise
         except (OSError, subprocess.TimeoutExpired) as exc:
             stream.write(f"\n{exc}\n")
             code = 1

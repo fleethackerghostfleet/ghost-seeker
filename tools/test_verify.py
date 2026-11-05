@@ -1,7 +1,9 @@
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -68,11 +70,26 @@ class VerifyTests(unittest.TestCase):
 
     def test_missing_command_and_timeout_are_logged_as_failures(self):
         for error in (FileNotFoundError("missing"), subprocess.TimeoutExpired(["fake"], 3600)):
-            with self.subTest(error=error), patch.object(verify.subprocess, "run", side_effect=error):
+            with self.subTest(error=error), patch.object(verify.subprocess, "Popen", side_effect=error):
                 result = verify.run_check("missing", ["fake"], self.root)
             self.assertEqual(result["status"], "failed")
             self.assertNotEqual(result["exit_code"], 0)
             self.assertTrue((self.root / result["log"]).read_text())
+
+    def test_timeout_kills_child_processes(self):
+        command = [sys.executable, "-c",
+                   "import subprocess,sys,time; "
+                   "p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); "
+                   "print(p.pid,flush=True); time.sleep(60)"]
+        result = verify.run_check("timeout", command, self.root, timeout=1)
+        self.assertEqual(result["status"], "failed")
+        child = int((self.root / "timeout.log").read_text().splitlines()[0])
+        try:
+            os.kill(child, 0)
+        except ProcessLookupError:
+            return
+        # A reparented zombie is terminated and cannot keep consuming resources.
+        self.assertEqual(Path(f"/proc/{child}/stat").read_text().split()[2], "Z")
 
     def test_generated_comparison_includes_staged_changes(self):
         with patch.object(verify.subprocess, "run") as run:
