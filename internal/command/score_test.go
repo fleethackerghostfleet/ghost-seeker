@@ -15,6 +15,49 @@ func TestRescoreWithoutRules(t *testing.T) {
 	}
 }
 
+func TestClassFeedbackTargetsAdvertisedTier(t *testing.T) {
+	for tier := 1; tier <= 4; tier++ {
+		rules := []Rule{{Type: "suppress", Classes: []string{"tanker"}, Tier: tier}}
+		for _, confidence := range []float64{.3, .95} {
+			item := Item{Dets: []Detection{{Class: "tanker", Conf: confidence}, {Class: "tanker", Conf: confidence}}}
+			Rescore(&item, "maritime", []Directive{{Rules: rules}})
+			if item.Tier != tier || item.Det[0].Sup {
+				t.Fatalf("target P%d: %+v", tier, item)
+			}
+		}
+		other := Detection{Class: "warship", Conf: .9}
+		if ScoreDet(other, rules, "maritime").Score != ScoreDet(other, nil, "maritime").Score {
+			t.Fatal("class feedback changed unrelated class")
+		}
+	}
+	item := Item{}
+	Rescore(&item, "maritime", []Directive{{Rules: []Rule{{Type: "suppress", Classes: []string{"tanker"}, Tier: 2}}}})
+	if item.Tier != 4 {
+		t.Fatal("empty frame gained a class priority")
+	}
+}
+
+func TestNewestMatchingDirectiveOverridesTargetTier(t *testing.T) {
+	detection := Detection{Class: "tanker", Conf: .9}
+	target := Rule{Type: "suppress", Classes: []string{"tanker"}, Tier: 2}
+	for _, kind := range []string{"suppress", "boost"} {
+		later := Rule{Type: kind, Classes: []string{"tanker"}}
+		got := ScoreDet(detection, []Rule{target, later}, "maritime")
+		want := ScoreDet(detection, []Rule{later}, "maritime")
+		if got.Score != want.Score || got.Sup != want.Sup {
+			t.Fatalf("later %s lost: got %+v want %+v", kind, got, want)
+		}
+		got = ScoreDet(detection, []Rule{later, target}, "maritime")
+		if TierFor(got.Score) != 2 || got.Sup {
+			t.Fatalf("later target lost: %+v", got)
+		}
+	}
+	other := Rule{Type: "suppress", Classes: []string{"bird"}}
+	if got := ScoreDet(detection, []Rule{target, other}, "maritime"); TierFor(got.Score) != 2 || got.Sup {
+		t.Fatalf("unrelated rule cancelled target: %+v", got)
+	}
+}
+
 func TestSuppressRuleLowersMatchingScore(t *testing.T) {
 	detection := Detection{Class: "warship", Conf: .9}
 	base := ScoreDet(detection, nil, "maritime").Score

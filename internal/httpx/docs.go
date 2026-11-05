@@ -1,0 +1,5 @@
+package httpx
+
+const DocsLinkHTML = `<a class="docs-link" href="https://ghostfleet-docs.vercel.app" target="_blank" rel="noopener noreferrer" aria-label="Open documentation (new tab)" title="Open documentation (new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg></a>`
+
+const DocsLinkCSS = `.docs-link{display:inline-flex;align-items:center;justify-content:center;flex:none;width:30px;height:30px;box-sizing:border-box;margin-left:auto;color:var(--muted,var(--dim,#8aa0b6));border:1px solid var(--line,#243445);border-radius:6px;text-decoration:none}.docs-link:hover,.docs-link:focus-visible{color:var(--text,var(--fg,#d6e2ee));border-color:currentColor}.docs-link:focus-visible{outline:2px solid currentColor;outline-offset:2px}.docs-link svg{width:18px;height:18px;pointer-events:none}`
