@@ -14,11 +14,13 @@ shore gets an image of 10/10 dev objects vs 2/10 naive.
 ## Run it in Docker (Mac or Linux laptop, one command)
 
 Prerequisites: **Docker Desktop** (Apple silicon or Intel; ~6 GB free for the images) and,
-once, **gcloud** signed in as a lab student account to pull the clips and models
-(the bucket is not public). No Go, Python or venv needed.
+while the repo is private, the **GitHub CLI** signed in once (`brew install gh && gh auth login`)
+so `make demo-clips demo-models` can pull the ~225 MB of clips + models from the
+[`demo-data-v1` release](https://github.com/fleethackerghostfleet/ghost-seeker/releases/tag/demo-data-v1)
+(`deploy/demo-data.sh`; it falls back to the lab GCS bucket via gcloud). No Go, Python or venv needed.
 
 ```sh
-make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (gcloud)
+make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (GitHub release; gh auth)
 make compose-demo             # builds the four images (first time ~5-10 min), starts the stack
 open http://localhost:8090    # signed in automatically; the edge starts replaying once the sidecar is healthy (~30 s)
 make compose-demo-down        # stop + delete data and credentials -> next `make compose-demo` is a fresh replay
@@ -53,7 +55,7 @@ validation. The real operator token is still required for shore/edge bearer
 authentication; only the UI's login form accepts arbitrary tokens.
 
 ```sh
-# toolchain: Go 1.26.10 (GOTOOLCHAIN=local), Python >= 3.10, gcloud signed in as a lab student account
+# toolchain: Go 1.26.10, Python >= 3.10, GitHub CLI signed in (gh auth login) for the demo data
 make build
 make demo-clips        # -> scenarios/ghostfleet_demo/frames/<clip>/{img1,gt,seqinfo.ini}  (gitignored)
 make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports, ~100 MB) + mobileclip-s1/unknown_calib.npz (H: dev-fitted unknownness calibration + kNN bank, auto-loaded by the sidecar)
