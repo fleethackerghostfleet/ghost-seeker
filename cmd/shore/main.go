@@ -40,6 +40,9 @@ func main() {
 	requireDefault, err := strconv.ParseBool(env("GS_REQUIRE_AUTH", "false"))
 	fatal(err)
 	requireAuth := flag.Bool("require-auth", requireDefault, "require per-unit JWTs on SyncService")
+	requireOperatorDefault, err := strconv.ParseBool(env("GS_REQUIRE_OPERATOR_AUTH", "false"))
+	fatal(err)
+	requireOperatorAuth := flag.Bool("require-operator-auth", requireOperatorDefault, "require operator JWTs on SetPolicy")
 	key := flag.String("signing-key", env("GS_SIGNING_KEY", ""), "HS256 signing key (prefer env or file)")
 	keyFile := flag.String("signing-key-file", env("GS_SIGNING_KEY_FILE", ""), "signing key file")
 	signingKey := flag.String("policy-signing-key", env("GS_POLICY_SIGNING_KEY", ""), "JSON Ed25519 policy signing key")
@@ -50,6 +53,11 @@ func main() {
 	fatal(err)
 	auth, err := unitauth.New(*requireAuth, secret)
 	fatal(err)
+	var opAuth *unitauth.Interceptor
+	if *requireOperatorAuth {
+		opAuth, err = unitauth.New(true, secret)
+		fatal(err)
+	}
 
 	st, err := store.Open(*data)
 	fatal(err)
@@ -63,6 +71,9 @@ func main() {
 		emb = inference.NewRemote(*inferURL)
 	}
 	con := &console.Service{NodeID: "shore", St: st, Clk: clk, Embedder: emb, EdgeID: *edgeID}
+	if opAuth != nil {
+		con.Operators = opAuth
+	}
 	if *signingKey != "" {
 		con.Signer, err = policy.LoadSigningKey(*signingKey)
 		fatal(err)

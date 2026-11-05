@@ -5,6 +5,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,7 +20,9 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
+	"google.golang.org/protobuf/proto"
 )
 
 type Service struct {
@@ -29,8 +32,9 @@ type Service struct {
 	St       *store.Store
 	Clk      clock.Clock
 	// Embedder compiles natural-language interest into vectors; optional.
-	Embedder inference.Analyzer
-	Signer   *policy.SigningKey
+	Embedder  inference.Analyzer
+	Signer    *policy.SigningKey
+	Operators *unitauth.Interceptor
 	// Edge to address downlink to; "" = broadcast to all edges.
 	EdgeID string
 }
@@ -97,14 +101,46 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 	}
 	s.policyMu.Lock()
 	defer s.policyMu.Unlock()
+	var prev *pb.Policy
+	if s.Operators != nil {
+		op, err := s.Operators.OperatorFromHeader(req.Header())
+		if err != nil {
+			log.Printf("console: SetPolicy operator= echelon= result=rejected reason=%q", err)
+			return nil, err
+		}
+		if len(p.Layers) == 0 {
+			err := connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("operator auth requires layered policy"))
+			log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
+			return nil, err
+		}
+		prev, err = s.St.GetPolicy(ctx)
+		if err != nil {
+			wrapped := connect.NewError(connect.CodeInternal, err)
+			log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), wrapped)
+			return nil, wrapped
+		}
+		if err := authorizeOperatorLayers(p, prev, op); err != nil {
+			log.Printf("console: SetPolicy operator=%s echelon=%s result=rejected reason=%q", op.ID, op.Echelon.String(), err)
+			return nil, err
+		}
+		for _, layer := range p.Layers {
+			if layer != nil && layer.Echelon == op.Echelon {
+				layer.IssuedBy = op.ID
+			}
+		}
+		log.Printf("console: SetPolicy operator=%s echelon=%s result=accepted reason=authorized", op.ID, op.Echelon.String())
+	}
 	now := s.Clk.Now()
 	if p.Id == "" {
 		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
 	}
 	if p.Version == 0 {
-		prev, err := s.St.GetPolicy(ctx)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
+		if s.Operators == nil {
+			var err error
+			prev, err = s.St.GetPolicy(ctx)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
 		}
 		version := now.UnixMilli()
 		if prev != nil && prev.Version+1 > version {
@@ -144,6 +180,63 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&pb.SetPolicyResponse{Policy: p, Conflicts: p.Conflicts}), nil
+}
+
+func authorizeOperatorLayers(request, stored *pb.Policy, operator unitauth.Operator) error {
+	var storedLayers []*pb.PolicyLayer
+	if stored != nil {
+		storedLayers = stored.Layers
+	}
+	matched := make(map[int]bool)
+	for _, requestedLayer := range request.Layers {
+		if requestedLayer == nil || requestedLayer.Echelon <= operator.Echelon {
+			continue
+		}
+		index := matchingStoredLayer(requestedLayer, storedLayers, matched)
+		if index < 0 || !proto.Equal(requestedLayer, storedLayers[index]) {
+			return cannotChangeLayer(requestedLayer.Echelon, operator.Echelon)
+		}
+		matched[index] = true
+	}
+	for index, storedLayer := range storedLayers {
+		if storedLayer != nil && storedLayer.Echelon > operator.Echelon && !matched[index] {
+			return cannotChangeLayer(storedLayer.Echelon, operator.Echelon)
+		}
+	}
+	return nil
+}
+
+func matchingStoredLayer(requested *pb.PolicyLayer, stored []*pb.PolicyLayer, matched map[int]bool) int {
+	var sameEchelon []int
+	for index, layer := range stored {
+		if layer != nil && layer.Echelon == requested.Echelon {
+			sameEchelon = append(sameEchelon, index)
+		}
+	}
+	if len(sameEchelon) == 1 {
+		if matched[sameEchelon[0]] {
+			return -1
+		}
+		return sameEchelon[0]
+	}
+	if len(sameEchelon) > 1 {
+		match := -1
+		for _, index := range sameEchelon {
+			if !matched[index] && stored[index].IssuedBy == requested.IssuedBy {
+				if match >= 0 {
+					return -1
+				}
+				match = index
+			}
+		}
+		return match
+	}
+	return -1
+}
+
+func cannotChangeLayer(layer, operator pb.Echelon) error {
+	return connect.NewError(connect.CodePermissionDenied,
+		fmt.Errorf("cannot change %s layer with %s token", layer.String(), operator.String()))
 }
 
 // compileInterest turns boost/suppress label lists into positive/negative
