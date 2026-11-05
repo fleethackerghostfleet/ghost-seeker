@@ -9,7 +9,7 @@ dev-only except §6, which was run **once** at the end with every knob frozen.
 |---|---|---|
 | live `unknownness` | MCM vs 11 subtype prompts, `sim_ref=0.30`, no kNN bank → **AUROC 0.49** known-vs-unknown on synth dev (coin flip) | dev-fitted `sim_ref/sim_width` + 98-crop kNN bank auto-loaded from `unknown_calib.npz` → **AUROC 0.75–0.85** dev (two halves), **0.87** on the locked test (held-out classes vs real test vessels; before 0.57) |
 | unknown flag (`unknown_real`) | ungated: 4/13 known dev vessels flagged "unknown"; gate opt-in | realness-gated by default: dev 0/13 known vessels flagged, 5/6 surfaced synthetic unusual contacts still flagged; locked test 9/21 known flagged (before 14/21), 5/8 surfaced synthetic flagged (before 3/8), 0 false unknown sightings (before 1) |
-| YOLO11n on unusual contacts | box recall@0.25: semi-sub 0.00, jet-ski 0.20, buoy 0.26, USV 0.34 | unchanged by default. Opt-in `--anomaly-fallback` (horizon-band colour anomaly proposer) doubles surfaced synth tracks (6→11/24) but adds 87 false sightings on 391 sea-only frames → **not** a default |
+| YOLO11n on unusual contacts | box recall@0.25: semi-sub 0.00, jet-ski 0.20, buoy 0.26, USV 0.34 | unchanged by default. Opt-in `--anomaly-fallback` (horizon-band colour anomaly proposer) doubles surfaced synth tracks (6→12/24) but adds 95 false sightings on 391 sea-only frames → **not** a default |
 | dataset | none | `edgeml_synth_unknown`: 35 MOT sequences / 1135 frames / 1208 synthetic boxes on dev footage, in the bucket + catalog |
 
 Winner = calibration artifact + realness gate. Prompt-bank edits, temperature and kNN-weight tweaks did not beat
@@ -134,17 +134,17 @@ is strictly better, so `gate_unknown_bonus_on_realness=True` becomes the sidecar
 5. **Cheap "anything-on-water" proposer** `detectors/anomaly.py` (`SeaAnomalyProposer`: per-row Lab colour
    statistics below the horizon at 480 px, 2-pass inlier re-estimation, z > 3.5, bright-achromatic (foam/glint)
    penalty, ≤8 proposals/frame, label `anomaly`; `AnomalyFusionDetector` adds proposals only where no closed-set
-   detection ≥0.05 covers them). `z_thr` 2.5 vs 3.5 swept on dev; 3.5 wins.
+   detection ≥0.25 — the track-start score — covers them). `z_thr` 2.5 vs 3.5 swept on dev; 3.5 wins.
 
    | class | box recall any@0.25 YOLO → +anomaly | track3@0.25 YOLO → +anomaly |
    |---|---|---|
-   | buoy | 0.26 → 0.46 | 0.50 → 0.83 |
-   | jet_ski | 0.20 → 0.39 | 0.20 → 0.40 |
-   | semi_submersible | 0.00 → 0.27 | 0.00 → 0.43 |
+   | buoy | 0.26 → 0.78 | 0.50 → 0.83 |
+   | jet_ski | 0.20 → 0.68 | 0.20 → 0.80 |
+   | semi_submersible | 0.00 → 0.34 | 0.00 → 0.43 |
    | usv | 0.34 → 0.40 | 0.33 → 0.50 |
 
-   Replay (after + gate): synth surfaced 6 → **11**/24, but false sightings on sea-only real frames 1 → **87**
-   (the gate still removes every false *unknown* flag: 84 → 0, and keeps 2 synthetic flags). 0.22 extra sightings
+   Replay (after + gate): synth surfaced 6 → **12**/24, but false sightings on sea-only real frames 1 → **95**
+   (the gate still removes every false *unknown* flag: 89 → 0, and keeps 6 synthetic flags). 0.24 extra sightings
    per sea frame would flood the shore queue, so this ships **opt-in** (`python -m edgeml.sidecar
    --anomaly-fallback`, optional JSON kwargs) and is not a default. It is the right next lever once the
    proposer gets a temporal-persistence stage (track-level, not frame-level) — see §7.
@@ -162,6 +162,7 @@ is strictly better, so `gate_unknown_bonus_on_realness=True` becomes the sidecar
 
 Every knob (artifact, τ=0.5, gate, prompt bank, proposer `z_thr`=3.5) was frozen before this ran. Outputs:
 `~/data/h_results/{recall_test,recall_test_fusion_z35,auroc_test,replay_test_before,replay_test_after,replay_test_fusion_after}.json`.
+Note: the opt-in fusion rows below were measured before two Devin-Review fixes to the fallback path (`cover_thr` 0.05 → 0.25 and the sidecar label filter on the cached base, both in `edgeml/tools`/`detectors/anomaly.py`); the dev fusion numbers in §4 were re-measured after the fixes, the test rows were **not** re-run (test is evaluated once). The shipped default path (no fallback) is unaffected.
 
 ### 6a. YOLO11n class-agnostic recall on the held-out synthetic classes (same matcher as §3a)
 
@@ -219,7 +220,7 @@ on 214 sea-only frames, confirming the dev decision to ship it opt-in only.
 * The dev set is tiny (24 synthetic tracks, 13 known tracks, 98 bank crops); AUROC moves ±0.05 with the fit/eval
   split and 9/21 known test vessels still get flagged (§6c). Growing the kNN bank with the remaining dev GT crops
   (fvessel/SMD/r2 dev, thousands of crops) is free, needs no test data, and should pull `p90_known` under τ.
-* Anomaly proposer: add a 1–2 s persistence filter (ByteTrack already does some of this; the 87 false sightings are
+* Anomaly proposer: add a 1–2 s persistence filter (ByteTrack already does some of this; the 95 false sightings are
   mostly glint/foam tracks that live ≥3 frames) before considering it as a default.
 * `buoy` and `submarine` are *known* subtypes by prompt-bank design; if the product wants "buoy" flagged as unusual,
   drop it from `SUBTYPES` rather than fighting the score.
