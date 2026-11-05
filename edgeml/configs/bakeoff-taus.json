@@ -1,0 +1,70 @@
+{
+  "yolov9t": {
+    "seaships7000": 0.2,
+    "smd_vis_onboard_sample": 0.15
+  },
+  "yolov9s": {
+    "seaships7000": 0.35,
+    "smd_vis_onboard_sample": 0.25
+  },
+  "yolov10n": {
+    "seaships7000": 0.15,
+    "smd_vis_onboard_sample": 0.3
+  },
+  "yolov10s": {
+    "seaships7000": 0.2,
+    "smd_vis_onboard_sample": 0.2
+  },
+  "yolo12n": {
+    "seaships7000": 0.25,
+    "smd_vis_onboard_sample": 0.15
+  },
+  "yolo12s": {
+    "seaships7000": 0.35,
+    "smd_vis_onboard_sample": 0.25
+  },
+  "detr-r50": {
+    "seaships7000": 0.95,
+    "smd_vis_onboard_sample": 0.95
+  },
+  "conditional-detr-r50": {
+    "seaships7000": 0.4,
+    "smd_vis_onboard_sample": 0.55
+  },
+  "deformable-detr": {
+    "seaships7000": 0.45,
+    "smd_vis_onboard_sample": 0.6
+  },
+  "rtdetrv2-r34": {
+    "seaships7000": 0.65,
+    "smd_vis_onboard_sample": 0.75
+  },
+  "owlvit-b32": {
+    "seaships7000": 0.1,
+    "smd_vis_onboard_sample": 0.05
+  },
+  "owlvit-b16": {
+    "seaships7000": 0.05,
+    "smd_vis_onboard_sample": 0.05
+  },
+  "gdino-base": {
+    "seaships7000": 0.35,
+    "smd_vis_onboard_sample": 0.4
+  },
+  "rfdetr-nano": {
+    "seaships7000": 0.5,
+    "smd_vis_onboard_sample": 0.4
+  },
+  "rfdetr-small": {
+    "seaships7000": 0.6,
+    "smd_vis_onboard_sample": 0.3
+  },
+  "rfdetr-base": {
+    "seaships7000": 0.65,
+    "smd_vis_onboard_sample": 0.35
+  },
+  "florence2-base-ft": {
+    "seaships7000": 0.05,
+    "smd_vis_onboard_sample": 0.05
+  }
+}
