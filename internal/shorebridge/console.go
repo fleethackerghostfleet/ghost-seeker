@@ -246,7 +246,7 @@ func scoreObjects(objs []*Object, pins ...map[string]int32) map[*Object]objectSc
 	sort.SliceStable(byScore, func(i, j int) bool { return byScore[i].Score > byScore[j].Score })
 	ranked := make([]*Object, 0, len(objs))
 	for _, o := range byScore {
-		tier := tiers[normLabel(o.Label)]
+		_, tier := objectTierPin(o, tiers)
 		if !o.Suppressed && (tier < 1 || tier > 4) {
 			ranked = append(ranked, o)
 		}
@@ -259,7 +259,7 @@ func scoreObjects(objs []*Object, pins ...map[string]int32) map[*Object]objectSc
 		s.base = rankScore(i, len(byScore))
 		s.baseTier = rankTier(i, len(byScore))
 		s.central, s.centralTier = 0.05+0.1*s.edge, 4
-		if tier := tiers[normLabel(o.Label)]; tier >= 1 && tier <= 4 {
+		if _, tier := objectTierPin(o, tiers); tier >= 1 && tier <= 4 {
 			s.centralTier = int(tier)
 			s.central = [...]float64{0, .9, .7, .475, .175}[tier]
 		}
@@ -384,9 +384,9 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		score.Matched = true
 		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: c.directiveFor(l)})
 	}
-	if tier := c.policy.TierLabels[normLabel(o.Label)]; tier >= 1 && tier <= 4 {
+	if label, tier := objectTierPin(o, c.policy.TierLabels); tier >= 1 && tier <= 4 {
 		score.Matched = true
-		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{normLabel(o.Label)}, Attrs: []string{}, Tier: int(tier), DirectiveID: c.directiveFor(o.Label)})
+		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{label}, Attrs: []string{}, Tier: int(tier), DirectiveID: c.directiveFor(label)})
 	}
 	item.Dets = append(item.Dets, det)
 	item.Det = append(item.Det, score)

@@ -232,12 +232,7 @@ func (Interest) Score(it *pb.Item, ctx *Context) Result {
 		sup = DefaultSuppressFactor
 	}
 	labels := allLabels(it, detMin)
-	pinned := int32(0)
-	for label, tier := range in.TierLabels {
-		if tier >= 1 && tier <= 4 && hasLabel(labels, label) && (pinned == 0 || tier < pinned) {
-			pinned = tier
-		}
-	}
+	_, pinned := TierPin(it, ctx.Policy)
 	switch pinned {
 	case 1:
 		return Result{Value: 1, Multiplier: boost, Note: "pinned: P1"}
@@ -320,6 +315,19 @@ func allLabels(it *pb.Item, minConf float32) []string {
 		out = append(out, sub)
 	}
 	return out
+}
+
+// TierPin returns the matching policy label and most urgent valid tier, using
+// the same authoritative override, confidence threshold and subtype as Interest.
+func TierPin(it *pb.Item, p *pb.Policy) (label string, tier int32) {
+	_, minConf := thresholds(p)
+	labels := allLabels(it, minConf)
+	for candidate, target := range p.GetInterest().GetTierLabels() {
+		if target >= 1 && target <= 4 && hasLabel(labels, candidate) && (tier == 0 || target < tier || target == tier && candidate < label) {
+			label, tier = candidate, target
+		}
+	}
+	return
 }
 
 func hasLabel(labels []string, want string) bool {

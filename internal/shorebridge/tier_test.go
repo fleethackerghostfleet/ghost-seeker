@@ -3,12 +3,14 @@ package shorebridge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/scoring"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
@@ -107,5 +109,60 @@ func TestLiveConsoleSuggestionPinsWholeClass(t *testing.T) {
 	postDirective(t, console.Handler(), `{"text":"ignore tankers","rules":[{"type":"suppress","classes":["tanker"]}]}`)
 	if pins := shore.stored().Interest.TierLabels; len(pins) != 0 {
 		t.Fatal("new generic did not cancel old pin", pins)
+	}
+}
+
+func TestShoreTierPinsMatchEdgeLabels(t *testing.T) {
+	for _, tc := range []struct {
+		name, override, subtype string
+		conf, min               float32
+		pins                    map[string]int32
+		want                    int
+	}{
+		{"subtype", "", "cargo ship", .9, 0, map[string]int32{"cargo ships": 4}, 4},
+		{"urgent wins", "", "cargo_ship", .9, 0, map[string]int32{"boat": 3, "cargo ships": 1}, 1},
+		{"other detection", "", "", .9, 0, map[string]int32{"tanker": 2}, 2},
+		{"below threshold", "", "", .3, .5, map[string]int32{"tanker": 4}, 0},
+		{"override stands alone", "bird", "cargo ship", .9, 0, map[string]int32{"cargo ships": 4, "tanker": 4}, 0},
+		{"override match", "bird", "cargo ship", .9, 0, map[string]int32{"bird": 3, "cargo ships": 1}, 3},
+		{"invalid", "", "cargo ship", .9, 0, map[string]int32{"cargo ships": 5}, 0},
+		{"empty", "", "", .9, 0, nil, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := &pb.ItemView{Item: &pb.Item{Id: "contact", Features: &pb.Features{LabelOverride: tc.override, Detections: []*pb.Detection{{Label: "boat", Confidence: 1}, {Label: "tanker", Confidence: tc.conf}}, Tags: map[string]string{"subtype": tc.subtype}}}}
+			card := ToCard(v)
+			o := &Object{Key: "contact", Label: "boat", Subtype: tc.subtype, Best: card, Items: []*Card{card}, Score: 100, detectionMin: tc.min}
+			pol := &pb.Policy{Interest: &pb.Interest{TierLabels: tc.pins}, Thresholds: &pb.Thresholds{DetectionMinConf: tc.min}}
+			_, edgeTier := scoring.TierPin(v.Item, pol)
+			if int(edgeTier) != tc.want {
+				t.Fatalf("edge tier=%d want=%d", edgeTier, tc.want)
+			}
+			assignTiers([]*Object{o}, tc.pins)
+			scores := scoreObjects([]*Object{o}, tc.pins)
+			want := tc.want
+			if want == 0 {
+				want = 1
+			}
+			if o.Priority != fmt.Sprintf("P%d", want) || scores[o].centralTier != want {
+				t.Fatalf("shore disagrees: %v %v", o, scores[o])
+			}
+			c := NewConsole(New("", "", nil))
+			c.policy.TierLabels = tc.pins
+			item := c.buildItem(o, scores[o])
+			if item.CentralTier != want {
+				t.Fatal(item)
+			}
+			if tc.want != 0 {
+				found := false
+				for _, note := range item.Det[0].Notes {
+					if note.Tier == tc.want {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("missing pinned note: %v", item.Det)
+				}
+			}
+		})
 	}
 }
