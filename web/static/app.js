@@ -466,6 +466,7 @@ function boxesHTML(it,labels){
   return`<div class="box ${c}${d.cls==='unknown'?' unknown':''}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${esc(clsOf(d.cls).lab)} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
 function isScene(it){return it?.live?.event==='scene'}
+function isEmptyWater(it){return isScene(it)||!!(it&&!it.live&&it.background)}
 function topLine(it){
 	if(isScene(it))return 'Empty water · no contacts';
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return it.background?'No contacts · empty water':'—';
@@ -576,7 +577,7 @@ function renderStats(){
  for(const it of items){
   if(it.tier===1)allP1++;
   if(state.src!=='ALL'&&it.src.id!==state.src)continue;
-  total++;if(it.tier===1)p1++;if(!isScene(it)&&!it.reviewed&&!it.dismissed)unrev++;if(humanSent(it))humanSentCount++;
+  total++;if(it.tier===1)p1++;if(!isEmptyWater(it)&&!it.reviewed&&!it.dismissed)unrev++;if(humanSent(it))humanSentCount++;
   if(!it.dismissed){const u=uploadState(it);if(u.done)done++;if(u.queued)queued++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
  }
  const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
@@ -852,7 +853,7 @@ async function answerTeamProposal(answer){
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
  finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
-function rvQueue(){const l=items.filter(i=>!isScene(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
+function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
@@ -933,7 +934,7 @@ function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)retur
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
- if(isScene(rv.cur)){rv.cur=null;rv.shown=null;rv.displayed=null}
+ if(isEmptyWater(rv.cur)){rv.cur=null;rv.shown=null;rv.displayed=null}
  const current=rv.cur?findItem(rv.cur.id):rv.busy?null:rvQueue()[0];
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
@@ -961,9 +962,9 @@ function rvAct(a){
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
  if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{if(revision!==resetRevision)return;rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;setLast(rv.navigation===navigation?'↶ Undone: you are back on that image.':'↶ Undone: previous review was restored.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{if(revision!==resetRevision)return;rv.busy=false;renderReview();toast(error.message)});return}
- if(!rv.cur||isScene(rv.cur))return;
+ if(!rv.cur||isEmptyWater(rv.cur))return;
  if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
- const it=rv.displayed;if(!it||isScene(it)||it.id!==rv.cur.id)return;
+ const it=rv.displayed;if(!it||isEmptyWater(it)||it.id!==rv.cur.id)return;
  if(!findItem(it.id)){renderReview();toast('This image is no longer available. Skip to continue.');return}
  const sug=it.centralTier,p={id:it.id,item:it,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
  let msg,col,receipt;
