@@ -7,10 +7,12 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/server"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
@@ -20,6 +22,15 @@ import (
 )
 
 func main() {
+	llmTimeoutDefault := 8 * time.Second
+	if value := os.Getenv("GS_LLM_TIMEOUT"); value != "" {
+		timeout, err := time.ParseDuration(value)
+		if err != nil || timeout <= 0 {
+			log.Printf("invalid GS_LLM_TIMEOUT %q; using 8s", value)
+		} else {
+			llmTimeoutDefault = timeout
+		}
+	}
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	retain := flag.Int("retain", 260, "maximum stored items")
 	backfill := flag.Int("backfill", 84, "number of historical items to generate at startup")
@@ -29,6 +40,9 @@ func main() {
 	linkListen := flag.String("link-listen", ":18080", "live mode: listen here as the shaped ship-to-shore link; point the edge's -shore at it (empty = no shaper, bandwidth buttons disabled)")
 	linkBps := flag.Int64("link-bps", 2_000_000, "live mode: initial link rate in bits/s")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
+	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
+	llmModel := flag.String("llm-model", os.Getenv("GS_LLM_MODEL"), "local LLM model name")
+	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
 	flag.Parse()
 
 	if *shoreURL != "" {
@@ -40,6 +54,12 @@ func main() {
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
 	app := server.New(data)
+	app.SetCompiler(&command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)})
+	if *llmURL == "" {
+		log.Printf("NL compiler: rules parser (set GS_LLM_URL to enable LLM)")
+	} else {
+		log.Printf("NL compiler: local LLM at %s", *llmURL)
+	}
 	go runSimulation(data, generator, app)
 	go refreshTimeScopes(app)
 	if *autoCDR > 0 {

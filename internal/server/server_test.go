@@ -167,6 +167,51 @@ func TestStreamClientLimit(t *testing.T) {
 	}
 }
 
+func TestCompileDirectiveEndpoint(t *testing.T) {
+	app := New(store.New(10))
+	response := request(app, http.MethodPost, "/api/directives/compile", map[string]string{"text": "small boats for 2 hours"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("compile status = %d: %s", response.Code, response.Body.String())
+	}
+	var compiled command.Compiled
+	if err := json.Unmarshal(response.Body.Bytes(), &compiled); err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Path != "rules" || compiled.Readback != "Boost: small boat. For 2h." {
+		t.Fatalf("compiled = %+v", compiled)
+	}
+}
+
+func TestBlockedDirectiveAndDurationExpiry(t *testing.T) {
+	app := New(store.New(10))
+	response := request(app, http.MethodPost, "/api/directives", map[string]string{"text": "prioritize everything"})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("blocked add status = %d, want %d: %s", response.Code, http.StatusUnprocessableEntity, response.Body.String())
+	}
+
+	var expire func()
+	var delay time.Duration
+	app.after = func(d time.Duration, callback func()) {
+		delay, expire = d, callback
+	}
+	response = request(app, http.MethodPost, "/api/directives", map[string]any{"text": "small boats", "durationMin": 60})
+	if response.Code != http.StatusCreated {
+		t.Fatalf("timed add status = %d: %s", response.Code, response.Body.String())
+	}
+	if delay != time.Hour || expire == nil {
+		t.Fatalf("expiry scheduler got delay=%s callback=%t", delay, expire != nil)
+	}
+	_, _, _, state := app.store.Snapshot()
+	if len(state.Directives) != 1 {
+		t.Fatalf("active directives before expiry = %d", len(state.Directives))
+	}
+	expire()
+	_, _, _, state = app.store.Snapshot()
+	if len(state.Directives) != 0 {
+		t.Fatalf("active directives after expiry = %d", len(state.Directives))
+	}
+}
+
 func TestDirectiveCountLimit(t *testing.T) {
 	app := New(store.New(10))
 	for i := 0; i < store.MaxActiveDirectives; i++ {
