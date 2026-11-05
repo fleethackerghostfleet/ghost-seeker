@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,11 +20,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 )
 
@@ -210,7 +213,8 @@ func (b *Bridge) refresh(ctx context.Context) {
 
 	var st pb.GetStatusResponse
 	if err := b.call(ctx, b.shore, "GetStatus", &pb.GetStatusRequest{}, &st); err != nil {
-		snap.Shore.Error = err.Error()
+		log.Printf("shorebridge: shore status: %v", err)
+		snap.Shore.Error = "upstream shore error"
 	} else {
 		snap.Shore = nodeStatus(&st)
 		if b.link == nil {
@@ -227,7 +231,8 @@ func (b *Bridge) refresh(ctx context.Context) {
 	if b.edge != "" {
 		var est pb.GetStatusResponse
 		if err := b.call(ctx, b.edge, "GetStatus", &pb.GetStatusRequest{}, &est); err != nil {
-			snap.Edge.Error = err.Error()
+			log.Printf("shorebridge: edge status: %v", err)
+			snap.Edge.Error = "upstream edge error"
 		} else {
 			snap.Edge = nodeStatus(&est)
 		}
@@ -238,8 +243,9 @@ func (b *Bridge) refresh(ctx context.Context) {
 	for page := 0; page < 20; page++ {
 		var lr pb.ListItemsResponse
 		if err := b.call(ctx, b.shore, "ListItems", &pb.ListItemsRequest{Limit: 500, PageToken: token}, &lr); err != nil {
+			log.Printf("shorebridge: shore list items: %v", err)
 			if snap.Shore.Error == "" {
-				snap.Shore.Error = err.Error()
+				snap.Shore.Error = "upstream shore error"
 			}
 			break
 		}
@@ -654,7 +660,7 @@ func (b *Bridge) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	ch := make(chan []byte, 4)
 	b.mu.Lock()
 	b.subs[ch] = struct{}{}
@@ -693,8 +699,14 @@ type policyBody struct {
 // parsed with Interpret (e.g. "ignore cargo ships" -> suppress cargo ship).
 func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	var in policyBody
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: policy request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if utf8.RuneCountInString(in.Text) > 500 {
+		http.Error(w, "text exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
 	if in.IssuedBy == "" {
@@ -706,7 +718,8 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	var out pb.SetPolicyResponse
 	if err := b.call(r.Context(), b.shore, "SetPolicy", &pb.SetPolicyRequest{Policy: pol}, &out); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.Printf("shorebridge: set policy upstream: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
 	raw, _ := protojson.Marshal(&out)
@@ -719,8 +732,18 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 		ItemID string `json:"itemId"`
 		Form   string `json:"form"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.ItemID == "" {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: pull request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if in.ItemID == "" {
 		http.Error(w, "itemId required", http.StatusBadRequest)
+		return
+	}
+	if !ids.Valid(in.ItemID) {
+		http.Error(w, "invalid item id", http.StatusBadRequest)
 		return
 	}
 	kind := pb.FormKind_FORM_KIND_FULL
@@ -732,7 +755,8 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 	var out pb.RequestPullResponse
 	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: in.ItemID, Form: kind, RequestedBy: "operator-ui"}}
 	if err := b.call(r.Context(), b.shore, "RequestPull", req, &out); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.Printf("shorebridge: request pull upstream: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "itemId": in.ItemID, "form": formNames[kind]})
@@ -743,14 +767,29 @@ func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
 		ItemID string `json:"itemId"`
 		Label  string `json:"label"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.ItemID == "" {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: override request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if in.ItemID == "" {
 		http.Error(w, "itemId required", http.StatusBadRequest)
+		return
+	}
+	if !ids.Valid(in.ItemID) {
+		http.Error(w, "invalid item id", http.StatusBadRequest)
+		return
+	}
+	if utf8.RuneCountInString(in.Label) > 500 {
+		http.Error(w, "label exceeds 500 characters", http.StatusBadRequest)
 		return
 	}
 	var out pb.OverrideLabelResponse
 	req := &pb.OverrideLabelRequest{Override: &pb.LabelOverride{ItemId: in.ItemID, Label: in.Label, By: "operator-ui"}}
 	if err := b.call(r.Context(), b.shore, "OverrideLabel", req, &out); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.Printf("shorebridge: override upstream: %v", err)
+		http.Error(w, "upstream shore error", http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true})
@@ -764,8 +803,10 @@ func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Bps int64 `json:"bps"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		log.Printf("shorebridge: link request body: %v", err)
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 	b.link.SetBps(in.Bps)
@@ -775,4 +816,19 @@ func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+
+func decodeJSONBody(reader io.Reader, dst any) error {
+	decoder := json.NewDecoder(reader)
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("unexpected trailing JSON")
+		}
+		return err
+	}
+	return nil
 }
