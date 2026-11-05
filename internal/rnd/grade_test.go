@@ -329,3 +329,38 @@ func TestBadInputs(t *testing.T) {
 		t.Fatal("empty predictions")
 	}
 }
+
+func TestReplayRejectsGradeForReplacedFrame(t *testing.T) {
+	dir, logs := fixture(t)
+	s, err := OpenSession(dir, logs, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Grade("a", 2); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	replacement := []byte("a different frame")
+	if err = os.WriteFile(filepath.Join(dir, "images", "a.jpg"), replacement, 0600); err != nil {
+		t.Fatal(err)
+	}
+	images, err := readRows[Image](filepath.Join(dir, "manifest.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	for _, im := range images {
+		if im.ID == "a" {
+			im.SHA256 = fmt.Sprintf("%x", sha256.Sum256(replacement))
+		}
+		b, _ := json.Marshal(im)
+		out.Write(b)
+		out.WriteByte('\n')
+	}
+	if err = os.WriteFile(filepath.Join(dir, "manifest.jsonl"), []byte(out.String()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = OpenSession(dir, logs, "Alice"); err == nil || !strings.Contains(err.Error(), "invalid grade in journal") {
+		t.Fatalf("grade for replaced frame accepted: %v", err)
+	}
+}
