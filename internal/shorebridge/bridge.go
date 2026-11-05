@@ -187,18 +187,19 @@ type NodeStatus struct {
 }
 
 type Snapshot struct {
-	TS         int64       `json:"ts"`
-	Shore      NodeStatus  `json:"shore"`
-	Edge       NodeStatus  `json:"edge"`
-	Link       LinkStatus  `json:"link"`
-	Policy     string      `json:"policy"`
-	PolicyID   string      `json:"policyId,omitempty"`
-	Emcon      string      `json:"emcon,omitempty"`
-	Suppress   []string    `json:"suppress,omitempty"`
-	Boost      []string    `json:"boost,omitempty"`
-	PolicyInfo *PolicyInfo `json:"policyInfo,omitempty"`
-	Objects    []*Object   `json:"objects"`
-	Counts     Counts      `json:"counts"`
+	TS         int64            `json:"ts"`
+	Shore      NodeStatus       `json:"shore"`
+	Edge       NodeStatus       `json:"edge"`
+	Link       LinkStatus       `json:"link"`
+	Policy     string           `json:"policy"`
+	PolicyID   string           `json:"policyId,omitempty"`
+	Emcon      string           `json:"emcon,omitempty"`
+	Suppress   []string         `json:"suppress,omitempty"`
+	Boost      []string         `json:"boost,omitempty"`
+	TierLabels map[string]int32 `json:"tierLabels,omitempty"`
+	PolicyInfo *PolicyInfo      `json:"policyInfo,omitempty"`
+	Objects    []*Object        `json:"objects"`
+	Counts     Counts           `json:"counts"`
 }
 
 type PolicyInfo struct {
@@ -412,6 +413,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 		suppressed = currentPolicy.GetInterest().GetSuppressLabels()
 		snap.Suppress = suppressed
 		snap.Boost = currentPolicy.GetInterest().GetBoostLabels()
+		snap.TierLabels = currentPolicy.GetInterest().GetTierLabels()
 		snap.PolicyInfo = policyInfo(currentPolicy, b.echelon())
 	}
 
@@ -433,6 +435,9 @@ func (b *Bridge) refresh(ctx context.Context) {
 		}
 	}
 	snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
+	if len(snap.TierLabels) > 0 {
+		assignTiers(snap.Objects, snap.TierLabels)
+	}
 	if b.onSnapshot != nil {
 		b.onSnapshot(snap, currentPolicy)
 	}
@@ -568,9 +573,18 @@ var formNames = map[pb.FormKind]string{
 // assignTiers maps the edge's unbounded priority score onto the P1..P4
 // tiers the operator UI uses by rank within the current shore picture:
 // top 10% P1, next 25% P2, next 35% P3, rest P4. Suppressed objects are P4.
-func assignTiers(objs []*Object) {
+func assignTiers(objs []*Object, pins ...map[string]int32) {
+	tiers := map[string]int32{}
+	if len(pins) > 0 {
+		tiers = pins[0]
+	}
 	ranked := make([]*Object, 0, len(objs))
 	for _, o := range objs {
+		if tier := tiers[normLabel(o.Label)]; tier >= 1 && tier <= 4 {
+			o.Priority = fmt.Sprintf("P%d", tier)
+			o.Suppressed = tier == 4
+			continue
+		}
 		if o.Best != nil && !o.Suppressed && !o.Scene {
 			ranked = append(ranked, o)
 		} else {

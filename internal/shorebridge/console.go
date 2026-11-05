@@ -100,17 +100,18 @@ type Prioritization struct {
 // emcon/locks/conflicts fields mirror the simulation's policy summary so the
 // policy panels render from either backend.
 type LivePolicy struct {
-	ID        string           `json:"id,omitempty"`
-	Version   int64            `json:"version"`
-	Text      string           `json:"text"`
-	Suppress  []string         `json:"suppress"`
-	Boost     []string         `json:"boost"`
-	Readback  string           `json:"readback"`
-	Admin     bool             `json:"admin"`
-	NodeID    string           `json:"nodeId"`
-	EMCON     EmconSummary     `json:"emcon"`
-	Locks     []PolicyLock     `json:"locks"`
-	Conflicts []PolicyConflict `json:"conflicts"`
+	ID         string           `json:"id,omitempty"`
+	Version    int64            `json:"version"`
+	Text       string           `json:"text"`
+	Suppress   []string         `json:"suppress"`
+	Boost      []string         `json:"boost"`
+	TierLabels map[string]int32 `json:"tierLabels,omitempty"`
+	Readback   string           `json:"readback"`
+	Admin      bool             `json:"admin"`
+	NodeID     string           `json:"nodeId"`
+	EMCON      EmconSummary     `json:"emcon"`
+	Locks      []PolicyLock     `json:"locks"`
+	Conflicts  []PolicyConflict `json:"conflicts"`
 	// ExpiresAtUnixMs is 0 for an open-ended policy (the sim fills a default TTL; the shore keeps it until cleared).
 	ExpiresAtUnixMs int64 `json:"expiresAtUnixMs"`
 }
@@ -188,7 +189,7 @@ func (c *Console) onSnapshot(snap *Snapshot, pol *pb.Policy) {
 		}
 		objects = append(objects, o)
 	}
-	scores := scoreObjects(objects)
+	scores := scoreObjects(objects, c.policy.TierLabels)
 	for _, o := range objects {
 		item := c.buildItem(o, scores[o])
 		c.base[item.ID] = item
@@ -231,7 +232,11 @@ type objectScore struct {
 // 0..1 scores by rank: Edge is the raw score normalized, Base the rank with
 // suppression ignored, Central the rank the shore actually uses (suppressed
 // objects sink to the bottom band but stay on the board).
-func scoreObjects(objs []*Object) map[*Object]objectScore {
+func scoreObjects(objs []*Object, pins ...map[string]int32) map[*Object]objectScore {
+	tiers := map[string]int32{}
+	if len(pins) > 0 {
+		tiers = pins[0]
+	}
 	out := make(map[*Object]objectScore, len(objs))
 	maxScore := 0.0
 	for _, o := range objs {
@@ -241,7 +246,8 @@ func scoreObjects(objs []*Object) map[*Object]objectScore {
 	sort.SliceStable(byScore, func(i, j int) bool { return byScore[i].Score > byScore[j].Score })
 	ranked := make([]*Object, 0, len(objs))
 	for _, o := range byScore {
-		if !o.Suppressed {
+		tier := tiers[normLabel(o.Label)]
+		if !o.Suppressed && (tier < 1 || tier > 4) {
 			ranked = append(ranked, o)
 		}
 	}
@@ -253,6 +259,10 @@ func scoreObjects(objs []*Object) map[*Object]objectScore {
 		s.base = rankScore(i, len(byScore))
 		s.baseTier = rankTier(i, len(byScore))
 		s.central, s.centralTier = 0.05+0.1*s.edge, 4
+		if tier := tiers[normLabel(o.Label)]; tier >= 1 && tier <= 4 {
+			s.centralTier = int(tier)
+			s.central = [...]float64{0, .9, .7, .475, .175}[tier]
+		}
 		out[o] = s
 	}
 	for i, o := range ranked {
@@ -373,6 +383,10 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 	if l := matchLabel(c.policy.Boost, b.Override, o.Subtype, o.Label); l != "" {
 		score.Matched = true
 		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: c.directiveFor(l)})
+	}
+	if tier := c.policy.TierLabels[normLabel(o.Label)]; tier >= 1 && tier <= 4 {
+		score.Matched = true
+		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{normLabel(o.Label)}, Attrs: []string{}, Tier: int(tier), DirectiveID: c.directiveFor(o.Label)})
 	}
 	item.Dets = append(item.Dets, det)
 	item.Det = append(item.Det, score)
@@ -579,9 +593,10 @@ func prioritizationMode(snap *Snapshot) Prioritization {
 func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
 	p := LivePolicy{
 		ID: snap.PolicyID, Text: snap.Policy, Suppress: dedupe(snap.Suppress), Boost: dedupe(snap.Boost),
-		NodeID: "shore", EMCON: EmconSummary{Mode: "NORMAL"}, Locks: []PolicyLock{}, Conflicts: []PolicyConflict{},
+		TierLabels: snap.TierLabels,
+		NodeID:     "shore", EMCON: EmconSummary{Mode: "NORMAL"}, Locks: []PolicyLock{}, Conflicts: []PolicyConflict{},
 	}
-	p.Readback = Readback(p.Suppress, p.Boost)
+	p.Readback = tierReadback(p.Suppress, p.Boost, p.TierLabels)
 	c.pol, c.ruleFor = nil, nil
 	if pol == nil {
 		return p
@@ -599,8 +614,9 @@ func (c *Console) policyView(pol *pb.Policy, now time.Time) LivePolicy {
 	p := LivePolicy{
 		ID: pol.GetId(), Text: strings.TrimSpace(pol.GetText()), NodeID: "shore", Version: info.Version,
 		Suppress: dedupe(pol.GetInterest().GetSuppressLabels()), Boost: dedupe(pol.GetInterest().GetBoostLabels()),
-		EMCON: EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy},
-		Locks: info.Locks, Conflicts: info.Conflicts,
+		TierLabels: pol.GetInterest().GetTierLabels(),
+		EMCON:      EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy},
+		Locks:      info.Locks, Conflicts: info.Conflicts,
 	}
 	directives := c.b.directives(pol, now)
 	c.pol, c.ruleFor = pol, map[string]string{}
@@ -621,7 +637,7 @@ func (c *Console) policyView(pol *pb.Policy, now time.Time) LivePolicy {
 		p.Readback = directivesReadback(directives)
 		return p
 	}
-	p.Readback = Readback(p.Suppress, p.Boost)
+	p.Readback = tierReadback(p.Suppress, p.Boost, p.TierLabels)
 	if p.ExpiresAtUnixMs > 0 {
 		until := time.UnixMilli(p.ExpiresAtUnixMs).UTC().Format("15:04Z")
 		p.Readback = strings.Replace(p.Readback, "Until cleared.", "Until "+until+".", 1)
@@ -708,7 +724,7 @@ func (c *Console) cdrLocked() int {
 
 func (c *Console) directivesLocked() []command.Directive {
 	if c.pol == nil {
-		rules := policyRules(flatDirectiveID, c.policy.Suppress, c.policy.Boost)
+		rules := policyRules(flatDirectiveID, c.policy.Suppress, c.policy.Boost, c.policy.TierLabels)
 		if len(rules) == 0 {
 			return []command.Directive{}
 		}
@@ -1061,11 +1077,25 @@ func (c *Console) pull(w http.ResponseWriter, r *http.Request) {
 // rulesFromBody turns a directive (free text or explicit rules) into the
 // shore's suppress/boost label lists.
 func rulesFromBody(text string, rules *[]command.Rule) (suppress, boost []string, parsed []command.Rule) {
+	tiers := map[string]int32{}
 	if rules != nil && len(*rules) > 0 {
 		for _, r := range *rules {
 			labels := r.Classes
 			if len(labels) == 0 {
 				labels = r.Attrs
+			}
+			for _, label := range labels {
+				key := normLabel(label)
+				if r.Tier > 0 {
+					tiers[key] = int32(r.Tier)
+					suppress = withoutLabels(suppress, map[string]bool{key: true})
+					boost = withoutLabels(boost, map[string]bool{key: true})
+				} else {
+					delete(tiers, key)
+				}
+			}
+			if r.Tier > 0 {
+				continue
 			}
 			switch r.Type {
 			case "suppress":
@@ -1078,7 +1108,26 @@ func rulesFromBody(text string, rules *[]command.Rule) (suppress, boost []string
 		suppress, boost = Interpret(text)
 	}
 	suppress, boost = dedupe(suppress), dedupe(boost)
-	return suppress, boost, policyRules(flatDirectiveID, suppress, boost)
+	return suppress, boost, policyRules(flatDirectiveID, suppress, boost, tiers)
+}
+
+func ruleTiers(rules []command.Rule) map[string]int32 {
+	tiers := map[string]int32{}
+	for _, rule := range rules {
+		if rule.Tier > 0 {
+			for _, label := range rule.Classes {
+				tiers[normLabel(label)] = int32(rule.Tier)
+			}
+		}
+	}
+	return tiers
+}
+
+func tierReadback(suppress, boost []string, tiers map[string]int32) string {
+	if len(tiers) == 0 {
+		return Readback(suppress, boost)
+	}
+	return (&command.Compiler{}).Review("", policyRules(flatDirectiveID, suppress, boost, tiers), 0).Readback
 }
 
 // compiled runs the shared NL compiler (#54) when the bridge has one, so the
@@ -1130,7 +1179,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 		if dropped {
 			out.Warnings = append(out.Warnings, scopeWarning)
 		}
-		out.Readback = Readback(out.Suppress, out.Boost)
+		out.Readback = tierReadback(out.Suppress, out.Boost, ruleTiers(out.Rules))
 	} else if c.b.Compiler != nil && strings.TrimSpace(ruleText) != "" {
 		comp := c.b.Compiler.Compile(ctx, ruleText)
 		if !comp.Blocked {
@@ -1142,9 +1191,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 				comp.Warnings = mergeWarnings(prior, comp.Warnings, []string{scopeWarning})
 			}
 		}
-		out.Suppress, out.Boost = rulesToLabels(comp.Rules)
-		out.Suppress, out.Boost = dedupe(out.Suppress), dedupe(out.Boost)
-		out.Rules = policyRules(flatDirectiveID, out.Suppress, out.Boost)
+		out.Suppress, out.Boost, out.Rules = rulesFromBody("", &comp.Rules)
 		out.Compiled = &comp
 		out.Path, out.Warnings, out.Blocked, out.DurationMin = comp.Path, comp.Warnings, comp.Blocked, comp.DurationMin
 		out.Readback = strings.TrimSpace(comp.Readback)
@@ -1198,6 +1245,14 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body.Text = strings.TrimSpace(body.Text)
+	if body.Rules != nil {
+		for _, rule := range *body.Rules {
+			if rule.Tier < 0 || rule.Tier > 4 {
+				writeError(w, http.StatusBadRequest, "target tier must be between 1 and 4")
+				return
+			}
+		}
+	}
 	if utf8.RuneCountInString(body.Text) > 500 {
 		writeError(w, http.StatusBadRequest, "text exceeds 500 characters")
 		return
@@ -1220,7 +1275,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects — try \"ignore cargo ships\" or \"prioritize submarines\".")
 		return
 	}
-	pol := &pb.Policy{IssuedBy: opauth.Actor(r.Context(), c.b.issuer()), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost}, Emcon: cd.Emcon}
+	pol := &pb.Policy{IssuedBy: opauth.Actor(r.Context(), c.b.issuer()), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost, TierLabels: ruleTiers(rules)}, Emcon: cd.Emcon}
 	if cd.DurationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(cd.DurationMin) * time.Minute).UnixMilli()
 	}
@@ -1243,7 +1298,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	for i := range rules {
 		rules[i].DirectiveID = ruleID
 	}
-	readback := withDuration(Readback(suppress, boost), cd.DurationMin)
+	readback := withDuration(tierReadback(suppress, boost, ruleTiers(rules)), cd.DurationMin)
 	if cd.Compiled != nil || cd.Emcon != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		readback = cd.Readback
 	}
