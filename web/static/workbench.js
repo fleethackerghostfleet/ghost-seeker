@@ -8,7 +8,7 @@ const workbench=(()=>{
  const delta=(before,next)=>next.map((n,i)=>`${n-before[i]>=0?'+':'−'}${Math.abs(n-before[i])} P${i+1} ${TNAME[i+1]}`).join(' · ');
  const changes=(before,next)=>{const map=new Map(before.map(i=>[i.id,i.tier]));return next.filter(i=>map.has(i.id)&&map.get(i.id)!==i.tier).length};
  const normalize=r=>({...r,classes:r.classes||[],attrs:r.attrs||[],sources:r.sources||[],withinMin:r.withinMin||0,weight:r.weight||1});
- const rows=()=>sorted(after.map(result=>{const item=findItem(result.id),pin=draft.pins[result.id];return item?{...item,...result,tier:pin===0?(result.central>=.8?1:result.central>=.6?2:result.central>=.35?3:4):pin??result.tier}:null}).filter(Boolean));
+ const rows=()=>sorted(after.map(result=>{const item=findItem(result.id),pin=draft.pins[result.id];return item&&!isScene(item)?{...item,...result,tier:pin===0?(result.central>=.8?1:result.central>=.6?2:result.central>=.35?3:4):pin??result.tier}:null}).filter(Boolean));
  function ruleText(r){return `${r.type==='boost'?'Prioritize':'Suppress'} ${r.only?'only ':''}${r.classes.join(' or ')||'any object'}${r.attrs.length?' '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):''}${r.sources.length?' from '+r.sources.join(' or '):''}${r.withinMin?' last '+r.withinMin+' min':''}`}
  function rewrite(){draft.text=draft.rules.map(ruleText).join('; ').slice(0,500);$('nlIn').value=draft.text}
  function save(label){
@@ -89,7 +89,7 @@ const workbench=(()=>{
   if(background&&tile&&control){renderDeferred=true;return}
   renderDeferred=false;
   const focused=tile?.dataset.id,controlIndex=tile&&control?[...tile.querySelectorAll('select,input,button,textarea')].indexOf(control):-1;
-  const current=rows(),live=sorted(items),before=sorted(comparison?items.map(it=>({...it,...comparison.result.find(r=>r.id===it.id)})):items),bm=new Map(before.map((i,index)=>[i.id,{...i,rank:index+1}])),ac=counts(current),bc=counts(before);
+  const contacts=items.filter(it=>!isScene(it)),current=rows(),live=sorted(contacts),before=sorted(comparison?contacts.map(it=>({...it,...comparison.result.find(r=>r.id===it.id)})):contacts),bm=new Map(before.map((i,index)=>[i.id,{...i,rank:index+1}])),ac=counts(current),bc=counts(before);
   $('wbCompareLabel').textContent=`Before: ${comparison?'v'+comparison.n+' recorded results':'current live feed'} → After: draft · ${changes(before,current)} images change priority`;
   $('wbCounts').innerHTML=ac.map((n,i)=>`<div class="wb-count" style="--tier:${tcol(i+1)}">P${i+1} ${TNAME[i+1]}<b>${bc[i]} → ${n}</b><span class="hint">${n-bc[i]>=0?'+':''}${n-bc[i]} images</span><div class="wb-track"><i style="width:${before.length?bc[i]/before.length*100:0}%;opacity:.4"></i></div><div class="wb-track"><i style="width:${current.length?n/current.length*100:0}%"></i></div></div>`).join('');
   const top=current.slice(0,16),display=$('wbDiff').checked?current.filter(i=>bm.get(i.id)?.tier!==i.tier):[...top];
@@ -107,7 +107,7 @@ const workbench=(()=>{
   $('wbGrid').querySelectorAll('.wb-tile').forEach(el=>el.classList.toggle('selected',el.dataset.id===id));
  }
  async function correct(id,action){
-  await flush();const it=findItem(id);if(!it)return;const score=(d,i)=>it.det?.[i]?.s??MODELS[state.model].w[d.cls]*d.conf,det=it.dets.map((d,i)=>({d,s:score(d,i)})).sort((a,b)=>b.s-a.s)[0]?.d;if(!det)return;
+  await flush();const it=findItem(id);if(!it||isScene(it))return;const score=(d,i)=>it.det?.[i]?.s??MODELS[state.model].w[d.cls]*d.conf,det=it.dets.map((d,i)=>({d,s:score(d,i)})).sort((a,b)=>b.s-a.s)[0]?.d;if(!det)return;
   const attr=['dark','approaching','moving','loitering','new'].find(a=>det.attrs[a]),rule=normalize({type:action==='higher'?'boost':'suppress',classes:[det.cls],attrs:attr?[attr]:[],sources:[it.src.id],weight:action==='irrelevant'?2:1,edited:true});
   proposal={id,label:ruleText(rule),rules:[...copy(draft.rules),rule]};await preview();$('wbProposal').scrollIntoView({block:'nearest',behavior:'smooth'});
  }
@@ -136,7 +136,7 @@ const workbench=(()=>{
   $('wbGrid').onfocusin=e=>{const t=e.target.closest('.wb-tile');if(t)why(t.dataset.id)};
   $('wbGrid').onfocusout=()=>setTimeout(()=>{if(renderDeferred)renderResults({background:true})},0);
   $('wbGrid').onclick=e=>{const t=e.target.closest('.wb-tile');if(!t)return;why(t.dataset.id);const b=e.target.closest('[data-correct]');if(b)correct(t.dataset.id,b.dataset.correct)};
-  $('wbGrid').onchange=e=>{if(!e.target.classList.contains('wb-pin'))return;const id=e.target.closest('.wb-tile').dataset.id;if(e.target.value==='')delete draft.pins[id];else draft.pins[id]=+e.target.value;selected=id;renderResults();save('Tier exception updated')};
+  $('wbGrid').onchange=e=>{if(!e.target.classList.contains('wb-pin'))return;const id=e.target.closest('.wb-tile').dataset.id,item=findItem(id);if(!item||isScene(item))return;if(e.target.value==='')delete draft.pins[id];else draft.pins[id]=+e.target.value;selected=id;renderResults();save('Tier exception updated')};
   $('wbDropped').onclick=e=>{const b=e.target.closest('[data-why]');if(b)why(b.dataset.why)};
   $('wbDiff').onchange=renderResults;$('wbBaseline').onclick=()=>{comparison=null;renderResults()};
   $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;unknown=[];renderChips();await preview({label:'Version restored'})}};
@@ -173,12 +173,23 @@ const workbench=(()=>{
   $('wbEditApply').onclick=()=>{closeFocus='edit';$('wbConfirm').close();focusInput()};
   $('wbConfirmApply').onclick=async()=>{
    busy=true;$('wbConfirmApply').disabled=true;
+   const applied=[];
    try{
+    const pins=Object.entries(draft.pins).map(([id,manual])=>{
+     const item=findItem(id);if(!item||isScene(item))throw new Error('Tier exception is no longer available; reset or edit the draft');
+     return {id,manual,previous:item.manual||0};
+    });
+    for(const pin of pins){await patchItem(pin.id,{manual:pin.manual});applied.push(pin)}
     let conflicts=[];
     if(draft.rules.length){const added=await request('/api/directives','POST',{text:draft.text||draft.rules.map(ruleText).join('; ').slice(0,500),rules:draft.rules,durationMin:pendingDuration});conflicts=added.conflicts||[];draft.rules=[]}
-    for(const [id,manual]of Object.entries(draft.pins)){if(findItem(id))await patchItem(id,{manual});delete draft.pins[id]}
     closeFocus='confirm';$('wbConfirm').close();await reset('Applied to live feed');$('nlIn').focus();toast(conflicts.length?gsPolicy.conflictToast(conflicts):'Collection priorities applied to live feed');
-   }catch(error){renderChips();closeFocus='apply';$('wbConfirm').close();if(!error.policyConflicts)toast('Apply stopped: '+error.message+'; successful changes are already live.')}finally{busy=false;$('wbConfirmApply').disabled=false;live()}
+   }catch(error){
+    const failures=[];
+    for(const pin of applied.reverse()){try{await patchItem(pin.id,{manual:pin.previous})}catch(rollback){failures.push(pin.id+': '+rollback.message)}}
+    renderChips();closeFocus='apply';$('wbConfirm').close();
+    if(failures.length)toast('Apply stopped: '+error.message+'; exception rollback failed: '+failures.join('; '));
+    else if(!error.policyConflicts)toast('Apply stopped: '+error.message+'; no draft changes were saved.');
+   }finally{busy=false;$('wbConfirmApply').disabled=false;live()}
   };
  }
  function focusInput(){const input=$('nlIn');input.focus();input.setSelectionRange(input.value.length,input.value.length)}
