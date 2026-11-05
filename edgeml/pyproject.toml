@@ -13,6 +13,7 @@ eval = ["pycocotools", "faster-coco-eval", "trackeval @ git+https://github.com/J
 tracking = ["boxmot>=13", "lap"]
 detect = ["ultralytics>=8.3", "torch", "torchvision"]
 test = ["pytest"]
+audit = ["pyarrow", "google-cloud-storage", "google-cloud-bigquery"]
 # workstream B detectors (GPU eval box); CPU boxes install [onnx] only
 gpu = ["torch", "torchvision", "ultralytics>=8.3", "transformers>=4.50", "timm", "huggingface_hub", "onnxruntime-gpu",
        "onnx", "onnxslim", "faster-coco-eval", "pillow"]
