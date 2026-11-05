@@ -25,7 +25,7 @@ function render(){
   'Last 20 |Δ| '+c.mean_abs_last20.toFixed(3),
   'Signed Δ '+c.mean_signed_delta.toFixed(3)
  ]) line($('counters'),text);
- $('info').textContent=(index+1)+' / '+state.entries.length+' · '+entry.image.source+' · '+entry.id+' · Model P'+entry.model_tier+' · Edge score '+entry.model_score.toFixed(4);
+ $('info').textContent=(index+1)+' / '+state.entries.length+' · '+entry.image.source+' · '+entry.id+' · Model P'+entry.model_tier+' · Edge score '+entry.model_score.toFixed(4)+(entry.image.tags?' · '+Object.entries(entry.image.tags).map(([k,v])=>k+'='+v).join(' '):'')+(entry.image.ground_truth?' · truth boxes '+entry.image.ground_truth.length:'');
  $('image').src='/images/'+encodeURIComponent(entry.id);
  const grade=state.grades[entry.id];
  $('grade').textContent=grade?'Human P'+grade.human_tier+' · Δ '+grade.delta:'Not graded';
@@ -37,6 +37,16 @@ function render(){
   const text=document.createElementNS(ns,'text');
   text.setAttribute('x',b.x*1000);text.setAttribute('y',Math.max(18,b.y*1000-6));text.setAttribute('fill','#39ffae');text.setAttribute('font-size','18');text.setAttribute('paint-order','stroke');text.setAttribute('stroke','#101822');text.setAttribute('stroke-width','3');
   text.textContent=(det.subtype||det.label)+' '+Math.round(det.conf*100)+'%';
+  $('boxes').append(rect,text);
+ }
+ const im=entry.image, truth=im.ground_truth||[];
+ for(const g of truth){
+  const b=g.box, ns='http://www.w3.org/2000/svg', x=b.x/im.width*1000, y=b.y/im.height*1000, w=b.w/im.width*1000, h=b.h/im.height*1000;
+  const rect=document.createElementNS(ns,'rect');
+  for(const [key,value] of Object.entries({x,y,width:w,height:h,fill:'none',stroke:'#ffd166','stroke-width':1.5,'stroke-dasharray':'8 5'}))rect.setAttribute(key,value);
+  const text=document.createElementNS(ns,'text');
+  text.setAttribute('x',x);text.setAttribute('y',Math.min(990,y+h+16));text.setAttribute('fill','#ffd166');text.setAttribute('font-size','15');text.setAttribute('paint-order','stroke');text.setAttribute('stroke','#000');text.setAttribute('stroke-width','3');
+  text.textContent='truth: '+g.label;
   $('boxes').append(rect,text);
  }
 }
