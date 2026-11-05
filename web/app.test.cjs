@@ -189,7 +189,7 @@ test('feed shows every pipeline image by default with low-value, repeat and dire
    frame('mixed',{tier:3,det:[{sup:true},{sup:false}]}),frame('dismissed',{dismissed:true})];
   before=JSON.stringify(items);
  `,context);
- assert.equal(vm.runInContext('ids()',context),'original,mixed,repeat,directive,low');
+ assert.equal(vm.runInContext('ids()',context),'original,repeat,mixed,directive,low');
  assert.equal(vm.runInContext('visible().counts[4]',context),3);
  assert.equal(vm.runInContext("feedReasons.get('repeat')",context),'Repeat of an earlier image');
  assert.equal(vm.runInContext("feedReasons.get('low')",context),'Low value');
@@ -213,6 +213,20 @@ test('feed interleaves sensors within a priority tier without changing prioritie
  assert.equal(vm.runInContext('ids()',context),'n1,m1,n2,o3,o1,o2');
  vm.runInContext("items.find(i=>i.id==='o3').ts=-1000",context);
  assert.equal(vm.runInContext('ids()',context),'n1,m1,n2,o1,o2,o3');
+});
+test('shown repeats sit right after their original across sensors and sorts; hiding removes them',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('a',{tier:1,central:.9}),frame('b',{tier:1,src:{id:'IR-U1'},central:.8}),frame('c',{tier:2}),
+  frame('ra',{tier:4,filtered:'duplicate',dupOf:'a'}),frame('rb',{tier:4,src:{id:'IR-U1'},filtered:'duplicate',dupOf:'b'}),
+  frame('orphan',{tier:4,filtered:'duplicate',dupOf:'gone'}),frame('low',{tier:4,filtered:'low-value',central:.1})];before=JSON.stringify(items)`,context);
+ assert.equal(vm.runInContext('ids()',context),'a,ra,b,rb,c,orphan,low');
+ assert.equal(vm.runInContext('repeatCount()',context),3);
+ vm.runInContext("state.sort='time';items.forEach((i,n)=>i.ts=10000-n*100);before=JSON.stringify(items)",context);
+ assert.match(vm.runInContext('ids()',context),/a,ra/);
+ assert.match(vm.runInContext('ids()',context),/b,rb/);
+ vm.runInContext("state.sort='pri';filters.showDuplicates=false",context);
+ assert.equal(vm.runInContext('ids()',context),'a,b,c,low');
+ assert.equal(vm.runInContext('JSON.stringify(items)===before',context),true);
 });
 test('a later boost keeps the stored priority despite an earlier suppression flag',()=>{
  const context=feedContext();
@@ -270,7 +284,7 @@ test('cards mark human sends purple and automatic sends green',()=>{
 test('main strip moves low-level counts to the Details screen',()=>{
  assert.match(css,/#simStrip :is\(#st2,#st4\),#simStrip :is\(#st2,#st4\)\+\.ar,#liveStrip \.lowlevel,#liveStrip \.lowlevel\+\.ar\{display:none\}/);
  assert.match(html,/href="#details">Details: counts &amp; filtered photos ›<\/a>/);
- assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates<\/label>/);
+ assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0<\/span><\/label>/);
  assert.match(html,/<div class="seg" id="densSeg"><button data-d="m" class="on">Small<\/button><button data-d="l">Large<\/button><\/div>/);
 });
 test('Details screen lists automatically filtered photos by kind with their originals',()=>{
