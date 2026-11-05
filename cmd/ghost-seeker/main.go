@@ -52,7 +52,7 @@ func main() {
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–50 Mbps ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
-	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
+	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic, mean 16 kbps with ~5% outages, 0 = outage)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -172,9 +172,12 @@ func main() {
 			len(images), distribution, summary.ImagesWithPerson, summary.PersonDrivenP1)
 		fillDatasetBacklog(data, replay, *backfill)
 	} else {
-		uplink = newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 		generator = sensor.NewGenerator()
 		fillBacklog(data, generator, *backfill)
+		if *simLinkBps < 0 {
+			data.AdvanceUploads(24 * time.Hour)
+		}
+		uplink = newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	}
 	if *policyState != "" {
 		backend, err := policy.NewFileBackend(*policyState)
@@ -375,7 +378,10 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 		for _, updated := range updates {
 			app.PublishUpdate(updated, cdr)
 		}
-		_, _, _, state := data.Snapshot()
+		items, _, _, state := data.Snapshot()
+		if !uplink.canGenerate(items) {
+			continue
+		}
 		item, extra := generator.Tick(nil, time.Now(), state.Model, data.Directives())
 		stored, evicted := data.Add(item, extra)
 		app.PublishEvict(evicted)
