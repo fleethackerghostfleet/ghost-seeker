@@ -78,6 +78,15 @@ test('externally shaped links show the one measured rate without claiming automa
  assert.match(html,/controlled outside this console/);
  assert.doesNotMatch(html,/Simulated|linkPresets|data-bps/);
 });
+
+test('externally shaped links without a measurement yet say measuring, not link down',()=>{
+ const c=setup();
+ c.LIVE.edge.estimateBps=0;
+ vm.runInContext('renderLiveStrip()',c);
+ const html=vm.runInContext("$('liveStrip').innerHTML",c);
+ assert.match(html,/class="st link".*<b>—<\/b>.*Measuring link speed…/);
+ assert.doesNotMatch(html,/Link down|st link down/);
+});
 test('live errors stay visible and escaped, and failed image requests retain their error',async()=>{
  const c=setup();
  vm.runInContext("LIVE.shore={ok:false,error:'<offline>'};renderLiveStrip()",c);

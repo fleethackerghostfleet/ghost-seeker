@@ -647,6 +647,8 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  vm.runInContext('stats.linkBps=0;renderSimLink()',ctx);
  assert.match(el.innerHTML,/<b>0.00 MB\/s<\/b>.*Link down — sending paused/);
  assert.equal(el.classList.on.has('down'),true);
+ vm.runInContext('stats.linkBps=160000;stats.linkFixed=true;renderSimLink()',ctx);
+ assert.match(el.innerHTML,/Fixed test rate/);assert.doesNotMatch(el.innerHTML,/every 5 s/);
  const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
  assert.match(html,/id="simStrip">\s*<div class="st link" id="stLink"/);
  assert.doesNotMatch(html,/type="range"|linkPresets/);
@@ -666,8 +668,11 @@ test('cards being sent show a blue arrow and sent cards a green check in the top
  apply({bytes:100,sent:100,done:true});
  assert.equal(mark.className,'sendmark done');assert.equal(mark.textContent,'✓');assert.ok(classes.has('uploaded'));
  context.it={live:{imageForm:'thumb',forms:{thumb:{state:'partial',bytes:100,received:10}}}};
+ vm.runInContext("LIVE={link:{controllable:true,bps:4000000},edge:{}}",context);
  vm.runInContext('applySendMark(card,it)',context);
  assert.equal(mark.className,'sendmark sending');
+ vm.runInContext('LIVE.link.bps=0;applySendMark(card,it)',context);
+ assert.equal(mark.className,'sendmark','live outage: partial form is not on the wire');
  const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
  assert.match(css,/\.sendmark\{[^}]*position:absolute;top:5px;right:5px/);
  assert.match(css,/\.sendmark\.done\{[^}]*background:var\(--good\)/);

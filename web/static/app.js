@@ -23,7 +23,7 @@ function uploadState(it){
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
   const f=forms[key]||{};
-  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
+  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(LIVE?.link?.controllable?LIVE.link.bps>0:!!LIVE?.edge?.estimateBps),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
  const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next',queued=!done&&!held&&sent===0;
@@ -386,14 +386,15 @@ function renderLiveStrip(){
  const {shore,edge,link,counts,policy,prioritization}=L;
  const rate=link.controllable?link.bps:(edge.ok?edge.estimateBps:shore.estimateBps)||0;
  const d=link.distribution;
- const linkNote=d?`Simulated · changes every ${d.intervalMs/1000} s`:'Measured by the ship';
+ const measuring=!link.controllable&&!rate;
+ const linkNote=d?`Simulated · changes every ${d.intervalMs/1000} s`:measuring?'Measuring link speed…':'Measured by the ship';
  const linkTitle=d?`Simulated bandwidth follows a normal distribution: mean ${fmtRate(d.meanBps)}, standard deviation ${fmtRate(d.stdDevBps)}, clipped to ${fmtRate(d.minBps)}–${fmtRate(d.maxBps)}. A new rate is applied to the actual ship-to-shore link every ${d.intervalMs/1000} seconds.`:'Ship-to-shore speed is controlled outside this console.';
  const sightingMode=counts.grouped>0;
  const objsShown=sightingMode?counts.sightings:counts.objects,objsImg=sightingMode?counts.sightingsWithImage:counts.objectsWithImage;
  const preTrack=sightingMode?Math.max(0,counts.objects-counts.sightings):0;
  const dropPct=edge.ok&&(edge.itemsTotal+edge.itemsDeduped)>0?Math.round(100*edge.itemsDeduped/(edge.itemsTotal+edge.itemsDeduped)):0;
  el.innerHTML=`
-  <div class="st link${rate>0?'':' down'}" title="${esc(linkTitle)}">${linkPanelHTML(rate,linkNote)}</div><span class="ar">›</span>
+  <div class="st link${rate>0||measuring?'':' down'}" title="${esc(linkTitle)}">${linkPanelHTML(rate,linkNote,measuring)}</div><span class="ar">›</span>
   <div class="st" title="Ship records include detected objects and camera overview updates. Repeated views of an already reported object stay on the ship to save bandwidth. Waiting records and bytes have not yet been sent.">On ship ${edge.ok?`<b>${edge.itemsTotal}</b> records · <b>${edge.itemsDeduped||0}</b> repeated views kept on ship · waiting <b>${edge.queuedItems}</b> (${fmtBytes(edge.queuedBytes||0)})`:`<b>${edge.error?'n/a':'—'}</b>`}</div><span class="ar">›</span>
   <div class="st" title="Records received on shore include object summaries and camera overview updates. Each tracked object has one card. Cards without an image show only a summary until image data arrives.${preTrack?` ${preTrack} earlier record${preTrack===1?'':'s'} of the same objects are combined.`:''}">On shore <b>${shore.ok?shore.itemsTotal:'—'}</b> records · <b>${objsShown}</b> detected objects (<b>${objsImg}</b> with image) · <b>${counts.scenes||0}</b> camera updates${shore.ok?'':` <span class="bad">${esc(shore.error||'unreachable')}</span>`}</div><span class="ar">›</span>
   <div class="st" title="Image and summary data sent over the connection${link.controllable?` (shore itself counted ${fmtBytes(shore.bytes||0)})`:''}. Compare with what ${edge.itemsDeduped||0} repeated views would have cost to send.">Data transferred <b>${fmtBytes(link.controllable?link.bytes:shore.bytes||0)}</b></div><span class="ar">›</span>
@@ -401,12 +402,12 @@ function renderLiveStrip(){
   <div class="st" id="prioMode" title="Scoring model used on the ship. P1 Critical, P2 High, P3 Routine and P4 Low divide the current shore feed into priority groups (top 10%, next 25%, next 35%, then the rest). Deprioritized objects are P4 Low.">Scoring model <b>${esc(prioritization?.label||'Ship score')}</b>${prioritization?.source==='edge'?'':' <span class="hint">(built-in)</span>'}</div>
   <span class="sv" title="Share of all camera views that stayed on the ship because they repeated an object already reported. This saves bandwidth.">${dropPct}% of camera views stayed on the ship (repeats) to save bandwidth</span>`;
 }
-function linkPanelHTML(bps,note){
- return`<span class="lk">Ship-to-shore connection</span> <b>${fmtRate(bps)}</b><span class="hint">${bps>0?esc(note):'Link down — sending paused'}</span>`;
+function linkPanelHTML(bps,note,measuring){
+ return`<span class="lk">Ship-to-shore connection</span> <b>${measuring?'—':fmtRate(bps)}</b><span class="hint">${bps>0||measuring?esc(note):'Link down — sending paused'}</span>`;
 }
 function renderSimLink(){
  const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
- el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,'Simulated · changes every 5 s');
+ el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'Simulated · changes every 5 s');
 }
 const pulling=new Set();
 function renderCameras(){

@@ -181,4 +181,6 @@ type Stats struct {
 	DB    int `json:"db"`
 	// LinkBPS is the simulated ship-to-shore rate in bits/s (0 = outage).
 	LinkBPS int64 `json:"linkBps"`
+	// LinkFixed is true when -sim-link-bps pins the rate (no resampling).
+	LinkFixed bool `json:"linkFixed,omitempty"`
 }

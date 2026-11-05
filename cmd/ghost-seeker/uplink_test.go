@@ -40,6 +40,9 @@ func TestSimulationUplinkFixedOverride(t *testing.T) {
 		if it.Upload.Sent != rate*10/8 {
 			t.Fatalf("fixed rate %d: %+v", rate, it.Upload)
 		}
+		if _, stats, _, _ := data.Snapshot(); !stats.LinkFixed || stats.LinkBPS != rate {
+			t.Fatalf("fixed rate %d: stats %+v", rate, stats)
+		}
 	}
 }
 

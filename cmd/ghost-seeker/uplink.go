@@ -19,6 +19,7 @@ func newSimulationUplink(data *store.Store, fixedBPS int64, sample func() float6
 	u := &simulationUplink{data: data, sample: sample}
 	if fixedBPS >= 0 {
 		data.SetLinkBPS(fixedBPS)
+		data.SetLinkFixed(true)
 		return u
 	}
 	u.distribution = shaper.NewNormal("").Distribution()

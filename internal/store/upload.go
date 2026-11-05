@@ -41,6 +41,13 @@ func (s *Store) SetUploadOverride(id, override, by string) (command.Item, int, e
 	return command.Item{}, s.cdr, ErrNotFound
 }
 
+// SetLinkFixed records that the simulated rate is pinned and never resampled.
+func (s *Store) SetLinkFixed(fixed bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stats.LinkFixed = fixed
+}
+
 func (s *Store) SetLinkBPS(bps int64) []command.Item {
 	s.mu.Lock()
 	defer s.mu.Unlock()
