@@ -147,12 +147,23 @@ func imageShipped(row *store.Row) bool {
 
 // replaceKeyFrame swaps the item's image payloads and features for a better
 // key frame of the same object and re-scores it. Forms the item never had
-// (e.g. CROP when the first key frame carried no box) are not added.
+// (e.g. CROP when the first key frame carried no box) are not added; a CROP
+// it already has is always re-cut from the new frame.
 func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting) (*store.Row, error) {
 	it := row.Item
 	it.ContentHash = hash
 	g.applyFeatures(it, resp, s)
-	payloads := g.imageForms(c.Data, s)
+	payloads, original := g.imageForms(c.Data, resp, s)
+	if err := g.keepOriginal(ctx, it.Id, original); err != nil {
+		return nil, err
+	}
+	if _, ok := payloads[pb.FormKind_FORM_KIND_CROP]; !ok && row.Form(pb.FormKind_FORM_KIND_CROP) != nil {
+		cr, err := g.replacementCrop(c.Data, resp, s)
+		if err != nil {
+			return nil, fmt.Errorf("replace CROP: %w", err)
+		}
+		payloads[pb.FormKind_FORM_KIND_CROP] = cr
+	}
 	payloads[pb.FormKind_FORM_KIND_FACT] = fact.FromItem(it).Marshal()
 	for k, data := range payloads {
 		nf, err := g.replaceForm(ctx, it.Id, k, data)

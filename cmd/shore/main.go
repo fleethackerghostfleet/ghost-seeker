@@ -21,6 +21,7 @@ import (
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
@@ -68,7 +69,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	p, h := ghostseekerv1connect.NewSyncServiceHandler(ssync.Handler{Service: syncSvc}, connect.WithInterceptors(auth))
+	p, h := ghostseekerv1connect.NewSyncServiceHandler(ssync.Handler{Service: syncSvc}, append(link.HandlerOptions(), connect.WithInterceptors(auth))...)
 	mux.Handle(p, h)
 	p, h = ghostseekerv1connect.NewConsoleServiceHandler(con)
 	mux.Handle(p, h)

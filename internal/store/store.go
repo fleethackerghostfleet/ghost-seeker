@@ -283,6 +283,35 @@ func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *boo
 	return command.Item{}, s.cdr, false
 }
 
+// ErrOperatorRequired: a full-size override needs a named operator.
+var ErrOperatorRequired = errors.New("operator name is required for a full-size override")
+
+// RequestFullRes records an operator's override to send the original image
+// at full size with no compression.
+func (s *Store) RequestFullRes(id, by string) (command.Item, int, error) {
+	r := []rune(strings.TrimSpace(by))
+	if len(r) == 0 {
+		return command.Item{}, 0, ErrOperatorRequired
+	}
+	if len(r) > maxNoteRunes {
+		r = r[:maxNoteRunes]
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.items {
+		item := &s.items[i]
+		if item.ID != id {
+			continue
+		}
+		if !item.FullRes {
+			now := time.Now()
+			item.FullRes, item.FullResBy, item.FullResAt = true, string(r), &now
+		}
+		return cloneItem(*item), s.cdr, nil
+	}
+	return command.Item{}, s.cdr, ErrNotFound
+}
+
 // Decide records the commander's decision on an escalated item. An empty
 // decision reopens it; DecisionReturn sends it back to the watch floor.
 func (s *Store) Decide(id, decision, note string) (command.Item, int, error) {
