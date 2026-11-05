@@ -69,6 +69,7 @@ func (c *Console) reviewItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "cannot persist review")
 		return
 	}
+	c.publish("review-data", c.reviews.Summary())
 	o := c.overlayFor(old.ID)
 	o.Manual, o.Reviewed = effect.Tier, true
 	if effect.Dismissed != nil {
@@ -144,6 +145,7 @@ func (c *Console) correctReview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, err.Error())
 		return
 	}
+	c.publish("review-data", c.reviews.Summary())
 	if action == "undo" {
 		before := original.Before
 		o := c.overlayFor(original.ItemID)

@@ -23,6 +23,26 @@ func TestReviews(t *testing.T) {
 	stored, _ := d.GetItem("i")
 	s := New(d)
 	s.SetReviewLog(l)
+	peer, _ := s.hub.add()
+	defer s.hub.remove(peer)
+	assertSummary := func(count int) {
+		t.Helper()
+		for len(peer.events) > 0 {
+			event := <-peer.events
+			if event.name != "review-data" {
+				continue
+			}
+			var summary struct {
+				Count int `json:"count"`
+			}
+			data, _ := json.Marshal(event.data)
+			if err := json.Unmarshal(data, &summary); err != nil || summary.Count != count {
+				t.Fatalf("peer summary: %s, err=%v", event.data, err)
+			}
+			return
+		}
+		t.Fatal("no peer review summary event")
+	}
 	post := func(path, body string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		s.ServeHTTP(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
@@ -35,6 +55,7 @@ func TestReviews(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
+	assertSummary(1)
 	var v struct {
 		Record reviews.Record `json:"record"`
 	}
@@ -59,6 +80,7 @@ func TestReviews(t *testing.T) {
 	if w.Code != 200 || l.Summary().Count != 0 {
 		t.Fatal(w.Body.String())
 	}
+	assertSummary(0)
 	it, _ := d.GetItem("i")
 	if it.Reviewed || it.Manual != 0 || it.HumanReviewed {
 		t.Fatal("undo did not restore")

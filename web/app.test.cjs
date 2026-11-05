@@ -34,6 +34,21 @@ test('preempted partial uploads show queued progress and do not count as uploadi
  assert.match(vm.runInContext('uploadHTML(items[0])',context),/Link outage, paused/);
  assert.match(context.$('uploadSummary').textContent,/1 uploading · 1 queued/);
 });
+test('peer review summary updates through the stream and beats an older in-flight response',async()=>{
+ const context=setup();
+ vm.runInContext(`openStream();request=()=>new Promise(resolve=>{finishSummary=resolve});pendingSummary=refreshReviewData();
+  streamHandlers['review-data']({data:JSON.stringify({count:20,agreement:.5,reviewers:{Alice:{count:17},Bob:{count:3}}})})`,context);
+ assert.match(context.$('reviewData').textContent,/20 reviews/);
+ vm.runInContext('finishSummary({count:17,agreement:.5,reviewers:{Alice:{count:17}}})',context);
+ await vm.runInContext('pendingSummary',context);
+ assert.match(context.$('reviewData').textContent,/20 reviews/);
+ assert.match(context.$('reviewData').textContent,/Bob: 3/);
+ vm.runInContext(`streamHandlers['review-data']({data:JSON.stringify({count:0,agreement:0,reviewers:{}})});
+  request=async()=>{throw Error('offline')}`,context);
+ assert.match(context.$('reviewData').textContent,/0 reviews/);
+ await vm.runInContext('refreshReviewData()',context);
+ assert.equal(context.$('reviewData').textContent,'offline');
+});
 test('review suggestions alone use the overlay and retain busy buttons',()=>{
  const context=setup(),box=context.$('rvAsk'),classes=new Set();
  box.classList.toggle=(name,on)=>on?classes.add(name):classes.delete(name);

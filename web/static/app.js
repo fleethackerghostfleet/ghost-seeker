@@ -236,7 +236,8 @@ function openStream(){
  const stream=new EventSource('/api/stream');
  stream.onopen=()=>{state.offline=false;renderLive()};
  stream.onerror=()=>{state.offline=true;renderLive()};
- stream.addEventListener('snapshot',event=>{applySnapshot(JSON.parse(event.data));refreshTeamProposals()});
+ stream.addEventListener('snapshot',event=>{applySnapshot(JSON.parse(event.data));refreshTeamProposals();if(reviewDataReady)refreshReviewData()});
+ stream.addEventListener('review-data',event=>{reviewDataRevision++;renderReviewData(JSON.parse(event.data))});
  stream.addEventListener('review-sync',event=>receiveTeamProposal(JSON.parse(event.data).proposal));
  stream.addEventListener('item',event=>{
   const data=JSON.parse(event.data);
@@ -809,8 +810,9 @@ function rvAct(a){
 }
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').trim().slice(0,80)}catch{}
-let reviewDataReady=false,lastReview=null;
-function refreshReviewData(){return request('/api/reviews/summary').then(s=>{$('reviewData').textContent=`${s.count} reviews · ${Math.round(s.agreement*100)}% agreement · `+Object.entries(s.reviewers).map(([n,v])=>`${n}: ${v.count}`).join(', ')}).catch(error=>{$('reviewData').textContent=error.message})}
+let reviewDataReady=false,lastReview=null,reviewDataRevision=0;
+function renderReviewData(s){$('reviewData').textContent=`${s.count} reviews · ${Math.round(s.agreement*100)}% agreement · `+Object.entries(s.reviewers).map(([n,v])=>`${n}: ${v.count}`).join(', ')}
+function refreshReviewData(){const revision=++reviewDataRevision;return request('/api/reviews/summary').then(s=>{if(revision===reviewDataRevision)renderReviewData(s)}).catch(error=>{if(revision===reviewDataRevision)$('reviewData').textContent=error.message})}
 function setupReviewData(){if(reviewDataReady)return;reviewDataReady=true;$('reviewerName').value=reviewerName;$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';$('reviewerSave').onclick=()=>{reviewerName=$('reviewerName').value.trim().slice(0,80);try{localStorage.setItem('gsReviewer',reviewerName)}catch{}$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';renderReview()};$('reviewNoteOpen').onclick=openReviewNote;$('reviewNote').onkeydown=async e=>{e.stopPropagation();if(e.key==='Escape'){$('reviewNoteBox').hidden=true;return}if(e.key!=='Enter')return;e.preventDefault();try{await saveReviewReason(lastReview.id,lastReview.reason||'',$('reviewNote').value);lastReview.note=$('reviewNote').value;$('reviewNoteBox').hidden=true;toast('Note saved')}catch(error){toast(error.message)}};refreshReviewData()}
 function openReviewNote(){if(!lastReview){toast('Review an image first');return}$('reviewNoteBox').hidden=false;$('reviewNote').value=lastReview.note||'';$('reviewNote').focus()}
 async function submitReview(id,action,changes,p){const r=await request(`/api/items/${encodeURIComponent(id)}/review`,'POST',{reviewer:reviewerName,action:'1234'.includes(action)?'tier':action,tier:changes.manual});p.record=r.record.id;lastReview=r.record;cdr=r.cdr;applyItemUpdate(r.item);refreshReviewData();return findItem(id)}
