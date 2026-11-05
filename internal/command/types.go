@@ -112,6 +112,50 @@ type Item struct {
 	Lat       Latency          `json:"lat"`
 	Dets      []Detection      `json:"dets"`
 	Det       []DetectionScore `json:"det"`
+	// Live is set only when the item comes from a shore node (ghost-seeker
+	// -shore); the simulation leaves it nil.
+	Live *LiveMeta `json:"live,omitempty"`
+}
+
+// LiveForm is the shore-side state of one form of an item's fidelity ladder.
+type LiveForm struct {
+	State    string `json:"state"` // none | offered | pending | partial | received
+	Bytes    int64  `json:"bytes"`
+	Received int64  `json:"received"`
+}
+
+// LiveMeta carries what a shore sighting knows that the simulation does not:
+// which shore item backs the card, how it was grouped, which forms have
+// landed and whether the standing policy deprioritizes it.
+type LiveMeta struct {
+	ItemID       string              `json:"itemId"` // shore item the card shows (best received form)
+	SightingID   string              `json:"sightingId,omitempty"`
+	Subtype      string              `json:"subtype,omitempty"` // sidecar zero-shot subtype
+	Label        string              `json:"label,omitempty"`   // detector class
+	Override     string              `json:"override,omitempty"`
+	Event        string              `json:"event,omitempty"`
+	Unknownness  float64             `json:"unknownness"`
+	Unknown      bool                `json:"unknown"`
+	Score        float64             `json:"score"`    // shore priority score (unbounded)
+	Priority     string              `json:"priority"` // P1..P4 by rank on shore
+	Suppressed   bool                `json:"suppressed"`
+	SuppressedBy string              `json:"suppressedBy,omitempty"`
+	Frames       int                 `json:"frames"`
+	FramesKnown  bool                `json:"framesKnown"`
+	Reports      int                 `json:"reports"`
+	FirstMs      int64               `json:"firstMs"`
+	LastMs       int64               `json:"lastMs"`
+	Forms        map[string]LiveForm `json:"forms"`
+	ImageForm    string              `json:"imageForm,omitempty"`
+	FactURL      string              `json:"factUrl"`
+	Pull         LivePull            `json:"pull"`
+}
+
+// LivePull explains the state of the "Pull full image" action for a card.
+type LivePull struct {
+	Enabled bool   `json:"enabled"`
+	Label   string `json:"label"`
+	Reason  string `json:"reason"`
 }
 
 type Stats struct {

@@ -13,7 +13,7 @@ func TestSecureHeaders(t *testing.T) {
 		}
 	}))
 	for _, tc := range []struct {
-		path       string
+		path        string
 		wantNoStore bool
 	}{
 		{path: "/api/x", wantNoStore: true},

@@ -22,6 +22,7 @@ function norm(it){
 const awaiting=it=>it.sent&&!it.decision;
 function upsert(raw){
  const it=norm(raw),had=items.get(it.id);
+ if(had&&had.img!==it.img)imageCache.delete(it.id);
  if(it.sent||it.decision)items.set(it.id,it);else items.delete(it.id);
  return{it,isNew:awaiting(it)&&!(had&&awaiting(had))};
 }
@@ -43,7 +44,7 @@ function flags(it){
  return[...new Map(f.map(x=>[x[1],x])).values()];
 }
 function boxes(it){
- return it.dets.map((d,i)=>{const s=(it.det[i]||{}).s||0,b=d.b,c=s>=.6?'hi':s>=.3?'md':'lo';
+ return it.dets.map((d,i)=>{const s=(it.det[i]||{}).s||0,b=d.b,c=s>=.6?'hi':s>=.3?'md':'lo';if(!b||!(b.w>0))return'';
   return`<div class="box ${c}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%"><em>${esc(lab(d.cls))} ${Math.round(d.conf*100)}%</em></div>`}).join('');
 }
 
@@ -126,7 +127,7 @@ let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on'
 function connect(){
  const es=new EventSource('/api/stream');
  es.onopen=()=>setLive(true);es.onerror=()=>setLive(false);
- es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
+ es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);if(m.live){const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
  es.addEventListener('update',e=>{
   const m=JSON.parse(e.data),prev=view.sel,{it,isNew}=upsert(m.item);
   if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}
