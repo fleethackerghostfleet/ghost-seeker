@@ -155,6 +155,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, linkBps int64, pol
 	mux.Handle("/blob/", bridge.Handler())
 	mux.Handle("/api/", console.Handler())
 	mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
+	mux.Handle("GET /shore.html", http.RedirectHandler("/", http.StatusFound)) // retired F2 UI; same console at /
 	mux.Handle("/", web.Handler())
 	log.Printf("Ghost Seeker (live shore mode, shore=%s) listening on %s", shoreURL, addr)
 	log.Fatal(serve(addr, httpx.Secure(httpx.SameOrigin(mux))))
