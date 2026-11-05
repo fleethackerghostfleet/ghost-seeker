@@ -160,6 +160,9 @@ type Ingester struct {
 	// kept that frame, so near_duplicate frames can fold into it (bounded ring).
 	tomerItems map[string]string
 	tomerRing  []string
+	// Frames, when set, records every image capture's outcome for the ship console.
+	Frames   *FrameLog
+	lastResp *pb.AnalyzeResponse
 }
 
 func New(cfg Config, st *store.Store, an inference.Analyzer, sch *scheduler.Scheduler, clk clock.Clock, log *slog.Logger) *Ingester {
@@ -194,6 +197,17 @@ func (g *Ingester) Run(ctx context.Context, src Source) error {
 // frames are new objects, better key frames, or duplicates (see sightings.go),
 // and a response without sightings behaves like hash mode.
 func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
+	if g.Frames == nil || c.Type != pb.ItemType_ITEM_TYPE_IMAGE {
+		return g.ingest(ctx, c)
+	}
+	dups, count := atomic.LoadInt64(&g.Dups), g.Count
+	g.lastResp = nil
+	row, err := g.ingest(ctx, c)
+	g.logFrame(c, row, err, dups, count)
+	return row, err
+}
+
+func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	sum := sha256.Sum256(c.Data)
 	hash := hex.EncodeToString(sum[:])
 	image := c.Type == pb.ItemType_ITEM_TYPE_IMAGE
@@ -209,6 +223,7 @@ func (g *Ingester) Ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		if err != nil {
 			return nil, fmt.Errorf("analyze: %w", err)
 		}
+		g.lastResp = resp
 		if resp.Burst != nil && resp.Burst.Fps > 0 && resp.Burst.DurationS > 0 && g.OnBurst != nil {
 			d := time.Duration(resp.Burst.DurationS * float64(time.Second))
 			if d > 0 {

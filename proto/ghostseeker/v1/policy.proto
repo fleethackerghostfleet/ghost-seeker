@@ -34,6 +34,7 @@ message Interest {
   double boost_factor = 5; // default 2.0
   double suppress_factor = 6; // default 0.05 (deprioritize, never drop)
   map<string, double> boost_weights = 7; // per-label boost from merged rule weights; missing = boost_factor
+  map<string, int32> tier_labels = 8; // normalized label → pinned priority tier 1–4 (P1–P4), overriding the shore's relative rank band
 }
 
 message Thresholds {
@@ -73,6 +74,7 @@ message InterestRule {
   int64 expires_at_unix_ms = 7; // 0 = no per-rule expiry
   repeated string targets = 8; // edge node ids; empty = all
   string text = 9; // operator's words, for readback/audit
+  map<string, int32> tier_labels = 10; // normalized label → pinned priority tier 1–4 (P1–P4), overriding the shore's relative rank band
 }
 
 message EmconSetting {

@@ -1,0 +1,1547 @@
+{
+  "version": 1,
+  "notes": [
+    "Hand-authored expected outcomes frozen before execution; no model-generated answer key.",
+    "Research benchmark, not a statistically representative field evaluation.",
+    "Supported score includes direct/parser and Granite paths; report each separately.",
+    "Context is passed explicitly to compile and never mutates the active policy.",
+    "Weights: boost default2, strongly3, slightly1.5; suppress1 uses existing global suppression multiplier.",
+    "Multi-rule pronouns without an explicit focus are expected to request clarification; only unambiguous single-rule follow-ups change state."
+  ],
+  "cases": [
+    {
+      "id": "direct-01",
+      "category": "direct",
+      "text": "Prioritize cargo ships",
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-02",
+      "category": "direct",
+      "text": "Boost fishing boats",
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-03",
+      "category": "direct",
+      "text": "Deprioritize tankers",
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-04",
+      "category": "direct",
+      "text": "Prioritize sailboats",
+      "expected": [
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-05",
+      "category": "direct",
+      "text": "Suppress speedboats",
+      "expected": [
+        {
+          "concept": "speedboat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-06",
+      "category": "direct",
+      "text": "Boost passenger ships",
+      "expected": [
+        {
+          "concept": "passenger ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-07",
+      "category": "direct",
+      "text": "Prioritize submarines",
+      "expected": [
+        {
+          "concept": "submarine",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-08",
+      "category": "direct",
+      "text": "Deprioritize buoys",
+      "expected": [
+        {
+          "concept": "buoy",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-09",
+      "category": "direct",
+      "text": "Boost aircraft",
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-10",
+      "category": "direct",
+      "text": "Prioritize marine mammals",
+      "expected": [
+        {
+          "concept": "marine mammal",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-11",
+      "category": "direct",
+      "text": "Strongly prioritize fishing boats",
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "direct-12",
+      "category": "direct",
+      "text": "Slightly prioritize cargo ships",
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 1.5
+        }
+      ]
+    },
+    {
+      "id": "direct-13",
+      "category": "direct",
+      "text": "Boost coast guard",
+      "expected": [
+        {
+          "concept": "coast guard",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-14",
+      "category": "direct",
+      "text": "Deprioritize container ships",
+      "expected": [
+        {
+          "concept": "container ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-15",
+      "category": "direct",
+      "text": "Prioritize rescue boats",
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-16",
+      "category": "direct",
+      "text": "Suppress tugboats",
+      "expected": [
+        {
+          "concept": "tugboat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-17",
+      "category": "direct",
+      "text": "Boost inflatable boats",
+      "expected": [
+        {
+          "concept": "inflatable boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-18",
+      "category": "direct",
+      "text": "Prioritize orange life rafts",
+      "expected": [
+        {
+          "concept": "orange life raft",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-19",
+      "category": "direct",
+      "text": "Deprioritize cruise ships",
+      "expected": [
+        {
+          "concept": "cruise ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-20",
+      "category": "direct",
+      "text": "Prioritize red boats",
+      "expected": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-21",
+      "category": "direct",
+      "text": "Boost white sailboats",
+      "expected": [
+        {
+          "concept": "white sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-22",
+      "category": "direct",
+      "text": "Deprioritize floating logs",
+      "expected": [
+        {
+          "concept": "floating log",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-23",
+      "category": "direct",
+      "text": "Prioritize kayaks",
+      "expected": [
+        {
+          "concept": "kayak",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-24",
+      "category": "direct",
+      "text": "Boost jet skis",
+      "expected": [
+        {
+          "concept": "jet ski",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-25",
+      "category": "direct",
+      "text": "Suppress oil platforms",
+      "expected": [
+        {
+          "concept": "oil platform",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-26",
+      "category": "direct",
+      "text": "Prioritize ferry boats",
+      "expected": [
+        {
+          "concept": "ferry boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-27",
+      "category": "direct",
+      "text": "Boost fishing nets",
+      "expected": [
+        {
+          "concept": "fishing net",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-28",
+      "category": "direct",
+      "text": "Deprioritize blue containers",
+      "expected": [
+        {
+          "concept": "blue container",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-29",
+      "category": "direct",
+      "text": "Prioritize yellow buoys",
+      "expected": [
+        {
+          "concept": "yellow buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-30",
+      "category": "direct",
+      "text": "Boost rowboats",
+      "expected": [
+        {
+          "concept": "rowboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "direct-31",
+      "category": "direct",
+      "text": "Suppress wooden boats",
+      "expected": [
+        {
+          "concept": "wooden boat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "direct-32",
+      "category": "direct",
+      "text": "Prioritize rigid inflatable boats",
+      "expected": [
+        {
+          "concept": "rigid inflatable boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-01",
+      "category": "paraphrase",
+      "text": "Please give rescue boats higher priority",
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-02",
+      "category": "paraphrase",
+      "text": "I want fishing boats to be more important",
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-03",
+      "category": "paraphrase",
+      "text": "Put cargo ships lower on the priority list",
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-04",
+      "category": "paraphrase",
+      "text": "Can you focus on sailboats?",
+      "expected": [
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-05",
+      "category": "paraphrase",
+      "text": "Make tankers a lower priority",
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-06",
+      "category": "paraphrase",
+      "text": "Pay more attention to speedboats",
+      "expected": [
+        {
+          "concept": "speedboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-07",
+      "category": "paraphrase",
+      "text": "Give me fewer images of buoys",
+      "expected": [
+        {
+          "concept": "buoy",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-08",
+      "category": "paraphrase",
+      "text": "Increase the priority of coast guard",
+      "expected": [
+        {
+          "concept": "coast guard",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-09",
+      "category": "paraphrase",
+      "text": "Reduce the priority of container ships",
+      "expected": [
+        {
+          "concept": "container ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-10",
+      "category": "paraphrase",
+      "text": "Put rescue boats first",
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-11",
+      "category": "paraphrase",
+      "text": "Treat aircraft as more important",
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-12",
+      "category": "paraphrase",
+      "text": "Show fewer passenger ships",
+      "expected": [
+        {
+          "concept": "passenger ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-13",
+      "category": "paraphrase",
+      "text": "Make red boats more important",
+      "expected": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-14",
+      "category": "paraphrase",
+      "text": "I care more about inflatable boats",
+      "expected": [
+        {
+          "concept": "inflatable boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-15",
+      "category": "paraphrase",
+      "text": "I care less about cruise ships",
+      "expected": [
+        {
+          "concept": "cruise ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-16",
+      "category": "paraphrase",
+      "text": "Give orange life rafts more emphasis",
+      "expected": [
+        {
+          "concept": "orange life raft",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-17",
+      "category": "paraphrase",
+      "text": "Give cargo ships less emphasis",
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-18",
+      "category": "paraphrase",
+      "text": "Move tugboats up in priority",
+      "expected": [
+        {
+          "concept": "tugboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-19",
+      "category": "paraphrase",
+      "text": "Move oil platforms down in priority",
+      "expected": [
+        {
+          "concept": "oil platform",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-20",
+      "category": "paraphrase",
+      "text": "Rank kayaks higher",
+      "expected": [
+        {
+          "concept": "kayak",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-21",
+      "category": "paraphrase",
+      "text": "Rank wooden boats lower",
+      "expected": [
+        {
+          "concept": "wooden boat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-22",
+      "category": "paraphrase",
+      "text": "I would like to emphasize ferry boats",
+      "expected": [
+        {
+          "concept": "ferry boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-23",
+      "category": "paraphrase",
+      "text": "Please favor fishing nets",
+      "expected": [
+        {
+          "concept": "fishing net",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-24",
+      "category": "paraphrase",
+      "text": "Please downrank floating logs",
+      "expected": [
+        {
+          "concept": "floating log",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-01",
+      "category": "multiple",
+      "text": "Prioritize rescue boats and deprioritize cargo ships",
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-02",
+      "category": "multiple",
+      "text": "Boost fishing boats and sailboats",
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "multiple-03",
+      "category": "multiple",
+      "text": "Suppress tankers and container ships",
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        },
+        {
+          "concept": "container ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-04",
+      "category": "multiple",
+      "text": "Prioritize red boats and yellow buoys",
+      "expected": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "yellow buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "multiple-05",
+      "category": "multiple",
+      "text": "Boost orange life rafts and suppress cruise ships",
+      "expected": [
+        {
+          "concept": "orange life raft",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "cruise ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-06",
+      "category": "multiple",
+      "text": "Prioritize kayaks and deprioritize jet skis",
+      "expected": [
+        {
+          "concept": "kayak",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "jet ski",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-07",
+      "category": "multiple",
+      "text": "Boost aircraft and suppress buoys",
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "buoy",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-08",
+      "category": "multiple",
+      "text": "Prioritize white sailboats and red boats",
+      "expected": [
+        {
+          "concept": "white sailboat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "multiple-09",
+      "category": "multiple",
+      "text": "Suppress floating logs and fishing nets",
+      "expected": [
+        {
+          "concept": "floating log",
+          "action": "suppress",
+          "weight": 1
+        },
+        {
+          "concept": "fishing net",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-10",
+      "category": "multiple",
+      "text": "Boost tugboats and deprioritize oil platforms",
+      "expected": [
+        {
+          "concept": "tugboat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "oil platform",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "multiple-11",
+      "category": "multiple",
+      "text": "Prioritize rescue boats, fishing boats, and sailboats",
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "multiple-12",
+      "category": "multiple",
+      "text": "Boost coast guard and deprioritize passenger ships",
+      "expected": [
+        {
+          "concept": "coast guard",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "passenger ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "negation-01",
+      "category": "negation",
+      "text": "Remove cargo ships",
+      "initial": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "negation-02",
+      "category": "negation",
+      "text": "Stop prioritizing rescue boats",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "negation-03",
+      "category": "negation",
+      "text": "Do not prioritize cargo ships",
+      "initial": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "negation-04",
+      "category": "negation",
+      "text": "Don't boost fishing boats",
+      "initial": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "negation-05",
+      "category": "negation",
+      "text": "Stop suppressing tankers",
+      "initial": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "negation-06",
+      "category": "negation",
+      "text": "Remove the rule for sailboats",
+      "initial": [
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "negation-07",
+      "category": "negation",
+      "text": "Prioritize fishing boats",
+      "initial": [
+        {
+          "concept": "fishing boat",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "negation-08",
+      "category": "negation",
+      "text": "Deprioritize cargo ships",
+      "initial": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "negation-09",
+      "category": "negation",
+      "text": "Remove buoys",
+      "initial": [
+        {
+          "concept": "buoy",
+          "action": "suppress",
+          "weight": 1
+        },
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "negation-10",
+      "category": "negation",
+      "text": "Stop prioritizing red boats",
+      "initial": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "yellow buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "yellow buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "negation-11",
+      "category": "negation",
+      "text": "Remove orange life rafts",
+      "initial": [
+        {
+          "concept": "orange life raft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "negation-12",
+      "category": "negation",
+      "text": "Do not boost tugboats",
+      "initial": [
+        {
+          "concept": "tugboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": []
+    },
+    {
+      "id": "context-01",
+      "category": "context",
+      "text": "More of those",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2.5
+        }
+      ]
+    },
+    {
+      "id": "context-02",
+      "category": "context",
+      "text": "Less of those",
+      "initial": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 1.5
+        }
+      ]
+    },
+    {
+      "id": "context-03",
+      "category": "ambiguous_context",
+      "text": "More of those",
+      "initial": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "reject": true
+    },
+    {
+      "id": "context-04",
+      "category": "context",
+      "text": "Less of those",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 3
+        }
+      ],
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2.5
+        }
+      ]
+    },
+    {
+      "id": "context-05",
+      "category": "context",
+      "text": "Prioritize sailboats",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "context-06",
+      "category": "context",
+      "text": "Also boost aircraft",
+      "initial": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "context-07",
+      "category": "context",
+      "text": "Also deprioritize cargo ships",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "context-08",
+      "category": "context",
+      "text": "Remove fishing boats",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "context-09",
+      "category": "context",
+      "text": "Strongly prioritize cargo ships",
+      "initial": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "id": "context-10",
+      "category": "context",
+      "text": "Slightly prioritize rescue boats",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 1.5
+        }
+      ]
+    },
+    {
+      "id": "context-11",
+      "category": "context",
+      "text": "Prioritize buoys",
+      "initial": [
+        {
+          "concept": "buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [
+        {
+          "concept": "buoy",
+          "action": "boost",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "id": "context-12",
+      "category": "context",
+      "text": "Deprioritize tankers",
+      "initial": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "id": "reset-01",
+      "category": "reset",
+      "text": "Reset",
+      "initial": [
+        {
+          "concept": "rescue boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [],
+      "operation": "reset"
+    },
+    {
+      "id": "reset-02",
+      "category": "reset",
+      "text": "Clear all instructions",
+      "initial": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "tanker",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "expected": [],
+      "operation": "reset"
+    },
+    {
+      "id": "reset-03",
+      "category": "reset",
+      "text": "Reset priorities",
+      "initial": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [],
+      "operation": "reset"
+    },
+    {
+      "id": "reset-04",
+      "category": "reset",
+      "text": "Remove all rules",
+      "initial": [
+        {
+          "concept": "aircraft",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "expected": [],
+      "operation": "reset"
+    },
+    {
+      "id": "unsupported-01",
+      "category": "unsupported",
+      "text": "Prioritize boats approaching us",
+      "reject": true
+    },
+    {
+      "id": "unsupported-02",
+      "category": "unsupported",
+      "text": "Only prioritize rescue boats within five miles",
+      "reject": true
+    },
+    {
+      "id": "unsupported-03",
+      "category": "unsupported",
+      "text": "Boost cargo ships after sunset",
+      "reject": true
+    },
+    {
+      "id": "unsupported-04",
+      "category": "unsupported",
+      "text": "Prioritize boats from camera two",
+      "reject": true
+    },
+    {
+      "id": "unsupported-05",
+      "category": "unsupported",
+      "text": "Deprioritize boats that are moving away",
+      "reject": true
+    },
+    {
+      "id": "unsupported-06",
+      "category": "unsupported",
+      "text": "Prioritize suspicious vessels",
+      "reject": true
+    },
+    {
+      "id": "unsupported-07",
+      "category": "unsupported",
+      "text": "Boost ships with their AIS turned off",
+      "reject": true
+    },
+    {
+      "id": "unsupported-08",
+      "category": "unsupported",
+      "text": "Prioritize boats that need help",
+      "reject": true
+    },
+    {
+      "id": "unsupported-09",
+      "category": "unsupported",
+      "text": "Ignore everything except rescue boats",
+      "reject": true
+    },
+    {
+      "id": "unsupported-10",
+      "category": "unsupported",
+      "text": "Prioritize cargo ships and suppress cargo ships",
+      "reject": true
+    },
+    {
+      "id": "unsupported-11",
+      "category": "unsupported",
+      "text": "Boost fishing boats for the next ten minutes",
+      "reject": true
+    },
+    {
+      "id": "unsupported-12",
+      "category": "unsupported",
+      "text": "Prioritize red boats if they are moving",
+      "reject": true
+    },
+    {
+      "id": "unsupported-13",
+      "category": "unsupported",
+      "text": "More of those",
+      "reject": true
+    },
+    {
+      "id": "unsupported-14",
+      "category": "unsupported",
+      "text": "Less of those",
+      "reject": true
+    },
+    {
+      "id": "unsupported-15",
+      "category": "unsupported",
+      "text": "Make it better",
+      "reject": true
+    },
+    {
+      "id": "unsupported-16",
+      "category": "unsupported",
+      "text": "Do something useful",
+      "reject": true
+    },
+    {
+      "id": "unsupported-17",
+      "category": "unsupported",
+      "text": "Prioritize",
+      "reject": true
+    },
+    {
+      "id": "unsupported-18",
+      "category": "unsupported",
+      "text": "Suppress",
+      "reject": true
+    },
+    {
+      "id": "unsupported-19",
+      "category": "unsupported",
+      "text": "Give aircraft a weight of 9000",
+      "reject": true
+    },
+    {
+      "id": "unsupported-20",
+      "category": "unsupported",
+      "text": "Delete all images",
+      "reject": true
+    },
+    {
+      "id": "unsupported-21",
+      "category": "unsupported",
+      "text": "Prioritize boats near the harbor",
+      "reject": true
+    },
+    {
+      "id": "unsupported-22",
+      "category": "unsupported",
+      "text": "Boost boats that crossed the border",
+      "reject": true
+    },
+    {
+      "id": "unsupported-23",
+      "category": "unsupported",
+      "text": "Suppress all unknown objects",
+      "reject": true
+    },
+    {
+      "id": "unsupported-24",
+      "category": "unsupported",
+      "text": "Disable unknown protection",
+      "reject": true
+    }
+  ]
+}

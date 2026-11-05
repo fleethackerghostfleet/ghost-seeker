@@ -109,7 +109,7 @@ compose-demo: demo-ocean ## build + start the live demo in Docker, then open htt
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (or MODELS=/path/to/D)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d
 	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"
-	@$(MAKE) -s compose-demo-ship
+	@echo "ship console: make compose-demo-ship   (prints a signed-in http://localhost:8081 URL; contains the demo operator token)"
 
 compose-demo-ship: ## print the ship console URL (signs in with the demo's generated operator token)
 	@echo "ship console: http://localhost:8081/#token=$$(docker run --rm --entrypoint cat -v ghost-seeker-demo_demo-secrets:/s:ro ghost-seeker/demo-init:0.1.0 /s/operator.token)"

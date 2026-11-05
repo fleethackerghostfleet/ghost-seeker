@@ -106,3 +106,26 @@ func TestSceneFeedRejectsContactActions(t *testing.T) {
 		t.Fatalf("stale overlay affected scene: %+v", it)
 	}
 }
+
+func TestSceneIgnoresLanguagePolicyTierPins(t *testing.T) {
+	pins := map[string]int32{"boat": 1}
+	scene := &Object{Key: "scene", Scene: true, Label: "boat", Best: &Card{Label: "boat"}}
+	contact := &Object{Key: "contact", Label: "boat", Best: &Card{Label: "boat"}}
+	objects := []*Object{scene, contact}
+	assignTiers(objects, pins)
+	if scene.Priority != "P4" || contact.Priority != "P1" {
+		t.Fatalf("policy tier pins changed scene priority or lost contact pin: %+v %+v", scene, contact)
+	}
+	c := NewConsole(New("", "", nil))
+	c.onSnapshot(&Snapshot{Objects: objects}, nil)
+	preview, _, _ := c.predictLocked(nil, nil, pins)
+	for _, item := range preview {
+		want := 1
+		if item.ID == "scene" {
+			want = 4
+		}
+		if item.Tier != want {
+			t.Fatalf("preview tier = %d for %s, want %d", item.Tier, item.ID, want)
+		}
+	}
+}
