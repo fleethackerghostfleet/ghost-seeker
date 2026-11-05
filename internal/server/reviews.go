@@ -52,35 +52,18 @@ func (s *Server) reviewItem(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	tier := b.Tier
-	var dismissed, sent *bool
-	yes := true
-	switch b.Action {
-	case "tier":
-		if tier < 1 || tier > 4 {
-			writeError(w, 400, "tier must be 1–4")
-			return
-		}
-	case "accept":
-		tier = old.CentralTier
-	case "dismiss":
-		tier = 4
-		dismissed = &yes
-	case "cdr":
-		tier = 1
-		sent = &yes
-	default:
-		writeError(w, 400, "unknown review action")
+	effect, err := reviews.ReviewEffect(b.Action, b.Tier, old.CentralTier)
+	if err != nil {
+		writeError(w, 400, err.Error())
 		return
 	}
+	tier, dismissed, sent := effect.Tier, effect.Dismissed, effect.Sent
+	yes := true
 	texts := []string{}
 	for _, d := range state.Directives {
 		texts = append(texts, d.Text)
 	}
-	human := tier
-	if b.Action == "dismiss" {
-		human = 0
-	}
+	human := effect.HumanTier
 	rec, err := s.reviews.Append(reviews.Record{Action: b.Action, ItemID: old.ID, Img: old.Img, SourceID: old.SourceID, TS: old.TS, Reviewer: b.Reviewer, Model: catalog.Models[state.Model].Name, ModelKey: state.Model, ModelTier: old.CentralTier, ModelScore: old.Central, Edge: old.Edge, BaseTier: old.BaseTier, HumanTier: human, Agreed: human == old.CentralTier, Detections: old.Dets, Scores: old.Det, Directives: texts, Note: reviews.Trim(b.Note, 280), Before: old})
 	if err != nil {
 		writeError(w, 500, "cannot persist review")
