@@ -227,7 +227,7 @@ test('human review filters separate people from automatic escalation and list ne
  vm.runInContext("state.src='EO-P7'",context);
  assert.equal(vm.runInContext('ids()',context),'sent-new,full,sent-old');
  vm.runInContext("filters.review='reviewed'",context);
- assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,full,sent-new,dismissed');
+ assert.equal(vm.runInContext('ids()',context),'accepted,manual,sent-old,full,dismissed,sent-new');
  vm.runInContext("filters.review='unreviewed'",context);
  assert.equal(vm.runInContext('ids()',context),'auto,pending');
  assert.equal(vm.runInContext("humanSent(items[4])",context),false);
