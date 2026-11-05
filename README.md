@@ -136,6 +136,10 @@ Briefing export vendors PptxGenJS 3.12.0 (MIT, `web/static/pptxgen.LICENSE`) wit
 
 ## Prioritization benchmark
 
+Unknown contacts are injected in 12% of frames using a separate seeded RNG (library contacts and false positives are unchanged). Persistent unknowns default to P2; approaching or dark unknowns to P1, in every mission, even at low classification confidence. Transient flicker defaults to P4. Persistence is simulated track evidence, not a new vision detector. No restricted-area/geofencing model is implemented.
+
+Compare `go run ./cmd/bench -unknowns=false` (original frames), `go run ./cmd/bench -before-unknown` (same injected contacts, closed-set command/edge weights), and `go run ./cmd/bench` (unknown-aware). The extra table reports persistent unknown edge retention and joint retention/≤P2 scoring, approaching P1 scoring, and transient P4 scoring; contact scores avoid credit from unrelated high-priority frame contacts.
+
 `go run ./cmd/bench` scores edge triage and each command model against a written mission oracle (`internal/bench/oracle.go`) on deterministic synthetic frames: generated-library contacts with drawn confidence and track attributes, plus a spurious detection in 30% of frames. The oracle ignores confidence and false positives; each model is judged against its own mission (maritime security, air picture, search and rescue). Tune on seeds 1–3; report the held-out default seeds 101–103 (6,000 frames each).
 
 | Metric (held-out) | Maritime before → after | Air before → after | SAR before → after |
