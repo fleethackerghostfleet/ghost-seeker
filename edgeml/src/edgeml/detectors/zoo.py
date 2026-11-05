@@ -45,6 +45,7 @@ def register_extra(spec: str | None = None) -> list[str]:
         if path:
             trained_on = {"seaships7000"} if not trained else set(trained.split("+")) - {"-"}
             _reg(name, "finetune")(_ul(path, name, training="+".join(sorted(trained_on)) + "-dev (fine-tune)"))
+            EXCLUDE_DEV.pop(name, None)  # re-registering a name replaces its exclusions too
             if trained_on:
                 EXCLUDE_DEV[name] = trained_on  # G trained on SeaShips train+valid = the whole SeaShips dev eval set
             added.append(name)
