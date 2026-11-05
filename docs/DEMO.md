@@ -18,6 +18,9 @@ while the repo is private, the **GitHub CLI** signed in once (`brew install gh &
 so `make demo-clips demo-models` can pull the ~225 MB of clips + models from the
 [`demo-data-v1` release](https://github.com/fleethackerghostfleet/ghost-seeker/releases/tag/demo-data-v1)
 (`deploy/demo-data.sh`; it falls back to the lab GCS bucket via gcloud). No Go needed.
+Python 3 generates the live scenario; signed-in **gcloud** is required to sync
+the additional bucket frame sets. For released eval clips only, use
+`make demo-ship-clips` (no gcloud required).
 The live ocean watch comes from the same release (`demo-ocean.tar.gz`, 32 screened crops)
 and is laid out by `ocean.py` with the system `python3` (no Pillow, no LFS).
 
@@ -67,7 +70,7 @@ authentication; only the UI's login form accepts arbitrary tokens.
 make build
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
 pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
-make demo-clips        # three released ship clips + generated Open_ocean_watch/img1 (all gitignored)
+make demo-clips        # released eval clips + GCS frame sets + generated ocean watch (all gitignored)
 make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports + H's unknown_calib.npz)
 ```
 
@@ -77,7 +80,7 @@ Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/e
 `sets` in `scenarios/ghostfleet_demo/live.json` to use others in the live demo.
 `scenario.json` remains the unchanged three-ship input to the headless comparison.
 
-`make demo-clips` prepares all live inputs via `demo-ship-clips` and `demo-ocean`.
+`make demo-clips` prepares the eval clips, GCS frame sets and `demo-ocean`.
 The live `demo-edge` and `compose-demo` targets also depend on `demo-ocean`.
 `demo-ocean` fetches the released crops (verified against `ocean-manifest.json`); only
 without them does it regenerate from the LFS ZIP, which needs `git lfs pull
@@ -95,6 +98,31 @@ The 32 crops cycle through 420 MOT-style frames, names 000001–001258, proporti
 spread over the entire replay (one ocean input per ~3 ship inputs). The four-set live
 replay has 1690 inputs at 200 ms (~338 s before processing); ship clips and their
 relative interleaving are unchanged. The released three-clip archive is unchanged.
+
+`CLIPS` (space-separated) and `BUCKET` override the eval clips and their GCS prefix.
+Default eval clips use the release/cache first; a custom `BUCKET` always syncs from GCS.
+
+`make demo-clips` also discovers every `frames/*_frames/` prefix in that bucket
+and syncs the flat JPEG directories into `frames/bucket/`. Every run checks
+content checksums and updates changed/new files (and removes deleted local files
+within each synced set). No bucket data is modified. The resulting on-disk image
+sets are written to gitignored `scenario.generated.json`, preserving the other
+fields of `live.json`, including its screened ocean watch and scene cadence.
+`make compose-demo` and `make demo-edge` select this generated scenario, falling
+back to committed `live.json` when it does not exist.
+Restart the edge after another sync to load newly added sets. For direct Compose,
+set `GS_DEMO_SCENARIO=scenario.generated.json`; without it `live.json` is used.
+The headless `make demo` comparison fetches only the eval clips (no bucket frame
+discovery/sync) and keeps the committed three-clip scenario and its GT data.
+
+Optional environment controls (apply when running `make demo-clips`):
+- `INCLUDE_BUCKET_FRAMES=0`: eval clips only.
+- `FRAME_SETS_INCLUDE='*sailboat*,*SMD*'` / `FRAME_SETS_EXCLUDE='*test*'`:
+  comma-separated, case-sensitive glob filters on full directory names (including
+  `_frames`). Excluded cached sets are not added to the generated scenario.
+- `FRAMES_BUCKET=gs://another-bucket`: override the bucket root for discovery.
+- `DEST`: override the local frames directory; keep it inside the mounted
+  `scenarios/ghostfleet_demo/` directory for Docker replay.
 
 ## 1. Headless comparison (`make demo`)
 

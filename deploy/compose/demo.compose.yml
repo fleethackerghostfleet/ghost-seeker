@@ -81,7 +81,7 @@ services:
     build: { <<: *go-build, target: edge }
     image: ghost-seeker/edge:0.1.0
     command: ["-id", "edge-1", "-data", "/data/edge", "-listen", ":8081", "-ui", "/ui",
-              "-shore", "http://ui:18080", "-scenario", "/demo/live.json", "-period", "200ms",
+              "-shore", "http://ui:18080", "-scenario", "/demo/${GS_DEMO_SCENARIO:-live.json}", "-period", "200ms",
               "-infer", "http://sidecar:9090", "-dedup", "sightings", "-prioritizer", "edgeml",
               "-dev-token-file", "/secrets/operator.token", "-unit-token-file", "/secrets/edge-1.jwt"]
     environment:
