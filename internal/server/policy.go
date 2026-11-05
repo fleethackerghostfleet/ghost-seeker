@@ -178,10 +178,14 @@ func (rt *policyRuntime) armExpiry(p *pb.Policy) {
 		rt.expiryTimer.Stop()
 		rt.expiryTimer = nil
 	}
-	if p == nil || p.ExpiresAtUnixMs == 0 {
+	if p == nil {
 		return
 	}
-	delay := time.Until(time.UnixMilli(p.ExpiresAtUnixMs))
+	expiry := policy.Expiry(p, policy.DefaultTTL)
+	if expiry.IsZero() {
+		return
+	}
+	delay := time.Until(expiry)
 	if delay < 0 {
 		delay = 0
 	}
