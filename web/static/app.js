@@ -20,7 +20,8 @@ function uploadState(it){
  let u=it.upload,form='';
  if(it.live){
   const forms=it.live.forms||{};
-  const key=FORMS.find(k=>forms[k]?.state==='partial')||FORMS.find(k=>forms[k]?.state==='pending')||it.live.imageForm||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||FORMS.find(k=>forms[k]?.state==='offered');
+  const imageForms=['thumb','crop','full'];
+  const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
   const f=forms[key]||{};
   u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};

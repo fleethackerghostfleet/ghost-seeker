@@ -291,6 +291,14 @@ test('live uploads derive progress from shown form, never from commander escalat
  assert.equal(vm.runInContext("uploadState({live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100,received:0}}}}).done",context),true);
  assert.equal(vm.runInContext("uploadState({live:{forms:{thumb:{state:'pending',bytes:100}}}}).queued",context),true);
 });
+test('summary corrections do not reset a received image upload',()=>{
+ const context=setup();
+ for(const state of ['pending','partial']){
+  vm.runInContext(`corrected={live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:100},fact:{state:'${state}',bytes:200,received:10}}}}`,context);
+  assert.equal(vm.runInContext('uploadState(corrected).done',context),true);
+  assert.match(vm.runInContext('uploadHTML(corrected)',context),/✓ Uploaded/);
+ }
+});
 test('live active and pending forms take precedence over a received preview',()=>{
  const context=setup();
  vm.runInContext("liveItem={live:{imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},crop:{state:'partial',bytes:100,received:25},full:{state:'pending',bytes:1000}}}}",context);
