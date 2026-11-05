@@ -7,8 +7,8 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/oklog/ulid/v2 v2.1.0
 	golang.org/x/crypto v0.58.0
-	golang.org/x/image v0.25.0
-	golang.org/x/net v0.60.0
+	golang.org/x/image v0.45.0
+	golang.org/x/net v0.62.0
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.37.1

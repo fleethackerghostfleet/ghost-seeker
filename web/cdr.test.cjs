@@ -26,6 +26,24 @@ function setup(){
  return {elements,context};
 }
 
+test('commander learned directives and image URLs are escaped',()=>{
+ const {elements,context}=setup();
+ context.payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>';
+ vm.runInContext(`
+  renderLearned([{text:'Operator feedback: '+payload}]);
+ `,context);
+ const learned=elements.get('learned').innerHTML;
+ assert.match(learned,/&quot;&gt;&lt;img/);
+ assert.doesNotMatch(learned,/<img|<svg/);
+ context.imageFor=()=>context.payload;
+ context.row={id:'image',src:{name:'Camera'},ts:new Date(),tier:2,central:.5,edge:.4,dets:[],det:[],upload:{done:true}};
+ vm.runInContext('items=new Map([[row.id,row]]);view.sel=row.id;renderQueue();renderStage()',context);
+ for(const id of ['qlist','stage']){
+  assert.match(elements.get(id).innerHTML,/src="&quot;&gt;&lt;img/);
+  assert.doesNotMatch(elements.get(id).innerHTML,/<img src=x|<svg/);
+ }
+});
+
 test('commander queue and note templates escape item ids',()=>{
  const {elements,context}=setup();
 

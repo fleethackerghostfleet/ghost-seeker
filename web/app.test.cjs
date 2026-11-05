@@ -1142,6 +1142,22 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
  assert.equal(vm.runInContext('indicator.textContent',context),'RECONNECTING');
  assert.equal(vm.runInContext("$('live').title",context),'Reconnecting — click to resume feed');
 });
+test('shore outage is visible without diagnostics and recovers without affecting simulation',()=>{
+ const context=setup();
+ vm.runInContext("indicator={};statusClasses=new Set();$('live').classList={toggle:(key,on)=>on?statusClasses.add(key):statusClasses.delete(key)};$('live').querySelector=()=>indicator;applyLive({shore:{ok:false,error:'upstream shore error'}})",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'SHORE UNREACHABLE');
+ assert.equal(vm.runInContext("statusClasses.has('off')",context),true);
+ assert.equal(context.$('shoreWarning').hidden,false);
+ assert.match(context.$('live').title,/showing last-known data/);
+ assert.match(html,/id="shoreWarning" role="status" hidden>Shore unreachable — showing last-known data/);
+ vm.runInContext("applyLive({shore:{ok:true}})",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED ACTIVE');
+ assert.equal(vm.runInContext("statusClasses.has('off')",context),false);
+ assert.equal(context.$('shoreWarning').hidden,true);
+ vm.runInContext("applyLive(null)",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED ACTIVE');
+ assert.equal(context.$('shoreWarning').hidden,true);
+});
 test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
  const context=setup();
  assert.match(vm.runInContext('uploadHTML({})',context),/Queued for shore/);
@@ -1208,6 +1224,47 @@ test('live active and pending forms take precedence over a received preview',()=
  assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
  assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
 });
+test('directive rules and priority explanations escape stored labels and attributes',()=>{
+ const c=setup();
+ c.payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>&';
+ vm.runInContext(`
+  CLS={vessel:{lab:payload}};ATTR_LAB={moving:payload};MODELS={maritime:{name:payload}};
+  rule={type:'boost',classes:['vessel'],attrs:['moving']};
+  state.directives=[{id:'d1',text:payload,rules:[rule]}];
+  $('directives').querySelectorAll=()=>[];
+  renderDirectives();
+  why=buildWhy({edge:.5,central:.5},[[{cls:'vessel',conf:.9,attrs:{}},{s:.5,notes:[{...rule,directiveId:'d1'}]}]]);
+ `,c);
+ for(const html of [c.$('directives').innerHTML,vm.runInContext('why.map(w=>w.t).join("")',c)]){
+  assert.match(html,/&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(html,/<img|<svg/);
+  assert.doesNotMatch(html,/&amp;lt;/);
+ }
+ assert.equal(vm.runInContext("ruleLabel({type:'boost',classes:[],attrs:[]})",c),'▲ Any object');
+ vm.runInContext('state.directives=[];renderDirectives()',c);
+ assert.match(c.$('directives').innerHTML,/No directives/);
+});
+
+test('image URLs and processing metadata are escaped at HTML sinks',()=>{
+ const c=setup();
+ c.payload='"><img src=x onerror=alert(1)>';
+ vm.runInContext(`
+  MODELS={maritime:{name:payload}};
+  imageFor=()=>payload;
+  zulu=()=> '12:00:00Z';
+  item={src:{id:'camera',hw:payload,em:payload,link:payload},dets:[],lat:{edge:1,up:2,cen:3},edge:.5,central:.5,tier:2,ts:new Date()};
+  imageHTML=cardHTML(item,false);
+  timeline=processingHTML(item);
+  chips=formChipsHTML({live:{forms:{fact:{state:payload}}}});
+  ladder=liveLadderHTML({live:{forms:{fact:{state:payload}},pull:{}}});
+ `,c);
+ for(const name of ['imageHTML','timeline','chips','ladder']){
+  const html=vm.runInContext(name,c);
+  assert.match(html,/&quot;&gt;&lt;img/);
+  assert.doesNotMatch(html,/<img src=x/);
+ }
+});
+
 function setup(){
  const elements=new Map();
  const context=vm.createContext({
@@ -1575,6 +1632,19 @@ test('empty water has an obvious kept-on-ship label and explicit upload override
  assert.match(vm.runInContext('uploadHTML(ocean)',context),/Upload next \(operator\)/);
  assert.doesNotMatch(vm.runInContext('uploadHTML(ocean)',context),/kept on ship/);
  assert.equal(vm.runInContext('uploadState(ocean).queued',context),true);
+});
+
+test('simulation empty water stays out of Operator Review and its unreviewed count',()=>{
+ const context=setup();
+ vm.runInContext(`
+  const upload={bytes:1000,sent:0,done:false};
+  items=[normalizeItem({...raw('ocean',4),src:'BY-12',background:true,dets:null,det:null,upload:{...upload}}),normalizeItem({...raw('ship',4),upload:{...upload}})];
+  state.src='ALL';rv.cur=items[0];fullRenderStats();
+ `,context);
+ assert.equal(vm.runInContext('rvQueue().map(i=>i.id).join()',context),'ship');
+ assert.equal(vm.runInContext('isEmptyWater(items[0])',context),true);
+ assert.equal(vm.runInContext('isEmptyWater(items[1])',context),false);
+ assert.equal(context.$('rvCount').textContent,1);
 });
 
 test('upload summary counts retained empty water separately from queued and active transfers',()=>{
