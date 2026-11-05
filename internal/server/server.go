@@ -295,7 +295,15 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 	if durationMin > 0 {
 		id := directive.ID
 		s.after(time.Duration(durationMin)*time.Minute, func() {
-			if s.store.DeleteDirective(id) {
+			s.policy.mu.Lock()
+			deleted := s.store.DeleteDirective(id)
+			if deleted {
+				if _, err := s.policy.apply("expiry", "TAO", "Directive expired", time.Now()); err != nil {
+					log.Printf("server: expire directive %s: %v", id, err)
+				}
+			}
+			s.policy.mu.Unlock()
+			if deleted {
 				s.publishSnapshot()
 			}
 		})
