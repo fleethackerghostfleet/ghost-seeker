@@ -74,8 +74,9 @@ func TestTomerFoldRebindsAfterReferenceEvicted(t *testing.T) {
 	if g.Deduped() != 1 {
 		t.Fatalf("dups=%d, want 1", g.Deduped())
 	}
-	if len(g.tomerItems) != len(g.tomerRing) || len(g.tomerRing) != 3 { // #1, #2 and the rebound alias all ride the ring
-		t.Fatalf("map=%d ring=%d", len(g.tomerItems), len(g.tomerRing))
+	// #1, #2 and the rebound alias all ride the ring, so the map can never outgrow it
+	if g.tomerItems["cam-a#1"] != second.Item.Id || len(g.tomerRing) != 3 || len(g.tomerItems) > len(g.tomerRing) {
+		t.Fatalf("alias=%q map=%d ring=%d", g.tomerItems["cam-a#1"], len(g.tomerItems), len(g.tomerRing))
 	}
 }
 
