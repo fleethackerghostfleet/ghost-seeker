@@ -996,8 +996,31 @@ func (b *Bridge) layerPolicy(ctx context.Context, pol *pb.Policy, mode string) (
 		if len(current.Layers) > 0 {
 			pol.Layers = cloneLayers(current.Layers)
 			operatorLayer := findOperatorLayer(pol.Layers, pol.IssuedBy)
+			inherited := map[string]bool{}
+			for i, layer := range pol.Layers {
+				if i == operatorLayer || layer == nil {
+					continue
+				}
+				for _, r := range layer.GetRules() {
+					for _, l := range r.GetBoostLabels() {
+						inherited[l] = true
+					}
+					for _, l := range r.GetSuppressLabels() {
+						inherited[l] = true
+					}
+				}
+			}
+			own := func(labels []string) []string {
+				out := make([]string, 0, len(labels))
+				for _, l := range labels {
+					if !inherited[l] {
+						out = append(out, l)
+					}
+				}
+				return out
+			}
 			rule := &pb.InterestRule{Id: fmt.Sprintf("ui-%d", time.Now().UnixMilli()), Author: pol.IssuedBy,
-				BoostLabels: append([]string(nil), pol.GetInterest().GetBoostLabels()...), SuppressLabels: append([]string(nil), pol.GetInterest().GetSuppressLabels()...), Text: pol.Text}
+				BoostLabels: own(pol.GetInterest().GetBoostLabels()), SuppressLabels: own(pol.GetInterest().GetSuppressLabels()), Text: pol.Text}
 			if operatorLayer >= 0 {
 				pol.Layers[operatorLayer].Rules = []*pb.InterestRule{rule}
 			} else {
