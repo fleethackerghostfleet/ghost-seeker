@@ -23,7 +23,7 @@ function uploadState(it){
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
   const f=forms[key]||{};
-  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(LIVE?.link?.controllable?LIVE.link.bps>0:!!LIVE?.edge?.estimateBps),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
+  u={bytes:f.bytes||0,sent:f.state==='received'?f.bytes:f.received||0,done:f.state==='received',active:f.state==='partial'&&(LIVE?.link?.controllable?LIVE.link.bps>0:!!(LIVE?.edge?.ok?LIVE.edge.estimateBps:LIVE?.shore?.estimateBps)),bps:LIVE?.link?.bps||LIVE?.edge?.estimateBps||0};
  }
  const bytes=Math.max(0,Number(u?.bytes)||0),sent=Math.min(bytes,Math.max(0,Number(u?.sent)||0));
  const done=!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next',queued=!done&&!held&&sent===0;

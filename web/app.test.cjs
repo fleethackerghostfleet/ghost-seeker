@@ -673,6 +673,8 @@ test('cards being sent show a blue arrow and sent cards a green check in the top
  assert.equal(mark.className,'sendmark sending');
  vm.runInContext('LIVE.link.bps=0;applySendMark(card,it)',context);
  assert.equal(mark.className,'sendmark','live outage: partial form is not on the wire');
+ vm.runInContext("LIVE={link:{},edge:{ok:false,estimateBps:0},shore:{estimateBps:64000}};applySendMark(card,it)",context);
+ assert.equal(mark.className,'sendmark sending','edge offline: shore estimate keeps the link up, matching the connection panel');
  const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
  assert.match(css,/\.sendmark\{[^}]*position:absolute;top:5px;right:5px/);
  assert.match(css,/\.sendmark\.done\{[^}]*background:var\(--good\)/);
