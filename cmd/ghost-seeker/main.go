@@ -53,6 +53,7 @@ func main() {
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
 	policyState := flag.String("policy-state", "", "persist simulation policy state at this path")
 	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
+	researchCompilerURL := flag.String("research-compiler-url", os.Getenv("GS_RESEARCH_COMPILER_URL"), "opt-in local research language compiler origin (e.g. http://localhost:8097)")
 	llmModel := flag.String("llm-model", os.Getenv("GS_LLM_MODEL"), "local LLM model name")
 	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
 	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
@@ -79,8 +80,14 @@ func main() {
 	}
 	var transport *tls.Config
 
-	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)}
-	if *llmURL == "" {
+	researchCompiler, err := command.NewResearchClient(*researchCompilerURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout), Research: researchCompiler}
+	if researchCompiler != nil {
+		log.Printf("NL compiler: research interpreter at %s (existing demo classes; failures block Apply)", *researchCompilerURL)
+	} else if *llmURL == "" {
 		log.Printf("NL compiler: rules parser (set GS_LLM_URL to enable LLM)")
 	} else {
 		log.Printf("NL compiler: local LLM at %s", *llmURL)

@@ -1,0 +1,74 @@
+name: ghost-seeker-priority-lab
+services:
+  granite-fetch:
+    image: python:3.11-slim
+    profiles: [setup]
+    volumes:
+      - ${NL_MODELS_DIR:-./models}:/models
+      - ./tools/fetch_granite.py:/fetch_granite.py:ro
+    command: [python, /fetch_granite.py, /models]
+  clip-export:
+    build:
+      context: ../..
+      dockerfile: research/nl-priority/vision/Dockerfile.export
+    profiles: [setup]
+    volumes:
+      - ${NL_MODELS_DIR:-./models}:/models
+    command: [--output, /models/mobileclip, --cache-dir, /models/cache]
+  granite:
+    build:
+      context: ../..
+      dockerfile: research/nl-priority/Dockerfile.granite
+    volumes:
+      - ${NL_MODELS_DIR:-./models}:/models:ro
+    networks: [runtime]
+    cpus: 2
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/health]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+  vision:
+    build:
+      context: ../..
+      dockerfile: research/nl-priority/vision/Dockerfile
+    volumes:
+      - ${NL_MODELS_DIR:-./models}:/models:ro
+    networks: [runtime]
+    cpus: 2
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8098/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+  app:
+    build:
+      context: ../..
+      dockerfile: research/nl-priority/Dockerfile
+    ports: ["127.0.0.1:${NL_PORT:-8097}:8097"]
+    volumes:
+      - state:/data
+    networks: [runtime]
+    depends_on:
+      granite: {condition: service_healthy}
+      vision: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8097/api/health]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  ingest:
+    build:
+      context: ../..
+      dockerfile: research/nl-priority/vision/Dockerfile
+    profiles: [tools]
+    entrypoint: [python, -m, edgeml_research.nl_priority.ingest, --vision-url, http://vision:8098, --backend-url, http://app:8097]
+    volumes:
+      - ${NL_INPUT_DIR:-./inputs}:/input:ro
+      - ${NL_OUTPUT_DIR:-./data}:/output
+    networks: [runtime]
+volumes:
+  state:
+networks:
+  runtime:
+    internal: true

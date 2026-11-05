@@ -1,0 +1,155 @@
+{
+  "system": "Normalize an object category to the equivalent known category. Use general English meaning to recognize synonyms, singular/plural forms, and alternative wording. The generic words boat, ship, vessel and craft do not define a new subtype when the function is the same. Use NONE only for a genuinely different category or an additional distinguishing feature. Colors, sizes and materials must be retained, so return NONE if they are absent from the known label. A generic vessel is broader than a specific role, so keep it. Do not change rescue craft into an unrelated category. The input and label must be the same kind of physical object. Equipment, parts, clothing and tools are not the vehicles, animals or people using them. Associated objects are not synonyms. Return NONE for equipment when no equivalent equipment category exists.\nKnown categories: [\"cargo ship\", \"tanker\", \"container ship\", \"fishing boat\", \"sailboat\", \"speedboat\", \"passenger ship\", \"warship\", \"submarine\", \"coast guard\", \"buoy\", \"aircraft\", \"marine mammal\"]\nInput: cargo vessel\nOutput: {\"label\":\"cargo ship\"}\nInput: sailing boat\nOutput: {\"label\":\"sailboat\"}\nInput: passenger vessel\nOutput: {\"label\":\"passenger ship\"}\nInput: container vessel\nOutput: {\"label\":\"container ship\"}\nInput: naval warship\nOutput: {\"label\":\"warship\"}\nInput: red cargo ship\nOutput: {\"label\":\"NONE\"}\nInput: life raft\nOutput: {\"label\":\"NONE\"}\nInput: vessel\nOutput: {\"label\":\"NONE\"}\nInput: rescue boat\nOutput: {\"label\":\"NONE\"}\nInput: cargo net\nOutput: {\"label\":\"NONE\"}\nInput: small cargo vessel\nOutput: {\"label\":\"NONE\"}\nFinal check: if the input adds a size, color, or material that is not in the chosen category, output NONE. Never discard such a qualifier.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "label": {
+        "type": "string",
+        "enum": [
+          "cargo ship",
+          "tanker",
+          "container ship",
+          "fishing boat",
+          "sailboat",
+          "speedboat",
+          "passenger ship",
+          "warship",
+          "submarine",
+          "coast guard",
+          "buoy",
+          "aircraft",
+          "marine mammal",
+          "NONE"
+        ]
+      }
+    },
+    "required": [
+      "label"
+    ],
+    "additionalProperties": false
+  },
+  "results": [
+    {
+      "input": "fishing vessel",
+      "expected": "fishing boat",
+      "actual": "fishing boat",
+      "correct": true,
+      "seconds": 0.30799891700735316
+    },
+    {
+      "input": "fishing vessels",
+      "expected": "fishing boat",
+      "actual": "fishing boat",
+      "correct": true,
+      "seconds": 0.0917739580036141
+    },
+    {
+      "input": "cargo vessel",
+      "expected": "cargo ship",
+      "actual": "cargo ship",
+      "correct": true,
+      "seconds": 0.0826182080199942
+    },
+    {
+      "input": "red fishing boat",
+      "expected": "NONE",
+      "actual": "NONE",
+      "correct": true,
+      "seconds": 0.07932550000259653
+    },
+    {
+      "input": "rescue boat",
+      "expected": "NONE",
+      "actual": "NONE",
+      "correct": true,
+      "seconds": 0.09689366701059043
+    },
+    {
+      "input": "vessel",
+      "expected": "NONE",
+      "actual": "NONE",
+      "correct": true,
+      "seconds": 0.0733889999683015
+    },
+    {
+      "input": "fishing boat",
+      "expected": "fishing boat",
+      "actual": "fishing boat",
+      "correct": true,
+      "seconds": 0.09042529197176918
+    },
+    {
+      "input": "oil tanker",
+      "expected": "tanker",
+      "actual": "tanker",
+      "correct": true,
+      "seconds": 0.08270683302544057
+    },
+    {
+      "input": "sailing boat",
+      "expected": "sailboat",
+      "actual": "sailboat",
+      "correct": true,
+      "seconds": 0.09026754199294373
+    },
+    {
+      "input": "blue vessel",
+      "expected": "NONE",
+      "actual": "NONE",
+      "correct": true,
+      "seconds": 0.08337400003802031
+    },
+    {
+      "input": "passenger vessel",
+      "expected": "passenger ship",
+      "actual": "passenger ship",
+      "correct": true,
+      "seconds": 0.09784200001740828
+    },
+    {
+      "input": "life raft",
+      "expected": "NONE",
+      "actual": "NONE",
+      "correct": true,
+      "seconds": 0.07516308303456753
+    },
+    {
+      "input": "container vessel",
+      "expected": "container ship",
+      "actual": "container ship",
+      "correct": true,
+      "seconds": 0.08256904099835083
+    },
+    {
+      "input": "fishing net",
+      "expected": "NONE",
+      "actual": "NONE",
+      "correct": true,
+      "seconds": 0.0747002920252271
+    },
+    {
+      "input": "small fishing vessel",
+      "expected": "NONE",
+      "actual": "fishing boat",
+      "correct": false,
+      "seconds": 0.10260033298982307
+    }
+  ],
+  "evaluationStage": "targeted-development-probe",
+  "model": "ibm-granite/granite-4.0-350m-GGUF Q4_K_M",
+  "modelRevision": "b8208a86a58427e1739265318028eb5895b74bf2",
+  "llamaCppRevision": "45b6604b20f17b7d7638042306c0cd1b6af5999c",
+  "schemaVersion": 1,
+  "notes": [
+    "Targeted cases used during prompt development; not a new heldout accuracy claim.",
+    "The system prompt contains no fishing-vessel equivalence example or alias dictionary.",
+    "The request is resolved by the real local Granite model only when a command is compiled.",
+    "NONE retains the original phrase for the open vocabulary.",
+    "Known residual: small fishing vessel loses small in raw model output. No lexical rule masks this failure.",
+    "These are direct single-concept model results. Deployed resolver schema requires its own verification."
+  ],
+  "summary": {
+    "cases": 15,
+    "correct": 14
+  }
+}
