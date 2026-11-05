@@ -1,7 +1,6 @@
 package command
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -26,14 +25,11 @@ func TestParseEmcon(t *testing.T) {
 }
 
 func TestSplitEmcon(t *testing.T) {
-	mode, rest := SplitEmcon("prioritize submarines and go dark")
+	mode, rest := SplitEmcon("Ⱥ prioritize submarines and go quiet")
 	if mode != "SILENT" {
 		t.Fatalf("mode = %q, want SILENT", mode)
 	}
-	if strings.Contains(strings.ToLower(rest), "dark") || strings.Contains(strings.ToLower(rest), "go") {
-		t.Fatalf("rest still contains EMCON phrase: %q", rest)
-	}
-	if rest != "prioritize submarines and" {
+	if rest != "Ⱥ prioritize submarines and" {
 		t.Fatalf("rest = %q", rest)
 	}
 }

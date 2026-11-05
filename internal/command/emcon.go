@@ -48,7 +48,7 @@ var emconMatchers = func() []struct {
 		out = append(out, struct {
 			mode string
 			re   *regexp.Regexp
-		}{e.mode, regexp.MustCompile(`\b` + regexp.QuoteMeta(e.phrase) + `\b`)})
+		}{e.mode, regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(e.phrase) + `\b`)})
 	}
 	return out
 }()
@@ -64,11 +64,10 @@ func ParseEmcon(text string) string {
 // SplitEmcon extracts the requested transmit posture and removes all EMCON
 // phrases from the text passed to the directive rules parser.
 func SplitEmcon(text string) (mode, rest string) {
-	lower := strings.ToLower(text)
 	best, bestPos := "", -1
 	spans := make([][2]int, 0)
 	for _, m := range emconMatchers {
-		for _, loc := range m.re.FindAllStringIndex(lower, -1) {
+		for _, loc := range m.re.FindAllStringIndex(text, -1) {
 			if loc[0] > bestPos {
 				best, bestPos = m.mode, loc[0]
 			}
