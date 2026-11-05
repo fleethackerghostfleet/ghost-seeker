@@ -1442,7 +1442,7 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 	items, counts, _ := c.predictLocked(suppress, boost, ruleTiers(rules))
 	cands := []candidateResult{}
 	for _, cand := range body.Candidates {
-		rs := append(append([]command.Rule{}, rules...), cand.Rules...)
+		rs := cand.Rules
 		s, b, combined := rulesFromBody("", &rs)
 		_, cc, changed := c.predictLocked(s, b, ruleTiers(combined))
 		cands = append(cands, candidateResult{Key: cand.Key, Counts: cc, Changed: changed})

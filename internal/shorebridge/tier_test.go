@@ -253,3 +253,30 @@ func TestClosedSightingRetainsUnionOfTierPinLabels(t *testing.T) {
 		t.Fatal("empty object matched a pin")
 	}
 }
+
+func TestCandidatePreviewUsesCompleteReplacementRules(t *testing.T) {
+	c := NewConsole(New("", "", nil))
+	objects := []*Object{{Key: "boat", Label: "boat", Score: 100, Best: &Card{Label: "boat"}}, {Key: "bird", Label: "bird", Score: 1, Best: &Card{Label: "bird"}}}
+	c.onSnapshot(&Snapshot{Objects: objects}, nil)
+	body := `{"rules":[{"type":"suppress","classes":["boat"],"tier":2}],"candidates":[{"key":"remove","rules":[]},{"key":"retarget","rules":[{"type":"suppress","classes":["bird"],"tier":2}]},{"key":"change","rules":[{"type":"suppress","classes":["boat"],"tier":3}]}]}`
+	w := httptest.NewRecorder()
+	c.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/directives/preview", strings.NewReader(body)))
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		Counts     [4]int            `json:"counts"`
+		Candidates []candidateResult `json:"candidates"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Counts != [4]int{0, 1, 0, 1} || len(got.Candidates) != 3 {
+		t.Fatalf("base draft: %+v", got)
+	}
+	for i, want := range [][4]int{{1, 0, 0, 1}, {1, 1, 0, 0}, {0, 0, 1, 1}} {
+		if got.Candidates[i].Counts != want {
+			t.Fatalf("candidate %s retained base pin: %+v", got.Candidates[i].Key, got)
+		}
+	}
+}
