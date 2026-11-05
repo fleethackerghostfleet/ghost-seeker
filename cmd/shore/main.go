@@ -24,6 +24,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/console"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 	ssync "github.com/fleethackerghostfleet/ghost-seeker/shore/sync"
@@ -40,6 +41,7 @@ func main() {
 	requireAuth := flag.Bool("require-auth", requireDefault, "require per-unit JWTs on SyncService")
 	key := flag.String("signing-key", env("GS_SIGNING_KEY", ""), "HS256 signing key (prefer env or file)")
 	keyFile := flag.String("signing-key-file", env("GS_SIGNING_KEY_FILE", ""), "signing key file")
+	signingKey := flag.String("policy-signing-key", env("GS_POLICY_SIGNING_KEY", ""), "JSON Ed25519 policy signing key")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
@@ -60,6 +62,10 @@ func main() {
 		emb = inference.NewRemote(*inferURL)
 	}
 	con := &console.Service{NodeID: "shore", St: st, Clk: clk, Embedder: emb, EdgeID: *edgeID}
+	if *signingKey != "" {
+		con.Signer, err = policy.LoadSigningKey(*signingKey)
+		fatal(err)
+	}
 
 	mux := http.NewServeMux()
 	p, h := ghostseekerv1connect.NewSyncServiceHandler(ssync.Handler{Service: syncSvc}, connect.WithInterceptors(auth))

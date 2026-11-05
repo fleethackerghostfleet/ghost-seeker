@@ -20,13 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
-	"google.golang.org/protobuf/proto"
 	"log/slog"
 	"math"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scoring"
@@ -45,16 +47,18 @@ const (
 )
 
 type Config struct {
-	EdgeID           string
-	Strategy         Strategy
-	Tick             time.Duration // planning interval when the link is up
-	ProbeInterval    time.Duration // how often to try a dead link
-	MaxExchangeBytes int64
-	MinChunk         int64
-	MaxChunk         int64
-	RescoreEvery     time.Duration // freshness refresh
-	ManifestRetry    time.Duration // resend manifest if unacked for this long
-	PullBoost        float64
+	EdgeID              string
+	Strategy            Strategy
+	Tick                time.Duration // planning interval when the link is up
+	ProbeInterval       time.Duration // how often to try a dead link
+	MaxExchangeBytes    int64
+	MinChunk            int64
+	MaxChunk            int64
+	RescoreEvery        time.Duration // freshness refresh
+	ManifestRetry       time.Duration // resend manifest if unacked for this long
+	PullBoost           float64
+	RequireSignedPolicy bool
+	PolicyKeys          policy.Keyring
 }
 
 func DefaultConfig(edgeID string) Config {
@@ -73,16 +77,19 @@ type Stats struct {
 }
 
 type Scheduler struct {
-	cfg    Config
-	st     *store.Store
-	lk     link.Link
-	eng    *scoring.Engine
-	clk    clock.Clock
-	log    *slog.Logger
-	mu     sync.Mutex
-	policy *pb.Policy
-	last   time.Time // last full rescore
-	stats  Stats
+	cfg            Config
+	st             *store.Store
+	lk             link.Link
+	eng            *scoring.Engine
+	clk            clock.Clock
+	log            *slog.Logger
+	mu             sync.Mutex
+	policy         *pb.Policy
+	last           time.Time // last full rescore
+	guard          *policy.Store
+	policyExpiry   time.Time
+	nextRuleExpiry time.Time
+	stats          Stats
 	// OnDownlink is called for every applied downlink message (for UIs/tests).
 	OnDownlink func(*pb.Downlink)
 }
@@ -92,6 +99,26 @@ func New(cfg Config, st *store.Store, lk link.Link, eng *scoring.Engine, clk clo
 		log = slog.Default()
 	}
 	s := &Scheduler{cfg: cfg, st: st, lk: lk, eng: eng, clk: clk, log: log}
+	var err error
+	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{Keys: cfg.PolicyKeys, RequireSigned: cfg.RequireSignedPolicy})
+	if err != nil {
+		return nil, err
+	}
+	now := clk.Now()
+	lastGood, expired := s.guard.Active(now)
+	if expired {
+		s.policy = DefaultPolicy()
+		_ = s.guard.MarkExpired(context.Background(), now)
+		_ = st.Event(context.Background(), now, "policy", "", "expired policy -> default")
+		_ = st.SetPolicy(context.Background(), s.policy)
+		return s, nil
+	}
+	if lastGood != nil {
+		s.policy = normalizePolicy(policy.Flatten(lastGood, cfg.EdgeID, now), now)
+		s.policyExpiry = policy.Expiry(lastGood, policy.DefaultTTL)
+		s.nextRuleExpiry = nextRuleExpiry(lastGood, now)
+		return s, nil
+	}
 	p, err := st.GetPolicy(context.Background())
 	if err != nil {
 		return nil, err
@@ -101,6 +128,19 @@ func New(cfg Config, st *store.Store, lk link.Link, eng *scoring.Engine, clk clo
 	}
 	s.policy = p
 	return s, nil
+}
+
+func normalizePolicy(p *pb.Policy, now time.Time) *pb.Policy {
+	if p.Id == "" {
+		p.Id = fmt.Sprintf("p-%d", now.UnixMilli())
+	}
+	if p.IssuedAtUnixMs == 0 {
+		p.IssuedAtUnixMs = now.UnixMilli()
+	}
+	if p.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
+		p.Emcon = pb.EmconMode_EMCON_MODE_NORMAL
+	}
+	return p
 }
 
 func DefaultPolicy() *pb.Policy {
@@ -153,15 +193,7 @@ func (s *Scheduler) ScoreItem(ctx context.Context, row *store.Row) error {
 // ApplyPolicy installs a new policy and rescores the whole backlog. Returns
 // how many items are now suppressed / boosted, for operator preview.
 func (s *Scheduler) ApplyPolicy(ctx context.Context, p *pb.Policy) (suppressed, boosted int64, err error) {
-	if p.Id == "" {
-		p.Id = fmt.Sprintf("p-%d", s.clk.Now().UnixMilli())
-	}
-	if p.IssuedAtUnixMs == 0 {
-		p.IssuedAtUnixMs = s.clk.Now().UnixMilli()
-	}
-	if p.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-		p.Emcon = pb.EmconMode_EMCON_MODE_NORMAL
-	}
+	normalizePolicy(p, s.clk.Now())
 	s.mu.Lock()
 	s.policy = p
 	s.mu.Unlock()
@@ -188,6 +220,87 @@ func (s *Scheduler) ApplyPolicy(ctx context.Context, p *pb.Policy) (suppressed, 
 		}
 	}
 	return suppressed, boosted, nil
+}
+
+func (s *Scheduler) AcceptPolicy(ctx context.Context, p *pb.Policy, source string) (suppressed, boosted int64, err error) {
+	now := s.clk.Now()
+	accepted, err := s.guard.Accept(ctx, p, source, now)
+	if err != nil {
+		id := ""
+		if p != nil {
+			id = p.Id
+		}
+		s.log.Warn("reject policy", "id", id, "source", source, "err", err)
+		_ = s.st.Event(ctx, now, "policy", "", fmt.Sprintf("rejected %s: %v", id, err))
+		return 0, 0, err
+	}
+	flat := policy.Flatten(accepted, s.cfg.EdgeID, now)
+	suppressed, boosted, err = s.ApplyPolicy(ctx, flat)
+	if err != nil {
+		return suppressed, boosted, err
+	}
+	s.mu.Lock()
+	s.policyExpiry = policy.Expiry(accepted, policy.DefaultTTL)
+	s.nextRuleExpiry = nextRuleExpiry(accepted, now)
+	s.mu.Unlock()
+	return suppressed, boosted, nil
+}
+
+func nextRuleExpiry(p *pb.Policy, now time.Time) time.Time {
+	var next time.Time
+	if p == nil {
+		return next
+	}
+	for _, layer := range p.Layers {
+		if layer == nil {
+			continue
+		}
+		for _, rule := range layer.Rules {
+			if rule == nil || rule.ExpiresAtUnixMs <= 0 {
+				continue
+			}
+			expires := time.UnixMilli(rule.ExpiresAtUnixMs)
+			if expires.After(now) && (next.IsZero() || expires.Before(next)) {
+				next = expires
+			}
+		}
+	}
+	return next
+}
+
+func (s *Scheduler) checkPolicyExpiry(ctx context.Context, now time.Time) {
+	s.mu.Lock()
+	policyExpiry, ruleExpiry := s.policyExpiry, s.nextRuleExpiry
+	s.mu.Unlock()
+	if !policyExpiry.IsZero() && !now.Before(policyExpiry) {
+		if _, _, err := s.ApplyPolicy(ctx, DefaultPolicy()); err != nil {
+			s.log.Warn("apply default policy after expiry", "err", err)
+		}
+		if err := s.guard.MarkExpired(ctx, now); err != nil {
+			s.log.Warn("audit expired policy", "err", err)
+		}
+		_ = s.st.Event(ctx, now, "policy", "", "expired policy -> default")
+		s.log.Warn("policy expired; restored default policy")
+		s.mu.Lock()
+		s.policyExpiry, s.nextRuleExpiry = time.Time{}, time.Time{}
+		s.mu.Unlock()
+		return
+	}
+	if !ruleExpiry.IsZero() && !now.Before(ruleExpiry) {
+		if lastGood, expired := s.guard.Active(now); lastGood != nil && !expired {
+			flat := policy.Flatten(lastGood, s.cfg.EdgeID, now)
+			if _, _, err := s.ApplyPolicy(ctx, flat); err != nil {
+				s.log.Warn("reflatten policy after rule expiry", "err", err)
+			}
+			s.mu.Lock()
+			s.nextRuleExpiry = nextRuleExpiry(lastGood, now)
+			s.mu.Unlock()
+		}
+	}
+}
+
+func (s *Scheduler) PolicyAudit(ctx context.Context, limit int) ([]policy.AuditEntry, error) {
+	return s.guard.Audit(ctx, limit)
 }
 
 // Override sets a human label on an item and rescores it.
@@ -508,6 +621,7 @@ func estimateManifestBytes(me *pb.ManifestEntry) int {
 // before the next one.
 func (s *Scheduler) Tick(ctx context.Context) (time.Duration, error) {
 	now := s.clk.Now()
+	s.checkPolicyExpiry(ctx, now)
 	rows, err := s.st.All(ctx)
 	if err != nil {
 		return s.cfg.Tick, err
@@ -659,7 +773,7 @@ func (s *Scheduler) applyResponse(ctx context.Context, resp *pb.ExchangeResponse
 		var err error
 		switch m := d.Msg.(type) {
 		case *pb.Downlink_Policy:
-			_, _, err = s.ApplyPolicy(ctx, m.Policy)
+			_, _, err = s.AcceptPolicy(ctx, m.Policy, "downlink")
 		case *pb.Downlink_Pull:
 			err = s.Pull(ctx, m.Pull)
 		case *pb.Downlink_LabelOverride:

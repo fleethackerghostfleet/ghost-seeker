@@ -162,6 +162,9 @@ func Rescore(item *Item, model string, directives []Directive) {
 func RescoreAt(item *Item, model string, directives []Directive, now time.Time) {
 	rules := make([]Rule, 0)
 	for _, directive := range directives {
+		if directive.Blocked != "" {
+			continue
+		}
 		for _, rule := range directive.Rules {
 			if len(rule.Sources) > 0 && !contains(rule.Sources, item.SourceID) {
 				continue
@@ -221,6 +224,9 @@ type Weight struct {
 func EffectiveWeights(model string, directives []Directive) map[string]Weight {
 	rules := make([]Rule, 0)
 	for _, directive := range directives {
+		if directive.Blocked != "" {
+			continue
+		}
 		rules = append(rules, directive.Rules...)
 	}
 	result := make(map[string]Weight, len(catalog.Models[model].W))

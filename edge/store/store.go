@@ -19,6 +19,7 @@ import (
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/proto"
 	_ "modernc.org/sqlite"
 )
@@ -101,6 +102,11 @@ CREATE TABLE IF NOT EXISTS forms (
   PRIMARY KEY (item_id, kind)
 );
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v BLOB);
+CREATE TABLE IF NOT EXISTS policy_audit (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  at INTEGER NOT NULL,
+  entry BLOB NOT NULL
+);
 CREATE TABLE IF NOT EXISTS events (
   ts INTEGER NOT NULL, kind TEXT NOT NULL, item_id TEXT, detail TEXT
 );
@@ -538,6 +544,103 @@ func (s *Store) SetPolicy(ctx context.Context, p *pb.Policy) error {
 		return err
 	}
 	return s.setKV(ctx, "policy", raw)
+}
+
+func (s *Store) LoadPolicyState(ctx context.Context) (*pb.Policy, int64, error) {
+	raw, err := s.getKV(ctx, "policy_last_good")
+	if err != nil {
+		return nil, 0, err
+	}
+	var lastGood *pb.Policy
+	if len(raw) > 0 {
+		lastGood = &pb.Policy{}
+		if err := proto.Unmarshal(raw, lastGood); err != nil {
+			return nil, 0, err
+		}
+	}
+	highWaterRaw, err := s.getKV(ctx, "policy_high_water")
+	if err != nil {
+		return nil, 0, err
+	}
+	return lastGood, decodeInt64(highWaterRaw), nil
+}
+
+func (s *Store) SavePolicyState(ctx context.Context, lastGood *pb.Policy, highWater int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if lastGood == nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM kv WHERE k='policy_last_good'`); err != nil {
+			return err
+		}
+	} else {
+		raw, err := proto.Marshal(lastGood)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO kv(k,v) VALUES('policy_last_good',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, raw); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO kv(k,v) VALUES('policy_high_water',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, encodeInt64(highWater)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) AppendPolicyAudit(ctx context.Context, entry policy.AuditEntry) error {
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO policy_audit(at,entry) VALUES(?,?)`, entry.AtUnixMs, raw)
+	return err
+}
+
+func (s *Store) ListPolicyAudit(ctx context.Context, limit int) ([]policy.AuditEntry, error) {
+	query := `SELECT entry FROM policy_audit ORDER BY seq DESC`
+	args := []any{}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var entries []policy.AuditEntry
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var entry policy.AuditEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+func encodeInt64(value int64) []byte {
+	raw := make([]byte, 8)
+	for i := 7; i >= 0; i-- {
+		raw[i] = byte(value)
+		value >>= 8
+	}
+	return raw
+}
+
+func decodeInt64(raw []byte) int64 {
+	var value int64
+	for _, b := range raw {
+		value = value<<8 | int64(b)
+	}
+	return value
 }
 
 func (s *Store) GetCursor(ctx context.Context) (int64, error) {

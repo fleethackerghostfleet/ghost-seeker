@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/scenario"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
@@ -50,6 +52,8 @@ func main() {
 	tokenFile := flag.String("unit-token-file", env("GS_UNIT_TOKEN_FILE", ""), "unit JWT file")
 	maxBytes := flag.Int64("max-bytes", envInt64("GS_EDGE_MAX_BYTES"), "edge payload byte cap (0 = unlimited)")
 	maxItems := flag.Int64("max-items", envInt64("GS_EDGE_MAX_ITEMS"), "edge item cap (0 = unlimited)")
+	requireSignedPolicy := flag.Bool("require-signed-policy", envBool("GS_REQUIRE_SIGNED_POLICY"), "require signed downlinked policies")
+	policyKeysPath := flag.String("policy-keys", env("GS_POLICY_KEYS", ""), "JSON public keyring for signed policies")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
@@ -66,6 +70,14 @@ func main() {
 	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9), token)
 	cfg := scheduler.DefaultConfig(*id)
 	cfg.Tick = *tick
+	cfg.RequireSignedPolicy = *requireSignedPolicy
+	if *policyKeysPath != "" {
+		cfg.PolicyKeys, err = policy.LoadKeyring(*policyKeysPath)
+		fatal(err)
+	}
+	if cfg.RequireSignedPolicy && *policyKeysPath == "" {
+		fatal(fmt.Errorf("-policy-keys or GS_POLICY_KEYS is required with -require-signed-policy"))
+	}
 	sch, err := scheduler.New(cfg, st, lk, scoring.Default(), clk, log)
 	fatal(err)
 
@@ -111,6 +123,7 @@ func main() {
 	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc)
 	mux.Handle(path, h)
 	mux.Handle("/blob/", svc.BlobHandler())
+	mux.Handle("GET /policy/audit", svc.PolicyAuditHandler())
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	httpx.StaticUI(mux, *uiDir, "edge "+*id)
 	srv := &http.Server{Addr: *listen, Handler: h2c.NewHandler(httpx.CORS(mux), &http2.Server{})}
@@ -131,6 +144,15 @@ func env(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func envBool(k string) bool {
+	switch strings.ToLower(os.Getenv(k)) {
+	case "1", "true":
+		return true
+	default:
+		return false
+	}
 }
 
 func fatal(err error) {
