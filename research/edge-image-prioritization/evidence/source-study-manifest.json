@@ -61,7 +61,7 @@
       "original_sha256": "08de57f78f9aac2a721937506d5aee1fd9bcfd2c5486b9849938556206a2e444",
       "delivery_sha256": "4181aa6a3f7c5e2d721de4509d03c9001e9b094f1d07ec93c205fbed6610be45",
       "modified_for_portability": true,
-      "delivery_note": "Path portability edits and removal of trailing whitespace; AST unchanged by whitespace cleanup."
+      "delivery_note": "Trailing whitespace removed; parsed AST matches the original study source."
     },
     {
       "path": "phase1/evaluation/annotation_sensitivity.py",
