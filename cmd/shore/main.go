@@ -30,6 +30,10 @@ import (
 )
 
 func main() {
+	if err := opauth.CheckLegacyOperatorAuth(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	data := flag.String("data", env("DATA_DIR", "data/shore"), "data directory")
 	listen := flag.String("listen", env("LISTEN", ":8080"), "listen address")
 	tlsCert := flag.String("tls-cert", env("GS_TLS_CERT", ""), "optional HTTPS server certificate (PEM; requires -tls-key)")

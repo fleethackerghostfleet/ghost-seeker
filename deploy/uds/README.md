@@ -6,15 +6,14 @@ explicitly select ambient; no privileged Istio init-container exemption is
 needed. This bundle deploys the application **on an existing Core installation**;
 it does not install or replace a production cluster's controls.
 
-**Runtime fielding blocker found during integration:** the default sidecar image
-does not include optional BoxMOT, but its first Analyze request lazily imports
-that tracker. Live-frame ingest therefore fails with `ModuleNotFoundError:
-No module named 'boxmot'` even though model verification and pod health pass.
-The separate tracking image is AGPL-3.0 license-blocked as documented in
-PIPELINE.md. Do not silently substitute it. The default tracker/dependency
-contract needs a separately reviewed runtime fix before operational fielding;
-UDS deployment, gateway login and authenticated sync heartbeats can still be
-verified independently.
+The default sidecar uses `--tracker auto`: it returns real stateless detections
+when BoxMOT is absent, and retains ByteTrack when the tracking dependencies are
+installed. Explicit BoxMOT tracker requests fail during startup if dependencies
+are missing. The Zarf command remains model-manifest verified, with no mock
+fallback. The separate tracking image remains AGPL-3.0 license-blocked as
+documented in PIPELINE.md; do not silently substitute it.
+The image also includes the canonical night-light catalog/configuration needed
+by Analyze, without depending on the demo's host catalog mount.
 
 ## Local deployment
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
-	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -149,7 +149,7 @@ func (c *Console) publish(name string, v any) {
 }
 
 func (c *Console) stream(w http.ResponseWriter, r *http.Request) {
-	fl, ok := w.(http.Flusher)
+	_, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
@@ -159,20 +159,22 @@ func (c *Console) stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	ch := make(chan sseEvent, 64)
 	c.mu.Lock()
+	if len(c.subs) >= httpx.MaxStreamClients {
+		c.mu.Unlock()
+		http.Error(w, "too many stream clients", http.StatusTooManyRequests)
+		return
+	}
 	c.subs[ch] = struct{}{}
 	first, _ := json.Marshal(c.snapshotLocked())
 	c.mu.Unlock()
 	defer func() {
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 		c.mu.Lock()
 		delete(c.subs, ch)
 		c.mu.Unlock()
 	}()
 	send := func(name string, data []byte) bool {
-		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data); err != nil {
-			return false
-		}
-		fl.Flush()
-		return true
+		return httpx.WriteStream(w, fmt.Sprintf("event: %s\ndata: %s\n\n", name, data))
 	}
 	if !send("snapshot", first) {
 		return
@@ -188,10 +190,9 @@ func (c *Console) stream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-heartbeat.C:
-			if _, err := io.WriteString(w, ": heartbeat\n\n"); err != nil {
+			if !httpx.WriteStream(w, ": heartbeat\n\n") {
 				return
 			}
-			fl.Flush()
 		}
 	}
 }

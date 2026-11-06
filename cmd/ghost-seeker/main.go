@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -23,6 +24,10 @@ import (
 )
 
 func main() {
+	if err := opauth.CheckLegacyOperatorAuth(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	llmTimeoutDefault := 8 * time.Second
 	if value := os.Getenv("GS_LLM_TIMEOUT"); value != "" {
 		timeout, err := time.ParseDuration(value)

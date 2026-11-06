@@ -62,6 +62,7 @@ message PolicyLayer {
   string issued_by = 2;
   repeated InterestRule rules = 3;
   EmconSetting emcon = 4;
+  int64 command_version = 5; // original command sequence, preserved when shore versions/re-signs the envelope
 }
 
 message InterestRule {

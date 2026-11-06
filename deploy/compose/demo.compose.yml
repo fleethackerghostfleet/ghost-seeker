@@ -31,7 +31,7 @@ services:
   sidecar:
     # The fielding image (edgeml/Dockerfile, CI's edgeml-sidecar) with the
     # tracking extra: CPU torch from the PyTorch index (x86-64 and arm64) + boxmot.
-    build: { context: ../../edgeml, dockerfile: Dockerfile, args: { WITH_TRACKING: "1" } }
+    build: { context: ../.., dockerfile: edgeml/Dockerfile, args: { WITH_TRACKING: "1" } }
     image: ghost-seeker/edgeml-sidecar:0.1.0-tracking
     command: ["--listen", "0.0.0.0:9090", "--detector", "/models/yolo11n-640/model.onnx", "--embed", "/models/mobileclip-s1",
               "--model-manifest", "/models/manifest.json", "--threads", "4", "--fps", "5", "--prioritizer", "both"]

@@ -106,7 +106,7 @@ class EdgemlEngine:
     TRK_DEFAULTS: dict = {"centroid_max_distance": 0.04, "max_jump_diag": 1.5, "tentative_thresh": 0.5}
 
     def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
-                 engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
+                 engine: str = "auto", tracker: str = "auto", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
                  text_tower: str = "cache", anomaly_fallback: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
@@ -116,6 +116,19 @@ class EdgemlEngine:
         self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
         self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
         self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
+        self._ready_tracker = None
+        if tracker != "none":
+            from edgeml.tracking import make_tracker
+
+            try:
+                options = {"asso_func": asso, "max_lost_s": max_lost_s, "det_thresh": score_thr,
+                           "low_thresh": self.det_low_thr, **self.trk_params}
+                self._ready_tracker = make_tracker("bytetrack" if tracker == "auto" else tracker, fps=fps, **options)
+            except ModuleNotFoundError as exc:
+                if tracker != "auto" or exc.name != "boxmot":
+                    raise RuntimeError(f"tracker {tracker!r} requires the tracking dependencies; install the approved tracking build or select --tracker none") from exc
+                self.tracker_variant = "none"
+                logger.warning("BoxMOT is not installed: tracking disabled; returning stateless detections")
         self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, self.det_low_thr))
         if anomaly_fallback is not None:
             # H: cheap "anything-on-water" proposer (horizon-band colour anomaly) fills in where YOLO11n is blind
@@ -162,7 +175,10 @@ class EdgemlEngine:
 
                 kw = {"asso_func": self.asso, "max_lost_s": self.max_lost_s, "det_thresh": self.score_thr,
                       "low_thresh": self.det_low_thr, **self.trk_params}        # --trk may override any of these
-                tracker = make_tracker(self.tracker_variant, fps=self.fps, **kw)
+                tracker = getattr(self, "_ready_tracker", None)
+                self._ready_tracker = None
+                if tracker is None and self.tracker_variant != "none":
+                    tracker = make_tracker("bytetrack" if self.tracker_variant == "auto" else self.tracker_variant, fps=self.fps, **kw)
                 agg = _ZeroShotAggregator(name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
                 src = self.sources[name] = _Source(tracker=tracker, agg=agg)
             return src
@@ -186,7 +202,7 @@ class EdgemlEngine:
             H, W = image_bgr.shape[:2]
             dets = [d for d in self.detector.detect(image_bgr) if d.score >= self.det_low_thr]
             kept = [d for d in dets if d.score >= self.score_thr]
-            tracks = src.tracker.update(dets, image_bgr, fi, t_s)
+            tracks = src.tracker.update(dets, image_bgr, fi, t_s) if src.tracker is not None else []
             events = src.agg.update(tracks, image_bgr, fi, t_s)
             base_ms = (captured_ms - int(t_s * 1000)) if captured_ms else int(time.time() * 1000) - int(t_s * 1000)
             sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"])) for ev in events]
@@ -476,17 +492,22 @@ def image_dims(data: bytes):
         i, n = 2, len(data)
         while i + 9 < n:
             if data[i] != 0xFF:
-                i += 1
-                continue
+                return None
             marker = data[i + 1]
             if marker == 0xFF:  # fill bytes before a marker
                 i += 1
                 continue
+            if marker in (0x00, 0xDA, 0xD9):
+                return None
             if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
                 i += 2
                 continue
             seg = struct.unpack(">H", data[i + 2:i + 4])[0]
+            if seg < 2 or i + 2 + seg > n:
+                return None
             if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                if seg < 8:
+                    return None
                 h, w = struct.unpack(">HH", data[i + 5:i + 9])
                 return w, h
             i += 2 + seg

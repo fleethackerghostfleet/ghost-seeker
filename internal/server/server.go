@@ -17,6 +17,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/dataset"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
@@ -172,7 +173,7 @@ func (s *Server) config(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
+	_, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
@@ -188,12 +189,12 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.hub.remove(client)
+	defer func() { _ = http.NewResponseController(w).SetWriteDeadline(time.Time{}) }()
 	snapshot := s.snapshotEvent()
 	s.pubMu.Unlock()
 	if !writeEvent(w, "snapshot", snapshot) {
 		return
 	}
-	flusher.Flush()
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
 	for {
@@ -207,12 +208,10 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			if !writeEvent(w, event.name, event.data) {
 				return
 			}
-			flusher.Flush()
 		case <-heartbeat.C:
-			if _, err := io.WriteString(w, ": heartbeat\n\n"); err != nil {
+			if !httpx.WriteStream(w, ": heartbeat\n\n") {
 				return
 			}
-			flusher.Flush()
 		}
 	}
 }
@@ -638,13 +637,12 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
-func writeEvent(w io.Writer, name string, value any) bool {
+func writeEvent(w http.ResponseWriter, name string, value any) bool {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return false
 	}
-	_, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data)
-	return err == nil
+	return httpx.WriteStream(w, fmt.Sprintf("event: %s\ndata: %s\n\n", name, data))
 }
 
 type event struct {

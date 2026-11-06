@@ -145,7 +145,7 @@ images:
 	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
 	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
 	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
-	docker build $(PY_BUILD_ARG) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
+	docker build $(PY_BUILD_ARG) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) .
 
 images-save:
 	mkdir -p dist

@@ -35,7 +35,7 @@ def main(argv=None) -> None:
     ap.add_argument("--model-manifest", default=os.environ.get("EDGEML_MODEL_MANIFEST"),
                     help="approved SHA-256/source-revision manifest for the read-only model bundle")
     ap.add_argument("--fps", type=float, default=5.0, help="nominal frame rate used when requests carry no captured_at_unix_ms")
-    ap.add_argument("--tracker", default="bytetrack")
+    ap.add_argument("--tracker", default="auto", help="auto: ByteTrack when BoxMOT is installed, otherwise stateless detection; none disables tracking")
     ap.add_argument("--asso", default="centroid")
     ap.add_argument("--max-lost-s", type=float, default=6.0)
     ap.add_argument("--score-thr", type=float, default=0.35, help="new tracks / reports need a detection at least this confident")

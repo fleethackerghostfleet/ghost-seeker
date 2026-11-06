@@ -446,13 +446,14 @@ func (x *Thresholds) GetMinPriorityForImages() float64 {
 }
 
 type PolicyLayer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Echelon       Echelon                `protobuf:"varint,1,opt,name=echelon,proto3,enum=ghostseeker.v1.Echelon" json:"echelon,omitempty"`
-	IssuedBy      string                 `protobuf:"bytes,2,opt,name=issued_by,json=issuedBy,proto3" json:"issued_by,omitempty"`
-	Rules         []*InterestRule        `protobuf:"bytes,3,rep,name=rules,proto3" json:"rules,omitempty"`
-	Emcon         *EmconSetting          `protobuf:"bytes,4,opt,name=emcon,proto3" json:"emcon,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Echelon        Echelon                `protobuf:"varint,1,opt,name=echelon,proto3,enum=ghostseeker.v1.Echelon" json:"echelon,omitempty"`
+	IssuedBy       string                 `protobuf:"bytes,2,opt,name=issued_by,json=issuedBy,proto3" json:"issued_by,omitempty"`
+	Rules          []*InterestRule        `protobuf:"bytes,3,rep,name=rules,proto3" json:"rules,omitempty"`
+	Emcon          *EmconSetting          `protobuf:"bytes,4,opt,name=emcon,proto3" json:"emcon,omitempty"`
+	CommandVersion int64                  `protobuf:"varint,5,opt,name=command_version,json=commandVersion,proto3" json:"command_version,omitempty"` // original command sequence, preserved when shore versions/re-signs the envelope
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PolicyLayer) Reset() {
@@ -511,6 +512,13 @@ func (x *PolicyLayer) GetEmcon() *EmconSetting {
 		return x.Emcon
 	}
 	return nil
+}
+
+func (x *PolicyLayer) GetCommandVersion() int64 {
+	if x != nil {
+		return x.CommandVersion
+	}
+	return 0
 }
 
 type InterestRule struct {
@@ -865,12 +873,13 @@ const file_ghostseeker_v1_policy_proto_rawDesc = "" +
 	"\vunknown_min\x18\x01 \x01(\x02R\n" +
 	"unknownMin\x12,\n" +
 	"\x12detection_min_conf\x18\x02 \x01(\x02R\x10detectionMinConf\x125\n" +
-	"\x17min_priority_for_images\x18\x03 \x01(\x01R\x14minPriorityForImages\"\xc5\x01\n" +
+	"\x17min_priority_for_images\x18\x03 \x01(\x01R\x14minPriorityForImages\"\xee\x01\n" +
 	"\vPolicyLayer\x121\n" +
 	"\aechelon\x18\x01 \x01(\x0e2\x17.ghostseeker.v1.EchelonR\aechelon\x12\x1b\n" +
 	"\tissued_by\x18\x02 \x01(\tR\bissuedBy\x122\n" +
 	"\x05rules\x18\x03 \x03(\v2\x1c.ghostseeker.v1.InterestRuleR\x05rules\x122\n" +
-	"\x05emcon\x18\x04 \x01(\v2\x1c.ghostseeker.v1.EmconSettingR\x05emcon\"\x9b\x03\n" +
+	"\x05emcon\x18\x04 \x01(\v2\x1c.ghostseeker.v1.EmconSettingR\x05emcon\x12'\n" +
+	"\x0fcommand_version\x18\x05 \x01(\x03R\x0ecommandVersion\"\x9b\x03\n" +
 	"\fInterestRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06author\x18\x02 \x01(\tR\x06author\x12\x16\n" +
