@@ -41,7 +41,8 @@ test('feed card names include context outside the optional thumbnail overlays',(
 });
 test('Commander scroll panes are named and reachable by native keyboard focus',()=>{
  for(const [id,name] of [['qlist','Received imagery queue'],['stage','Selected image details'],['brief','Command assessment and decisions']]){
-  const pane=tag(commander,id);
+  const pane=id==='brief'?commander.match(/<aside\b[^>]*\bclass="brief"[^>]*>/)?.[0]:tag(commander,id);
+  assert.ok(pane,`missing ${id} scroll pane`);
   assert.match(pane,/tabindex="0"/);
   assert.match(pane,new RegExp(`aria-label="${name}"`));
  }
