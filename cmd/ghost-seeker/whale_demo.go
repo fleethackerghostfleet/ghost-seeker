@@ -27,7 +27,7 @@ func (w *whaleCadence) tick(data *store.Store, generator *sensor.Generator, now 
 	if epoch := data.Epoch(); epoch != w.epoch {
 		w.epoch, w.since = epoch, 0
 		if item := generator.WhaleFrame(now, model, directives); item != nil {
-			item.FeedFirst, item.Manual = true, 1
+			item.FeedFirst, item.ReviewFirst, item.Manual = true, true, 1
 			return item, 0
 		}
 	}
@@ -42,7 +42,7 @@ func (w *whaleCadence) tick(data *store.Store, generator *sensor.Generator, now 
 
 func seedWhale(data *store.Store, generator *sensor.Generator) {
 	if item := generator.WhaleFrame(time.Now(), "maritime", nil); item != nil {
-		item.FeedFirst, item.Manual = true, 1
+		item.FeedFirst, item.ReviewFirst, item.Manual = true, true, 1
 		data.Add(item, 0)
 	}
 }

@@ -1,3 +1,9 @@
+.draft-menu-wrap{position:relative;width:fit-content}
+#rvDraftMenu{position:absolute;left:0;bottom:100%;z-index:30;min-width:310px;max-width:90vw;padding:6px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 24px #0008}
+#rvDraftMenu[hidden]{display:none}
+#rvDraftMenu button{display:block;width:100%;padding:10px;text-align:left;color:var(--text);background:var(--panel);border:0;font:inherit;cursor:pointer}
+#rvDraftMenu button:hover,#rvDraftMenu button:focus-visible{background:var(--panel2);outline:2px solid var(--accent)}
+#oprepSendImage{width:220px;max-height:150px;object-fit:contain}
 #oprepDialog{width:min(1200px,94vw);max-height:90vh;box-sizing:border-box;background:var(--panel,#fff);color:var(--text,#172e40);border:1px solid var(--muted,#526672);border-radius:8px;padding:24px}
 #oprepDialog::backdrop{background:#0009}
 .oprep-layout{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.2fr);gap:24px}

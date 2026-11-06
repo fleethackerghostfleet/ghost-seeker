@@ -83,7 +83,7 @@ test('generic mammal or dolphin detections are not called whales',()=>{
 test('unknown defaults are empty and preview keeps blank slots without UNK',()=>{
  const f=M.defaults({},{});
  for(const key of ['originator','incidentTime','position','sensorHeading','course','speed','species','size','condition','damage','injuries','actions','media','assessment'])assert.equal(f[key],'',key);
- assert.equal(f.info,'CNO WASHINGTON DC');assert.equal(f.serial,'001');
+ assert.equal(f.info,'[INFO ADDRESSEE — VERIFY]');assert.equal(f.serial,'001');
  const message=M.message(f,now);assert.doesNotMatch(message,/\bUNK(?:NOWN)?\b/);
  assert.match(message,/FM \n/);assert(message.includes('TIMELOC////'));assert(message.includes('GENTEXT/ACTIONS TAKEN///'));
  assert.match(M.message({...f,course:'090'},now),/COURSE 090/);
@@ -97,8 +97,9 @@ test('highest-confidence mammal takes precedence over unrelated first-detection 
 });
 test('missing input highlight and accessible state update when filled and cleared',()=>{
  const vm=require('node:vm'),events={},control={name:'course',value:'',classList:{toggle(name,value){this[name]=value}},setAttribute(name,value){this[name]=value}};
- const form={elements:[control],addEventListener(name,fn){events[name]=fn}},nodes={oprepForm:form,oprepDialog:{addEventListener(){}},oprepPreview:{},oprepStatus:{},oprepClose:{},oprepCopy:{},oprepDownload:{}};
- const context=vm.createContext({document:{getElementById:id=>nodes[id]},OprepModel:M,FormData:class{*[Symbol.iterator](){yield ['course',control.value]}}});
+ const form={elements:[control],addEventListener(name,fn){events[name]=fn}},nodes={oprepForm:form,oprepDialog:{addEventListener(){}},oprepPreview:{},oprepStatus:{},oprepClose:{},oprepCopy:{},oprepDownload:{},oprepSend:{},rvDraftMenu:{append(){}},rvOprep:{addEventListener(){}}};
+ nodes.oprepHint={textContent:'Draft only'};
+ const context=vm.createContext({document:{getElementById:id=>nodes[id],createElement:()=>({setAttribute(){}}),addEventListener(){}},OprepModel:M,FormData:class{*[Symbol.iterator](){yield ['course',control.value]}}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'static/oprep.js'),'utf8'),context);
  events.input();assert.equal(control['aria-invalid'],'true');assert.equal(control.classList['oprep-missing'],true);
  control.value='090';events.input();assert.equal(control['aria-invalid'],'false');assert.equal(control.classList['oprep-missing'],false);
