@@ -103,7 +103,8 @@ func TestLiveReportDeduplicatesClassesAndKeepsNewestReviewerLabel(t *testing.T) 
 	base := reviews.Record{ID: "a", ItemID: "image", Reviewer: "A", ModelKey: "live:camera", ModelTier: 2, HumanTier: 1, ReviewedAt: time.Unix(1, 0),
 		Detections: []command.Detection{{Class: "boat|night\nwatch"}, {Class: "boat|night\nwatch"}}}
 	latest := base
-	latest.ID = "z"
+	latest.ID = "0"
+	latest.ReviewedAt = time.Unix(2, 0)
 	latest.HumanTier = 2
 	latest.Reason = "wrong_detection"
 	other := latest
