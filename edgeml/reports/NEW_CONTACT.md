@@ -3,28 +3,44 @@
 Review safety change: thermal fallback is now **off by default**; opt in
 separately with `--thermal-fallback`. Its frozen opt-in IR false-contact rate
 was 1.005/crop (28% nonempty), with unknownness ≥0.9. This change does not
-disable the weight-1 new-contact scorer. Historical tables below precede the
-review fixes/default-off change; final corrected replay results supersede them.
+disable the weight-1 new-contact scorer. The final review replay below uses
+the corrected temporal comparison and independent source-local memory.
 
 Companion: [thermal fallback evaluation](THERMAL_HOTSPOT.md). This evaluation uses
 **no IR data** and changes no production thresholds. Defaults remain
 `memory_s=30`, `iou_thr=.3`, `dist_diag=.5`. There was **no parameter sweep or
 tuning**: dev was replayed first, defaults frozen, then held-out replayed once.
-At the requested integration checkpoint, the branch was rebased onto
-`origin/dev` **908cce2** (#271), and both splits were replayed again with
-fresh detector caches on that live path. Tables/assets below are post-rebase
-runs, not a second parameter selection on held-out data. All pre/post-rebase
-birth and suppression metrics reproduce exactly for both detectors/splits.
+The branch includes #271 and #274 (`origin/dev` **5083be1**). Both splits were
+replayed with fresh detector caches after the review fixes and the thermal
+default-off safety change. These are not new threshold selections on held-out
+data. Historical integration checkpoints at the end describe earlier runs;
+the main tables/assets are the final review replay.
 
 ## Method and reproducibility
 
 `edgeml/tools/eval_newcontact.py` constructs the real `EdgemlEngine` per clip,
-with YOLO11n-640 ONNX, default LiveTiledDetector, default thermal fallback,
+with YOLO11n-640 ONNX, default LiveTiledDetector, thermal fallback **off**,
 ByteTrack, the live `_ZeroShotAggregator`, and per-source NewContactDetector.
 Embeddings are off. Every frame is consumed at its native MOT cadence (Ghost
 Fleet 5 Hz; FVessel 1 Hz), with captured time
 `1700000000000 + round((frame-1)/fps*1000)` ms. Sources reset between clips;
 there is no clip-end padding/flush to manufacture delayed OPENs.
+
+Novelty compares the new sighting's **first observed box**, not its moved
+confirmation-time box, against each neighbour's last observation at or before
+that same `first_t_s`. Only missing trajectories fall back to the event box.
+Before every aggregator update, the source-local detector snapshots open/closed
+observations into its own copied history. History is pruned against the
+30-second memory window; pending first-observation times delay pruning so
+confirmation lag cannot discard an observation still needed by an upcoming OPEN.
+Pending states themselves never suppress a flag. OPEN/UPDATE/CLOSE/relink
+semantics and aggregator eviction are unchanged.
+
+The eviction regression uses the library aggregator's defaults (20-second
+closed-state eviction), then confirms a reappearance 25 seconds after its
+last observation is not new. The live engine's existing relink override makes
+its eviction horizon 40 seconds; independent history removes reliance on
+either horizon. Memory is measured from last observation, **not close time**.
 
 No open-vocabulary prompts are sent. #271's hooks are present but its optional
 prompt encoder is inactive with embeddings off. Separate integration tests
@@ -128,19 +144,20 @@ the OPEN and annotated birth share a sampled frame, not zero compute cost.
 
 | Split | Detector | Signal | All TP/FP | All P/R % | Mid TP/FP | Mid P/R % | Median latency all / mid s |
 |---|---|---|---:|---|---:|---|---|
-| dev | YOLO | every OPEN | 11/57 | 16.18 / 50.00 | 9/57 | 13.64 / 45.00 | .2 / 0 |
-| dev | YOLO | newContact | 10/41 | 19.61 / 45.45 | 8/41 | 16.33 / 40.00 | .1 / 0 |
+| dev | YOLO | every OPEN | 11/57 | 16.18 / 50.00 | 9/57 | 13.64 / 45.00 | 0.2 / 0 |
+| dev | YOLO | newContact | 11/38 | 22.45 / 50.00 | 9/38 | 19.15 / 45.00 | 0.2 / 0 |
 | dev | oracle-d0.3 | every OPEN | 21/2 | 91.30 / 95.45 | 19/2 | 90.48 / 95.00 | 3 / 3 |
-| dev | oracle-d0.3 | newContact | 21/1 | 95.45 / 95.45 | 19/1 | 95.00 / 95.00 | 3 / 3 |
-| held-out | YOLO | every OPEN | 10/74 | 11.90 / 52.63 | 5/74 | 6.33 / 35.71 | .2 / .4 |
-| held-out | YOLO | newContact | 10/59 | 14.49 / 52.63 | 5/59 | 7.81 / 35.71 | .2 / .4 |
+| dev | oracle-d0.3 | newContact | 20/1 | 95.24 / 90.91 | 18/1 | 94.74 / 90.00 | 3 / 3 |
+| held-out | YOLO | every OPEN | 10/66 | 13.16 / 52.63 | 5/66 | 7.04 / 35.71 | 0.2 / 0.4 |
+| held-out | YOLO | newContact | 10/49 | 16.95 / 52.63 | 5/49 | 9.26 / 35.71 | 0.2 / 0.4 |
 | held-out | oracle-d0.3 | every OPEN | 18/5 | 78.26 / 94.74 | 13/5 | 72.22 / 92.86 | 1 / 2 |
 | held-out | oracle-d0.3 | newContact | 17/1 | 94.44 / 89.47 | 12/1 | 92.31 / 85.71 | 1 / 2.5 |
 
-**Finding:** complete-GT held-out YOLO retains the same credited births while
-removing 15 FP flags, but absolute birth precision remains low. Oracle removes
-four repeat flags at the cost of one timely true birth. Dev already shows a
-recall cost for YOLO. This is not a universally better birth detector.
+**Finding:** complete-GT held-out YOLO retains the same ten credited births
+while removing **17** FP flags; dev retains its eleven credited births while
+removing **19** FP flags. Absolute birth precision remains low. Oracle loses
+one timely true birth in each complete-GT split while reducing false flags.
+This is not a universally better birth detector.
 
 ## Policy-wide diagnostic (includes partial GT)
 
@@ -150,61 +167,64 @@ strongly affect these numbers; do not substitute them for complete-GT recall.
 
 | Split | Detector | Signal | All TP/FP | All P/R % | Mid TP/FP | Mid P/R % | Median latency all / mid s |
 |---|---|---|---:|---|---:|---|---|
-| dev | YOLO | every OPEN | 20/80 | 20.00 / 64.52 | 17/80 | 17.53 / 60.71 | .3 / .4 |
-| dev | YOLO | newContact | 16/57 | 21.92 / 51.61 | 13/57 | 18.57 / 46.43 | .2 / .2 |
+| dev | YOLO | every OPEN | 20/72 | 21.74 / 64.52 | 17/72 | 19.10 / 60.71 | 0.3 / 0.4 |
+| dev | YOLO | newContact | 17/46 | 26.98 / 54.84 | 14/46 | 23.33 / 50.00 | 0.2 / 0.3 |
 | dev | oracle-d0.3 | every OPEN | 27/5 | 84.38 / 87.10 | 24/5 | 82.76 / 85.71 | 3 / 3 |
 | dev | oracle-d0.3 | newContact | 26/2 | 92.86 / 83.87 | 23/2 | 92.00 / 82.14 | 3 / 3 |
-| held-out | YOLO | every OPEN | 16/108 | 12.90 / 30.77 | 10/108 | 8.47 / 21.74 | .3 / .4 |
-| held-out | YOLO | newContact | 13/72 | 15.29 / 25.00 | 7/72 | 8.86 / 15.22 | .2 / .2 |
+| held-out | YOLO | every OPEN | 16/100 | 13.79 / 30.77 | 10/100 | 9.09 / 21.74 | 0.3 / 0.4 |
+| held-out | YOLO | newContact | 13/60 | 17.81 / 25.00 | 7/60 | 10.45 / 15.22 | 0.2 / 0.2 |
 | held-out | oracle-d0.3 | every OPEN | 35/6 | 85.37 / 67.31 | 29/6 | 82.86 / 63.04 | 1 / 1 |
-| held-out | oracle-d0.3 | newContact | 25/1 | 96.15 / 48.08 | 19/1 | 95.00 / 41.30 | 1 / 1 |
+| held-out | oracle-d0.3 | newContact | 26/1 | 96.30 / 50.00 | 20/1 | 95.24 / 43.48 | 1 / 1 |
 
 Per-dataset breakdown (partial GT included); all baseline metrics, FP counts
 and latency distributions are also in the assets:
 
 | Split | Detector | Set | All TP OPEN → flagged | Flagged all P/R % | Mid TP OPEN → flagged | Flagged mid P/R % |
 |---|---|---|---|---|---|---|
-| dev | YOLO | Ghost Fleet | 12 → 9 | 30.00 / 69.23 | 9 → 6 | 22.22 / 60.00 |
-| dev | YOLO | FVessel | 8 → 7 | 16.28 / 38.89 | 8 → 7 | 16.28 / 38.89 |
+| dev | YOLO | Ghost Fleet | 12 → 9 | 45.00 / 69.23 | 9 → 6 | 35.29 / 60.00 |
+| dev | YOLO | FVessel | 8 → 8 | 18.60 / 44.44 | 8 → 8 | 18.60 / 44.44 |
 | dev | oracle-d0.3 | Ghost Fleet | 10 → 9 | 90.00 / 69.23 | 7 → 6 | 85.71 / 60.00 |
 | dev | oracle-d0.3 | FVessel | 17 → 17 | 94.44 / 94.44 | 17 → 17 | 94.44 / 94.44 |
-| held-out | YOLO | Ghost Fleet | 15 → 12 | 24.00 / 26.67 | 9 → 6 | 13.64 / 15.38 |
-| held-out | YOLO | FVessel | 1 → 1 | 2.86 / 14.29 | 1 → 1 | 2.86 / 14.29 |
-| held-out | oracle-d0.3 | Ghost Fleet | 28 → 18 | 94.74 / 40.00 | 22 → 12 | 92.31 / 30.77 |
-| held-out | oracle-d0.3 | FVessel | 7 → 7 | 100 / 100 | 7 → 7 | 100 / 100 |
+| held-out | YOLO | Ghost Fleet | 15 → 12 | 30.00 / 26.67 | 9 → 6 | 17.65 / 15.38 |
+| held-out | YOLO | FVessel | 1 → 1 | 3.03 / 14.29 | 1 → 1 | 3.03 / 14.29 |
+| held-out | oracle-d0.3 | Ghost Fleet | 28 → 19 | 95.00 / 42.22 | 22 → 13 | 92.86 / 33.33 |
+| held-out | oracle-d0.3 | FVessel | 7 → 7 | 100.00 / 100.00 | 7 → 7 | 100.00 / 100.00 |
 
 ## Suppressions and timing
 
 | Split / detector | OPENs → flagged | Suppressed | Correct repeat | Matched, not previously reported | Unmatched |
 |---|---:|---:|---:|---:|---:|
-| dev YOLO | 100 → 73 | 27 | 2 | 6 | 19 |
+| dev YOLO | 92 → 63 | 29 | 2 | 5 | 22 |
 | dev oracle-d0.3 | 32 → 28 | 4 | 2 | 1 | 1 |
-| held-out YOLO | 124 → 85 | 39 | 4 | 6 | 29 |
-| held-out oracle-d0.3 | 41 → 26 | 15 | 5 | 10 | 0 |
+| held-out YOLO | 116 → 73 | 43 | 4 | 6 | 33 |
+| held-out oracle-d0.3 | 41 → 27 | 14 | 5 | 9 | 0 |
 
-Complete-GT subsets: dev YOLO suppresses **17** (2 repeat / 3 matched-new /
-12 unmatched), oracle **1** (unmatched). Held-out YOLO suppresses **15**
-(4 / 1 / 10), oracle **5** (4 / 1 / 0). Not all matched-new suppressions
-would have been TP within the five-second window; TP loss is measured
-separately above. Nor are all removed FP flags tracker ID switches.
+Complete-GT suppressions: dev YOLO **19** (2 repeat / 2 matched-new /
+15 unmatched); dev oracle-d0.3 **2** (0 / 1 / 1); held-out YOLO **17**
+(4 / 1 / 12); held-out oracle-d0.3 **5** (4 / 1 / 0).
+Not all matched-new suppressions would have been TP within the five-second
+window; TP loss is measured separately above. Nor are all removed FP flags
+tracker ID switches.
 
-The timings sum only the body of `NewContactDetector.is_new`
+The `is_new` timings sum only the body of `NewContactDetector.is_new`
 via an instance proxy on each source: event calls including early-return
 non-OPENs, divided by **all replayed frames**, including frames with zero
 events. They exclude proxy bookkeeping, tracker, aggregator and detector cost;
 they are not a whole-engine on/off difference. Timer/call overhead is not
-subtracted.
+subtracted. Per-frame history snapshot/pruning is timed separately as
+`history_us_per_frame` in the assets and table; it is not hidden in the detector
+inference timings.
 
-| Rebased replay | Frames | is_new calls | is_new µs/replayed frame |
-|---|---:|---:|---:|
-| dev YOLO | 2,382 | 370 | 1.431 |
-| dev oracle-d0.3 | 2,382 | 125 | .279 |
-| held-out YOLO | 5,830 | 468 | .613 |
-| held-out oracle-d0.3 | 5,830 | 209 | .169 |
+| Final replay | Frames | is_new calls | is_new µs/frame | History snapshot/prune µs/frame |
+|---|---:|---:|---:|---:|
+| dev YOLO | 2,382 | 354 | 3.983 | 109.751 |
+| dev oracle-d0.3 | 2,382 | 125 | 1.196 | 37.784 |
+| held-out YOLO | 5,830 | 452 | 5.698 | 279.521 |
+| held-out oracle-d0.3 | 5,830 | 209 | 0.584 | 93.156 |
 
-CPU: Intel Xeon virtual CPU, 4 threads per replay, CPU ONNX Runtime. Rebased
-dev used CPUs 0–3; held-out used CPUs 4–7 concurrently. Thermal paired latency
-and final tests subsequently used the other CPU set; these are shared-VM
+CPU: Intel Xeon virtual CPU, 4 threads per replay, CPU ONNX Runtime. Final
+dev used CPUs 0–3; held-out used CPUs 4–7 concurrently. Final Go checks briefly
+shared the dev CPU set; these are shared-VM
 microsecond observations, not isolated hardware benchmarks.
 From [Step B2](THERMAL_HOTSPOT.md): RGB thermal-gate mean/p50/p95
 **2.234 / 2.217 / 2.392 ms**. The earlier paired engine RGB sample admitted
@@ -215,6 +235,8 @@ The post-#271 refresh in the companion report measures the RGB gate at
 **2.635 / 2.553 / 2.827 ms** standalone, or **2.235 / 2.166 / 2.609 ms** in
 the paired engine loop, again **0/62** RGB positives. Actual RGB wrapper cost
 is **2.322 ms mean**; noisy whole-engine on/off deltas are not gate cost.
+These thermal-gate rows are historical **opt-in** measurements. The final
+default-off new-contact replay executes no thermal modality gate or proposer.
 
 ## Interpretation and limitations
 
@@ -225,9 +247,10 @@ is **2.322 ms mean**; noisy whole-engine on/off deltas are not gate cost.
   Distinct objects entering a recently occupied region can be suppressed.
   This evaluation is not evidence that every suppression is a corrected ID
   switch. A higher filtered precision can come at lower birth recall.
-* Default memory is bounded by available aggregator state/history. This tests
-  clip-local defaults, not long-running sources, source restarts, or a tuned
-  memory horizon.
+* The detector now retains its own memory independently of aggregator eviction.
+  The regression covers eviction and delayed confirmation, but these replay
+  clips do not establish long-running memory/throughput behaviour or persistence
+  across source restarts. No memory horizon was tuned.
 * Ghost Fleet labels include teacher+human and partial teacher coverage;
   unannotated objects inflate apparent FP. FVessel is 1 Hz, AIS-fused GT with
   occasional box lag, same fixed camera/source conditions across splits: a
@@ -253,7 +276,7 @@ Sources: [A.md §1/§2/§7](A.md) and downloaded MOT `index.jsonl` / `seqinfo.in
   redistribution is subject to the authors' terms. This is internal offline
   evaluation, not a grant to ship videos or train commercial weights.
 
-## Final integration checkpoint (#274)
+## Historical integration checkpoint (#274, before review corrections)
 
 Latest base is **origin/dev 5083be1**. Marine verification remains default
 off; thermal fallback wraps its final base output when enabled. Marine
@@ -286,3 +309,31 @@ the exact failed sidecar build passed on retry. Original report:
 verifier report for the final rebased commit; the final four requested
 checks above were rerun after integration. No image/base/build config changes
 or mirror substitutions were needed.
+
+## Review correction checkpoint
+
+Fresh full dev/test replays use the final default-off engine and corrected
+new-contact implementation (pipeline fingerprint
+`4f5f2dbd00d9b9d4c8bb3d4deefea18e223b53c0508afb5a7030e184967563fb`).
+Thresholds were not retuned.
+The comparison below is against the pre-review thermal-on assets; it combines
+both new-contact correctness fixes and the thermal default-off safety change,
+not an isolated ablation. Oracle never uses thermal, so its changes reflect
+new-contact logic only. Birth denominators are unchanged.
+
+| Split | Detector | All filtered P/R %, before → final | Mid-clip filtered P/R %, before → final |
+|---|---|---|---|
+| dev | YOLO | 19.61 / 45.45 → 22.45 / 50.00 | 16.33 / 40.00 → 19.15 / 45.00 |
+| dev | oracle-d0.3 | 95.45 / 95.45 → 95.24 / 90.91 | 95.00 / 95.00 → 94.74 / 90.00 |
+| held-out | YOLO | 14.49 / 52.63 → 16.95 / 52.63 | 7.81 / 35.71 → 9.26 / 35.71 |
+| held-out | oracle-d0.3 | 94.44 / 89.47 → 94.44 / 89.47 | 92.31 / 85.71 → 92.31 / 85.71 |
+
+Final checks after the last code edit: Python **701 passed in 7.95s**;
+`make test` passed; Node **388 pass / 0 fail**; `make prod-gate`: **PASS**.
+Full logs: `~/data/review277-optin-pytest.log`,
+`~/data/review277-final-go.log`, `~/data/review277-final-node.log`,
+`~/data/review277-final-prod-gate.log`.
+Deployment/compose scan found **no** `--thermal-fallback` or
+`thermal_fallback` opt-ins. The independent new-contact scorer remains on at
+weight 1. Full `make verify` was not repeated for these review changes; the
+historical verifier limitation above remains explicit.
