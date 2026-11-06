@@ -695,7 +695,9 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 		cands = filtered
 	}
 	sortCands(cands)
-	for _, c := range cands {
+	sortCands(deferred)
+	queued := append(append([]*cand(nil), cands...), deferred...)
+	for _, c := range queued {
 		label, _ := scoring.TopLabel(c.row.Item, 0)
 		plan.Queue = append(plan.Queue, &pb.QueueEntry{ItemId: c.row.Item.Id, Form: c.form.Kind,
 			BytesRemaining: c.remaining, Rank: c.rank, Score: c.row.Score, TopLabel: label})
