@@ -1,7 +1,7 @@
 ARG PY_IMAGE=python:3.11-slim
 
 FROM ${PY_IMAGE} AS builder
-ARG WITH_TRACKING=0
+ARG WITH_TRACKING=1
 WORKDIR /build
 COPY pyproject.toml ./
 COPY src ./src

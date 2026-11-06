@@ -1,0 +1,30 @@
+{
+  "lights": {
+    "pattern_conf_threshold": 0.85
+  },
+  "burst": {
+    "base_fps": 1.0,
+    "burst_fps": 8.0,
+    "duration_s": 3.0,
+    "max_duty": 0.2,
+    "window_s": 60.0,
+    "triggers": {
+      "possible_flashing_yellow": true,
+      "flashing_rate_unresolved": true,
+      "unresolved_light_stack": true,
+      "low_confidence_pattern": true
+    }
+  },
+  "dark_contact": {
+    "label": "dark contact",
+    "side_pad": 0.15,
+    "above": 1.5,
+    "below": 0.1,
+    "vessel_terms": [
+      "boat", "ship", "vessel", "cargo", "container", "tanker", "sailboat", "yacht",
+      "fishing", "trawler", "tug", "ferry", "warship", "destroyer", "frigate",
+      "submarine", "barge", "dhow", "skiff"
+    ],
+    "priority_weight": 1.0
+  }
+}
