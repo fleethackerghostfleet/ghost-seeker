@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"slices"
 	"testing"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
 func TestCaptureDeterministic(t *testing.T) {
@@ -33,10 +35,18 @@ func TestCapturePreservesReal(t *testing.T) {
 	if a.Capture != c || a.Capture.Lon != 12 {
 		t.Fatal("real capture replaced")
 	}
-	a = Item{Dets: []Detection{{Class: "tanker", Ship: nil}}}
+	a = Item{Dets: []Detection{{Class: "tanker", Conf: .93}}}
 	EnsureCapture(&a)
 	if a.Capture.Subtype != "tanker" || slices.Contains(a.Capture.Synthetic, "subtype") {
 		t.Fatal("real class lost")
+	}
+	if a.Capture.SubtypeConf != .93 || slices.Contains(a.Capture.Synthetic, "subtypeConf") {
+		t.Fatal("real detection confidence lost")
+	}
+	a = Item{Dets: []Detection{{Class: "vessel", Conf: .93, Ship: &catalog.ShipClass{Type: "tanker", Conf: .87}}}}
+	EnsureCapture(&a)
+	if a.Capture.Subtype != "tanker" || a.Capture.SubtypeConf != .87 || slices.Contains(a.Capture.Synthetic, "subtype") || slices.Contains(a.Capture.Synthetic, "subtypeConf") {
+		t.Fatal("ship classification must take precedence")
 	}
 }
 

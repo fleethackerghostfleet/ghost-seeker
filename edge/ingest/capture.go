@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
+	_ "image/jpeg"
 	_ "image/png"
 	"maps"
 	"strconv"

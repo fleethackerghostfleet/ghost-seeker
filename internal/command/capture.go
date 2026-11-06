@@ -99,8 +99,8 @@ func EnsureCapture(it *Item) {
 	if len(it.Dets) > 0 {
 		d := it.Dets[0]
 		if d.Class != "" {
-			c.Subtype = d.Class
-			remove("subtype")
+			c.Subtype, c.SubtypeConf = d.Class, d.Conf
+			remove("subtype", "subtypeConf")
 		}
 		if d.Ship != nil && d.Ship.Type != "" {
 			c.Subtype, c.SubtypeConf = d.Ship.Type, d.Ship.Conf

@@ -3,6 +3,7 @@ package ingest
 import (
 	"bytes"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"strings"
 	"testing"
@@ -36,6 +37,24 @@ func TestCaptureEnrichment(t *testing.T) {
 		encoded := fact.FromItem(a).Marshal()
 		if len(encoded) > 1024 {
 			t.Fatalf("FACT is %d bytes: %s", len(encoded), encoded)
+		}
+	}
+}
+
+func TestCaptureJPEGDimensions(t *testing.T) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 64, 48)), nil); err != nil {
+		t.Fatal(err)
+	}
+	item := &pb.Item{Id: "jpeg-frame", Source: "camera"}
+	enrichCapture(item, buf.Bytes())
+	tags := item.Features.Tags
+	if tags["width_px"] != "64" || tags["height_px"] != "48" {
+		t.Fatalf("incorrect JPEG dimensions: %v", tags)
+	}
+	for _, key := range []string{"width_px", "height_px"} {
+		if strings.Contains(tags["synthetic"], key) {
+			t.Fatalf("real %s flagged synthetic: %v", key, tags)
 		}
 	}
 }
