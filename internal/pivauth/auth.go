@@ -459,11 +459,33 @@ func (a *Authenticator) ocspStatus(cert, issuer *x509.Certificate) (int, error) 
 	if err != nil {
 		return 0, err
 	}
-	result, err := ocsp.ParseResponseForCert(body, cert, issuer)
+	result, err := ocsp.ParseResponseForCert(body, cert, nil)
 	if err != nil {
 		return 0, err
 	}
 	now := a.cfg.Now()
+	signer := issuer
+	if delegated := result.Certificate; delegated != nil && !bytes.Equal(delegated.Raw, issuer.Raw) {
+		if !bytes.Equal(delegated.RawIssuer, issuer.RawSubject) {
+			return 0, errors.New("OCSP responder has wrong issuer")
+		}
+		if err := delegated.CheckSignatureFrom(issuer); err != nil {
+			return 0, errors.New("OCSP responder is not issued by the certificate issuer")
+		}
+		authorized := false
+		for _, usage := range delegated.ExtKeyUsage {
+			if usage == x509.ExtKeyUsageOCSPSigning {
+				authorized = true
+			}
+		}
+		if !authorized || now.Before(delegated.NotBefore) || now.After(delegated.NotAfter) {
+			return 0, errors.New("OCSP responder is not authorized or current")
+		}
+		signer = delegated
+	}
+	if err := result.CheckSignatureFrom(signer); err != nil {
+		return 0, errors.New("invalid OCSP response signature")
+	}
 	if result.ThisUpdate.After(now) || result.NextUpdate.IsZero() || now.After(result.NextUpdate) {
 		return 0, errors.New("OCSP response outside validity period")
 	}
