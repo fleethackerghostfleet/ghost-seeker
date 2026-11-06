@@ -1,0 +1,181 @@
+apiVersion: zarf.dev/v1alpha1
+kind: ZarfPackageConfig
+metadata:
+  name: ghost-seeker-shore
+  version: 0.1.0
+  architecture: amd64
+  description: Production shore on an existing UDS Core 1.16 cluster; pre-existing authentication Secrets required.
+variables:
+  - name: DOMAIN
+    default: uds.dev
+    description: Must match UDS Core DOMAIN.
+    pattern: '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$'
+  - name: EDGE_TLS_SECRET
+    description: Optional existing kubernetes.io/tls Secret for edge; empty keeps HTTP.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: INFERENCE_EGRESS_CIDR
+    description: Approved destination CIDR for edge/shore to remote inference or text embedding. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+    pattern: '^([^/]+)/([1-9][0-9]?)$'
+  - name: INFERENCE_EGRESS_PORT
+    description: TCP destination port for INFERENCE_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "9090"
+    prompt: false
+    pattern: '^[1-9][0-9]{0,4}$'
+  - name: LLM_EGRESS_CIDR
+    description: Approved destination CIDR for operator to optional GS_LLM_URL OpenAI-compatible endpoint or approved Vertex gateway. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+    pattern: '^([^/]+)/([1-9][0-9]?)$'
+  - name: LLM_EGRESS_PORT
+    description: TCP destination port for LLM_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "8080"
+    prompt: false
+    pattern: '^[1-9][0-9]{0,4}$'
+  - name: NAMESPACE
+    default: "ghost-seeker-shore"
+    description: "Application namespace; create it and auth Secrets before deploying."
+    prompt: false
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+  - name: OCSP_EGRESS_CIDR
+    description: Approved destination CIDR for operator to optional GS_PIV_OCSP_URL responder. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+    pattern: '^([^/]+)/([1-9][0-9]?)$'
+  - name: OCSP_EGRESS_PORT
+    description: TCP destination port for OCSP_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "80"
+    prompt: false
+    pattern: '^[1-9][0-9]{0,4}$'
+  - name: OPERATOR_AUTH_SECRET
+    default: "operator-auth"
+    description: "Existing Secret containing operator authentication material."
+    prompt: false
+    pattern: '^[a-z0-9]([-a-z0-9]{0,251}[a-z0-9])?$'
+  - name: OPERATOR_GATEWAY_HOST
+    default: ghost-seeker
+    description: Operator tenant gateway subdomain.
+    pattern: '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$'
+  - name: OPERATOR_OPERATOR_TOKEN_KEY
+    default: "operator-token"
+    description: "Key in OPERATOR_AUTH_SECRET for operator-token."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: OPERATOR_SHORE_URL
+    description: Operator upstream shore URL; its default switches to HTTPS with SHORE_TLS_SECRET. Custom URLs must explicitly use https for TLS endpoints.
+    default: http://shore:8080
+    prompt: false
+  - name: OPERATOR_STORAGE
+    default: "1Gi"
+    description: "Operator review log PVC size."
+    prompt: false
+    pattern: '^[1-9][0-9]*(Mi|Gi|Ti)$'
+  - name: OPERATOR_STORAGE_CLASS
+    default: ""
+    description: "operator data PVC StorageClass; empty uses the cluster default."
+    prompt: false
+  - name: RESEARCH_EGRESS_CIDR
+    description: Approved destination CIDR for operator to optional GS_RESEARCH_COMPILER_URL service. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+    pattern: '^([^/]+)/([1-9][0-9]?)$'
+  - name: RESEARCH_EGRESS_PORT
+    description: TCP destination port for RESEARCH_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "8097"
+    prompt: false
+    pattern: '^[1-9][0-9]{0,4}$'
+  - name: SHORE_AUTH_SECRET
+    default: "shore-auth"
+    description: "Existing Secret containing shore authentication material."
+    prompt: false
+    pattern: '^[a-z0-9]([-a-z0-9]{0,251}[a-z0-9])?$'
+  - name: SHORE_CA_SECRET
+    description: Optional existing Secret with ca.crt PEM roots for edge and operator shore/edge clients; empty uses system roots.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: SHORE_GATEWAY_HOST
+    default: shore
+    description: Shore tenant gateway subdomain.
+    pattern: '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$'
+  - name: SHORE_INFER_URL
+    description: Shore text-embedding inference URL; empty disables text search.
+    default: ""
+    prompt: false
+  - name: SHORE_OPERATOR_TOKEN_KEY
+    default: "operator-token"
+    description: "Key in SHORE_AUTH_SECRET for operator-token."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: SHORE_PUBLIC_HOSTS
+    description: Host names the shore answers to; must include the host of SHORE_URL and any ingress name.
+    default: "shore,shore.ghost-seeker-shore,shore.ghost-seeker-shore.svc,shore.ghost-seeker-shore.svc.cluster.local"
+    prompt: false
+  - name: SHORE_REQUIRE_AUTH
+    description: Require HS256 unit authentication on shore SyncService (production default; the shore-auth secret must carry signing-key and operator-token).
+    default: "true"
+    prompt: false
+    pattern: '^true$'
+  - name: SHORE_SIGNING_KEY_KEY
+    default: "signing-key"
+    description: "Key in SHORE_AUTH_SECRET for signing-key."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: SHORE_STORAGE
+    description: Shore SQLite persistent volume size.
+    default: 5Gi
+    prompt: false
+  - name: SHORE_STORAGE_CLASS
+    default: ""
+    description: "shore data PVC StorageClass; empty uses the cluster default."
+    prompt: false
+  - name: SHORE_TLS_SECRET
+    description: Optional existing kubernetes.io/tls Secret for shore; empty keeps HTTP. Setting this also upgrades the default local shore URLs to HTTPS.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+
+components:
+  - name: namespace
+    required: true
+    manifests:
+      - name: namespace
+        namespace: default
+        template: true
+        files: [../uds-namespace.yaml]
+  - name: uds-package
+    required: true
+    actions:
+      onDeploy:
+        before:
+          - cmd: |
+              if [ -n "${ZARF_VAR_SHORE_TLS_SECRET:-}" ] || [ -n "${ZARF_VAR_EDGE_TLS_SECRET:-}" ]; then
+                echo "UDS listeners must remain HTTP behind STRICT mTLS; TLS terminates at the gateway." >&2
+                exit 1
+              fi
+    manifests:
+      - name: uds-package
+        namespace: default
+        template: true
+        files: [uds-package.yaml]
+  - name: shore
+    required: true
+    images:
+      - ghost-seeker/shore:prod-b6e0f0fa18d1-20261106160717-221ead34
+    manifests:
+      - name: shore
+        namespace: default
+        template: true
+        files: [../manifests/shore.yaml]
+  - name: operator
+    required: true
+    images:
+      - ghost-seeker/operator:prod-b6e0f0fa18d1-20261106160717-221ead34
+    manifests:
+      - name: operator
+        namespace: default
+        template: true
+        files: [../manifests/operator.yaml]

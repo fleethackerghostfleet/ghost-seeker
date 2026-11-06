@@ -1,0 +1,7 @@
+{
+  "edge": "ghost-seeker/edge:prod-b6e0f0fa18d1-20261106160717-221ead34",
+  "edgeml-models": "ghost-seeker/edgeml-models:prod-b6e0f0fa18d1-20261106160717-221ead34",
+  "edgeml-sidecar": "ghost-seeker/edgeml-sidecar:prod-b6e0f0fa18d1-20261106160717-221ead34",
+  "operator": "ghost-seeker/operator:prod-b6e0f0fa18d1-20261106160717-221ead34",
+  "shore": "ghost-seeker/shore:prod-b6e0f0fa18d1-20261106160717-221ead34"
+}

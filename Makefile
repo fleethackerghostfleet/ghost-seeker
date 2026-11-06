@@ -14,12 +14,14 @@ GO_IMAGE ?=
 PY_IMAGE ?=
 GO_BUILD_ARG = $(if $(GO_IMAGE),--build-arg GO_IMAGE=$(GO_IMAGE))
 PY_BUILD_ARG = $(if $(PY_IMAGE),--build-arg PY_IMAGE=$(PY_IMAGE))
-SHORE_IMAGE := ghost-seeker/shore:0.1.0
-EDGE_IMAGE := ghost-seeker/edge:0.1.0
-OPERATOR_IMAGE := ghost-seeker/operator:0.1.0
-EDGEML_IMAGE := ghost-seeker/edgeml-sidecar:0.1.0
+# Each build gets a new tag; pin-images records the successfully built set for Zarf.
+IMAGE_TAG := $(or $(IMAGE_TAG),prod-$(shell git rev-parse --short=12 HEAD)-$(shell date -u +%Y%m%d%H%M%S)-$(shell python3 -c 'import secrets; print(secrets.token_hex(4))'))
+SHORE_IMAGE := ghost-seeker/shore:$(IMAGE_TAG)
+EDGE_IMAGE := ghost-seeker/edge:$(IMAGE_TAG)
+OPERATOR_IMAGE := ghost-seeker/operator:$(IMAGE_TAG)
+EDGEML_IMAGE := ghost-seeker/edgeml-sidecar:$(IMAGE_TAG)
 EDGEML_TRACKING ?= 1
-MODELS_IMAGE := ghost-seeker/edgeml-models:0.1.0
+MODELS_IMAGE := ghost-seeker/edgeml-models:$(IMAGE_TAG)
 MODEL_SUMS ?= deploy/models/SHA256SUMS
 BUSYBOX_IMAGE ?=
 IMAGES := $(SHORE_IMAGE) $(EDGE_IMAGE) $(OPERATOR_IMAGE) $(EDGEML_IMAGE)
@@ -155,11 +157,12 @@ images:
 	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
 	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
 	docker build $(PY_BUILD_ARG) --build-arg WITH_TRACKING=$(EDGEML_TRACKING) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
-	$(if $(MODEL_SUMS),$(MAKE) model-image,@echo 'skipped edgeml-models: set MODEL_SUMS=...')
+	$(if $(MODEL_SUMS),$(MAKE) model-image IMAGE_TAG=$(IMAGE_TAG),@echo 'skipped edgeml-models: set MODEL_SUMS=...')
 
 images-save:
 	mkdir -p dist
-	docker save -o dist/ghost-seeker-images.tar $(IMAGES) $(if $(MODEL_SUMS),$(MODELS_IMAGE))
+	python3 deploy/zarf/pin_images.py --check
+	docker save -o dist/ghost-seeker-images.tar $$(python3 -c 'import json; print(" ".join(json.load(open("deploy/zarf/images.lock.json")).values()))')
 
 images-load:
 	docker load -i dist/ghost-seeker-images.tar
@@ -167,7 +170,22 @@ images-load:
 package-check:
 	sh deploy/zarf/check.sh
 
-zarf-package: model-image
+.PHONY: pin-images zarf-ship zarf-shore
+pin-images:
+	python3 deploy/zarf/pin_images.py
+
+zarf-ship:
+	python3 deploy/zarf/pin_images.py --check
+	mkdir -p dist
+	zarf package create deploy/zarf/ship --confirm --output dist
+
+zarf-shore:
+	python3 deploy/zarf/pin_images.py --check
+	mkdir -p dist
+	zarf package create deploy/zarf/shore --confirm --output dist
+
+zarf-package:
+	python3 deploy/zarf/pin_images.py --check
 	mkdir -p dist
 	zarf package create deploy/zarf --confirm --output dist
 

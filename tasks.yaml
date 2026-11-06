@@ -1,32 +1,27 @@
 tasks:
   - name: images
-    description: Build production images (honors GO_IMAGE and PY_IMAGE).
+    description: Build and pin a new immutable-tag production image set.
     actions:
-      - cmd: make images
-  - name: zarf-package
-    description: Package local production images.
+      - cmd: make pin-images
+  - name: ship-package
+    description: Package edge and inference for an existing UDS cluster.
     actions:
-      - cmd: make zarf-package
-  - name: create-bundle
-    description: Create the pinned production UDS bundle.
+      - cmd: make zarf-ship
+  - name: shore-package
+    description: Package shore and operator console for an existing UDS cluster.
     actions:
-      - cmd: uds create bundles/prod-uds --confirm --output dist
-  - name: deploy-bundle
-    description: Deploy with the UDS_CONFIG environment variable pointing at site configuration.
+      - cmd: make zarf-shore
+  - name: create-ship-bundle
     actions:
-      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to site uds-config.yaml}" uds deploy dist/uds-bundle-ghost-seeker-prod-uds-amd64-0.1.0.tar.zst --confirm --set ghost-seeker.FRAMES_SOURCE=pvc'
-  - name: dev
-    description: Deploy local slim UDS Core and Ghost Seeker with fresh development auth.
+      - cmd: uds create bundles/prod-uds/ship --confirm --output dist
+  - name: create-shore-bundle
     actions:
-      - cmd: |
-          if k3d cluster list -o json | python3 -c 'import json,sys; sys.exit(not any(c["name"] == "uds" for c in json.load(sys.stdin)))'; then
-            k3d kubeconfig merge uds --kubeconfig-switch-context
-            uds zarf tools kubectl --context k3d-uds get namespace pepr-system istio-system
-          else
-            uds deploy ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.16.0 --confirm
-          fi
-      - cmd: python3 deploy/zarf/dev_auth.py
-        mute: true
-      - cmd: uds zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst --confirm --components uds-package,edge-inference --set FRAMES_SOURCE=pvc
-      - description: Restart workloads so they read the fresh credentials
-        cmd: uds zarf tools kubectl rollout restart deployment,statefulset -n ghost-seeker
+      - cmd: uds create bundles/prod-uds/shore --confirm --output dist
+  - name: deploy-ship-bundle
+    description: Deploy to the current cluster using administrator-supplied site config and existing Secrets.
+    actions:
+      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to ship site uds-config.yaml}" uds deploy dist/uds-bundle-ghost-seeker-ship-amd64-0.1.0.tar.zst --confirm'
+  - name: deploy-shore-bundle
+    description: Deploy to the current cluster using administrator-supplied site config and existing Secrets.
+    actions:
+      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to shore site uds-config.yaml}" uds deploy dist/uds-bundle-ghost-seeker-shore-amd64-0.1.0.tar.zst --confirm'

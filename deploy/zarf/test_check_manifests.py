@@ -5,6 +5,7 @@ import hmac
 import ipaddress
 import itertools
 import json
+import re
 import subprocess
 from urllib.parse import urlsplit
 import unittest
@@ -16,6 +17,98 @@ import yaml
 import check_manifests as validator
 import check_manifests as checker
 import dev_auth
+import pin_images
+
+
+class SplitProductionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.rendered = {role: validator.check_split(role) for role in ("ship", "shore")}
+
+    def documents(self, role):
+        return [d for docs in self.rendered[role].values() for d in docs]
+
+    def test_role_separation_and_mandatory_uds(self):
+        for role, expected in (("ship", {"edge", "edgeml-sidecar"}), ("shore", {"shore", "operator"})):
+            self.assertEqual({d["metadata"]["name"] for d in self.documents(role)
+                              if d["kind"] in validator.WORKLOAD_KINDS}, expected)
+            bundle = yaml.safe_load((validator.ROOT.parents[1] / f"bundles/prod-uds/{role}/uds-bundle.yaml").read_text())
+            self.assertEqual([p["name"] for p in bundle["packages"]], [f"ghost-seeker-{role}"])
+        self.assertNotIn("dev_auth", (validator.ROOT.parents[1] / "tasks.yaml").read_text())
+
+    def test_auth_names_and_keys_can_be_changed_without_values(self):
+        for role, names in (("ship", ("EDGE",)), ("shore", ("SHORE", "OPERATOR"))):
+            package = yaml.safe_load((validator.ROOT / role / "zarf.yaml").read_text())
+            overrides = {v["name"]: "site-key" if v["name"].endswith("_KEY") else "site-auth"
+                         for v in package["variables"] if any(v["name"].startswith(n + "_") for n in names)
+                         and (v["name"].endswith("_AUTH_SECRET") or v["name"].endswith("_KEY"))}
+            parsed = validator.check_split(role, overrides)
+            self.assertFalse(any(d["kind"] == "Secret" for docs in parsed.values() for d in docs))
+
+    def test_all_storage_and_inference_resources_are_configurable(self):
+        validator.check_split("ship", {"EDGE_STORAGE": "12Gi", "EDGE_STORAGE_CLASS": "ship-ssd",
+                                      "FRAMES_STORAGE": "21Gi", "FRAMES_STORAGE_CLASS": "camera-ssd",
+                                      "INFERENCE_CPU_REQUEST": "1200m", "INFERENCE_MEMORY_REQUEST": "2Gi",
+                                      "INFERENCE_CPU_LIMIT": "6", "INFERENCE_MEMORY_LIMIT": "8Gi"})
+        validator.check_split("shore", {"SHORE_STORAGE": "40Gi", "SHORE_STORAGE_CLASS": "shore-ssd",
+                                       "OPERATOR_STORAGE": "3Gi", "OPERATOR_STORAGE_CLASS": "review-ssd"})
+
+    def test_external_shore_requires_verified_tls_port_443(self):
+        for url in ("http://shore.example:443", "https://shore.example:8080", "https://a:b@shore.example:443",
+                    "https://shore.example:443/path"):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                validator.check_split("ship", {"SHORE_URL": url})
+        validator.check_split("ship", {"SHORE_URL": "https://shore.fleet.example:443", "SHORE_CA_SECRET": "fleet-ca"})
+        validator.check_split("ship", {"SHORE_TRANSPORT": "in-mesh", "SHORE_URL": "http://shore.ghost-seeker-shore.svc.cluster.local:8080",
+                                      "SHORE_EGRESS_PORT": "8080"})
+
+    def test_broad_cidrs_listener_tls_hostpath_and_disabled_auth_rejected(self):
+        for role, override in (("ship", {"SHORE_EGRESS_CIDR": "0.0.0.0/0"}),
+                               ("ship", {"CAMERA_EGRESS_CIDR": "::/0"}),
+                               ("ship", {"FRAMES_SOURCE": "hostPath"}),
+                               ("shore", {"SHORE_REQUIRE_AUTH": "false"}),
+                               ("shore", {"SHORE_TLS_SECRET": "listener-tls"})):
+            with self.subTest(override=override), self.assertRaises(ValueError):
+                validator.check_split(role, override)
+
+    def test_domain_and_gateway_hosts_propagate(self):
+        parsed = validator.check_split("shore", {"DOMAIN": "fleet.example", "SHORE_GATEWAY_HOST": "receive",
+                                                 "OPERATOR_GATEWAY_HOST": "review"})
+        docs = [d for group in parsed.values() for d in group]
+        config = next(d for d in docs if d["kind"] == "ConfigMap")
+        self.assertIn("receive.fleet.example", config["data"]["GS_PUBLIC_HOSTS"].split(","))
+
+    def test_missing_resource_secret_pvc_and_protocol_are_rejected(self):
+        mutations = (
+            ("ship", lambda docs: next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["initContainers"][0]["resources"]["limits"].pop("cpu")),
+            ("ship", lambda docs: next(d for d in docs if d["kind"] == "StatefulSet")["spec"]["template"]["spec"]["containers"][0]["env"][0].update({"valueFrom": {"secretKeyRef": {"name": "wrong", "key": "unit-token"}}})),
+            ("shore", lambda docs: next(d for d in docs if d["kind"] == "PersistentVolumeClaim")["spec"]["resources"]["requests"].update({"storage": "99Gi"})),
+            ("shore", lambda docs: next(d for d in docs if d["kind"] == "Service" and d["metadata"]["name"] == "shore")["spec"]["ports"][0].pop("appProtocol")),
+        )
+        for role, mutate in mutations:
+            parsed = copy.deepcopy(self.rendered[role])
+            mutate([d for docs in parsed.values() for d in docs])
+            with self.subTest(role=role), patch.object(validator, "render_manifests", return_value=parsed), self.assertRaises(ValueError):
+                validator.check_split(role)
+
+    def test_immutable_image_lock_matches_all_packages_and_manifests(self):
+        locked = pin_images.check_lock()
+        self.assertEqual(len(locked), 5)
+        self.assertTrue(all(re.fullmatch(pin_images.TAG_PATTERN, ref.rsplit(":", 1)[1]) for ref in locked.values()))
+
+    def test_namespace_and_paired_flows_cannot_be_broadened(self):
+        original = validator.read_documents
+        for role in ("ship", "shore"):
+            for mutation in (lambda rules: rules[0].pop("remoteNamespace"),
+                             lambda rules: rules.pop(1),
+                             lambda rules: rules[0].update({"remoteNamespace": "*"})):
+                def read(path, text=None):
+                    docs = original(path, text)
+                    if path == validator.ROOT / role / "uds-package.yaml" and text is None:
+                        mutation(docs[0]["spec"]["network"]["allow"])
+                    return docs
+                with self.subTest(role=role), patch.object(validator, "read_documents", side_effect=read), self.assertRaises(ValueError):
+                    validator.check_split(role)
 
 
 class DevAuthTests(unittest.TestCase):
@@ -51,12 +144,10 @@ class DevAuthTests(unittest.TestCase):
 
 class UDSPackageTests(unittest.TestCase):
     def test_example_config_preserves_sync_host(self):
-        config = yaml.safe_load((validator.ROOT.parents[1] / "bundles/prod-uds/uds-config.yaml").read_text())
-        overrides = config.get("variables", {}).get("ghost-seeker", {})
-        package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
-        values = validator.package_variables(package, overrides)
-        self.assertIn(urlsplit(values["SHORE_URL"]).hostname,
-                      values["SHORE_PUBLIC_HOSTS"].split(","))
+        for role in ("ship", "shore"):
+            config = yaml.safe_load((validator.ROOT.parents[1] / f"bundles/prod-uds/{role}/uds-config.yaml").read_text())
+            overrides = config["variables"][f"ghost-seeker-{role}"]
+            validator.check_split(role, overrides)
 
     def setUp(self):
         self.package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())

@@ -229,8 +229,8 @@ def package_variables(package: dict, overrides: dict[str, str]) -> dict[str, str
     return variables
 
 
-def render_manifests(package: dict, overrides: dict[str, str]) -> dict[Path, list[dict]]:
-    command = ["zarf", "dev", "inspect", "manifests", str(ROOT)]
+def render_manifests(package: dict, overrides: dict[str, str], package_dir: Path = ROOT) -> dict[Path, list[dict]]:
+    command = ["zarf", "dev", "inspect", "manifests", str(package_dir)]
     variables = package_variables(package, overrides)
     if variables:
         values = io.StringIO()
@@ -243,7 +243,7 @@ def render_manifests(package: dict, overrides: dict[str, str]) -> dict[Path, lis
     except subprocess.CalledProcessError as exc:
         raise ValueError(f"Zarf manifest rendering failed: {exc.stderr.strip()}") from exc
     sources = {
-        (component["name"], f"{group['name']}-{index}.yaml"): ROOT / filename
+        (component["name"], f"{group['name']}-{index}.yaml"): (package_dir / filename).resolve()
         for component in package["components"]
         for group in component.get("manifests", [])
         for index, filename in enumerate(group.get("files", []))
@@ -508,6 +508,155 @@ def check_frames(documents: list[dict], variables: dict[str, str]) -> None:
                 "non-UDS frames must use FRAMES_HOSTPATH")
 
 
+def check_hardening(documents: list[dict], variables: dict[str, str]) -> None:
+    require(not any(d["kind"] == "Secret" for d in documents), "authentication Secrets must pre-exist")
+    for workload in (d for d in documents if d["kind"] in WORKLOAD_KINDS):
+        name = workload["metadata"]["name"]
+        pod, containers = workload_containers(workload)
+        for container in containers:
+            resources = container.get("resources", {})
+            for budget in ("requests", "limits"):
+                require(set(resources.get(budget, {})) >= {"cpu", "memory"},
+                        f"{name}/{container['name']}: CPU and memory {budget} required")
+                require(all(str(resources[budget][key]) not in {"", "0", "0m", "0Mi"} for key in ("cpu", "memory")),
+                        f"{name}: resource budgets must be positive")
+            if container["name"] == "edgeml-sidecar":
+                for budget, suffix in (("requests", "REQUEST"), ("limits", "LIMIT")):
+                    for key in ("cpu", "memory"):
+                        require(str(resources[budget][key]) == variables[f"INFERENCE_{key.upper()}_{suffix}"],
+                                "inference resources must use configured variables")
+        if name in {"edge", "shore", "operator"}:
+            container = next(c for c in containers if c["name"] == name)
+            upper = name.upper()
+            required = {"GS_OPERATOR_TOKEN": "OPERATOR_TOKEN"}
+            if name == "shore":
+                required["GS_SIGNING_KEY"] = "SIGNING_KEY"
+            if name == "edge":
+                required["GS_UNIT_TOKEN"] = "UNIT_TOKEN"
+            env = {e["name"]: e for e in container.get("env", [])}
+            for env_name, key in required.items():
+                require(env.get(env_name, {}).get("valueFrom") == {"secretKeyRef": {
+                    "name": variables[f"{upper}_AUTH_SECRET"], "key": variables[f"{upper}_{key}_KEY"]}},
+                    f"{name}: {env_name} must use the configured pre-existing Secret name/key")
+        claims = workload.get("spec", {}).get("volumeClaimTemplates", [])
+        for claim in claims:
+            prefix = "FRAMES" if claim["metadata"]["name"] == "frames" else name.upper()
+            check_claim(claim, prefix, variables)
+    for claim in (d for d in documents if d["kind"] == "PersistentVolumeClaim"):
+        require(claim["metadata"]["name"] == "operator-data", "unknown PVC needs configuration")
+        check_claim(claim, "OPERATOR", variables)
+
+
+def check_claim(claim: dict, prefix: str, variables: dict[str, str]) -> None:
+    spec = claim["spec"]
+    require(spec.get("resources", {}).get("requests", {}).get("storage") == variables[f"{prefix}_STORAGE"],
+            f"{prefix}: PVC size must be configurable")
+    storage_class = variables[f"{prefix}_STORAGE_CLASS"]
+    require(spec.get("storageClassName", "") == storage_class
+            and (bool(storage_class) or "storageClassName" not in spec),
+            f"{prefix}: PVC StorageClass must be configurable; empty uses cluster default")
+
+
+def check_split(role: str, overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
+    package_dir = ROOT / role
+    package = yaml.safe_load((package_dir / "zarf.yaml").read_text())
+    values = package_variables(package, overrides or {})
+    require(package["metadata"]["name"] == f"ghost-seeker-{role}", "split package identity")
+    expected = {"edge", "edgeml-sidecar"} if role == "ship" else {"shore", "operator"}
+    require([c["name"] for c in package["components"]][:2] == ["namespace", "uds-package"]
+            and all(c.get("required") is True for c in package["components"]),
+            "split UDS components must be mandatory, namespace and Package first")
+    require(not any(s in str(package) for s in ("dev_auth", "mint-unit-token", "/dev/urandom")),
+            "production package must never generate authentication")
+    for name, value in values.items():
+        if name.endswith("_CIDR"):
+            require(ipaddress.ip_network(value, strict=True).prefixlen > 0, "unrestricted site CIDR")
+        if name.endswith("_EGRESS_PORT"):
+            require(1 <= int(value) <= 65535, "invalid egress port")
+    if role == "ship":
+        endpoint = urlsplit(values["SHORE_URL"])
+        require(not endpoint.username and not endpoint.password and not endpoint.query and not endpoint.fragment
+                and endpoint.path in {"", "/"}, "shore endpoint must be an origin without credentials")
+        if values["SHORE_TRANSPORT"] == "external":
+            require(endpoint.scheme == "https" and bool(endpoint.hostname) and endpoint.port == 443,
+                    "cross-cluster shore requires TLS on port 443 and HTTP/2")
+        else:
+            require(endpoint.scheme == "http" and bool(endpoint.hostname)
+                    and endpoint.hostname.endswith(".svc.cluster.local") and endpoint.port == 8080,
+                    "plaintext shore is only allowed within the STRICT mTLS mesh")
+        require(values["FRAMES_SOURCE"] == "pvc", "UDS requires PVC frames")
+    else:
+        require(values["SHORE_REQUIRE_AUTH"] == "true", "shore auth cannot be disabled")
+    require(not values["SHORE_TLS_SECRET"] and not values["EDGE_TLS_SECRET"],
+            "UDS uses gateway TLS and STRICT mTLS, not listener TLS")
+    parsed = render_manifests(package, overrides or {}, package_dir)
+    documents = [d for docs in parsed.values() for d in docs]
+    require({d["metadata"]["name"] for d in documents if d["kind"] in WORKLOAD_KINDS} == expected,
+            "split package contains the wrong workloads")
+    require(all(d["metadata"].get("namespace") == values["NAMESPACE"] for d in documents if d["kind"] != "Namespace"),
+            "all split resources must use configured namespace")
+    check_hardening(documents, values)
+    for workload in (d for d in documents if d["kind"] in WORKLOAD_KINDS and d["metadata"]["name"] in {"edge", "operator"}):
+        pod, containers = workload_containers(workload)
+        container = containers[0]
+        ca_secret = values["SHORE_CA_SECRET"]
+        check_secret_mount(pod, container, "shore-ca", ca_secret, "/run/shore-ca", {"ca.crt"})
+        require(("-shore-ca=/run/shore-ca/ca.crt" in container.get("args", [])) == bool(ca_secret),
+                "shore CA must configure the verified TLS client")
+    if role == "ship":
+        check_frames(documents, values)
+        check_models(package, documents)
+    uds = next(d for d in documents if d["kind"] == "Package")
+    require(uds["metadata"]["name"] == f"ghost-seeker-{role}", "split Package identity")
+    require(uds["spec"]["network"].get("serviceMesh") == {"mode": "sidecar"}, "UDS requires sidecar mesh")
+    require("sso" not in uds["spec"], "no implicit SSO credential creation")
+    network = uds["spec"]["network"]
+    services = {d["metadata"]["name"]: d for d in documents if d["kind"] == "Service"}
+    require({e["service"] for e in network.get("expose", [])} == ({"edge"} if role == "ship" else expected),
+            "unexpected gateway exposure")
+    for expose in network["expose"]:
+        require(expose.get("gateway") == "tenant" and expose.get("selector") == {"app": expose["service"]}
+                and any(p["port"] == expose["port"] for p in services[expose["service"]]["spec"]["ports"]),
+                "gateway Service/port/selector drift")
+    if role == "shore":
+        require(services["shore"]["spec"]["ports"][0].get("appProtocol") == "http2",
+                "shore Service must preserve HTTP/2 trailers")
+        expose = next(e for e in network["expose"] if e["service"] == "shore")
+        require(expose.get("match") == [
+            {"name": "versioned-api", "uri": {"prefix": "/api/v1/"}},
+            {"name": "ship-sync", "uri": {"prefix": "/ghostseeker.v1.SyncService/"}}],
+            "shore gateway must restrict API and sync paths")
+        shore = next(d for d in documents if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "shore-config")
+        require(values["SHORE_GATEWAY_HOST"] + "." + values["DOMAIN"] in shore["data"]["GS_PUBLIC_HOSTS"].split(","),
+                "shore public hosts must include gateway")
+    raw_network = read_documents(package_dir / "uds-package.yaml")[0]["spec"]["network"]
+    local = set()
+    for rule in raw_network["allow"]:
+        require(set(rule) <= {"description", "direction", "selector", "remoteSelector", "remoteNamespace", "remoteCidr", "port"}
+                and rule.get("selector", {}).get("app") in expected, "unscoped UDS allow")
+        require(rule.get("direction") in {"Ingress", "Egress"} and bool(rule.get("description")), "invalid allow direction/description")
+        if "remoteSelector" in rule:
+            require(rule.get("remoteNamespace") == "###ZARF_VAR_NAMESPACE###"
+                    and set(rule["remoteSelector"]) == {"app"}
+                    and rule["remoteSelector"]["app"] in expected, "remoteNamespace must be explicitly scoped")
+            local.add((rule["direction"], rule["selector"]["app"], rule["remoteSelector"]["app"], rule["port"]))
+        else:
+            match = VARIABLE_PATTERN.fullmatch(rule.get("remoteCidr", ""))
+            require(match is not None and match[1].endswith("_CIDR") and match[1] in values
+                    and "remoteNamespace" not in rule and rule["direction"] == "Egress",
+                    "external traffic must use narrow declared CIDRs; ingress is gateway-only")
+            egress_port(rule["port"], {n: {"default": v} for n, v in values.items()})
+    source, target, port = ("edge", "edgeml-sidecar", 9090) if role == "ship" else ("operator", "shore", 8080)
+    require(local == {("Egress", source, target, port), ("Ingress", target, source, port)},
+            "every in-mesh flow requires the exact ingress/egress pair")
+    listed = {i for c in package["components"] for i in c.get("images", [])}
+    actual = {c["image"] for d in documents if d["kind"] in WORKLOAD_KINDS for c in workload_containers(d)[1]}
+    require(listed == actual, "split package image list drift")
+    from pin_images import check_lock
+    require(actual <= set(check_lock().values()), "split package must use locked immutable images")
+    return parsed
+
+
 def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     package_file = ROOT / "zarf.yaml"
     package = yaml.safe_load(package_file.read_text())
@@ -538,6 +687,7 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     all_manifest_paths = sorted((ROOT / "manifests").glob("*.yaml"))
     require(bool(all_manifest_paths), "no manifests/*.yaml files found")
     parsed = render_manifests(package, overrides)
+    check_hardening([doc for docs in parsed.values() for doc in docs], variables)
     check_frames([doc for docs in parsed.values() for doc in docs], variables)
     check_models(package, [doc for docs in parsed.values() for doc in docs])
     require(set(parsed) == set(all_manifest_paths), "every manifest must be packaged")
@@ -656,6 +806,14 @@ if __name__ == "__main__":
             for path, documents in parsed.items():
                 (profile / path.name).write_text(yaml.safe_dump_all(documents, sort_keys=False))
         print("validated UDS PVC rendering without hostPath")
+        for role in ("ship", "shore"):
+            parsed = check_split(role)
+            if args.output_dir:
+                profile = args.output_dir / role
+                profile.mkdir(parents=True, exist_ok=True)
+                for path, documents in parsed.items():
+                    (profile / path.name).write_text(yaml.safe_dump_all(documents, sort_keys=False))
+            print(f"validated hardened {role} UDS package")
     except (KeyError, TypeError, ValueError) as exc:
         print(f"manifest validation failed: {exc}", file=sys.stderr)
         raise SystemExit(1)

@@ -1,0 +1,50 @@
+apiVersion: "uds.dev/v1alpha1"
+kind: "Package"
+metadata:
+  name: "ghost-seeker-ship"
+  namespace: "###ZARF_VAR_NAMESPACE###"
+spec:
+  network:
+    serviceMesh:
+      mode: "sidecar"
+    expose:
+      -
+        service: "edge"
+        selector:
+          app: "edge"
+        port: 8081
+        gateway: "tenant"
+        host: "###ZARF_VAR_EDGE_GATEWAY_HOST###"
+    allow:
+      -
+        description: "edge to edgeml-sidecar"
+        direction: "Egress"
+        selector:
+          app: "edge"
+        remoteSelector:
+          app: "edgeml-sidecar"
+        remoteNamespace: "###ZARF_VAR_NAMESPACE###"
+        port: 9090
+      -
+        description: "edgeml-sidecar from edge"
+        direction: "Ingress"
+        selector:
+          app: "edgeml-sidecar"
+        remoteSelector:
+          app: "edge"
+        remoteNamespace: "###ZARF_VAR_NAMESPACE###"
+        port: 9090
+      -
+        description: "edge routed shore"
+        direction: "Egress"
+        selector:
+          app: "edge"
+        remoteCidr: "###ZARF_VAR_SHORE_EGRESS_CIDR###"
+        port: ###ZARF_VAR_SHORE_EGRESS_PORT###
+      -
+        description: "edge routed camera"
+        direction: "Egress"
+        selector:
+          app: "edge"
+        remoteCidr: "###ZARF_VAR_CAMERA_EGRESS_CIDR###"
+        port: ###ZARF_VAR_CAMERA_EGRESS_PORT###

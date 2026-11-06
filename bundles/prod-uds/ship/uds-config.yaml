@@ -1,0 +1,25 @@
+# Deploy to an EXISTING UDS Core 1.16 cluster. Replace documentation-only site values.
+options:
+  architecture: amd64
+variables:
+  ghost-seeker-ship:
+    NAMESPACE: ghost-seeker-ship
+    DOMAIN: uds.dev
+    FRAMES_SOURCE: pvc
+    EDGE_GATEWAY_HOST: edge
+    SHORE_TRANSPORT: external
+    SHORE_URL: https://shore.uds.dev:443
+    SHORE_EGRESS_CIDR: 192.0.2.1/32
+    SHORE_EGRESS_PORT: "443"
+    EDGE_AUTH_SECRET: edge-auth
+    EDGE_UNIT_TOKEN_KEY: unit-token
+    EDGE_OPERATOR_TOKEN_KEY: operator-token
+    SHORE_CA_SECRET: ""
+    EDGE_STORAGE_CLASS: ""
+    EDGE_STORAGE: 10Gi
+    FRAMES_STORAGE_CLASS: ""
+    FRAMES_STORAGE: 10Gi
+    INFERENCE_CPU_REQUEST: 500m
+    INFERENCE_MEMORY_REQUEST: 1Gi
+    INFERENCE_CPU_LIMIT: "4"
+    INFERENCE_MEMORY_LIMIT: 4Gi

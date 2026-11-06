@@ -45,6 +45,8 @@ fi
 
 if command -v zarf >/dev/null 2>&1; then
   zarf dev lint deploy/zarf
+  zarf dev lint deploy/zarf/ship
+  zarf dev lint deploy/zarf/shore
   if [ "${PACKAGE_CREATE:-0}" = "1" ]; then
     mkdir -p dist
     zarf package create deploy/zarf --confirm --output dist
