@@ -61,5 +61,7 @@ func (g *Generator) WhaleFrame(ts time.Time, model string, directives []command.
 	item.Det = nil
 	item.Edge = edgeScore(rng, item.Dets)
 	command.Rescore(item, model, directives)
+	item.Capture = nil
+	command.EnsureCapture(item)
 	return item
 }
