@@ -2,6 +2,7 @@ package shorebridge
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,10 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
+
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
+	shoreconsole "github.com/fleethackerghostfleet/ghost-seeker/shore/console"
+	shorestore "github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -60,7 +65,25 @@ func TestAutomaticLinkStatus(t *testing.T) {
 }
 
 func TestFactCacheRefreshesOnReplacement(t *testing.T) {
-	version, reads := "old", 0
+	reads := 0
+	ctx := context.Background()
+	st, err := shorestore.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.UpsertManifest(ctx, "edge", &pb.ManifestEntry{ItemId: "image-1", Type: pb.ItemType_ITEM_TYPE_IMAGE}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	replace := func(version string) {
+		t.Helper()
+		raw := []byte(fmt.Sprintf(`{"id":"image-1","override":%q}`, version))
+		if _, complete, err := st.WriteChunk(ctx, "edge", &pb.Chunk{ItemId: "image-1", Form: pb.FormKind_FORM_KIND_FACT, ContentHash: fmt.Sprintf("%x", sha256.Sum256(raw)), TotalBytes: int64(len(raw)), Data: raw}, time.Now()); err != nil || !complete {
+			t.Fatalf("replace: complete=%v err=%v", complete, err)
+		}
+	}
+	replace("old")
+	service := &shoreconsole.Service{St: st}
 	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case consolePath + "GetStatus":
@@ -68,17 +91,28 @@ func TestFactCacheRefreshesOnReplacement(t *testing.T) {
 		case consolePath + "GetPolicy":
 			writeProtoResponse(t, w, &pb.GetPolicyResponse{})
 		case consolePath + "ListItems":
-			writeProtoResponse(t, w, &pb.ListItemsResponse{Items: []*pb.ItemView{{Item: &pb.Item{Id: "image-1", Type: pb.ItemType_ITEM_TYPE_IMAGE, Forms: []*pb.Form{{Kind: pb.FormKind_FORM_KIND_FACT, ContentHash: version}}}, FormStates: []*pb.FormState{{Kind: pb.FormKind_FORM_KIND_FACT, Complete: true}}}}})
+			response, err := service.ListItems(r.Context(), connect.NewRequest(&pb.ListItemsRequest{}))
+			if err != nil {
+				t.Error(err)
+				http.Error(w, "list failed", 500)
+				return
+			}
+			writeProtoResponse(t, w, response.Msg)
 		case "/blob/image-1/fact":
 			reads++
-			fmt.Fprintf(w, `{"id":"image-1","override":%q}`, version)
+			raw, err := st.ReadForm("image-1", pb.FormKind_FORM_KIND_FACT)
+			if err != nil {
+				t.Error(err)
+				http.Error(w, "blob failed", 500)
+				return
+			}
+			_, _ = w.Write(raw)
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	defer shore.Close()
 	b := New(shore.URL, "", nil)
-	ctx := context.Background()
 	b.refresh(ctx)
 	if f := b.fetchFact(ctx, "image-1"); f == nil || f.Override != "old" {
 		t.Fatalf("initial FACT: %+v", f)
@@ -88,7 +122,7 @@ func TestFactCacheRefreshesOnReplacement(t *testing.T) {
 	if reads != 1 {
 		t.Fatalf("unchanged FACT fetched %d times", reads)
 	}
-	version = "new"
+	replace("new")
 	b.refresh(ctx)
 	if f := b.fetchFact(ctx, "image-1"); f == nil || f.Override != "new" {
 		t.Fatalf("replacement FACT not refreshed: %+v", f)
