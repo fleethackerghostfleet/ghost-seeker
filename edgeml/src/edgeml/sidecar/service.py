@@ -154,6 +154,7 @@ class EdgemlEngine:
         from edgeml.detectors.thermal import configure_thermal
 
         self.detector, self.thermal_unknownness_floor = configure_thermal(self.detector, thermal_fallback, score_thr=self.score_thr)
+        self.thermal_fallback_enabled = thermal_fallback is not None and thermal_fallback is not False
         # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
         # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
         self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
@@ -237,7 +238,12 @@ class EdgemlEngine:
             emb = next((src.agg.states[ev["sighting_id"]].emb for ev in events
                         if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
                         and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
-            unknownness = max((float(ev.get("unknownness") or 0.0) for ev in sightings), default=0.0)
+            unknownness = max((float(ev.get("unknownness") or 0.0) for ev in events), default=0.0)
+            if getattr(self, "thermal_fallback_enabled", False):
+                thermal_unknownness = max((float(ev.get("unknownness") or 0.0) for ev in sightings
+                                           if ev["keyDetection"]["label"] == "thermal contact"), default=0.0)
+                if thermal_unknownness:
+                    unknownness = max(_f(unknownness), thermal_unknownness)
             open_dets = self.open_vocab.detect(image_bgr, dets, open_labels) if open_labels else []
             ms = (time.perf_counter() - t_start) * 1e3
             try:
