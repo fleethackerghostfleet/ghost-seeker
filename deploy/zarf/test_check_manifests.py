@@ -88,6 +88,18 @@ class SplitProductionTests(unittest.TestCase):
         config = next(d for d in docs if d["kind"] == "ConfigMap")
         self.assertIn("receive.fleet.example", config["data"]["GS_PUBLIC_HOSTS"].split(","))
 
+    def test_gateway_change_triggers_workload_rollout(self):
+        for role, name in (("ship", "edge"), ("shore", "shore")):
+            variable = name.upper() + "_GATEWAY_HOST"
+            parsed = validator.check_split(role, {"DOMAIN": "fleet.example", variable: "updated"})
+            docs = [d for group in parsed.values() for d in group]
+            workload = next(d for d in docs if d["kind"] == "StatefulSet")
+            config = next(d for d in docs if d["kind"] == "ConfigMap")
+            self.assertEqual(workload["spec"]["template"]["metadata"]["annotations"]["ghost-seeker.io/public-hosts"],
+                             config["data"]["GS_PUBLIC_HOSTS"])
+            original = next(d for d in self.documents(role) if d["kind"] == "StatefulSet")
+            self.assertNotEqual(workload["spec"]["template"], original["spec"]["template"])
+
     def test_missing_resource_secret_pvc_and_protocol_are_rejected(self):
         mutations = (
             ("ship", lambda docs: next(d for d in docs if d["kind"] == "Deployment")["spec"]["template"]["spec"]["initContainers"][0]["resources"]["limits"].pop("cpu")),

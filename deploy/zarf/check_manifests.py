@@ -592,6 +592,11 @@ def check_split(role: str, overrides: dict[str, str] | None = None) -> dict[Path
     require(all(d["metadata"].get("namespace") == values["NAMESPACE"] for d in documents if d["kind"] != "Namespace"),
             "all split resources must use configured namespace")
     check_hardening(documents, values)
+    for workload in (d for d in documents if d["kind"] in WORKLOAD_KINDS and d["metadata"]["name"] in {"edge", "shore"}):
+        name = workload["metadata"]["name"]
+        config = next(d for d in documents if d["kind"] == "ConfigMap" and d["metadata"]["name"] == name + "-config")
+        require(workload["spec"]["template"]["metadata"].get("annotations", {}).get("ghost-seeker.io/public-hosts")
+                == config["data"]["GS_PUBLIC_HOSTS"], "public hosts rollout annotation must track the ConfigMap")
     for workload in (d for d in documents if d["kind"] in WORKLOAD_KINDS and d["metadata"]["name"] in {"edge", "operator"}):
         pod, containers = workload_containers(workload)
         container = containers[0]

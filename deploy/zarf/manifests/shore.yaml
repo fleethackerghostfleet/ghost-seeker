@@ -26,6 +26,7 @@ spec:
   template:
     metadata:
       annotations:
+        ghost-seeker.io/public-hosts: "###ZARF_VAR_SHORE_PUBLIC_HOSTS###,###ZARF_VAR_SHORE_GATEWAY_HOST###.###ZARF_VAR_DOMAIN###"
         ghost-seeker.io/listener-tls-secret: "###ZARF_VAR_SHORE_TLS_SECRET###"
       labels:
         app: shore
