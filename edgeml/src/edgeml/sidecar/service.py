@@ -113,7 +113,7 @@ class EdgemlEngine:
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
                  text_tower: str = "cache", anomaly_fallback: Optional[dict] = None, live_tiling: Optional[dict] = None,
-                 marine_mammal: Optional[dict] = None, thermal_fallback: Optional[dict] | bool = True, new_contact: Optional[dict] = None):
+                 marine_mammal: Optional[dict] = None, thermal_fallback: Optional[dict] | bool = False, new_contact: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 

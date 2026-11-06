@@ -1,5 +1,17 @@
 # Thermal hotspot fallback: development record
 
+**Current safety default: OFF.** Opt in with bare `--thermal-fallback` for
+frozen defaults, or `--thermal-fallback '{"mode":"when_empty"}'` for JSON
+configuration. Programmatically use `thermal_fallback={}` or `True`.
+False/null disables it. No deploy/compose manifest enables it.
+
+Reason: held-out annotation-empty IR sea crops yielded **1.005 FP/crop**,
+**28%** nonempty; assigning those contacts unknownness ≥0.9 can elevate a
+stream of false high-priority items under unknown-first scoring. Thresholds
+remain frozen. All thermal-on quality/latency rows below describe the
+**opt-in** path, not the current default engine. The new-contact scorer stays
+enabled at weight 1.
+
 Companion: [new-contact MOT birth evaluation](NEW_CONTACT.md) (RGB tracking
 sequences, no IR tuning or evaluation in that step).
 
@@ -75,11 +87,11 @@ one of the 14 empty frames. This is not a general-purpose RGB detector.
 * Default fusion `when_empty`, cover threshold .25. `uncovered` uses anomaly
   fusion's padded center/IoU coverage suppression. Non-grayscale frames pay
   only the cheap gate in addition to the original detector.
-* Engine wraps after optional anomaly fusion, enabled by default. Explicit
-  `thermal_fallback=None` or `False` disables; dictionary config accepts
+* Engine wraps after optional anomaly/marine fusion **only when opted in**.
+  `thermal_fallback=None` or `False` (the default) disables; dictionary config accepts
   proposer options, fusion options, and `unknownness_floor` (default .9).
 * CLI: `--thermal-fallback '{"mode":"uncovered","unknownness_floor":0.95}'`;
-  `--thermal-fallback false` or `null` disables; bare flag uses defaults.
+  `--thermal-fallback false` or `null` disables; bare flag enables frozen defaults.
 * Detection label passes into track label, then aggregator label votes. The
   zero-shot adapter restores the thermal label when thermal votes dominate,
   and floors unknownness **after** classification (also without an embedder).

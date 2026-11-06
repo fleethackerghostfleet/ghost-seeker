@@ -136,6 +136,25 @@ def test_cli_thermal_options(monkeypatch):
     assert constructor.call_args.kwargs["thermal_fallback"] == {"k": 6, "unknownness_floor": .95}
     cli.main(["--det", "fake", "--thermal-fallback", "false"])
     assert constructor.call_args.kwargs["thermal_fallback"] is False
+    cli.main(["--det", "fake", "--thermal-fallback", "null"])
+    assert constructor.call_args.kwargs["thermal_fallback"] is None
+    cli.main(["--det", "fake", "--thermal-fallback"])
+    assert constructor.call_args.kwargs["thermal_fallback"] == {}
+    cli.main(["--det", "fake"])
+    assert "thermal_fallback" not in constructor.call_args.kwargs
+
+
+def test_engine_thermal_fallback_is_opt_in(monkeypatch):
+    from edgeml.runtime import detectors
+    from edgeml.sidecar import service
+
+    base = SimpleNamespace(name="fake", detect=Mock(return_value=[]))
+    monkeypatch.setattr(detectors, "load_detector", lambda *a, **kw: base)
+    default = service.EdgemlEngine("fake")
+    assert not isinstance(default.detector, ThermalFusionDetector)
+    enabled = service.EdgemlEngine("fake", thermal_fallback={})
+    assert isinstance(enabled.detector, ThermalFusionDetector)
+    assert enabled.detector.proposer.k == 8. and enabled.detector.proposer.min_delta == 40.
 
 
 @pytest.mark.parametrize("threshold", [.35, .6])

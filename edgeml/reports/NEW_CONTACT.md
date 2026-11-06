@@ -1,5 +1,11 @@
 # New-contact birth evaluation
 
+Review safety change: thermal fallback is now **off by default**; opt in
+separately with `--thermal-fallback`. Its frozen opt-in IR false-contact rate
+was 1.005/crop (28% nonempty), with unknownness ≥0.9. This change does not
+disable the weight-1 new-contact scorer. Historical tables below precede the
+review fixes/default-off change; final corrected replay results supersede them.
+
 Companion: [thermal fallback evaluation](THERMAL_HOTSPOT.md). This evaluation uses
 **no IR data** and changes no production thresholds. Defaults remain
 `memory_s=30`, `iou_thr=.3`, `dist_diag=.5`. There was **no parameter sweep or

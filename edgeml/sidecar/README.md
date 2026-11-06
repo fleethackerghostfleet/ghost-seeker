@@ -1,5 +1,22 @@
 # edgeml sidecar — `InferenceService` over Connect/HTTP+JSON
 
+## Thermal hotspot fallback
+
+Thermal fallback is **off by default** in both the CLI and `EdgemlEngine`.
+Opt in with bare `--thermal-fallback` (frozen defaults) or, for example,
+`--thermal-fallback '{"mode":"when_empty","unknownness_floor":0.9}'`.
+`--thermal-fallback false` or `null` disables it; programmatic callers enable
+it with `thermal_fallback={}` or `True`.
+
+Opt-in is required because held-out annotation-empty IR sea crops produced
+**1.005 false contacts/crop**, with **28%** of crops producing contacts.
+Those contacts receive unknownness ≥0.9 by default, so enabling the fallback
+can generate high-priority false items under unknown-first scoring. Thresholds
+remain frozen; see [THERMAL_HOTSPOT.md](../reports/THERMAL_HOTSPOT.md).
+Thermal-on latency rows there apply only when opted in. Deployment manifests
+do not enable it. Source-local new-contact detection and its weight-1 scorer
+remain enabled independently of this flag.
+
 ## Marine mammals
 
 Marine-mammal verification is **off by default**, even with MobileCLIP-S1 `--embed`.

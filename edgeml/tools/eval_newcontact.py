@@ -157,7 +157,7 @@ def replay(seq, dataset, mode, args, fingerprint):
             seq_hash.update(f"{p.name}:{p.stat().st_size}:{p.stat().st_mtime_ns}".encode())
         detector = DetectionCache(engine.detector, args.cache / dataset / f"{seq.seq_id}.json",
                                   {"pipeline": fingerprint, "input": seq_hash.hexdigest(), "frames": len(seq),
-                                   "threads": args.threads, "stack": "yolo+default-live-tiling+default-thermal"})
+                                   "threads": args.threads, "stack": "yolo+default-live-tiling+thermal-off"})
     engine.detector = detector
     opens = []
     start = time.perf_counter()
@@ -220,7 +220,7 @@ def main():
                for mode in ("yolo", "oracle-d0.3")}
     complete = {mode: pooled([r for r in rows if r["mode"] == mode and r["gt_status"] != "partial"])
                 for mode in ("yolo", "oracle-d0.3")}
-    output = {"split": args.split, "window_s": args.window_s, "iou_thr": .3, "new_contact": {"memory_s": 30, "iou_thr": .3, "dist_diag": .5},
+    output = {"split": args.split, "window_s": args.window_s, "iou_thr": .3, "thermal_fallback": False, "new_contact": {"memory_s": 30, "iou_thr": .3, "dist_diag": .5},
               "cpu": platform.processor(), "affinity": sorted(os.sched_getaffinity(0)), "threads": args.threads,
               "pipeline_fingerprint": fingerprint, "skipped_incomplete": skipped,
               "summary": summary, "complete_gt_only": complete, "sequences": rows}

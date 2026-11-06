@@ -53,7 +53,7 @@ def main(argv=None) -> None:
     ap.add_argument('--marine-mammal', choices=['on', 'off'], default='off')
     ap.add_argument('--mm', default='{}', help='MarineMammalConfig JSON overrides')
     ap.add_argument("--thermal-fallback", nargs="?", const="{}", default=None, metavar="JSON",
-                    help='thermal proposer overrides (enabled by default); JSON null or false disables')
+                    help='opt in to thermal fallback with frozen defaults or JSON overrides (default off); null or false disables')
     ap.add_argument("--new-contact", default=None, metavar="JSON", help="NewContactDetector overrides")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
