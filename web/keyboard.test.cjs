@@ -140,7 +140,7 @@ test('roving focus survives reorder, falls back on removal, and tolerates empty 
 });
 test('cards expose button semantics and theme-aware visible keyboard focus',()=>{
  assert.match(source,/el\.tabIndex=-1;el\.setAttribute\('role','button'\)/);
- assert.match(source,/el\.setAttribute\('aria-label',`P\$\{tier\}.*Open image details`\)/);
+ assert.match(source,/el\.querySelector\('\.card-context'\)\.textContent=`P\$\{tier\}.*Open image details`/);
  const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
  assert.match(css,/\.card:focus-visible\{outline:3px solid var\(--accent\);outline-offset:-4px\}/);
  assert.match(css,/body\.night \.card:focus-visible\{outline-color:#ff6666\}/);

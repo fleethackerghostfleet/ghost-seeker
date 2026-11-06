@@ -177,6 +177,9 @@ func decodeReviewBody(reader io.Reader, dst any) error {
 		return err
 	}
 	if err := d.Decode(new(any)); err != io.EOF {
+		if err != nil {
+			return err
+		}
 		return errors.New("invalid trailing data")
 	}
 	return nil

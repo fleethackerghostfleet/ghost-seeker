@@ -1,0 +1,128 @@
+"""Model-free service initialization, embedding failures and sighting wire semantics."""
+import json
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import numpy as np
+import pytest
+
+from edgeml.embed import clip_embedder, zeroshot
+from edgeml.runtime import detectors
+from edgeml.sidecar import service
+from edgeml.tracking import AggregatorParams
+from edgeml.types import Track
+
+
+@pytest.fixture
+def model_fakes(monkeypatch):
+    detector = SimpleNamespace(name="fixture-detector")
+    monkeypatch.setattr(detectors, "load_detector", Mock(return_value=detector))
+    clip = SimpleNamespace(dim=2, name="fixture-clip", short="tiny", embed_text=Mock(return_value=np.array([[0.123456, 0.5]])),
+                           embed_crops=Mock(return_value=np.array([[1., 0.]])), logit_scale=lambda: 10.)
+    constructor = Mock(return_value=clip)
+    monkeypatch.setattr(clip_embedder, "ClipEmbedder", constructor)
+    classifier = SimpleNamespace(classes=["tanker"], calibration_path="fixture-calibration")
+    monkeypatch.setattr(zeroshot, "load_classifier", Mock(return_value=classifier))
+    return detector, clip, constructor
+
+
+def test_embedding_metadata_initialization_and_wrapper_forwarding(tmp_path, model_fakes):
+    detector, clip, constructor = model_fakes
+    (tmp_path / "meta.json").write_text(json.dumps({"model": "tiny", "precision": "fp16"}))
+    engine = service.EdgemlEngine("fixture.onnx", tmp_path, threads=2, agg={"min_hits": 3})
+    constructor.assert_called_once_with("tiny", backend="ort", onnx_dir=tmp_path, threads=2, precision="fp16")
+    assert engine.detector is detector and engine.agg_params.min_hits == 3
+    assert engine.unknown_calib == "fixture-calibration"
+    assert engine.capabilities() == {"modelId": "fixture-detector+fixture-clip", "openVocabulary": True,
+                                     "fixedLabels": ["tanker"], "embeddingDim": 2}
+    assert engine.embed_text(["tanker"]) == [[0.12346, 0.5]]
+    clip.embed_text.assert_called_once_with(["tanker"])
+    crops = [np.zeros((8, 8, 3), np.uint8)]
+    assert np.array_equal(engine.embedder.embed_crops(crops), [[1., 0.]])
+    assert engine.embedder.calls == 1 and engine.embedder.ms >= 0
+    assert engine.embedder.logit_scale() == 10.
+    caps = engine.capabilities()
+    caps["fixedLabels"].append("not-a-model-class")
+    assert engine.capabilities()["fixedLabels"] == ["tanker"]
+
+
+def test_text_cache_failure_is_precondition_until_torch_is_explicitly_enabled(model_fakes):
+    _, clip, constructor = model_fakes
+    engine = service.EdgemlEngine("fixture.onnx", embed="none")
+    with pytest.raises(service.RpcError) as error:
+        engine.embed_text(["tanker"])
+    assert error.value.code == "unimplemented"
+    engine.embedder = service._TextEmbedder(clip)
+    clip.embed_text.side_effect = RuntimeError("uncached phrase")
+    with pytest.raises(service.RpcError) as error:
+        engine.embed_text(["unseen"])
+    assert error.value.code == "failed_precondition" and "uncached phrase" in str(error.value)
+    constructor.assert_not_called()
+    tower = SimpleNamespace(embed_text=Mock(return_value=np.array([[0.25, 0.75]])))
+    constructor.return_value = tower
+    engine._text_tower = "torch"
+    assert engine.embed_text(["unseen"]) == [[0.25, 0.75]]
+    assert engine.embed_text(["another"]) == [[0.25, 0.75]]
+    constructor.assert_called_once_with("tiny", backend="torch")
+    assert tower.embed_text.call_args_list[0].args == (["unseen"],)
+    assert tower.embed_text.call_args_list[1].args == (["another"],)
+
+
+def test_frame_clock_is_per_source_clamps_early_timestamps_and_has_fps_fallback(model_fakes):
+    engine = service.EdgemlEngine("fixture.onnx", fps=5.)
+    a, b = service._Source(None, None), service._Source(None, None)
+    assert engine._frame_time(a, 10000) == 0.
+    assert engine._frame_time(a, 10250) == .25
+    assert engine._frame_time(a, 9000) == 0.
+    assert engine._frame_time(b, 20000) == 0.
+    a.frame_idx = 4
+    assert engine._frame_time(a, None) == .6
+    assert a.t0_ms == 10000 and b.t0_ms == 20000
+
+
+@pytest.mark.parametrize("event,key,box,has_embedding", [
+    ("open", True, {"x": .1, "y": .2, "w": .3, "h": .4}, True),
+    ("update", False, {"x": .5, "y": .6, "w": .2, "h": .2}, True),
+    ("close", False, {"x": .5, "y": .6, "w": .2, "h": .2}, False),
+])
+def test_sighting_wire_uses_current_or_key_box_and_proto_json_types(event, key, box, has_embedding):
+    engine = service.EdgemlEngine.__new__(service.EdgemlEngine)
+    ev = {"event": event, "sighting_id": "cam-1", "label": "boat", "best_frame_idx": 3 if key else 1,
+          "best_box": [10, 20, 30, 40], "box": [50, 60, 20, 20], "best_score": .9123456,
+          "unknownness": float("nan"), "value": None, "first_t_s": .25, "last_t_s": 1.5, "n_frames": 4,
+          "reason": "confirmed", "forms": [{"kind": "crop", "bytes": 123, "quality": 75},
+                                            SimpleNamespace(kind="future", bytes=None, quality=None)]}
+    result = engine._sighting(ev, 3, 100, 100, 1700000000000, SimpleNamespace(emb=np.array([[.123456, .5]])))
+    assert result["event"] == {"open": "EVENT_OPEN", "update": "EVENT_UPDATE", "close": "EVENT_CLOSE"}[event]
+    assert result["keyDetection"] == {"label": "boat", "confidence": .91235, "box": box}
+    assert result["isKeyFrame"] is key and result["subtype"] == "boat"
+    assert result["unknownness"] == 0. and result["value"] == 0.
+    assert result["firstSeenUnixMs"] == "1700000000250" and result["lastSeenUnixMs"] == "1700000001500"
+    assert result["nFrames"] == 4
+    assert result["forms"] == [{"kind": "FORM_KIND_CROP", "bytes": "123", "jpegQuality": 75},
+                               {"kind": "FORM_KIND_UNSPECIFIED", "bytes": "0", "jpegQuality": 0}]
+    assert ("embedding" in result) is has_embedding
+    if has_embedding:
+        assert result["embedding"] == [.12346, .5]
+    json.dumps(result, allow_nan=False)
+
+
+def test_zero_shot_cache_reuses_embedding_identity_and_is_cleared_on_close():
+    classify = Mock(return_value=[{"subtype": "aircraft", "unknownness": .2}])
+    embedder = SimpleNamespace(embed_crops=lambda crops: np.tile([1., 0.], (len(crops), 1)))
+    agg = service._ZeroShotAggregator("cam", AggregatorParams(min_hits=1, close_after_s=.5),
+                                     embedder=embedder, classifier=SimpleNamespace(classify=classify), coarse=service.EdgemlEngine.COARSE)
+    image = np.random.default_rng(1).integers(0, 255, (100, 100, 3), dtype=np.uint8)
+    events = agg.update([Track(1, [20, 20, 30, 30], .9, "boat", 1, 0.)], image, 1, 0.)
+    assert events[0]["event"] == "open" and events[0]["label"] == "aircraft"
+    sid = events[0]["sighting_id"]
+    state = agg.states[sid]
+    agg._apply(state)
+    assert classify.call_count == 1 and state.s.unknownness == .2
+    state.emb = np.array([0., 1.])
+    classify.return_value = [{"subtype": "tanker", "unknownness": .7}]
+    agg._apply(state)
+    assert classify.call_count == 2 and state.s.label == "boat" and state.s.subtype == "tanker"
+    events = agg.update([], image, 2, 1.)
+    assert events[0]["event"] == "close" and events[0]["sighting_id"] == sid
+    assert sid not in agg.zs and classify.call_count == 2

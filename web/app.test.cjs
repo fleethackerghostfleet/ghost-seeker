@@ -1158,22 +1158,26 @@ test('consecutive Space and Enter and live renders retain band focus without rev
  vm.runInContext("press('Enter')",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&!!document.activeElement.closest('.band-controls button')",context),true);
 });
-test('live card updates preserve canonical priority labels',()=>{
+test('live card updates preserve priority and source in name content independently of thumbnail overlays',()=>{
  const context=setup();
  vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
  vm.runInContext(`
-  badge={};other={setAttribute(){}};
-  card={setAttribute(name,value){this[name]=value},querySelector:selector=>selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
+  badge={};nameContent={};other={setAttribute(){}};
+  card={setAttribute(name,value){this[name]=value},querySelector:selector=>selector==='.card-context'?nameContent:selector==='.tier'?badge:selector==='.thumb'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
   gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
   testItem={id:'test',src:{id:'EO-P7',name:'Mast camera'},el:card,tier:1,central:.9,base:.8};updateCard(testItem);
  `,context);
  assert.equal(vm.runInContext('badge.textContent',context),'P1 Critical');
  assert.equal(vm.runInContext('badge.title',context),'Notify Commander');
- assert.equal(vm.runInContext("card['aria-label']",context),'P1 Critical image from Mast camera. Open image details');
+ assert.equal(vm.runInContext('nameContent.textContent',context),'P1 Critical image from Mast camera. Open image details');
+ assert.equal(vm.runInContext("card['aria-description']",context),undefined);
+ assert.equal(vm.runInContext("card['aria-label']",context),undefined);
  vm.runInContext('testItem.tier=4;updateCard(testItem)',context);
  assert.equal(vm.runInContext('badge.textContent',context),'P4 Low');
  assert.equal(vm.runInContext('badge.title',context),'Image priority');
- assert.equal(vm.runInContext("card['aria-label']",context),'P4 Low image from Mast camera. Open image details');
+ assert.equal(vm.runInContext('nameContent.textContent',context),'P4 Low image from Mast camera. Open image details');
+ vm.runInContext("testItem.src={id:'BY-12'};updateCard(testItem)",context);
+ assert.equal(vm.runInContext('nameContent.textContent',context),'P4 Low image from BY-12. Open image details');
 });
 test('feed state uses clear active, paused and reconnecting labels',()=>{
  const context=setup();
