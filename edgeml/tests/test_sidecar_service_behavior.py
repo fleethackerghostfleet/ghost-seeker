@@ -90,7 +90,7 @@ def test_open_vocabulary_asset_negotiation_and_analysis_path(tmp_path, model_fak
     model_fakes[0].detect = Mock(return_value=[])
     src = SimpleNamespace(lock=__import__("threading").Lock(), frame_idx=0, t0_ms=None,
                           tracker=SimpleNamespace(update=Mock(return_value=[])),
-                          agg=SimpleNamespace(update=Mock(return_value=[]), states={}))
+                          agg=SimpleNamespace(update=Mock(return_value=[]), states={}), new_contact=service.NewContactDetector())
     engine._source = Mock(return_value=src)
     expected = {"label": "life raft", "confidence": .7, "box": {"x": 0., "y": 0., "w": .5, "h": .5}}
     engine.open_vocab.detect = Mock(return_value=[expected])

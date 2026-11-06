@@ -220,6 +220,7 @@ class EdgemlEngine:
             dets = [d for d in detect_frame(self.detector, image_bgr, fi) if d.score >= self.det_low_thr]
             kept = [d for d in dets if d.score >= self.score_thr]
             tracks = src.tracker.update(dets, image_bgr, fi, t_s)
+            src.new_contact.observe(src.agg.states, t_s)
             events = src.agg.update(tracks, image_bgr, fi, t_s)
             base_ms = (captured_ms - int(t_s * 1000)) if captured_ms else int(time.time() * 1000) - int(t_s * 1000)
             sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"]),

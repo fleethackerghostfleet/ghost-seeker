@@ -87,12 +87,19 @@ def pooled(rows):
     out["frames"], out["clips"] = frames, len(rows)
     out["is_new_us_per_frame"] = sum(r["is_new_ns"] for r in rows) / frames / 1000 if frames else 0.
     out["is_new_calls"] = sum(r["is_new_calls"] for r in rows)
+    out["history_us_per_frame"] = sum(r["history_ns"] for r in rows) / frames / 1000 if frames else 0.
     return out
 
 
 class TimedNewContact:
     def __init__(self, detector):
         self.detector, self.ns, self.calls = detector, 0, 0
+        self.history_ns = 0
+
+    def observe(self, states, t_s):
+        start = time.perf_counter_ns()
+        self.detector.observe(states, t_s)
+        self.history_ns += time.perf_counter_ns() - start
 
     def is_new(self, event, states):
         start = time.perf_counter_ns()
@@ -172,7 +179,7 @@ def replay(seq, dataset, mode, args, fingerprint):
         detector.save()
     result = {"dataset": dataset, "seq_id": seq.seq_id, "mode": mode, "frames": len(seq),
               "fps": seq.info.frame_rate, "license": seq.info.license, "label_source": seq.label_source,
-              "is_new_ns": timer.ns, "is_new_calls": timer.calls, "replay_s": time.perf_counter() - start,
+              "is_new_ns": timer.ns, "is_new_calls": timer.calls, "history_ns": timer.history_ns, "replay_s": time.perf_counter() - start,
               "opens": opens, "suppressions": suppressions(opens, gt_at)}
     for signal in ("open", "new_contact"):
         selected = opens if signal == "open" else [e for e in opens if e["new_contact"]]

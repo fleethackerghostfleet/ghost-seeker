@@ -56,6 +56,44 @@ def test_iou_and_diagonal_distance_are_alternative_near_tests():
     assert not NewContactDetector().near([0, 0, 20, 20], [100, 0, 20, 20])
 
 
+def test_reappearance_at_25_seconds_survives_default_aggregator_eviction():
+    from edgeml.tracking.aggregator import SightingAggregator
+
+    detector, aggregator = NewContactDetector(), SightingAggregator("source")
+    image = np.zeros((100, 100, 3), np.uint8)
+    box = [20, 20, 20, 20]
+
+    def frame(fi, t_s, tid=None):
+        detector.observe(aggregator.states, t_s)
+        tracks = [] if tid is None else [Track(tid, box, .9, "boat", fi, t_s)]
+        events = aggregator.update(tracks, image, fi, t_s)
+        return [(ev["event"], detector.is_new(ev, aggregator.states)) for ev in events]
+
+    assert frame(1, 0., 1) == []
+    assert frame(2, 1., 1) == [("open", True)]
+    assert frame(3, 7.) == [("close", False)]
+    assert frame(4, 22.) == []
+    assert not aggregator.states
+    assert frame(5, 26., 2) == []
+    assert frame(6, 27., 2) == [("open", False)]
+
+
+def test_history_is_copied_source_local_pruned_and_kept_for_confirmation_lag():
+    detector = NewContactDetector()
+    box = [0, 0, 10, 10]
+    old = state(box, seen=0., status="closed")
+    detector.observe({"old": old}, 0.)
+    box[0] = 100
+    assert not detector.is_new(event([0, 0, 10, 10], first=25.), {})
+    assert NewContactDetector().is_new(event([0, 0, 10, 10], first=25.), {})
+    pending = state([0, 0, 10, 10], first=25., status="pending")
+    detector.observe({"new": pending}, 40.)
+    assert not detector.is_new(event([0, 0, 10, 10], first=25.), {})
+    detector.observe({}, 40.)
+    assert not detector.history
+    assert detector.is_new(event([0, 0, 10, 10], first=40.), {})
+
+
 @pytest.mark.parametrize("start,current,expected", [
     ([0, 0, 10, 10], [100, 100, 10, 10], False),
     ([100, 100, 10, 10], [0, 0, 10, 10], True),
