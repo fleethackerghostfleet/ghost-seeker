@@ -3,8 +3,10 @@
 ## Marine mammals
 
 With MobileCLIP-S1 `--embed`, marine-mammal verification is on by default.
-`--marine-mammal off` disables it; `--mm '{"crop_thr":0.9,"scan_thr":0.95,"scan_stride":5,"max_crops":8}'`
-overrides `MarineMammalConfig`. Threshold defaults are provisional pending calibration.
+`--marine-mammal off` disables it; `--mm '{"scan_stride":5,"max_crops":8}'`
+overrides `MarineMammalConfig`. Calibrated defaults are crop threshold
+0.9480436444282532 and scan threshold 0.7265272736549377; see
+[`marine_mammal_live.md`](../reports/marine_mammal_live.md) for data discipline and limitations.
 Candidate YOLO crops and, on open-water frames, a bounded whole-frame/overlapping-grid scan
 produce `marine mammal` frame detections and tracked sightings, with sighting subtypes
 `whale`, `blow`, `fluke`, or `dolphin`. No torch is needed at runtime: additional text

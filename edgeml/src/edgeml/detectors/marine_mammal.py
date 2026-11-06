@@ -36,8 +36,8 @@ class MarineMammalConfig:
     candidate_min: float = 0.05
     top_k: int = 4
     context: float = 0.2
-    crop_thr: float = 0.9
-    scan_thr: float = 0.95
+    crop_thr: float = 0.9480436444282532
+    scan_thr: float = 0.7265272736549377
     score_thr: float = 0.35
     scan_stride: int = 5
     rows: int = 2

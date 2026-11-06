@@ -139,6 +139,61 @@ def test_eval_metrics_and_dev_threshold():
         module.pick_threshold([], 0)
 
 
+def test_joint_live_calibration():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location('mm_calibrate', Path(__file__).resolve().parents[1] / 'tools/mm_calibrate.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    rows = [dict(label=1, source='public:pos', subtype='whale', best_crop_p=.9, best_scan_p=0),
+            dict(label=1, source='v3_mm:clip', subtype='dolphin', best_crop_p=0, best_scan_p=.85),
+            dict(label=0, source='v3_neg:sea', subtype='none', best_crop_p=.8, best_scan_p=.8),
+            dict(label=0, source='public:hardneg', subtype='none', best_crop_p=.88, best_scan_p=0)]
+    frozen = module.calibrate(rows, target=0)
+    result = module.summarize(rows, frozen['crop_thr'], frozen['scan_thr'])
+    assert frozen['feasible']
+    assert result['all']['f1'] == 1
+    assert result['v3_neg']['fp_per_1000'] == 0
+    assert result['subtype:dolphin']['recall'] == 1
+    assert module.measure([], module.predictions([], .9, .9))['f1'] == 0
+    with pytest.raises(ValueError):
+        module.calibrate([])
+
+
+@pytest.mark.parametrize('readable', [True, False])
+def test_live_eval_uses_engine_stack(monkeypatch, tmp_path, readable):
+    import importlib.util
+    import json
+    from pathlib import Path
+    import sys
+    import edgeml.sidecar.service as service
+
+    spec = importlib.util.spec_from_file_location('mm_eval', Path(__file__).resolve().parents[1] / 'tools/mm_eval.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    detector = SimpleNamespace(frame=99, base=SimpleNamespace(n_calls=2),
+                               last_scores=dict(best_crop_p=.97, best_scan_p=0., crops=1, mm_ms=.1, scores=[], subtype='whale'))
+
+    def detect(image):
+        assert detector.frame == 0
+        return [MarineMammalDetection([0, 0, 10, 10], .97, 'marine mammal', subtype='whale')]
+
+    detector.detect = detect
+    monkeypatch.setattr(service, 'EdgemlEngine', lambda *a, **kw: SimpleNamespace(detector=detector, score_thr=.35))
+    monkeypatch.setattr(module.cv2, 'imread', lambda path: IMAGE if readable else None)
+    source, output = tmp_path / 'input.jsonl', tmp_path / 'scores.jsonl'
+    source.write_text(json.dumps(dict(path='frame.jpg', label=1, source='public:pos', subtype='dolphin')) + '\n')
+    monkeypatch.setattr(sys, 'argv', ['mm_eval', '--live', '--input', str(source), '--out', str(output)])
+    if not readable:
+        with pytest.raises(ValueError, match='unreadable image'):
+            module.main()
+    else:
+        module.main()
+        row = json.loads(output.read_text())
+        assert row['emitted'] and row['tiles'] == 1 and row['best_crop_p'] == .97
+        assert row['subtype'] == 'dolphin' and row['predicted_subtype'] == 'whale'
+
+
 def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
     import json
     from edgeml.embed import clip_embedder, zeroshot

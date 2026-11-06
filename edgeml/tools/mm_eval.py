@@ -46,29 +46,48 @@ def main():
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--limit', type=int)
     parser.add_argument('--mm', default='{}')
+    parser.add_argument('--live', action='store_true', help='Use the sidecar detector stack, each image as a cold-start frame')
     args = parser.parse_args()
     cv2.setNumThreads(args.threads)
-    detector = load_detector(Path(args.detector).expanduser(), engine='ort', threads=args.threads, score_thr=0.05)
-    embedder = ClipEmbedder('mobileclip-s1', backend='ort', onnx_dir=Path(args.embed).expanduser(), threads=args.threads)
-    verifier = MarineMammalVerifier(embedder)
-    cfg = MarineMammalConfig(**json.loads(args.mm))
+    if args.live:
+        from edgeml.sidecar.service import EdgemlEngine
+
+        engine = EdgemlEngine(args.detector, args.embed, engine='ort', threads=args.threads,
+                              marine_mammal=json.loads(args.mm))
+        detector = engine.detector
+    else:
+        detector = load_detector(Path(args.detector).expanduser(), engine='ort', threads=args.threads, score_thr=0.05)
+        embedder = ClipEmbedder('mobileclip-s1', backend='ort', onnx_dir=Path(args.embed).expanduser(), threads=args.threads)
+        verifier = MarineMammalVerifier(embedder)
+        cfg = MarineMammalConfig(**json.loads(args.mm))
     timings = []
     with args.input.open() as source, args.out.open('w') as output:
         for index, line in enumerate(source):
             if args.limit is not None and index >= args.limit:
                 break
             row = json.loads(line)
-            image = cv2.imread(row['local_path'])
+            path = row.get('local_path', row.get('path'))
+            image = cv2.imread(path)
             if image is None:
-                raise ValueError(f"unreadable image: {row['local_path']}")
+                raise ValueError(f"unreadable image: {path}")
             start = time.perf_counter()
-            detections = detector.detect(image)
-            yolo_ms = (time.perf_counter() - start) * 1000
-            result = raw_scores(image, detections, verifier, cfg)
-            result.pop('scores')
-            result.update(yolo_ms=yolo_ms, base_det_labels=[d.label for d in detections])
+            if args.live:
+                detector.frame = 0
+                detections = detector.detect(image)
+                total_ms = (time.perf_counter() - start) * 1000
+                result = dict(detector.last_scores)
+                yolo_ms = total_ms - result['mm_ms']
+                result.update(total_ms=total_ms, tiles=detector.base.n_calls - 1,
+                              emitted=any(d.label == 'marine mammal' and d.score >= engine.score_thr for d in detections))
+            else:
+                detections = detector.detect(image)
+                yolo_ms = (time.perf_counter() - start) * 1000
+                result = raw_scores(image, detections, verifier, cfg)
+            result.update(yolo_ms=yolo_ms, det_labels=[d.label for d in detections])
             result['score'] = max(result['best_crop_p'], result['best_scan_p'])
+            result['predicted_subtype'] = result.pop('subtype', None)
             output.write(json.dumps({**row, **result}) + '\n')
+            output.flush()
             timings.append((yolo_ms, result['mm_ms'], result['crops']))
     if timings:
         print(json.dumps(dict(zip(('mean_yolo_ms', 'mean_mm_ms', 'mean_crops'), np.mean(timings, axis=0).tolist())), sort_keys=True))
