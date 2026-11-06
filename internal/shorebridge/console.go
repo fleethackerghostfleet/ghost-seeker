@@ -1237,7 +1237,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 			kept, dropped := flatRules(comp.Rules)
 			if dropped {
 				prior, path := comp.Warnings, comp.Path
-				comp = c.b.Compiler.Review(ruleText, kept, comp.DurationMin)
+				comp = c.b.Compiler.Review(ruleText, kept, comp.DurationMin, comp.Unknown...)
 				comp.Path = path
 				comp.Warnings = mergeWarnings(prior, comp.Warnings, []string{scopeWarning})
 			}

@@ -87,11 +87,11 @@ func (c *Compiler) CompileRules(text string) Compiled {
 	return c.finish(text, rules, unknown, durationMin, "rules", []string{})
 }
 
-func (c *Compiler) Review(text string, rules []Rule, durationMin int) Compiled {
+func (c *Compiler) Review(text string, rules []Rule, durationMin int, unknown ...string) Compiled {
 	if durationMin == 0 {
 		durationMin, _ = extractDuration(text)
 	}
-	return c.finish(text, rules, []string{}, durationMin, "edited", []string{})
+	return c.finish(text, rules, unknown, durationMin, "edited", []string{})
 }
 
 func (c *Compiler) finish(text string, rules []Rule, unknown []string, durationMin int, path string, warnings []string) Compiled {

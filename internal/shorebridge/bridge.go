@@ -1119,7 +1119,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			if droppedScopedRules {
 				priorWarnings := c.Warnings
 				path := c.Path
-				c = b.Compiler.Review(ruleText, kept, c.DurationMin)
+				c = b.Compiler.Review(ruleText, kept, c.DurationMin, c.Unknown...)
 				c.Path = path
 				c.Warnings = mergeWarnings(priorWarnings, c.Warnings, []string{
 					"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.",
