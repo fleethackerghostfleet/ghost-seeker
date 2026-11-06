@@ -192,6 +192,7 @@ class EdgemlEngine:
 
     # -- rpc -------------------------------------------------------------------------------------------------------
     def analyze(self, source: str, image_bgr: np.ndarray, captured_ms: Optional[int], known_labels: list[str], want_embedding: bool) -> dict:
+        from .marine_mammal import detect_frame
         from .open_vocab import labels_from_wire
         try:
             open_labels = labels_from_wire(known_labels)
@@ -207,7 +208,7 @@ class EdgemlEngine:
             fi = src.frame_idx
             t_s = self._frame_time(src, captured_ms)
             H, W = image_bgr.shape[:2]
-            dets = [d for d in self.detector.detect(image_bgr) if d.score >= self.det_low_thr]
+            dets = [d for d in detect_frame(self.detector, image_bgr, fi) if d.score >= self.det_low_thr]
             kept = [d for d in dets if d.score >= self.score_thr]
             tracks = src.tracker.update(dets, image_bgr, fi, t_s)
             events = src.agg.update(tracks, image_bgr, fi, t_s)

@@ -210,7 +210,7 @@ def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
     monkeypatch.setattr(detectors, 'load_detector', lambda *a, **kw: SimpleNamespace(
         name='fake', detect=lambda image: [Detection([0, 0, 30, 30], .9, 'boat')]))
     monkeypatch.setattr(tracking, 'make_tracker', lambda *a, **kw: SimpleNamespace(
-        update=lambda dets, image, frame, t: [Track(1, dets[0].box, dets[0].score, dets[0].label, frame, t, extra={'det_ind': 0})]))
+        update=lambda dets, image, frame, t: [Track(1, d.box, d.score, d.label, frame, t, extra={'det_ind': 0}) for d in dets[:1]]))
     monkeypatch.setattr(service, 'frame_report', lambda *a, **kw: None)
     engine = EdgemlEngine('fake', tmp_path, agg={'min_hits': 1})
 
@@ -226,3 +226,9 @@ def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
     assert response['sightings'][0]['subtype'] == 'dolphin'
     assert response['detections'][-1]['label'] == 'bird'
     assert response['detections'][-1]['confidence'] == .91
+    engine.detector.base.base.detect = lambda image: []
+    engine.detector.cfg.scan_stride = 2
+    for frame in range(1, 4):
+        for source in ('camera-a', 'camera-b'):
+            response = engine.analyze(source, IMAGE, frame * 1000, [], False)
+            assert bool(response['detections']) == (frame % 2 == 1)

@@ -139,16 +139,19 @@ class MarineMammalFusionDetector:
         self.last_timing_ms = {}
         self.last_scores = {}
 
-    def detect(self, image):
+    def detect(self, image, *, frame_index=None):
         detections = self.base.detect(image)
-        self.frame += 1
-        self.last_scores = raw_scores(image, detections, self.verifier, self.cfg, scan=(self.frame - 1) % self.cfg.scan_stride == 0)
-        self.last_timing_ms = dict(getattr(self.base, 'last_timing_ms', {}), mm=self.last_scores['mm_ms'], mm_crops=self.last_scores['crops'])
-        for result in self.last_scores['scores']:
+        if frame_index is None:
+            self.frame += 1
+            frame_index = self.frame
+        scores = raw_scores(image, detections, self.verifier, self.cfg, scan=(frame_index - 1) % self.cfg.scan_stride == 0)
+        self.last_scores = scores
+        self.last_timing_ms = dict(getattr(self.base, 'last_timing_ms', {}), mm=scores['mm_ms'], mm_crops=scores['crops'])
+        for result in scores['scores']:
             if result['kind'] == 'crop' and result['p'] >= self.cfg.crop_thr:
                 old = detections[result['index']]
                 detections[result['index']] = MarineMammalDetection(old.box, result['p'], 'marine mammal', subtype=result['subtype'])
-        scans = [r for r in self.last_scores['scores'] if r['kind'] == 'scan' and r['p'] >= self.cfg.scan_thr]
+        scans = [r for r in scores['scores'] if r['kind'] == 'scan' and r['p'] >= self.cfg.scan_thr]
         if scans:
             hit = max(scans, key=lambda r: r['p'])
             detections.append(MarineMammalDetection(hit['box'], hit['p'], 'marine mammal', subtype=hit['subtype']))

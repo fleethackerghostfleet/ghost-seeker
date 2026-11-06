@@ -4,6 +4,12 @@ import logging
 from edgeml.detectors.marine_mammal import MarineMammalConfig, MarineMammalFusionDetector, MarineMammalVerifier
 
 
+def detect_frame(detector, image, frame_index):
+    if isinstance(detector, MarineMammalFusionDetector):
+        return detector.detect(image, frame_index=frame_index)
+    return detector.detect(image)
+
+
 def wrap_detector(detector, embedder, options, score_thr):
     cfg = MarineMammalConfig(**{'score_thr': score_thr, **(options or {})})
     if not cfg.enabled:
