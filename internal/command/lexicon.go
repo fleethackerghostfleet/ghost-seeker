@@ -296,14 +296,19 @@ func normalizeDirective(text string, edgeSubtypes bool) normalized {
 	out := normalized{}
 	text, out.resolutions = correctSpelling(text)
 	text = normalizeWindows(text)
-	// "everything else can wait" narrows to the named contacts; a positive
-	// "and other contacts" is left alone.
-	// The deferral may follow ("everything else can wait") or lead the
-	// clause ("ignore birds and everything else").
+	// "everything else can wait" and "ignore birds and everything else"
+	// narrow to the named contacts; a positive "and other contacts" is left
+	// alone. The governing clause starts after the last separator or
+	// positive action before the remainder.
 	var narrowed strings.Builder
 	last := 0
 	for _, loc := range elseClausePattern.FindAllStringIndex(text, -1) {
-		clauseStart := strings.LastIndexAny(text[:loc[0]], ",;.") + 1
+		clauseStart := 0
+		for _, pattern := range []*regexp.Regexp{splitPattern, positivePattern} {
+			for _, m := range pattern.FindAllStringIndex(text[:loc[0]], -1) {
+				clauseStart = max(clauseStart, m[1])
+			}
+		}
 		clause := text[clauseStart:loc[1]]
 		if negativeRewrites.MatchString(clause) || postNegativeRewrites.MatchString(clause) || negativePattern.MatchString(clause) {
 			out.onlyOthers = true
