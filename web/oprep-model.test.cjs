@@ -4,6 +4,16 @@ const fs=require('node:fs');
 const path=require('node:path');
 const M=require('./static/oprep-model.js');
 const now=new Date('2026-11-06T13:14:00Z');
+test('every non-whale draft exports all edited form fields',()=>{
+ const fields=Object.fromEntries(Object.keys(M.defaults()).map(key=>[key,'edited-'+key]));
+ fields.incidentTime='2026-11-06T12:34:00Z';
+ for(const template of M.templates.filter(t=>t.id!=='whale')){
+  const message=M.message(fields,now,template.id);
+  for(const [key,value] of Object.entries(fields))assert(message.includes(key==='incidentTime'?M.dtg(value):value.toUpperCase()),`${template.id} omitted ${key}`);
+  assert.match(message,/COURSE EDITED-COURSE; SPEED EDITED-SPEED/);
+  assert.match(message,/SPECIES EDITED-SPECIES; ESTIMATED SIZE EDITED-SIZE/);
+ }
+});
 const classes={fish:{lab:'Fish'},mm:{lab:'Marine mammal'},orca:{lab:'Orca'}};
 const item={id:'image-1',ts:now.getTime(),src:{id:'EO1',name:'Bow camera',loc:'10N 20W'},dets:[{cls:'fish',conf:.99},{cls:'mm',conf:.7},{cls:'orca',conf:.91}]};
 test('UTC DTG has zero padding, month and year and rejects invalid dates',()=>{
