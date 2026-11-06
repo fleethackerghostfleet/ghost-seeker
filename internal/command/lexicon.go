@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -303,9 +304,15 @@ func normalizeDirective(text string, edgeSubtypes bool) normalized {
 	var narrowed strings.Builder
 	last := 0
 	for _, loc := range elseClausePattern.FindAllStringIndex(text, -1) {
+		prefix := text[:loc[0]]
 		clauseStart := 0
-		for _, pattern := range []*regexp.Regexp{splitPattern, positivePattern} {
-			for _, m := range pattern.FindAllStringIndex(text[:loc[0]], -1) {
+		for _, m := range splitPattern.FindAllStringIndex(prefix, -1) {
+			clauseStart = max(clauseStart, m[1])
+		}
+		negated := negativeRewrites.FindAllStringIndex(prefix, -1)
+		for _, m := range positivePattern.FindAllStringIndex(prefix, -1) {
+			// "show" in "don't show" is part of the negation.
+			if !slices.ContainsFunc(negated, func(n []int) bool { return n[0] <= m[0] && m[1] <= n[1] }) {
 				clauseStart = max(clauseStart, m[1])
 			}
 		}
