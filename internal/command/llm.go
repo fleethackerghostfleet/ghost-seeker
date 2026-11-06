@@ -13,18 +13,98 @@ import (
 )
 
 type LLMClient struct {
-	BaseURL   string
-	Model     string
-	Timeout   time.Duration
-	HTTP      *http.Client
-	Cooldown  time.Duration
+	// Provider is "" (OpenAI-compatible chat completions) or "vertex".
+	Provider string
+	BaseURL  string
+	Model    string
+	Timeout  time.Duration
+	HTTP     *http.Client
+	Cooldown time.Duration
+	// Token returns a bearer token for each request when set.
+	Token     func(context.Context) (string, error)
+	CacheTTL  time.Duration
 	mu        sync.Mutex
 	openUntil time.Time
+	cache     map[string]cachedDraft
+	inflight  map[string]*draftCall
 }
 
 type llmDraft struct {
-	Rules       []Rule `json:"rules"`
-	DurationMin *int   `json:"durationMin"`
+	Rules       []Rule       `json:"rules"`
+	DurationMin *int         `json:"durationMin"`
+	Mappings    []llmMapping `json:"mappings,omitempty"`
+}
+
+type llmMapping struct {
+	Phrase  string   `json:"phrase"`
+	Classes []string `json:"classes"`
+}
+
+type cachedDraft struct {
+	draft   llmDraft
+	expires time.Time
+}
+
+type draftCall struct {
+	done  chan struct{}
+	draft llmDraft
+	err   error
+}
+
+const llmCacheSize = 512
+
+func cacheKey(text string) string {
+	return strings.ToLower(strings.Join(strings.Fields(text), " "))
+}
+
+// Cached returns a previously compiled draft without calling the model.
+func (c *LLMClient) Cached(text string) (llmDraft, bool) {
+	if c == nil {
+		return llmDraft{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.cache[cacheKey(text)]
+	if !ok || time.Now().After(entry.expires) {
+		return llmDraft{}, false
+	}
+	return entry.draft, true
+}
+
+// Prefetch compiles text in the background so a later Draft or Cached call
+// for the same text returns immediately. Previews use it to never wait.
+func (c *LLMClient) Prefetch(text string) {
+	if c == nil || strings.TrimSpace(text) == "" || c.isOpen() {
+		return
+	}
+	key := cacheKey(text)
+	c.mu.Lock()
+	_, cached := c.cache[key]
+	_, running := c.inflight[key]
+	c.mu.Unlock()
+	if cached || running {
+		return
+	}
+	go func() { _, _ = c.Draft(context.Background(), text) }()
+}
+
+func (c *LLMClient) store(key string, draft llmDraft) {
+	ttl := c.CacheTTL
+	if ttl == 0 {
+		ttl = time.Hour
+	}
+	if c.cache == nil {
+		c.cache = make(map[string]cachedDraft)
+	}
+	if len(c.cache) >= llmCacheSize {
+		now := time.Now()
+		for existing, entry := range c.cache {
+			if now.After(entry.expires) || len(c.cache) >= llmCacheSize {
+				delete(c.cache, existing)
+			}
+		}
+	}
+	c.cache[key] = cachedDraft{draft: draft, expires: time.Now().Add(ttl)}
 }
 
 func NewLLMClient(baseURL, model string, timeout time.Duration) *LLMClient {
@@ -41,21 +121,66 @@ func (c *LLMClient) Draft(ctx context.Context, text string) (llmDraft, error) {
 	if c == nil {
 		return llmDraft{}, fmt.Errorf("LLM client unavailable")
 	}
+	if draft, ok := c.Cached(text); ok {
+		return draft, nil
+	}
 	if c.isOpen() {
 		return llmDraft{}, fmt.Errorf("circuit open")
 	}
+	key := cacheKey(text)
+	c.mu.Lock()
+	call, running := c.inflight[key]
+	if !running {
+		call = &draftCall{done: make(chan struct{})}
+		if c.inflight == nil {
+			c.inflight = make(map[string]*draftCall)
+		}
+		c.inflight[key] = call
+	}
+	c.mu.Unlock()
+	if !running {
+		go c.run(key, text, call)
+	}
+	select {
+	case <-call.done:
+		return call.draft, call.err
+	case <-ctx.Done():
+		return llmDraft{}, ctx.Err()
+	}
+}
+
+// run performs one model request detached from the caller, so a cancelled
+// HTTP request still fills the cache for the next preview or apply.
+func (c *LLMClient) run(key, text string, call *draftCall) {
 	timeout := c.Timeout
 	if timeout <= 0 {
 		timeout = 8 * time.Second
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	draft, err := c.request(ctx, text)
+	var draft llmDraft
+	var err error
+	if c.Provider == "vertex" {
+		draft, err = c.vertexRequest(ctx, text)
+	} else {
+		draft, err = c.request(ctx, text)
+	}
 	if err != nil {
 		c.recordFailure()
-		return llmDraft{}, err
 	}
-	return draft, nil
+	valid := err == nil
+	if valid {
+		_, validateErr := validateDraft(draft)
+		valid = validateErr == nil
+	}
+	c.mu.Lock()
+	delete(c.inflight, key)
+	if valid {
+		c.store(key, draft)
+	}
+	c.mu.Unlock()
+	call.draft, call.err = draft, err
+	close(call.done)
 }
 
 func (c *LLMClient) request(ctx context.Context, text string) (llmDraft, error) {
@@ -83,6 +208,13 @@ func (c *LLMClient) request(ctx context.Context, text string) (llmDraft, error) 
 			return llmDraft{}, err
 		}
 		req.Header.Set("Content-Type", "application/json")
+		if c.Token != nil {
+			token, err := c.Token(ctx)
+			if err != nil {
+				return llmDraft{}, err
+			}
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 		client := c.HTTP
 		if client == nil {
 			client = http.DefaultClient
@@ -141,6 +273,13 @@ func stripJSONFence(content string) string {
 	content = strings.TrimSpace(content)
 	content = strings.TrimSuffix(content, "```")
 	return strings.TrimSpace(content)
+}
+
+func (c *LLMClient) label() string {
+	if c != nil && c.Provider == "vertex" {
+		return "Gemini (Vertex AI)"
+	}
+	return "Local LLM"
 }
 
 func (c *LLMClient) isOpen() bool {
