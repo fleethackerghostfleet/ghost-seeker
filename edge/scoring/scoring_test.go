@@ -58,6 +58,24 @@ func TestInterestBoostAndSuppress(t *testing.T) {
 	}
 }
 
+func TestQualifiedOpenVocabularyInterestDoesNotMatchBareNoun(t *testing.T) {
+	for _, suppress := range []bool{false, true} {
+		interest := &pb.Interest{BoostLabels: []string{"red sailboats"}}
+		if suppress {
+			interest = &pb.Interest{SuppressLabels: []string{"red sailboats"}}
+		}
+		ctx := &Context{Now: time.Now(), Policy: &pb.Policy{Interest: interest}}
+		for _, label := range []string{"sailboat", "boat", "red", "infrared sailboats"} {
+			if r := (Interest{}).Score(img(label, .9, 0), ctx); r.Multiplier > 1 || r.Suppressed {
+				t.Errorf("qualified interest broadened to %q: %+v", label, r)
+			}
+		}
+		if r := (Interest{}).Score(img("red sailboats", .9, 0), ctx); r.Suppressed != suppress || !suppress && r.Multiplier <= 1 {
+			t.Fatalf("qualified detection not matched: %+v", r)
+		}
+	}
+}
+
 func TestInterestPerLabelBoostWeights(t *testing.T) {
 	p := &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"submarine", "tanker"}, BoostWeights: map[string]float64{"submarine": 3}}}
 	ctx := &Context{Policy: p, Now: time.Now()}
