@@ -42,7 +42,7 @@ func TestReviewDuration(t *testing.T) {
 }
 
 func TestGuardrailsEverything(t *testing.T) {
-	for _, text := range []string{"prioritize everything"} {
+	for _, text := range []string{"prioritize everything", "prioritize ships, aircraft, people, debris, birds and buoys"} {
 		if got := (&Compiler{}).CompileRules(text); !got.Blocked {
 			t.Errorf("%q should be blocked", text)
 		}
