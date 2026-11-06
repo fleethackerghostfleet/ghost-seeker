@@ -10,7 +10,7 @@ const workbench=(()=>{
  const changes=(before,next)=>{const map=new Map(before.map(i=>[i.id,i.tier]));return next.filter(i=>map.has(i.id)&&map.get(i.id)!==i.tier).length};
  const normalize=r=>({...r,classes:r.classes||[],attrs:r.attrs||[],sources:r.sources||[],withinMin:r.withinMin||0,weight:r.weight||1});
  const rows=()=>sorted(after.map(result=>{const item=findItem(result.id),pin=draft.pins[result.id];return item&&!isScene(item)?{...item,...result,tier:pin===0?(item.detectorNegative?4:result.central>=.8?1:result.central>=.6?2:result.central>=.35?3:4):pin??result.tier}:null}).filter(Boolean));
- const compilerLabel=path=>(path==='research'||path?.startsWith('research/'))?'IBM Granite · research language compiler':({llm:'On-board language assistant',rules:'Built-in language rules',edited:'Your edited rules'}[path]||'');
+ const compilerLabel=path=>(path==='research'||path?.startsWith('research/'))?'IBM Granite · research language compiler':({llm:'On-board language assistant',rules:'On-board language understanding',edited:'Your edited rules'}[path]||'');
  const draftKey=()=>JSON.stringify(draft);
  function updateApply(){
   $('wbApply').disabled=busy||!!compiling||interpretationPending||!previewReady||!!interpretation?.blocked||(!draft.rules.length&&!Object.keys(draft.pins).length);
