@@ -18,7 +18,7 @@ test('operator navigation and empty briefing explain the next step',()=>{
 
 test('advanced collection settings are together and collapsed, with active directives outside',()=>{
  const html=read('index.html');
- const advanced=html.slice(html.indexOf('<details class="panel"><summary>Advanced settings</summary>'),html.indexOf('<dialog id="wbConfirm">'));
+ const advanced=html.slice(html.indexOf('<details class="panel"><summary>Advanced settings</summary>'),html.indexOf('<dialog id="wbConfirm"'));
  assert.ok(advanced.length>0);
  for(const label of ['Base prioritization model','Effective object weights','Super admin · raw policy (protojson)','Policy audit'])assert.ok(advanced.includes(label),label);
  assert.doesNotMatch(advanced,/<details[^>]*\bopen\b|<h3>Active directives<\/h3>/);
