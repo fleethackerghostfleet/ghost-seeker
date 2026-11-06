@@ -342,15 +342,17 @@ historical verifier limitation above remains explicit.
 
 The subsequent performance-only review fix walks trajectories backwards only
 to the observation cutoff, rather than copying lifetime trajectories every
-frame. Current-state lookups binary-search the chronological trajectory to
-the last timestamp at/before `first_t_s`, then consume only that observation;
-even a long confirmation lag does not scan the intervening future trajectory.
+frame. Current-state lookups reverse-scan arrival order, skipping observations
+later than `first_t_s`, then consume only the latest eligible arrival. This
+does not assume sorted timestamps: captured-time rollbacks are accepted by
+the live frame clock. Work stays window/confirmation-lag bounded when timestamps
+are monotonic, rather than scanning the sighting's entire lifetime.
 Copied detector history remains window-bounded (with the pending-lag anchor
 described above). No aggregator trajectory or event semantics changed.
 
 A 10,000-point regression retains only 31 inclusive one-second observations
 for the 30-second window and reads only 32 trajectory points during snapshot.
-Looking up time 1 from the far end reads at most 16 points. Twenty full-scan
+Looking up time 9995 from the far end reads five points. Twenty full-scan
 equivalence cases cover live and evicted states, old/current/future first
 times and memory boundaries; existing moving-contact, pruning, pending-lag,
 empty-state and source-isolation tests also pass.
@@ -358,7 +360,17 @@ empty-state and source-isolation tests also pass.
 Quality tables/assets are retained from the measured `6a7954a` replay based on
 those equivalence tests; no full evaluation was rerun for this optimization.
 The timing table above is **pre-optimization**, not a new measurement of this
-bounded implementation. Final checks: **722 passed in 8.43s** and
+bounded implementation. Checks before the rollback correction: **722 passed in 8.43s** and
 `make prod-gate`: **PASS**. Logs: `~/data/review277-bounded-pytest.log` and
 `~/data/review277-bounded-prod-gate.log`. Go/Node inputs are unchanged from the
 earlier successful checks.
+
+The rollback correction removes the binary search from `8392e97` rather than
+adding a sortedness-dependent fallback. Its regression covers an arrival-order
+trajectory with timestamps 0, 10, 12, 2, 11: a sighting first seen at time 3
+must match the nearby observation at time 2, both live and after eviction.
+The monotonic MOT quality results remain unchanged by construction and the
+full-scan equivalence tests; no full evaluation or latency replay was repeated.
+After the rollback correction: **723 passed in 8.24s**; `make prod-gate`:
+**PASS**. Full logs: `~/data/review277-rollback-pytest.log` and
+`~/data/review277-rollback-prod-gate.log`.

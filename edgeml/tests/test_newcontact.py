@@ -113,8 +113,19 @@ def test_long_lived_trajectory_work_is_bounded_to_memory_and_lookup():
     assert detector.history["old"][1][0][0] == 9969.
     assert trajectory.reads == 32
     trajectory.reads = 0
-    assert not detector.is_new(event([0, 0, 10, 10], first=1.), {"old": old})
-    assert trajectory.reads <= 16
+    assert not detector.is_new(event([0, 0, 10, 10], first=9995.), {"old": old})
+    assert trajectory.reads == 5
+
+
+def test_lookup_skips_future_observations_after_captured_time_rollback():
+    near, far = [0, 0, 10, 10], [100, 100, 10, 10]
+    trajectory = [(0, 0., far, .9), (1, 10., far, .9), (2, 12., far, .9),
+                  (3, 2., near, .9), (4, 11., far, .9)]
+    old = state(far, seen=11., traj=trajectory)
+    detector = NewContactDetector()
+    assert not detector.is_new(event(near, first=3.), {"old": old})
+    detector.observe({"old": old}, 12.)
+    assert not detector.is_new(event(near, first=3.), {})
 
 
 @pytest.mark.parametrize("first", [0., 1., 100., 9968., 9969., 9990., 9995., 9999., 10029., 10030.])

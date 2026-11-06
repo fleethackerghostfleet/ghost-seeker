@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-from bisect import bisect_right
 
 from ..types import box_iou
 
@@ -18,12 +17,12 @@ class NewContactDetector:
     @staticmethod
     def _observations(state, cutoff=-math.inf, before=None):
         trajectory = getattr(state, "traj", ()) or [(0, state.last_seen_t, state.s.box, 0)]
-        end = len(trajectory) if before is None else bisect_right(trajectory, before, key=lambda ob: ob[1])
-        for index in range(end - 1, -1, -1):
+        for index in range(len(trajectory) - 1, -1, -1):
             ob = trajectory[index]
             if ob[1] < cutoff:
                 break
-            yield ob[1], tuple(ob[2])
+            if before is None or ob[1] <= before:
+                yield ob[1], tuple(ob[2])
 
     def observe(self, states, t_s):
         anchor = min([t_s] + [st.s.first_t_s for st in states.values() if st.status == "pending"])
