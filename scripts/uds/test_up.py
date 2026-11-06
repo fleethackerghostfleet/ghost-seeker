@@ -16,7 +16,7 @@ docker() {
   [[ "$1 $2" == 'network inspect' ]] || return 1
   shift 2
   while [[ "$1" != --format ]]; do
-    case "$TARGET:$1" in
+    case "${TARGET:-both}:$1" in
       shore:k3d-shore-test|ship:k3d-ship-test|both:k3d-shore-test|both:k3d-ship-test) echo "$1";;
       *) echo 'network does not exist on this host' >&2; return 1;;
     esac
@@ -41,7 +41,7 @@ docker() {
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(networks, expected)
 
-    def test_invalid_or_empty_target_does_not_inspect_networks(self):
+    def test_invalid_and_default_target_handling(self):
         for target in ['invalid', '']:
             with self.subTest(target=target):
                 result, networks = self.run_dispatch(target)
