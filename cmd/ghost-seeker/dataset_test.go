@@ -154,7 +154,7 @@ func TestDatasetTickCapturesDespitePendingUploads(t *testing.T) {
 				items, _, _, _ := s.Snapshot()
 				var bytes int64
 				for _, item := range items {
-					bytes += item.Upload.Sent
+					bytes += item.Upload.Sent + item.Upload.MetaSent
 				}
 				return bytes
 			}

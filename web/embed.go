@@ -12,6 +12,14 @@ import (
 //go:embed static
 var files embed.FS
 
+func Imagery() fs.FS {
+	content, err := fs.Sub(files, "static/imagery")
+	if err != nil {
+		panic(err)
+	}
+	return content
+}
+
 func Handler() http.Handler {
 	content, err := fs.Sub(files, "static")
 	if err != nil {

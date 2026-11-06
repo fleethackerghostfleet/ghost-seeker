@@ -86,6 +86,8 @@ const (
 )
 
 type Item struct {
+	Capture *CaptureMeta `json:"capture,omitempty"`
+
 	Background       bool       `json:"background,omitempty"`
 	DetectorNegative bool       `json:"detectorNegative,omitempty"`
 	Upload           Upload     `json:"upload"`
@@ -141,6 +143,10 @@ type Item struct {
 }
 
 type Upload struct {
+	MetaBytes  int64      `json:"metadataBytes"`
+	MetaSent   int64      `json:"metadataSent"`
+	MetaDone   bool       `json:"metadataDone"`
+	MetaDoneAt *time.Time `json:"metadataDoneAt,omitempty"`
 	Override   string     `json:"override,omitempty"`
 	OverrideBy string     `json:"overrideBy,omitempty"`
 	OverrideAt *time.Time `json:"overrideAt,omitempty"`
@@ -204,5 +210,8 @@ type Stats struct {
 	// LinkBPS is the simulated ship-to-shore rate in bits/s (0 = outage).
 	LinkBPS int64 `json:"linkBps"`
 	// LinkFixed is true when -sim-link-bps pins the rate (no resampling).
-	LinkFixed bool `json:"linkFixed,omitempty"`
+	LinkFixed      bool       `json:"linkFixed,omitempty"`
+	MetaOnly       bool       `json:"metaOnly,omitempty"`
+	MetaOnlySince  *time.Time `json:"metaOnlySince,omitempty"`
+	MetaOnlyReason string     `json:"metaOnlyReason,omitempty"`
 }

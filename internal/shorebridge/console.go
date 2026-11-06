@@ -381,6 +381,7 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		}
 	}
 	item.Live = live
+	populateCapture(item, o)
 	if o.Scene {
 		item.Background = true
 		live.Event, live.Priority = "scene", "P4"
@@ -775,7 +776,61 @@ func (c *Console) statsLocked() command.Stats {
 	if c.live.Link.Controllable {
 		bytes = c.live.Link.Bytes
 	}
-	return command.Stats{Cap: int(e.ItemsTotal + e.Deduped), Keep: int(e.ItemsTotal), Drop: int(e.Deduped), Bytes: int(bytes), DB: int(s.ItemsTotal)}
+	stats := command.Stats{Cap: int(e.ItemsTotal + e.Deduped), Keep: int(e.ItemsTotal), Drop: int(e.Deduped), Bytes: int(bytes), DB: int(s.ItemsTotal), MetaOnly: e.MetaOnly, MetaOnlyReason: e.MetaOnlyReason}
+	if e.MetaOnlySince != 0 {
+		t := time.UnixMilli(e.MetaOnlySince).UTC()
+		stats.MetaOnlySince = &t
+	}
+	return stats
+}
+
+func (c *Console) itemMetadata(w http.ResponseWriter, r *http.Request) {
+	c.mu.Lock()
+	base := c.base[r.PathValue("id")]
+	if base != nil {
+		copy := c.withOverlay(base)
+		base = &copy
+	}
+	c.mu.Unlock()
+	if base == nil {
+		http.Error(w, "item not found", http.StatusNotFound)
+		return
+	}
+	record := command.BuildMetadata(*base)
+	if emcon := c.b.cachedEmcon(); emcon != "" {
+		record["capture"].(map[string]any)["sensor"].(map[string]any)["emcon"] = emcon
+	}
+	if base.Live != nil {
+		tr := record["transfer"].(map[string]any)
+		meta := base.Live.Forms["fact"]
+		tr["metadata"] = map[string]any{"bytes": meta.Bytes, "received": meta.Received, "state": meta.State, "done": meta.State == "received"}
+		image := base.Live.Forms[base.Live.ImageForm]
+		if base.Live.ImageForm == "" {
+			image = base.Live.Forms["full"]
+		}
+		tr["image"] = map[string]any{"bytes": image.Bytes, "received": image.Received, "state": image.State, "done": image.State == "received", "form": base.Live.ImageForm}
+		if f := c.b.fetchFact(r.Context(), base.Live.ItemID); f != nil {
+			if len(f.Tags) > 0 {
+				record["capture"].(map[string]any)["tags"] = f.Tags
+			}
+			if synthetic := strings.TrimSpace(f.Tags["synthetic"]); synthetic != "" {
+				var list []string
+				if strings.HasPrefix(synthetic, "[") {
+					_ = json.Unmarshal([]byte(synthetic), &list)
+				}
+				if len(list) == 0 {
+					for _, v := range strings.Split(synthetic, ",") {
+						if v = strings.TrimSpace(v); v != "" {
+							list = append(list, v)
+						}
+					}
+				}
+				record["synthetic"] = list
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(record)
 }
 
 func (c *Console) snapshotLocked() map[string]any {
@@ -809,6 +864,7 @@ func (c *Console) publish(name string, v any) {
 func (c *Console) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/config", c.config)
+	mux.HandleFunc("GET /api/items/{id}/metadata", c.itemMetadata)
 	mux.HandleFunc("GET /api/stream", c.stream)
 	mux.HandleFunc("PATCH /api/items/{id}", c.patchItem)
 	mux.HandleFunc("POST /api/items/{id}/review", c.reviewItem)
