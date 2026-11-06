@@ -13,8 +13,8 @@ MAX_PROMPTS = 5
 MAX_CROPS = 8
 NEGATIVES = ("a photo of the open sea", "a photo of waves and sky", "an empty ocean horizon",
              "sea spray and foam", "a blurry photo of water", "a photo of a boat", "a photo of a person")
-MIN_SIMILARITY = 0.25
-MIN_MARGIN = 0.025
+MIN_SIMILARITY = 0.275
+MIN_MARGIN = 0.05
 
 
 def labels_from_wire(known_labels):

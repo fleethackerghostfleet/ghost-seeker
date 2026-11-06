@@ -26,6 +26,8 @@ def main(args):
         labels = ["open-vocab:" + q for q in queries[:count]]
         # Fresh source state gives identical per-frame tracker/aggregator work in each condition.
         engine.sources.clear()
+        with engine._cached_text.lock:
+            engine._cached_text.cache.clear()
         started = time.perf_counter()
         engine.analyze("warmup", images[0], None, labels, False)
         cold = (time.perf_counter() - started) * 1000
@@ -36,7 +38,8 @@ def main(args):
                 engine.analyze(f"frame-{repeat}-{i}", image, None, labels, False)
                 times.append((time.perf_counter() - started) * 1000)
         report["conditions"][str(count)] = {"cold_first_ms": cold, "mean_ms": float(np.mean(times)),
-                                              "median_ms": float(np.median(times)), "p95_ms": float(np.percentile(times, 95))}
+                                              "median_ms": float(np.median(times)), "p95_ms": float(np.percentile(times, 95)),
+                                              "text_cache_entries": len(engine._cached_text.cache)}
         print(count, report["conditions"][str(count)], flush=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
 

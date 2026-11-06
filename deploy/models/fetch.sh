@@ -17,7 +17,7 @@ if ! (cd "$dest" && sha256sum -c "$here/RELEASE_SHA256SUMS"); then
 fi
 mkdir -p "$dest/files"
 tar -xzf "$dest/models-D.tar.gz" -C "$dest/files" --strip-components=1
-# Explicitly opt out for an image-only deployment; it advertises openVocabulary=false.
+# Set FETCH_TEXT=0 to skip optional text downloads on image-only deployments.
 if [ "${FETCH_TEXT:-1}" = 1 ]; then
   mkdir -p "$dest/files/mobileclip-s1"
   if ! (cd "$dest/files" && sha256sum -c "$here/TEXT_SHA256SUMS"); then

@@ -31,6 +31,12 @@ The live Go ingester retains matching frames even during tracker warm-up and
 applies effective policy boosts to their detection labels. With no active
 prompts there is no additional image/text inference.
 
+The Go edge derives prompts from the effective merged policy, after expiry,
+target and lock processing. A single directive with more than five novel
+phrases is blocked. If independently authored policy layers together exceed
+five, the edge deterministically uses the first five normalized phrases in
+alphabetical order; it never sends an unbounded request.
+
 The authenticated edge-only `GET /ship/inference` proxies these capabilities;
 shore caches them for 15 seconds and fails closed on unavailable/older edges.
 There are no protobuf fields or versioned shore `/api/v1` response changes.

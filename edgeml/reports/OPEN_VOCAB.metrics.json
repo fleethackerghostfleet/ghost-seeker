@@ -1,0 +1,129 @@
+{
+  "manifest_sha256": "f20aa4ccc956615157d1aa20fa4ac417c5bff1e1942884bfcb8c39c27bcfbd05",
+  "frames": 508,
+  "threshold": {
+    "similarity": 0.275,
+    "margin": 0.05
+  },
+  "dev": {
+    "buoy": {
+      "tp": 29,
+      "fp": 3,
+      "fn": 31,
+      "tn": 91,
+      "precision": 0.90625,
+      "recall": 0.48333333333333334,
+      "negative_fpr": 0.031914893617021274
+    },
+    "jetski": {
+      "tp": 16,
+      "fp": 3,
+      "fn": 34,
+      "tn": 101,
+      "precision": 0.8421052631578947,
+      "recall": 0.32,
+      "negative_fpr": 0.028846153846153848
+    },
+    "life saving appliances": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 50,
+      "tn": 104,
+      "precision": 0.0,
+      "recall": 0.0,
+      "negative_fpr": 0.0
+    }
+  },
+  "test": {
+    "buoy": {
+      "tp": 72,
+      "fp": 15,
+      "fn": 112,
+      "tn": 155,
+      "precision": 0.8275862068965517,
+      "recall": 0.391304347826087,
+      "negative_fpr": 0.08823529411764706
+    },
+    "jetski": {
+      "tp": 48,
+      "fp": 4,
+      "fn": 62,
+      "tn": 240,
+      "precision": 0.9230769230769231,
+      "recall": 0.43636363636363634,
+      "negative_fpr": 0.01639344262295082
+    },
+    "life saving appliances": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 100,
+      "tn": 254,
+      "precision": 0.0,
+      "recall": 0.0,
+      "negative_fpr": 0.0
+    }
+  },
+  "hardware": {
+    "platform": "Linux-6.8.0-1060-aws-x86_64-with-glibc2.35",
+    "cpu_count": 8,
+    "cpu_model": "Intel Xeon, 8 vCPUs, CPU-only"
+  },
+  "queries": {
+    "buoy": "buoy",
+    "jetski": "jetski",
+    "life saving appliances": "life_saving_appliances"
+  },
+  "latency": {
+    "frames_per_condition": 24,
+    "threads": 4,
+    "scope": "EdgemlEngine.analyze including detector, tracker, aggregator, optional crop/grid matcher; excludes JPEG/RPC",
+    "image_ids": [
+      "seadronessee/train/9653",
+      "seadronessee/train/7098",
+      "seadronessee/train/14968",
+      "seadronessee/train/15091",
+      "seadronessee/train/9730",
+      "seadronessee/train/11492",
+      "seadronessee/train/3695",
+      "seadronessee/train/13825",
+      "seadronessee/train/15140",
+      "seadronessee/train/13810",
+      "seadronessee/train/14914",
+      "seadronessee/train/9546"
+    ],
+    "conditions": {
+      "0": {
+        "cold_first_ms": 1344.6844269999474,
+        "mean_ms": 249.58455383331093,
+        "median_ms": 274.80456050000157,
+        "p95_ms": 369.8480278499687,
+        "text_cache_entries": 0
+      },
+      "1": {
+        "cold_first_ms": 1254.152933000114,
+        "mean_ms": 907.2461241666664,
+        "median_ms": 908.7357055000211,
+        "p95_ms": 1022.4611873499612,
+        "text_cache_entries": 9
+      },
+      "5": {
+        "cold_first_ms": 1657.613278999861,
+        "mean_ms": 850.0315963750136,
+        "median_ms": 825.7823769999959,
+        "p95_ms": 1097.65194785017,
+        "text_cache_entries": 17
+      }
+    }
+  },
+  "dataset": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/clean/v3/coverage-20261105/catalog/",
+  "splits": {
+    "dev": {
+      "frames": 154,
+      "source_videos": 29
+    },
+    "test": {
+      "frames": 354,
+      "source_videos": 55
+    }
+  }
+}

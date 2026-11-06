@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from edgeml.sidecar.open_vocab import (MAX_CROPS, NEGATIVES, OpenVocabulary, TextCache, labels_from_wire,
-                                      prompts, regions)
+from edgeml.sidecar.open_vocab import (MAX_CROPS, MIN_MARGIN, MIN_SIMILARITY, NEGATIVES, OpenVocabulary,
+                                      TextCache, labels_from_wire, regions)
 
 
 def test_wire_bounds_and_explicit_opt_in():
@@ -62,6 +62,15 @@ def test_negative_margin_rejects_generic_water_even_above_absolute_threshold():
     assert model.detect(np.zeros((30, 50, 3), np.uint8), [], ["oil slick"]) == []
     scores, margins = model.score([[.6, .8]], ["oil slick"])
     assert scores[0, 0] > model.similarity and margins[0, 0] < 0
+
+
+def test_dev_calibrated_thresholds_require_both_gates():
+    assert MIN_SIMILARITY == .275 and MIN_MARGIN == .05
+    model, _ = fixture_matcher([1., 0.])
+    image = np.zeros((20, 20, 3), np.uint8)
+    for score, margin, accepted in ((.274, .06, False), (.30, .049, False), (.275, .05, True)):
+        model.score = lambda features, labels: (np.full((5, 1), score), np.full((5, 1), margin))
+        assert bool(model.detect(image, [], ["life raft"])) is accepted
 
 
 def test_regions_bounded_clipped_and_keep_coarse_grid():
