@@ -6,6 +6,9 @@ import (
 )
 
 func TestInterpret(t *testing.T) {
+	if s, b := Interpret("ignore whales near the ship"); !reflect.DeepEqual(s, []string{"marine mammal"}) || len(b) != 0 {
+		t.Fatalf("observation suppress = %v, boost = %v", s, b)
+	}
 	s, b := Interpret("Ignore cargo ships; prioritize submarines and small boats")
 	if !reflect.DeepEqual(s, []string{"cargo ship"}) {
 		t.Fatalf("suppress = %v", s)

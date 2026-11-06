@@ -48,11 +48,11 @@ func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
 	}
 	durationMin, rest := extractDuration(text)
 	warnings := make([]string, 0)
-	if c != nil && c.EdgeSubtypes {
-		rules, unknown := parseDirectiveDetailed(rest, true)
+	if c != nil {
+		rules, unknown := parseDirectiveDetailed(rest, c.EdgeSubtypes)
 		for _, rule := range rules {
 			for _, class := range rule.Classes {
-				if catalog.EdgeSubtypes[class] {
+				if (c.EdgeSubtypes && catalog.EdgeSubtypes[class]) || (class == "marine mammal" && len(unknown) == 0) {
 					return c.finish(text, rules, unknown, durationMin, "rules", warnings)
 				}
 			}

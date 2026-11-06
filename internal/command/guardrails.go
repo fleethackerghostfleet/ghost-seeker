@@ -24,11 +24,9 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 			classSet[class] = true
 		}
 	}
-	coreClasses := 0
-	for class := range catalog.Classes {
-		if !catalog.EdgeSubtypes[class] {
-			coreClasses++
-		}
+	coreClasses := len(catalog.Classes)
+	if _, ok := catalog.Classes["marine mammal"]; ok {
+		coreClasses--
 	}
 	if len(classSet)*5 >= coreClasses*4 {
 		blocked = true

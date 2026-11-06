@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
 
 var suppressVerbs = []string{"ignore", "suppress", "deprioritize", "deprioritise", "mute", "skip", "drop", "hide", "stop showing", "don't show", "do not show", "not interested in"}
@@ -14,7 +15,7 @@ var boostVerbs = []string{"prioritize", "prioritise", "boost", "focus on", "look
 // boost [submarine]. Labels are singularised to match detector labels.
 func Interpret(text string) (suppress, boost []string) {
 	for _, clause := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return r == ';' || r == ',' || r == '.' || r == '\n' }) {
-		clause = strings.TrimSpace(clause)
+		clause = command.StripObservationContext(clause)
 		if clause == "" {
 			continue
 		}
@@ -24,6 +25,8 @@ func Interpret(text string) (suppress, boost []string) {
 		} else if verb, rest, ok := leadVerb(clause, boostVerbs); ok {
 			_ = verb
 			boost = append(boost, labels(rest)...)
+		} else if classes := command.ObservationClasses(clause); len(classes) > 0 {
+			boost = append(boost, classes...)
 		}
 	}
 	return
@@ -52,6 +55,11 @@ func labels(rest string) []string {
 	rest = strings.TrimPrefix(rest, "the ")
 	rest = strings.TrimPrefix(rest, "all ")
 	rest = strings.TrimPrefix(rest, "any ")
+	if strings.Contains(rest, " near ") {
+		if classes := command.ObservationClasses(rest); len(classes) > 0 {
+			return classes
+		}
+	}
 	var out []string
 	for _, part := range strings.Split(rest, " and ") {
 		part = strings.TrimSpace(part)

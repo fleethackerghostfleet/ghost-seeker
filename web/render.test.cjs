@@ -6,6 +6,18 @@ const {test}=require('node:test');
 
 const source=fs.readFileSync(path.join(__dirname,'static/render.js'),'utf8');
 
+test('marine mammal draws a body in side and top views',()=>{
+ const {context,canvases}=setup();
+ context.document.createElement('canvas');
+ const ctx=canvases[0].ctx;
+ context.drawSide(ctx,'marine mammal',{x:10,y:20,w:48,h:19},'eo',{});
+ assert.ok(canvases[0].calls.some(c=>c[0]==='ellipse'));
+ canvases[0].calls.length=0;
+ context.drawTop(ctx,'marine mammal',{cx:100,cy:100,L:48,B:19,a:0},'eo',{});
+ assert.ok(canvases[0].calls.some(c=>c[0]==='ellipse'));
+ assert.ok(canvases[0].calls.some(c=>c[0]==='fill'));
+});
+
 function setup(){
  const canvases=[];
  const math=Object.create(Math);

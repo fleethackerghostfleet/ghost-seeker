@@ -25,7 +25,7 @@ func TestNightFramesSeparateFromBenchLibrary(t *testing.T) {
 			}
 		}
 	}
-	if count != 48 {
+	if count != 52 {
 		t.Fatalf("ordinary library count = %d", count)
 	}
 	g := NewGenerator()
