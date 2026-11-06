@@ -584,32 +584,31 @@ function renderZoomContent(){const it=items.find(i=>i.id===state.sel);if(!it){cl
  z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
 function closeDetail(){closeZoom();const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
 function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
-function metadataValue(value,path,synthetic){
- if(value===null||value===undefined||value==='')return'';
- const format=v=>v&&typeof v==='object'?Array.isArray(v)?v.map(format).join(' · '):Object.entries(v).map(([k,x])=>`${k}: ${format(x)}`).join(' · '):String(v??'');
- const text=format(value);
- return`${esc(text)}${synthetic?'<sup class="synthetic-marker" title="Synthetic value">sim</sup>':''}`;
-}
-function metadataRows(value,group,path='',synthetic=[]){
- if(!value||typeof value!=='object')return'';
- return Object.entries(value).map(([key,val])=>{
-  const p=path?`${path}.${key}`:key,mark=synthetic.some(k=>String(k).toLowerCase()===p.toLowerCase()||String(k).toLowerCase()===key.toLowerCase()||String(k).toLowerCase().startsWith(p.toLowerCase()+'.')||String(k).toLowerCase().startsWith(p.toLowerCase()+'['));
-  if(group==='transfer'&&val&&typeof val==='object'){
-   const done=val.done||val.state==='received',sent=val.sent??val.received??0,bytes=val.bytes||0;
-   const status=done?'on shore':val.state||'queued';
-   const text=`${status} · ${fmtBytes(bytes)}${done&&val.doneAt?` · ${String(val.doneAt).replace(/^.*T/,'').replace(/\.\d+Z$/,'Z')}`:!done?` · ${Math.round(100*sent/Math.max(1,bytes))}%`:''}`;
-   return`<tr><th>${esc(key)}</th><td>${metadataValue(text,p,mark)}</td></tr>`;
-  }
-  if(Array.isArray(val)&&val.some(v=>v&&typeof v==='object'))return val.map((v,n)=>`<tr><th>${esc(key)} ${n+1}</th><td>${metadataValue(v,`${p}[${n}]`,mark)}</td></tr>`).join('');
-  const label=group==='scoring'?({edge:'Ship score',central:'Shore score'}[key]||key):key;
-  const display=key==='imageSize'?fmtBytes(val):group==='scoring'&&typeof val==='number'&&!Number.isInteger(val)?val.toFixed(3):val;
-  return`<tr><th>${esc(label.replace(/([a-z])([A-Z])/g,'$1 $2'))}</th><td>${metadataValue(display,p,mark)}</td></tr>`;
- }).join('');
-}
 function metadataHTML(record){
- const groups=[['capture','Capture'],['model','Model classification'],['scoring','Scoring'],['operator','Operator'],['transfer','Transfer']];
- const synthetic=record?.synthetic||[];
- return groups.map(([key,label])=>record?.[key]?`<section class="metadata-group"><h5>${label}</h5><table>${metadataRows(record[key],key,key,synthetic)}</table></section>`:'').join('')||'<p class="hint">Metadata unavailable.</p>';
+ if(!record||!Object.keys(record).length)return'<p class="hint">Metadata unavailable.</p>';
+ const c=record.capture||{},m=record.model||{},s=record.scoring||{},o=record.operator||{},t=record.transfer||{};
+ const synthetic=[...(record.synthetic||[]),...(c.synthetic||[])];
+ const marked=keys=>keys.some(key=>synthetic.some(k=>k===key||k===key.split('.').pop()));
+ const row=(label,value,keys=[],title='')=>value===undefined||value===null||value===''?'':`<tr><th>${esc(label)}</th><td${title?` title="${esc(title)}"`:''}>${esc(value)}${marked(keys)?'<sup class="synthetic-marker" title="Synthetic value">sim</sup>':''}</td></tr>`;
+ const group=(name,rows)=>rows?`<section class="metadata-group"><h5>${name}</h5><table>${rows}</table></section>`:'';
+ const number=(v,d=2)=>typeof v==='number'&&Number.isFinite(v)?v.toFixed(d):'';
+ const name=v=>String(v||'').replace(/_/g,' ').replace(/^\w/,x=>x.toUpperCase());
+ const sensor={...(SRC[c.source]||{}),...(c.sensor||{})};
+ const position=c.lat!==undefined&&c.lon!==undefined?`${number(c.lat,4)}, ${number(c.lon,4)}${c.headingDeg!==undefined?` · ${number(c.headingDeg,0)}°`:''}`:'';
+ const hash=c.contentHash||'';
+ const image=[c.imageSize>0?`${number(c.imageSize/(1024*1024))} MB`:'',c.widthPx>0&&c.heightPx>0?`${c.widthPx} × ${c.heightPx}`:''].filter(Boolean).join(' · ');
+ const capture=row('Time (UTC Z)',c.time)+row('Sensor',[sensor.name||c.source,sensor.hardware||sensor.hw,sensor.emcon].filter(Boolean).join(' · '))+row('Position',position,['capture.lat','capture.lon','capture.headingDeg'])+row('Altitude',c.altM?`${number(c.altM,0)} m`:'',['capture.altM'])+row('Frame / record',[c.frame?`Frame ${c.frame}`:'',c.record?`#${c.record}`:''].filter(Boolean).join(' / '))+row('Content hash',hash.length>24?hash.slice(0,24)+'…':hash,['capture.contentHash'],hash)+row('Image size',image,['capture.widthPx','capture.heightPx'])+row('Field of view',c.fovDeg?`${number(c.fovDeg,0)}°`:'',['capture.fovDeg']);
+ const dets=m.detections||[];
+ const detections=dets.map((d,n)=>{const b=d.box||{},box=['x','y','w','h'].every(k=>typeof b[k]==='number')?` · box ${['x','y','w','h'].map(k=>Math.round(b[k])).join(',')}`:'';return row(`Detection ${n+1}`,`${clsOf(d.class).lab} · conf ${number(d.confidence)}${box}`)}).join('');
+ const ships=dets.map(d=>d.shipClass).filter(Boolean);
+ const shipText=ships.map(ship=>[ship.label||name(ship.type),ship.aspect,ship.size,ship.markings?`markings ${ship.markings}`:'',(ship.features||[]).join(', '),ship.model].filter(Boolean).join(' · ')).join('; ');
+ const behavior=[...new Set(dets.flatMap(d=>Object.entries(d.attrs||{}).filter(([,v])=>v===true).map(([key])=>ATTR_LAB[key]||name(key))))].join(' · ');
+ const lights=dets.map(d=>d.signal?[d.signal.line||d.signal.meaning,d.signal.ref,d.signal.aspect].filter(Boolean).join(' · '):(d.lights||[]).map(light=>`${name(light.colour)}${light.flashing?' flashing':''} · conf ${number(light.conf)}`).join(', ')).filter(Boolean).join('; ');
+ const model=row('Model',m.name||m.id)+detections+row('Subtype (zero-shot)',m.subtype?`${name(m.subtype)}${m.subtypeConf?` · ${number(m.subtypeConf)}`:''}`:'',['model.subtype','model.subtypeConf'])+row('Ship class',shipText)+row('Behavior',behavior||'None')+row('Night lights / COLREGS',lights||'None')+row('Unknownness',number(m.unknownness),['model.unknownness'])+row('Tracked object',m.trackId?`${m.trackId}${m.trackFrames?` · ${m.trackFrames} frames`:''}`:'',['model.trackId','model.trackFrames']);
+ const scoring=row('Ship score',number(s.edge,3))+row('Shore score',number(s.central,3))+row('Tier',s.tier?`P${s.tier} · ${TNAME[s.tier]||''}`:'')+row('Top reasons',(s.topReasons||[]).map(v=>ATTR_LAB[v]||clsOf(v).lab||name(v)).join(' · ')||'None')+row('Filter',s.filtered?`${name(s.filtered)}${s.dupOf?` · repeat of ${s.dupOf}`:''}`:'None');
+ const operator=row('Label override',o.labelOverride?name(o.labelOverride):'None')+row('Manual tier',o.manualTier?`P${o.manualTier} · ${TNAME[o.manualTier]||''}`:'None (model priority)')+row('Reviewed',o.humanReviewed?'Human reviewed':o.reviewed?'Reviewed':'Not reviewed')+row('Commander decision',o.decision?name(o.decision):'Pending');
+ const transfer=(label,value)=>{if(!value)return'';const done=value.done||value.state==='received',bytes=value.bytes||0,sent=value.sent??value.received??0;return row(label,[done?'on shore':value.state||'queued',bytes?fmtBytes(bytes):'',done&&value.doneAt?String(value.doneAt).replace(/^.*T/,'').replace(/\.\d+Z$/,'Z'):!done&&bytes?`${Math.round(100*sent/bytes)}%`:''].filter(Boolean).join(' · '))};
+ return group('Capture',capture)+group('Model classification',model)+group('Scoring',scoring)+group('Operator',operator)+group('Transfer',transfer('Metadata',t.metadata)+transfer('Image',t.image));
 }
 async function loadMetadata(it,panel){
  if(!panel||!panel.open)return;

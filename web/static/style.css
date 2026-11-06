@@ -187,11 +187,11 @@ body.drawer-open .drawer{transform:none}
 .dsec{margin-bottom:14px}
 .dsec h4{margin:0 0 6px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .metadata-panel{margin-top:14px;color:var(--muted)}
-.metadata-panel>summary{list-style:none;cursor:pointer;margin:0 0 8px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;outline:none}
+.metadata-panel>summary{list-style:none;cursor:pointer;margin:0 0 8px;padding:0;border:0;background:none;box-shadow:none;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;outline:none}
 .metadata-panel>summary::-webkit-details-marker{display:none}.metadata-panel>summary:focus-visible{outline:1px solid var(--line);outline-offset:3px}
 .metadata-caret{display:inline-block;width:14px;color:var(--muted)}
-.metadata-group{border-top:1px solid var(--line);padding:7px 0 3px}.metadata-group h5{margin:0 0 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-.metadata-group:first-child{border-top:0}.metadata-group table{width:100%;border-collapse:collapse;font:11px/1.35 "IBM Plex Mono",ui-monospace,monospace}.metadata-group th,.metadata-group td{padding:2px 0;border:0;text-align:left;vertical-align:top;font-size:11px;letter-spacing:0;text-transform:none}.metadata-group th{width:30%;color:var(--muted);font-weight:500}.metadata-group td{color:var(--text);word-break:break-word}.synthetic-marker{margin-left:5px;color:var(--muted);font:9px system-ui;letter-spacing:0;text-transform:none}
+.metadata-group{border-top:1px solid var(--line);padding:5px 0 3px}.metadata-group h5{margin:0 0 3px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.metadata-group:first-child{border-top:0}.metadata-group table{width:100%;border-collapse:collapse;font:11px/1.25 "IBM Plex Mono",ui-monospace,monospace}.metadata-group th,.metadata-group td{padding:0;border:0;text-align:left;vertical-align:top;font-size:11px;letter-spacing:0;text-transform:none}.metadata-group th{width:26%;color:var(--muted);font-weight:500}.metadata-group td{color:var(--text);word-break:break-word}.synthetic-marker{margin-left:5px;color:var(--muted);font:9px system-ui;letter-spacing:0;text-transform:none}
 .metadata-copy{display:block;margin:9px 0 0 auto}
 table{width:100%;border-collapse:collapse;font-size:12px}
 td,th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}

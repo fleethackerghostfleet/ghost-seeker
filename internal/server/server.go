@@ -86,7 +86,9 @@ func (s *Server) itemMetadata(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "item not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, command.BuildMetadata(item))
+	record := command.BuildMetadata(item)
+	record["capture"].(map[string]any)["sensor"].(map[string]any)["emcon"] = s.policySummary().EMCON.Mode
+	writeJSON(w, http.StatusOK, record)
 }
 
 func (s *Server) SetCompiler(compiler *command.Compiler) {

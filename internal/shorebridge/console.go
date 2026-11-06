@@ -797,6 +797,9 @@ func (c *Console) itemMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	record := command.BuildMetadata(*base)
+	if emcon := c.b.cachedEmcon(); emcon != "" {
+		record["capture"].(map[string]any)["sensor"].(map[string]any)["emcon"] = emcon
+	}
 	if base.Live != nil {
 		tr := record["transfer"].(map[string]any)
 		meta := base.Live.Forms["fact"]

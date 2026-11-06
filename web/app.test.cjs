@@ -1202,7 +1202,7 @@ test('metadata panel is initially collapsed, lazily loads, caches and renders sy
   calls=[];metadataBody={innerHTML:''};caret={textContent:''};
   panel={open:false,isConnected:true,querySelector:s=>s==='.metadata-content'?metadataBody:caret,addEventListener:(name,fn)=>{if(name==='toggle')toggleMetadata=fn}};
   originalDollar=$;$=id=>id==='metadataPanel'?panel:originalDollar(id);
-  request=async(...args)=>{calls.push(args);return {capture:{lat:36.9},model:{},scoring:{tier:2},operator:{},transfer:{},synthetic:['capture.lat']}};
+  request=async(...args)=>{calls.push(args);return {capture:{lat:36.9,lon:-76},model:{},scoring:{tier:2},operator:{},transfer:{},synthetic:['capture.lat']}};
   item={id:'a/b',upload:{metadataBytes:1024}};
  `,c);
  assert.doesNotMatch(vm.runInContext('metadataPanelHTML(item)',c),/id="metadataPanel" open/);
@@ -1236,6 +1236,20 @@ test('metadata fetch completion fills the current panel after an in-flight reren
  vm.runInContext(`state.sel='x';oldBody={innerHTML:''};newBody={innerHTML:''};oldPanel={open:true,isConnected:true,querySelector:()=>oldBody};newPanel={open:true,isConnected:true,querySelector:()=>newBody};request=()=>new Promise(resolve=>{finishMetadata=resolve});originalDollar=$;$=id=>id==='metadataPanel'?newPanel:originalDollar(id);pendingMetadata=loadMetadata({id:'x'},oldPanel);oldPanel.isConnected=false;finishMetadata({capture:{source:'camera'}})`,c);
  await vm.runInContext('pendingMetadata',c);
  assert.match(vm.runInContext('newBody.innerHTML',c),/camera/);
+});
+
+test('metadata uses ordered human labels, compact detections, capture synthetic markers and friendly empty values',()=>{
+ const c=setup();
+ vm.runInContext(`CLS={submarine:{lab:'Submarine'}};ATTR_LAB={dark:'No AIS',new:'New sighting'};record={capture:{time:'2026-11-06T12:00:00Z',source:'camera',lat:36.9,lon:-76,headingDeg:84,altM:450,frame:8,record:12,contentHash:'abcdef'.repeat(12),imageSize:1048576,widthPx:640,heightPx:480,synthetic:['lat','subtype','trackId']},model:{name:'Detector',subtype:'patrol',subtypeConf:.95,unknownness:.1234,trackId:'track-1',trackFrames:8,detections:[{class:'submarine',confidence:.951,box:{x:157.4,y:115.6,w:120,h:87},attrs:{dark:true,new:false},shipClass:{type:'submarine',aspect:'beam',size:'large',markings:'not visible',model:'Ship model'}}]},scoring:{edge:.12345,central:.9,tier:1,topReasons:[]},operator:{manualTier:0,reviewed:false},transfer:{metadata:{done:true,bytes:1024},image:{done:false,bytes:1048576,sent:0}}}`,c);
+ const html=vm.runInContext('metadataHTML(record)',c);
+ const labels=['Time (UTC Z)','Sensor','Position','Altitude','Frame / record','Content hash','Image size','Model','Detection 1','Subtype (zero-shot)','Ship class','Behavior','Night lights / COLREGS','Unknownness','Tracked object','Ship score','Shore score','Tier','Top reasons','Filter','Label override','Manual tier','Reviewed','Commander decision','Metadata','Image'];
+ let previous=-1;for(const label of labels){const index=html.indexOf(`<th>${label}</th>`);assert.ok(index>previous,`${label} out of order`);previous=index}
+ assert.match(html,/Submarine · conf 0.95 · box 157,116,120,87/);
+ assert.match(html,/No AIS/);assert.doesNotMatch(html,/New sighting|attrs:|dark: true|manual Tier|image Size/);
+ assert.match(html,/None \(model priority\)/);assert.match(html,/Not reviewed/);assert.match(html,/Pending/);
+ assert.match(html,/P1 · Critical/);assert.match(html,/0.123/);assert.match(html,/1.00 MB · 640 × 480/);
+ assert.match(html,/title="abcdef.*">abcdef.*…/);
+ assert.equal((html.match(/title="Synthetic value"/g)||[]).length,3);
 });
 
 test('metadata-only upload labels do not claim image receipt in simulation or live mode',()=>{

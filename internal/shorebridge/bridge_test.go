@@ -66,6 +66,7 @@ func TestLiveMetadataEndpointUsesFormStates(t *testing.T) {
 			"fact":  {State: "received", Bytes: 120, Received: 120},
 			"thumb": {State: "pending", Bytes: 2000},
 		}}}
+	c.base["live-1"].Capture = &command.CaptureMeta{Lat: 36.9, Lon: -76, WidthPx: 640, HeightPx: 480, ContentHash: "real-hash", Subtype: "patrol", TrackID: "track-1", TrackFrames: 8, Synthetic: []string{"lat"}}
 	rec := httptest.NewRecorder()
 	c.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/items/live-1/metadata", nil))
 	if rec.Code != http.StatusOK {
@@ -81,6 +82,10 @@ func TestLiveMetadataEndpointUsesFormStates(t *testing.T) {
 		}
 	}
 	transfer := got["transfer"].(map[string]any)
+	capture, model := got["capture"].(map[string]any), got["model"].(map[string]any)
+	if capture["lat"] != 36.9 || capture["contentHash"] != "real-hash" || model["trackId"] != "track-1" || model["subtype"] != "patrol" || len(capture["synthetic"].([]any)) != 1 {
+		t.Fatalf("live capture missing from metadata: %v", got)
+	}
 	if transfer["metadata"].(map[string]any)["state"] != "received" || transfer["image"].(map[string]any)["state"] != "pending" {
 		t.Fatalf("wrong live transfer state: %v", transfer)
 	}
