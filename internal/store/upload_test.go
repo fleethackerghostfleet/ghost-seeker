@@ -9,6 +9,26 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
 
+func TestResetPreservesMetadataOnlyMode(t *testing.T) {
+	for _, reason := range []string{"link", "emcon"} {
+		t.Run(reason, func(t *testing.T) {
+			s := New(1)
+			if reason == "link" {
+				s.SetLowbandHold(time.Second)
+				s.SetLinkBPS(4000)
+				s.AdvanceUploads(time.Second)
+			} else {
+				s.SetEMCON(true)
+			}
+			s.Reset()
+			_, stats, _, _ := s.Snapshot()
+			if !stats.MetaOnly || stats.MetaOnlyReason != reason || stats.MetaOnlySince == nil {
+				t.Fatalf("reset lost metadata-only state: %+v", stats)
+			}
+		})
+	}
+}
+
 func TestUploadNextRecordsOperatorSend(t *testing.T) {
 	for _, automatic := range []bool{false, true} {
 		s := New(1)
@@ -217,6 +237,57 @@ func TestUploadOverridesOrderHoldAndRelease(t *testing.T) {
 	}
 	if _, _, err := s.SetUploadOverride("missing", "hold", "operator"); err != ErrNotFound {
 		t.Fatal(err)
+	}
+}
+
+func TestMetadataPassCompletesBeforeImagePass(t *testing.T) {
+	s := New(2)
+	s.SetLinkBPS(800)
+	s.items = []command.Item{
+		{ID: "p1", Tier: 1, Upload: command.Upload{Bytes: 1000, MetaDone: true}},
+		{ID: "p4", Tier: 4, Upload: command.Upload{Bytes: 1000, MetaBytes: 100}},
+	}
+	changed := s.AdvanceUploads(time.Second)
+	p1, _ := s.GetItem("p1")
+	p4, _ := s.GetItem("p4")
+	if p4.Upload.MetaSent != 100 || !p4.Upload.MetaDone || p1.Upload.Sent != 0 {
+		t.Fatalf("metadata must precede every image: p1=%+v p4=%+v changes=%+v", p1.Upload, p4.Upload, changed)
+	}
+}
+
+func TestMetadataOnlyStillSendsOverridesWithoutMarkingImage(t *testing.T) {
+	s := New(3)
+	s.SetLinkBPS(8000)
+	s.SetEMCON(true)
+	s.items = []command.Item{
+		{ID: "held", Tier: 4, Upload: command.Upload{Bytes: 1000, MetaBytes: 100}},
+		{ID: "next", Tier: 2, Upload: command.Upload{Bytes: 1000, MetaDone: true, Override: "next"}},
+		{ID: "normal", Tier: 1, Upload: command.Upload{Bytes: 1000, MetaDone: true}},
+	}
+	s.AdvanceUploads(time.Second)
+	held, _ := s.GetItem("held")
+	next, _ := s.GetItem("next")
+	normal, _ := s.GetItem("normal")
+	if !held.Upload.MetaDone || held.Upload.Sent != 0 || held.Upload.Done || held.Upload.Received || held.Upload.Active || held.Sent {
+		t.Fatalf("metadata delivery changed image/send state: item=%+v", held)
+	}
+	if next.Upload.Sent == 0 || next.Upload.Done {
+		t.Fatalf("next override did not bypass metadata-only mode: %+v", next.Upload)
+	}
+	if normal.Upload.Sent != 0 || normal.Upload.Done {
+		t.Fatalf("normal image bypassed metadata-only mode: %+v", normal.Upload)
+	}
+}
+
+func TestBackgroundImageRemainsOnShipAfterMetadata(t *testing.T) {
+	s := New(1)
+	s.SetLinkBPS(800)
+	s.items = []command.Item{{ID: "scene", SourceID: "CAM", Background: true, Tier: 4, Upload: command.Upload{Bytes: 1000, MetaBytes: 100}}}
+	s.AdvanceUploads(time.Second)
+	s.AdvanceUploads(time.Second)
+	item, _ := s.GetItem("scene")
+	if !item.Upload.MetaDone || item.Upload.Sent != 0 || item.Upload.Done {
+		t.Fatalf("background image uploaded automatically: %+v", item.Upload)
 	}
 }
 

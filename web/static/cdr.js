@@ -21,7 +21,9 @@ function norm(it){
  it.ts=new Date(it.ts);it.src=SRC[typeof it.src==='string'?it.src:it.src.id]||{id:String(it.src),name:String(it.src),scene:'open',mode:'eo'};
  it.sentAt=it.sentAt?new Date(it.sentAt):null;it.decidedAt=it.decidedAt?new Date(it.decidedAt):null;return it;
 }
-const onShore=it=>it.live?it.live.event!=='scene'&&Object.values(it.live.forms||{}).some(f=>f.state==='received'):!!(it.upload?.received||it.upload?.done);
+const hasImage=it=>it.live?!!it.live.imageForm||['thumb','crop','full'].some(k=>it.live.forms?.[k]?.state==='received'):!!(it.upload?.received||it.upload?.done);
+const metadataOnly=it=>it.live?it.live.event!=='scene'&&it.live.forms?.fact?.state==='received'&&!hasImage(it):!!it.upload?.metadataDone&&!hasImage(it);
+const onShore=it=>it.live?it.live.event!=='scene'&&Object.values(it.live.forms||{}).some(f=>f.state==='received'):!!(it.upload?.received||it.upload?.done||it.upload?.metadataDone);
 const awaiting=it=>onShore(it)&&it.sent&&!it.decision;
 function upsert(raw){
  const it=norm(raw),had=items.get(it.id);
@@ -33,7 +35,7 @@ const pending=()=>[...items.values()].filter(awaiting).sort((a,b)=>a.tier-b.tier
 const received=()=>[...items.values()].filter(onShore).sort((a,b)=>b.ts-a.ts);
 const decided=()=>[...items.values()].filter(i=>i.decision).sort((a,b)=>b.decidedAt-a.decidedAt);
 const list=()=>view.tab==='received'?received():view.tab==='pending'?pending():decided();
-const receipt=it=>it.live?it.live.imageForm?'Image received':'Summary only · image not received':it.fullRes&&!it.upload?.done?'Image received · full-size transfer pending':'Image received';
+const receipt=it=>metadataOnly(it)?'Metadata on shore · image queued':it.live?it.live.imageForm?'Image received':'Summary only · image not received':it.fullRes&&!it.upload?.done?'Image received · full-size transfer pending':'Image received';
 const reportStatus=it=>it.decision?DEC[it.decision].lab:it.sent?'Awaiting command decision':it.reviewed?'Reviewed on watch floor':'Not yet reviewed on watch floor';
 function ensureSel(){if(!items.has(view.sel)||!list().some(i=>i.id===view.sel))view.sel=list()[0]?.id||null}
 
@@ -76,8 +78,8 @@ function renderQueue(follow=false){
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
-  <div class="th"><img src="${esc(imageFor(it))}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
-  <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
+  <div class="th${metadataOnly(it)?' metadata-thumb':''}">${metadataOnly(it)?'<div class="cdr-placeholder">Image not yet received · metadata on shore</div>':`<img src="${esc(imageFor(it))}" alt="">`}<span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
+  <div class="rm"><b>${esc(title(it))}</b>${metadataOnly(it)?'<span class="metadata-badge">Metadata only</span>':''}<span>${esc(it.src.name)}</span>
   <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
  queue.scrollTop=tabChanged?0:scroll;
  if(follow){
@@ -94,7 +96,7 @@ function renderStage(){
  if(!it){
   $('stage').innerHTML=`<div class="idle"><b>${view.tab==='received'?'Waiting for ship data':view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='received'?'Ship backlog is not a shore receipt.':view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';placeToast();return;
  }
- $('stage').innerHTML=`<div class="frame"><img src="${esc(imageFor(it))}" alt=""><div class="bx">${boxes(it)}</div></div>
+ $('stage').innerHTML=`<div class="frame${metadataOnly(it)?' metadata-frame':''}">${metadataOnly(it)?'<div class="cdr-placeholder">Image not yet received · metadata on shore</div>':`<img src="${esc(imageFor(it))}" alt="">`}<div class="bx">${metadataOnly(it)?'':boxes(it)}</div></div>
  <div class="facts"><div><span>Source</span><b>${esc(it.src.name)}</b></div><div><span>Location</span><b>${esc(it.src.loc||'—')}</b></div>
  <div><span>Captured</span><b class="mono">${zulu(it.ts)} · ${ago(it.ts)} ago</b></div><div><span>Record</span><b class="mono">#${it.dbId} · FRM ${it.frame}</b></div></div>
  <div class="shore-receipt"><b>${esc(receipt(it))}</b><span>${esc(reportStatus(it))}</span>${it.live?`<ul>${['fact','thumb','crop','full'].map(k=>`<li>${{fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'}[k]}: ${esc(it.live.forms?.[k]?.state||'not offered')}</li>`).join('')}</ul>`:''}</div>
@@ -114,9 +116,9 @@ function renderBrief(it){
  $('brief').innerHTML=`<div class="pri" style="--c:${tcol(it.tier)}"><span class="big">P${it.tier}</span><div><b>${TN[it.tier]}</b><span>${datasetMode?'Operator':'Watch-officer'} priority${it.manual&&it.manual!==sug?` · model suggested P${sug} ${TN[sug]}`:''}</span></div></div>
  <div class="meter"><span title="Command score after model scoring and directives">${datasetMode?'Model':'Shore'} score</span><div class="bar"><i style="width:${it.central*100}%;background:${tcol(sug)}"></i></div><b class="mono">${it.central.toFixed(2)}</b></div>
  <div class="meter"><span title="${datasetMode?'Real detector triage score':'Edge score: the initial importance assigned on the ship'}">${datasetMode?'Detector':'Ship'} score</span><div class="bar"><i style="width:${it.edge*100}%"></i></div><b class="mono">${it.edge.toFixed(2)}</b></div>
- <h4>Why it reached ${datasetMode?'you':'shore'}</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||(datasetMode?'<li>High command-model score</li>':'<li>Received over the ship-to-shore link</li>')}</ul>
- <h4 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
- <h4>Decision</h4>${!it.sent&&!d?'<p>Received for awareness. Command decisions become available when the watch floor sends a report to Commander.</p>':d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
+ <h2>Why it reached ${datasetMode?'you':'shore'}</h2><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||(datasetMode?'<li>High command-model score</li>':'<li>Received over the ship-to-shore link</li>')}</ul>
+ <h2 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h2><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
+ <h2>Decision</h2>${!it.sent&&!d?'<p>Received for awareness. Command decisions become available when the watch floor sends a report to Commander.</p>':d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
  `<textarea id="note" data-id="${esc(it.id)}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
  <div class="decs">${Object.entries(DEC).map(([k,v])=>`<button class="dec" title="${k==='close'?'Record a final decision to take no further action. The image remains stored in Decided.':v.sub}" data-d="${k}" style="--c:${v.c}"><kbd>${v.k.toUpperCase()}</kbd><b>${v.lab}</b><span>${v.sub}</span></button>`).join('')}</div>`}`;
 }
@@ -157,7 +159,7 @@ function setLive(on){$('live').classList.toggle('off',!on);$('live').querySelect
 function placeToast(){
  const t=$('toast');if(!t.classList.contains('on')||t.classList.contains('inline'))return;
  const bounds=t.getBoundingClientRect(),height=bounds.height;
- const controls=[...document.querySelectorAll('#brief > :last-child,#brief #note,#brief h4:last-of-type,body>.banner')].map(e=>e.getBoundingClientRect()).filter(r=>r.bottom>0&&r.top<innerHeight&&r.right>bounds.left&&r.left<bounds.right).sort((a,b)=>a.top-b.top);
+ const controls=[...document.querySelectorAll('#brief > :last-child,#brief #note,#brief h2:last-of-type,body>.banner')].map(e=>e.getBoundingClientRect()).filter(r=>r.bottom>0&&r.top<innerHeight&&r.right>bounds.left&&r.left<bounds.right).sort((a,b)=>a.top-b.top);
  let top=8;
  for(const control of controls){
   if(top+height+8<=control.top)break;
@@ -190,7 +192,7 @@ function applySnapshot(m){
 async function init(){
  document.addEventListener('scroll',placeToast,true);window.addEventListener('resize',placeToast);
  if(typeof gsAuth!=='undefined')await gsAuth.init();
- const c=await api('/api/config');datasetMode=!!c.datasetMode;
+ const c=await api('/api/config');datasetMode=c.features?.dataset===true;
  if(datasetMode){const banner=document.querySelector('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY · REAL IMAGERY · clean v2 dev · COMMANDER FINAL REVIEW'}
  SRC=Object.fromEntries(c.sources.map(s=>[s.id,s]));CLS=c.classes;MODELS=c.models;ATTR_LAB=c.attrLabels;
  $('tabs').onclick=e=>{const b=e.target.closest('button');if(b){setTab(b.dataset.t);view.sel=null;render()}};

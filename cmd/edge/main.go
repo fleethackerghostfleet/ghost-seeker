@@ -8,7 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -17,11 +19,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
-	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/ingest"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scheduler"
@@ -30,9 +29,9 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/scenario"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
 
@@ -40,17 +39,27 @@ func main() {
 	id := flag.String("id", env("EDGE_ID", "edge-1"), "edge id")
 	data := flag.String("data", env("DATA_DIR", "data/edge"), "data directory")
 	listen := flag.String("listen", env("LISTEN", ":8081"), "console listen address")
+	tlsCert := flag.String("tls-cert", env("GS_TLS_CERT", ""), "optional HTTPS server certificate (PEM; requires -tls-key)")
+	tlsKey := flag.String("tls-key", env("GS_TLS_KEY", ""), "optional HTTPS server private key (PEM; requires -tls-cert)")
 	shoreURL := flag.String("shore", env("SHORE_URL", "http://localhost:8080"), "shore base URL (put Toxiproxy here to degrade)")
-	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference sidecar URL, or 'mock'")
+	shoreCA := flag.String("shore-ca", env("GS_SHORE_CA", ""), "optional PEM CA bundle added to system roots for HTTPS shore")
+	inferURL := flag.String("infer", env("INFER_URL", defaultInferURL), inferUsage)
 	sceneEvery := flag.Duration("scene-every", 60*time.Second, "sightings mode: store at most one object-free 'scene' frame (FACT+THUMB) per source per interval; 0 = one item per frame")
 	prioritizer := flag.String("prioritizer", env("PRIORITIZER", "edgeml"), "edgeml (object-level: unknownness, labels, confidence) | tomer (algorithm/ghost_priority image-level score; sidecar must run --prioritizer tomer|both)")
 	dedup := flag.String("dedup", env("DEDUP", "hash"), "naive (item per frame) | hash (exact-duplicate frames fold) | sightings (one item per object; needs a sidecar that returns sightings)")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
-	scen := flag.String("scenario", env("SCENARIO", ""), "scenario JSON to replay into the store (optional)")
-	frames := flag.String("frames", env("FRAMES_DIR", ""), "replay the built-in scenario from this frame dir (optional)")
-	period := flag.Duration("period", 5*time.Second, "capture period for replay")
+	watchDir := flag.String("watch-dir", env("GS_WATCH_DIR", ""), "live image spool directory (writable; optional <image>.json sidecar)")
+	liveSource := flag.String("live-source", env("GS_LIVE_SOURCE", "camera-1"), "default camera id for spool/MJPEG")
+	liveBytes := flag.Int64("ingest-max-bytes", ingest.DefaultMaxFrameBytes, "maximum live frame request/file bytes")
+	liveQueue := flag.Int("ingest-queue", 4, "maximum live frames being read, queued or processed")
+	watchPoll := flag.Duration("watch-poll", 500*time.Millisecond, "spool poll/stability interval")
+	mjpegURL := flag.String("mjpeg-url", env("GS_MJPEG_URL", ""), "optional HTTP multipart MJPEG camera URL")
+	mjpegFPS := flag.Float64("mjpeg-fps", 2, "maximum MJPEG frames per second (0 < fps <= 60)")
 	tick := flag.Duration("tick", 3*time.Second, "scheduler tick")
 	initBps := flag.Float64("init-bps", 64000, "initial link estimate (bits/s)")
+	lowbandHold := flag.Duration("lowband-hold", 2*time.Minute, "sustained low/high link duration before metadata-only mode changes")
+	lowbandLow := flag.Int64("lowband-low-bps", 8000, "enter metadata-only mode below this link rate")
+	lowbandHigh := flag.Int64("lowband-high-bps", 16000, "exit metadata-only mode above this link rate")
 	icfg := ingest.DefaultConfig()
 	flag.IntVar(&icfg.ThumbWidth, "thumb-width", icfg.ThumbWidth, "THUMB max width in px (0 = unbounded)")
 	flag.IntVar(&icfg.ThumbHeight, "thumb-height", icfg.ThumbHeight, "THUMB max height in px (0 = unbounded)")
@@ -67,10 +76,27 @@ func main() {
 	policyKeysPath := flag.String("policy-keys", env("GS_POLICY_KEYS", ""), "JSON public keyring for signed policies")
 	opToken := flag.String("operator-token", env("GS_OPERATOR_TOKEN", ""), "operator bearer token for the ship-side console and /blob/ (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", env("GS_OPERATOR_TOKEN_FILE", ""), "operator token file")
-	devTokenFile := flag.String("dev-token-file", env("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set ('none' = require an explicit token)")
+	devTokenFile := opauth.DevTokenFileFlag(flag.CommandLine)
 	corsOrigins := flag.String("cors-origins", env("GS_CORS_ORIGINS", ""), "comma-separated browser origins allowed to call the API cross-origin (default: same-origin only)")
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
+	replay := registerReplayFlags()
 	flag.Parse()
+	tlsConfig, err := httpx.ServerTLS(*tlsCert, *tlsKey)
+	fatal(err)
+	shoreTransport, err := httpx.ClientTransport(*shoreCA)
+	fatal(err)
+	if *liveBytes <= 0 || *liveQueue < 1 || *liveQueue > 256 || *watchPoll <= 0 || *mjpegFPS <= 0 || *mjpegFPS > 60 || math.IsNaN(*mjpegFPS) {
+		fatal(fmt.Errorf("invalid live ingest limits"))
+	}
+	if (*watchDir != "" || *mjpegURL != "") && !ids.ValidName(*liveSource) {
+		fatal(fmt.Errorf("invalid live source id"))
+	}
+	if *mjpegURL != "" {
+		u, err := url.Parse(*mjpegURL)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			fatal(fmt.Errorf("mjpeg-url must be HTTP(S)"))
+		}
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
 	token, err := unitauth.Credential(*tokenFlag, *tokenFile)
@@ -91,9 +117,11 @@ func main() {
 		fatal(err)
 	}
 	clk := clock.Real{}
-	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9), token)
+	lk := link.NewConnectWithClient(*shoreURL, &http.Client{Timeout: 5 * time.Minute, Transport: shoreTransport}, link.NewEstimator(*initBps, 300, 1e9), token)
 	cfg := scheduler.DefaultConfig(*id)
 	cfg.Tick = *tick
+	cfg.LowbandHold = *lowbandHold
+	cfg.LowbandLowBPS, cfg.LowbandHighBPS = *lowbandLow, *lowbandHigh
 	cfg.RequireSignedPolicy = *requireSignedPolicy
 	if *policyKeysPath != "" {
 		cfg.PolicyKeys, err = policy.LoadKeyring(*policyKeysPath)
@@ -110,12 +138,8 @@ func main() {
 	sch, err := scheduler.New(cfg, st, lk, eng, clk, log)
 	fatal(err)
 
-	var an inference.Analyzer
-	if *inferURL == "mock" {
-		an = inference.NewMock()
-	} else {
-		an = inference.NewRemote(*inferURL)
-	}
+	an, err := newAnalyzer(*inferURL)
+	fatal(err)
 	icfg.EdgeID = *id
 	icfg.WaitForSpace = true
 	icfg.Dedup, err = ingest.ParseDedup(*dedup)
@@ -128,32 +152,29 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() { _ = sch.Run(ctx) }()
-
-	if *scen != "" || *frames != "" {
-		var sc *scenario.Scenario
-		if *scen != "" {
-			sc, err = scenario.Load(*scen)
-		} else {
-			sc = scenario.Default(*frames)
-		}
-		fatal(err)
-		src, err := ingest.NewReplay(clk, *period, sc.Sets...)
-		fatal(err)
-		ing.OnBurst = func(source string, fps float64, d time.Duration, reason string) {
-			src.Burst(source, fps, d)
-			log.Info("replay burst", "source", source, "fps", fps, "duration", d, "reason", reason)
-		}
-		log.Info("replaying", "frames", src.Len(), "period", *period)
+	queue := ingest.NewQueue(*liveQueue)
+	go func() { _ = ing.Run(ctx, queue) }()
+	if *watchDir != "" {
 		go func() {
-			if err := ing.Run(ctx, src); err != nil && ctx.Err() == nil {
-				log.Error("replay", "err", err)
+			if err := ingest.Watch(ctx, queue, *watchDir, ingest.Metadata{Source: *liveSource}, *liveBytes, *watchPoll); err != nil && ctx.Err() == nil {
+				log.Error("spool stopped", "err", err)
 			}
-			log.Info("replay finished", "items", ing.Count, "dups", ing.Dups)
+		}()
+	}
+	if *mjpegURL != "" {
+		go func() {
+			if err := ingest.PullMJPEG(ctx, queue, *mjpegURL, ingest.Metadata{Source: *liveSource}, *liveBytes, *mjpegFPS); err != nil && ctx.Err() == nil {
+				log.Error("MJPEG stopped", "err", err)
+			}
 		}()
 	}
 
+	startReplay(ctx, replay, ing, queue, clk, log)
+
 	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped, Prioritizer: *prioritizer, Frames: ing.Frames}
 	mux := http.NewServeMux()
+	mux.Handle("/api/v1/ingest/frames", queue.Handler(operator, token, *liveBytes))
+	mux.Handle("GET /api/v1/health", opauth.RequireBearer(operator, http.HandlerFunc(queue.Health)))
 	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc, connect.WithReadMaxBytes(1<<20))
 	mux.Handle(path, opauth.RequireBearer(operator, h))
 	mux.Handle("/blob/", opauth.RequireBearer(operator, svc.BlobHandler()))
@@ -164,17 +185,26 @@ func main() {
 	mux.Handle("GET /ship/frames/{seq}", opauth.RequireBearer(operator, svc.ShipFramesHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	httpx.StaticUI(mux, *uiDir, "edge "+*id)
-	srv := httpx.Server(*listen, h2c.NewHandler(httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux), &http2.Server{}))
+	srv := newHTTPServer(*listen, httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux))
 	go func() {
 		<-ctx.Done()
 		sctx, c := context.WithTimeout(context.Background(), 3*time.Second)
 		defer c()
 		_ = srv.Shutdown(sctx)
 	}()
-	log.Info("edge console", "listen", *listen, "shore", *shoreURL, "infer", *inferURL)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	log.Info("edge console", "listen", *listen, "shore", *shoreURL, "infer", *inferURL, "tls", tlsConfig != nil)
+	if err := httpx.ListenAndServe(srv, tlsConfig); err != nil && err != http.ErrServerClosed {
 		fatal(err)
 	}
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	srv := httpx.Server(addr, handler)
+	srv.Protocols = new(http.Protocols)
+	srv.Protocols.SetHTTP1(true)
+	srv.Protocols.SetHTTP2(true)
+	srv.Protocols.SetUnencryptedHTTP2(true)
+	return srv
 }
 
 func env(k, def string) string {

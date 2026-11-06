@@ -4,8 +4,9 @@ Ghost Seeker has three network surfaces: the **shore node** (`cmd/shore`: SyncSe
 edges, ConsoleService + `/blob/` for operators), the **edge node** (`cmd/edge`: ship-side
 ConsoleService + `/blob/`) and the **operator web app** (`cmd/ghost-seeker`, which fronts the
 shore/edge consoles for a browser). This page lists the controls, how to run them locally with
-zero extra steps, and what production must set explicitly. `docs/reports/` holds the STIG /
-pentest report; the Deep scan counts are at the bottom.
+zero extra steps, and what production must set explicitly. The STIG / pentest report is in
+[`security/STIG_PENTEST_REPORT.md`](security/STIG_PENTEST_REPORT.md); the Deep scan counts
+are at the bottom.
 
 ## 1. Operator authentication (shore console, edge console, web bridge, blobs)
 
@@ -229,6 +230,50 @@ docker compose -f deploy/compose/docker-compose.yml --profile piv up --build
 `-shore http://shore:8080` without inserting a second link shaper. The profile does not change
 shore/edge authentication or make their plain HTTP links suitable for untrusted networks.
 
+## 1b. Shore and edge listener TLS (opt-in)
+
+`cmd/shore` and `cmd/edge` retain HTTP by default. Supply both server files to
+enable HTTPS with TLS **1.3 minimum**; an unpaired flag/env setting, unreadable
+file or invalid key pair is a startup error, before opening data stores.
+
+| Binary | Flag | Environment | Purpose |
+|---|---|---|---|
+| shore, edge | `-tls-cert` | `GS_TLS_CERT` | PEM server certificate/chain |
+| shore, edge | `-tls-key` | `GS_TLS_KEY` | PEM private key; required with certificate |
+| edge | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for HTTPS sync to shore |
+| ghost-seeker (live mode) | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for shore **and edge** RPCs and shore blob/REST/SSE proxies |
+
+Clients use system roots when no CA file is supplied; a supplied bundle adds
+trust roots rather than replacing the system roots. Missing/empty/invalid CA
+bundles fail startup. HTTPS connections use TLS 1.3+, verify the peer chain and
+the URL hostname, and offer no verification bypass. A shared operator bundle
+can contain multiple private roots if shore and edge use different issuers.
+Certificates must cover the actual URL host/IP, including a TCP shaper's host
+when used. Private CAs must also be trusted by browsers accessing node consoles.
+
+This is server authentication, not client-certificate authentication for sync.
+Unit JWT and operator bearer checks remain required independently; the
+operator app's PIV client-authentication mode is unchanged. Protect private keys,
+provision certificate renewal and restart nodes to load replacements. Inference,
+MJPEG cameras and optional language-model services have separate clients; the
+shore CA option does not configure those connections.
+
+See [deployment notes](../deploy/README.md) for commands and required deployment
+overrides. Compose still needs site-specific TLS mounts, flags and probes. Zarf
+v0.89 supports opt-in TLS directly: empty `SHORE_TLS_SECRET`, `EDGE_TLS_SECRET`
+and `SHORE_CA_SECRET` defaults preserve the original HTTP manifests. Setting a
+listener Secret adds read-only `tls.crt`/`tls.key` mounts, paired server flags
+and HTTPS probes; setting the CA Secret mounts `ca.crt` and supplies `-shore-ca`
+to edge and operator. Configured Secrets/keys are required, with no HTTP fallback
+on missing or invalid credentials. The default local shore URLs upgrade to
+HTTPS with shore TLS; custom `SHORE_URL`/`OPERATOR_SHORE_URL` values must explicitly
+use the appropriate scheme. Keys remain in namespace-local Secrets, not in the
+package. Restrict Secret access, rotate credentials and restart pods to reload
+them. Kubernetes HTTPS health probes skip certificate verification; successful
+probes do not prove chain/hostname trust. Verify authenticated application
+connections separately. Operator browser TLS/PIV and inference/camera transport
+remain separate configuration boundaries.
+
 ## 2. CSRF / cross-origin
 
 * **Host header / DNS rebinding**: shore and edge reject requests with an unknown `Host` using
@@ -288,19 +333,106 @@ curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{
 curl -s -o /dev/null -w '%{http_code}\n' -d '{}' localhost:8080/ghostseeker.v1.ConsoleService/GetStatus   # 401
 ```
 
-Delete `data/operator.token` to rotate. The Docker compose topology is the production posture
-(explicit `GS_OPERATOR_TOKEN`, `GS_DEV_TOKEN_FILE=none`).
+Delete `data/operator.token` to rotate. `deploy/compose/docker-compose.yml` requires explicit
+operator/unit credentials and sets `GS_DEV_TOKEN_FILE=none`. The separate laptop demo
+(`deploy/compose/demo.compose.yml`) generates shared demo credentials instead.
+
+### Deployment manifests (static inventory, not a runtime security assessment)
+
+`deploy/zarf/zarf.yaml` is a package definition, not a TODO stub. It references
+`deploy/zarf/manifests/` for a namespace, shore/edge StatefulSets with PVCs and
+ConfigMaps, an operator Deployment, an optional edgeml sidecar Deployment, and
+ClusterIP Services. The pod specs set non-root numeric UIDs and `RuntimeDefault`
+seccomp; containers use read-only root filesystems, drop all capabilities and
+disable privilege escalation. They include health probes, resource requests and
+memory limits. Shore defaults to required unit authentication; shore, edge and
+operator reference externally supplied credential Secrets and disable dev tokens.
+
+The package includes namespace-wide default-deny ingress and egress NetworkPolicies,
+per-workload service/DNS allows and configurable external CIDR/port allows (§5a).
+Opt-in listener TLS and custom shore CA wiring are packaged too (§1b); HTTP remains
+the default. No Kubernetes Ingress resource is packaged. ClusterIP alone is not
+network isolation, and these static controls do not establish field hardening.
+Policy-signing keys / required-signature settings are not configured. The edge
+mounts a node `hostPath` read-only for frames; storage provisioning, permissions
+and credential lifecycle remain deployment responsibilities. The optional sidecar
+binds `0.0.0.0:9090` with a local ONNX detector path and an empty read-only model
+volume; it has no authentication setting in the manifest. Real inference needs
+approved model mounts replacing the placeholder volume.
+
+`deploy/compose/docker-compose.yml` provides shore, edge and Toxiproxy with
+persistent data volumes and required credentials, plus an optional PIV/HTTPS
+operator profile. It publishes shore/edge HTTP ports and the Toxiproxy admin
+port; it does not set the Kubernetes container-hardening controls above.
+`deploy/compose/demo*.yml` supplies separate laptop/demo variants. Restrict exposed
+ports and provision transport protection, keys and models for the target network.
+Kubernetes runtime/cluster security review and real-model inference in the packaged
+deployment remain unverified; see [Fielding](FIELDING.md).
+
+## 5a. Zarf network isolation
+
+The Zarf package includes `networking.k8s.io/v1` NetworkPolicies: namespace-wide
+default-deny **ingress and egress** in the required namespace component, and
+explicit allows alongside each optional workload. All packaged workloads currently use
+the dedicated `ghost-seeker` namespace. Same-namespace pod labels admit
+operator → shore:8080/edge:8081, edge → shore:8080/inference:9090, and optional
+shore text search → inference:9090. Operator-to-edge is ready for deployments
+that configure it; the packaged operator currently disables that connection.
+
+External browsers, API/sensor clients, and routed ship/shore connections use
+configurable source `ipBlock`s, not pod labels from another cluster. Set
+`OPERATOR_INGRESS_CIDR` (UI:8090), `SHORE_INGRESS_CIDR` (sync/API/console:8080),
+`EDGE_INGRESS_CIDR` (console/sensor push:8081), and, if needed,
+`INFERENCE_INGRESS_CIDR` (remote inference:9090). Defaults are documentation-only
+`192.0.2.0/32`, not deployment source addresses. Use approved, narrow CIDRs as
+observed after routing/NAT. See [Fielding](FIELDING.md#zarf-network-isolation)
+for the traffic matrix and split-cluster setup.
+
+Each workload can resolve DNS only to pods labeled `k8s-app: kube-dns` in the
+namespace labeled `kubernetes.io/metadata.name: kube-system`, over UDP/TCP 53.
+The namespace and pod selectors are combined in one peer (AND, not OR).
+The five internal service flows above have matching egress permissions.
+
+External egress uses destination `ipBlock`s and TCP ports. Set the needed
+`SHORE_EGRESS_CIDR`/`PORT`, `EDGE_EGRESS_CIDR`/`PORT`,
+`INFERENCE_EGRESS_CIDR`/`PORT`, `CAMERA_EGRESS_CIDR`/`PORT`,
+`LLM_EGRESS_CIDR`/`PORT`, `RESEARCH_EGRESS_CIDR`/`PORT`,
+`OCSP_EGRESS_CIDR`/`PORT`, and `MODEL_EGRESS_CIDR`/`PORT` variables (each `PORT`
+name has the same `_EGRESS_` prefix, e.g. `SHORE_EGRESS_PORT`). All destination
+CIDRs default to `192.0.2.0/32` so external paths fail closed until configured.
+Optional LLM/research compiler and PIV OCSP clients run in the **operator**,
+not shore; edge owns optional HTTP(S) MJPEG camera pulls. The packaged inference
+runtime uses offline, mounted models, not a public model hub; its optional model
+mirror permission is reserved for reviewed deployment customizations.
+See [deployment egress variables](../deploy/README.md#external-egress-variables)
+for defaults, source workloads and configuration requirements. These variables
+grant network access only; they do not enable or configure application features.
+
+These are L3/L4 rules: allowing shore TCP 8080 does not limit clients to
+`/api/v1`; SyncService, ConsoleService and blobs share that listener. Authentication,
+TLS termination and any path restrictions remain separate requirements. Policies
+do not create ingress gateways, expose ClusterIP Services, or constrain
+`kubectl port-forward` authorization. Enforcing CNI support is required; Kubernetes
+API acceptance alone does not prove isolation. Other policies can add permissions.
 
 ## 6. Residual risk / not in scope here
 
-* No TLS inside the repo: terminate TLS in front of every listener; the operator token and
-  session cookie are bearer secrets.
+* TLS is opt-in: enable shore/edge listener TLS (§1b) or terminate TLS at an approved
+  proxy. The operator app supports PIV/mTLS (§1a), but token mode defaults to HTTP
+  and needs a TLS boundary. Operator tokens and session cookies are bearer secrets.
 * The unit JWT authenticates the edge to shore; it does not authenticate plaintext
   shore responses to the edge. Use the TLS boundary above for transport protection.
   Ed25519 policy payload signing is implemented in `internal/policy` and remains
   opt-in: configure shore's `-policy-signing-key` and edge's
   `-require-signed-policy` / `-policy-keys`.
 * Sessions live in process memory: a web-app restart signs everyone out (by design).
+* Zarf ingress/egress rules have static validation and traffic-matrix regression
+  tests, not a runtime cluster/CNI test. Inventory approved destination IPs,
+  gateways, proxies and ports; maintain CIDRs when DNS/CDN addresses change.
+  NetworkPolicy cannot enforce hostnames, HTTP paths or redirect destinations.
+  NodeLocal DNS or a differently labeled DNS service needs a reviewed site policy.
+  Default-deny applies to every pod in `ghost-seeker`, including extra workloads;
+  only explicit workload allows grant DNS or service access.
 
 ## 7. Deep scan: before / after
 

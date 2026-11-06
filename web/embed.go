@@ -3,14 +3,19 @@ package web
 import (
 	"archive/zip"
 	"bytes"
-	"embed"
 	"io/fs"
 	"net/http"
 	"strings"
 )
 
-//go:embed static
-var files embed.FS
+// Imagery returns the embedded imagery tree (empty in prod builds).
+func Imagery() fs.FS {
+	content, err := fs.Sub(files, "static/imagery")
+	if err != nil {
+		panic(err)
+	}
+	return content
+}
 
 func Handler() http.Handler {
 	content, err := fs.Sub(files, "static")
@@ -18,17 +23,26 @@ func Handler() http.Handler {
 		panic(err)
 	}
 	fileServer := http.FileServer(http.FS(content))
-	ocean, err := files.ReadFile("static/imagery/empty-ocean.zip")
-	if err != nil {
-		panic(err)
-	}
-	archive, archiveErr := zip.NewReader(bytes.NewReader(ocean), int64(len(ocean)))
 	var oceanServer http.Handler
-	if archiveErr == nil {
+	ocean, archiveErr := files.ReadFile(demoOceanArchive)
+	if !hasDemoImagery {
+		archiveErr = nil
+	} else if archiveErr != nil {
+		panic(archiveErr)
+	}
+	archive, zipErr := zip.NewReader(bytes.NewReader(ocean), int64(len(ocean)))
+	if hasDemoImagery && zipErr != nil {
+		archiveErr = zipErr
+	}
+	if hasDemoImagery && archiveErr == nil {
 		oceanServer = http.StripPrefix("/imagery/empty-ocean/", http.FileServer(http.FS(archive)))
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		if !hasDemoImagery && strings.HasPrefix(r.URL.Path, "/imagery/") {
 			http.NotFound(w, r)
 			return
 		}

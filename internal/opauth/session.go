@@ -57,23 +57,6 @@ func (s *Sessions) WithReviewJoinKey(key string) *Sessions {
 	return s
 }
 
-// DemoAcceptAnyToken permits any non-empty login token for demos only.
-// Certificate authentication does not use token login.
-func (s *Sessions) DemoAcceptAnyToken(on bool) *Sessions {
-	s.demoAcceptAnyToken = on
-	return s
-}
-
-// TrustPeers extends dev auto-login to browsers that address a loopback host
-// from any peer address. For containers only: a port published on the host's
-// 127.0.0.1 reaches the process from the bridge gateway, never from loopback,
-// so Loopback alone would send every demo browser to /login. Forwarded
-// headers still disqualify a request. No-op outside dev mode.
-func (s *Sessions) TrustPeers(on bool) *Sessions {
-	s.anyPeer = on
-	return s
-}
-
 // local reports whether r qualifies for dev auto-login.
 func (s *Sessions) local(r *http.Request) bool {
 	if !s.dev {
@@ -109,8 +92,8 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			_, _ = w.Write([]byte(reviewJoinPage))
 			return
 		}
-		authed := s.authenticated(r)
-		if authed && s.sessionRole(r) == "reviewer" && !reviewerRequestAllowed(r) {
+		role, authed := s.authentication(r)
+		if authed && role == "reviewer" && !reviewerRequestAllowed(r) {
 			forbiddenReviewer(w)
 			return
 		}
@@ -128,14 +111,11 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 		if !authed && s.local(r) {
 			s.issue(w, r)
 			authed = true
+			role = "operator"
 		}
 		if r.URL.Path == "/api/auth" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Cache-Control", "no-store")
-			role := ""
-			if authed {
-				role = s.sessionRole(r)
-			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"authenticated": authed, "dev": s.dev, "mode": "token", "id": "", "name": "", "role": role})
 			return
 		}
@@ -147,7 +127,7 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 			return
 		}
-		principal := Principal{Role: s.sessionRole(r), Mode: "token"}
+		principal := Principal{Role: role, Mode: "token"}
 		if principal.Role == "reviewer" && !reviewerRequestAllowed(r) {
 			forbiddenReviewer(w)
 			return
@@ -155,23 +135,6 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, principal))
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (s *Sessions) sessionRole(r *http.Request) string {
-	if Equal(s.token, BearerToken(r)) {
-		return "operator"
-	}
-	cookie, err := r.Cookie(CookieName)
-	if err != nil {
-		return "operator"
-	}
-	s.mu.Lock()
-	binding, ok := s.bindings[cookie.Value]
-	s.mu.Unlock()
-	if ok && binding.Role != "" {
-		return binding.Role
-	}
-	return "operator"
 }
 
 // publicBrandAssets are the logo files the sign-in pages show before a session exists.
@@ -210,25 +173,34 @@ func forbiddenReviewer(w http.ResponseWriter) {
 }
 
 func (s *Sessions) authenticated(r *http.Request) bool {
+	_, ok := s.authentication(r)
+	return ok
+}
+
+func (s *Sessions) authentication(r *http.Request) (string, bool) {
 	if Equal(s.token, BearerToken(r)) {
-		return true
+		return "operator", true
 	}
 	c, err := r.Cookie(CookieName)
 	if err != nil || c.Value == "" {
-		return false
+		return "", false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	exp, ok := s.sessions[c.Value]
 	if !ok {
-		return false
+		return "", false
 	}
 	if s.now().After(exp) {
 		delete(s.sessions, c.Value)
 		delete(s.bindings, c.Value)
-		return false
+		return "", false
 	}
-	return true
+	binding, ok := s.bindings[c.Value]
+	if !ok || binding.Role == "" {
+		return "", false
+	}
+	return binding.Role, true
 }
 
 func (s *Sessions) issue(w http.ResponseWriter, r *http.Request, principal ...pivauth.Principal) {
@@ -239,6 +211,10 @@ func (s *Sessions) issue(w http.ResponseWriter, r *http.Request, principal ...pi
 	id := base64.RawURLEncoding.EncodeToString(b)
 	now := s.now()
 	s.mu.Lock()
+	if previous, err := r.Cookie(CookieName); err == nil {
+		delete(s.sessions, previous.Value)
+		delete(s.bindings, previous.Value)
+	}
 	for k, exp := range s.sessions {
 		if now.After(exp) {
 			delete(s.sessions, k)
@@ -246,6 +222,7 @@ func (s *Sessions) issue(w http.ResponseWriter, r *http.Request, principal ...pi
 		}
 	}
 	s.sessions[id] = now.Add(s.ttl)
+	s.bindings[id] = pivauth.Principal{Role: "operator"}
 	if len(principal) > 0 {
 		s.bindings[id] = principal[0]
 	}
@@ -276,7 +253,7 @@ func (s *Sessions) login(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad form", http.StatusBadRequest)
+			http.Error(w, "bad form", httpx.RequestBodyStatus(err))
 			return
 		}
 		token := strings.TrimSpace(r.PostForm.Get("token"))

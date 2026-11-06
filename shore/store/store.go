@@ -9,11 +9,14 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
@@ -28,6 +31,7 @@ var ErrNotOwner = errors.New("item belongs to another edge")
 type Store struct {
 	db      *sql.DB
 	blobDir string
+	blobMu  sync.Mutex
 }
 
 const schema = `
@@ -54,6 +58,7 @@ CREATE TABLE IF NOT EXISTS forms (
   kind INTEGER NOT NULL,
   total INTEGER NOT NULL,
   received INTEGER NOT NULL DEFAULT 0,
+  received_ranges TEXT NOT NULL DEFAULT '[]',
   complete INTEGER NOT NULL DEFAULT 0,
   hash TEXT NOT NULL DEFAULT '',
   mime TEXT NOT NULL DEFAULT '',
@@ -86,7 +91,23 @@ func Open(dataDir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(schema); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
+	}
+	var hasRanges int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('forms') WHERE name='received_ranges'`).Scan(&hasRanges); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("inspect forms schema: %w", err)
+	}
+	if hasRanges == 0 {
+		if _, err := db.Exec(`ALTER TABLE forms ADD COLUMN received_ranges TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate forms ranges: %w", err)
+		}
+	}
+	if _, err := db.Exec(apiSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("API schema: %w", err)
 	}
 	return &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}, nil
 }
@@ -106,6 +127,7 @@ type Item struct {
 
 type FormState struct {
 	Kind       pb.FormKind
+	Hash       string
 	Total      int64
 	Received   int64 // contiguous from 0
 	Complete   bool
@@ -146,7 +168,9 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx, `INSERT INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at,priority,unknownness,top_label)
 		VALUES(?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(id) DO UPDATE SET edge_id=excluded.edge_id, manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label
+		ON CONFLICT(id) DO UPDATE SET edge_id=excluded.edge_id, manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label,
+		type=excluded.type, captured_at=excluded.captured_at, source=excluded.source,
+		manifest_at=CASE WHEN items.manifest_at=0 THEN excluded.manifest_at ELSE items.manifest_at END
 		WHERE items.edge_id=excluded.edge_id OR items.edge_id=''`,
 		me.ItemId, edgeID, int(me.Type), me.CapturedAtUnixMs, me.Source, raw, at.UnixMilli(), me.Priority, me.Unknownness, me.TopLabel)
 	if err != nil {
@@ -174,10 +198,13 @@ const MaxBlobBytes = 256 << 20
 const MaxChunkBytes = 4 << 20
 
 // WriteChunk stores a chunk at its offset and returns the new contiguous
-// receive count and whether the form is complete. Out-of-order or duplicate
-// chunks are safe: bytes are written in place and "received" only advances
-// contiguously (chunks arrive in order from one edge in practice).
+// receive count and whether the form is complete. Persisted merged byte ranges
+// let gap-filling chunks advance past earlier out-of-order writes. Overlaps and
+// duplicates are safe. If the range cap is exceeded, only the contiguous prefix
+// is retained; discarded ranges must be retransmitted before being acknowledged.
 func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at time.Time) (int64, bool, error) {
+	s.blobMu.Lock()
+	defer s.blobMu.Unlock()
 	if !ids.Valid(c.ItemId) {
 		return 0, false, fmt.Errorf("invalid item id %q", c.ItemId)
 	}
@@ -211,10 +238,12 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		return 0, false, err
 	}
 	path := filepath.Join(s.blobDir, c.ItemId, fmt.Sprintf("%d", c.Form))
+	partial := path + ".partial"
 	var received int64
 	var complete int
 	var hash string
-	err = s.db.QueryRowContext(ctx, `SELECT received, complete, hash FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash)
+	var rangesJSON string
+	err = s.db.QueryRowContext(ctx, `SELECT received, complete, hash, received_ranges FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash, &rangesJSON)
 	if err == nil && complete == 1 && (c.ContentHash == "" || c.ContentHash == hash) {
 		return c.TotalBytes, true, nil
 	}
@@ -223,12 +252,17 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		// after an original pull), possibly mid-transfer: start over with
 		// the new content.
 		received, complete = 0, 0
-		_ = os.Remove(path)
+		rangesJSON = "[]"
+		_ = os.Remove(partial)
+	}
+	if _, statErr := os.Stat(partial); errors.Is(statErr, os.ErrNotExist) {
+		received = 0
+		rangesJSON = "[]"
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return 0, false, err
 	}
-	f, err2 := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err2 := os.OpenFile(partial, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err2 != nil {
 		return 0, false, err2
 	}
@@ -236,7 +270,9 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		f.Close()
 		return 0, false, err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return 0, false, err
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		// Payload before manifest (FIFO baseline, or lost manifest): the
 		// ownership check above already created the item stub.
@@ -246,36 +282,66 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	} else if err != nil {
 		return 0, false, err
 	}
-	if c.Offset <= received {
-		if end := c.Offset + int64(len(c.Data)); end > received {
-			received = end
-		}
-	}
+	received, rangesJSON = mergeReceived(received, rangesJSON, c.Offset, c.Offset+n)
 	done := received >= c.TotalBytes && c.TotalBytes > 0
 	if done && c.ContentHash != "" {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(partial)
 		if err != nil {
 			return 0, false, err
 		}
 		sum := sha256.Sum256(data)
 		if hex.EncodeToString(sum[:]) != c.ContentHash {
 			// Corrupt: restart this form.
-			_, _ = s.db.ExecContext(ctx, `UPDATE forms SET received=0 WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form))
+			if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=0, complete=0, complete_at=0, received_ranges='[]' WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)); err != nil {
+				return 0, false, err
+			}
 			return 0, false, fmt.Errorf("hash mismatch for %s/%v", c.ItemId, c.Form)
 		}
 	}
 	cpl := 0
 	if done {
+		if err := os.Rename(partial, path); err != nil {
+			return 0, false, err
+		}
 		cpl = 1
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=?, complete=?, hash=?, mime=?, total=?,
+	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=?, received_ranges=?, complete=?, hash=?, mime=?, total=?,
 		first_at=CASE WHEN first_at=0 THEN ? ELSE first_at END,
-		complete_at=CASE WHEN ?=1 AND complete_at=0 THEN ? ELSE complete_at END
+		complete_at=CASE WHEN ?=1 THEN ? ELSE 0 END
 		WHERE item_id=? AND kind=?`,
-		received, cpl, c.ContentHash, c.Mime, c.TotalBytes, at.UnixMilli(), cpl, at.UnixMilli(), c.ItemId, int(c.Form)); err != nil {
+		received, rangesJSON, cpl, c.ContentHash, c.Mime, c.TotalBytes, at.UnixMilli(), cpl, at.UnixMilli(), c.ItemId, int(c.Form)); err != nil {
 		return 0, false, err
 	}
 	return received, done, nil
+}
+
+const maxReceivedRanges = 256
+
+// The prefix is stored in received; only disjoint ranges beyond it need JSON.
+func mergeReceived(received int64, raw string, start, end int64) (int64, string) {
+	var ranges [][2]int64
+	if err := json.Unmarshal([]byte(raw), &ranges); err != nil || len(ranges) > maxReceivedRanges {
+		ranges = nil
+	}
+	if end > start {
+		ranges = append(ranges, [2]int64{start, end})
+	}
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i][0] < ranges[j][0] })
+	merged := make([][2]int64, 0, len(ranges))
+	for _, r := range ranges {
+		if r[0] <= received {
+			received = max(received, r[1])
+		} else if len(merged) > 0 && r[0] <= merged[len(merged)-1][1] {
+			merged[len(merged)-1][1] = max(merged[len(merged)-1][1], r[1])
+		} else {
+			merged = append(merged, r)
+		}
+	}
+	if len(merged) > maxReceivedRanges {
+		return received, "[]"
+	}
+	encoded, _ := json.Marshal(merged)
+	return received, string(encoded)
 }
 
 // SetFeatures stores the decoded FACT for an item.
@@ -331,6 +397,14 @@ func (s *Store) Owner(ctx context.Context, itemID string) (string, error) {
 
 func (s *Store) ReadForm(itemID string, kind pb.FormKind) ([]byte, error) {
 	return os.ReadFile(filepath.Join(s.blobDir, itemID, fmt.Sprintf("%d", kind)))
+}
+
+// OpenForm streams a blob without allocating its full payload in an API reader.
+func (s *Store) OpenForm(itemID string, kind pb.FormKind) (*os.File, error) {
+	if !ids.Valid(itemID) {
+		return nil, ErrNotFound
+	}
+	return os.Open(filepath.Join(s.blobDir, itemID, fmt.Sprintf("%d", kind)))
 }
 
 // Heartbeat records the latest edge heartbeat.
@@ -487,7 +561,7 @@ func (s *Store) Get(ctx context.Context, id string) (*Item, error) {
 			return nil, err
 		}
 	}
-	q, err := s.db.QueryContext(ctx, `SELECT kind,total,received,complete,mime,first_at,complete_at FROM forms WHERE item_id=? ORDER BY kind`, id)
+	q, err := s.db.QueryContext(ctx, `SELECT kind,hash,total,received,complete,mime,first_at,complete_at FROM forms WHERE item_id=? ORDER BY kind`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -496,7 +570,7 @@ func (s *Store) Get(ctx context.Context, id string) (*Item, error) {
 		var fs FormState
 		var kind, cpl int
 		var fa, ca int64
-		if err := q.Scan(&kind, &fs.Total, &fs.Received, &cpl, &fs.Mime, &fa, &ca); err != nil {
+		if err := q.Scan(&kind, &fs.Hash, &fs.Total, &fs.Received, &cpl, &fs.Mime, &fa, &ca); err != nil {
 			return nil, err
 		}
 		fs.Kind, fs.Complete = pb.FormKind(kind), cpl == 1

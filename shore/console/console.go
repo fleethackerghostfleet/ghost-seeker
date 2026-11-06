@@ -52,7 +52,7 @@ func view(it *store.Item) *pb.ItemView {
 	}
 	v := &pb.ItemView{Item: item, Score: &pb.Score{Priority: m.Priority}, ManifestSent: it.ManifestAt.UnixMilli() > 0}
 	for _, f := range it.Forms {
-		item.Forms = append(item.Forms, &pb.Form{Kind: f.Kind, Bytes: f.Total, Mime: f.Mime, Ready: f.Complete})
+		item.Forms = append(item.Forms, &pb.Form{Kind: f.Kind, ContentHash: f.Hash, Bytes: f.Total, Mime: f.Mime, Ready: f.Complete})
 		v.FormStates = append(v.FormStates, &pb.FormState{Kind: f.Kind, Bytes: f.Total, AckedThrough: f.Received, Complete: f.Complete})
 	}
 	return v

@@ -67,6 +67,8 @@ func (s *Store) SeedUploaded(n int) {
 	})
 	for _, i := range top[:min(n, len(top))] {
 		u := &s.items[i].Upload
+		now := s.clock
+		u.MetaSent, u.MetaDone, u.MetaDoneAt = u.MetaBytes, true, &now
 		s.stats.Bytes += int(u.Bytes - u.Sent)
 		u.Sent, u.Done, u.Received, u.Active = u.Bytes, true, true, false
 	}
@@ -84,6 +86,7 @@ func (s *Store) SetLinkBPS(bps int64) []command.Item {
 	defer s.mu.Unlock()
 	s.linkBPS = max(0, bps)
 	s.stats.LinkBPS = s.linkBPS
+	s.observeLink()
 	s.uploadRemainder = 0
 	var changed []command.Item
 	for i := range s.items {
@@ -104,7 +107,12 @@ func (s *Store) SetLinkBPS(bps int64) []command.Item {
 func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if elapsed <= 0 || s.linkBPS == 0 {
+	if elapsed <= 0 {
+		return nil
+	}
+	s.clock = s.clock.Add(elapsed)
+	s.observeLink()
+	if s.linkBPS == 0 {
 		return nil
 	}
 	var numerator, quotient, remainder big.Int
@@ -119,29 +127,39 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 	if budget == 0 {
 		return nil // sub-byte tick: keep Active so the UI does not flicker
 	}
-	queue := make([]int, 0, len(s.items))
+	metadataQueue := make([]int, 0, len(s.items))
+	imageQueue := make([]int, 0, len(s.items))
 	for i := range s.items {
 		item := s.items[i]
+		if !item.Upload.MetaDone && item.Upload.MetaBytes > item.Upload.MetaSent {
+			metadataQueue = append(metadataQueue, i)
+		}
+		// Background/scene images stay aboard until explicitly pulled. Their
+		// metadata is still eligible for the first pass above.
 		if item.Background && item.Manual == 0 && !item.Sent && !item.FullRes && item.Upload.Override != "next" {
 			continue
 		}
-		if !item.Upload.Done && item.Upload.Override != "hold" {
-			queue = append(queue, i)
+		if !item.Upload.Done && item.Upload.Override != "hold" && (!s.stats.MetaOnly || item.Upload.Override == "next" || item.FullRes) {
+			imageQueue = append(imageQueue, i)
 		}
 	}
-	sort.SliceStable(queue, func(i, j int) bool {
-		a, b := s.items[queue[i]], s.items[queue[j]]
-		if (a.Upload.Override == "next") != (b.Upload.Override == "next") {
-			return a.Upload.Override == "next"
-		}
-		if a.Upload.Override == "next" {
-			return a.Upload.NextOrder < b.Upload.NextOrder
-		}
-		if a.Tier != b.Tier {
-			return a.Tier < b.Tier
-		}
-		return a.Central > b.Central
-	})
+	queueOrder := func(queue []int) {
+		sort.SliceStable(queue, func(i, j int) bool {
+			a, b := s.items[queue[i]], s.items[queue[j]]
+			if (a.Upload.Override == "next") != (b.Upload.Override == "next") {
+				return a.Upload.Override == "next"
+			}
+			if a.Upload.Override == "next" {
+				return a.Upload.NextOrder < b.Upload.NextOrder
+			}
+			if a.Tier != b.Tier {
+				return a.Tier < b.Tier
+			}
+			return a.Central > b.Central
+		})
+	}
+	queueOrder(metadataQueue)
+	queueOrder(imageQueue)
 	wasActive := map[int]bool{}
 	for i := range s.items {
 		if s.items[i].Upload.Active {
@@ -156,7 +174,36 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 			}
 		}
 	}()
-	for _, i := range queue {
+	// Metadata gets the complete first pass. No image bytes are spent until
+	// every eligible item's metadata is complete, even if that leaves budget.
+	for _, i := range metadataQueue {
+		if budget == 0 {
+			break
+		}
+		delete(wasActive, i)
+		u := &s.items[i].Upload
+		var n int64
+		if !u.MetaDone && u.MetaBytes > 0 {
+			n = min(budget, u.MetaBytes-u.MetaSent)
+			u.MetaSent += n
+			if u.MetaSent == u.MetaBytes {
+				u.MetaDone = true
+				now := s.clock
+				u.MetaDoneAt = &now
+			}
+		}
+		s.stats.Bytes += int(n)
+		budget -= n
+		// Active describes image bytes on the wire. Metadata delivery must not
+		// make the UI render the image as uploading.
+		changed = append(changed, cloneItem(s.items[i]))
+	}
+	for _, item := range s.items {
+		if !item.Upload.MetaDone && item.Upload.MetaBytes > item.Upload.MetaSent {
+			return changed
+		}
+	}
+	for _, i := range imageQueue {
 		if budget == 0 {
 			break
 		}
@@ -167,7 +214,7 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 		s.stats.Bytes += int(n)
 		budget -= n
 		u.Done = u.Sent == u.Bytes
-		u.Active = !u.Done
+		u.Active = n > 0 && !u.Done
 		if u.Done {
 			u.Received = true
 			u.Override = ""
@@ -176,4 +223,33 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 		changed = append(changed, cloneItem(s.items[i]))
 	}
 	return changed
+}
+
+func (s *Store) observeLink() {
+	mode := s.lowband.Observe(s.linkBPS, s.clock)
+	s.stats.MetaOnly = mode || s.emconBurst
+	if s.emconBurst {
+		s.stats.MetaOnlyReason = "emcon"
+	} else if mode {
+		s.stats.MetaOnlyReason = "link"
+	} else {
+		s.stats.MetaOnlyReason = ""
+	}
+	if s.stats.MetaOnly {
+		since := s.lowband.Since()
+		if s.emconBurst && since.IsZero() {
+			since = s.clock
+		}
+		s.stats.MetaOnlySince = &since
+	} else {
+		s.stats.MetaOnlySince = nil
+	}
+}
+
+// SetEMCON reports the policy's BURST state to the simulated uplink.
+func (s *Store) SetEMCON(burst bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.emconBurst = burst
+	s.observeLink()
 }
