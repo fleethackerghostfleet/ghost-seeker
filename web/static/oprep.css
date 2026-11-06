@@ -1,0 +1,10 @@
+#oprepDialog{width:min(1200px,94vw);max-height:90vh;box-sizing:border-box;background:var(--panel,#fff);color:var(--text,#172e40);border:1px solid var(--muted,#526672);border-radius:8px;padding:24px}
+#oprepDialog::backdrop{background:#0009}
+.oprep-layout{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.2fr);gap:24px}
+#oprepForm{display:grid;gap:12px}
+#oprepForm label{display:grid;gap:4px}
+#oprepForm input,#oprepForm textarea,#oprepForm select{width:100%;box-sizing:border-box;font:inherit;padding:6px}
+#oprepPreview{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;margin:0}
+.oprep-actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.oprep-provenance{color:var(--accent,#006c72)}
+@media(max-width:760px){.oprep-layout{grid-template-columns:1fr}}
