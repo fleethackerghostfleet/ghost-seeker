@@ -1169,11 +1169,12 @@ test('live card updates preserve canonical priority labels',()=>{
  `,context);
  assert.equal(vm.runInContext('badge.textContent',context),'P1 Critical');
  assert.equal(vm.runInContext('badge.title',context),'Notify Commander');
- assert.equal(vm.runInContext("card['aria-label']",context),'P1 Critical image from Mast camera. Open image details');
+ assert.equal(vm.runInContext("card['aria-description']",context),'P1 Critical image from Mast camera. Open image details');
+ assert.equal(vm.runInContext("card['aria-label']",context),undefined);
  vm.runInContext('testItem.tier=4;updateCard(testItem)',context);
  assert.equal(vm.runInContext('badge.textContent',context),'P4 Low');
  assert.equal(vm.runInContext('badge.title',context),'Image priority');
- assert.equal(vm.runInContext("card['aria-label']",context),'P4 Low image from Mast camera. Open image details');
+ assert.equal(vm.runInContext("card['aria-description']",context),'P4 Low image from Mast camera. Open image details');
 });
 test('feed state uses clear active, paused and reconnecting labels',()=>{
  const context=setup();

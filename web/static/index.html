@@ -47,7 +47,7 @@
  <div class="fhead" id="feedHead">
   <div class="toolbar" id="feedControls">
     <span class="lbl" id="sourceLabel">Sensor</span>
-    <select id="srcSel"></select>
+    <select id="srcSel" aria-labelledby="sourceLabel"></select>
     <label class="feed-check"><input type="checkbox" id="showDuplicates"> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0</span></label>
     <label class="feed-check" title="Hide images that have finished uploading to shore. Queued, uploading, held and kept-on-ship images stay visible."><input type="checkbox" id="hideUploaded"> Hide uploaded <span class="c" id="uploadedCount" title="Feed images fully uploaded to shore">0</span></label>
     <label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter"><option value="all">All images</option><option value="sent">Sent by a person</option><option value="reviewed">Reviewed by a person</option><option value="unreviewed">Not reviewed yet</option></select></label><span class="feed-note" id="sentOrder" hidden>Only images sent by a person · newest first <button type="button" class="btn sm" id="sentShowAll">Show all images</button></span>
@@ -108,14 +108,14 @@
   <div class="wb-admin">
    <section class="panel"><div class="wb-row"><h3>Active directives</h3><div class="spacer"></div><button class="btn sm" id="clearDir">Clear all</button></div><p class="hint">The base model sets starting scores. These directives adjust them to reflect what matters to you.</p><div class="dirs" id="directives"></div><div id="policyConflicts"></div></section>
    <details class="panel"><summary>Advanced settings</summary>
-   <section class="panel sim-only"><h3>Base prioritization model</h3><p class="hint">The base model gives each object a starting score. Active directives adjust those scores to reflect your priorities; image-specific exceptions override the resulting priority.</p><div class="mrow"><select id="modelSel"></select></div><div class="modeldesc" id="modelDesc"></div></section>
+   <section class="panel sim-only"><h3>Base prioritization model</h3><p class="hint">The base model gives each object a starting score. Active directives adjust those scores to reflect your priorities; image-specific exceptions override the resulting priority.</p><div class="mrow"><select id="modelSel" aria-label="Base prioritization model"></select></div><div class="modeldesc" id="modelDesc"></div></section>
    <section class="panel sim-only"><h3>Effective object weights</h3><p class="hint" id="wNote"></p><div id="weights"></div></section>
-   <section class="panel" id="policyAdmin" hidden><h3>Super admin · raw policy (protojson)</h3><textarea id="polRaw" spellcheck="false" rows="14"></textarea><div class="wb-row"><button id="polRawValidate">Validate</button><button id="polRawApply" class="primary">Apply</button><button id="polRawReload">Reload</button></div><div id="polRawMsg" role="status"></div></section>
+   <section class="panel" id="policyAdmin" hidden><h3>Super admin · raw policy (protojson)</h3><textarea id="polRaw" aria-label="Raw policy (protojson)" spellcheck="false" rows="14"></textarea><div class="wb-row"><button id="polRawValidate">Validate</button><button id="polRawApply" class="primary">Apply</button><button id="polRawReload">Reload</button></div><div id="polRawMsg" role="status"></div></section>
    <section class="panel sim-only" id="policyAudit"><h3>Policy audit · newest 50</h3><div class="policy-table-wrap"><table class="policy-audit"><thead><tr><th>Time</th><th>Who</th><th>Source</th><th>Version</th><th>Text</th><th>Result</th><th>Reason</th></tr></thead><tbody id="policyAuditRows"></tbody></table></div></section>
    </details>
   </div>
  </div>
-<dialog id="wbConfirm"><h3>Read back before applying</h3><p id="wbReadback" class="wb-readback"></p><small id="wbPath" class="hint"></small><ul id="wbWarnings" class="wb-warnings" hidden></ul><p id="wbConfirmText"></p><p class="hint">Adds draft rules to active directives and saves pinned exceptions. Other sessions will update.</p><div class="wb-row"><button id="wbConfirmApply" class="primary">Confirm</button><button id="wbEditApply">Edit</button><button id="wbCancelApply">Cancel</button></div></dialog>
+<dialog id="wbConfirm" aria-label="Read back before applying"><h3>Read back before applying</h3><p id="wbReadback" class="wb-readback"></p><small id="wbPath" class="hint"></small><ul id="wbWarnings" class="wb-warnings" hidden></ul><p id="wbConfirmText"></p><p class="hint">Adds draft rules to active directives and saves pinned exceptions. Other sessions will update.</p><div class="wb-row"><button id="wbConfirmApply" class="primary">Confirm</button><button id="wbEditApply">Edit</button><button id="wbCancelApply">Cancel</button></div></dialog>
 </section>
 <section class="page" id="pgRv">
   <div class="rvcard"><label>Reviewer <input id="reviewerName" maxlength="80" placeholder="Required reviewer name"></label> <button class="btn sm" id="reviewerSave">Set / change reviewer</button> <span id="reviewerStatus"></span> <label id="reviewSyncLabel" hidden><input type="checkbox" id="reviewSync"> Team sync</label></div>
@@ -171,7 +171,7 @@
 <div class="toast" id="toast"></div>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
 <dialog id="resetDemoDialog" aria-labelledby="resetDemoTitle"><h3 id="resetDemoTitle">Reset demo?</h3><p>This clears all images, the ship-to-shore upload queue, the Commander list and decisions, and session counters.</p><p>Collection priorities, model, link settings and the review log are kept. New captures keep arriving.</p><div class="wb-row"><button class="btn" id="resetDemoCancel" autofocus>Cancel</button><button class="btn danger" id="resetDemoConfirm">Reset demo</button></div></dialog>
-<dialog id="settings" class="setdlg"></dialog>
+<dialog id="settings" class="setdlg" aria-label="Display settings"></dialog>
 <script src="/settings.js" defer></script>
 <script src="/text-layout.js" defer></script>
 <script src="/resize.js" defer></script>
