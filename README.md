@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/ghost-seeker-logo.png" alt="Ghost Seeker" width="560"></p>
+
 # ghost-seeker
 
 Ship-to-shore **prioritized sync** for disconnected, low-bandwidth links.
@@ -13,6 +15,15 @@ See [Human review](docs/HUMAN_REVIEW.md) for durable review capture, exports, an
 `make verify` on a prepared Linux host for the complete fail-closed test/security/
 package/image suite. See [local verification](docs/VERIFY.md) for setup, commit-linked
 reports, and merge-policy limitations. No GitHub plan upgrade is needed.
+
+## Branches
+
+- `dev`: default branch; all new work lands here through pull requests.
+- `main`: the second demo.
+- `demo`: locked saved working version. Never touch it.
+- `prod`: the final version deployed to the fleet.
+
+Never push directly to `dev`, `main`, `demo` or `prod`; open a pull request.
 
 Key behaviours (all covered by `go test ./...` and the simulator):
 
@@ -327,11 +338,18 @@ go run ./cmd/ghost-seeker -addr :8090
 ```
 
 The app imagery is AI-generated synthetic imagery; see [tools/imagegen](tools/imagegen/README.md).
+For real Operator Review, build and replay the guarded clean-v2 development set with
+[`docs/HUMAN_REVIEW.md`](docs/HUMAN_REVIEW.md); test and quarantine imagery is never reviewed.
 
 Flags `-addr`, `-retain`, and `-backfill` set the listen address, item retention, and number of historical items generated at startup. Pages:
 
+Simulation capture cadence is controlled by `-capture-every` (default **700ms**,
+must be positive), uniformly jittered from 2/3 to 4/3 of the mean (about
+**467–933ms** by default). Use `-capture-every 1.8s` for the old **1.2–2.4s**
+range. Upload bandwidth and historical backfill timing are unchanged.
+
 - **Imagery Feed** — browse prioritized sensor imagery, open an item for detections and processing details, and set its priority.
-  Images the pipeline handled are no longer dropped before storage. Low-value frames and repeats of an earlier image are kept at **P4 Low**, and their cards say why. The feed still holds at most `-retain` images; when it is full, the oldest filtered images nobody touched are removed first. In live shore mode, frames of one sighting are still combined into a single card. **Show duplicates** (on by default) shows or hides the repeats; any repeat a person acted on stays visible either way. **Human review** selects all images, **Sent by a person** (newest send first), reviewed by a person, or not reviewed yet. Purple **➤ Sent by operator** marks a human send, and green **✓ Auto-sent to Commander** marks an automatic one. **Size** is Small or Large. These choices are saved in this browser and reset with Display settings. **Details: counts & filtered photos** opens the pipeline counts and lets you browse the filtered photos (each repeat is shown next to its original).
+  Images the pipeline handled are no longer dropped before storage. Low-value frames and repeats of an earlier image are kept at **P4 Low**, and their cards say why. The feed still holds at most `-retain` images; when it is full, the oldest filtered images nobody touched are removed first. In live shore mode, frames of one sighting are still combined into a single card. **Show duplicates** (off by default) shows or hides the repeats; any repeat a person acted on stays visible either way. **Human review** selects all images, **Sent by a person** (newest send first), reviewed by a person, or not reviewed yet. Purple **➤ Sent by operator** marks a human send, and green **✓ Auto-sent to Commander** marks an automatic one. **Size** is Small or Large. These choices are saved in this browser and reset with Display settings. **Details: counts & filtered photos** opens the pipeline counts and lets you browse the filtered photos (each repeat is shown next to its original).
 - **J2 briefing** — in an image's detail drawer, add individual vessel detections to the briefing selection (other object types are excluded). Choose **Create J2 brief** in the feed toolbar to freeze evidence, including locally available imagery with the selected detection highlighted. The integrated `#briefing` workspace provides editable title, analyst assessment and intelligence gaps; combined slides paginate at four observations, or use one slide per observation. Export editable 16:9 PowerPoint or **Print / Save PDF** (opens a printable page; choose Save as PDF in the browser). Export is local and needs no external service. Drafts live only in the current tab and are lost on reload. A new snapshot explicitly replaces evidence without changing review/commander state. Different observations may depict the same vessel: remove duplicates manually; there is no verified track identity, affiliation or geospatial data. Missing images get explicit placeholders. All slides retain the training marking.
 - **Review** — `1`–`4` set priority, `Space` accept the model suggestion, `X` dismiss, `C` send to the commander queue, `→`/`S` skip, `Z` undo, `N` night mode.
   Repeated overrides can prompt a one-key directive suggestion; when contacts are close, Review can ask which object caused the override.
@@ -408,6 +426,20 @@ estimate; there are no manual speed buttons or rate-setting API. A zero sample d
 the link until the next nonzero sample. The former `-link-bps` flag is removed.
 Pass `-link-listen ""` when the link is shaped elsewhere (compose +
 Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for the demo.
+
+### Synthetic simulation uplink
+
+Without `-shore` or `-dataset`, the Imagery Feed's automatic simulation link
+uses the shared normal distribution from `shaper.NewNormal`, resampled every
+five seconds with outages. Historical backfill starts uploaded.
+`-sim-link-bps N` fixes the rate in bits/second (`0` means outage); for example,
+`-sim-link-bps 2000000` can build a visible upload queue. Capture is independent of pending uploads in both synthetic and dataset simulation.
+`-capture-every` sets the positive mean interval (default 700ms, uniformly jittered
+from 2/3 to 4/3); `-capture-every 1.8s` restores the old 1.2–2.4s range.
+The bounded store evicts untouched filtered frames first, then other untouched
+queued/completed frames ahead of reviewed, manual, held or mid-transfer items.
+These are eviction preferences, not indefinite pins; the newly captured item is
+never its own eviction victim.
 
 ## Status / not done
 

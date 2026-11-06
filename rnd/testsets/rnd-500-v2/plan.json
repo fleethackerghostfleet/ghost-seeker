@@ -1,0 +1,532 @@
+{
+ "name": "rnd-500-v2",
+ "sources": [
+  {
+   "name": "30_Days_at_Sea_Timelapse",
+   "kind": "zip",
+   "path": "zips/30_Days_at_Sea_Timelapse_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "A_ship_in_the_distance",
+   "kind": "zip",
+   "path": "zips/A_ship_in_the_distance_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Argentina_to_Alaska_Cruise_Bridge_Timelapse",
+   "kind": "zip",
+   "path": "zips/Argentina_to_Alaska_Cruise_Bridge_Timelapse_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Arriving_In_Norfolk_USA_3hr_uncut",
+   "kind": "zip",
+   "path": "zips/Arriving_In_Norfolk_USA_3hr_uncut_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Canadian_Coast_Guard_Helicopter_Landing",
+   "kind": "zip",
+   "path": "zips/Canadian_Coast_Guard_Helicopter_Landing_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Cargo_Ship_Storm_first_hour",
+   "kind": "zip",
+   "path": "zips/Cargo_Ship_Storm_first_hour_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Cargo_Ship_Uncut_View",
+   "kind": "zip",
+   "path": "zips/Cargo_Ship_Uncut_View_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Chase_N_Fish_Sharky",
+   "kind": "zip",
+   "path": "zips/Chase_N_Fish_Sharky_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats",
+   "kind": "zip",
+   "path": "zips/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Cruise_Ship_POV",
+   "kind": "zip",
+   "path": "zips/Cruise_Ship_POV_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Cruise_ship_Mediterranean_sunset_off_Italy",
+   "kind": "zip",
+   "path": "zips/Cruise_ship_Mediterranean_sunset_off_Italy_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Dolphin_from_far_distance_in_Bay_of_Bengal",
+   "kind": "zip",
+   "path": "zips/Dolphin_from_far_distance_in_Bay_of_Bengal_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Dolphins_Pungo_Ferry_Bridge",
+   "kind": "zip",
+   "path": "zips/Dolphins_Pungo_Ferry_Bridge_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Far_away_but_did_you_see_that_splash",
+   "kind": "zip",
+   "path": "zips/Far_away_but_did_you_see_that_splash_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Ferry_Passing_By_On_River",
+   "kind": "zip",
+   "path": "zips/Ferry_Passing_By_On_River_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "NCL_Breakaway_Bomb_Cyclone",
+   "kind": "zip",
+   "path": "zips/NCL_Breakaway_Bomb_Cyclone_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Pacific_Ocean_at_night_from_Cruise_Balcony",
+   "kind": "zip",
+   "path": "zips/Pacific_Ocean_at_night_from_Cruise_Balcony_frames.zip",
+   "count": 6,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no",
+    "lighting": "night"
+   }
+  },
+  {
+   "name": "Partially_Obstructed_Balcony",
+   "kind": "zip",
+   "path": "zips/Partially_Obstructed_Balcony_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "SMD_MVI_1578_VIS_night",
+   "kind": "zip",
+   "path": "zips/SMD_MVI_1578_VIS_night_frames.zip",
+   "count": 6,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no",
+    "lighting": "night"
+   }
+  },
+  {
+   "name": "SMD_MVI_1582_VIS_night",
+   "kind": "zip",
+   "path": "zips/SMD_MVI_1582_VIS_night_frames.zip",
+   "count": 6,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no",
+    "lighting": "night"
+   }
+  },
+  {
+   "name": "SMD_MVI_1583_VIS_night",
+   "kind": "zip",
+   "path": "zips/SMD_MVI_1583_VIS_night_frames.zip",
+   "count": 6,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no",
+    "lighting": "night"
+   }
+  },
+  {
+   "name": "SMD_MVI_1584_VIS_night",
+   "kind": "zip",
+   "path": "zips/SMD_MVI_1584_VIS_night_frames.zip",
+   "count": 6,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no",
+    "lighting": "night"
+   }
+  },
+  {
+   "name": "Sailboat_on_the_horizon",
+   "kind": "zip",
+   "path": "zips/Sailboat_on_the_horizon_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Sailing_POV_Corfu_Paxos",
+   "kind": "zip",
+   "path": "zips/Sailing_POV_Corfu_Paxos_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Sailing_drone_inside_a_hurricane",
+   "kind": "zip",
+   "path": "zips/Sailing_drone_inside_a_hurricane_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Ship_crossing_Mariana_Trench",
+   "kind": "zip",
+   "path": "zips/Ship_crossing_Mariana_Trench_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Ship_in_the_Distance_Ian",
+   "kind": "zip",
+   "path": "zips/Ship_in_the_Distance_Ian_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Ship_in_the_Distance_Utopia_of_the_Seas",
+   "kind": "zip",
+   "path": "zips/Ship_in_the_Distance_Utopia_of_the_Seas_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Spotted_A_Submarine",
+   "kind": "zip",
+   "path": "zips/Spotted_A_Submarine_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Submarine_surfacing",
+   "kind": "zip",
+   "path": "zips/Submarine_surfacing_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Sunrise_Somewhere_in_the_Ocean",
+   "kind": "zip",
+   "path": "zips/Sunrise_Somewhere_in_the_Ocean_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Tarpon_Offshore",
+   "kind": "zip",
+   "path": "zips/Tarpon_Offshore_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Two_Dolphins_near_the_coast_of_Gibraltar",
+   "kind": "zip",
+   "path": "zips/Two_Dolphins_near_the_coast_of_Gibraltar_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "US_Destroyer_POV_Warship_Crossing",
+   "kind": "zip",
+   "path": "zips/US_Destroyer_POV_Warship_Crossing_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "Whale_Watching_in_Northern_Peru",
+   "kind": "zip",
+   "path": "zips/Whale_Watching_in_Northern_Peru_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "YouTube_0ua2sxTzDM4",
+   "kind": "zip",
+   "path": "zips/YouTube_0ua2sxTzDM4_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "YouTube_8GFfhVVc0nA",
+   "kind": "zip",
+   "path": "zips/YouTube_8GFfhVVc0nA_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "YouTube_JVzpzyw2lP8",
+   "kind": "zip",
+   "path": "zips/YouTube_JVzpzyw2lP8_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "YouTube_T8INJuESzEw",
+   "kind": "zip",
+   "path": "zips/YouTube_T8INJuESzEw_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "YouTube_aHfHHD8v4QE",
+   "kind": "zip",
+   "path": "zips/YouTube_aHfHHD8v4QE_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "YouTube_aOdUpBoJM1M",
+   "kind": "zip",
+   "path": "zips/YouTube_aOdUpBoJM1M_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "YouTube_tiPPZVspSDQ",
+   "kind": "zip",
+   "path": "zips/YouTube_tiPPZVspSDQ_frames.zip",
+   "count": 5,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "no"
+   }
+  },
+  {
+   "name": "seaships7000",
+   "kind": "catalog",
+   "path": "datasets/seaships7000",
+   "annotations": "catalog/ann-seaships7000.jsonl",
+   "count": 75,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "yes"
+   }
+  },
+  {
+   "name": "singapore_maritime",
+   "kind": "catalog",
+   "path": "datasets/singapore_maritime",
+   "annotations": "catalog/ann-singapore_maritime.jsonl",
+   "count": 75,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "yes"
+   }
+  },
+  {
+   "name": "seadronessee",
+   "kind": "catalog",
+   "path": "datasets/seadronessee",
+   "annotations": "catalog/ann-seadronessee.jsonl",
+   "count": 50,
+   "tags": {
+    "viewpoint": "aerial",
+    "modality": "rgb",
+    "labeled": "yes"
+   }
+  },
+  {
+   "name": "ir_maritime_vessels",
+   "kind": "catalog",
+   "path": "datasets/ir_maritime_vessels",
+   "annotations": "catalog/ann-ir_maritime_vessels.jsonl",
+   "count": 50,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "ir",
+    "labeled": "yes"
+   }
+  },
+  {
+   "name": "smd_vis_onboard_sample",
+   "kind": "catalog",
+   "path": "datasets/smd_vis_onboard_sample",
+   "annotations": "catalog/ann-smd_vis_onboard_sample.jsonl",
+   "count": 35,
+   "tags": {
+    "viewpoint": "surface",
+    "modality": "rgb",
+    "labeled": "yes"
+   }
+  }
+ ]
+}

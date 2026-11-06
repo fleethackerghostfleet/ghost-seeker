@@ -1,0 +1,7 @@
+{
+  "n_1080p": 1984,
+  "p50_ms": 85.2016740009276,
+  "p95_ms": 89.38184279968482,
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "scope": "decode excluded; synchronized preprocessing+inference; five warmups excluded"
+}

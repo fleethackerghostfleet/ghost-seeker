@@ -24,7 +24,8 @@ def main() -> None:
     ap.add_argument("--n-calib", type=int, default=300)
     ap.add_argument("--out", default="~/models/G")
     ap.add_argument("--class-names", nargs="+", default=["boat"],
-                    help="single_cls training names the class 'item'; the sidecar keeps COCO-style 'boat'")
+                    help="single_cls training names the class 'item'; the sidecar keeps COCO-style 'boat'. "
+                         "'model' keeps the weights' own names (multi-class COCO-80 fine-tunes, cov_train.sh)")
     a = ap.parse_args()
     d = Path(a.out).expanduser() / a.name
     if not (d / "model.onnx").exists():
@@ -36,7 +37,8 @@ def main() -> None:
         quantize_int8(d / "model.onnx", d / "int8", calib, n_calib=a.n_calib)
     for meta in d.rglob("meta.json"):
         m = json.loads(meta.read_text())
-        m["class_names"] = list(a.class_names)
+        if a.class_names != ["model"]:
+            m["class_names"] = list(a.class_names)
         m["model"] = a.name
         meta.write_text(json.dumps(m, indent=1))
     print("exported", d)

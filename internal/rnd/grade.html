@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R&D priority grader</title>
+<style>
+body{margin:0;background:#101822;color:#edf5ff;font:16px system-ui}header,footer{padding:14px 22px;background:#1b2b3c}header{position:sticky;top:0;z-index:1}h1{font-size:20px;margin:0 0 8px}#counters{display:flex;gap:18px;flex-wrap:wrap;font-variant-numeric:tabular-nums}main{max-width:1200px;margin:auto;padding:16px}#stage{position:relative;width:100%;line-height:0}img{width:100%;height:auto}svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}button{font:inherit;padding:9px 14px;background:#274663;color:white;border:1px solid #8bb6db;border-radius:4px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}button:hover{background:#366184}#info{margin:10px 0;line-height:1.8}#error{color:#ffacac;min-height:24px}#controls{display:flex;gap:8px;flex-wrap:wrap}#grade{font-weight:bold;color:#a3eab6}small{color:#b5cada}
+</style>
+<header><h1 id="title">R&D priority grader</h1><div id="counters"></div></header>
+<main><div id="info"></div><div id="stage"><img id="image" alt="Dataset frame"><svg id="boxes" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg></div>
+<p id="grade"></p><div id="controls"><button data-nav="-1">← Back</button><button data-tier="1">1 · P1</button><button data-tier="2">2 · P2</button><button data-tier="3">3 · P3</button><button data-tier="4">4 · P4</button><button id="accept">Enter / Space · Accept model</button><button id="undo">Z · Undo last</button><button data-nav="1">Next →</button></div>
+<p id="error" role="alert"></p><small>1 = highest priority; 4 = lowest. Signed delta = human − model (negative: model under-prioritizes). Regrading replaces the effective grade. Undo restores the previous grade, including regrades. Navigation does not grade.</small></main>
+<script>
+'use strict';
+let state, index=0, busy=false;
+const $=id=>document.getElementById(id);
+function line(parent,text){const el=document.createElement('span');el.textContent=text;parent.append(el);}
+function render(){
+ const entry=state.entries[index], c=state.summary;
+ $('title').textContent=state.testset+' · '+state.reviewer;
+ $('counters').replaceChildren();
+ for(const text of [
+  'Graded '+c.graded+' / '+state.entries.length,
+  'Changed '+c.changed+' ('+c.changed_pct.toFixed(1)+'%)',
+  'Mean |Δ| '+c.mean_abs_delta.toFixed(3),
+  'Changed |Δ| '+c.mean_abs_changed.toFixed(3),
+  'Last 20 |Δ| '+c.mean_abs_last20.toFixed(3),
+  'Signed Δ '+c.mean_signed_delta.toFixed(3)
+ ]) line($('counters'),text);
+ $('info').textContent=(index+1)+' / '+state.entries.length+' · '+entry.image.source+' · '+entry.id+' · Model P'+entry.model_tier+' · Edge score '+entry.model_score.toFixed(4)+(entry.image.tags?' · '+Object.entries(entry.image.tags).map(([k,v])=>k+'='+v).join(' '):'')+(entry.image.ground_truth?' · truth boxes '+entry.image.ground_truth.length:'');
+ $('image').src='/images/'+encodeURIComponent(entry.id);
+ const grade=state.grades[entry.id];
+ $('grade').textContent=grade?'Human P'+grade.human_tier+' · Δ '+grade.delta:'Not graded';
+ $('boxes').replaceChildren();
+ for(const det of entry.detections){
+  const b=det.box, ns='http://www.w3.org/2000/svg';
+  const rect=document.createElementNS(ns,'rect');
+  for(const [key,value] of Object.entries({x:b.x*1000,y:b.y*1000,width:b.w*1000,height:b.h*1000,fill:'none',stroke:'#39ffae','stroke-width':2}))rect.setAttribute(key,value);
+  const text=document.createElementNS(ns,'text');
+  text.setAttribute('x',b.x*1000);text.setAttribute('y',Math.max(18,b.y*1000-6));text.setAttribute('fill','#39ffae');text.setAttribute('font-size','18');text.setAttribute('paint-order','stroke');text.setAttribute('stroke','#101822');text.setAttribute('stroke-width','3');
+  text.textContent=(det.subtype||det.label)+' '+Math.round(det.conf*100)+'%';
+  $('boxes').append(rect,text);
+ }
+ const im=entry.image, truth=im.ground_truth||[];
+ for(const g of truth){
+  const b=g.box, ns='http://www.w3.org/2000/svg', x=b.x/im.width*1000, y=b.y/im.height*1000, w=b.w/im.width*1000, h=b.h/im.height*1000;
+  const rect=document.createElementNS(ns,'rect');
+  for(const [key,value] of Object.entries({x,y,width:w,height:h,fill:'none',stroke:'#ffd166','stroke-width':1.5,'stroke-dasharray':'8 5'}))rect.setAttribute(key,value);
+  const text=document.createElementNS(ns,'text');
+  text.setAttribute('x',x);text.setAttribute('y',Math.min(990,y+h+16));text.setAttribute('fill','#ffd166');text.setAttribute('font-size','15');text.setAttribute('paint-order','stroke');text.setAttribute('stroke','#000');text.setAttribute('stroke-width','3');
+  text.textContent='truth: '+g.label;
+  $('boxes').append(rect,text);
+ }
+}
+function navigate(delta){if(busy)return;index=Math.max(0,Math.min(state.entries.length-1,index+delta));render();}
+async function request(path,body){
+ const response=await fetch(path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+ if(!response.ok)throw new Error(await response.text());
+ return response.json();
+}
+async function mutate(path,body){
+ if(busy||!state)return;
+ busy=true;$('error').textContent='';document.querySelectorAll('button').forEach(b=>b.disabled=true);
+ try{
+  const previous=state;state=await request(path,body);
+  if(path==='/api/grade')index=Math.min(index+1,state.entries.length-1);
+  else {const removed=Object.keys(previous.grades).find(id=>JSON.stringify(previous.grades[id])!==JSON.stringify(state.grades[id]));if(removed)index=state.entries.findIndex(e=>e.id===removed);}
+  render();
+ }catch(error){$('error').textContent=error.message;}
+ finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);}
+}
+function grade(tier){mutate('/api/grade',{id:state.entries[index].id,tier});}
+document.querySelectorAll('[data-tier]').forEach(b=>b.onclick=()=>grade(Number(b.dataset.tier)));
+document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>navigate(Number(b.dataset.nav)));
+$('accept').onclick=()=>grade(state.entries[index].model_tier);
+$('undo').onclick=()=>mutate('/api/undo',{});
+document.addEventListener('keydown',e=>{
+ if(e.repeat||!state||busy||e.ctrlKey||e.metaKey||e.altKey)return;
+ if(e.target.closest('button,a,input,textarea,select,summary,[contenteditable]:not([contenteditable="false"]),[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="textbox"],[role="combobox"],[role="slider"],[role="spinbutton"],[tabindex]'))return;
+ if(/^[1-4]$/.test(e.key)){e.preventDefault();grade(Number(e.key));}
+ else if(e.key==='Enter'||e.key===' '){e.preventDefault();grade(state.entries[index].model_tier);}
+ else if(e.key.toLowerCase()==='z'){e.preventDefault();mutate('/api/undo',{});}
+ else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();navigate(e.key==='ArrowLeft'?-1:1);}
+});
+$('image').onerror=()=>{$('error').textContent='Image failed to load. Check the local testset images directory.';};
+request('/api/state').then(s=>{state=s;const next=state.entries.findIndex(e=>!state.grades[e.id]);index=Math.max(0,next);render();}).catch(e=>$('error').textContent=e.message);
+</script></html>

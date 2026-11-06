@@ -1,6 +1,7 @@
 /* Commander View: received shore picture and final decisions on escalations. */
-let SRC={},CLS={},MODELS={},ATTR_LAB={},model='maritime';
+let SRC={},CLS={},MODELS={},ATTR_LAB={},model='maritime',datasetMode=false;
 let items=new Map(),view={tab:'received',sel:null,busy:false,undo:[]};
+let snapshotEpoch=null,resetRevision=0;
 const DEC={
  action:{k:'1',lab:'Take action',sub:'Task an asset · intercept / investigate',c:'#ff4d5e'},
  track:{k:'2',lab:'Track',sub:'Keep following this object',c:'#ff9a3c'},
@@ -16,7 +17,7 @@ const ago=d=>{const s=Math.max(0,(Date.now()-d)/1000);return s<60?Math.round(s)+
 const lab=c=>CLS[c]?.lab||c;
 
 function norm(it){
- it.dets=it.dets||[];it.det=it.det||[];
+ it.dets=Array.isArray(it.dets)?it.dets:[];it.det=Array.isArray(it.det)?it.det:[];
  it.ts=new Date(it.ts);it.src=SRC[typeof it.src==='string'?it.src:it.src.id]||{id:String(it.src),name:String(it.src),scene:'open',mode:'eo'};
  it.sentAt=it.sentAt?new Date(it.sentAt):null;it.decidedAt=it.decidedAt?new Date(it.decidedAt):null;return it;
 }
@@ -45,7 +46,8 @@ function flags(it){
   if(d.attrs.approaching)f.push(['al',`${l}: track inbound toward the sensor`]);
   if(d.attrs.loitering)f.push(['',`${l}: loitering`]);
   if(d.attrs.new)f.push(['',`${l}: not present in previous pass`])});
- if(it.edge<it.central-.15)f.push(['up',`Shore model raised the ship score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`]);
+ if(it.edge<it.central-.15)f.push(['up',datasetMode?`Priority model raised detector score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`:`Shore model raised the ship score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`]);
+ if(it.manual&&!it.autoSent)f.push(['up',`${datasetMode?'Operator':'Watch officer'} set priority P${it.manual} ${TN[it.manual]}`]);
  return[...new Map(f.map(x=>[x[1],x])).values()];
 }
 function boxes(it){
@@ -65,21 +67,34 @@ function renderLearned(directives){
  root.hidden=!learned.length;
  root.innerHTML=learned.length?`<b>Learned from operator</b><ul>${learned.map(d=>`<li>${esc(d.text.slice(prefix.length).trim())}</li>`).join('')}</ul>`:'';
 }
-function renderQueue(){
+let queueTab,queueSelection;
+function renderQueue(follow=false){
+ const queue=$('qlist'),scroll=queue.scrollTop;
+ const tabChanged=queueTab!==view.tab;
+ follow=follow||tabChanged||queueSelection!==view.sel;
+ queueTab=view.tab;queueSelection=view.sel;
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
-  <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
+  <div class="th"><img src="${esc(imageFor(it))}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
   <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
- $('qlist').querySelector('.row.on')?.scrollIntoView({block:'nearest'});
+ queue.scrollTop=tabChanged?0:scroll;
+ if(follow){
+  const selected=queue.querySelector('.row.on');
+  if(selected){
+   const row=selected.getBoundingClientRect(),top=queue.getBoundingClientRect().top+queue.clientTop;
+   if(row.top<top)queue.scrollTop+=row.top-top;
+   else if(row.bottom>top+queue.clientHeight)queue.scrollTop+=row.bottom-top-queue.clientHeight;
+  }
+ }
 }
 function renderStage(){
  const it=items.get(view.sel),old=$('note'),keep=old&&old.dataset.id===view.sel?old.value:'';
  if(!it){
   $('stage').innerHTML=`<div class="idle"><b>${view.tab==='received'?'Waiting for ship data':view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='received'?'Ship backlog is not a shore receipt.':view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';return;
  }
- $('stage').innerHTML=`<div class="frame"><img src="${imageFor(it)}" alt=""><div class="bx">${boxes(it)}</div></div>
+ $('stage').innerHTML=`<div class="frame"><img src="${esc(imageFor(it))}" alt=""><div class="bx">${boxes(it)}</div></div>
  <div class="facts"><div><span>Source</span><b>${esc(it.src.name)}</b></div><div><span>Location</span><b>${esc(it.src.loc||'—')}</b></div>
  <div><span>Captured</span><b class="mono">${zulu(it.ts)} · ${ago(it.ts)} ago</b></div><div><span>Record</span><b class="mono">#${it.dbId} · FRM ${it.frame}</b></div></div>
  <div class="shore-receipt"><b>${esc(receipt(it))}</b><span>${esc(reportStatus(it))}</span>${it.live?`<ul>${['fact','thumb','crop','full'].map(k=>`<li>${{fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'}[k]}: ${esc(it.live.forms?.[k]?.state||'not offered')}</li>`).join('')}</ul>`:''}</div>
@@ -89,13 +104,16 @@ function renderStage(){
 }
 function renderBrief(it){
  const sug=tierFor(it.central),f=flags(it),d=it.decision&&DEC[it.decision];
- const steps=[['Sensor capture',`${esc(it.src.id)} · ${zulu(it.ts)}`],['Ship scoring',`score ${it.edge.toFixed(2)} · ${esc(it.src.em||'')}`],['Received on shore',esc(receipt(it))],
+ const steps=datasetMode?[['Dataset image',`${esc(it.dataset_id)} · ${esc(it.image_id)}`],['Detector output',`${it.dets.length} contacts · ${it.edge.toFixed(2)}`],
+  ['Priority model',`${esc(MODELS[model]?.name||model)} · ${it.central.toFixed(2)} → P${sug} ${TN[sug]}`],
+  ['Operator review',it.sentAt?`sent to Commander as P${it.tier} ${TN[it.tier]} · ${zulu(it.sentAt)}`:'returned for another look'],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])]:
+  [['Sensor capture',`${esc(it.src.id)} · ${zulu(it.ts)}`],['Ship scoring',`score ${it.edge.toFixed(2)} · ${esc(it.src.em||'')}`],['Received on shore',esc(receipt(it))],
   ['Shore model',`${esc(MODELS[model]?.name||model)} · ${it.central.toFixed(2)} → P${sug} ${TN[sug]}`],
   ['Operator report',it.sentAt?`sent to Commander as P${it.tier} ${TN[it.tier]} · ${zulu(it.sentAt)}`:esc(reportStatus(it))],...(d?[['Commander',`${d.lab} · ${zulu(it.decidedAt)}`]]:[])];
- $('brief').innerHTML=`<div class="pri" style="--c:${tcol(it.tier)}"><span class="big">P${it.tier}</span><div><b>${TN[it.tier]}</b><span>Watch-officer priority${it.manual&&it.manual!==sug?` · model suggested P${sug} ${TN[sug]}`:''}</span></div></div>
- <div class="meter"><span title="Command score: importance after shore-side scoring">Shore score</span><div class="bar"><i style="width:${it.central*100}%;background:${tcol(sug)}"></i></div><b class="mono">${it.central.toFixed(2)}</b></div>
- <div class="meter"><span title="Edge score: the initial importance assigned on the ship">Ship score</span><div class="bar"><i style="width:${it.edge*100}%"></i></div><b class="mono">${it.edge.toFixed(2)}</b></div>
- <h4>Why it reached shore</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||'<li>Received over the ship-to-shore link</li>'}</ul>
+ $('brief').innerHTML=`<div class="pri" style="--c:${tcol(it.tier)}"><span class="big">P${it.tier}</span><div><b>${TN[it.tier]}</b><span>${datasetMode?'Operator':'Watch-officer'} priority${it.manual&&it.manual!==sug?` · model suggested P${sug} ${TN[sug]}`:''}</span></div></div>
+ <div class="meter"><span title="Command score after model scoring and directives">${datasetMode?'Model':'Shore'} score</span><div class="bar"><i style="width:${it.central*100}%;background:${tcol(sug)}"></i></div><b class="mono">${it.central.toFixed(2)}</b></div>
+ <div class="meter"><span title="${datasetMode?'Real detector triage score':'Edge score: the initial importance assigned on the ship'}">${datasetMode?'Detector':'Ship'} score</span><div class="bar"><i style="width:${it.edge*100}%"></i></div><b class="mono">${it.edge.toFixed(2)}</b></div>
+ <h4>Why it reached ${datasetMode?'you':'shore'}</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||(datasetMode?'<li>High command-model score</li>':'<li>Received over the ship-to-shore link</li>')}</ul>
  <h4 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
  <h4>Decision</h4>${!it.sent&&!d?'<p>Received for awareness. Command decisions become available when the watch floor sends a report to Commander.</p>':d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
  `<textarea id="note" data-id="${esc(it.id)}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
@@ -104,11 +122,15 @@ function renderBrief(it){
 function render(){ensureSel();renderKpis();renderQueue();renderStage()}
 
 async function api(path,method='GET',body){
- if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method);
+ const revision=resetRevision;
+ if(typeof gsAuth!=='undefined')gsAuth.requireWrite(method,path);
  const r=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
- const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.statusText);return j;
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||j.error||r.statusText);
+ if(method!=='GET'&&(revision!==resetRevision||(j.item&&!items.has(j.item.id))))throw new Error('Image is no longer available — the feed changed');
+ return j;
 }
 async function decide(decision,id=view.sel){
+ const revision=resetRevision;
  const it=items.get(id);if(!it||(!it.sent&&!it.decision)||view.busy)return;
  const note=decision?($('note')?.value||''):'';view.busy=true;
  try{
@@ -119,23 +141,24 @@ async function decide(decision,id=view.sel){
   if(decision){view.undo.push(id);if(view.tab==='pending')view.sel=next?.id||null;toast(`${DEC[decision].lab} · P${it.tier} ${TN[it.tier]} ${title(it)}`)}
   else{setTab('pending');view.sel=id;toast('Decision reopened')}
   render();return true;
- }catch(e){toast(e.message);return false}finally{view.busy=false}
+ }catch(e){if(revision===resetRevision)toast(e.message);return false}finally{if(revision===resetRevision)view.busy=false}
 }
 async function undo(){
+ const revision=resetRevision;
  if(view.busy)return;
  const fromStack=view.undo.length>0,id=fromStack?view.undo.pop():(items.get(view.sel)?.decision?view.sel:null);
  if(!id||!items.get(id)?.decision)return;
- if(!await decide('',id)&&fromStack)view.undo.push(id);
+ if(!await decide('',id)&&fromStack&&revision===resetRevision)view.undo.push(id);
 }
 function setTab(t){view.tab=t;[...$('tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
-function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue();renderStage()}}
+function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue(true);renderStage()}}
 function setLive(on){$('live').classList.toggle('off',!on);$('live').querySelector('span').textContent=on?'LIVE':'RECONNECTING'}
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 
 function connect(){
  const es=new EventSource('/api/stream');
  es.onopen=()=>setLive(true);es.onerror=()=>setLive(false);
- es.addEventListener('snapshot',e=>{const m=JSON.parse(e.data);if(m.live){Object.assign(SRC,Object.fromEntries((m.live.sources||[]).map(s=>[s.id,s])));Object.assign(CLS,m.live.classes||{});const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render()});
+ es.addEventListener('snapshot',e=>applySnapshot(JSON.parse(e.data)));
  es.addEventListener('update',e=>{
   const m=JSON.parse(e.data),prev=view.sel,{it,isNew}=upsert(m.item);
   if(isNew){it.fresh=true;toast(`New escalation · P${it.tier} ${TN[it.tier]} ${title(it)} · ${it.src.name}`);setTimeout(()=>{it.fresh=false;renderQueue()},5000)}
@@ -143,15 +166,25 @@ function connect(){
  });
  es.addEventListener('evict',e=>{const{id}=JSON.parse(e.data);if(items.delete(id))render()});
 }
+function applySnapshot(m){
+ if(m.reset===true||(snapshotEpoch!==null&&m.epoch!==undefined&&m.epoch!==snapshotEpoch)){
+  ++resetRevision;items=new Map();view.sel=null;view.undo=[];view.busy=false;imageCache.clear();$('stage').innerHTML='';$('brief').innerHTML='';
+ }
+ if(m.epoch!==undefined)snapshotEpoch=m.epoch;
+ if(m.live){Object.assign(SRC,Object.fromEntries((m.live.sources||[]).map(s=>[s.id,s])));Object.assign(CLS,m.live.classes||{});const b=document.querySelector('.banner');if(b)b.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE · COMMANDER\'S FINAL REVIEW'}
+ model=m.state.model;renderLearned(m.state.directives);items=new Map();m.items.forEach(upsert);render();
+}
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
- const c=await api('/api/config');
+ const c=await api('/api/config');datasetMode=!!c.datasetMode;
+ if(datasetMode){const banner=document.querySelector('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY · REAL IMAGERY · clean v2 dev · COMMANDER FINAL REVIEW'}
  SRC=Object.fromEntries(c.sources.map(s=>[s.id,s]));CLS=c.classes;MODELS=c.models;ATTR_LAB=c.attrLabels;
  $('tabs').onclick=e=>{const b=e.target.closest('button');if(b){setTab(b.dataset.t);view.sel=null;render()}};
  $('qlist').onclick=e=>{const r=e.target.closest('.row');if(r){view.sel=r.dataset.id;renderQueue();renderStage()}};
  $('brief').onclick=e=>{const b=e.target.closest('.dec');if(b)decide(b.dataset.d);else if(e.target.id==='reopen')decide('')};
  document.addEventListener('keydown',e=>{
   if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;
+  if(typeof gsAuth!=='undefined'&&gsAuth.reviewer())return;
   if(e.target.tagName==='TEXTAREA'){if(e.key==='Escape')e.target.blur();return}
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();

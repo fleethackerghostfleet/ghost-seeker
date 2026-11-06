@@ -26,6 +26,78 @@ function setup(){
  return {elements,context};
 }
 
+test('commander learned directives and image URLs are escaped',()=>{
+ const {elements,context}=setup();
+ context.payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>';
+ vm.runInContext(`
+  renderLearned([{text:'Operator feedback: '+payload}]);
+ `,context);
+ const learned=elements.get('learned').innerHTML;
+ assert.match(learned,/&quot;&gt;&lt;img/);
+ assert.doesNotMatch(learned,/<img|<svg/);
+ context.imageFor=()=>context.payload;
+ context.row={id:'image',src:{name:'Camera'},ts:new Date(),tier:2,central:.5,edge:.4,dets:[],det:[],upload:{done:true}};
+ vm.runInContext('items=new Map([[row.id,row]]);view.sel=row.id;renderQueue();renderStage()',context);
+ for(const id of ['qlist','stage']){
+  assert.match(elements.get(id).innerHTML,/src="&quot;&gt;&lt;img/);
+  assert.doesNotMatch(elements.get(id).innerHTML,/<img src=x|<svg/);
+ }
+});
+
+test('queue updates preserve scrolling; keyboard following scrolls only the queue pane',()=>{
+ const {context}=setup(),queue=context.$('qlist');
+ queue.scrollTop=120;queue.clientTop=2;queue.clientHeight=100;
+ queue.getBoundingClientRect=()=>({top:10});
+ let row={top:20,bottom:50};
+ queue.querySelector=()=>({getBoundingClientRect:()=>row,scrollIntoView(){assert.fail('must not scroll page ancestors')}});
+ vm.runInContext(`item={id:'a',src:{name:'EO'},sent:true,tier:1,central:.9,ts:new Date(),dets:[],det:[],upload:{done:true}};items=new Map([['a',item]]);view.sel='a';renderQueue()`,context);
+ queue.scrollTop=120;row={top:180,bottom:220};
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,120);
+ vm.runInContext('renderQueue(true)',context);
+ assert.equal(queue.scrollTop,228);
+ row={top:-20,bottom:10};
+ vm.runInContext('renderQueue(true)',context);
+ assert.equal(queue.scrollTop,196);
+ row={top:20,bottom:50};
+ vm.runInContext('renderQueue(true)',context);
+ assert.equal(queue.scrollTop,196);
+ queue.querySelector=()=>null;
+ vm.runInContext('renderQueue(true);items.clear();renderQueue(true)',context);
+ assert.match(queue.innerHTML,/Nothing received/);
+});
+
+test('tab switches and next decisions reveal selection without scrolling page ancestors',async()=>{
+ const {context}=setup(),queue=context.$('qlist');
+ queue.scrollTop=0;queue.clientTop=2;queue.clientHeight=100;
+ queue.getBoundingClientRect=()=>({top:10});
+ queue.querySelector=()=>({getBoundingClientRect:()=>({top:12-queue.scrollTop,bottom:42-queue.scrollTop}),scrollIntoView(){assert.fail('must not scroll page ancestors')}});
+ context.$('tabs').children=[];
+ vm.runInContext(`
+  SRC={EO:{id:'EO',name:'EO'}};
+  a={id:'a',src:SRC.EO,sent:true,tier:1,central:.9,edge:.8,ts:new Date(),sentAt:new Date(),dets:[],det:[],upload:{done:true}};
+  b={...a,id:'b',tier:2};items=new Map([['a',a],['b',b]]);view.sel='a';renderQueue();
+  toast=()=>{};api=async()=>({item:{...a,decision:'track',decidedAt:new Date()}});
+ `,context);
+ queue.scrollTop=400;
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,400);
+ vm.runInContext("setTab('pending');view.sel=null;ensureSel();renderQueue()",context);
+ assert.equal(vm.runInContext('view.sel',context),'a');
+ assert.equal(queue.scrollTop,0);
+ queue.scrollTop=400;
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,400);
+ await vm.runInContext("decide('track')",context);
+ assert.equal(vm.runInContext('view.sel',context),'b');
+ assert.equal(queue.scrollTop,0);
+ queue.scrollTop=80;
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,80);
+ vm.runInContext('items.clear();ensureSel();renderQueue()',context);
+ assert.match(queue.innerHTML,/No escalations/);
+});
+
 test('commander queue and note templates escape item ids',()=>{
  const {elements,context}=setup();
 
@@ -41,6 +113,29 @@ test('commander queue and note templates escape item ids',()=>{
  assert.ok(elements.get('brief').innerHTML.includes(expected));
  assert.doesNotMatch(elements.get('qlist').innerHTML,/<style/);
  assert.doesNotMatch(elements.get('brief').innerHTML,/<style/);
+ context.testItem={...context.testItem,id:'negative',detectorNegative:true,dets:null,det:null};
+ vm.runInContext('upsert(testItem);view.sel=testItem.id;renderQueue();renderStage()',context);
+ assert.match(elements.get('qlist').innerHTML,/No contacts/);
+ assert.ok(Array.isArray(context.testItem.dets));
+ assert.ok(Array.isArray(context.testItem.det));
+});
+
+test('commander processing chain keeps dataset provenance separate from shore receipt steps',()=>{
+ const {elements,context}=setup();
+ context.row={
+  id:'review-image',src:{id:'camera',name:'Camera'},ts:new Date(),tier:2,central:.7,edge:.5,
+  dets:[],det:[],dataset_id:'dev<set>',image_id:'frame<1>',sent:true,sentAt:new Date(),
+  decision:'track',decidedAt:new Date(),upload:{done:true},
+ };
+ vm.runInContext('datasetMode=true;renderBrief(row)',context);
+ const dataset=elements.get('brief').innerHTML;
+ for(const step of ['Dataset image','Detector output','Priority model','Operator review','Commander'])assert.ok(dataset.includes(`<b>${step}</b>`),step);
+ assert.match(dataset,/dev&lt;set&gt; · frame&lt;1&gt;/);
+ assert.doesNotMatch(dataset,/Sensor capture|Received on shore|Shore model/);
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ const shore=elements.get('brief').innerHTML;
+ for(const step of ['Sensor capture','Ship scoring','Received on shore','Shore model','Operator report','Commander'])assert.ok(shore.includes(`<b>${step}</b>`),step);
+ assert.doesNotMatch(shore,/Dataset image|Detector output|<b>Captured<\/b>|Kept on ship/);
 });
 
 test('shore view excludes ship backlog even after escalation and includes completed uploads',()=>{
@@ -135,4 +230,19 @@ test('full-size transfer preserves previous receipts and decisions across snapsh
  context.unreceived={...context.rows[0],id:'unreceived',upload:{done:false,received:false}};
  vm.runInContext('upsert(unreceived);renderKpis()',context);
  assert.equal(elements.get('kReceived').textContent,3);
+});
+
+test('manual operator escalation is explained instead of claiming a high model score',()=>{
+ const {elements,context}=setup();
+ context.row={id:'manual',src:{id:'camera',name:'Camera'},ts:new Date(),tier:1,manual:1,central:0,edge:0,dets:[],det:[],sent:true,sentAt:new Date(),upload:{done:true}};
+ vm.runInContext('datasetMode=true;renderBrief(row)',context);
+ const html=elements.get('brief').innerHTML;
+ assert.match(html,/Operator set priority P1/);
+ assert.doesNotMatch(html,/High command-model score/);
+ context.row={...context.row,id:'model',manual:0,central:.9,edge:.9};
+ vm.runInContext('renderBrief(row)',context);
+ assert.match(elements.get('brief').innerHTML,/High command-model score/);
+ context.row={...context.row,id:'auto',manual:1,autoSent:true};
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ assert.doesNotMatch(elements.get('brief').innerHTML,/set priority P1/);
 });

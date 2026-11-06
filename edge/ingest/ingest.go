@@ -178,6 +178,7 @@ func (g *Ingester) Deduped() int64 { return atomic.LoadInt64(&g.Dups) }
 
 // Run drains a source until done or ctx is cancelled.
 func (g *Ingester) Run(ctx context.Context, src Source) error {
+	seenSources := make(map[string]bool)
 	for {
 		c, done, err := src.Next(ctx)
 		if err != nil {
@@ -188,6 +189,9 @@ func (g *Ingester) Run(ctx context.Context, src Source) error {
 		}
 		if _, err := g.Ingest(ctx, c); err != nil {
 			g.log.Warn("ingest", "err", err)
+		} else if !seenSources[c.Source] {
+			seenSources[c.Source] = true
+			g.log.Info("ingested camera source", "source", c.Source, "frame", c.Tags["frame"])
 		}
 	}
 }

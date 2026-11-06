@@ -9,6 +9,9 @@ import (
 func Secure(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
+		if r.TLS != nil {
+			header.Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("X-Frame-Options", "DENY")
 		header.Set("Referrer-Policy", "no-referrer")

@@ -53,11 +53,25 @@ func Load(token, tokenFile, devFile string) (tok string, dev bool, err error) {
 }
 
 func loadOrCreate(path string) (string, error) {
+	return loadOrCreateSecret(path, "token", "operator.token")
+}
+
+// LoadOrCreateReviewLinkKey loads a review bearer key or creates one privately.
+func LoadOrCreateReviewLinkKey(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("review link key file path is empty")
+	}
+	return loadOrCreateSecret(path, "review link key", "review-link.key")
+}
+
+func loadOrCreateSecret(path, kind, prefix string) (string, error) {
 	if raw, err := os.ReadFile(path); err == nil {
 		if t := strings.TrimSpace(string(raw)); len(t) >= minTokenBytes {
 			return t, nil
 		}
-		return "", fmt.Errorf("%s: token shorter than %d bytes; delete it to regenerate", path, minTokenBytes)
+		return "", fmt.Errorf("%s: %s shorter than %d bytes; delete it to regenerate", path, kind, minTokenBytes)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", err
@@ -66,10 +80,9 @@ func loadOrCreate(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Write a private temp file, then link it into place: readers only ever
-	// see a complete token, and the first of concurrently starting demo
-	// processes wins while the others read its token.
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".operator.token.*")
+	// Write a private temp file, then link it into place so concurrent starts
+	// only ever read a complete secret.
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+prefix+".*")
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +109,7 @@ func loadOrCreate(path string) (string, error) {
 		if t := strings.TrimSpace(string(raw)); len(t) >= minTokenBytes {
 			return t, nil
 		}
-		return "", fmt.Errorf("%s: token shorter than %d bytes; delete it to regenerate", path, minTokenBytes)
+		return "", fmt.Errorf("%s: %s shorter than %d bytes; delete it to regenerate", path, kind, minTokenBytes)
 	}
 	return tok, nil
 }

@@ -1248,6 +1248,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 			out.Rules = policyRules(flatDirectiveID, out.Suppress, out.Boost)
 			if len(out.Rules) > 0 {
 				out.Readback = Readback(out.Suppress, out.Boost)
+				comp.Unknown = nil // the compiler's unmatched words were just interpreted
 			}
 		}
 	} else {
@@ -1516,7 +1517,9 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 	unknown := unknownWords(text, suppress, boost)
 	resolutions := []command.ResearchResolution{}
 	if compiled != nil {
-		unknown = compiled.Unknown
+		if compiled.Unknown != nil {
+			unknown = compiled.Unknown
+		}
 		resolutions = compiled.Resolutions
 	}
 	writeJSON(w, map[string]any{"rules": rules, "unknown": unknown, "items": items, "counts": counts, "candidates": cands,

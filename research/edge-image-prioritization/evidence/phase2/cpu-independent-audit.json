@@ -1,0 +1,55 @@
+{
+  "scope": "Independent local CPU-log arithmetic and recorded cleanup verification; no cloud access",
+  "hardware_checks": "Intel, affinity0\u20133 and reported OpenCV4 verified",
+  "modes": {
+    "stress": {
+      "frames": 2889,
+      "pipeline_p50_ms": 206.6913010000917,
+      "pipeline_p95_ms": 210.1471215999709,
+      "pipeline_max_ms": 514.7809659999964,
+      "pipeline_frames_over_500ms": 1,
+      "lifetime_peak_rss_mib": 105.09375,
+      "last_recorded_finish_s": 600.0520626140001,
+      "wall_seconds": 600.052623077,
+      "fps": 4.814577736841719,
+      "complete_cycles": 28,
+      "rolling_fps_min": 4.645727315667985,
+      "rolling_fps_max": 4.860909973778976
+    },
+    "paced": {
+      "frames": 240,
+      "pipeline_p50_ms": 207.06408199998805,
+      "pipeline_p95_ms": 210.06457649998538,
+      "pipeline_max_ms": 215.5667250000306,
+      "pipeline_frames_over_500ms": 0,
+      "lifetime_peak_rss_mib": 105.30078125,
+      "last_recorded_finish_s": 119.70559790300001,
+      "scheduled_duration_seconds": 120,
+      "actual_wall_until_last_completion": 119.706115211,
+      "deadline_misses": 0,
+      "deadline_miss_fraction": 0.0,
+      "max_start_lateness_ms": 0.17423300005248166,
+      "max_completion_lateness_ms": 0.0
+    }
+  },
+  "preservation": {
+    "files_checked": 6,
+    "local_sha256_md5_size_match_recorded_pinned_generation_metadata": true
+  },
+  "cleanup": {
+    "status": "recorded ownership/deletion/preserved-result metadata verified",
+    "instance_name": "edgeml-payload-acc4",
+    "instance_id": "6481043689195031546",
+    "boot_disk_id": "1765082268617001978",
+    "completed_utc": "2026-11-05T12:37:49.689917+00:00",
+    "no_matching_instances_or_disks_in_recorded_postdelete_lists": true,
+    "independent_live_cloud_query_performed": false
+  },
+  "source_sha256": {
+    "frames.jsonl": "75e6bfe540d2b10ccf1a6074ecaa1e6db550375aa4b575db6062fdaf4443b48a",
+    "summary.json": "1bbf2c7dc7eefabf7320c579050d6adf7ac8159d51a8351a8b18a688a75c10ca",
+    "hardware.json": "2acf4c8da44c0945f0cb65928e58a1086d541937d780838f7ba3f839e929f9d7",
+    "worker-result.json": "22e84e5bd5872c5c7d3d83b2573303a7d5cbd499a91c2ecbb2529db3b6716dc5"
+  },
+  "reviewer_script_sha256": "09f3401ec5d5b9ba13f76701be6cf12149a6a1aa928a98b0ab12adbc67202fcb"
+}

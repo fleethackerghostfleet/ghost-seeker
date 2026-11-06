@@ -1,0 +1,5 @@
+{
+  "wall_seconds": 3987.0752533649993,
+  "checkpoint": "checkpoint_best_total.pth",
+  "selection": "library best valid COCO mAP regular/EMA"
+}
