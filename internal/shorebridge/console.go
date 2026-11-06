@@ -19,6 +19,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/buildprofile"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
@@ -933,7 +934,7 @@ func (c *Console) patchItem(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.Manual != nil && (*body.Manual < 0 || *body.Manual > 4) {
@@ -994,7 +995,7 @@ func (c *Console) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.Decision != "" && !store.Decisions[body.Decision] {
@@ -1049,7 +1050,7 @@ func (c *Console) fullRes(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	by := opauth.Actor(r.Context(), strings.TrimSpace(body.By))
@@ -1097,7 +1098,7 @@ func (c *Console) pull(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	id := r.PathValue("id")
@@ -1293,7 +1294,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	body.Text = strings.TrimSpace(body.Text)
@@ -1465,7 +1466,7 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	var checkRules []command.Rule
@@ -1555,7 +1556,7 @@ func (c *Console) compile(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.DurationMin < 0 || body.DurationMin > 10080 {

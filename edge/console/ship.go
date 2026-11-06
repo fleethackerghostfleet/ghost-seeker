@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -41,8 +43,12 @@ func (s *Service) ShipPolicyHandler() http.Handler {
 		case http.MethodGet:
 		case http.MethodPost:
 			var req ShipPolicy
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
-				http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
+			if err == nil {
+				err = json.Unmarshal(body, &req)
+			}
+			if err != nil {
+				http.Error(w, "bad request: "+err.Error(), httpx.RequestBodyStatus(err))
 				return
 			}
 			layer, err := s.shipLayer(req)

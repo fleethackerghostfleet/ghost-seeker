@@ -29,6 +29,7 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
@@ -1049,7 +1050,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
 		log.Printf("shorebridge: policy request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	if utf8.RuneCountInString(in.Text) > 500 {
@@ -1289,7 +1290,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	mode, ok := parseEMCON(in.Mode)
@@ -1455,7 +1456,7 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
 		log.Printf("shorebridge: pull request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	if in.ItemID == "" {
@@ -1498,7 +1499,7 @@ func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
 		log.Printf("shorebridge: override request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	if in.ItemID == "" {

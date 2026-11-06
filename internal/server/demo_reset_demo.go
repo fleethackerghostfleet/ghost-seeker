@@ -45,7 +45,11 @@ func (s *Server) resetDemo(w http.ResponseWriter, r *http.Request) {
 		Confirm string `json:"confirm"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	if err := decodeJSON(r.Body, &body); err != nil || body.Confirm != "reset" {
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeRequestBodyError(w, err)
+		return
+	}
+	if body.Confirm != "reset" {
 		writeError(w, http.StatusBadRequest, "confirm must be reset")
 		return
 	}

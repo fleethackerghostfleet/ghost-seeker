@@ -532,7 +532,7 @@ func (s *Server) validatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := decodeProtoPolicy(r.Body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeRequestBodyError(w, err)
 		return
 	}
 	interest, emcon, conflicts := policy.Merge(p.Layers, s.policy.nodeID, time.Now())
@@ -555,7 +555,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 	p, err := decodeProtoPolicy(r.Body)
 	if err != nil {
 		s.policy.guard.Reject(r.Context(), nil, "admin", err.Error(), time.Now())
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeRequestBodyError(w, err)
 		return
 	}
 	p.IssuedBy = opauth.Actor(r.Context(), p.IssuedBy)
@@ -582,9 +582,13 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func decodeProtoPolicy(reader io.Reader) (*pb.Policy, error) {
-	raw, err := io.ReadAll(io.LimitReader(reader, 2<<20))
+	const limit = 2 << 20
+	raw, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(raw) > limit {
+		return nil, &http.MaxBytesError{Limit: limit}
 	}
 	p := &pb.Policy{}
 	if err := protojson.Unmarshal(raw, p); err != nil {
