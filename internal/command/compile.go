@@ -52,7 +52,7 @@ func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
 		rules, unknown := parseDirectiveDetailed(rest, c.EdgeSubtypes)
 		for _, rule := range rules {
 			for _, class := range rule.Classes {
-				if (c.EdgeSubtypes && catalog.EdgeSubtypes[class]) || class == "marine mammal" {
+				if (c.EdgeSubtypes && catalog.EdgeSubtypes[class]) || (class == "marine mammal" && len(unknown) == 0) {
 					return c.finish(text, rules, unknown, durationMin, "rules", warnings)
 				}
 			}
