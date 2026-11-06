@@ -49,6 +49,7 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	flush := func(data string) bool {
 		_ = ctrl.SetWriteDeadline(time.Now().Add(a.WriteTimeout))
+		defer func() { _ = ctrl.SetWriteDeadline(time.Time{}) }()
 		if _, err := fmt.Fprint(w, data); err != nil {
 			return false
 		}
@@ -57,7 +58,6 @@ func (a *API) stream(w http.ResponseWriter, r *http.Request) {
 	if !flush("retry: 1000\n: connected\n\n") {
 		return
 	}
-	defer func() { _ = ctrl.SetWriteDeadline(time.Time{}) }()
 	poll := time.NewTicker(a.PollInterval)
 	defer poll.Stop()
 	heartbeat := time.NewTicker(a.Heartbeat)
