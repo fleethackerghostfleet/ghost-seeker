@@ -17,7 +17,8 @@ RUN python -m venv /opt/venv \
         && /opt/venv/bin/pip install --no-cache-dir --no-deps "opencv-python-headless==$cv"; \
       fi \
       && rm -rf /opt/venv/lib/python*/site-packages/torch/include; \
-    fi
+    fi \
+    && /opt/venv/bin/python -m pip uninstall --yes setuptools wheel pip
 
 FROM ${PY_IMAGE} AS runtime
 ENV PATH="/opt/venv/bin:$PATH" \
@@ -32,7 +33,8 @@ RUN groupadd --gid 10001 edgeml \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin edgeml \
     && apt-get update \
     && apt-get install --no-install-recommends -y libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && /usr/local/bin/python -m pip uninstall --yes setuptools wheel pip
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /models
 USER 10001:10001

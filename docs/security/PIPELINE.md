@@ -40,9 +40,12 @@ installed; missing tools or scan/parse errors are not successful gates.
 ## Policies, scope and exceptions
 
 * **Secrets:** gitleaks scans every PR commit in base..head (not only the
-  final tree), full Git history otherwise. Reports are redacted. There is no
-  blanket test-file exclusion and no secret baseline. Historical detections
-  must be triaged and any real credentials revoked, even if removed later.
+  final tree), full Git history otherwise. Reports are redacted. The reviewed
+  `gitleaks-baseline.json` contains 338 exact historical false positives (see
+  triage below); there are no path or rule exclusions. The baseline applies
+  to both modes, but a match in any new commit still fails. Any real
+  credentials must be revoked, even if removed later. Never auto-refresh the
+  baseline in CI; changes require review and a documented disposition.
 * **Go:** gosec scans both default and prod build profiles; any new HIGH
   fails. `gosec-baseline.json` freezes 29 default / 24 prod existing HIGH
   findings at origin/dev 2267d7e using file, rule and code-context SHA256,
@@ -80,12 +83,19 @@ installed; missing tools or scan/parse errors are not successful gates.
   listener-TLS/CA profiles before Trivy scans them. Raw Go-template manifests
   are not valid YAML and must not be scanned as if they were plain YAML.
   HIGH/CRITICAL findings fail; there are no IaC suppressions.
+  The `GS_DEV_TOKEN_FILE=none` disable sentinel is set directly in shore/edge
+  container environment entries, not stored in ConfigMaps. This preserves
+  the demo-auth-disable behavior without triggering a ConfigMap secret-name
+  heuristic or suppressing detection of actual ConfigMap secrets.
 * **Images:** Syft emits CycloneDX JSON and SPDX JSON per image. Trivy scans
   OS and language packages, failing fixable HIGH/CRITICAL. Unfixed advisories
   do not block this policy and still need POA&M review. Scans never pull an
   unrelated registry image when a local image is missing. Reports/SBOMs are
   retained as Actions artifacts (14 days source; 30 days images); archive
   release evidence to the program's long-term evidence store before expiry.
+  The Python runtime contains neither pip, setuptools nor wheel in its
+  application venv or base interpreter. They are removed after building and
+  installing dependencies; runtime package installation is not supported.
 
 ## Signing and assessor evidence
 
@@ -121,16 +131,46 @@ controls; passing automation is not authorization.
 
 ### Initial findings (2026-11-06)
 
-The gates intentionally expose existing debt rather than silently accept it.
-Full-history gitleaks detected 338 generic-api-key matches (including tests
-and evaluation reports); these need triage, not automatic baseline acceptance.
-Trivy config reports KSV-0109 for `GS_DEV_TOKEN_FILE: none` on shore and edge
-in each of the 8 renders (16 HIGH detections). This is a key-name heuristic
-false positive for the explicit demo-auth-disable sentinel, but remains
-unsuppressed pending a narrowly reviewed policy exception. Image scanning
-found fixable HIGH CVE-2026-23949 (`jaraco.context` 5.3.0, fixed 6.1.0) and
-CVE-2026-24049 (`wheel` 0.45.1, fixed 0.46.2) in the Python base's vendored
-build tooling; the three Go images had no fixable HIGH/CRITICAL detections.
-Updating/hardening bases and reviewing exceptions are follow-up work; these
-gates will block signing until their findings are resolved. No vulnerability,
-license, secret or IaC blanket suppression has been added.
+The original 16 KSV-0109 detections were the explicit demo-auth-disable
+sentinel, not credentials; moving the sentinel to container env resolves
+them without an exception. Image scanning originally found HIGH
+CVE-2026-23949 (`jaraco.context` 5.3.0) and CVE-2026-24049 (`wheel` 0.45.1)
+in setuptools' vendored build tooling in both the Python base interpreter
+and application venv. Removing build tooling from both runtime locations
+removes those vulnerable copies rather than ignoring their CVEs.
+
+Full-history gitleaks triage grouped **all 338 detections**, all from the
+`generic-api-key` rule, by path and historical commit:
+
+| Historical path | Count | Commit | Disposition |
+|---|---:|---|---|
+| `edgeml/reports/nightlights/gemini_comparison.json` | 333 | `ae0277ad7b` | SHA256 payload cache identifiers, not API credentials |
+| `cmd/mint-unit-token/main_test.go` | 1 | `95af9f9c09` | Explicit test-only signing-key fixture |
+| `edge/link/connect_test.go` | 1 | `c5273b71d2` | Same test-only signing-key fixture |
+| `internal/unitauth/auth_test.go` | 1 | `c5273b71d2` | Same test-only signing-key fixture |
+| `shore/sync/sync_test.go` | 1 | `04a0e1685b` | Same test-only signing-key fixture |
+| `cmd/policy-keygen/behavior_test.go` | 1 | `a9e5dad12f` | `-id=operator-2026` CLI argument, not key material |
+
+Triage read each test finding at its historical revision and verified all
+four signing fixtures are the same deliberately named test string, used
+only to exercise token/authentication behavior. The policy-keygen test
+generates fresh key material under `t.TempDir()`; its flagged argument is
+only the key's public identifier.
+
+For the eval report, all 333 flagged lines were parsed and checked as
+64-character hexadecimal `key` fields on evaluation examples; first,
+middle and last contexts were inspected. The generator at the **same
+historical commit**, `edgeml/scripts/nightlights_gemini.py:compare`, assigns
+`hashlib.sha256((ENDPOINT + json.dumps(payload, sort_keys=True)).encode()).hexdigest()`
+to `key` and retains that field in report examples while excluding the
+payload. Authentication is obtained separately with gcloud; it is not the
+job's cache key. This distinguishes cache hashes from an assumed credential
+based merely on their shape. No finding looked like a real credential.
+
+The committed baseline is the redacted gitleaks report, not an allowlist of
+these paths or rules. With gitleaks v8.30.1 and `--redact`, baseline matching
+still checks rule, file, exact historical commit, source coordinates,
+description, entropy and commit metadata; it does not compare secret text.
+Thus no credential values need be committed. The same string introduced
+in a new commit is not exempt. Baseline self-scanning is excluded by
+gitleaks' baseline handling, not by a repository-wide path suppression.

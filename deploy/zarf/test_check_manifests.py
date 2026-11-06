@@ -53,6 +53,18 @@ class NetworkPolicyTests(unittest.TestCase):
         validator.check()
         self.assertEqual(self.validate(), 10)
 
+    def test_demo_token_disable_sentinel_is_container_env(self):
+        for name in ("shore", "edge"):
+            config = next(doc for doc in self.documents
+                          if doc["kind"] == "ConfigMap" and doc["metadata"]["name"] == f"{name}-config")
+            self.assertNotIn("GS_DEV_TOKEN_FILE", config["data"])
+            workload = next(doc for doc in self.documents
+                            if doc["kind"] == "StatefulSet" and doc["metadata"]["name"] == name)
+            containers = workload["spec"]["template"]["spec"]["containers"]
+            container = next(container for container in containers if container["name"] == name)
+            sentinel = next(env for env in container["env"] if env["name"] == "GS_DEV_TOKEN_FILE")
+            self.assertEqual(sentinel, {"name": "GS_DEV_TOKEN_FILE", "value": "none"})
+
     def test_internal_traffic_matrix(self):
         expected = {("operator", "shore", 8080), ("operator", "edge", 8081),
                     ("edge", "shore", 8080), ("edge", "edgeml-sidecar", 9090),

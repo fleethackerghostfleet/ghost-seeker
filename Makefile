@@ -171,7 +171,7 @@ security: security-secrets security-go security-python security-licenses securit
 
 security-secrets:
 	mkdir -p $(SECURITY_REPORTS)
-	gitleaks git --redact --log-opts="$(GITLEAKS_LOG_OPTS)" --report-format=json --report-path=$(SECURITY_REPORTS)/gitleaks.json
+	gitleaks git --redact --baseline-path=docs/security/gitleaks-baseline.json --log-opts="$(GITLEAKS_LOG_OPTS)" --report-format=json --report-path=$(SECURITY_REPORTS)/gitleaks.json
 
 security-go:
 	$(SECURITY_PYTHON) scripts/security.py gosec
