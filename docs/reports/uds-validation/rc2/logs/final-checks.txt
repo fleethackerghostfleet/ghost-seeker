@@ -1,0 +1,16 @@
+Ran 16 tests in 2.735s
+OK
+PASS: 812 harness/report files contain no current/prior credential values, base64 encodings, or JWT-like values
+PASS: changed Python helper compilation
+PASS: added source/report whitespace check
+PASS: host filter rules restored exactly
+ship 25 pods; 25 Running and Ready
+shore 25 pods; 25 Running and Ready
+Final API detections: 5 records, 6 contacts
+Gateway successful edge exchanges: 98
+UDS_SYNC method=POST path=/ghostseeker.v1.SyncService/Exchange protocol=HTTP/2 grpc_status=OK status=200 agent=grpc-go-connect/1.18.1 (go1.26.10)
+
+Visual check passed: rc2/img/shore-feed.png, shore-item-detail.png,
+shore-link-sync-status.png. Feed contains eight real uploaded items, P1 vessel
+detail is visible, and the link view shows eight records and transfer status.
+No credential input is visible. Shore UI detection-label caveat is in README.md.

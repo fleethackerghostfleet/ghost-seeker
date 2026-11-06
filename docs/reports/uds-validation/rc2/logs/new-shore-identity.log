@@ -1,0 +1,2 @@
+$ kubectl --context k3d-uds-shore get namespace default -o 'jsonpath={.metadata.uid}'
+d005e0ef-e55e-41bc-b4fb-4fc1757f0fe0

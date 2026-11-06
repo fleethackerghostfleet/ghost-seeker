@@ -1,0 +1,184 @@
+[
+  {
+    "name": "edge-0",
+    "uid": "ef66e6cc-f659-4d4b-80eb-c67e9c7f8c94",
+    "labels": {
+      "app": "edge",
+      "apps.kubernetes.io/pod-index": "0",
+      "controller-revision-hash": "edge-655b4fbf98",
+      "networking.istio.io/tunnel": "http",
+      "security.istio.io/tlsMode": "istio",
+      "service.istio.io/canonical-name": "edge",
+      "service.istio.io/canonical-revision": "latest",
+      "statefulset.kubernetes.io/pod-name": "edge-0",
+      "zarf-agent": "patched",
+      "zarf.dev/package": "ghost-seeker-ship"
+    },
+    "containers": [
+      {
+        "name": "edge",
+        "image": "127.0.0.1:31999/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e"
+      },
+      {
+        "name": "istio-init",
+        "image": "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless"
+      },
+      {
+        "name": "istio-proxy",
+        "image": "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless"
+      }
+    ],
+    "statuses": [
+      {
+        "allocatedResources": {
+          "cpu": "100m",
+          "memory": "128Mi"
+        },
+        "containerID": "containerd://5399b8eda19f27d4c25df98e7c3e52a1abb86d7d66c0d25ef689878690ce19a4",
+        "image": "127.0.0.1:31999/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e",
+        "imageID": "127.0.0.1:31999/ghost-seeker/edge@sha256:7b5c6e172b28d90c013ae491da78e19df4ceda79a8f81ebf7470525c17adbc6d",
+        "lastState": {},
+        "name": "edge",
+        "ready": true,
+        "resources": {
+          "limits": {
+            "cpu": "1",
+            "memory": "1Gi"
+          },
+          "requests": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          }
+        },
+        "restartCount": 0,
+        "started": true,
+        "state": {
+          "running": {
+            "startedAt": "2026-11-06T17:29:47Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 65532,
+            "supplementalGroups": [
+              65532
+            ],
+            "uid": 65532
+          }
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/data",
+            "name": "data"
+          },
+          {
+            "mountPath": "/tmp",
+            "name": "tmp"
+          },
+          {
+            "mountPath": "/frames",
+            "name": "frames",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          },
+          {
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+            "name": "kube-api-access-l6j4v",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "edgeml-sidecar-d54b57c99-mjszf",
+    "uid": "2d24c38c-af54-4d2d-8b12-c80ea17e8b40",
+    "labels": {
+      "app": "edgeml-sidecar",
+      "networking.istio.io/tunnel": "http",
+      "pod-template-hash": "d54b57c99",
+      "security.istio.io/tlsMode": "istio",
+      "service.istio.io/canonical-name": "edgeml-sidecar",
+      "service.istio.io/canonical-revision": "latest",
+      "zarf-agent": "patched",
+      "zarf.dev/package": "ghost-seeker-ship"
+    },
+    "containers": [
+      {
+        "name": "edgeml-sidecar",
+        "image": "127.0.0.1:31999/ghost-seeker/edgeml-sidecar:prod-c74106e2509c-20261106165828-258bab3e"
+      },
+      {
+        "name": "istio-init",
+        "image": "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless"
+      },
+      {
+        "name": "istio-proxy",
+        "image": "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless"
+      },
+      {
+        "name": "models",
+        "image": "127.0.0.1:31999/ghost-seeker/edgeml-models:prod-c74106e2509c-20261106165828-258bab3e"
+      }
+    ],
+    "statuses": [
+      {
+        "allocatedResources": {
+          "cpu": "500m",
+          "memory": "1Gi"
+        },
+        "containerID": "containerd://e9874cab37f293920bcf86e7998f201517bb5b7b34fdf3e8426d32ff1c9fb1cb",
+        "image": "127.0.0.1:31999/ghost-seeker/edgeml-sidecar:prod-c74106e2509c-20261106165828-258bab3e",
+        "imageID": "127.0.0.1:31999/ghost-seeker/edgeml-sidecar@sha256:79e2cc3b50788ac6f6392cb6d2f3cb92823b1b647b417b953aea59d403b0cb8a",
+        "lastState": {},
+        "name": "edgeml-sidecar",
+        "ready": true,
+        "resources": {
+          "limits": {
+            "cpu": "4",
+            "memory": "4Gi"
+          },
+          "requests": {
+            "cpu": "500m",
+            "memory": "1Gi"
+          }
+        },
+        "restartCount": 0,
+        "started": true,
+        "state": {
+          "running": {
+            "startedAt": "2026-11-06T17:29:50Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 10001,
+            "supplementalGroups": [
+              10001
+            ],
+            "uid": 10001
+          }
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/models",
+            "name": "models",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          },
+          {
+            "mountPath": "/tmp",
+            "name": "tmp"
+          },
+          {
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+            "name": "kube-api-access-bc5t9",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          }
+        ]
+      }
+    ]
+  }
+]

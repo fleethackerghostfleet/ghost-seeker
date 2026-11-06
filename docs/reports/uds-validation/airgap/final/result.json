@@ -1,0 +1,11 @@
+{
+  "offline_restart": true,
+  "offline_redeployment": true,
+  "uncached_app_image_references": [
+    "127.0.0.1:31999/ghost-seeker/edge:prod-f0121e459e61-20261106170117-9abc79bd",
+    "127.0.0.1:31999/ghost-seeker/edgeml-models:prod-f0121e459e61-20261106170117-9abc79bd",
+    "127.0.0.1:31999/ghost-seeker/edgeml-sidecar:prod-f0121e459e61-20261106170117-9abc79bd"
+  ],
+  "live_ingest_scored_and_synchronized_twice": true,
+  "sustained_64kbps_exchanges": true
+}

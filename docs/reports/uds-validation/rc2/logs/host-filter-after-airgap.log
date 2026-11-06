@@ -1,0 +1,33 @@
+$ sudo -n iptables -S
+-P INPUT ACCEPT
+-P FORWARD DROP
+-P OUTPUT ACCEPT
+-N DOCKER
+-N DOCKER-BRIDGE
+-N DOCKER-CT
+-N DOCKER-FORWARD
+-N DOCKER-INTERNAL
+-N DOCKER-USER
+-A FORWARD -j DOCKER-USER
+-A FORWARD -j DOCKER-FORWARD
+-A DOCKER -d 172.19.0.3/32 ! -i br-81f7bd28ea41 -o br-81f7bd28ea41 -p tcp -m tcp --dport 6443 -j ACCEPT
+-A DOCKER -d 172.19.0.3/32 ! -i br-81f7bd28ea41 -o br-81f7bd28ea41 -p tcp -m tcp --dport 443 -j ACCEPT
+-A DOCKER -d 172.19.0.3/32 ! -i br-81f7bd28ea41 -o br-81f7bd28ea41 -p tcp -m tcp --dport 80 -j ACCEPT
+-A DOCKER -d 172.18.0.3/32 ! -i br-26325eb923fd -o br-26325eb923fd -p tcp -m tcp --dport 6443 -j ACCEPT
+-A DOCKER -d 172.18.0.3/32 ! -i br-26325eb923fd -o br-26325eb923fd -p tcp -m tcp --dport 443 -j ACCEPT
+-A DOCKER -d 172.18.0.3/32 ! -i br-26325eb923fd -o br-26325eb923fd -p tcp -m tcp --dport 80 -j ACCEPT
+-A DOCKER ! -i docker0 -o docker0 -j DROP
+-A DOCKER ! -i br-26325eb923fd -o br-26325eb923fd -j DROP
+-A DOCKER ! -i br-81f7bd28ea41 -o br-81f7bd28ea41 -j DROP
+-A DOCKER-BRIDGE -o docker0 -j DOCKER
+-A DOCKER-BRIDGE -o br-26325eb923fd -j DOCKER
+-A DOCKER-BRIDGE -o br-81f7bd28ea41 -j DOCKER
+-A DOCKER-CT -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A DOCKER-CT -o br-26325eb923fd -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A DOCKER-CT -o br-81f7bd28ea41 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A DOCKER-FORWARD -j DOCKER-CT
+-A DOCKER-FORWARD -j DOCKER-INTERNAL
+-A DOCKER-FORWARD -j DOCKER-BRIDGE
+-A DOCKER-FORWARD -i docker0 -j ACCEPT
+-A DOCKER-FORWARD -i br-26325eb923fd -j ACCEPT
+-A DOCKER-FORWARD -i br-81f7bd28ea41 -j ACCEPT

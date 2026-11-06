@@ -1,0 +1,9 @@
+$ kubectl --context k3d-uds-shore -n ghost-seeker-shore get pods -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{range .status.initContainerStatuses[*]}{.name}{" "}{.image}{" "}{.imageID}{"\n"}{end}{range .status.containerStatuses[*]}{.name}{" "}{.image}{" "}{.imageID}{"\n"}{end}{end}'
+operator-c98bfdc85-4dkr2
+istio-init 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+istio-proxy 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+operator 127.0.0.1:31999/ghost-seeker/operator:prod-c74106e2509c-20261106165828-258bab3e 127.0.0.1:31999/ghost-seeker/operator@sha256:c5c460fd03b242b0f71b4e1880d71b8596035cd83a8253795df42dcf07ec0829
+shore-0
+istio-init 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+istio-proxy 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+shore 127.0.0.1:31999/ghost-seeker/shore:prod-c74106e2509c-20261106165828-258bab3e 127.0.0.1:31999/ghost-seeker/shore@sha256:f47a60201ac2ac89c279da1919e8dcfccdac507646000edd998056a3f13d534e

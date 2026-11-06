@@ -1,0 +1,79 @@
+[
+  {
+    "id": "01M6RYF43SZRAA7JQAY4NVZ9E9",
+    "cursor": "9",
+    "event": "created",
+    "tier": "P1",
+    "score": 0.6362238259124268,
+    "source": "uds-20261106T172738Z-outage-2",
+    "contacts": [
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.87247
+      }
+    ]
+  },
+  {
+    "id": "01M6RYF4NDZ9AGPEYGQE935Y3V",
+    "cursor": "10",
+    "event": "created",
+    "tier": "P2",
+    "score": 0.6304804427914488,
+    "source": "uds-20261106T172738Z-outage-4",
+    "contacts": [
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.86099
+      },
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.82488
+      }
+    ]
+  },
+  {
+    "id": "01M6RYF51PT7DBF80681XXKSJ9",
+    "cursor": "11",
+    "event": "created",
+    "tier": "P3",
+    "score": 0.43866651644694776,
+    "source": "uds-20261106T172738Z-outage-5",
+    "contacts": [
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.47735
+      }
+    ]
+  },
+  {
+    "id": "01M6RYF4DNSCCDY7NTWBHKFQN1",
+    "cursor": "13",
+    "event": "created",
+    "tier": "P4",
+    "score": 0.19999750761566357,
+    "source": "uds-20261106T172738Z-outage-3",
+    "contacts": []
+  },
+  {
+    "id": "01M6RYF3VT1Y39DPT46DYPJJ1G",
+    "cursor": "16",
+    "event": "created",
+    "tier": "P4",
+    "score": 0.19999736676835353,
+    "source": "uds-20261106T172738Z-outage-1",
+    "contacts": []
+  },
+  {
+    "id": "01M6RYF5CDVCNGZK7BXD307DWY",
+    "cursor": "17",
+    "event": "created",
+    "tier": "P4",
+    "score": 0.19999713642321715,
+    "source": "uds-20261106T172738Z-outage-6",
+    "contacts": []
+  }
+]

@@ -1,0 +1,13 @@
+options:
+  architecture: amd64
+variables:
+  ghost-seeker-ship:
+    NAMESPACE: ghost-seeker-ship
+    DOMAIN: uds.dev
+    EDGE_ID: ship-001
+    EDGE_GATEWAY_HOST: edge
+    FRAMES_SOURCE: pvc
+    SHORE_TRANSPORT: external
+    SHORE_URL: https://shore.uds.dev:443
+    SHORE_EGRESS_CIDR: 172.19.0.1/32
+    SHORE_EGRESS_PORT: "443"

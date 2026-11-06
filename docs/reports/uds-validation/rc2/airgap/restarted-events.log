@@ -1,0 +1,85 @@
+LAST SEEN   TYPE      REASON                  OBJECT                                MESSAGE
+3m29s       Normal    ExternalProvisioning    persistentvolumeclaim/data-edge-0     Waiting for a volume to be created either by the external provisioner 'rancher.io/local-path' or manually by the system administrator. If volume creation is delayed, please verify that the provisioner is running and correctly registered.
+3m29s       Normal    Provisioning            persistentvolumeclaim/data-edge-0     External provisioner is provisioning volume for claim "ghost-seeker-ship/data-edge-0"
+3m29s       Normal    SuccessfulCreate        statefulset/edge                      Create Claim frames-edge-0 Pod edge-0 in StatefulSet edge success
+30s         Normal    SuccessfulCreate        statefulset/edge                      Create Pod edge-0 in StatefulSet edge successful
+3m29s       Normal    SuccessfulCreate        statefulset/edge                      Create Claim data-edge-0 Pod edge-0 in StatefulSet edge success
+3m29s       Normal    WaitForFirstConsumer    persistentvolumeclaim/data-edge-0     waiting for first consumer to be created before binding
+3m29s       Normal    WaitForFirstConsumer    persistentvolumeclaim/frames-edge-0   waiting for first consumer to be created before binding
+3m29s       Normal    ExternalProvisioning    persistentvolumeclaim/frames-edge-0   Waiting for a volume to be created either by the external provisioner 'rancher.io/local-path' or manually by the system administrator. If volume creation is delayed, please verify that the provisioner is running and correctly registered.
+3m29s       Normal    Provisioning            persistentvolumeclaim/frames-edge-0   External provisioner is provisioning volume for claim "ghost-seeker-ship/frames-edge-0"
+3m27s       Normal    ProvisioningSucceeded   persistentvolumeclaim/frames-edge-0   Successfully provisioned volume pvc-41d8d478-7ecc-47ba-8f47-e34b01be4b04
+3m27s       Normal    ProvisioningSucceeded   persistentvolumeclaim/data-edge-0     Successfully provisioned volume pvc-2084334f-7b3a-4858-ab39-da01acf53db9
+3m26s       Normal    Created                 pod/edge-0                            Container created
+3m26s       Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+3m26s       Normal    Scheduled               pod/edge-0                            Successfully assigned ghost-seeker-ship/edge-0 to k3d-uds-ship-server-0
+3m26s       Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+3m26s       Normal    Started                 pod/edge-0                            Container started
+3m26s       Normal    Started                 pod/edge-0                            Container started
+3m26s       Normal    Created                 pod/edge-0                            Container created
+3m25s       Normal    Pulling                 pod/edge-0                            Pulling image "127.0.0.1:31999/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e"
+3m24s       Warning   Unhealthy               pod/edge-0                            Readiness probe failed: HTTP probe failed with statuscode: 500
+3m24s       Normal    Pulled                  pod/edge-0                            Successfully pulled image "127.0.0.1:31999/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e" in 407ms (407ms including waiting). Image size: 7473005 bytes.
+3m24s       Normal    Started                 pod/edge-0                            Container started
+3m24s       Normal    Created                 pod/edge-0                            Container created
+3m20s       Normal    ScalingReplicaSet       deployment/edgeml-sidecar             Scaled up replica set edgeml-sidecar-d54b57c99 from 0 to 1
+3m20s       Normal    SuccessfulCreate        replicaset/edgeml-sidecar-d54b57c99   Created pod: edgeml-sidecar-d54b57c99-v4gpp
+3m19s       Normal    Scheduled               pod/edgeml-sidecar-d54b57c99-v4gpp    Successfully assigned ghost-seeker-ship/edgeml-sidecar-d54b57c99-v4gpp to k3d-uds-ship-server-0
+3m19s       Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-v4gpp    Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+3m19s       Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-v4gpp    Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+3m19s       Normal    Created                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container created
+3m19s       Normal    Started                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container started
+3m19s       Normal    Created                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container created
+3m19s       Normal    Started                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container started
+3m18s       Normal    Pulling                 pod/edgeml-sidecar-d54b57c99-v4gpp    Pulling image "127.0.0.1:31999/ghost-seeker/edgeml-models:prod-c74106e2509c-20261106165828-258bab3e"
+3m17s       Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-v4gpp    Successfully pulled image "127.0.0.1:31999/ghost-seeker/edgeml-models:prod-c74106e2509c-20261106165828-258bab3e" in 990ms (990ms including waiting). Image size: 92245709 bytes.
+3m17s       Normal    Created                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container created
+3m17s       Normal    Started                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container started
+3m15s       Normal    Pulling                 pod/edgeml-sidecar-d54b57c99-v4gpp    Pulling image "127.0.0.1:31999/ghost-seeker/edgeml-sidecar:prod-c74106e2509c-20261106165828-258bab3e"
+3m4s        Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-v4gpp    Successfully pulled image "127.0.0.1:31999/ghost-seeker/edgeml-sidecar:prod-c74106e2509c-20261106165828-258bab3e" in 11.074s (11.074s including waiting). Image size: 603991249 bytes.
+3m4s        Normal    Created                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container created
+3m3s        Normal    Started                 pod/edgeml-sidecar-d54b57c99-v4gpp    Container started
+3m3s        Warning   Unhealthy               pod/edgeml-sidecar-d54b57c99-v4gpp    Readiness probe failed: HTTP probe failed with statuscode: 500
+3m1s        Normal    SuccessfulDelete        statefulset/edge                      Delete Pod edge-0 in StatefulSet edge successful
+3m1s        Normal    Killing                 pod/edge-0                            Stopping container edge
+3m1s        Normal    Killing                 pod/edge-0                            Stopping container istio-proxy
+2m59s       Normal    Scheduled               pod/edge-0                            Successfully assigned ghost-seeker-ship/edge-0 to k3d-uds-ship-server-0
+2m59s       Normal    Created                 pod/edge-0                            Container created
+2m59s       Normal    Started                 pod/edge-0                            Container started
+2m59s       Normal    Created                 pod/edge-0                            Container created
+2m59s       Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+2m59s       Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+2m58s       Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e" already present on machine and can be accessed by the pod
+2m58s       Normal    Started                 pod/edge-0                            Container started
+2m58s       Normal    Created                 pod/edge-0                            Container created
+2m57s       Normal    Started                 pod/edge-0                            Container started
+31s         Normal    Killing                 pod/edgeml-sidecar-d54b57c99-v4gpp    Stopping container istio-proxy
+31s         Normal    Killing                 pod/edgeml-sidecar-d54b57c99-v4gpp    Stopping container edgeml-sidecar
+31s         Normal    Killing                 pod/edge-0                            Stopping container istio-proxy
+31s         Normal    Killing                 pod/edge-0                            Stopping container edge
+30s         Normal    Scheduled               pod/edge-0                            Successfully assigned ghost-seeker-ship/edge-0 to k3d-uds-ship-server-0
+30s         Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+30s         Normal    Created                 pod/edge-0                            Container created
+30s         Normal    Started                 pod/edgeml-sidecar-d54b57c99-mjszf    Container started
+30s         Normal    Created                 pod/edgeml-sidecar-d54b57c99-mjszf    Container created
+30s         Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-mjszf    Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+30s         Normal    Scheduled               pod/edgeml-sidecar-d54b57c99-mjszf    Successfully assigned ghost-seeker-ship/edgeml-sidecar-d54b57c99-mjszf to k3d-uds-ship-server-0
+30s         Normal    SuccessfulCreate        replicaset/edgeml-sidecar-d54b57c99   Created pod: edgeml-sidecar-d54b57c99-mjszf
+30s         Normal    Started                 pod/edge-0                            Container started
+29s         Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+29s         Normal    Created                 pod/edgeml-sidecar-d54b57c99-mjszf    Container created
+29s         Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-mjszf    Container image "127.0.0.1:31999/istio/proxyv2:1.31.2-distroless" already present on machine and can be accessed by the pod
+29s         Normal    Started                 pod/edgeml-sidecar-d54b57c99-mjszf    Container started
+29s         Normal    Created                 pod/edge-0                            Container created
+29s         Normal    Started                 pod/edge-0                            Container started
+28s         Normal    Pulled                  pod/edge-0                            Container image "127.0.0.1:31999/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e" already present on machine and can be accessed by the pod
+28s         Normal    Started                 pod/edge-0                            Container started
+28s         Normal    Created                 pod/edge-0                            Container created
+28s         Warning   Unhealthy               pod/edge-0                            Readiness probe failed: HTTP probe failed with statuscode: 500
+27s         Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-mjszf    Container image "127.0.0.1:31999/ghost-seeker/edgeml-models:prod-c74106e2509c-20261106165828-258bab3e" already present on machine and can be accessed by the pod
+27s         Normal    Created                 pod/edgeml-sidecar-d54b57c99-mjszf    Container created
+27s         Normal    Started                 pod/edgeml-sidecar-d54b57c99-mjszf    Container started
+25s         Normal    Pulled                  pod/edgeml-sidecar-d54b57c99-mjszf    Container image "127.0.0.1:31999/ghost-seeker/edgeml-sidecar:prod-c74106e2509c-20261106165828-258bab3e" already present on machine and can be accessed by the pod
+25s         Warning   Unhealthy               pod/edgeml-sidecar-d54b57c99-mjszf    Readiness probe failed: HTTP probe failed with statuscode: 500
+25s         Normal    Started                 pod/edgeml-sidecar-d54b57c99-mjszf    Container started
+25s         Normal    Created                 pod/edgeml-sidecar-d54b57c99-mjszf    Container created

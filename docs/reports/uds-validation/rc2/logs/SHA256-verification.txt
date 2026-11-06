@@ -1,0 +1,4 @@
+uds-bundle-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst: OK
+uds-bundle-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst: OK
+zarf-package-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst: OK
+zarf-package-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst: OK

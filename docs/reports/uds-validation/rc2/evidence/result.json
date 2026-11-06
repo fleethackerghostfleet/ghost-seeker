@@ -1,0 +1,9 @@
+{
+  "accepted_frames": 7,
+  "outage_frames": 6,
+  "shore_before": 1,
+  "shore_during": 1,
+  "shore_after": 7,
+  "first_backlog_tier": "P1",
+  "priority_order_verified": true
+}

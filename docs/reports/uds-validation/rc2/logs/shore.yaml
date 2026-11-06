@@ -1,0 +1,8 @@
+options:
+  architecture: amd64
+variables:
+  ghost-seeker-shore:
+    NAMESPACE: ghost-seeker-shore
+    DOMAIN: uds.dev
+    SHORE_GATEWAY_HOST: shore
+    OPERATOR_GATEWAY_HOST: ghost-seeker
