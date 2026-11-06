@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 )
 
 // ResearchClient is an opt-in boundary to the separately packaged research
@@ -143,6 +145,9 @@ func (c *Compiler) compileResearch(ctx context.Context, text string) Compiled {
 		}
 		concept := strings.ToLower(strings.TrimSpace(rule.Concept))
 		class, ok := canonicalClass(concept, c.EdgeSubtypes)
+		if c.openVocabulary() && (!ok || class == "debris") {
+			class, ok = openvocab.Normalize(concept)
+		}
 		if !ok {
 			reason := c.unsupportedReadback([]string{shortReason(concept, 80)})
 			result := blocked(reason)

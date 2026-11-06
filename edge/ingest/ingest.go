@@ -34,6 +34,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 )
 
 // Capture is one thing a source produced.
@@ -228,7 +229,8 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	var resp *pb.AnalyzeResponse
 	if image {
 		var err error
-		resp, err = g.an.Analyze(ctx, inference.Frame{Image: c.Data, Source: c.Source, CapturedAt: c.CapturedAt}, g.cfg.KnownLabels, c.Hints)
+		labels := append(append([]string{}, g.cfg.KnownLabels...), openvocab.Labels(g.sch.Policy())...)
+		resp, err = g.an.Analyze(ctx, inference.Frame{Image: c.Data, Source: c.Source, CapturedAt: c.CapturedAt}, labels, c.Hints)
 		if err != nil {
 			return nil, fmt.Errorf("analyze: %w", err)
 		}
@@ -238,6 +240,13 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 			if d > 0 {
 				g.OnBurst(c.Source, resp.Burst.Fps, d, resp.Burst.Reason)
 			}
+		}
+		if g.cfg.Dedup == DedupSightings && hasOpenVocabularyMatch(resp, labels) {
+			// Grid proposals have no tracker identity; retain the matching frame.
+			if row, err := g.existing(ctx, hash); row != nil || err != nil {
+				return row, err
+			}
+			return g.newItem(ctx, c, hash, resp, nil)
 		}
 		if ip := resp.GetImagePriority(); ip != nil && g.cfg.Prioritizer == scoring.PrioritizerTomer && g.cfg.Dedup == DedupHash && ip.NearDuplicate {
 			if id, ok := g.tomerItems[ip.NearestPriorId]; ok {
@@ -265,6 +274,20 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		g.rememberTomer(resp, row.Item.Id)
 	}
 	return row, err
+}
+
+func hasOpenVocabularyMatch(resp *pb.AnalyzeResponse, labels []string) bool {
+	for _, label := range labels {
+		if !strings.HasPrefix(label, openvocab.Prefix) {
+			continue
+		}
+		for _, detection := range resp.GetDetections() {
+			if detection.GetLabel() == strings.TrimPrefix(label, openvocab.Prefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 const tomerRingSize = 512

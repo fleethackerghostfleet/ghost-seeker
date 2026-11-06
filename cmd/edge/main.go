@@ -21,6 +21,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
+	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/ingest"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scheduler"
@@ -181,6 +182,7 @@ func main() {
 	mux.Handle("GET /policy/audit", opauth.RequireBearer(operator, svc.PolicyAuditHandler()))
 	mux.Handle("/ship/policy", opauth.RequireBearer(operator, svc.ShipPolicyHandler()))
 	mux.Handle("GET /ship/items", opauth.RequireBearer(operator, svc.ShipItemsHandler()))
+	mux.Handle("GET /ship/inference", opauth.RequireBearer(operator, inference.CapabilitiesHandler(an)))
 	mux.Handle("GET /ship/frames", opauth.RequireBearer(operator, svc.ShipFramesHandler()))
 	mux.Handle("GET /ship/frames/{seq}", opauth.RequireBearer(operator, svc.ShipFramesHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })

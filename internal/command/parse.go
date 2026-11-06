@@ -87,6 +87,10 @@ var edgeConceptPatterns = []classPattern{
 }
 
 func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
+	return parseDirectiveVocabulary(text, edgeSubtypes, false)
+}
+
+func parseDirectiveVocabulary(text string, edgeSubtypes, openVocabulary bool) ([]Rule, []string) {
 	text = strings.ToLower(text)
 	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
 	text = andActionPattern.ReplaceAllString(text, "; $1")
@@ -137,6 +141,9 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 			patterns = append(append([]classPattern{}, edgeConceptPatterns...), patterns...)
 		}
 		for _, pattern := range patterns {
+			if openVocabulary && pattern.class == "debris" {
+				pattern.re = regexp.MustCompile(`\b(debris|wreckage|floating objects?|flotsam)\b`)
+			}
 			if pattern.re.MatchString(clause) {
 				if !seen[pattern.class] {
 					classes = append(classes, pattern.class)
@@ -164,6 +171,11 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 			}
 		}
 		unused := grammarPattern.ReplaceAllString(negativePattern.ReplaceAllString(clause, " "), " ")
+		if openVocabulary {
+			var concepts []string
+			concepts, unused = openConcepts(clause)
+			classes = append(classes, concepts...)
+		}
 		for _, word := range wordPattern.FindAllString(unused, -1) {
 			if !unknownSeen[word] {
 				unknown = append(unknown, word)

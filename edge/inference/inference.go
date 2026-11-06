@@ -65,6 +65,14 @@ func (r *Remote) EmbedText(ctx context.Context, texts []string) ([][]float32, er
 	return out, nil
 }
 
+func (r *Remote) Capabilities(ctx context.Context) (*pb.CapabilitiesResponse, error) {
+	resp, err := r.c.Capabilities(ctx, connect.NewRequest(&pb.CapabilitiesRequest{}))
+	if err != nil {
+		return nil, err
+	}
+	return resp.Msg, nil
+}
+
 // Mock is a deterministic stand-in: it reads ground truth from hints
 // ("label", "conf", "unknownness") and produces embeddings such that the
 // same text always maps to the same vector, so interest-vector similarity
