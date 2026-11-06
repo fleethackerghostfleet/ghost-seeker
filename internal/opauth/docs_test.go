@@ -27,6 +27,12 @@ func TestAuthenticationPagesIncludeDocumentation(t *testing.T) {
 			if !strings.Contains(body, httpx.DocsLinkCSS) {
 				t.Fatal("documentation styling missing")
 			}
+			if !strings.Contains(body[start:end], `<img src="/brand/logo.png"`) || !strings.Contains(body, `href="/brand/favicon-32.png"`) {
+				t.Fatal("logo missing from authentication page")
+			}
+			if !strings.Contains(w.Header().Get("Content-Security-Policy"), "img-src 'self'") {
+				t.Fatal("authentication page CSP must allow the same-origin logo")
+			}
 		})
 	}
 }

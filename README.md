@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/ghost-seeker-logo.png" alt="Ghost Seeker" width="560"></p>
+
 # ghost-seeker
 
 Ship-to-shore **prioritized sync** for disconnected, low-bandwidth links.
@@ -9,10 +11,21 @@ lost. Images are the first data type; the item model is type-agnostic.
 See [Fielding](docs/FIELDING.md) for offline builds, container staging, and Zarf deployment.
 See [Human review](docs/HUMAN_REVIEW.md) for durable review capture, exports, and offline weight proposals.
 
-**Verification:** hosted CI is manual-only to conserve Actions allowance. Run
+**Verification:** quick Go vet/tests and web tests run automatically on PRs into
+`dev`/`main` and pushes to `dev`, except changes only to `docs/**`, `*.md`, or
+`frames/**`. The full CI suite remains manual (`workflow_dispatch`), or run
 `make verify` on a prepared Linux host for the complete fail-closed test/security/
 package/image suite. See [local verification](docs/VERIFY.md) for setup, commit-linked
-reports, and merge-policy limitations. No GitHub plan upgrade is needed.
+reports, and merge-policy limitations.
+
+## Branches
+
+- `dev`: default branch; all new work lands here through pull requests.
+- `main`: the second demo.
+- `demo`: locked saved working version. Never touch it.
+- `prod`: the final version deployed to the fleet.
+
+Never push directly to `dev`, `main`, `demo` or `prod`; open a pull request.
 
 Key behaviours (all covered by `go test ./...` and the simulator):
 
@@ -46,16 +59,19 @@ internal/               fact format, virtual clock, scenario loader, http helper
 cmd/edge cmd/shore      the two services
 cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JSON metrics
 algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
-inference/              inference contract notes + model-free Python stub
+inference/              reference/contract notes + manual model-free stub; running sidecar is edgeml/
 edgeml/                 Python detection/tracking/sighting pipeline, real-model sidecar, evaluation reports
-deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
+deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf package with ingress/egress NetworkPolicies
 frames/                 demo imagery (Git LFS zips)
 cmd/ghost-seeker web/   operator web app (Go, in-memory simulation, SSE feed); see "Operator web app" below
 ui/                     API notes for wiring the web app to the edge/shore consoles
+ui-mockup/              static design reference, not served; live workbench is web/static/workbench.js
 scenarios/              replay scenarios (datasets + operator events)
 ```
 
 ## Quick start
+
+Fetch the console's ocean imagery with `git lfs pull --include web/static/imagery/empty-ocean.zip`; archive-dependent tests skip while it remains an LFS pointer.
 
 Requires Go 1.26.10+ (pinned in `go.mod` and the container builder). No CGO, no GPU. The demo imagery in `frames/` is Git LFS: run `git lfs pull` after cloning, or the default replay scenario finds only pointer files.
 
@@ -63,6 +79,7 @@ Requires Go 1.26.10+ (pinned in `go.mod` and the container builder). No CGO, no 
 make build                 # bin/edge bin/ghost-seeker bin/shore bin/sim
 make sim                   # FIFO vs prioritized, 90 simulated minutes of contested SATCOM, seconds of wall time
 ./bin/sim -trace starlink_turns -duration 60m          # traces: steady_64k trickle_2k4 starlink_turns satcom_contested los_bursty
+go run ./cmd/sim -scenario scenarios/sailboats_example.json # sailboat lane replay with bundled LFS archives
 ```
 
 Live, two processes, replaying the frame zips through the mock analyzer:
@@ -95,6 +112,15 @@ deploy/compose/degrade.sh satcom   # 64 kbps / 600 ms; also trickle | starlink |
 The operator web app also supports optional **offline CAC/PIV mutual-TLS login** with
 operator/viewer roles. See [CAC/PIV mode (offline)](docs/SECURITY.md#1a-cacpiv-mode-offline)
 for deployment, air-gap trust/CRL loading, and a synthetic demo PKI generator. Token mode remains the default.
+
+Shore and edge also support opt-in **server TLS 1.3**: set both `-tls-cert` /
+`GS_TLS_CERT` and `-tls-key` / `GS_TLS_KEY`. Setting only one is a startup error;
+setting neither preserves plain HTTP. For a private-CA HTTPS shore, edge accepts
+`-shore-ca` / `GS_SHORE_CA` (PEM bundle added to system roots). The live operator
+accepts the same CA option for its shore **and edge** console RPCs and shore
+blob/API proxy. Hostname verification stays enabled. See
+[listener TLS](docs/SECURITY.md#1b-shore-and-edge-listener-tls-opt-in) and
+[deployment notes](deploy/README.md); Compose/Zarf defaults remain HTTP.
 
 Shore ConsoleService, the edge console, `/blob/` on both and the operator web app share one
 **operator bearer token**: `-operator-token` / `GS_OPERATOR_TOKEN` or `-operator-token-file` /
@@ -147,8 +173,9 @@ Go duration (e.g. `5m`). Tokens use **HS256** and require `sub` (edge node ID),
 every received message on streaming handlers (the current proto only defines
 unary Exchange). No relay role or three-tier relay is implemented. The edge reads
 its token at startup: provision a fresh token and restart before expiry. This is
-sync authentication only, not operator/ConsoleService auth or TLS; deploy behind
-an approved TLS boundary and restrict console access to a trusted network.
+sync authentication only, not operator/ConsoleService auth or transport encryption;
+enable listener TLS or deploy behind an approved TLS boundary, and restrict console
+access to a trusted network.
 
 Caps count retained item rows and the sum of their form payload sizes, not
 SQLite/WAL overhead or audit history. Negative caps are rejected; either cap may
@@ -432,6 +459,11 @@ never its own eviction victim.
 
 ## Status / not done
 
+- Zarf includes namespace-wide default-deny ingress/egress and workload-specific
+  service/DNS allows. Configure external ingress source and egress destination
+  CIDRs/ports before deployment; policies require an enforcing CNI. Cluster
+  enforcement has not been runtime-tested. See [network isolation](docs/FIELDING.md#zarf-network-isolation)
+  and [egress variables](deploy/README.md#external-egress-variables).
 - Inference: Go mock, model-free Python stub, and an implemented CPU sidecar
   with ONNX Runtime/OpenVINO detection, tracking, MobileCLIP classification,
   and sighting aggregation. Real models must be provisioned separately; see
@@ -440,12 +472,18 @@ never its own eviction victim.
 - NL directives compile in `internal/command`, optionally through a local
   OpenAI-compatible LLM (`GS_LLM_URL`, `GS_LLM_MODEL`, `GS_LLM_TIMEOUT`) with
   JSON-schema constraints, regex fallback, deterministic readback and
-  guardrails before apply.
+  guardrails before apply. Offline sailboat requests map to the broader
+  `small boat` class (including other small boats); live shore preserves the
+  `sailboat` subtype and maps whales/dolphins to `marine mammal`. Simulation
+  has no marine-mammal class. Unsupported terms are named in the readback
+  alongside available sensor classes, without requiring a model. The opt-in
+  Granite/research adapter still blocks unsupported or qualified concepts;
+  no new detector classes are created.
 - Unit authentication is on by default, and operator authentication gates
-  ConsoleService and blobs. Policy signing remains opt-in. No service provides
-  TLS; see [Security](docs/SECURITY.md) for deployment requirements and residuals.
+  ConsoleService and blobs. Policy signing remains opt-in. Shore/edge server TLS
+  is opt-in; the operator supports PIV/mTLS. Plain HTTP remains the default; see
+  [Security](docs/SECURITY.md) for deployment requirements and residuals.
 - Capture input is frame/scenario replay; no live camera ingestion is implemented.
-- Shore chunk reassembly assumes in-order delivery within an item/form.
-- Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
-  the boat is not visible in every frame). `scenarios/sailboats_example.json`
-  still uses a placeholder path for the sailboat set.
+- Sailboat footage used by `scenarios/sailboats_example.json` is in
+  `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled; the boat is not
+  visible in every frame, so the scenario's sailboat labels are mock hints).

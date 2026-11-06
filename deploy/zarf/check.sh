@@ -17,29 +17,13 @@ if ! command -v "$PYTHON" >/dev/null 2>&1; then
   skip "$PYTHON not installed"
   exit 0
 fi
-"$PYTHON" "$SCRIPT_DIR/check_manifests.py"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+"$PYTHON" -m unittest discover -s "$SCRIPT_DIR" -p 'test_check_manifests.py'
+"$PYTHON" "$SCRIPT_DIR/check_manifests.py" --output-dir "$tmp/manifests"
 
 if command -v kubeconform >/dev/null 2>&1; then
-  tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' EXIT HUP INT TERM
-  for manifest in "$SCRIPT_DIR"/manifests/*.yaml; do
-    sed \
-      -e 's,###ZARF_VAR_SHORE_URL###,http://shore.ghost-seeker.svc.cluster.local:8080,g' \
-      -e 's|###ZARF_VAR_SHORE_PUBLIC_HOSTS###|shore,shore.ghost-seeker,shore.ghost-seeker.svc,shore.ghost-seeker.svc.cluster.local|g' \
-      -e 's|###ZARF_VAR_EDGE_PUBLIC_HOSTS###|edge,edge.ghost-seeker,edge.ghost-seeker.svc,edge.ghost-seeker.svc.cluster.local|g' \
-      -e 's,###ZARF_VAR_EDGE_ID###,edge-1,g' \
-      -e 's,###ZARF_VAR_SHORE_REQUIRE_AUTH###,false,g' \
-      -e 's,###ZARF_VAR_EDGE_MAX_BYTES###,0,g' \
-      -e 's,###ZARF_VAR_EDGE_MAX_ITEMS###,0,g' \
-      -e 's,###ZARF_VAR_INFER_URL###,mock,g' \
-      -e 's,###ZARF_VAR_SHORE_STORAGE###,5Gi,g' \
-      -e 's,###ZARF_VAR_EDGE_STORAGE###,10Gi,g' \
-      -e 's,###ZARF_VAR_FRAMES_HOSTPATH###,/var/lib/ghost-seeker/frames,g' \
-      -e 's,###ZARF_VAR_FRAMES_DIR###,,g' \
-      -e 's,###ZARF_VAR_SCENARIO###,,g' \
-      "$manifest" > "$tmp/$(basename "$manifest")"
-  done
-  if kubeconform -strict -summary "$tmp" >"$tmp/kubeconform.log" 2>&1; then
+  if kubeconform -strict -summary "$tmp"/manifests/*/*.yaml >"$tmp/kubeconform.log" 2>&1; then
     cat "$tmp/kubeconform.log"
   else
     if grep -Eiq 'Invalid:[[:space:]]*[1-9][0-9]*([,[:space:]]|$)' "$tmp/kubeconform.log" ||

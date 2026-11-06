@@ -1,3 +1,5 @@
+//go:build !prod
+
 package main
 
 // Three-way delivery comparison for the ghost-fleet demo:
@@ -22,7 +24,6 @@ import (
 	"image"
 	"image/color"
 
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 	"math/bits"
 	"os"
 	"path/filepath"
@@ -32,6 +33,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/ingest"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"

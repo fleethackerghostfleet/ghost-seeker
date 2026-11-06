@@ -115,11 +115,17 @@ class VerifyTests(unittest.TestCase):
                 self.assertEqual(self.report()["status"], "failed")
                 self.assertIn("signal", self.report()["error"])
                 child = int(ready.read_text())
-                try:
-                    # Reparented zombies are terminated; already-reaped children have no entry.
-                    self.assertEqual(Path(f"/proc/{child}/stat").read_text().split()[2], "Z")
-                except FileNotFoundError:
-                    pass
+                deadline = time.monotonic() + 2
+                while True:
+                    try:
+                        state = Path(f"/proc/{child}/stat").read_text().split()[2]
+                    except FileNotFoundError:
+                        break
+                    if state == "Z":
+                        break
+                    if time.monotonic() >= deadline:
+                        self.fail(f"child {child} still running after SIGKILL: {state}")
+                    time.sleep(0.01)
             finally:
                 if process.poll() is None:
                     process.send_signal(signal.SIGTERM)

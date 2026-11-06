@@ -142,9 +142,12 @@ func (c *Compiler) compileResearch(ctx context.Context, text string) Compiled {
 			return blocked("Research compiler returned an invalid emphasis weight.")
 		}
 		concept := strings.ToLower(strings.TrimSpace(rule.Concept))
-		class, ok := canonicalClass(concept)
+		class, ok := canonicalClass(concept, c.EdgeSubtypes)
 		if !ok {
-			return blocked(fmt.Sprintf("The demo cannot match the visual concept %q yet. Choose an existing demo class; new or qualified concepts remain research-only.", shortReason(concept, 80)))
+			reason := c.unsupportedReadback([]string{shortReason(concept, 80)})
+			result := blocked(reason)
+			result.Readback = reason + " No directive will be applied."
+			return result
 		}
 		if seen[class] {
 			return blocked("Research compiler returned conflicting or duplicate rules for " + class + ".")

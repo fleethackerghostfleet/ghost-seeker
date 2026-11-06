@@ -8,7 +8,7 @@
   handle.setAttribute('aria-label',label+' width');
   handle.setAttribute('aria-valuemin',min);handle.setAttribute('aria-valuemax',max);
   handle.title='Drag or use arrow keys to resize. Double-click or Home to reset.';
-  document.body.append(handle);
+  (document.getElementById?.('panelResizers')||document.body).append(handle);
   let panel,right=false,drag=null,observed=null,scheduled=false;
   const schedule=()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;update()})};
   const sizes=new ResizeObserver(schedule);
