@@ -304,9 +304,9 @@ for the complete variable table, TLS/proxy ports and DNS/NAT caveats.
 ### Live edge input
 
 The edge captures from the authenticated push API and the optional live
-sources below (`-watch-dir` spool, `-mjpeg-url`). The packaged edge mounts the
-node directory `FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`)
-read-only at `/frames`; a spool requires a separate **writable** mount and
+sources below (`-watch-dir` spool, `-mjpeg-url`). The packaged edge mounts an
+optional existing `FRAMES_PVC` read-only at `/frames` (empty uses an emptyDir,
+never a hostPath). A spool requires a separate **writable** mount and
 `-watch-dir`. Production images have no scenario/frame replay (`-scenario`,
 `-frames`, `-period`, `SCENARIO` and `FRAMES_DIR` exist only in demo builds,
 [Production profile](#production-profile-and-prod-gate)). The Zarf package
@@ -587,6 +587,8 @@ through Secret references, never ConfigMaps.
 | `shore-auth` | `signing-key`, `operator-token` | shore |
 | `edge-auth` | `unit-token`, `operator-token` | edge |
 | `operator-auth` | `operator-token` | operator web app |
+| `policy-signing` (`POLICY_SIGNING_SECRET`) | `signing-key.json` | shore, Ed25519 private signing key file at `/run/policy/signing-key.json` |
+| `policy-keys` (`POLICY_KEYS_SECRET`) | `keyring.json` | edge, approved Ed25519 public keyring at `/run/policy/keyring.json` |
 
 ```sh
 # One operator token shared by shore, edge and the operator web app (>= 16 bytes); owner-only file
@@ -598,11 +600,18 @@ kubectl -n ghost-seeker create secret generic shore-auth \
 kubectl -n ghost-seeker create secret generic operator-auth \
   --from-file=operator-token=./operator.token
 
+# Independently generated Ed25519 policy key; not the HS256 unit JWT signing.key
+go run ./cmd/policy-keygen -id shore-2026 -out-dir ./policy-keys
+kubectl -n ghost-seeker create secret generic policy-signing \
+  --from-file=signing-key.json=./policy-keys/shore-2026.key.json
+
 # On a trusted workstation with the same signing key
 GS_SIGNING_KEY_FILE=./signing.key bin/mint-unit-token \
   -id edge-1 -ttl 720h > unit.jwt
 
 # In the edge cluster; remove the plaintext token after storing it
+kubectl -n ghost-seeker create secret generic policy-keys \
+  --from-file=keyring.json=./policy-keys/keyring.json
 kubectl -n ghost-seeker create secret generic edge-auth \
   --from-file=unit-token=./unit.jwt --from-file=operator-token=./operator.token && rm unit.jwt
 
@@ -614,6 +623,18 @@ zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
 Setting `SHORE_REQUIRE_AUTH=false` is for lab clusters only; shore then logs a WARN at startup and
 accepts any edge. ConsoleService always requires an operator token; local
 binary runs may auto-generate one, while Compose and Zarf require an explicit credential.
+
+Zarf now signs shore policy using `GS_POLICY_SIGNING_KEY` (a mounted JSON file
+path, not inline key material). Edge defaults `GS_REQUIRE_SIGNED_POLICY=true`
+and loads `GS_POLICY_KEYS` from its mounted public keyring. Missing Secrets fail
+closed. Keep the private key only in the shore cluster; distribute the public
+keyring to each edge cluster. Rotate by first adding the new public key to all
+edges, then switching shore's signer, restarting workloads after Secret changes,
+and only later removing the old public key. `REQUIRE_SIGNED_POLICY=false` is an
+explicit isolated-lab override, never the fielding default.
+
+For UDS Core deployment, gateway hostnames, model PVC provisioning and the
+optional Keycloak registration, see [UDS packaging](../deploy/uds/README.md).
 
 To rotate before expiry, mint a new token, replace the `edge-auth` Secret, and
 restart the edge StatefulSet:

@@ -7,7 +7,10 @@ data:
   EDGE_ID: "###ZARF_VAR_EDGE_ID###"
   DATA_DIR: /data
   LISTEN: :8081
-  GS_PUBLIC_HOSTS: "###ZARF_VAR_EDGE_PUBLIC_HOSTS###"
+  GS_PUBLIC_HOSTS: "###ZARF_VAR_EDGE_PUBLIC_HOSTS###,###ZARF_VAR_EDGE_HOST###.###ZARF_VAR_UDS_DOMAIN###"
+  GS_CORS_ORIGINS: "https://###ZARF_VAR_OPERATOR_HOST###.###ZARF_VAR_UDS_DOMAIN###"
+  GS_REQUIRE_SIGNED_POLICY: "###ZARF_VAR_REQUIRE_SIGNED_POLICY###"
+  GS_POLICY_KEYS: /run/policy/keyring.json
   SHORE_URL: "{{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_SHORE_URL###" "http://shore.ghost-seeker.svc.cluster.local:8080") }}https://shore.ghost-seeker.svc.cluster.local:8080{{ else }}###ZARF_VAR_SHORE_URL###{{ end }}"
   INFER_URL: "###ZARF_VAR_INFER_URL###"
   DEDUP: hash
@@ -103,6 +106,9 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: policy-keys
+              mountPath: /run/policy
+              readOnly: true
 {{ if ne "###ZARF_VAR_EDGE_TLS_SECRET###" "" }}
             - name: listener-tls
               mountPath: /run/listener-tls
@@ -121,6 +127,13 @@ spec:
               mountPath: /frames
               readOnly: true
       volumes:
+        - name: policy-keys
+          secret:
+            secretName: "###ZARF_VAR_POLICY_KEYS_SECRET###"
+            defaultMode: 0440
+            items:
+              - key: keyring.json
+                path: keyring.json
 {{ if ne "###ZARF_VAR_EDGE_TLS_SECRET###" "" }}
         - name: listener-tls
           secret:
@@ -144,9 +157,13 @@ spec:
         - name: tmp
           emptyDir: {}
         - name: frames
-          hostPath:
-            path: "###ZARF_VAR_FRAMES_HOSTPATH###"
-            type: DirectoryOrCreate
+{{ if ne "###ZARF_VAR_FRAMES_PVC###" "" }}
+          persistentVolumeClaim:
+            claimName: "###ZARF_VAR_FRAMES_PVC###"
+            readOnly: true
+{{ else }}
+          emptyDir: {}
+{{ end }}
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -468,7 +468,8 @@ Earlier residuals (post-#60 run), kept for history:
   at startup when unit auth is off. PR #57 added Ed25519 policy signing, but it is **opt-in**:
   shore signs only when `-policy-signing-key` (`GS_POLICY_SIGNING_KEY`) is set and the edge
   verifies only with `-require-signed-policy` / `-policy-keys` (`GS_REQUIRE_SIGNED_POLICY`,
-  `GS_POLICY_KEYS`); compose and Zarf do not configure a policy key yet, so their downlink
+  `GS_POLICY_KEYS`); Zarf now mounts required policy signing/keyring Secrets and requires
+  signed policy by default (see FIELDING.md); compose still does not configure a key, so its downlink
   policies are unsigned by default — fielded deployments should set all three. Shore items are
   bound to the authenticated unit (`sub` of the unit JWT / `ExchangeRequest.edge_id`): manifests,
   chunks and sync overrides from another unit are rejected and not acked; chunk-created stubs

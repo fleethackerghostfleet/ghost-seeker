@@ -11,6 +11,104 @@ import check_manifests as validator
 import check_manifests as checker
 
 
+class UDSPackageTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.package = yaml.safe_load((checker.ROOT / "zarf.yaml").read_text())
+        cls.parsed = checker.render_manifests(cls.package, {})
+
+    def setUp(self):
+        self.documents = copy.deepcopy([doc for docs in self.parsed.values() for doc in docs])
+        self.variables = checker.package_variables(self.package, {})
+
+    def resource(self, kind, name):
+        return next(doc for doc in self.documents if doc["kind"] == kind and doc["metadata"]["name"] == name)
+
+    def validate(self):
+        checker.check_uds_wiring(self.documents, self.variables)
+
+    def test_defaults_are_minimal_and_policy_verification_is_required(self):
+        self.validate()
+        self.assertEqual(self.variables["REQUIRE_SIGNED_POLICY"], "true")
+        network = self.resource("Package", "ghost-seeker")["spec"]["network"]
+        self.assertEqual(len(network["allow"]), 6)
+        self.assertEqual(len(network["expose"]), 1)
+        self.assertEqual(self.variables["UDS_SSO_CLIENT_ENABLED"], "false")
+
+    def test_optional_routes_storage_and_key_secret_overrides(self):
+        overrides = {"UDS_CROSS_CLUSTER_SHORE": "true", "SHORE_EGRESS_CIDR": "203.0.113.7/32",
+                     "SHORE_EGRESS_PORT": "443", "SHORE_URL": "https://shore.remote.test",
+                     "UDS_EXPOSE_SHORE": "true", "UDS_SSO_CLIENT_ENABLED": "true",
+                     "SHORE_INFER_URL": "http://edgeml-sidecar:9090", "UDS_DOMAIN": "example.test",
+                     "OPERATOR_HOST": "console", "FRAMES_PVC": "sensor-frames", "MODELS_PVC": "approved-models",
+                     "POLICY_SIGNING_SECRET": "site-signing", "POLICY_KEYS_SECRET": "site-keys"}
+        parsed = checker.check(overrides)
+        edge = next(doc for docs in parsed.values() for doc in docs if doc["kind"] == "StatefulSet" and doc["metadata"]["name"] == "edge")
+        frames = next(v for v in edge["spec"]["template"]["spec"]["volumes"] if v["name"] == "frames")
+        self.assertEqual(frames["persistentVolumeClaim"], {"claimName": "sensor-frames", "readOnly": True})
+
+    def test_empty_missing_or_extra_network_rules_fail(self):
+        for replacement in ([], None, [{"direction": "Egress", "remoteGenerated": "Anywhere"}]):
+            with self.subTest(rules=replacement):
+                network = self.resource("Package", "ghost-seeker")["spec"]["network"]
+                network["allow"] = replacement
+                with self.assertRaisesRegex(ValueError, "least-privilege"):
+                    self.validate()
+
+    def test_missing_package_and_mesh_enrollment_fail(self):
+        package = self.resource("Package", "ghost-seeker")
+        self.documents.remove(package)
+        with self.assertRaisesRegex(ValueError, "UDS Package"):
+            self.validate()
+        self.documents.append(package)
+        self.resource("Namespace", "ghost-seeker")["metadata"]["labels"] = {}
+        with self.assertRaisesRegex(ValueError, "ambient"):
+            self.validate()
+
+    def test_broad_or_placeholder_cross_cluster_cidrs_fail(self):
+        for cidr in ("0.0.0.0/0", "::/0", "192.0.2.0/32"):
+            with self.subTest(cidr=cidr), self.assertRaisesRegex(ValueError, "narrow site CIDR"):
+                checker.check({"UDS_CROSS_CLUSTER_SHORE": "true", "SHORE_EGRESS_CIDR": cidr})
+
+    def test_policy_keys_cannot_be_optional_or_publicly_readable(self):
+        shore = self.resource("StatefulSet", "shore")["spec"]["template"]["spec"]
+        secret = next(v["secret"] for v in shore["volumes"] if v["name"] == "policy-signing")
+        for mutation in ({"optional": True}, {"defaultMode": 0o444}, {"secretName": "wrong"}):
+            original = copy.deepcopy(secret)
+            secret.update(mutation)
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                self.validate()
+            secret.clear()
+            secret.update(original)
+
+    def test_hostpath_and_privilege_escalation_fail(self):
+        edge = self.resource("StatefulSet", "edge")["spec"]["template"]["spec"]
+        frames = next(v for v in edge["volumes"] if v["name"] == "frames")
+        frames["hostPath"] = {"path": "/frames"}
+        with self.assertRaisesRegex(ValueError, "hostPath"):
+            self.validate()
+        del frames["hostPath"]
+        edge["containers"][0]["securityContext"]["allowPrivilegeEscalation"] = True
+        with self.assertRaisesRegex(ValueError, "privilege escalation"):
+            self.validate()
+
+    def test_gateway_host_and_cors_allowlist_are_enforced(self):
+        config = self.resource("ConfigMap", "shore-config")["data"]
+        config["GS_PUBLIC_HOSTS"] = "shore"
+        with self.assertRaisesRegex(ValueError, "Host allowlist"):
+            self.validate()
+        config["GS_PUBLIC_HOSTS"] += ",shore.uds.dev"
+        config["GS_CORS_ORIGINS"] = "*"
+        with self.assertRaisesRegex(ValueError, "CORS"):
+            self.validate()
+
+    def test_operator_audit_log_cannot_fall_back_to_readonly_root(self):
+        operator = self.resource("Deployment", "operator")["spec"]["template"]["spec"]["containers"][0]
+        operator["volumeMounts"] = [mount for mount in operator["volumeMounts"] if mount["name"] != "data"]
+        with self.assertRaisesRegex(ValueError, "review log"):
+            self.validate()
+
+
 class NetworkPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -380,7 +478,7 @@ class TLSManifestTests(unittest.TestCase):
                 self.assertNotIn("args", container)
             else:
                 self.assertEqual(container["args"], ["-addr=:8090", "-shore=http://shore:8080",
-                                                      "-edge=", "-link-listen="])
+                                                      "-edge=", "-link-listen=", "-review-log=/data/reviews.jsonl"])
             for probe in ("readinessProbe", "livenessProbe"):
                 self.assertNotIn("scheme", container[probe]["httpGet"])
             pod = self.workload(documents, name)["spec"]["template"]["spec"]

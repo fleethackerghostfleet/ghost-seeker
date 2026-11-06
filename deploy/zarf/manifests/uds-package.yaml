@@ -1,0 +1,82 @@
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  name: ghost-seeker
+  namespace: ghost-seeker
+spec:
+  network:
+    serviceMesh:
+      mode: ambient
+    allow:
+      - direction: Egress
+        selector: {app: edge}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: shore}
+        port: 8080
+      - direction: Ingress
+        selector: {app: shore}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: edge}
+        port: 8080
+      - direction: Egress
+        selector: {app: edge}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: edgeml-sidecar}
+        port: 9090
+      - direction: Ingress
+        selector: {app: edgeml-sidecar}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: edge}
+        port: 9090
+      - direction: Egress
+        selector: {app: operator}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: shore}
+        port: 8080
+      - direction: Ingress
+        selector: {app: shore}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: operator}
+        port: 8080
+{{ if ne "###ZARF_VAR_SHORE_INFER_URL###" "" }}
+      - direction: Egress
+        selector: {app: shore}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: edgeml-sidecar}
+        port: 9090
+      - direction: Ingress
+        selector: {app: edgeml-sidecar}
+        remoteNamespace: ghost-seeker
+        remoteSelector: {app: shore}
+        port: 9090
+{{ end }}
+{{ if eq "###ZARF_VAR_UDS_CROSS_CLUSTER_SHORE###" "true" }}
+      - direction: Egress
+        selector: {app: edge}
+        remoteCidr: "###ZARF_VAR_SHORE_EGRESS_CIDR###"
+        port: ###ZARF_VAR_SHORE_EGRESS_PORT###
+{{ end }}
+    expose:
+      - service: operator
+        selector: {app: operator}
+        port: 8090
+        gateway: tenant
+        host: "###ZARF_VAR_OPERATOR_HOST###"
+{{ if eq "###ZARF_VAR_UDS_EXPOSE_SHORE###" "true" }}
+      - service: shore
+        selector: {app: shore}
+        port: 8080
+        gateway: tenant
+        host: "###ZARF_VAR_SHORE_HOST###"
+{{ end }}
+  sso:
+    - name: Ghost Seeker operator (registration only)
+      clientId: ghost-seeker
+      enabled: ###ZARF_VAR_UDS_SSO_CLIENT_ENABLED###
+      protocol: openid-connect
+      publicClient: false
+      standardFlowEnabled: true
+      redirectUris:
+        - "https://###ZARF_VAR_OPERATOR_HOST###.###ZARF_VAR_UDS_DOMAIN###/oidc/callback"
+      webOrigins:
+        - "https://###ZARF_VAR_OPERATOR_HOST###.###ZARF_VAR_UDS_DOMAIN###"

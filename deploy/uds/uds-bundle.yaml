@@ -1,0 +1,14 @@
+kind: UDSBundle
+metadata:
+  name: ghost-seeker
+  version: 0.1.0
+  description: Ghost Seeker on an existing UDS Core 1.14.3 cluster (use make uds-core-dev locally).
+packages:
+  - name: ghost-seeker
+    path: ../../dist
+    ref: 0.1.0
+    optionalComponents:
+      - shore
+      - operator
+      - edge
+      - edge-inference

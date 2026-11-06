@@ -7,6 +7,37 @@ metadata:
   description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: UDS_DOMAIN
+    description: UDS Core tenant domain (must match the installed Core domain).
+    default: uds.dev
+    prompt: false
+  - name: OPERATOR_HOST
+    description: Operator console subdomain on the UDS tenant gateway (without UDS_DOMAIN).
+    default: ghost-seeker
+    prompt: false
+  - name: SHORE_HOST
+    description: Optional shore sync subdomain on the UDS tenant gateway.
+    default: shore
+    prompt: false
+  - name: EDGE_HOST
+    description: Reserved edge gateway subdomain accepted by the application; edge is not exposed by default.
+    default: edge
+    prompt: false
+  - name: UDS_EXPOSE_SHORE
+    description: Expose the authenticated shore sync/API listener through the tenant gateway.
+    default: "false"
+    pattern: '^(true|false)$'
+    prompt: false
+  - name: UDS_CROSS_CLUSTER_SHORE
+    description: Permit edge egress to SHORE_EGRESS_CIDR on SHORE_EGRESS_PORT for a routed shore endpoint.
+    default: "false"
+    pattern: '^(true|false)$'
+    prompt: false
+  - name: UDS_SSO_CLIENT_ENABLED
+    description: Register a Keycloak client only; the app still requires token/PIV authentication and has no OIDC callback implementation.
+    default: "false"
+    pattern: '^(true|false)$'
+    prompt: false
   - name: SHORE_EGRESS_CIDR
     description: Approved destination CIDR for edge/operator to routed shore sync, console and API. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
     default: 192.0.2.0/32
@@ -146,13 +177,36 @@ variables:
     description: Shore SQLite persistent volume size.
     default: 5Gi
     prompt: false
+  - name: OPERATOR_STORAGE
+    description: Operator review audit log persistent volume size.
+    default: 1Gi
+    prompt: false
   - name: EDGE_STORAGE
     description: Edge SQLite persistent volume size.
     default: 10Gi
     prompt: false
-  - name: FRAMES_HOSTPATH
-    description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop). Production images have no replay; the edge ingests the live input stream.
-    default: /var/lib/ghost-seeker/frames
+  - name: FRAMES_PVC
+    description: Optional existing PVC mounted read-only at /frames; empty uses an emptyDir, never a hostPath.
+    default: ""
+    prompt: false
+  - name: MODELS_PVC
+    description: Existing PVC containing the approved model bundle and manifest.json; empty uses an unpopulated emptyDir (provision before selecting edge-inference).
+    default: ""
+    prompt: false
+  - name: POLICY_SIGNING_SECRET
+    description: Required existing Secret containing the shore Ed25519 signing-key.json file.
+    default: policy-signing
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: POLICY_KEYS_SECRET
+    description: Required existing Secret containing the edge public keyring.json file.
+    default: policy-keys
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: REQUIRE_SIGNED_POLICY
+    description: Require Ed25519 signed downlinked policy; disabling is for explicitly reviewed isolated labs only.
+    default: "true"
+    pattern: '^(true|false)$'
     prompt: false
 
 components:
@@ -162,8 +216,10 @@ components:
     manifests:
       - name: namespace
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/namespace.yaml
+          - manifests/uds-package.yaml
           - manifests/network-default-deny.yaml
           - manifests/network-default-deny-egress.yaml
   - name: shore
@@ -217,6 +273,7 @@ components:
     manifests:
       - name: edge-inference
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/edge-inference.yaml
           - manifests/network-edge-inference.yaml

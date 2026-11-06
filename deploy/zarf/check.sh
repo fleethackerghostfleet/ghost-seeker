@@ -22,8 +22,20 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 "$PYTHON" -m unittest discover -s "$SCRIPT_DIR" -p 'test_check_manifests.py'
 "$PYTHON" "$SCRIPT_DIR/check_manifests.py" --output-dir "$tmp/manifests"
 
+schema_status=0
 if command -v kubeconform >/dev/null 2>&1; then
-  if kubeconform -strict -summary "$tmp"/manifests/*/*.yaml >"$tmp/kubeconform.log" 2>&1; then
+  "$PYTHON" deploy/uds/check_schema.py "$tmp/schemas" || schema_status=$?
+  if [ "$schema_status" -ne 0 ] && [ "$schema_status" -ne 2 ]; then
+    exit "$schema_status"
+  fi
+fi
+
+if [ "$schema_status" -eq 2 ]; then
+  skip "UDS Package CRD could not be fetched (offline)"
+elif command -v kubeconform >/dev/null 2>&1; then
+  if kubeconform -strict -summary -schema-location default \
+    -schema-location "$tmp/schemas/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+    "$tmp"/manifests/*/*.yaml >"$tmp/kubeconform.log" 2>&1; then
     cat "$tmp/kubeconform.log"
   else
     if grep -Eiq 'Invalid:[[:space:]]*[1-9][0-9]*([,[:space:]]|$)' "$tmp/kubeconform.log" ||
