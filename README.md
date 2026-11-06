@@ -79,6 +79,7 @@ Requires Go 1.26.10+ (pinned in `go.mod` and the container builder). No CGO, no 
 make build                 # bin/edge bin/ghost-seeker bin/shore bin/sim
 make sim                   # FIFO vs prioritized, 90 simulated minutes of contested SATCOM, seconds of wall time
 ./bin/sim -trace starlink_turns -duration 60m          # traces: steady_64k trickle_2k4 starlink_turns satcom_contested los_bursty
+go run ./cmd/sim -scenario scenarios/sailboats_example.json # sailboat lane replay with bundled LFS archives
 ```
 
 Live, two processes, replaying the frame zips through the mock analyzer:
@@ -478,6 +479,6 @@ never its own eviction victim.
   is opt-in; the operator supports PIV/mTLS. Plain HTTP remains the default; see
   [Security](docs/SECURITY.md) for deployment requirements and residuals.
 - Capture input is frame/scenario replay; no live camera ingestion is implemented.
-- Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
-  the boat is not visible in every frame). `scenarios/sailboats_example.json`
-  still uses a placeholder path for the sailboat set.
+- Sailboat footage used by `scenarios/sailboats_example.json` is in
+  `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled; the boat is not
+  visible in every frame, so the scenario's sailboat labels are mock hints).
