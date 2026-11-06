@@ -431,26 +431,36 @@ The current run covers the remediation of those 5 mediums and the 2 HTML-escape 
 * **Resolved by PR #77** — `CORSAllow` trusted `Host` (DNS rebinding, 1 medium). Shore and edge
   check the `-public-hosts` / `GS_PUBLIC_HOSTS` allowlist before CORS; compose and Zarf set it.
 
-Open findings after the current run (the three new ones were introduced by the remediation /
-echelon changes themselves and are candidates for the next batch):
+Status after Task 4 remediation (regression/mutation tests, not a new external scan;
+the scan counts above are historical):
 
-* **Medium ×1 (new, from PR #80)** — if the shore's own policy-signing key is in its `-policy-keys`
+* **Resolved in Task 4 — Medium ×1 (from PR #80)** — if the shore's own policy-signing key is in its `-policy-keys`
   keyring, a holder of the operator token can replay an old shore-signed policy to restore a
   revoked command layer (e.g. EMCON SILENT) and move the stored command mark above command's next
   versions. Fix: refuse signed above-ship submissions whose `KeyId` is the shore's own signer and
-  keep the command version inside the signed command layer.
-* **Low ×1 (new, from PR #78)** — first-writer ownership plus edge item ULIDs seeded from
+  keep the command version inside the signed command layer. Both guards are now implemented;
+  public-key aliases of the shore signer are rejected too. `PolicyLayer.command_version`
+  preserves the original command sequence through shore envelope re-versioning/signing.
+* **Resolved in Task 4 — Low ×1 (from PR #78)** — first-writer ownership plus edge item ULIDs seeded from
   `math/rand(hash(edge id))` lets a stolen unit token pre-claim another edge's predictable item
-  ids. Fix: `crypto/rand` entropy for the ULIDs.
-* **Low ×1 (new, from PR #73)** — removing the per-operator echelon check does not fail closed; a
+  ids. Fixed with `crypto/rand` entropy for the ULIDs.
+* **Resolved in Task 4 — Low ×1 (from PR #73)** — removing the per-operator echelon check does not fail closed; a
   deployment still setting `GS_REQUIRE_OPERATOR_AUTH=true` starts silently without it. Fix: exit
-  with an error when that variable is set.
-* **Low ×7 (carried over)** — SSE stream has no subscriber cap / stalled-client eviction; EMCON
-  SILENT still sends a heartbeat every tick; an attribute-only suppress directive can defeat a
-  command-locked priority rule; 1-byte chunks make the shore re-read and re-hash a 256 MiB blob per
-  chunk; login `next=` check
-  bypassed by a tab/newline; JPEG fill bytes skip the sidecar's 50-megapixel cap; chunk uploads
-  have no item-count / disk cap.
+  with an error when that variable is set. Edge, shore and operator now reject it at startup.
+* **Resolved in Task 4 — carried-over lows:** live shore/ship SSE streams are capped at 64
+  subscribers and writes/flushes have 10-second deadlines; corrupt partial blobs are removed
+  after failed streaming hash verification, preventing tiny-chunk rehash amplification;
+  JPEG header parsing rejects stray/stuffed bytes and pre-SOF scan markers while preserving
+  valid fill bytes and enforcing the 50-megapixel cap. Shore caps both manifest/chunk-created
+  items (10,000 by default) and blob bytes (2 GiB, including partial files, reconstructed at
+  startup). Chunk/manifest metadata and form kinds are bounded too, so they cannot bypass
+  payload quotas with unbounded database rows/strings. `GS_SHORE_MAX_ITEMS` / `GS_SHORE_MAX_BLOB_BYTES` accept positive integers; size
+  the latter below the PVC capacity, leaving room for SQLite/WAL. These limits fail closed
+  without deleting received mission data; operators must archive/clean up or raise limits
+  deliberately when full. The existing login `next=` control-character rejection was already
+  fixed in this base; dedicated tab/newline authority-bypass regressions now cover it.
+* **Still open — carried-over lows:** EMCON SILENT still sends a heartbeat every tick;
+  an attribute-only suppress directive can defeat a command-locked priority rule.
 
 Earlier residuals (post-#60 run), kept for history:
 

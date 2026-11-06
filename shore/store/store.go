@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -29,9 +30,13 @@ var ErrNotFound = errors.New("not found")
 var ErrNotOwner = errors.New("item belongs to another edge")
 
 type Store struct {
-	db      *sql.DB
-	blobDir string
-	blobMu  sync.Mutex
+	db        *sql.DB
+	blobDir   string
+	blobMu    sync.Mutex
+	maxItems  int64
+	blobQuota int64
+	blobBytes int64
+	blobSizes map[string]int64
 }
 
 const schema = `
@@ -109,7 +114,12 @@ func Open(dataDir string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("API schema: %w", err)
 	}
-	return &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}, nil
+	store := &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}
+	if err := store.loadLimits(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return store, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -146,6 +156,8 @@ func (it *Item) Form(k pb.FormKind) *FormState {
 
 // UpsertManifest records that an item exists on an edge. Idempotent.
 func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.ManifestEntry, at time.Time) error {
+	s.blobMu.Lock()
+	defer s.blobMu.Unlock()
 	if edgeID == "" {
 		return fmt.Errorf("%w: empty edge id", ErrNotOwner)
 	}
@@ -158,6 +170,20 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 	}
 	raw, err := proto.Marshal(me)
 	if err != nil {
+		return err
+	}
+	if len(raw) > 64<<10 {
+		return fmt.Errorf("manifest metadata exceeds 64 KiB")
+	}
+	for _, form := range me.Forms {
+		if form == nil {
+			return fmt.Errorf("form required")
+		}
+		if _, ok := pb.FormKind_name[int32(form.Kind)]; !ok || form.Kind == pb.FormKind_FORM_KIND_UNSPECIFIED || form.Bytes < 0 || form.Bytes > MaxBlobBytes {
+			return fmt.Errorf("invalid manifest form")
+		}
+	}
+	if err := s.itemCapacity(ctx, me.ItemId); err != nil {
 		return err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -208,11 +234,20 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		return 0, false, fmt.Errorf("invalid item id %q", c.ItemId)
 	}
 	n := int64(len(c.Data))
+	if len(c.Mime) > 256 || len(c.ContentHash) > 64 {
+		return 0, false, fmt.Errorf("chunk metadata too large")
+	}
 	if c.TotalBytes <= 0 || c.TotalBytes > MaxBlobBytes || n > MaxChunkBytes || c.Offset < 0 || c.Offset > c.TotalBytes || n > c.TotalBytes-c.Offset {
 		return 0, false, fmt.Errorf("chunk out of bounds: off=%d len=%d total=%d", c.Offset, len(c.Data), c.TotalBytes)
 	}
 	if edgeID == "" {
 		return 0, false, fmt.Errorf("%w: empty edge id", ErrNotOwner)
+	}
+	if _, ok := pb.FormKind_name[int32(c.Form)]; !ok || c.Form == pb.FormKind_FORM_KIND_UNSPECIFIED {
+		return 0, false, fmt.Errorf("invalid form kind")
+	}
+	if err := s.itemCapacity(ctx, c.ItemId); err != nil {
+		return 0, false, err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -252,11 +287,17 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		// the new content.
 		received, complete = 0, 0
 		rangesJSON = "[]"
-		_ = os.Remove(partial)
+		if err := s.removeBlob(partial); err != nil {
+			return 0, false, err
+		}
 	}
 	if _, statErr := os.Stat(partial); errors.Is(statErr, os.ErrNotExist) {
 		received = 0
 		rangesJSON = "[]"
+	}
+	growth := max(int64(0), c.Offset+n-s.blobSizes[partial])
+	if growth > 0 && s.blobBytes > s.blobQuota-growth {
+		return 0, false, fmt.Errorf("shore blob byte limit reached")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return 0, false, err
@@ -265,7 +306,11 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	if err2 != nil {
 		return 0, false, err2
 	}
-	if _, err := f.WriteAt(c.Data, c.Offset); err != nil {
+	_, writeErr := f.WriteAt(c.Data, c.Offset)
+	if info, err := f.Stat(); err == nil {
+		s.recordBlob(partial, info.Size())
+	}
+	if err := writeErr; err != nil {
 		f.Close()
 		return 0, false, err
 	}
@@ -284,12 +329,20 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	received, rangesJSON = mergeReceived(received, rangesJSON, c.Offset, c.Offset+n)
 	done := received >= c.TotalBytes && c.TotalBytes > 0
 	if done && c.ContentHash != "" {
-		data, err := os.ReadFile(partial)
+		file, err := os.Open(partial)
 		if err != nil {
 			return 0, false, err
 		}
-		sum := sha256.Sum256(data)
-		if hex.EncodeToString(sum[:]) != c.ContentHash {
+		sum := sha256.New()
+		_, err = io.Copy(sum, file)
+		file.Close()
+		if err != nil {
+			return 0, false, err
+		}
+		if hex.EncodeToString(sum.Sum(nil)) != c.ContentHash {
+			if err := s.removeBlob(partial); err != nil {
+				return 0, false, err
+			}
 			// Corrupt: restart this form.
 			if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=0, complete=0, complete_at=0, received_ranges='[]' WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)); err != nil {
 				return 0, false, err
@@ -302,6 +355,8 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		if err := os.Rename(partial, path); err != nil {
 			return 0, false, err
 		}
+		s.recordBlob(path, s.blobSizes[partial])
+		s.recordBlob(partial, 0)
 		cpl = 1
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=?, received_ranges=?, complete=?, hash=?, mime=?, total=?,

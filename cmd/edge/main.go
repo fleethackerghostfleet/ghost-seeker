@@ -36,6 +36,10 @@ import (
 )
 
 func main() {
+	if err := opauth.CheckLegacyOperatorAuth(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	id := flag.String("id", env("EDGE_ID", "edge-1"), "edge id")
 	data := flag.String("data", env("DATA_DIR", "data/edge"), "data directory")
 	listen := flag.String("listen", env("LISTEN", ":8081"), "console listen address")

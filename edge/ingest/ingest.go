@@ -6,18 +6,17 @@ package ingest
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"image"
 	"image/jpeg"
 	"io"
 	"log/slog"
 	"maps"
 	"math"
-	"math/rand"
 	"slices"
 	"strconv"
 	"strings"
@@ -71,7 +70,7 @@ type Source interface {
 }
 
 type Config struct {
-	EdgeID string // seeds id entropy; must differ per edge
+	EdgeID string
 	// THUMB: JPEG fitted within ThumbWidth × ThumbHeight px (0 = unbounded).
 	ThumbWidth  int
 	ThumbHeight int
@@ -520,14 +519,8 @@ func window(c, n, limit float64) (int, int) {
 	return int(math.Round(lo)), int(math.Round(lo + n))
 }
 
-// entropyFor seeds ULID entropy from the edge id, so two edges capturing
-// in the same millisecond never mint the same id, while a single edge stays
-// deterministic for tests and simulations. Uniqueness within an edge comes
-// from the monotonic counter + timestamp.
-func entropyFor(edgeID string) io.Reader {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(edgeID))
-	return rand.New(rand.NewSource(int64(h.Sum64())))
+func entropyFor(_ string) io.Reader {
+	return rand.Reader
 }
 
 // keepOriginal stores the pre-re-encode capture for an operator's original

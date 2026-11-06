@@ -210,8 +210,13 @@ allowlist entry or vulnerability exclusion was added. To audit that inventory:
 
 ```sh
 pip-audit -r edgeml/requirements-tracking.lock --require-hashes --disable-pip
-docker build -f edgeml/Dockerfile --build-arg WITH_TRACKING=1 -t edgeml-tracking edgeml
+docker build -f edgeml/Dockerfile --build-arg WITH_TRACKING=1 -t edgeml-tracking .
 ```
+
+Build the sidecar from the repository root: its Dockerfile-specific context
+allowlist includes only Python sources/locks and the two canonical night-light
+catalog files. `python3 scripts/test_sidecar_image.py [image]` verifies packaged
+night-light analysis with networking disabled, a read-only root and no host mounts.
 
 The lock fixes Python resolution, not bit-for-bit OS builds: Debian packages
 (currently `libgomp1`), timestamps and upstream build backends still require

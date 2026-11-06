@@ -4,9 +4,9 @@ ARG PY_IMAGE=mirror.gcr.io/library/python@sha256:65bd3d9f1d7fa268dd1909973ba7eb4
 FROM ${PY_IMAGE} AS builder
 ARG WITH_TRACKING=0
 WORKDIR /build
-COPY pyproject.toml ./
-COPY requirements*.lock ./
-COPY src ./src
+COPY edgeml/pyproject.toml ./
+COPY edgeml/requirements*.lock ./
+COPY edgeml/src ./src
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements-build.lock \
     && if [ "$WITH_TRACKING" = "1" ]; then \
@@ -37,6 +37,7 @@ RUN groupadd --gid 10001 edgeml \
     && rm -rf /var/lib/apt/lists/* \
     && /usr/local/bin/python -m pip uninstall --yes setuptools wheel pip
 COPY --from=builder /opt/venv /opt/venv
+COPY internal/catalog/colregs_lights.json internal/catalog/colregs_night_config.json /opt/venv/lib/internal/catalog/
 WORKDIR /models
 USER 10001:10001
 EXPOSE 9090

@@ -119,7 +119,7 @@ jobs:
             file: deploy/Dockerfile
             target: operator
           - image: edgeml-sidecar
-            context: edgeml
+            context: .
             file: edgeml/Dockerfile
             target: ""
     steps:

@@ -1,0 +1,12 @@
+**
+!edgeml/
+!edgeml/pyproject.toml
+!edgeml/requirements*.lock
+!edgeml/src/
+!edgeml/src/**
+!internal/
+!internal/catalog/
+!internal/catalog/colregs_lights.json
+!internal/catalog/colregs_night_config.json
+**/__pycache__/
+**/*.pyc

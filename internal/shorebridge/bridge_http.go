@@ -10,6 +10,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 )
 
 // ---- HTTP ----
@@ -90,7 +93,7 @@ func proxyForwardedHeaders(pr *httputil.ProxyRequest) {
 }
 
 func (b *Bridge) stream(w http.ResponseWriter, r *http.Request) {
-	fl, ok := w.(http.Flusher)
+	_, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
@@ -99,27 +102,36 @@ func (b *Bridge) stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	ch := make(chan []byte, 4)
 	b.mu.Lock()
+	if len(b.subs) >= httpx.MaxStreamClients {
+		b.mu.Unlock()
+		http.Error(w, "too many stream clients", http.StatusTooManyRequests)
+		return
+	}
 	b.subs[ch] = struct{}{}
 	last := b.snap
 	b.mu.Unlock()
 	defer func() {
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 		b.mu.Lock()
 		delete(b.subs, ch)
 		b.mu.Unlock()
 	}()
-	send := func(buf []byte) {
-		fmt.Fprintf(w, "event: snapshot\ndata: %s\n\n", buf)
-		fl.Flush()
+	send := func(buf []byte) bool {
+		return httpx.WriteStream(w, fmt.Sprintf("event: snapshot\ndata: %s\n\n", buf))
 	}
 	if last != nil {
-		send(last)
+		if !send(last) {
+			return
+		}
 	}
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case buf := <-ch:
-			send(buf)
+			if !send(buf) {
+				return
+			}
 		}
 	}
 }

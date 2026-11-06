@@ -3,7 +3,9 @@
 package console
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -20,6 +22,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
+	"google.golang.org/protobuf/proto"
 )
 
 type Service struct {
@@ -117,12 +120,37 @@ func (s *Service) SetPolicy(ctx context.Context, req *connect.Request[pb.SetPoli
 		commandMark = prev.GetVersion()
 	}
 	var signedVersion int64
+	if p.Signature == nil {
+		for _, incoming := range policy.HigherLayers(p.Layers) {
+			if incoming.CommandVersion != 0 {
+				continue
+			}
+			for _, held := range policy.HigherLayers(prev.GetLayers()) {
+				candidate := proto.Clone(held).(*pb.PolicyLayer)
+				candidate.CommandVersion = 0
+				if proto.Equal(candidate, incoming) {
+					incoming.CommandVersion = held.CommandVersion
+					break
+				}
+			}
+		}
+	}
 	if policy.HigherLayersChanged(prev, p, now, policy.DefaultTTL) {
 		if p.Signature == nil || len(p.Signature.Ed25519) == 0 || len(s.Keys) == 0 {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon layers can only be set by a policy signed with a trusted key"))
 		}
 		if err := policy.Verify(p, s.Keys); err != nil {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("higher-echelon policy: %w", err))
+		}
+		if s.Signer != nil && (p.Signature.KeyId == s.Signer.KeyID ||
+			len(s.Signer.Private) == ed25519.PrivateKeySize && bytes.Equal(s.Keys[p.Signature.KeyId], s.Signer.Private.Public().(ed25519.PublicKey))) {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("shore signing key cannot authorize higher-echelon submissions"))
+		}
+		for _, layer := range policy.HigherLayers(p.Layers) {
+			if layer.CommandVersion != 0 && layer.CommandVersion != p.Version {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("command layer version must match the signed command envelope"))
+			}
+			layer.CommandVersion = p.Version
 		}
 		if p.Version <= commandMark {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("signed higher-echelon policy must carry a version above %d", commandMark))
