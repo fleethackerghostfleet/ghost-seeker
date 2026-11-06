@@ -258,8 +258,20 @@ MJPEG cameras and optional language-model services have separate clients; the
 shore CA option does not configure those connections.
 
 See [deployment notes](../deploy/README.md) for commands and required deployment
-overrides. Existing Compose/Zarf URLs, probes and listener defaults are unchanged;
-they still use HTTP until explicitly adapted for TLS.
+overrides. Compose still needs site-specific TLS mounts, flags and probes. Zarf
+v0.89 supports opt-in TLS directly: empty `SHORE_TLS_SECRET`, `EDGE_TLS_SECRET`
+and `SHORE_CA_SECRET` defaults preserve the original HTTP manifests. Setting a
+listener Secret adds read-only `tls.crt`/`tls.key` mounts, paired server flags
+and HTTPS probes; setting the CA Secret mounts `ca.crt` and supplies `-shore-ca`
+to edge and operator. Configured Secrets/keys are required, with no HTTP fallback
+on missing or invalid credentials. The default local shore URLs upgrade to
+HTTPS with shore TLS; custom `SHORE_URL`/`OPERATOR_SHORE_URL` values must explicitly
+use the appropriate scheme. Keys remain in namespace-local Secrets, not in the
+package. Restrict Secret access, rotate credentials and restart pods to reload
+them. Kubernetes HTTPS health probes skip certificate verification; successful
+probes do not prove chain/hostname trust. Verify authenticated application
+connections separately. Operator browser TLS/PIV and inference/camera transport
+remain separate configuration boundaries.
 
 ## 2. CSRF / cross-origin
 

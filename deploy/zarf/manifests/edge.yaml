@@ -8,7 +8,7 @@ data:
   DATA_DIR: /data
   LISTEN: :8081
   GS_PUBLIC_HOSTS: "###ZARF_VAR_EDGE_PUBLIC_HOSTS###"
-  SHORE_URL: "###ZARF_VAR_SHORE_URL###"
+  SHORE_URL: "{{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_SHORE_URL###" "http://shore.ghost-seeker.svc.cluster.local:8080") }}https://shore.ghost-seeker.svc.cluster.local:8080{{ else }}###ZARF_VAR_SHORE_URL###{{ end }}"
   INFER_URL: "###ZARF_VAR_INFER_URL###"
   DEDUP: hash
   UI_DIR: /ui
@@ -29,6 +29,11 @@ spec:
       app: edge
   template:
     metadata:
+      annotations:
+        ghost-seeker.io/listener-tls-secret: "###ZARF_VAR_EDGE_TLS_SECRET###"
+        ghost-seeker.io/shore-tls-secret: "###ZARF_VAR_SHORE_TLS_SECRET###"
+        ghost-seeker.io/shore-ca-secret: "###ZARF_VAR_SHORE_CA_SECRET###"
+        ghost-seeker.io/shore-url: "{{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_SHORE_URL###" "http://shore.ghost-seeker.svc.cluster.local:8080") }}https://shore.ghost-seeker.svc.cluster.local:8080{{ else }}###ZARF_VAR_SHORE_URL###{{ end }}"
       labels:
         app: edge
     spec:
@@ -43,6 +48,16 @@ spec:
         - name: edge
           image: ghost-seeker/edge:0.1.0
           imagePullPolicy: IfNotPresent
+{{ if or (ne "###ZARF_VAR_EDGE_TLS_SECRET###" "") (ne "###ZARF_VAR_SHORE_CA_SECRET###" "") }}
+          args:
+{{ if ne "###ZARF_VAR_EDGE_TLS_SECRET###" "" }}
+            - "-tls-cert=/run/listener-tls/tls.crt"
+            - "-tls-key=/run/listener-tls/tls.key"
+{{ end }}
+{{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
+            - "-shore-ca=/run/shore-ca/ca.crt"
+{{ end }}
+{{ end }}
           ports:
             - name: http
               containerPort: 8081
@@ -64,10 +79,16 @@ spec:
             httpGet:
               path: /healthz
               port: http
+{{ if ne "###ZARF_VAR_EDGE_TLS_SECRET###" "" }}
+              scheme: HTTPS
+{{ end }}
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
+{{ if ne "###ZARF_VAR_EDGE_TLS_SECRET###" "" }}
+              scheme: HTTPS
+{{ end }}
           resources:
             requests:
               cpu: 100m
@@ -81,6 +102,16 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+{{ if ne "###ZARF_VAR_EDGE_TLS_SECRET###" "" }}
+            - name: listener-tls
+              mountPath: /run/listener-tls
+              readOnly: true
+{{ end }}
+{{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
+            - name: shore-ca
+              mountPath: /run/shore-ca
+              readOnly: true
+{{ end }}
             - name: data
               mountPath: /data
             - name: tmp
@@ -89,6 +120,26 @@ spec:
               mountPath: /frames
               readOnly: true
       volumes:
+{{ if ne "###ZARF_VAR_EDGE_TLS_SECRET###" "" }}
+        - name: listener-tls
+          secret:
+            secretName: "###ZARF_VAR_EDGE_TLS_SECRET###"
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+{{ end }}
+{{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
+        - name: shore-ca
+          secret:
+            secretName: "###ZARF_VAR_SHORE_CA_SECRET###"
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
+{{ end }}
         - name: tmp
           emptyDir: {}
         - name: frames
