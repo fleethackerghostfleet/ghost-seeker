@@ -21,7 +21,9 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 			continue
 		}
 		for _, class := range rule.Classes {
-			classSet[class] = true
+			if class != "person in water" {
+				classSet[class] = true
+			}
 		}
 	}
 	// A live-only refinement of "person" must not dilute the broad-boost guard.

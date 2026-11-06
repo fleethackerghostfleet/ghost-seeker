@@ -35,4 +35,13 @@ func TestMOBClassAndDirective(t *testing.T) {
 	if _, blocked := guardrails("", []Rule{{Type: "boost", Classes: classes}}, nil, nil); !blocked {
 		t.Fatal("adding MOB diluted the existing 14-class broad boost guard")
 	}
+	for _, includeMOB := range []bool{false, true} {
+		thirteen := append([]string{}, classes[:13]...)
+		if includeMOB {
+			thirteen = append(thirteen, "person in water")
+		}
+		if _, blocked := guardrails("", []Rule{{Type: "boost", Classes: thirteen}}, nil, nil); blocked {
+			t.Fatalf("13 existing classes plus optional MOB must not count as 14 existing classes: MOB=%v", includeMOB)
+		}
+	}
 }
