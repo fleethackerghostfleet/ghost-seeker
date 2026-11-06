@@ -39,6 +39,7 @@ import (
 
 // Capture is one thing a source produced.
 type Capture struct {
+	complete   func(*store.Row, error, bool)
 	SceneEvery *time.Duration
 	Type       pb.ItemType
 	Data       []byte // image bytes, record JSON, telemetry blob
@@ -187,7 +188,12 @@ func (g *Ingester) Run(ctx context.Context, src Source) error {
 		if done {
 			return nil
 		}
-		if _, err := g.Ingest(ctx, c); err != nil {
+		dups := g.Deduped()
+		row, err := g.Ingest(ctx, c)
+		if c.complete != nil {
+			c.complete(row, err, g.Deduped() > dups)
+		}
+		if err != nil {
 			g.log.Warn("ingest", "err", err)
 		} else if !seenSources[c.Source] {
 			seenSources[c.Source] = true

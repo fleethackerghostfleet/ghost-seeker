@@ -88,6 +88,10 @@ func Open(dataDir string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, fmt.Errorf("schema: %w", err)
 	}
+	if _, err := db.Exec(apiSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("API schema: %w", err)
+	}
 	return &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}, nil
 }
 
@@ -146,7 +150,9 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx, `INSERT INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at,priority,unknownness,top_label)
 		VALUES(?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(id) DO UPDATE SET edge_id=excluded.edge_id, manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label
+		ON CONFLICT(id) DO UPDATE SET edge_id=excluded.edge_id, manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label,
+		type=excluded.type, captured_at=excluded.captured_at, source=excluded.source,
+		manifest_at=CASE WHEN items.manifest_at=0 THEN excluded.manifest_at ELSE items.manifest_at END
 		WHERE items.edge_id=excluded.edge_id OR items.edge_id=''`,
 		me.ItemId, edgeID, int(me.Type), me.CapturedAtUnixMs, me.Source, raw, at.UnixMilli(), me.Priority, me.Unknownness, me.TopLabel)
 	if err != nil {
@@ -331,6 +337,14 @@ func (s *Store) Owner(ctx context.Context, itemID string) (string, error) {
 
 func (s *Store) ReadForm(itemID string, kind pb.FormKind) ([]byte, error) {
 	return os.ReadFile(filepath.Join(s.blobDir, itemID, fmt.Sprintf("%d", kind)))
+}
+
+// OpenForm streams a blob without allocating its full payload in an API reader.
+func (s *Store) OpenForm(itemID string, kind pb.FormKind) (*os.File, error) {
+	if !ids.Valid(itemID) {
+		return nil, ErrNotFound
+	}
+	return os.Open(filepath.Join(s.blobDir, itemID, fmt.Sprintf("%d", kind)))
 }
 
 // Heartbeat records the latest edge heartbeat.
