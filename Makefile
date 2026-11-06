@@ -141,11 +141,12 @@ compose-demo-down: ## stop the Docker demo and delete its data + credentials (ne
 	$(DEMO_COMPOSE_CMD) down -v --remove-orphans
 
 .PHONY: model-image
+MODEL_RELEASE_CACHE = $(if $(filter file,$(origin MODELS)),$(if $(GS_MODELS),,1))
 model-image:
 	@test -n "$(MODEL_SUMS)" || { echo 'error: MODEL_SUMS is required (sha256sum file relative to MODELS)' >&2; exit 1; }
-	$(if $(filter file,$(origin MODELS)),sh deploy/models/fetch.sh dist/models,@true)
+	$(if $(MODEL_RELEASE_CACHE),sh deploy/models/fetch.sh dist/models,@true)
 	@context=$$(mktemp -d); trap 'rm -rf "$$context"' EXIT; \
-	python3 deploy/models/prepare.py "$(if $(filter file,$(origin MODELS)),dist/models/files,$(MODELS))" "$(MODEL_SUMS)" "$$context" && \
+	python3 deploy/models/prepare.py "$(if $(MODEL_RELEASE_CACHE),dist/models/files,$(MODELS))" "$(MODEL_SUMS)" "$$context" && \
 	cp deploy/models/THIRD_PARTY_NOTICES.md "$$context/THIRD_PARTY_NOTICES.md" && \
 	docker build $(if $(BUSYBOX_IMAGE),--build-arg BUSYBOX_IMAGE=$(BUSYBOX_IMAGE)) -f deploy/models/Dockerfile -t $(MODELS_IMAGE) "$$context"
 
