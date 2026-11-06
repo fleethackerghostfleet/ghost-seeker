@@ -23,7 +23,6 @@ import (
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
-	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/ingest"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scheduler"
@@ -35,7 +34,6 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/scenario"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
 
@@ -47,14 +45,11 @@ func main() {
 	tlsKey := flag.String("tls-key", env("GS_TLS_KEY", ""), "optional HTTPS server private key (PEM; requires -tls-cert)")
 	shoreURL := flag.String("shore", env("SHORE_URL", "http://localhost:8080"), "shore base URL (put Toxiproxy here to degrade)")
 	shoreCA := flag.String("shore-ca", env("GS_SHORE_CA", ""), "optional PEM CA bundle added to system roots for HTTPS shore")
-	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference sidecar URL, or 'mock'")
+	inferURL := flag.String("infer", env("INFER_URL", defaultInferURL), inferUsage)
 	sceneEvery := flag.Duration("scene-every", 60*time.Second, "sightings mode: store at most one object-free 'scene' frame (FACT+THUMB) per source per interval; 0 = one item per frame")
 	prioritizer := flag.String("prioritizer", env("PRIORITIZER", "edgeml"), "edgeml (object-level: unknownness, labels, confidence) | tomer (algorithm/ghost_priority image-level score; sidecar must run --prioritizer tomer|both)")
 	dedup := flag.String("dedup", env("DEDUP", "hash"), "naive (item per frame) | hash (exact-duplicate frames fold) | sightings (one item per object; needs a sidecar that returns sightings)")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
-	scen := flag.String("scenario", env("SCENARIO", ""), "scenario JSON to replay into the store (optional)")
-	frames := flag.String("frames", env("FRAMES_DIR", ""), "replay the built-in scenario from this frame dir (optional)")
-	period := flag.Duration("period", 5*time.Second, "capture period for replay")
 	watchDir := flag.String("watch-dir", env("GS_WATCH_DIR", ""), "live image spool directory (writable; optional <image>.json sidecar)")
 	liveSource := flag.String("live-source", env("GS_LIVE_SOURCE", "camera-1"), "default camera id for spool/MJPEG")
 	liveBytes := flag.Int64("ingest-max-bytes", ingest.DefaultMaxFrameBytes, "maximum live frame request/file bytes")
@@ -80,9 +75,10 @@ func main() {
 	policyKeysPath := flag.String("policy-keys", env("GS_POLICY_KEYS", ""), "JSON public keyring for signed policies")
 	opToken := flag.String("operator-token", env("GS_OPERATOR_TOKEN", ""), "operator bearer token for the ship-side console and /blob/ (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", env("GS_OPERATOR_TOKEN_FILE", ""), "operator token file")
-	devTokenFile := flag.String("dev-token-file", env("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set ('none' = require an explicit token)")
+	devTokenFile := opauth.DevTokenFileFlag(flag.CommandLine)
 	corsOrigins := flag.String("cors-origins", env("GS_CORS_ORIGINS", ""), "comma-separated browser origins allowed to call the API cross-origin (default: same-origin only)")
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
+	replay := registerReplayFlags()
 	flag.Parse()
 	tlsConfig, err := httpx.ServerTLS(*tlsCert, *tlsKey)
 	fatal(err)
@@ -139,12 +135,8 @@ func main() {
 	sch, err := scheduler.New(cfg, st, lk, eng, clk, log)
 	fatal(err)
 
-	var an inference.Analyzer
-	if *inferURL == "mock" {
-		an = inference.NewMock()
-	} else {
-		an = inference.NewRemote(*inferURL)
-	}
+	an, err := newAnalyzer(*inferURL)
+	fatal(err)
 	icfg.EdgeID = *id
 	icfg.WaitForSpace = true
 	icfg.Dedup, err = ingest.ParseDedup(*dedup)
@@ -174,28 +166,7 @@ func main() {
 		}()
 	}
 
-	if *scen != "" || *frames != "" {
-		var sc *scenario.Scenario
-		if *scen != "" {
-			sc, err = scenario.Load(*scen)
-		} else {
-			sc = scenario.Default(*frames)
-		}
-		fatal(err)
-		src, err := ingest.NewReplay(clk, *period, sc.Sets...)
-		fatal(err)
-		ing.OnBurst = func(source string, fps float64, d time.Duration, reason string) {
-			src.Burst(source, fps, d)
-			log.Info("replay burst", "source", source, "fps", fps, "duration", d, "reason", reason)
-		}
-		log.Info("replaying", "frames", src.Len(), "period", *period)
-		go func() {
-			if err := ingest.Pump(ctx, queue, src, "replay"); err != nil && ctx.Err() == nil {
-				log.Error("replay", "err", err)
-			}
-			log.Info("replay finished")
-		}()
-	}
+	startReplay(ctx, replay, ing, queue, clk, log)
 
 	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped, Prioritizer: *prioritizer, Frames: ing.Frames}
 	mux := http.NewServeMux()

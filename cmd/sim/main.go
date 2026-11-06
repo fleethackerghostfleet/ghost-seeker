@@ -1,4 +1,6 @@
-// sim runs edge + shore in one process over a simulated link with a virtual
+//go:build !prod
+
+// sim (demo builds only) runs edge + shore in one process over a simulated link with a virtual
 // clock, for both strategies, and prints what reached shore when. This is
 // the metrics harness behind the FIFO-vs-prioritized chart.
 package main
