@@ -75,3 +75,15 @@ func TestUnsupportedReadback(t *testing.T) {
 		t.Fatalf("live sensor classes missing: %+v", live)
 	}
 }
+
+func TestMammalCatalogPreservesBroadBoostGuardrail(t *testing.T) {
+	for _, edge := range []bool{false, true} {
+		compiler := &Compiler{EdgeSubtypes: edge}
+		if got := compiler.CompileRules("prioritize ships, aircraft, people, debris, birds and buoys"); !got.Blocked {
+			t.Fatalf("edge=%v broad boost was not blocked: %+v", edge, got)
+		}
+		if got := compiler.CompileRules("prioritize whales"); got.Blocked || len(got.Rules) != 1 {
+			t.Fatalf("edge=%v targeted mammal boost blocked: %+v", edge, got)
+		}
+	}
+}

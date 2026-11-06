@@ -136,8 +136,10 @@ func TestResearchCompilerAcceptsEdgeSubtypesOnlyInShoreMode(t *testing.T) {
 	if result := compile("sailboat", false); result.Blocked || !reflect.DeepEqual(result.Rules[0].Classes, []string{"small boat"}) {
 		t.Fatalf("sailboat did not use the available simulation class: %+v", result)
 	}
-	if result := compile("whales", false); result.Blocked || !reflect.DeepEqual(result.Rules[0].Classes, []string{"marine mammal"}) {
-		t.Fatalf("simulation whale mapping: %+v", result)
+	for _, concept := range []string{"whales", "marine mammals"} {
+		if result := compile(concept, false); result.Blocked || len(result.Rules) != 1 || !reflect.DeepEqual(result.Rules[0].Classes, []string{"marine mammal"}) {
+			t.Fatalf("catalog mammal blocked in simulation mode: %+v", result)
+		}
 	}
 	for _, concept := range []string{"red whale"} {
 		result := compile(concept, false)

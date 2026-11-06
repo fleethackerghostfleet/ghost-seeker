@@ -232,8 +232,8 @@ func canonicalClass(label string, edgeSubtypes bool) (string, bool) {
 	if _, ok := catalog.Classes[label]; ok {
 		return label, true
 	}
-	if edgeSubtypes {
-		for _, pattern := range edgeConceptPatterns {
+	for _, pattern := range edgeConceptPatterns {
+		if _, available := catalog.Classes[pattern.class]; edgeSubtypes || available {
 			if pattern.re.FindString(label) == label {
 				return pattern.class, true
 			}
