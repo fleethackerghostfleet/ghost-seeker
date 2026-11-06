@@ -23,7 +23,9 @@ class NewContactDetector:
         if event["event"] != "open":
             return False
         sid, first_t = event["sighting_id"], event["first_t_s"]
-        box = event.get("box") or event["best_box"]
+        own = states.get(sid)
+        trajectory = getattr(own, "traj", ())
+        box = trajectory[0][2] if trajectory else event.get("box") or event["best_box"]
         for other_id, other in states.items():
             if (other_id == sid or other.status not in {"open", "closed"}
                     or other.s.first_t_s >= first_t):

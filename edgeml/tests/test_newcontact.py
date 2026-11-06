@@ -56,6 +56,16 @@ def test_iou_and_diagonal_distance_are_alternative_near_tests():
     assert not NewContactDetector().near([0, 0, 20, 20], [100, 0, 20, 20])
 
 
+@pytest.mark.parametrize("start,current,expected", [
+    ([0, 0, 10, 10], [100, 100, 10, 10], False),
+    ([100, 100, 10, 10], [0, 0, 10, 10], True),
+])
+def test_moving_contact_compares_both_boxes_at_first_observation(start, current, expected):
+    own = state(current, first=2., seen=5., traj=[(2, 2., start, .9), (5, 5., current, .9)])
+    old = state([0, 0, 10, 10], seen=1.)
+    assert NewContactDetector().is_new(event(current), {"new": own, "old": old}) is expected
+
+
 @pytest.mark.parametrize("config", [{"memory_s": -1}, {"iou_thr": 2}, {"dist_diag": -1}, {"memory_s": float("nan")}])
 def test_invalid_config(config):
     with pytest.raises(ValueError):
