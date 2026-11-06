@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
@@ -32,10 +33,6 @@ type serverOptions struct {
 	nodeID         string
 	datasetDir     string
 	datasetSources []catalog.Source
-}
-
-func WithDemoReset() Option {
-	return func(options *serverOptions) { options.demoReset = true }
 }
 
 func WithAdmin(enabled bool) Option {

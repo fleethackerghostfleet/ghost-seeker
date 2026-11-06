@@ -1,0 +1,388 @@
+openapi: 3.1.0
+info:
+  title: Ghost Seeker live I/O
+  version: 1.0.0
+  description: >-
+    Edge accepts live captures; shore is the durable source of truth for reads.
+    Use the corresponding edge or shore base URL. All routes require a bearer
+    operator token. Edge push also accepts its configured unit token. In live
+    operator mode GET /api/v1 is proxied to shore under existing token/PIV
+    sessions (viewer roles allowed); cookies and caller credentials never reach shore.
+    Receipt cursors and SSE event cursors are distinct decimal sequences.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/ingest/frames:
+    post:
+      operationId: ingestFrame
+      summary: Push one JPEG or PNG to the edge
+      description: >-
+        Admission bounds concurrent body readers, queued frames and processing
+        together. 202 is sent after the existing ingester stores/scores or folds
+        the capture, not after shore upload. On disconnect or 503 retrying may
+        fold a previously accepted frame. Requests default to a 32 MiB cap,
+        configurable with -ingest-max-bytes; images are limited to 50 MP.
+      parameters:
+        - {name: source, in: query, schema: {$ref: '#/components/schemas/Source'}, description: Required for raw bodies; metadata part can override it.}
+        - {name: captured_at, in: query, schema: {type: string, format: date-time}, description: Defaults to now.}
+        - {name: sensor_type, in: query, schema: {type: string, maxLength: 32}}
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: {type: string, format: binary}
+          image/png:
+            schema: {type: string, format: binary}
+          multipart/form-data:
+            schema:
+              type: object
+              required: [frame]
+              properties:
+                frame: {type: string, format: binary}
+                meta: {$ref: '#/components/schemas/Metadata'}
+            encoding:
+              frame: {contentType: 'image/jpeg, image/png'}
+              meta: {contentType: application/json}
+      responses:
+        '202':
+          description: Stored/scored or duplicate-folded on edge
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IngestResult'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '413': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Busy'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/items:
+    get:
+      operationId: listItems
+      description: >-
+        Stable first-received order, independent of capture time and mutable
+        priority. Supply next_cursor as since. Filters do not change the cursor
+        namespace. A scan examines at most 2000 receipts; an empty filtered page
+        may still advance next_cursor. Keep paging while the cursor advances.
+        Changing filters requires starting at since=0. Tier is a current relative
+        rank (top 10%, next 25%, next 35%, remainder, with first item always P1),
+        unless pinned/suppressed by current policy; scenes are P4.
+      parameters:
+        - {name: since, in: query, schema: {$ref: '#/components/schemas/Cursor'}}
+        - {name: tier, in: query, schema: {$ref: '#/components/schemas/Tier'}}
+        - {name: source, in: query, schema: {$ref: '#/components/schemas/Source'}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
+      responses:
+        '200':
+          description: Items in received order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ItemPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/items/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/ItemID'}
+    get:
+      operationId: getItem
+      responses:
+        '200':
+          description: Current durable shore item
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Item'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/items/{id}/image:
+    parameters:
+      - {$ref: '#/components/parameters/ItemID'}
+    get:
+      operationId: getItemImage
+      parameters:
+        - {name: form, in: query, schema: {type: string, enum: [thumb, crop, full], default: thumb}}
+      responses:
+        '200':
+          description: Complete image form (never partial bytes)
+          content:
+            image/jpeg:
+              schema: {type: string, format: binary}
+            image/png:
+              schema: {type: string, format: binary}
+            image/webp:
+              schema: {type: string, format: binary}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/stream:
+    get:
+      operationId: streamItems
+      description: >-
+        Durable received-event order reflects the edge scheduler's priority-first
+        manifest/payload arrivals, not a retrospective re-sort of history. Each
+        event: item block has id: <event cursor> and JSON StreamEvent data. New
+        manifests and completed/reset forms, features, overrides and policy writes
+        produce events, as do relative tier changes of other items when arrivals
+        or priority updates shift rank boundaries. Duplicate unchanged writes do not. Payloads are the latest
+        item state at delivery, not historical snapshots. Last-Event-ID takes
+        precedence over since and resumes strictly after that cursor. Cursors
+        survive process restarts (retain the shore SQLite DB). Heartbeat comments
+        every 15 seconds; at most 32 event references buffered per client, 64
+        concurrent clients, 10-second write deadlines. Ranks are computed once
+        per page. Consecutive updates for the same item within a page are
+        coalesced into one latest-state snapshot using the last event cursor.
+        A coalesced run containing a creation keeps the created event kind.
+        Slow readers disconnect
+        and should reconnect using the last consumed id. Shore keeps the newest
+        100000 journal entries by default (-api-event-retain), swept at startup
+        and every second; bursts may temporarily exceed this count. A cursor
+        older than the oldest retained sequence minus one returns 410 JSON and
+        requires resync via GET /api/v1/items. This includes an omitted/zero
+        cursor after pruning. Capture /api/v1/health stream_cursor before paging
+        /items, then resume from that cursor. A connected client that falls
+        behind retention is disconnected; its next request receives 410.
+        Item/list receipt history is not pruned.
+      parameters:
+        - {name: Last-Event-ID, in: header, schema: {$ref: '#/components/schemas/Cursor'}}
+        - {name: since, in: query, schema: {$ref: '#/components/schemas/Cursor'}}
+      responses:
+        '200':
+          description: SSE item events, retry hint and heartbeat comments
+          content:
+            text/event-stream:
+              schema: {type: string}
+              x-event-data-schema: {$ref: '#/components/schemas/StreamEvent'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '410': {$ref: '#/components/responses/CursorExpired'}
+        '429': {$ref: '#/components/responses/Busy'}
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: Shore store health or edge live-source counters
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: '#/components/schemas/ShoreHealth'}
+                  - {$ref: '#/components/schemas/EdgeHealth'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/openapi.yaml:
+    get:
+      operationId: getOpenAPI
+      responses:
+        '200':
+          description: This OpenAPI 3.1 contract (shore and operator proxy)
+          content:
+            application/yaml:
+              schema: {type: string}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  parameters:
+    ItemID:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,64}$'}
+  responses:
+    CursorExpired:
+      description: Stream history expired; resync via GET /api/v1/items and resume from a fresh health stream_cursor
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Error:
+      description: Request rejected or store unavailable
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    BadRequest:
+      description: Invalid metadata, image, cursor, form or query parameter
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Item or requested complete image not received yet
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Busy:
+      description: Bounded queue or stream client limit reached; retry later
+      headers:
+        Retry-After:
+          schema: {type: string}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Cursor: {type: string, pattern: '^[0-9]+$'}
+    Source: {type: string, pattern: '^[A-Za-z0-9_.:/-]{1,128}$'}
+    Tier: {type: string, enum: [P1, P2, P3, P4]}
+    Geo:
+      type: object
+      required: [lat, lon, heading]
+      additionalProperties: false
+      properties:
+        lat: {type: number, minimum: -90, maximum: 90}
+        lon: {type: number, minimum: -180, maximum: 180}
+        alt: {type: number, description: Altitude in metres, preserved in alt_m feature tag on the legacy transport.}
+        heading: {type: number, minimum: 0, exclusiveMaximum: 360}
+    Metadata:
+      type: object
+      required: [source]
+      properties:
+        source: {$ref: '#/components/schemas/Source'}
+        captured_at: {type: string, format: date-time}
+        geo:
+          type: object
+          required: [lat, lon]
+          properties:
+            lat: {type: number, minimum: -90, maximum: 90}
+            lon: {type: number, minimum: -180, maximum: 180}
+            alt: {type: number}
+            heading: {type: number, minimum: 0, exclusiveMaximum: 360}
+        sensor_type: {type: string, pattern: '^[A-Za-z0-9_-]{1,32}$', examples: [eo, ir, sar]}
+        tags: {type: object, maxProperties: 64, additionalProperties: {type: string, maxLength: 1024}}
+    IngestResult:
+      type: object
+      required: [id, duplicate]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{0,64}$'
+          description: Empty only for duplicate folds with no stored item (tracker warm-up or throttled scene cadence in sightings mode).
+        duplicate: {type: boolean}
+    Contact:
+      type: object
+      required: [label, ship_type, confidence]
+      additionalProperties: false
+      properties:
+        label: {type: string}
+        ship_type: {type: string, description: Empty when no subtype has arrived.}
+        confidence: {type: number}
+    Reason:
+      type: object
+      required: [scorer, value, note]
+      additionalProperties: false
+      properties:
+        scorer: {type: string}
+        value: {type: number}
+        note: {type: string}
+    Form:
+      type: object
+      required: [name, available, bytes, mime]
+      additionalProperties: false
+      properties:
+        name: {type: string, enum: [fact, thumb, crop, full]}
+        available: {type: boolean}
+        bytes: {type: integer, minimum: 0}
+        mime: {type: string}
+    DirectiveMatch:
+      type: object
+      required: [policy_id, note]
+      additionalProperties: false
+      properties:
+        policy_id: {type: string}
+        note: {type: string}
+    Decision:
+      type: object
+      required: [kind, label, by]
+      additionalProperties: false
+      properties:
+        kind: {type: string, enum: [label_override]}
+        label: {type: string}
+        by: {type: string}
+    Item:
+      type: object
+      required: [id, receipt_cursor, tier, score, reasons, explanation, contacts, source, edge_id, captured_at, received_at, geo, sensor_type, tags, forms, directive_matches, decisions]
+      additionalProperties: false
+      properties:
+        id: {type: string, pattern: '^[A-Za-z0-9_-]{1,64}$'}
+        receipt_cursor: {$ref: '#/components/schemas/Cursor'}
+        tier: {$ref: '#/components/schemas/Tier'}
+        score: {type: number}
+        reasons: {type: array, items: {$ref: '#/components/schemas/Reason'}}
+        explanation: {type: string}
+        contacts: {type: array, items: {$ref: '#/components/schemas/Contact'}}
+        source: {type: string}
+        edge_id: {type: string}
+        captured_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        geo:
+          oneOf:
+            - {$ref: '#/components/schemas/Geo'}
+            - {type: 'null'}
+        sensor_type: {type: string}
+        tags: {type: object, additionalProperties: {type: string}}
+        forms: {type: array, items: {$ref: '#/components/schemas/Form'}}
+        directive_matches: {type: array, items: {$ref: '#/components/schemas/DirectiveMatch'}}
+        decisions:
+          type: array
+          description: >-
+            Only decisions persisted at shore (label overrides) are available.
+            Commander/review actions in the existing UI are process-local overlays,
+            not shore records, and are intentionally not fabricated here.
+          items: {$ref: '#/components/schemas/Decision'}
+    ItemPage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Item'}}
+        next_cursor: {$ref: '#/components/schemas/Cursor'}
+    StreamEvent:
+      type: object
+      required: [cursor, event, item]
+      additionalProperties: false
+      properties:
+        cursor: {$ref: '#/components/schemas/Cursor'}
+        event: {type: string, enum: [created, updated]}
+        item: {$ref: '#/components/schemas/Item'}
+    ShoreHealth:
+      type: object
+      required: [status, items, stream_cursor]
+      additionalProperties: false
+      properties:
+        status: {type: string, enum: [ok]}
+        items: {type: integer, minimum: 0}
+        stream_cursor: {$ref: '#/components/schemas/Cursor'}
+    SourceStats:
+      type: object
+      required: [accepted, processed, duplicates, rejected, failed, last_frame_at]
+      additionalProperties: false
+      properties:
+        accepted: {type: integer, minimum: 0}
+        processed: {type: integer, minimum: 0}
+        duplicates: {type: integer, minimum: 0}
+        rejected: {type: integer, minimum: 0}
+        failed: {type: integer, minimum: 0}
+        last_frame_at:
+          oneOf:
+            - {type: string, format: date-time}
+            - {type: 'null'}
+    EdgeHealth:
+      type: object
+      required: [status, in_flight, capacity, sources]
+      additionalProperties: false
+      properties:
+        status: {type: string, enum: [ok]}
+        in_flight: {type: integer, minimum: 0}
+        capacity: {type: integer, minimum: 1}
+        sources: {type: object, additionalProperties: {$ref: '#/components/schemas/SourceStats'}}
+    Error:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code: {type: string}
+        message: {type: string}
