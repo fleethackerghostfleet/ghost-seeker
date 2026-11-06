@@ -128,8 +128,19 @@ paths:
         precedence over since and resumes strictly after that cursor. Cursors
         survive process restarts (retain the shore SQLite DB). Heartbeat comments
         every 15 seconds; at most 32 event references buffered per client, 64
-        concurrent clients, 10-second write deadlines. Slow readers disconnect
-        and should reconnect using the last consumed id. No in-memory drop gaps.
+        concurrent clients, 10-second write deadlines. Ranks are computed once
+        per page. Consecutive updates for the same item within a page are
+        coalesced into one latest-state snapshot using the last event cursor.
+        Slow readers disconnect
+        and should reconnect using the last consumed id. Shore keeps the newest
+        100000 journal entries by default (-api-event-retain), swept at startup
+        and every second; bursts may temporarily exceed this count. A cursor
+        older than the oldest retained sequence minus one returns 410 JSON and
+        requires resync via GET /api/v1/items. This includes an omitted/zero
+        cursor after pruning. Capture /api/v1/health stream_cursor before paging
+        /items, then resume from that cursor. A connected client that falls
+        behind retention is disconnected; its next request receives 410.
+        Item/list receipt history is not pruned.
       parameters:
         - {name: Last-Event-ID, in: header, schema: {$ref: '#/components/schemas/Cursor'}}
         - {name: since, in: query, schema: {$ref: '#/components/schemas/Cursor'}}
@@ -142,6 +153,7 @@ paths:
               x-event-data-schema: {$ref: '#/components/schemas/StreamEvent'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '410': {$ref: '#/components/responses/CursorExpired'}
         '429': {$ref: '#/components/responses/Busy'}
   /api/v1/health:
     get:
@@ -177,6 +189,11 @@ components:
       required: true
       schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,64}$'}
   responses:
+    CursorExpired:
+      description: Stream history expired; resync via GET /api/v1/items and resume from a fresh health stream_cursor
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
     Error:
       description: Request rejected or store unavailable
       content:

@@ -39,6 +39,7 @@ func main() {
 	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference URL for text embedding, or 'mock'")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	edgeID := flag.String("edge", env("EDGE_ID", ""), "edge id to address downlink to ('' = all)")
+	eventRetain := flag.Int("api-event-retain", store.DefaultEventRetain, "newest API stream events to retain (positive; swept every second)")
 	requireDefault, err := strconv.ParseBool(env("GS_REQUIRE_AUTH", "true"))
 	fatal(err)
 	requireAuth := flag.Bool("require-auth", requireDefault, "require per-unit JWTs on SyncService (on by default; -require-auth=false is for isolated lab links only)")
@@ -52,6 +53,9 @@ func main() {
 	corsOrigins := flag.String("cors-origins", env("GS_CORS_ORIGINS", ""), "comma-separated browser origins allowed to call the API cross-origin (default: same-origin only)")
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
 	flag.Parse()
+	if *eventRetain < 1 {
+		fatal(fmt.Errorf("-api-event-retain must be positive"))
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
 	secret, err := unitauth.Credential(*key, *keyFile)
@@ -73,6 +77,7 @@ func main() {
 	st, err := store.Open(*data)
 	fatal(err)
 	defer st.Close()
+	fatal(st.PruneEvents(context.Background(), *eventRetain))
 	clk := clock.Real{}
 	syncSvc := ssync.New(st, clk, log)
 	var emb inference.Analyzer
@@ -105,6 +110,20 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go func() {
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				if err := st.PruneEvents(ctx, *eventRetain); err != nil && ctx.Err() == nil {
+					log.Error("prune API events", "err", err)
+				}
+			}
+		}
+	}()
 	srv := httpx.Server(*listen, h2c.NewHandler(httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux), &http2.Server{}))
 	go func() {
 		<-ctx.Done()
