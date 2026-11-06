@@ -4,7 +4,7 @@ const oprep=(()=>{
  const hint=document.getElementById('oprepHint'),whaleHint=hint.textContent;
  const fields=()=>Object.fromEntries(new FormData(form));
  function update(){
-  for(const control of form.elements)if(control.name){const value=control.value.trim(),missing=!value||/^\[[^\]]*\bVERIFY\s*\]$/i.test(value);control.classList.toggle('oprep-missing',missing);control.setAttribute('aria-invalid',String(missing))}
+  for(const control of form.elements)if(control.name){const value=control.value.trim(),missing=!value||/\[[^\]]*\bVERIFY\s*\]/i.test(value);control.classList.toggle('oprep-missing',missing);control.setAttribute('aria-invalid',String(missing))}
   preview.textContent=OprepModel.message(fields(),created,type);
  }
  function open(item,classes,sources,button,metadata={},metadataUnavailable=false,reportType='whale'){
