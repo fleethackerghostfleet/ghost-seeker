@@ -162,7 +162,9 @@ def cli(evaluation, tmp_path, monkeypatch, split="dev", frozen=None):
     monkeypatch.setattr(evaluation.cv2, "setNumThreads", lambda n: calls.append(("opencv-threads", n)))
     monkeypatch.setattr(evaluation, "load_sets", lambda *a: [sequence(tmp_path)])
     monkeypatch.setattr(evaluation, "verify_split", lambda seqs, s: calls.append(("verify", s)))
-    monkeypatch.setattr(evaluation, "load_model", lambda config, seqs: (calls.append(("model", seqs)) or None, None))
+    real_load_model = evaluation.load_model
+    monkeypatch.setattr(evaluation, "load_model", lambda config, seqs: (calls.append(("model", seqs)), real_load_model(config, seqs))[1]
+                        if seqs is None else (calls.append(("model", seqs)) or None, None))
     monkeypatch.setattr(evaluation, "tracked_frames", lambda *a: calls.append(("tracked", a[0].seq_id)) or [])
     monkeypatch.setattr(evaluation, "replay", lambda seq, rows, params, *a: ([(params["unknown_min_hits"], params["realness_threshold"])], []))
     def measure(seq, events, *a):
@@ -182,7 +184,7 @@ def cli(evaluation, tmp_path, monkeypatch, split="dev", frozen=None):
 
 def frozen_file(tmp_path, **overrides):
     path = tmp_path / "frozen.json"
-    path.write_text(json.dumps({"cache": "yolo11n-c05", "calibration_split": "dev", "known_score": .5,
+    path.write_text(json.dumps({"cache": "yolo11n-c05", "calibration_split": "dev", "known_score": .5, "unknownness_source": "label-score",
         "params": {"unknown_min_hits": 5, "realness_threshold": .5, "unknown_threshold": .5}, **overrides}))
     return path
 
