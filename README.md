@@ -456,7 +456,6 @@ never its own eviction victim.
   ConsoleService and blobs. Policy signing remains opt-in. No service provides
   TLS; see [Security](docs/SECURITY.md) for deployment requirements and residuals.
 - Capture input is frame/scenario replay; no live camera ingestion is implemented.
-- Shore chunk reassembly assumes in-order delivery within an item/form.
 - Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
   the boat is not visible in every frame). `scenarios/sailboats_example.json`
   still uses a placeholder path for the sailboat set.
