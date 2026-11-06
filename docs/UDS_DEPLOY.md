@@ -290,14 +290,19 @@ ship JWTs before changing the shared HS256 key (there is no overlap keyring).
 
 ## 4. Acquire verified release artifacts and deploy
 
-`<RELEASE_URL>` is the approved release's download base URL; `<VERSION>` is the
-**package metadata version**, which may differ from the release tag
-`uds-v<VERSION>-rcN`. Confirm published names rather than deriving them from a
-Git tag. Naming follows [tasks.yaml](../tasks.yaml):
+The release download base URL is
+`https://github.com/fleethackerghostfleet/ghost-seeker/releases/download/uds-v0.1.0-rc2`;
+`0.1.0-rc2` is the **package metadata version**, matching tag `uds-v0.1.0-rc2`.
+Confirm these names against the published assets and checksum manifest before
+downloading; do not substitute an earlier release. Naming follows
+[tasks.yaml](../tasks.yaml):
 
-- `uds-bundle-ghost-seeker-{shore,ship}-amd64-<VERSION>.tar.zst`
-- `zarf-package-ghost-seeker-{shore,ship}-amd64-<VERSION>.tar.zst`
-- `SHA256SUMS` (plus release provenance/signatures if published).
+- `uds-bundle-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst`
+- `uds-bundle-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst`
+- `zarf-package-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst`
+- `zarf-package-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst`
+- `SHA256SUMS`, `release.json`, `images.lock.json`, `THIRD_PARTY_NOTICES.md`,
+  and SBOM JSON files listed in `SHA256SUMS` (plus provenance/signatures if published).
 
 Use a fresh release directory; download and verify **all** files listed by the
 release checksum manifest before deploying. Abort on any missing/mismatched
@@ -307,7 +312,7 @@ signatures/provenance according to site policy. Do not use `--insecure` or skip
 signature validation.
 
 ```bash
-export RELEASE_URL='<RELEASE_URL>' VERSION='<VERSION>' ARCH=amd64
+export RELEASE_URL='https://github.com/fleethackerghostfleet/ghost-seeker/releases/download/uds-v0.1.0-rc2' VERSION='0.1.0-rc2' ARCH=amd64
 # In an empty release working directory:
 curl -fSL "$RELEASE_URL/SHA256SUMS" -o SHA256SUMS
 for role in shore ship; do

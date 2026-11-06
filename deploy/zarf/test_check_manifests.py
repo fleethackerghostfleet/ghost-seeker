@@ -7,6 +7,8 @@ import itertools
 import json
 import re
 import subprocess
+import tempfile
+from pathlib import Path
 from urllib.parse import urlsplit
 import unittest
 from unittest import mock
@@ -117,6 +119,29 @@ class SplitProductionTests(unittest.TestCase):
         locked = pin_images.check_lock()
         self.assertEqual(len(locked), 5)
         self.assertTrue(all(re.fullmatch(pin_images.TAG_PATTERN, ref.rsplit(":", 1)[1]) for ref in locked.values()))
+
+    def test_repin_preserves_registry_prefix_and_pull_credentials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sources = pin_images.reference_files()
+            paths = [root / path.relative_to(pin_images.ROOT) for path in sources]
+            for source, path in zip(sources, paths):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(source.read_text())
+            with patch.object(pin_images, "ROOT", root), \
+                    patch.object(pin_images, "LOCK", root / "deploy/zarf/images.lock.json"), \
+                    patch.object(pin_images, "reference_files", return_value=paths), \
+                    patch.object(pin_images.subprocess, "check_output", return_value="a" * 12), \
+                    patch.object(pin_images.subprocess, "run"), patch("sys.argv", ["pin_images.py"]):
+                pin_images.main()
+                images = pin_images.check_lock()
+            for source, path in zip(sources, paths):
+                expected = pin_images.IMAGE_PATTERN.sub(
+                    lambda match: images[match[0].split("/")[1].split(":")[0]], source.read_text())
+                self.assertEqual(path.read_text(), expected)
+                if path.parent.name == "manifests":
+                    self.assertIn('image: "###ZARF_REGISTRY###/ghost-seeker/', path.read_text())
+                    self.assertIn("imagePullSecrets:\n        - name: private-registry", path.read_text())
 
     def test_workloads_use_zarf_registry_and_explicit_pull_credentials(self):
         for role in ("ship", "shore"):
