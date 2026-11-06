@@ -44,6 +44,60 @@ test('commander learned directives and image URLs are escaped',()=>{
  }
 });
 
+test('queue updates preserve scrolling; keyboard following scrolls only the queue pane',()=>{
+ const {context}=setup(),queue=context.$('qlist');
+ queue.scrollTop=120;queue.clientTop=2;queue.clientHeight=100;
+ queue.getBoundingClientRect=()=>({top:10});
+ let row={top:20,bottom:50};
+ queue.querySelector=()=>({getBoundingClientRect:()=>row,scrollIntoView(){assert.fail('must not scroll page ancestors')}});
+ vm.runInContext(`item={id:'a',src:{name:'EO'},sent:true,tier:1,central:.9,ts:new Date(),dets:[],det:[],upload:{done:true}};items=new Map([['a',item]]);view.sel='a';renderQueue()`,context);
+ queue.scrollTop=120;row={top:180,bottom:220};
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,120);
+ vm.runInContext('renderQueue(true)',context);
+ assert.equal(queue.scrollTop,228);
+ row={top:-20,bottom:10};
+ vm.runInContext('renderQueue(true)',context);
+ assert.equal(queue.scrollTop,196);
+ row={top:20,bottom:50};
+ vm.runInContext('renderQueue(true)',context);
+ assert.equal(queue.scrollTop,196);
+ queue.querySelector=()=>null;
+ vm.runInContext('renderQueue(true);items.clear();renderQueue(true)',context);
+ assert.match(queue.innerHTML,/Nothing received/);
+});
+
+test('tab switches and next decisions reveal selection without scrolling page ancestors',async()=>{
+ const {context}=setup(),queue=context.$('qlist');
+ queue.scrollTop=0;queue.clientTop=2;queue.clientHeight=100;
+ queue.getBoundingClientRect=()=>({top:10});
+ queue.querySelector=()=>({getBoundingClientRect:()=>({top:12-queue.scrollTop,bottom:42-queue.scrollTop}),scrollIntoView(){assert.fail('must not scroll page ancestors')}});
+ context.$('tabs').children=[];
+ vm.runInContext(`
+  SRC={EO:{id:'EO',name:'EO'}};
+  a={id:'a',src:SRC.EO,sent:true,tier:1,central:.9,edge:.8,ts:new Date(),sentAt:new Date(),dets:[],det:[],upload:{done:true}};
+  b={...a,id:'b',tier:2};items=new Map([['a',a],['b',b]]);view.sel='a';renderQueue();
+  toast=()=>{};api=async()=>({item:{...a,decision:'track',decidedAt:new Date()}});
+ `,context);
+ queue.scrollTop=400;
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,400);
+ vm.runInContext("setTab('pending');view.sel=null;ensureSel();renderQueue()",context);
+ assert.equal(vm.runInContext('view.sel',context),'a');
+ assert.equal(queue.scrollTop,0);
+ queue.scrollTop=400;
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,400);
+ await vm.runInContext("decide('track')",context);
+ assert.equal(vm.runInContext('view.sel',context),'b');
+ assert.equal(queue.scrollTop,0);
+ queue.scrollTop=80;
+ vm.runInContext('renderQueue()',context);
+ assert.equal(queue.scrollTop,80);
+ vm.runInContext('items.clear();ensureSel();renderQueue()',context);
+ assert.match(queue.innerHTML,/No escalations/);
+});
+
 test('commander queue and note templates escape item ids',()=>{
  const {elements,context}=setup();
 

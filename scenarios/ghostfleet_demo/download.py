@@ -4,6 +4,7 @@ import fnmatch
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 
@@ -31,32 +32,43 @@ def sync(source, dest):
                     "--recursive", "--checksums-only", "--delete-unmatched-destination-objects"], check=True)
 
 
+def gcloud_ready():
+    return bool(shutil.which("gcloud")) and subprocess.run(
+        ["gcloud", "auth", "print-access-token"], stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL).returncode == 0
+
+
 def prepare(env):
     bucket = env.get("BUCKET", TEAM_BUCKET + "/edgeml/eval/ghost_fleet_5fps").rstrip("/")
     frames_bucket = env.get("FRAMES_BUCKET", "/".join(bucket.split("/")[:3])).rstrip("/")
     dest = Path(env.get("DEST", HERE / "frames")).resolve()
     output = HERE / "scenario.generated.json"
-    template = HERE / "live.json"
-    scenario = json.loads((template if template.exists() else HERE / "scenario.json").read_text())
+    scenario = json.loads((HERE / "scenario.json").read_text())
     defaults = {s["source"]: s for s in scenario["sets"]}
     sets = []
     clips = env.get("CLIPS", DEFAULT_CLIPS).split()
     for clip in clips:
         if Path(clip).name != clip or clip in {".", ".."}:
             raise ValueError(f"invalid clip name: {clip}")
-    bundled = not env.get("BUCKET") and set(clips) <= set(DEFAULT_CLIPS.split())
-    if bundled and any(not images(dest / clip / "img1") for clip in clips):
+    cloud = gcloud_ready() if clips or env.get("INCLUDE_BUCKET_FRAMES", "1") != "0" else True
+    if not cloud:
+        if env.get("BUCKET") or env.get("FRAMES_BUCKET") or not set(clips) <= set(DEFAULT_CLIPS.split()):
+            raise RuntimeError("gcloud authentication required for custom camera datasets")
+        print("WARNING: gcloud unavailable or unauthenticated; using released eval clips only. "
+              "Bucket frame discovery/refresh is unavailable.", flush=True)
         subprocess.run([str(HERE / "../../deploy/demo-data.sh"),
-                        "demo-frames.tar.gz", str(dest), "1"], check=False)
+                        "demo-frames.tar.gz", str(dest), "1"], check=True)
     for clip in clips:
         path = dest / clip / "img1"
-        if not bundled or not images(path):
+        if cloud:
             sync(bucket + "/" + clip, dest / clip)
+        elif not images(path):
+            raise RuntimeError(f"release missing eval clip: {clip}")
         if images(path):
             entry = dict(defaults.get(clip, {"source": clip}))
             entry["path"] = os.path.relpath(path, HERE)
             sets.append(entry)
-    if env.get("INCLUDE_BUCKET_FRAMES", "1") != "0":
+    if cloud and env.get("INCLUDE_BUCKET_FRAMES", "1") != "0":
         prefix = frames_bucket + "/frames/"
         result = subprocess.run(["gcloud", "storage", "ls", prefix],
                                 capture_output=True, text=True)
@@ -76,8 +88,16 @@ def prepare(env):
             sync(prefix + name, path)
             if images(path):
                 sets.append({"path": os.path.relpath(path, HERE), "source": name})
-    for entry in scenario["sets"]:
-        if "scene_every_s" in entry and entry["source"] not in {s["source"] for s in sets}:
+    if env.get("INCLUDE_OCEAN_SCENES", "0") == "1":
+        live = json.loads((HERE / "live.json").read_text())
+        for entry in live["sets"]:
+            if "scene_every_s" not in entry or entry["source"] in {s["source"] for s in sets}:
+                continue
+            entry = dict(entry)
+            path = dest / entry["source"] / "img1"
+            if not images(path):
+                raise RuntimeError("ocean scenes missing; run make demo-ocean first")
+            entry["path"] = os.path.relpath(path, HERE)
             sets.append(entry)
     if not sets:
         output.unlink(missing_ok=True)

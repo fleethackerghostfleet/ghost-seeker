@@ -1,0 +1,355 @@
+{
+  "completed_utc": "2026-11-05T12:35:27.693820+00:00",
+  "modes": {
+    "stress": {
+      "frames": 2889,
+      "wall_seconds": 600.052623077,
+      "fps": 4.814577736841719,
+      "complete_100_image_cycles": 28,
+      "at_least_three_cycles": true,
+      "stage_ms": {
+        "read_decode_ms": {
+          "count": 2889,
+          "mean": 10.489429289373524,
+          "p50": 10.493983000003482,
+          "p95": 11.225235400024758,
+          "max": 11.703392000015356,
+          "sum": 30303.96121700011
+        },
+        "analysis_ms": {
+          "count": 2889,
+          "mean": 175.7067712277606,
+          "p50": 175.5941250000319,
+          "p95": 177.36145939998664,
+          "max": 189.97603900000115,
+          "sum": 507616.86207700043
+        },
+        "representation_wall_ms": {
+          "count": 2889,
+          "mean": 20.979308400830398,
+          "p50": 20.481735999965167,
+          "p95": 22.52920859999108,
+          "max": 326.7515299999957,
+          "sum": 60609.22196999902
+        },
+        "jpeg_encode_ms": {
+          "count": 2889,
+          "mean": 18.673818014537616,
+          "p50": 18.46831999978349,
+          "p95": 20.2727967999067,
+          "max": 21.943257000089034,
+          "sum": 53948.66024399917
+        },
+        "pipeline_ms": {
+          "count": 2889,
+          "mean": 207.17550891796455,
+          "p50": 206.6913010000917,
+          "p95": 210.1471215999709,
+          "max": 514.7809659999964,
+          "sum": 598530.0452639996
+        }
+      },
+      "peak_rss_bytes": 110198784
+    },
+    "paced": {
+      "frames": 240,
+      "scheduled_fps": 2,
+      "scheduled_duration_seconds": 120,
+      "wall_seconds_until_last_completion": 119.706115211,
+      "deadline_misses": 0,
+      "deadline_miss_fraction": 0.0,
+      "completion_lateness_ms": {
+        "count": 240,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "sum": 0.0
+      },
+      "start_lateness_ms": {
+        "count": 240,
+        "mean": 0.14076935421864314,
+        "p50": 0.1421050000658397,
+        "p95": 0.16213180007298433,
+        "max": 0.17423300005248166,
+        "sum": 33.78464501247436
+      },
+      "stage_ms": {
+        "read_decode_ms": {
+          "count": 240,
+          "mean": 10.697945104166706,
+          "p50": 10.68823150001208,
+          "p95": 11.364667450089883,
+          "max": 11.637461999953302,
+          "sum": 2567.5068250000095
+        },
+        "analysis_ms": {
+          "count": 240,
+          "mean": 175.94134737916437,
+          "p50": 175.8054814999923,
+          "p95": 177.1241967499975,
+          "max": 182.20846700000948,
+          "sum": 42225.92337099945
+        },
+        "representation_wall_ms": {
+          "count": 240,
+          "mean": 20.615337424998376,
+          "p50": 20.423202500069237,
+          "p95": 22.349697599997853,
+          "max": 23.732420999976966,
+          "sum": 4947.680981999611
+        },
+        "jpeg_encode_ms": {
+          "count": 240,
+          "mean": 18.59802549999614,
+          "p50": 18.373171499888485,
+          "p95": 20.234982249940003,
+          "max": 21.449299999972027,
+          "sum": 4463.526119999074
+        },
+        "pipeline_ms": {
+          "count": 240,
+          "mean": 207.2546299083295,
+          "p50": 207.06408199998805,
+          "p95": 210.06457649998538,
+          "max": 215.5667250000306,
+          "sum": 49741.111177999075
+        }
+      },
+      "peak_rss_bytes": 110415872
+    }
+  },
+  "rolling_100_frame_windows": [
+    {
+      "cycle": 1,
+      "frames": 100,
+      "wall_seconds": 20.607905544000005,
+      "fps": 4.85250671333337,
+      "end_elapsed_s": 20.607905544000005,
+      "p95_pipeline_ms": 208.67486739999953
+    },
+    {
+      "cycle": 2,
+      "frames": 100,
+      "wall_seconds": 21.525154879999995,
+      "fps": 4.645727315667985,
+      "end_elapsed_s": 42.133060424,
+      "p95_pipeline_ms": 212.8213687500022
+    },
+    {
+      "cycle": 3,
+      "frames": 100,
+      "wall_seconds": 20.690727209000002,
+      "fps": 4.833082906651161,
+      "end_elapsed_s": 62.823787633,
+      "p95_pipeline_ms": 209.53796054999287
+    },
+    {
+      "cycle": 4,
+      "frames": 100,
+      "wall_seconds": 20.704600111999994,
+      "fps": 4.829844549474872,
+      "end_elapsed_s": 83.528387745,
+      "p95_pipeline_ms": 209.42054359999602
+    },
+    {
+      "cycle": 5,
+      "frames": 100,
+      "wall_seconds": 20.673598059000014,
+      "fps": 4.837087366921413,
+      "end_elapsed_s": 104.201985804,
+      "p95_pipeline_ms": 209.27705240000023
+    },
+    {
+      "cycle": 6,
+      "frames": 100,
+      "wall_seconds": 20.808530222,
+      "fps": 4.805721448517979,
+      "end_elapsed_s": 125.010516026,
+      "p95_pipeline_ms": 210.99966374998758
+    },
+    {
+      "cycle": 7,
+      "frames": 100,
+      "wall_seconds": 20.93346841099998,
+      "fps": 4.777039238631505,
+      "end_elapsed_s": 145.94398443699998,
+      "p95_pipeline_ms": 211.6505055499985
+    },
+    {
+      "cycle": 8,
+      "frames": 100,
+      "wall_seconds": 20.781261968000024,
+      "fps": 4.81202730392335,
+      "end_elapsed_s": 166.725246405,
+      "p95_pipeline_ms": 210.13423254999282
+    },
+    {
+      "cycle": 9,
+      "frames": 100,
+      "wall_seconds": 20.76918669599999,
+      "fps": 4.814825032087527,
+      "end_elapsed_s": 187.494433101,
+      "p95_pipeline_ms": 209.86555494999806
+    },
+    {
+      "cycle": 10,
+      "frames": 100,
+      "wall_seconds": 20.797692194999996,
+      "fps": 4.808225790746204,
+      "end_elapsed_s": 208.292125296,
+      "p95_pipeline_ms": 210.71554879999184
+    },
+    {
+      "cycle": 11,
+      "frames": 100,
+      "wall_seconds": 20.732078235000017,
+      "fps": 4.823443113926679,
+      "end_elapsed_s": 229.024203531,
+      "p95_pipeline_ms": 209.84263819999427
+    },
+    {
+      "cycle": 12,
+      "frames": 100,
+      "wall_seconds": 20.70839273499996,
+      "fps": 4.828959991230347,
+      "end_elapsed_s": 249.73259626599997,
+      "p95_pipeline_ms": 209.4822348499889
+    },
+    {
+      "cycle": 13,
+      "frames": 100,
+      "wall_seconds": 20.712717069999997,
+      "fps": 4.827951816366891,
+      "end_elapsed_s": 270.44531333599997,
+      "p95_pipeline_ms": 209.78520689998845
+    },
+    {
+      "cycle": 14,
+      "frames": 100,
+      "wall_seconds": 20.622522498000023,
+      "fps": 4.849067324799768,
+      "end_elapsed_s": 291.067835834,
+      "p95_pipeline_ms": 208.74323569995852
+    },
+    {
+      "cycle": 15,
+      "frames": 100,
+      "wall_seconds": 20.59772891099999,
+      "fps": 4.854904170847501,
+      "end_elapsed_s": 311.665564745,
+      "p95_pipeline_ms": 209.3200295000372
+    },
+    {
+      "cycle": 16,
+      "frames": 100,
+      "wall_seconds": 20.572279787000014,
+      "fps": 4.860909973778976,
+      "end_elapsed_s": 332.237844532,
+      "p95_pipeline_ms": 208.0516934999963
+    },
+    {
+      "cycle": 17,
+      "frames": 100,
+      "wall_seconds": 20.732579902999987,
+      "fps": 4.823326400663242,
+      "end_elapsed_s": 352.970424435,
+      "p95_pipeline_ms": 209.56072105001908
+    },
+    {
+      "cycle": 18,
+      "frames": 100,
+      "wall_seconds": 20.69160273099999,
+      "fps": 4.832878404831387,
+      "end_elapsed_s": 373.662027166,
+      "p95_pipeline_ms": 209.7296145500195
+    },
+    {
+      "cycle": 19,
+      "frames": 100,
+      "wall_seconds": 20.738900557000022,
+      "fps": 4.821856381689766,
+      "end_elapsed_s": 394.400927723,
+      "p95_pipeline_ms": 210.2828251500341
+    },
+    {
+      "cycle": 20,
+      "frames": 100,
+      "wall_seconds": 20.794383862000018,
+      "fps": 4.808990767105226,
+      "end_elapsed_s": 415.195311585,
+      "p95_pipeline_ms": 209.83798990003208
+    },
+    {
+      "cycle": 21,
+      "frames": 100,
+      "wall_seconds": 20.760643216999995,
+      "fps": 4.816806442592025,
+      "end_elapsed_s": 435.955954802,
+      "p95_pipeline_ms": 210.0201233000007
+    },
+    {
+      "cycle": 22,
+      "frames": 100,
+      "wall_seconds": 20.72573769799999,
+      "fps": 4.824918729413906,
+      "end_elapsed_s": 456.6816925,
+      "p95_pipeline_ms": 209.08762675000787
+    },
+    {
+      "cycle": 23,
+      "frames": 100,
+      "wall_seconds": 20.720505419000006,
+      "fps": 4.826137103214836,
+      "end_elapsed_s": 477.402197919,
+      "p95_pipeline_ms": 209.62194724999677
+    },
+    {
+      "cycle": 24,
+      "frames": 100,
+      "wall_seconds": 20.765690106999955,
+      "fps": 4.81563576672517,
+      "end_elapsed_s": 498.16788802599996,
+      "p95_pipeline_ms": 210.19760079998377
+    },
+    {
+      "cycle": 25,
+      "frames": 100,
+      "wall_seconds": 20.854622251000023,
+      "fps": 4.795100040481663,
+      "end_elapsed_s": 519.022510277,
+      "p95_pipeline_ms": 211.17209379999053
+    },
+    {
+      "cycle": 26,
+      "frames": 100,
+      "wall_seconds": 20.788013300999978,
+      "fps": 4.8104644995195205,
+      "end_elapsed_s": 539.810523578,
+      "p95_pipeline_ms": 210.1670639499389
+    },
+    {
+      "cycle": 27,
+      "frames": 100,
+      "wall_seconds": 20.77846574,
+      "fps": 4.812674874617571,
+      "end_elapsed_s": 560.588989318,
+      "p95_pipeline_ms": 210.21406904999367
+    },
+    {
+      "cycle": 28,
+      "frames": 100,
+      "wall_seconds": 20.852587696,
+      "fps": 4.7955678910384,
+      "end_elapsed_s": 581.441577014,
+      "p95_pipeline_ms": 211.15400574992123
+    }
+  ],
+  "scope": "Actual sequential decode, NanoDet analysis and all four whole forms plus top2 crops; JPEG writes included",
+  "limits": [
+    "Repeats 100 frozen 1920x1080 Singapore training images; filesystem cache warms",
+    "No transport, policy selection, tracking, competing workloads or laptop thermals",
+    "Cloud Intel CPU proxy, not actual rugged-laptop certification",
+    "Paced deadline is pipeline completion by next 0.5s arrival, not operator receipt"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "methods": [
+    "color",
+    "phash",
+    "color-phash",
+    "no_similarity",
+    "uniform",
+    "tiled_phash",
+    "local_color",
+    "registered_residual"
+  ],
+  "candidate_configs": {
+    "tiled_phash": {
+      "analysis_size": 640,
+      "aspect_tolerance": 0.03,
+      "global_gate": true,
+      "grid": 4,
+      "tile_color_size": 4,
+      "phash_scale": 8.0,
+      "color_scale": 0.08,
+      "tail_fraction": 0.0625,
+      "hash_margin": 2.0
+    },
+    "local_color": {
+      "analysis_size": 640,
+      "aspect_tolerance": 0.03,
+      "global_gate": true,
+      "local_size": 128,
+      "residual_scale": 0.04,
+      "tail_fraction": 0.002,
+      "compensate_offset": true
+    },
+    "registered_residual": {
+      "analysis_size": 640,
+      "aspect_tolerance": 0.03,
+      "global_gate": true,
+      "local_size": 128,
+      "residual_scale": 0.04,
+      "tail_fraction": 0.002,
+      "compensate_offset": true,
+      "max_shift_fraction": 0.05,
+      "min_response": 0.08,
+      "min_overlap": 0.88
+    }
+  },
+  "candidate_sha256": "5ebd15ad7ebfc145223898ab64814316f64b619b03c28eab7e71e874bd400081",
+  "harness_sha256": "5d4e0f748829d864f0975d8d4eba16dd7eebf8d3a87d8049b3bece5ae70943a0",
+  "index_sha256": "a3f53ace153a287ac3de971362085c86b5c05334a583dc79d50bdf0d83a03f64",
+  "requested_threads": 4,
+  "sample_stride": 5,
+  "analysis_size": 320,
+  "payload_size": 1280,
+  "jpeg_quality": 80,
+  "window_seconds": 60.0,
+  "budget_bps": [
+    0,
+    9600,
+    64000,
+    256000,
+    2000000
+  ],
+  "partial_window_budget": "full_60s_allowance",
+  "duplicate_strength": 0.85,
+  "model_sha256": null,
+  "baseline_source_sha256": {
+    "ghost_priority/__init__.py": "826c98a19f62d7451ec4147a8e1625b94ee8db1d993bc4d214a612105988a0b8",
+    "ghost_priority/__main__.py": "f38fd2f2c920c29c828645e87ed64743d567aaaef7fba7a15d2c7d7f8094f91f",
+    "ghost_priority/analysis.py": "4336d694e915c2ba554aa19d7930e769df97bbcf386c19830db22b0fbfd18d41",
+    "ghost_priority/bandwidth.py": "9bcbfd5b0d4df9e2d7478bc7d5c7d6cc4410d0a7ef193d5c64956ca6e8dff971",
+    "ghost_priority/cli.py": "a7aa16cf42bac239e6225fec1d6cde7605c96271e5a9ee37d2b4c105291f02e7",
+    "ghost_priority/contracts.py": "1bffa5a96a32f73f2c11f64ca4a49508b57c07b5f8c1f71a91aa8c2419ee8005",
+    "ghost_priority/evaluation.py": "bceb7259dc6e37cda3e167c269e66c1fc3a52f2dddf9c7a9a9d07b600ff83f63",
+    "ghost_priority/policy.py": "19c80da0e642845c6be5db3c550ce913e31653a7e855146afa8f530e99e1e981",
+    "ghost_priority/providers.py": "a025b7379150c97968fc7748c3ef25a6069552fc61b461fb68cfe4e868aabf62",
+    "ghost_priority/selection.py": "c79e3faef4dfbdf49c2d99aef259884fc44189991fcf73bef64fc5ce760b066d",
+    "ghost_priority/similarity.py": "da0d750138313d888dcb23bec7647daa76495adca8c5820a61815c821e0dacaa",
+    "ghost_priority/similarity_commands.py": "8f2ff131703fd3310a661d32f3c1d83e005aaabca8b19478a93cdcbd87b3ac9f",
+    "ghost_priority/similarity_evaluation.py": "91ac02838bd3aa5dc045c3bdc24663878f1162801ff438829941c2990d554c16",
+    "ghost_priority/similarity_features.py": "5cd189beaeefdc7e5c4b0294c86e25a5a3442fdb0148a1ecea30d2dbcec7ac73",
+    "ghost_priority/smd.py": "12ae6ad68aa91d17eb1af11871d906a76ab1e7b409863b6bf259709345bd74ff",
+    "ghost_priority/third_party/nanodet.py": "4fa19c613d5c3610d2428635eac5621f7c9c36b11b5b222adce2f578ba0d6416"
+  }
+}
