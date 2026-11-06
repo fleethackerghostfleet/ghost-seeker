@@ -30,6 +30,11 @@ const CompressMinBytes = 512
 // overhead). Fast level: on a fat link the exchange is mostly image bytes.
 func NewConnect(shoreURL string, timeout time.Duration, est *Estimator, token ...string) *Connect {
 	hc := &http.Client{Timeout: timeout}
+	return NewConnectWithClient(shoreURL, hc, est, token...)
+}
+
+// NewConnectWithClient uses the caller's HTTP transport and trust configuration.
+func NewConnectWithClient(shoreURL string, hc *http.Client, est *Estimator, token ...string) *Connect {
 	c := &Connect{
 		client: ghostseekerv1connect.NewSyncServiceClient(hc, shoreURL, connect.WithGRPC(),
 			connect.WithAcceptCompression(gzipName, newGzipDecompressor, newGzipCompressor),
