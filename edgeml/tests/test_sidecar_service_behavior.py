@@ -61,9 +61,10 @@ def test_text_cache_failure_is_precondition_until_torch_is_explicitly_enabled(mo
     tower = SimpleNamespace(embed_text=Mock(return_value=np.array([[0.25, 0.75]])))
     constructor.return_value = tower
     engine._text_tower = "torch"
+    engine._text_weights = "verified/text_model.pt"
     assert engine.embed_text(["unseen"]) == [[0.25, 0.75]]
     assert engine.embed_text(["another"]) == [[0.25, 0.75]]
-    constructor.assert_called_once_with("tiny", backend="torch")
+    constructor.assert_called_once_with("tiny", backend="torch", pretrained_weights="verified/text_model.pt")
     assert tower.embed_text.call_args_list[0].args == (["unseen"],)
     assert tower.embed_text.call_args_list[1].args == (["another"],)
 

@@ -1,4 +1,5 @@
 """Tracker low-stage overrides must also reach the detector's earlier score filter."""
+import hashlib
 import json
 from types import SimpleNamespace
 
@@ -40,7 +41,14 @@ def test_cli_low_stage_threshold_reaches_detector(monkeypatch, tmp_path, floor, 
 
     monkeypatch.setattr(tracking, "make_tracker", make_tracker)
     monkeypatch.setattr(server, "serve", lambda engine, *args, **kw: engines.append(engine))
-    argv = ["--detector", str(tmp_path / "model.onnx"), "--det-low-thr", str(floor)]
+    weights = tmp_path / "model.bin"
+    weights.write_bytes(b"fixture session")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"schema_version": 1, "artifacts": [
+        {"path": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+         "source": "file:threshold-fixture", "revision": "0" * 40}
+        for path in (weights, tmp_path / "meta.json")]}))
+    argv = ["--detector", str(weights), "--det-low-thr", str(floor), "--model-manifest", str(manifest)]
     if overrides is not None:
         argv += ["--trk", json.dumps(overrides)]
     cli.main(argv)

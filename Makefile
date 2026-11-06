@@ -12,7 +12,9 @@ verify:         ## all CI checks locally; fails on missing tools or dirty source
 
 GO_IMAGE ?=
 PY_IMAGE ?=
+RUNTIME_IMAGE ?=
 GO_BUILD_ARG = $(if $(GO_IMAGE),--build-arg GO_IMAGE=$(GO_IMAGE))
+RUNTIME_BUILD_ARG = $(if $(RUNTIME_IMAGE),--build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE))
 PY_BUILD_ARG = $(if $(PY_IMAGE),--build-arg PY_IMAGE=$(PY_IMAGE))
 SHORE_IMAGE := ghost-seeker/shore:0.1.0
 EDGE_IMAGE := ghost-seeker/edge:0.1.0
@@ -137,9 +139,9 @@ compose-demo-down: ## stop the Docker demo and delete its data + credentials (ne
 	$(DEMO_COMPOSE_CMD) down -v --remove-orphans
 
 images:
-	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
-	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
-	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
+	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
+	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
+	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
 	docker build $(PY_BUILD_ARG) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
 
 images-save:
@@ -181,8 +183,11 @@ security-go:
 security-python:
 	mkdir -p $(SECURITY_REPORTS)
 	$(BANDIT) -r edgeml/src -lll -f json -o $(SECURITY_REPORTS)/bandit.json
-	$(SHIPPED_PYTHON) -m pip freeze --exclude edgeml --exclude pip --exclude setuptools > $(SECURITY_REPORTS)/python-requirements.txt
-	$(PIP_AUDIT) -r $(SECURITY_REPORTS)/python-requirements.txt --no-deps --disable-pip -f json -o $(SECURITY_REPORTS)/pip-audit.json
+	$(PIP_AUDIT) -r edgeml/requirements.lock --require-hashes --disable-pip -f json -o $(SECURITY_REPORTS)/pip-audit.json
+
+.PHONY: lock-edgeml
+lock-edgeml:
+	bash scripts/lock-edgeml.sh
 
 security-licenses:
 	SHIPPED_PYTHON=$(SHIPPED_PYTHON) $(SECURITY_PYTHON) scripts/security.py licenses

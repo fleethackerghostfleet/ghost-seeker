@@ -24,7 +24,7 @@ class ClipEmbedder:
     dim: int
 
     def __init__(self, short: str = "mobileclip-s1", backend: str = "torch", onnx_dir: str | Path | None = None,
-                 threads: int = 4, precision: str = "fp32"):
+                 threads: int = 4, precision: str = "fp32", pretrained_weights: str | Path | None = None):
         self.short = short
         arch, tag, self.size = MODELS[short]
         self.backend = backend
@@ -39,9 +39,19 @@ class ClipEmbedder:
             import open_clip
             import torch
 
-            self.model, _, pre = open_clip.create_model_and_transforms(arch, pretrained=tag)
+            if pretrained_weights is not None:
+                pretrained_weights = Path(pretrained_weights).expanduser().resolve(strict=True)
+            self.model, _, pre = open_clip.create_model_and_transforms(arch, pretrained=str(pretrained_weights) if pretrained_weights else tag)
             self.model.eval()
-            self.tokenizer = open_clip.get_tokenizer(arch)
+            if pretrained_weights is not None and short == "siglip-b16":
+                from open_clip.tokenizer import HFTokenizer
+
+                tokenizer = pretrained_weights.parent / "tokenizer"
+                if not tokenizer.is_dir():
+                    raise FileNotFoundError("SigLIP requires a local tokenizer directory in the verified bundle")
+                self.tokenizer = HFTokenizer(str(tokenizer), context_length=self.model.context_length, local_files_only=True)
+            else:
+                self.tokenizer = open_clip.get_tokenizer(arch)
             norm = next(t for t in pre.transforms if t.__class__.__name__ == "Normalize")
             self.mean, self.std = np.array(norm.mean, np.float32), np.array(norm.std, np.float32)
             self.model_bytes = sum(p.numel() * p.element_size() for p in self.model.visual.parameters())

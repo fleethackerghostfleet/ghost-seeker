@@ -139,7 +139,7 @@ jobs:
           persist-credentials: false
       - run: git lfs pull --include web/static/imagery/empty-ocean.zip --exclude=""
       - run: bash scripts/security-install.sh images
-      - run: make images GO_IMAGE=mirror.gcr.io/library/golang:1.26.10-alpine PY_IMAGE=mirror.gcr.io/library/python:3.11-slim
+      - run: make images
       - run: |
           export PATH="$HOME/.local/bin:$PATH"
           make sbom

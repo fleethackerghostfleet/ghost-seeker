@@ -20,7 +20,7 @@ for group in secrets go python manifests images; do
 done
 make security                    # source gates (fails closed)
 make security-secrets GITLEAKS_LOG_OPTS="origin/dev..HEAD" # PR range
-make images GO_IMAGE=mirror.gcr.io/library/golang:1.26.10-alpine PY_IMAGE=mirror.gcr.io/library/python:3.11-slim
+make images                      # digest-pinned base defaults (including mirrors)
 make sbom                        # scans local images, no build/network registry fallback
 make scan                        # scans all 4 even when one fails
 python3 -m unittest discover -s scripts -p 'test_security.py'
@@ -61,14 +61,12 @@ installed; missing tools or scan/parse errors are not successful gates.
   in CI or add fingerprints merely to make a PR green. govulncheck fails on
   reachable vulnerabilities in both build profiles.
 * **Python:** Bandit scans `edgeml/src`, failing HIGH; all other findings
-  remain in the JSON metrics. pip-audit fails on any advisory in the resolved
-  dependencies of the default sidecar: `edgeml` core plus `onnxruntime`,
-  exactly the default Dockerfile install. The freeze is retained as evidence.
-  Optional evaluation/GPU/detect/tracking extras and model weights are not
-  shipped by `make images` and are not approved by this check. Enabling
-  `WITH_TRACKING` requires extending this inventory first. Versions are
-  currently resolved, not locked: a hashed deployment lockfile is follow-up
-  work; the image SBOM/scan remains the authority for the actual build.
+  remain in the JSON metrics. pip-audit fails on any advisory in
+  `edgeml/requirements.lock`, with hash enforcement. The license environment
+  is installed from that same lock. This is the default CPU sidecar closure
+  (core, ONNX Runtime and ONNX for external-data integrity validation).
+  Optional evaluation/GPU/detect extras and model licenses are not approved
+  by this gate. Tracking has a separate hashed lock; see the restrictions below.
 * **Licenses:** Go production command dependency closure (`GOFLAGS=-tags=prod`)
   and the isolated shipped Python environment are checked. AGPL and GPL
   variants (including dual-license expressions containing them) and unknown
@@ -174,3 +172,151 @@ description, entropy and commit metadata; it does not compare secret text.
 Thus no credential values need be committed. The same string introduced
 in a new commit is not exempt. Baseline self-scanning is excluded by
 gitleaks' baseline handling, not by a repository-wide path suppression.
+
+## Pinned Python image dependencies
+
+`make lock-edgeml` requires `uv==0.9.5` (install it in a tooling venv).
+`UV=/path/to/uv make lock-edgeml` selects that executable. The script compiles
+`pyproject.toml` plus the runtime inputs for Python 3.11 / Linux amd64
+(manylinux 2.28), with hashes for every resolved transitive dependency.
+Review lock diffs on updates; other Python versions/architectures need their
+own reviewed resolution and smoke test. Development dependency ranges remain
+in `pyproject.toml`. Existing lock versions are retained unless constraints
+change; use uv's `--upgrade` when deliberately refreshing the full default inventory.
+The tracking compile refreshes its full inventory and compares available
+versions across PyPI/the CPU index (`unsafe-best-match`); review those updates
+and their hashes rather than trusting the CPU index as the source for unrelated packages.
+
+* `requirements.lock`: default sidecar. pip uses `--require-hashes` and binary
+  wheels only; it cannot silently resolve a new dependency.
+* `requirements-tracking.lock`: full optional `WITH_TRACKING=1` inventory,
+  including pinned CPU Torch/Torchvision versions and PyTorch-index wheel
+  hashes. No unhashed index fallback is used. `filterpy` is source-only: its
+  sdist is hashed and built without build isolation using the hashed
+  `requirements-build.lock` toolchain and installed core scientific deps.
+* `requirements-headless.lock`: pinned headless OpenCV replacement for
+  BoxMOT's GUI OpenCV dependency, retaining the original slim-image behavior.
+  The replacement is also hashed, not an unconstrained post-install fixup.
+* `requirements-build.lock`: pip/setuptools/wheel used to build the local
+  package without dependency resolution or isolated build downloads. These
+  tools are removed from the runtime, including the base interpreter.
+
+The optional tracking image is **not approved for fielding by the default
+license gate**: BoxMOT carries AGPL licensing and its distribution includes
+additional model-download utilities. Enabling it requires a separate legal
+decision and scanning its complete locked inventory/image. No GPL/AGPL
+allowlist entry or vulnerability exclusion was added. To audit that inventory:
+
+```sh
+pip-audit -r edgeml/requirements-tracking.lock --require-hashes --disable-pip
+docker build -f edgeml/Dockerfile --build-arg WITH_TRACKING=1 -t edgeml-tracking edgeml
+```
+
+The lock fixes Python resolution, not bit-for-bit OS builds: Debian packages
+(currently `libgomp1`), timestamps and upstream build backends still require
+a program-controlled package mirror/snapshot for full reproducibility.
+
+## Model provenance and runtime integrity (F-16)
+
+No model is downloaded or baked into the shipped image. The real sidecar
+loads local ONNX/OpenVINO exports; offline HF settings are retained. Before
+constructing any engine/provider, `--model-manifest` (or
+`EDGEML_MODEL_MANIFEST`) is mandatory whenever external model/policy files
+are used. Model-free `--mock` and Tomer `NoObjects` modes need no manifest.
+The Zarf inference manifest points to `/models/manifest.json` alongside the
+operator-provisioned, read-only model bundle; its emptyDir remains a placeholder.
+
+The approved manifest is JSON, relative to its own directory:
+
+```json
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "path": "yolo11n-640/model.onnx",
+      "sha256": "<64 lowercase hex characters from the approved artifact>",
+      "source": "<upstream repository URL or controlled export artifact URI>",
+      "revision": "<40 lowercase hex upstream commit SHA>"
+    }
+  ]
+}
+```
+
+List **every** file in each selected model directory: weights, metadata,
+OpenVINO BIN/XML, ONNX external tensors, embedding text caches, tokenizer
+files and calibration JSON. Paths cannot escape the bundle; symlinks,
+missing/unlisted files, mutable revisions and SHA-256 mismatches fail startup.
+ONNX external tensor references must also resolve to hash-approved files.
+Controlled exports can use `revision: "sha256:<64 hex artifact digest>"`
+instead of a Git commit, with the upstream inputs recorded in the export's
+reviewed provenance. Download Hugging Face sources in the controlled export
+job using `revision=<full commit SHA>`, not a branch/tag, verify expected
+artifact hashes there, then approve the exported bundle and manifest.
+
+The manifest is an **operator trust input**, not a signature or proof that
+an upstream publisher is trusted. Obtain expected hashes/revisions from a
+reviewed source, store the approved manifest with release evidence, and mount
+it and the models read-only before startup (do not compute/trust a new manifest
+inside the running container). Do not mutate files after startup: lazy text
+caches and weights rely on that read-only mount. Inference does not fetch
+missing models. `botsort_reid` requires explicit local `reid_weights` in
+`--trk`; default BoxMOT weight discovery is not allowed. The optional torch
+text tower uses `text_model.pt` inside the verified embedding directory,
+never an OpenCLIP pretrained tag; SigLIP also needs its local `tokenizer/`.
+The default lock does not include Torch/OpenCLIP; requesting that optional
+tower still requires a separately reviewed image with those dependencies.
+
+Download-path review and boundary:
+
+| Path | Use / disposition |
+|---|---|
+| `runtime/detectors.py`, `runtime/backends.py` | Sidecar local ONNX/OpenVINO loading; manifest verified before loading |
+| `embed/clip_embedder.py` | Runtime ORT embedding/cache local; optional sidecar Torch receives verified local weights/tokenizer; dev/export default pretrained tags remain unapproved |
+| `detectors/onnx_det.py` | Evaluation detector URL downloads (`urlretrieve`), not the sidecar runtime adapter |
+| `detectors/hf_det.py`, `detectors/zoo.py` | Evaluation HF `from_pretrained`/`hf_hub_download` and Ultralytics `.pt` auto-downloads; not called by sidecar |
+| `runtime/export.py`, export scripts | Research/export-time model acquisition; not executed by Docker build or sidecar; outputs need reviewed, hash-pinned provenance before promotion |
+| `algorithm/ghost_priority/providers.py` | Optional Tomer local NanoDet via OpenCV; model/policy verified by sidecar startup; algorithm package is not copied into the default Python image |
+| `algorithm/README.md` | Research download command already uses an OpenCV-zoo commit URL; promotion still requires SHA-256 in the manifest |
+| `research/` | Research HTTP inference clients/services, not a source of models in shipped images |
+
+F-16 is remediated at the shipped runtime boundary, **not closed for the
+repository's evaluation/export utilities**. Their existing unpinned download
+APIs must not be used directly as an approved supply-chain promotion process;
+Bandit findings remain visible. Model licensing is a separate approval.
+
+## Base digests, numeric users and Iron Bank substitution
+
+`deploy/Dockerfile` pins the Go builder, distroless runtime and demo-init
+Alpine base to multi-platform index digests; `edgeml/Dockerfile` pins Python
+the same way. Readable tags are comments, not mutable defaults. The workflow
+uses these defaults instead of overriding them with tags. Locks and current
+image checks target Linux amd64; index digests retain platform selection but
+do not constitute verification of other architectures.
+
+Go runtime images use `USER 65532:65532`; the sidecar uses `10001:10001`.
+Zarf shore/operator/edge pod contexts use UID/GID/fsGroup 65532, and
+edge-inference uses 10001 consistently. No UID manifest migration is needed.
+
+Registry1 access must already be configured through the program's approved
+credential mechanism (`docker login registry1.dso.mil` outside build scripts).
+Choose approved repositories and immutable digests; these placeholders are
+not asserted to be actual Iron Bank catalog paths:
+
+```sh
+export IB_GO='registry1.dso.mil/<approved-go-repository>@sha256:<reviewed-digest>'
+export IB_PY='registry1.dso.mil/<approved-python-repository>@sha256:<reviewed-digest>'
+export IB_RUNTIME='registry1.dso.mil/<approved-static-runtime>@sha256:<reviewed-digest>'
+make images GO_IMAGE="$IB_GO" PY_IMAGE="$IB_PY" RUNTIME_IMAGE="$IB_RUNTIME"
+make sbom
+make scan
+```
+
+The ARGs are also directly overridable with `docker build --build-arg`.
+The Go builder must provide the `go.mod` toolchain and shell; the static
+runtime must support Linux static binaries, CA trust and UID 65532. Both
+Python stages use `PY_IMAGE` and currently require Python 3.11 plus Debian
+`apt-get`, `groupadd`/`useradd` and `libgomp1`. A UBI/RHEL-based Iron Bank
+Python image is **not** a drop-in ARG override: adapt and review the package
+installation recipe for that distribution, then rerun locks, runtime smoke,
+SBOM, license and CVE gates. ARG substitution alone does not certify Iron Bank
+compliance, package provenance or air-gap readiness.
