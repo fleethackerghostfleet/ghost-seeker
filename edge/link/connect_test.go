@@ -3,6 +3,7 @@ package link
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,55 @@ import (
 )
 
 type echoShore struct{}
+
+type trailerShore struct{ echoShore }
+
+func (s trailerShore) Exchange(ctx context.Context, req *connect.Request[pb.ExchangeRequest]) (*connect.Response[pb.ExchangeResponse], error) {
+	if req.Msg.EdgeId == "denied" {
+		return nil, connect.NewError(connect.CodePermissionDenied, nil)
+	}
+	return s.echoShore.Exchange(ctx, req)
+}
+
+func TestConnectH2COnly(t *testing.T) {
+	_, handler := ghostseekerv1connect.NewSyncServiceHandler(trailerShore{}, HandlerOptions()...)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor != 2 {
+			t.Errorf("sync protocol = %s, want HTTP/2", r.Proto)
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	server.Config.Protocols = new(http.Protocols)
+	server.Config.Protocols.SetUnencryptedHTTP2(true)
+	server.Start()
+	defer server.Close()
+
+	for _, supplied := range []bool{false, true} {
+		t.Run(fmt.Sprintf("supplied-client=%v", supplied), func(t *testing.T) {
+			est := NewEstimator(64000, 300, 1e9)
+			client := NewConnect(server.URL, time.Second, est)
+			if supplied {
+				transport := http.DefaultTransport.(*http.Transport).Clone()
+				original := transport.Protocols
+				hc := &http.Client{Transport: transport, Timeout: time.Second}
+				client = NewConnectWithClient(server.URL, hc, est)
+				if hc.Transport != transport || transport.Protocols != original {
+					t.Fatal("modified caller's transport")
+				}
+			}
+			for _, request := range []*pb.ExchangeRequest{{}, {Manifest: []*pb.ManifestEntry{{ItemId: "h2c-item"}}}} {
+				response, err := client.Exchange(context.Background(), request)
+				if err != nil || len(response.GetAcks()) != len(request.Manifest) {
+					t.Fatalf("h2c exchange: %v %v", response, err)
+				}
+			}
+			// gRPC success requires status 0; this also verifies a nonzero status trailer.
+			if _, err := client.Exchange(context.Background(), &pb.ExchangeRequest{EdgeId: "denied"}); connect.CodeOf(err) != connect.CodePermissionDenied {
+				t.Fatalf("gRPC status trailer: %v", err)
+			}
+		})
+	}
+}
 
 func (echoShore) Exchange(_ context.Context, req *connect.Request[pb.ExchangeRequest]) (*connect.Response[pb.ExchangeResponse], error) {
 	resp := &pb.ExchangeResponse{}

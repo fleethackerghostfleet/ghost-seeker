@@ -86,7 +86,11 @@ func newRig(t *testing.T) *rig {
 	path, h := ghostseekerv1connect.NewSyncServiceHandler(ssync.Handler{Service: svc}, append(link.HandlerOptions(), connect.WithInterceptors(auth))...)
 	mux.Handle(path, h)
 	mux.Handle("/api/v1/", opauth.RequireBearer(operator, a.Handler()))
-	shore := httptest.NewServer(mux)
+	shore := httptest.NewUnstartedServer(mux)
+	shore.Config.Protocols = new(http.Protocols)
+	shore.Config.Protocols.SetHTTP1(true)
+	shore.Config.Protocols.SetUnencryptedHTTP2(true)
+	shore.Start()
 	cfg := scheduler.DefaultConfig("contract-edge")
 	cfg.Tick = 20 * time.Millisecond
 	cfg.ProbeInterval = 20 * time.Millisecond

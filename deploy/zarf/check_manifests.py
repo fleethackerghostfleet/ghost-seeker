@@ -424,6 +424,9 @@ def check_uds_package(documents: list[dict], package: dict, rendered: list[dict]
                                        [d for d in documents if d["kind"] in WORKLOAD_KINDS])),
                 "UDS expose selector matches no workload")
         if expose["service"] == "shore":
+            require(any(p["port"] == expose["port"] and p.get("appProtocol") == "http2"
+                        for p in services[0]["spec"]["ports"]),
+                    "shore Service must declare HTTP/2 for gRPC sync trailers")
             require(expose.get("match") == [
                 {"name": "versioned-api", "uri": {"prefix": "/api/v1/"}},
                 {"name": "ship-sync", "uri": {"prefix": "/ghostseeker.v1.SyncService/"}}],
