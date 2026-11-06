@@ -34,6 +34,7 @@ def checks():
         ("go-tests", ["go", "test", "./..."]),
         ("go-race", ["go", "test", "-race", "./..."]),
         ("go-build", ["make", "build"]),
+        ("prod-gate", ["make", "prod-gate"]),
         ("go-modules", ["go", "mod", "verify"]),
         ("go-vulnerabilities", ["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.9.0", "./..."]),
         ("web", ["node", "--test", *[str(p.relative_to(ROOT)) for p in sorted((ROOT / "web").glob("*.test.cjs"))]]),

@@ -21,7 +21,6 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
-	"github.com/fleethackerghostfleet/ghost-seeker/edge/inference"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/link"
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
@@ -36,7 +35,7 @@ import (
 func main() {
 	data := flag.String("data", env("DATA_DIR", "data/shore"), "data directory")
 	listen := flag.String("listen", env("LISTEN", ":8080"), "listen address")
-	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference URL for text embedding, or 'mock'")
+	inferURL := flag.String("infer", env("INFER_URL", defaultInferURL), inferUsage)
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	edgeID := flag.String("edge", env("EDGE_ID", ""), "edge id to address downlink to ('' = all)")
 	eventRetain := flag.Int("api-event-retain", store.DefaultEventRetain, "newest API stream events to retain (positive; swept every second)")
@@ -49,7 +48,7 @@ func main() {
 	policyKeysPath := flag.String("policy-keys", env("GS_POLICY_KEYS", ""), "JSON public keyring; higher-echelon layers must be signed by one of these keys")
 	opToken := flag.String("operator-token", env("GS_OPERATOR_TOKEN", ""), "operator bearer token for ConsoleService and /blob/ (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", env("GS_OPERATOR_TOKEN_FILE", ""), "operator token file")
-	devTokenFile := flag.String("dev-token-file", env("GS_DEV_TOKEN_FILE", opauth.DefaultDevFile), "local demo only: auto-generate the operator token here when none is set ('none' = require an explicit token)")
+	devTokenFile := opauth.DevTokenFileFlag(flag.CommandLine)
 	corsOrigins := flag.String("cors-origins", env("GS_CORS_ORIGINS", ""), "comma-separated browser origins allowed to call the API cross-origin (default: same-origin only)")
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
 	flag.Parse()
@@ -80,11 +79,10 @@ func main() {
 	fatal(st.PruneEvents(context.Background(), *eventRetain))
 	clk := clock.Real{}
 	syncSvc := ssync.New(st, clk, log)
-	var emb inference.Analyzer
-	if *inferURL == "mock" {
-		emb = inference.NewMock()
-	} else {
-		emb = inference.NewRemote(*inferURL)
+	emb, err := newEmbedder(*inferURL)
+	if err != nil {
+		log.Error("embedder", "err", err)
+		os.Exit(2)
 	}
 	con := &console.Service{NodeID: "shore", St: st, Clk: clk, Embedder: emb, EdgeID: *edgeID}
 	if *signingKey != "" {
