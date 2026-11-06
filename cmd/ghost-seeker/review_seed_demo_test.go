@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
@@ -22,8 +23,31 @@ func TestDemoReviewSeedStartupAndReset(t *testing.T) {
 				continue
 			}
 			count++
-			if item.Img == "" || len(item.Dets) != 1 || item.Dets[0].Class != "marine mammal" || item.Reviewed {
+			whale := false
+			for _, det := range item.Dets {
+				whale = whale || det.Class == "marine mammal"
+			}
+			if item.Img == "" || !whale || item.Reviewed {
 				t.Fatalf("invalid first review item: %+v", item)
+			}
+			var frame *catalog.LibraryImage
+			for _, image := range catalog.Library[item.SourceID] {
+				if image.File == item.Img {
+					frame = &image
+					break
+				}
+			}
+			if frame == nil || len(item.Dets) != len(frame.Dets) {
+				t.Fatalf("seed does not preserve catalog detections: %+v", item)
+			}
+			for i, det := range item.Dets {
+				want := frame.Dets[i]
+				if det.Class != want.Cls || det.Box.X != want.B.X || det.Box.Y != want.B.Y || det.Box.W != want.B.W || det.Box.H != want.B.H || det.Ship != want.Ship {
+					t.Errorf("detection %d = %+v, want catalog detection %+v", i, det, want)
+				}
+				if det.Conf < .55 || det.Conf > .98 {
+					t.Errorf("detection %d confidence = %v, outside [.55, .98]", i, det.Conf)
+				}
 			}
 		}
 		if count != 1 {
