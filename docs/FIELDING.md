@@ -242,16 +242,11 @@ node directory `FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`)
 read-only at `/frames`; a spool requires a separate **writable** mount and
 `-watch-dir`. Production images have no scenario/frame replay (`-scenario`,
 `-frames`, `-period`, `SCENARIO` and `FRAMES_DIR` exist only in demo builds,
-[Production profile](#production-profile-and-prod-gate)). To replay the demo
-clips with a demo build (`docker build --build-arg GO_TAGS= ...`), copy
-`scenarios/ghostfleet_demo` (including the `frames/` downloaded by
-`make demo-clips`) onto the node and point the edge at it:
-
-```sh
-zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
-  --confirm --components=edge \
-  --set-variables=FRAMES_HOSTPATH=/srv/ghost-seeker,SCENARIO=/frames/ghostfleet_demo/scenario.json
-```
+[Production profile](#production-profile-and-prod-gate)). The Zarf package
+is production-only and does not support replay. To replay the demo clips, use
+the demo compose stack (`deploy/compose/demo.compose.yml`, built with
+`GO_TAGS: ""`; see [DEMO.md](DEMO.md)) or a demo-build edge
+(`go build ./cmd/edge` without `-tags prod`) with `-scenario` and `-frames`.
 
 ## Live input
 
