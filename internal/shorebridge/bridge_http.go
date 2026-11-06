@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 )
 
 // ---- HTTP ----
@@ -32,18 +34,17 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
 	b.registerDemoRoutes(mux)
 	if u, err := url.Parse(b.shore); err == nil {
-		rp := httputil.NewSingleHostReverseProxy(u)
-		rp.Transport = b.client.Transport
-		director := rp.Director
 		// The browser's session cookie stays on this origin; the shore sees
 		// the operator bearer token instead.
-		rp.Director = func(r *http.Request) {
-			director(r)
-			r.Host = u.Host
-			r.Header.Del("Cookie")
-			r.Header.Del("Authorization")
-			b.authorize(r)
-		}
+		rp := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.RawQuery = pr.In.URL.RawQuery
+			pr.SetURL(u)
+			proxyForwardedHeaders(pr)
+			pr.Out.Header.Del("Cookie")
+			pr.Out.Header.Del("Authorization")
+			b.authorize(pr.Out)
+		}}
+		rp.Transport = b.client.Transport
 		rp.ModifyResponse = func(res *http.Response) error {
 			if res.Header.Get("Content-Security-Policy") == "" {
 				res.Header.Set("Content-Security-Policy", "default-src 'none'; sandbox")
@@ -61,6 +62,31 @@ func (b *Bridge) Handler() http.Handler {
 		mux.Handle("GET /api/v1/", rp)
 	}
 	return mux
+}
+
+func proxyForwardedHeaders(pr *httputil.ProxyRequest) {
+	headers := pr.In.Header.Clone()
+	for _, connection := range headers.Values("Connection") {
+		for _, name := range strings.Split(connection, ",") {
+			headers.Del(strings.TrimSpace(name))
+		}
+	}
+	for _, name := range []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"} {
+		if values, ok := headers[name]; ok {
+			pr.Out.Header[name] = values
+		}
+	}
+	// Match the legacy X-Forwarded-For append without generating host/proto headers.
+	if clientIP, _, err := net.SplitHostPort(pr.In.RemoteAddr); err == nil {
+		prior, ok := pr.Out.Header["X-Forwarded-For"]
+		if ok && prior == nil {
+			return
+		}
+		if len(prior) > 0 {
+			clientIP = strings.Join(prior, ", ") + ", " + clientIP
+		}
+		pr.Out.Header.Set("X-Forwarded-For", clientIP)
+	}
 }
 
 func (b *Bridge) stream(w http.ResponseWriter, r *http.Request) {
