@@ -85,6 +85,16 @@ func spoolFile(ctx context.Context, q *Queue, path string, defaults Metadata, ma
 	if a != stamp(path) || meta != stamp(path+".json") {
 		return nil
 	}
+	if !q.reserve() {
+		q.count("spool:"+defaults.Source, func(s *SourceStats) { s.Rejected++ })
+		return nil
+	}
+	reserved := true
+	defer func() {
+		if reserved {
+			<-q.slots
+		}
+	}()
 	m := defaults
 	var data []byte
 	var err error
@@ -110,7 +120,8 @@ func spoolFile(ctx context.Context, q *Queue, path string, defaults Metadata, ma
 		c, err = m.Capture(data)
 		if err == nil {
 			submitted = true
-			_, err = q.Push(ctx, c, "spool")
+			reserved = false
+			_, err = q.submit(ctx, c, key)
 			if errors.Is(err, ErrBusy) || ctx.Err() != nil {
 				return nil
 			}
@@ -161,22 +172,19 @@ func pause(ctx context.Context, d time.Duration) error {
 // Pump fans any existing Source (including replay) into the single live writer.
 func Pump(ctx context.Context, q *Queue, src Source, transport string) error {
 	for {
+		if err := q.waitSlot(ctx, transport); err != nil {
+			return err
+		}
 		c, done, err := src.Next(ctx)
 		if err != nil {
+			<-q.slots
 			return err
 		}
 		if done {
+			<-q.slots
 			return nil
 		}
-		for {
-			_, err = q.Push(ctx, c, transport)
-			if !errors.Is(err, ErrBusy) {
-				break
-			}
-			if err = pause(ctx, 100*time.Millisecond); err != nil {
-				return err
-			}
-		}
+		_, err = q.submit(ctx, c, transport+":"+c.Source)
 		if err != nil && ctx.Err() != nil {
 			return ctx.Err()
 		}

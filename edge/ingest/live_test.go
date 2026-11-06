@@ -167,6 +167,74 @@ func TestLivePushRejectsInactiveUnitCredential(t *testing.T) {
 	}
 }
 
+func TestSpoolReservesBeforeReadingOrDecoding(t *testing.T) {
+	dir, q := t.TempDir(), NewQueue(1)
+	for _, sub := range []string{"processed", "failed"} {
+		if err := os.Mkdir(filepath.Join(dir, sub), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(dir, "bad.jpg")
+	if err := os.WriteFile(path, []byte("not a JPEG"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	q.reserve()
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("full queue decoded/moved frame before admission", err)
+	}
+	if len(q.slots) != 1 {
+		t.Fatal("stole an existing reservation")
+	}
+	<-q.slots
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := os.ReadDir(filepath.Join(dir, "failed"))
+	if err != nil || len(failed) != 1 || len(q.slots) != 0 {
+		t.Fatal("decode failure did not release admission", err, len(failed), len(q.slots))
+	}
+}
+
+type observedReader struct{ calls int }
+
+func (r *observedReader) Read(b []byte) (int, error) { r.calls++; return 0, io.EOF }
+
+type observedSource struct{ calls int }
+
+func (s *observedSource) Next(context.Context) (*Capture, bool, error) {
+	s.calls++
+	return nil, true, nil
+}
+
+func TestLocalProducersWaitForAdmissionBeforeReading(t *testing.T) {
+	q := NewQueue(1)
+	q.reserve()
+	frame, source := &observedReader{}, &observedSource{}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := mjpegFrame(ctx, q, frame, Metadata{Source: "camera"}, 1<<20); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel2()
+	if err := Pump(ctx2, q, source, "replay"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	if frame.calls != 0 || source.calls != 0 || len(q.slots) != 1 {
+		t.Fatal("local reader allocated outside admission", frame.calls, source.calls, len(q.slots))
+	}
+	<-q.slots
+	if err := mjpegFrame(context.Background(), q, frame, Metadata{Source: "camera"}, 1<<20); err == nil || len(q.slots) != 0 {
+		t.Fatal("bad camera frame leaked admission", err)
+	}
+	if err := Pump(context.Background(), q, source, "replay"); err != nil || len(q.slots) != 0 || source.calls != 1 {
+		t.Fatal("finished source leaked admission", err)
+	}
+}
+
 func TestLivePushSizeMetadataAndBackpressure(t *testing.T) {
 	q := NewQueue(1)
 	jpg := encJPEG(t, scene(40, 30))

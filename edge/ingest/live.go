@@ -155,6 +155,22 @@ func (q *Queue) reserve() bool {
 	}
 }
 
+func (q *Queue) waitSlot(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if q.reserve() {
+		return nil
+	}
+	q.count(key, func(s *SourceStats) { s.Rejected++ })
+	select {
+	case q.slots <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (q *Queue) submit(ctx context.Context, c *Capture, key string) (Result, error) {
 	done := make(chan Result, 1)
 	c.complete = func(row *store.Row, err error, duplicate bool) {

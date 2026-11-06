@@ -110,21 +110,7 @@ func mjpegConnection(ctx context.Context, client *http.Client, q *Queue, rawURL 
 		if t != "image/jpeg" {
 			return errors.New("expected image/jpeg MJPEG frame")
 		}
-		data, err := io.ReadAll(io.LimitReader(part, maxBytes+1))
-		if err != nil {
-			return err
-		}
-		if int64(len(data)) > maxBytes {
-			return errors.New("MJPEG frame exceeds byte cap")
-		}
-		if err := checkType(data, t); err != nil {
-			return err
-		}
-		c, err := m.Capture(data)
-		if err != nil {
-			return err
-		}
-		if _, err = q.Push(ctx, c, "mjpeg"); err != nil && !errors.Is(err, ErrBusy) {
+		if err := mjpegFrame(ctx, q, part, m, maxBytes); err != nil {
 			return err
 		}
 		if err := pause(ctx, period); err != nil {
@@ -132,4 +118,34 @@ func mjpegConnection(ctx context.Context, client *http.Client, q *Queue, rawURL 
 		}
 	}
 	return ctx.Err()
+}
+
+func mjpegFrame(ctx context.Context, q *Queue, frame io.Reader, m Metadata, maxBytes int64) error {
+	key := "mjpeg:" + m.Source
+	if err := q.waitSlot(ctx, key); err != nil {
+		return err
+	}
+	reserved := true
+	defer func() {
+		if reserved {
+			<-q.slots
+		}
+	}()
+	data, err := io.ReadAll(io.LimitReader(frame, maxBytes+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(data)) > maxBytes {
+		return errors.New("MJPEG frame exceeds byte cap")
+	}
+	if err := checkType(data, "image/jpeg"); err != nil {
+		return err
+	}
+	c, err := m.Capture(data)
+	if err != nil {
+		return err
+	}
+	reserved = false
+	_, err = q.submit(ctx, c, key)
+	return err
 }
