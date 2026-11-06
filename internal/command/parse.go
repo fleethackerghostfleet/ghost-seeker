@@ -132,9 +132,13 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 		classes := make([]string, 0)
 		seen := make(map[string]bool)
 		patterns := synonymPatterns
-		if edgeSubtypes {
-			patterns = append(append([]classPattern{}, edgeConceptPatterns...), patterns...)
+		concepts := make([]classPattern, 0, len(edgeConceptPatterns))
+		for _, pattern := range edgeConceptPatterns {
+			if _, available := catalog.Classes[pattern.class]; edgeSubtypes || available {
+				concepts = append(concepts, pattern)
+			}
 		}
+		patterns = append(concepts, patterns...)
 		for _, pattern := range patterns {
 			if pattern.re.MatchString(clause) {
 				if !seen[pattern.class] {

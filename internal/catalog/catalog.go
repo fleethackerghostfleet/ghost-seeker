@@ -106,13 +106,14 @@ var Classes = map[string]Class{
 	"helicopter":        {Group: "aircraft", Length: .11, Aspect: .5, Label: "Helicopter"},
 	"drone":             {Group: "other", Length: .05, Aspect: .6, Label: "Drone / UAS"},
 	"person":            {Group: "other", Length: .035, Aspect: .8, Label: "Person in water"},
+	"marine mammal":     {Group: "other", Label: "Marine Mammal"},
 	"debris":            {Group: "other", Length: .06, Aspect: .5, Label: "Debris"},
 	"bird":              {Group: "clutter", Length: .035, Aspect: .5, Label: "Bird"},
 	"buoy":              {Group: "clutter", Length: .025, Aspect: 1.6, Label: "Buoy"},
 }
 
 // EdgeSubtypes are edge MobileCLIP subtype labels (edgeml/src/edgeml/embed/zeroshot.py SUBTYPES) that live
-// shore mode can match but the simulation catalog does not model as classes.
+// shore mode can match, including labels outside the simulation catalog.
 var EdgeSubtypes = map[string]bool{"sailboat": true, "speedboat": true, "container ship": true, "passenger ship": true, "coast guard": true, "marine mammal": true}
 
 var Air = map[string]bool{"military aircraft": true, "civil aircraft": true, "helicopter": true, "drone": true, "bird": true}

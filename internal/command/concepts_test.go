@@ -33,12 +33,8 @@ func TestOfflineConceptMapping(t *testing.T) {
 		}
 		for _, text := range []string{"prioritize whales", "report dolphins", "report marine mammals", "prioritize orcas"} {
 			got := compiler.CompileRules(text)
-			if edge {
-				if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"marine mammal"}) || len(got.Unknown) != 0 {
-					t.Fatalf("live mammal mapping %q: %+v", text, got)
-				}
-			} else if len(got.Rules) != 0 || !strings.HasPrefix(got.Readback, "Not supported:") || strings.Contains(got.Readback, "this sensor can detect: marine mammal") {
-				t.Fatalf("unsupported simulation mammal %q: %+v", text, got)
+			if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"marine mammal"}) || len(got.Unknown) != 0 {
+				t.Fatalf("edge=%v mammal mapping %q: %+v", edge, text, got)
 			}
 		}
 	}
@@ -77,5 +73,17 @@ func TestUnsupportedReadback(t *testing.T) {
 	live := (&Compiler{EdgeSubtypes: true}).CompileRules("report unicorns")
 	if !strings.Contains(live.Readback, "marine mammal") || !strings.Contains(live.Readback, "sailboat") {
 		t.Fatalf("live sensor classes missing: %+v", live)
+	}
+}
+
+func TestMammalCatalogPreservesBroadBoostGuardrail(t *testing.T) {
+	for _, edge := range []bool{false, true} {
+		compiler := &Compiler{EdgeSubtypes: edge}
+		if got := compiler.CompileRules("prioritize ships, aircraft, people, debris, birds and buoys"); !got.Blocked {
+			t.Fatalf("edge=%v broad boost was not blocked: %+v", edge, got)
+		}
+		if got := compiler.CompileRules("prioritize whales"); got.Blocked || len(got.Rules) != 1 {
+			t.Fatalf("edge=%v targeted mammal boost blocked: %+v", edge, got)
+		}
 	}
 }

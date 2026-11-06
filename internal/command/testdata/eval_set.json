@@ -21,7 +21,7 @@
  {"id": "mines-floating", "text": "look for floating mines", "expect": {"boost": ["debris"]}},
  {"id": "sailboats-dark", "text": "spot sailboats running dark for 8 hours, priority", "expect": {"boost": ["small boat"], "attrs": ["dark"], "durationMin": 480}},
  {"id": "yachts-own-ship", "text": "track white yachts, low priority, ignore own ship", "expect": {"boost": ["small boat"]}},
- {"id": "boats-ignore-two", "text": "boats, but ignore birds and whales", "expect": {"boost": ["small boat"], "suppress": ["bird"]}},
+ {"id": "boats-ignore-two", "text": "boats, but ignore birds and whales", "expect": {"boost": ["small boat"], "suppress": ["bird", "marine mammal"]}},
  {"id": "aircraft-90m", "text": "aircraft overhead, immediate, for 90 mins", "expect": {"boost": ["military aircraft", "civil aircraft", "helicopter", "drone"], "durationMin": 90}},
  {"id": "slang-typos", "text": "eyes out 4 red fishin boats w outriggers urgent", "expect": {"boost": ["fishing vessel"]}},
  {"id": "cargo-tankers-6hrs", "text": "pls look out for cargo ships & tankers, report + pic, 6hrs", "expect": {"boost": ["cargo ship", "tanker"], "durationMin": 360}},

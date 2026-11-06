@@ -24,7 +24,13 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 			classSet[class] = true
 		}
 	}
-	if len(classSet)*5 >= len(catalog.Classes)*4 {
+	coreClasses := 0
+	for class := range catalog.Classes {
+		if !catalog.EdgeSubtypes[class] {
+			coreClasses++
+		}
+	}
+	if len(classSet)*5 >= coreClasses*4 {
 		blocked = true
 	}
 	for _, clause := range splitPattern.Split(strings.ToLower(text), -1) {
