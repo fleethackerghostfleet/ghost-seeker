@@ -53,9 +53,11 @@
    ...(template.flagword?[`FLAGWORD/${template.flagword}//`]:[]),
    `SUBJ/${clean(template.label)}//`,
    `TIMELOC/${incident}/${f.position}//`,
+   `GENTEXT/NAVIGATION/COURSE ${f.course}; SPEED ${f.speed}; SENSOR HEADING AT CAPTURE ${f.sensorHeading} (NOT SHIP COURSE)//`,
+   `GENTEXT/ANIMAL OBSERVATIONS/SPECIES ${f.species}; ESTIMATED SIZE ${f.size}//`,
    `GENTEXT/${template.section}/${f.evidence}//`,
    `GENTEXT/STATUS/${f.condition}; DAMAGE ${f.damage}; INJURIES ${f.injuries}//`,
-   `GENTEXT/ACTIONS/${f.actions}//`,`GENTEXT/ASSESSMENT/${f.assessment}//`,
+   `GENTEXT/ACTIONS/${f.actions}//`,`GENTEXT/PUBLIC AFFAIRS/${f.media}//`,`GENTEXT/ASSESSMENT/${f.assessment}//`,
    'SENSOR OBSERVATIONS ONLY. OPERATOR MUST VERIFY; NO INCIDENT OR STRIKE IS CONFIRMED.', 'BT'
   ].join('\n');
   return [
