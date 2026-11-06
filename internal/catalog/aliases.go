@@ -46,7 +46,7 @@ var Aliases = map[string]string{
 
 	"navigation buoy": "buoy", "marker buoy": "buoy", "channel marker": "buoy",
 
-	"swimmer": "person", "man overboard": "person", "person in the water": "person",
+	"swimmer": "person", "man overboard": "person in water", "person in the water": "person in water", "mob": "person in water",
 }
 
 // CanonicalAlias resolves a whole phrase, or its regular plural, through Aliases.

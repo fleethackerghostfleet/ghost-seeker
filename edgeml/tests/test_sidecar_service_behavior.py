@@ -31,10 +31,10 @@ def test_embedding_metadata_initialization_and_wrapper_forwarding(tmp_path, mode
     (tmp_path / "meta.json").write_text(json.dumps({"model": "tiny", "precision": "fp16"}))
     engine = service.EdgemlEngine("fixture.onnx", tmp_path, threads=2, agg={"min_hits": 3})
     constructor.assert_called_once_with("tiny", backend="ort", onnx_dir=tmp_path, threads=2, precision="fp16")
-    assert engine.detector is detector and engine.agg_params.min_hits == 3
+    assert engine.detector.base is detector and engine.agg_params.min_hits == 3
     assert engine.unknown_calib == "fixture-calibration"
-    assert engine.capabilities() == {"modelId": "fixture-detector+fixture-clip", "openVocabulary": True,
-                                     "fixedLabels": ["tanker"], "embeddingDim": 2}
+    assert engine.capabilities() == {"modelId": "fixture-detector+live-tiles2-mob+fixture-clip", "openVocabulary": False,
+                                     "fixedLabels": ["tanker", "person in water"], "embeddingDim": 2}
     assert engine.embed_text(["tanker"]) == [[0.12346, 0.5]]
     clip.embed_text.assert_called_once_with(["tanker"])
     crops = [np.zeros((8, 8, 3), np.uint8)]
@@ -43,7 +43,7 @@ def test_embedding_metadata_initialization_and_wrapper_forwarding(tmp_path, mode
     assert engine.embedder.logit_scale() == 10.
     caps = engine.capabilities()
     caps["fixedLabels"].append("not-a-model-class")
-    assert engine.capabilities()["fixedLabels"] == ["tanker"]
+    assert engine.capabilities()["fixedLabels"] == ["tanker", "person in water"]
 
 
 def test_text_cache_failure_is_precondition_until_torch_is_explicitly_enabled(model_fakes):
@@ -66,6 +66,40 @@ def test_text_cache_failure_is_precondition_until_torch_is_explicitly_enabled(mo
     constructor.assert_called_once_with("tiny", backend="torch")
     assert tower.embed_text.call_args_list[0].args == (["unseen"],)
     assert tower.embed_text.call_args_list[1].args == (["another"],)
+
+
+def test_open_vocabulary_asset_negotiation_and_analysis_path(tmp_path, model_fakes, monkeypatch):
+    from edgeml.sidecar import open_vocab
+    from edgeml.types import Detection
+
+    (tmp_path / "meta.json").write_text(json.dumps({"model": "tiny"}))
+    engine = service.EdgemlEngine("fixture.onnx", tmp_path)
+    assert engine.capabilities()["openVocabulary"] is False
+    with pytest.raises(service.RpcError) as error:
+        engine.analyze("cam", np.zeros((32, 48, 3), np.uint8), None, ["open-vocab:life raft"], False)
+    assert error.value.code == "failed_precondition"
+    for name in ("text_model.onnx", "tokenizer.json"):
+        (tmp_path / name).touch()
+    tower = Mock(return_value=np.array([[1., 0.]]))
+    monkeypatch.setattr(open_vocab, "ONNXTextTower", Mock(return_value=tower))
+    engine = service.EdgemlEngine("fixture.onnx", tmp_path)
+    assert engine.capabilities()["openVocabulary"] is True
+    assert engine.embed_text(["arbitrary noun"]) == [[1., 0.]]
+    assert engine.embed_text(["arbitrary noun"]) == [[1., 0.]]
+    tower.assert_called_once_with(["arbitrary noun"])
+    model_fakes[0].detect = Mock(return_value=[])
+    src = SimpleNamespace(lock=__import__("threading").Lock(), frame_idx=0, t0_ms=None,
+                          tracker=SimpleNamespace(update=Mock(return_value=[])),
+                          agg=SimpleNamespace(update=Mock(return_value=[]), states={}))
+    engine._source = Mock(return_value=src)
+    expected = {"label": "life raft", "confidence": .7, "box": {"x": 0., "y": 0., "w": .5, "h": .5}}
+    engine.open_vocab.detect = Mock(return_value=[expected])
+    result = engine.analyze("cam", np.zeros((32, 48, 3), np.uint8), None, ["open-vocab:life raft"], False)
+    assert expected in result["detections"]
+    assert engine.open_vocab.detect.call_args.args[2] == ["life raft"]
+    with pytest.raises(service.RpcError) as error:
+        engine.analyze("cam", np.zeros((32, 48, 3), np.uint8), None, [f"open-vocab:phrase {i}" for i in range(6)], False)
+    assert error.value.code == "invalid_argument"
 
 
 def test_frame_clock_is_per_source_clamps_early_timestamps_and_has_fps_fallback(model_fakes):
@@ -126,3 +160,24 @@ def test_zero_shot_cache_reuses_embedding_identity_and_is_cleared_on_close():
     events = agg.update([], image, 2, 1.)
     assert events[0]["event"] == "close" and events[0]["sighting_id"] == sid
     assert sid not in agg.zs and classify.call_count == 2
+
+
+def test_live_engine_reports_mob_with_tiling_disabled_and_preserves_sighting_class(model_fakes, monkeypatch):
+    from edgeml.types import Detection
+    import edgeml.tracking as tracking
+
+    detector, _, _ = model_fakes
+    detector.detect = Mock(return_value=[Detection([100, 800, 20, 20], .8, "person")])
+    monkeypatch.setattr(tracking, "make_tracker", lambda *a, **kw: SimpleNamespace(update=lambda *a: []))
+    engine = service.EdgemlEngine("fixture.onnx", embed="none", live_tiling={"enabled": False})
+    image = np.full((1080, 1920, 3), 60, np.uint8)
+    image[:400] = 220
+    result = engine.analyze("cam", image, 1000, [], False)
+    assert result["detections"][0]["label"] == "person in water"
+    assert result["detections"][0]["confidence"] == .8
+    detector.detect.assert_called_once()
+    classifier = SimpleNamespace(classify=Mock(side_effect=AssertionError("must not overwrite a person")))
+    agg = service._ZeroShotAggregator("cam", AggregatorParams(min_hits=1), classifier=classifier)
+    state = SimpleNamespace(s=SimpleNamespace(label="person in water"), emb=np.array([1., 0.]))
+    agg._apply(state)
+    assert state.s.label == "person in water"

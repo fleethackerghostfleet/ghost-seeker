@@ -45,6 +45,24 @@ func TestResearchCompilerAdaptsKnownClassAndIsolatesState(t *testing.T) {
 	}
 }
 
+func TestResearchCompilerOpenVocabularyCapabilityAndBoost(t *testing.T) {
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"rules":[{"concept":"orange life jackets","action":"boost","weight":2}]} `))
+	}))
+	defer service.Close()
+	client, _ := NewResearchClient(service.URL)
+	for _, enabled := range []bool{true, false} {
+		compiler := &Compiler{Research: client, Capabilities: testCapabilities{Capabilities{OpenVocabulary: enabled}}}
+		result := compiler.Compile(context.Background(), "look for orange life jackets")
+		if result.Blocked == enabled {
+			t.Fatalf("capability %v result %+v", enabled, result)
+		}
+		if enabled && (result.Rules[0].Classes[0] != "orange life jackets" || result.Rules[0].Weight != 2) {
+			t.Fatalf("lost phrase/boost: %+v", result)
+		}
+	}
+}
+
 func TestResearchCompilerRejectsUnsupportedAndMalformedDrafts(t *testing.T) {
 	for _, raw := range []string{
 		`{"rules":[{"concept":"red fishing boat","action":"boost","weight":2}]}`,

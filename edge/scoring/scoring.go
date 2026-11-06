@@ -17,6 +17,7 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/vec"
 )
 
@@ -55,9 +56,9 @@ const (
 // operator interest, and detection confidence.
 func Default() *Engine {
 	return &Engine{
-		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}},
+		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}, PersonInWater{}},
 		Weights: map[string]float64{"base": 1, "unknown": 3, "interest": 1, "confidence": 0.5,
-			"dark": catalog.NightConfig.DarkContact.PriorityWeight},
+			"dark": catalog.NightConfig.DarkContact.PriorityWeight, "mob": 4},
 	}
 }
 
@@ -341,9 +342,10 @@ func TierPin(it *pb.Item, p *pb.Policy) (label string, tier int32) {
 
 func hasLabel(labels []string, want string) bool {
 	w := norm(want)
+	closed := openvocab.Closed(strings.ToLower(strings.TrimSpace(want))) || openvocab.Closed(w)
 	for _, l := range labels {
 		n := norm(l)
-		if n == w || strings.Contains(n, w) || strings.Contains(w, n) {
+		if n == w || strings.Contains(" "+n+" ", " "+w+" ") || closed && (strings.Contains(n, w) || strings.Contains(w, n)) {
 			return true
 		}
 	}

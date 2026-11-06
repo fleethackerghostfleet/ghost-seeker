@@ -2,6 +2,7 @@ package command
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,6 +20,7 @@ type genericPattern struct {
 }
 
 var synonymPatterns = []classPattern{
+	{"person in water", regexp.MustCompile(`\b(persons?|people) in (the )?water\b|\b(man[- ]overboard|mob)\b`)},
 	{"unknown", regexp.MustCompile(`\b((unknown|unidentified) (objects?|contacts?)|unclassified)\b`)},
 	{"warship", regexp.MustCompile(`\b(warships?|destroyers?|frigates?|cruisers?|corvettes?|combatants?|navy (ship|vessel)s?|naval (ship|vessel)s?|military (ship|vessel)s?|grey hulls?|gray hulls?)\b`)},
 	{"submarine", regexp.MustCompile(`\b(submarines?|subs?|periscopes?|submersibles?)\b`)},
@@ -86,6 +88,10 @@ var edgeConceptPatterns = []classPattern{
 }
 
 func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
+	return parseDirectiveVocabulary(text, edgeSubtypes, false)
+}
+
+func parseDirectiveVocabulary(text string, edgeSubtypes, openVocabulary bool) ([]Rule, []string) {
 	text = strings.ToLower(text)
 	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
 	text = andActionPattern.ReplaceAllString(text, "; $1")
@@ -130,10 +136,20 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 			clause = windowPattern.ReplaceAllString(clause, " ")
 		}
 		classes := make([]string, 0)
+		attrs := make([]string, 0)
 		seen := make(map[string]bool)
 		patterns := synonymPatterns
 		if edgeSubtypes {
 			patterns = append(append([]classPattern{}, edgeConceptPatterns...), patterns...)
+		}
+		if openVocabulary {
+			patterns = append([]classPattern{}, patterns...)
+			for i, pattern := range patterns {
+				if pattern.class == "debris" {
+					patterns[i].re = regexp.MustCompile(`\b(debris|wreckage|floating objects?|flotsam)\b`)
+				}
+			}
+			classes, attrs, clause = qualifiedConcepts(clause, patterns)
 		}
 		for _, pattern := range patterns {
 			if pattern.re.MatchString(clause) {
@@ -155,14 +171,20 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 				clause = pattern.re.ReplaceAllString(clause, " ")
 			}
 		}
-		attrs := make([]string, 0)
 		for _, pattern := range attributePatterns {
 			if pattern.re.MatchString(clause) {
-				attrs = append(attrs, pattern.name)
+				if !slices.Contains(attrs, pattern.name) {
+					attrs = append(attrs, pattern.name)
+				}
 				clause = pattern.re.ReplaceAllString(clause, " ")
 			}
 		}
 		unused := grammarPattern.ReplaceAllString(negativePattern.ReplaceAllString(clause, " "), " ")
+		if openVocabulary {
+			var concepts []string
+			concepts, unused = openConcepts(clause)
+			classes = append(classes, concepts...)
+		}
 		for _, word := range wordPattern.FindAllString(unused, -1) {
 			if !unknownSeen[word] {
 				unknown = append(unknown, word)

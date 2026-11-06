@@ -53,6 +53,15 @@ def test_mock_startup_does_not_consult_models_or_pin_threads(launch):
     pin.assert_not_called()
 
 
+@pytest.mark.parametrize('options, enabled', [([], False), (['--marine-mammal', 'on'], True),
+                                            (['--mm', '{"enabled":true}'], True),
+                                            (['--marine-mammal', 'on', '--mm', '{"enabled":false}'], False)])
+def test_marine_mammal_is_opt_in(launch, options, enabled):
+    _, engine, _, _ = launch
+    cli.main(['--detector', 'fixture.onnx', *options])
+    assert engine.call_args.kwargs['marine_mammal'] == {'enabled': enabled}
+
+
 def test_tomer_only_startup_forwards_options_without_detector(launch):
     serve, engine, prioritizer, pin = launch
     cli.main(["--prioritizer", "tomer", "--threads", "2", "--tomer-window", "5",
@@ -75,7 +84,8 @@ def test_real_engine_configuration_parses_overrides(monkeypatch, launch, anomaly
               "--prioritizer", "both", *anomaly])
     engine.assert_called_once_with("env.onnx", "none", threads=2, fps=8.0, engine="ort", tracker="ocsort", asso="iou",
                                    max_lost_s=3.0, score_thr=0.4, det_low_thr=0.02, agg={"min_hits": 3},
-                                   trk={"tentative_thresh": None}, text_tower="torch", anomaly_fallback=expected)
+                                   trk={"tentative_thresh": None}, text_tower="torch", anomaly_fallback=expected, live_tiling={},
+                                   marine_mammal={"enabled": False})
     pin.assert_called_once_with(2)
     assert serve.call_args.args[0] is engine.return_value
     assert serve.call_args.kwargs["prioritizer"] is prioritizer.return_value

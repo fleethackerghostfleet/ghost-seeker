@@ -177,7 +177,7 @@ func TestPrediction(t *testing.T) {
 		t.Fatal(p)
 	}
 	engine := scoring.Default()
-	if len(engine.Scorers) != 5 {
+	if len(engine.Scorers) != 6 {
 		t.Fatal("live engine changed")
 	}
 }

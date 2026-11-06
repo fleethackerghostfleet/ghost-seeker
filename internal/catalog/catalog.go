@@ -68,6 +68,7 @@ var Library map[string][]LibraryImage
 
 func init() {
 	for _, model := range Models {
+		model.W["person in water"] = 1
 		model.W["unknown"] = .7
 		model.W["vessel"] = model.W["cargo ship"]
 		model.W["aircraft"] = model.W["military aircraft"]
@@ -105,7 +106,8 @@ var Classes = map[string]Class{
 	"civil aircraft":    {Group: "aircraft", Length: .18, Aspect: .36, Label: "Civil aircraft"},
 	"helicopter":        {Group: "aircraft", Length: .11, Aspect: .5, Label: "Helicopter"},
 	"drone":             {Group: "other", Length: .05, Aspect: .6, Label: "Drone / UAS"},
-	"person":            {Group: "other", Length: .035, Aspect: .8, Label: "Person in water"},
+	"person":            {Group: "other", Length: .035, Aspect: .8, Label: "Person"},
+	"person in water":   {Group: "other", Length: .035, Aspect: .8, Label: "Possible person in water / MOB"},
 	"debris":            {Group: "other", Length: .06, Aspect: .5, Label: "Debris"},
 	"bird":              {Group: "clutter", Length: .035, Aspect: .5, Label: "Bird"},
 	"buoy":              {Group: "clutter", Length: .025, Aspect: 1.6, Label: "Buoy"},
