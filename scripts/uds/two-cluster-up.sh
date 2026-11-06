@@ -59,13 +59,16 @@ up() {
 }
 
 case "${TARGET:-both}" in shore|ship|both) ;; *) echo 'TARGET must be shore, ship or both' >&2; exit 1;; esac
+networks=()
 if [[ "${TARGET:-both}" != ship ]]; then
   up "$SHORE_CLUSTER" "${SHORE_API_PORT:-6551}" "${SHORE_HTTP_PORT:-9080}" "${SHORE_HTTPS_PORT:-9443}"
+  networks+=("k3d-$SHORE_CLUSTER")
 fi
 if [[ "${TARGET:-both}" != shore ]]; then
   up "$SHIP_CLUSTER" "${SHIP_API_PORT:-6552}" "${SHIP_HTTP_PORT:-10080}" "${SHIP_HTTPS_PORT:-10443}"
+  networks+=("k3d-$SHIP_CLUSTER")
 fi
 k3d cluster list | tee "$LOG_DIR/clusters.txt"
-docker network inspect "k3d-$SHORE_CLUSTER" "k3d-$SHIP_CLUSTER" \
+docker network inspect "${networks[@]}" \
   --format '{{.Name}} {{range .IPAM.Config}}{{.Subnet}} gateway={{.Gateway}}{{end}}' \
   | tee "$LOG_DIR/networks.txt"
