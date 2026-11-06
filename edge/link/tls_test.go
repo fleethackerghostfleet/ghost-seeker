@@ -29,6 +29,9 @@ func TestConnectPrivateCA(t *testing.T) {
 	path, handler := ghostseekerv1connect.NewSyncServiceHandler(echoShore{}, HandlerOptions()...)
 	mux := http.NewServeMux()
 	mux.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor != 2 {
+			t.Errorf("sync protocol = %s, want HTTP/2", r.Proto)
+		}
 		if r.Header.Get("Authorization") != "Bearer test-unit" {
 			t.Error("unit token lost")
 		}

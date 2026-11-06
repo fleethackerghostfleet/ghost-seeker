@@ -73,6 +73,14 @@ class UDSPackageTests(unittest.TestCase):
     def test_valid(self):
         self.validate()
 
+    def test_shore_sync_requires_http2_service(self):
+        shore = next(d for d in self.documents if d["kind"] == "Service" and d["metadata"]["name"] == "shore")
+        for protocol in (None, "http"):
+            with self.subTest(protocol=protocol):
+                shore["spec"]["ports"][0]["appProtocol"] = protocol
+                with self.assertRaisesRegex(ValueError, "HTTP/2"):
+                    self.validate()
+
     def test_invalid_package_contracts(self):
         cases = [
             ("apiVersion", "wrong", "identity"),

@@ -33,10 +33,22 @@ func NewConnect(shoreURL string, timeout time.Duration, est *Estimator, token ..
 	return NewConnectWithClient(shoreURL, hc, est, token...)
 }
 
-// NewConnectWithClient uses the caller's HTTP transport and trust configuration.
+// NewConnectWithClient preserves the caller's settings and enables HTTP/2 on standard transports.
 func NewConnectWithClient(shoreURL string, hc *http.Client, est *Estimator, token ...string) *Connect {
+	client := *hc
+	transport := hc.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	if standard, ok := transport.(*http.Transport); ok {
+		transport := standard.Clone()
+		transport.Protocols = new(http.Protocols)
+		transport.Protocols.SetHTTP2(true)
+		transport.Protocols.SetUnencryptedHTTP2(true)
+		client.Transport = transport
+	}
 	c := &Connect{
-		client: ghostseekerv1connect.NewSyncServiceClient(hc, shoreURL, connect.WithGRPC(),
+		client: ghostseekerv1connect.NewSyncServiceClient(&client, shoreURL, connect.WithGRPC(),
 			connect.WithAcceptCompression(gzipName, newGzipDecompressor, newGzipCompressor),
 			connect.WithSendCompression(gzipName),
 			connect.WithCompressMinBytes(CompressMinBytes)),
