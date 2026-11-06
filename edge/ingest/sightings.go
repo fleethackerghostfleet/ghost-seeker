@@ -203,7 +203,10 @@ func imageShipped(row *store.Row) bool {
 func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Capture, hash string, resp *pb.AnalyzeResponse, s *pb.Sighting) (*store.Row, error) {
 	it := row.Item
 	it.ContentHash = hash
+	it.Geo = c.Geo
+	it.Features.Tags = maps.Clone(c.Tags)
 	g.applyFeatures(it, resp, s)
+	enrichCapture(it, c.Data)
 	payloads, original := g.imageForms(c.Data, resp, s)
 	if err := g.keepOriginal(ctx, it.Id, original); err != nil {
 		return nil, err
