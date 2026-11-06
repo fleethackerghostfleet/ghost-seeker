@@ -8,6 +8,7 @@ const origin=process.argv[2]||'http://127.0.0.1:8120',shots=process.argv[3];
  const browser=await chromium.launch({headless:true});
  const results=[];
  const tiers=[];
+ try{
  for(const theme of ['cic','day','red']){
   const page=await browser.newPage({viewport:{width:1920,height:1200}});
   await page.addInitScript(t=>localStorage.setItem('gs.settings',JSON.stringify({theme:t})),theme);
@@ -80,7 +81,7 @@ const origin=process.argv[2]||'http://127.0.0.1:8120',shots=process.argv[3];
   }
   await page.close();
  }
- await browser.close();
+ }finally{await browser.close()}
  console.log(`Rendered red tier treatments: ${tiers.length} samples, 0 failing samples`);
  if(process.env.AUDIT_JSON)fs.writeFileSync(process.env.AUDIT_JSON.replace(/\.json$/,'.tiers.json'),JSON.stringify(tiers,null,2));
  for(const theme of ['cic','day','red']){const rows=results.filter(x=>x.theme===theme),bad=rows.filter(x=>x.ratio+.001<x.threshold);console.log(`${theme}: ${rows.length} samples, ${bad.length} failing samples, lowest ${Math.min(...rows.map(x=>x.ratio)).toFixed(2)}:1`);console.log(JSON.stringify(bad,null,2));}
