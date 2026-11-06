@@ -49,7 +49,7 @@ def test_rpc_http_override_and_unexpected_engine_exception(endpoint):
     endpoint[1].embed_text.side_effect = RpcError("resource_exhausted", "pixel cap", http_status=413)
     assert request(endpoint) == (413, {"code": "resource_exhausted", "message": "pixel cap"})
     endpoint[1].embed_text.side_effect = RuntimeError("backend offline")
-    assert request(endpoint) == (500, {"code": "internal", "message": "RuntimeError: backend offline"})
+    assert request(endpoint) == (500, {"code": "internal", "message": "inference request failed"})
     endpoint[1].embed_text.side_effect = KeyError("cache")
     status, error = request(endpoint)
     assert status == 400 and error["code"] == "invalid_argument" and error["message"].startswith("KeyError:")
@@ -66,10 +66,11 @@ def test_bad_json_and_content_length_are_invalid_arguments(endpoint, body, heade
     assert status == 400 and error["code"] == "invalid_argument" and error["message"].startswith(prefix)
 
 
-@pytest.mark.parametrize("length", [-1, server.MAX_BODY_BYTES + 1])
-def test_body_limits_reject_without_waiting_for_the_declared_body(endpoint, length):
-    status, error = request(endpoint, body=b"", headers={"Content-Type": "application/json", "Content-Length": str(length)})
-    assert status == 413 and error["code"] == "resource_exhausted"
+@pytest.mark.parametrize("length,status,code", [(-1, 400, "invalid_argument"),
+                                               (server.MAX_BODY_BYTES + 1, 413, "resource_exhausted")])
+def test_body_limits_reject_without_waiting_for_the_declared_body(endpoint, length, status, code):
+    actual, error = request(endpoint, body=b"", headers={"Content-Type": "application/json", "Content-Length": str(length)})
+    assert actual == status and error["code"] == code
 
 
 def test_empty_body_health_routes_and_unknown_paths(endpoint):

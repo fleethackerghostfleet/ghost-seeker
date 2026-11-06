@@ -44,8 +44,8 @@ func ForPrioritizer(name string) (*Engine, error) {
 func Tomer() *Engine {
 	d := Default()
 	return &Engine{
-		Scorers: []Scorer{TomerScore{}, Interest{}, DarkContact{}},
-		Weights: map[string]float64{"tomer": 3, "interest": d.Weights["interest"], "dark": d.Weights["dark"]},
+		Scorers: []Scorer{TomerScore{}, Interest{}, DarkContact{}, PersonInWater{}},
+		Weights: map[string]float64{"tomer": 3, "interest": d.Weights["interest"], "dark": d.Weights["dark"], "mob": d.Weights["mob"]},
 	}
 }
 
