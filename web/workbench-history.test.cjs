@@ -13,7 +13,7 @@ function setup(){
  const $=id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)};
  const items=[{id:'a',src:{id:'EO-P7'},ts:Date.now(),tier:3,central:.4,dets:[{cls:'small boat',attrs:{},conf:.9}],frame:1},
   {id:'b',src:{id:'SAR'},ts:Date.now(),tier:2,central:.7,dets:[{cls:'tanker',attrs:{},conf:.8}],frame:2}];
- const context=vm.createContext({$,items,CLS:{'small boat':{lab:'Small boat'},tanker:{lab:'Tanker'}},ATTR_LAB:{moving:'Moving',dark:'Dark',approaching:'Approaching'},
+ const context=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},$,items,CLS:{'small boat':{lab:'Small boat'},tanker:{lab:'Tanker'}},ATTR_LAB:{moving:'Moving',dark:'Dark',approaching:'Approaching'},
   SOURCES:[{id:'EO-P7'},{id:'SAR'}],TNAME:['','Critical','High','Routine','Low'],state:{page:'rp'},gsPolicy:{isPolicyHotkeyTarget:()=>false},
   tcol:()=>'',esc:String,ruleLabel:r=>r.type+' '+r.classes.join(', '),imageFor:()=>'/frame.jpg',findItem:id=>items.find(i=>i.id===id),isScene:()=>false,
   toast:m=>messages.push(m),CSS:{escape:String},setTimeout:()=>1,clearTimeout(){},

@@ -9,7 +9,7 @@ function setup(){
  const elements=new Map(),writes=[],messages=[];
  const element=()=>({value:'',checked:false,dataset:{},classList:{toggle(){}},querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){},focus(){},close(){this.open=false},showModal(){this.open=true},replaceChildren(){},append(){},setSelectionRange(){}});
  const items=['first','second','ocean'].map((id,i)=>({id,manual:i===0?2:0,tier:4,central:.1,frame:i,src:{id:'camera'},ts:Date.now(),dets:[],det:[],...(id==='ocean'?{live:{event:'scene'}}:{})}));
- const c=vm.createContext({items,findItem:id=>items.find(i=>i.id===id),isScene:i=>i?.live?.event==='scene',
+ const c=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},items,findItem:id=>items.find(i=>i.id===id),isScene:i=>i?.live?.event==='scene',
   $:id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id)},
   document:{activeElement:{closest:()=>null},querySelector:()=>elements.get('wbConfirm')?.open?{}:null,addEventListener(){},createElement:element},
   setTimeout:()=>1,clearTimeout(){},CLS:{},ATTR_LAB:{},SOURCES:[],TNAME:['','Critical','High','Routine','Low'],state:{page:'rp'},

@@ -755,7 +755,7 @@ function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
 function renderZoom(){preserveBandFocus(renderZoomContent)}
 function renderZoomContent(){const it=findItem(state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
- z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
+ renderImageHTML(z,`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`);z.onclick=closeZoom}
 function closeDetail(){closeZoom();selectFeedItem(null);document.body.classList.remove('drawer-open')}
 function step(dir){const l=feedOrdered;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function metadataHTML(record){
@@ -824,8 +824,8 @@ function metadataPanelHTML(it){
 }
 function bindMetadataPanel(it){
  const panel=$('metadataPanel');if(!panel)return;
- panel.addEventListener?.('toggle',()=>{if(!panel.isConnected)return;metadataExpanded=panel.open;const caret=panel.querySelector('.metadata-caret');if(caret)caret.textContent=panel.open?'▾':'▸';if(panel.open)loadMetadata(it,panel)});
- $('metadataCopy')?.addEventListener?.('click',async e=>{e.stopPropagation();const data=metadataCache.get(it.id)?.data;if(!data)return;try{await navigator.clipboard.writeText(JSON.stringify(data,null,2));toast('Metadata JSON copied')}catch{toast('Could not copy metadata JSON')}});
+ panel.ontoggle=()=>{if(!panel.isConnected)return;metadataExpanded=panel.open;const caret=panel.querySelector('.metadata-caret');if(caret)caret.textContent=panel.open?'▾':'▸';if(panel.open)loadMetadata(it,panel)};
+ const copy=$('metadataCopy');if(copy)copy.onclick=async e=>{e.stopPropagation();const data=metadataCache.get(it.id)?.data;if(!data)return;try{await navigator.clipboard.writeText(JSON.stringify(data,null,2));toast('Metadata JSON copied')}catch{toast('Could not copy metadata JSON')}};
  if(panel.open)loadMetadata(it,panel);
 }
 function buildWhy(it,rows){
@@ -877,14 +877,14 @@ function renderDetailContent(){
  const it=findItem(state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';closeDetail();return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn" aria-label="Close image details">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
+	 renderImageHTML(D,`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn" aria-label="Close image details">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`);
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;bindMetadataPanel(it);return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
  const why=buildWhy(it,rows);
  const dl=it.central-it.base;
  const l=feedOrdered,idx=l.findIndex(x=>x.id===it.id);
- D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span></h2><small>${esc(it.src.name)} · <span class="mono" title="UTC time (Zulu)">${zulu(it.ts)}</span> · Stored image #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
+ renderImageHTML(D,`<div class="dhead"><div><h2><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span></h2><small>${esc(it.src.name)} · <span class="mono" title="UTC time (Zulu)">${zulu(it.ts)}</span> · Stored image #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
   <div class="dnav"><button id="dPrev" title="Previous (←)" aria-label="Previous image">‹</button><button id="dNext" title="Next (→)" aria-label="Next image">›</button><button id="dClose" title="Close (Esc)" aria-label="Close image details">×</button></div></div>
  <div class="dimg" id="dImg" title="Enlarge (F)">${largeImage(it)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
@@ -906,7 +906,7 @@ function renderDetailContent(){
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
   ${metadataPanelHTML(it)}
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
- </div>`;
+ </div>`);
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
  bindMetadataPanel(it);briefing.renderDetections(it);
  $('oprepOpen').onclick=event=>openItemOprep(it,event.currentTarget,()=>state.sel===it.id);
