@@ -56,6 +56,18 @@ func Mint(node, key string, ttl time.Duration) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(key))
 }
 
+// ConfiguredTokenActive checks the lifetime of an administrator-provisioned
+// credential. Call only after constant-time equality with that exact token;
+// edge does not have shore's signing key and cannot verify arbitrary JWTs.
+func ConfiguredTokenActive(value string) bool {
+	c := &claims{}
+	t, _, err := jwt.NewParser().ParseUnverified(value, c)
+	if err != nil || t.Method.Alg() != "HS256" || c.Role != "unit" || strings.TrimSpace(c.Subject) == "" {
+		return false
+	}
+	return jwt.NewValidator(jwt.WithExpirationRequired(), jwt.WithIssuedAt()).Validate(c) == nil
+}
+
 type Interceptor struct {
 	required bool
 	key      []byte
