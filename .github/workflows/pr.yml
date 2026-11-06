@@ -5,13 +5,13 @@ on:
     branches: [dev, main]
     paths-ignore:
       - 'docs/**'
-      - '*.md'
+      - '**/*.md'
       - 'frames/**'
   push:
     branches: [dev]
     paths-ignore:
       - 'docs/**'
-      - '*.md'
+      - '**/*.md'
       - 'frames/**'
 
 permissions:
