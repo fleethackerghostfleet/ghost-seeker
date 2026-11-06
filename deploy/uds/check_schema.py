@@ -18,6 +18,8 @@ def main():
     try:
         with urllib.request.urlopen(URL, timeout=30) as response:
             raw = response.read()
+    except urllib.error.HTTPError:
+        raise
     except (urllib.error.URLError, OSError) as err:
         print(f"could not fetch pinned UDS Package CRD: {err}", file=sys.stderr)
         return OFFLINE
