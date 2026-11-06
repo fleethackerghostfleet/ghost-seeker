@@ -114,7 +114,10 @@ def test_detection_tracker_aggregator_wire():
     wire = engine._sighting(events[0], 1, 90, 60, 0)
     assert wire['keyDetection']['label'] == 'marine mammal'
     assert wire['subtype'] == 'dolphin'
-    assert _wire_subtype({'label': 'marine mammal', 'subtype': 'blow', 'tentative': True}) == 'blow'
+    for subtype in ('whale', 'blow', 'fluke', 'dolphin'):
+        assert _wire_subtype({'label': 'marine mammal', 'subtype': subtype, 'tentative': True}) == 'tentative'
+        assert _wire_subtype({'label': 'marine mammal', 'subtype': subtype, 'reason': 'confirmed'}) == subtype
+        assert _wire_subtype({'label': 'marine mammal', 'subtype': subtype, 'event': 'update'}) == subtype
 
 
 @pytest.mark.parametrize('options', [{'scan_stride': 0}, {'rows': 0}, {'max_crops': -1}, {'scan_thr': 2}])

@@ -88,10 +88,10 @@ class _Source:
 def _wire_subtype(ev: dict) -> str:
     """The proto has no tentative flag: a tentative sighting is tagged ``subtype="tentative"``; on confirmation the edge
     only retags on a non-empty subtype, so a confirmation without a classifier subtype retags with the coarse label."""
-    if ev.get('label') == 'marine mammal' and ev.get('subtype') in ('whale', 'blow', 'fluke', 'dolphin'):
-        return ev['subtype']
     if ev.get("tentative"):
         return "tentative"
+    if ev.get('label') == 'marine mammal' and ev.get('subtype') in ('whale', 'blow', 'fluke', 'dolphin'):
+        return ev['subtype']
     return ev.get("subtype") or ((ev.get("label") or "") if ev.get("reason") == "confirmed" else "")
 
 
