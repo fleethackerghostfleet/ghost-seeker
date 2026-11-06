@@ -16,12 +16,12 @@
       "negative_fpr": 0.031914893617021274
     },
     "jetski": {
-      "tp": 16,
+      "tp": 14,
       "fp": 3,
-      "fn": 34,
+      "fn": 36,
       "tn": 101,
-      "precision": 0.8421052631578947,
-      "recall": 0.32,
+      "precision": 0.8235294117647058,
+      "recall": 0.28,
       "negative_fpr": 0.028846153846153848
     },
     "life saving appliances": {
@@ -36,22 +36,22 @@
   },
   "test": {
     "buoy": {
-      "tp": 72,
+      "tp": 70,
       "fp": 15,
-      "fn": 112,
+      "fn": 114,
       "tn": 155,
-      "precision": 0.8275862068965517,
-      "recall": 0.391304347826087,
+      "precision": 0.8235294117647058,
+      "recall": 0.3804347826086957,
       "negative_fpr": 0.08823529411764706
     },
     "jetski": {
-      "tp": 48,
-      "fp": 4,
-      "fn": 62,
-      "tn": 240,
-      "precision": 0.9230769230769231,
-      "recall": 0.43636363636363634,
-      "negative_fpr": 0.01639344262295082
+      "tp": 44,
+      "fp": 3,
+      "fn": 66,
+      "tn": 241,
+      "precision": 0.9361702127659575,
+      "recall": 0.4,
+      "negative_fpr": 0.012295081967213115
     },
     "life saving appliances": {
       "tp": 0,
@@ -73,6 +73,21 @@
     "jetski": "jetski",
     "life saving appliances": "life_saving_appliances"
   },
+  "detector": {
+    "name": "yolo11n-fp32-640-ort+live-tiles2-mob",
+    "tiling": {
+      "enabled": true,
+      "min_pixels": 921600,
+      "tile": 640,
+      "overlap": 0.2,
+      "max_tiles": 2,
+      "budget_ms": 3500.0,
+      "cost_margin": 1.2,
+      "merge_iou": 0.5
+    },
+    "mob": "horizon-context candidate"
+  },
+  "mean_regions": 11.181102362204724,
   "latency": {
     "frames_per_condition": 24,
     "threads": 4,
@@ -93,24 +108,24 @@
     ],
     "conditions": {
       "0": {
-        "cold_first_ms": 1344.6844269999474,
-        "mean_ms": 249.58455383331093,
-        "median_ms": 274.80456050000157,
-        "p95_ms": 369.8480278499687,
+        "cold_first_ms": 2739.3207200002507,
+        "mean_ms": 649.8223247083009,
+        "median_ms": 680.3049564998673,
+        "p95_ms": 981.6223089501134,
         "text_cache_entries": 0
       },
       "1": {
-        "cold_first_ms": 1254.152933000114,
-        "mean_ms": 907.2461241666664,
-        "median_ms": 908.7357055000211,
-        "p95_ms": 1022.4611873499612,
+        "cold_first_ms": 2013.9931859998796,
+        "mean_ms": 1772.6441535833526,
+        "median_ms": 1897.6075614998535,
+        "p95_ms": 2160.768970300046,
         "text_cache_entries": 9
       },
       "5": {
-        "cold_first_ms": 1657.613278999861,
-        "mean_ms": 850.0315963750136,
-        "median_ms": 825.7823769999959,
-        "p95_ms": 1097.65194785017,
+        "cold_first_ms": 2834.410041999945,
+        "mean_ms": 2006.6123289166928,
+        "median_ms": 1979.7737560002133,
+        "p95_ms": 2478.9030413502815,
         "text_cache_entries": 17
       }
     }

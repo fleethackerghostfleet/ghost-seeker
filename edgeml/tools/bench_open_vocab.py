@@ -16,18 +16,15 @@ def main(args):
     manifest = [json.loads(x) for x in (args.evaluation / "manifest.jsonl").read_text().splitlines()]
     rows = [x for x in manifest if x["eval_split"] == "test"][:args.frames]
     images = [cv2.imread(str(args.evaluation / "images" / (x["sha256"] + ".jpg"))) for x in rows]
-    engine = EdgemlEngine(args.models / "yolo11n-640/model.onnx", args.models / "mobileclip-s1", threads=4)
-    assert engine.capabilities()["openVocabulary"]
     queries = ["buoy", "jetski", "life saving appliances", "oil slick", "orange life jackets"]
     report = {"frames_per_condition": len(images) * args.repeats, "threads": 4,
               "scope": "EdgemlEngine.analyze including detector, tracker, aggregator, optional crop/grid matcher; excludes JPEG/RPC",
               "image_ids": [x["image_id"] for x in rows], "conditions": {}}
     for count in (0, 1, 5):
+        # Reset live tiling cursors, tracker state, runtime sessions and text cache equally.
+        engine = EdgemlEngine(args.models / "yolo11n-640/model.onnx", args.models / "mobileclip-s1", threads=4)
+        assert engine.capabilities()["openVocabulary"]
         labels = ["open-vocab:" + q for q in queries[:count]]
-        # Fresh source state gives identical per-frame tracker/aggregator work in each condition.
-        engine.sources.clear()
-        with engine._cached_text.lock:
-            engine._cached_text.cache.clear()
         started = time.perf_counter()
         engine.analyze("warmup", images[0], None, labels, False)
         cold = (time.perf_counter() - started) * 1000

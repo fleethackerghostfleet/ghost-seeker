@@ -20,7 +20,7 @@ localizer**. No model training or licensing decision was performed.
   exceeding five novel phrases is blocked; combined policy layers are bounded
   deterministically to five. Removed policy prompts do not persist in requests.
 * MobileCLIP-S1 embeds up to eight YOLO proposals, the full frame and a 2×2 grid
-  (5–13 regions). Evaluation observed mean 10.66 regions/frame. No ground-truth
+  (5–13 regions). Evaluation observed mean 11.18 regions/frame. No ground-truth
   boxes are used for inference. One best accepted region becomes a normal
   labeled detection per phrase. Matching frames survive sighting warm-up and
   scene deduplication and participate in the existing policy boost rules.
@@ -50,7 +50,8 @@ The query mapping is `buoy → buoy`, `jetski → jetski`, and
 `life saving appliances → life_saving_appliances`. These queried classes are
 held out of closed-set classification: the evaluator never invokes the fixed
 catalog classifier or feeds it query labels. YOLO supplies generic proposals
-only; all positive decisions come from arbitrary-text similarity plus the
+only, using the same default LiveTiledDetector (up to two horizon tiles,
+3500 ms admission budget) as the rebased live service; all positive decisions come from arbitrary-text similarity plus the
 negative margin, full frame and coarse grid. This is not a new trained detector.
 
 For each v3 dev/test split, sort by image SHA-256 and take up to 50/100 images
@@ -64,17 +65,20 @@ Threshold search uses **dev only**, maximizing macro query recall subject to
 margins `{0, .005, .01, .015, .02, .025, .03, .04, .05, .075, .1}`.
 Ties favor the lower cosine threshold, then lower margin. This selected
 **0.275 / 0.05** before test was evaluated; no tuning on test followed.
+The initial untiled run was superseded after integrating the live-tiling change
+on dev; this report uses a fresh feature cache and the same fixed sampling and
+dev-only calibration procedure against that final live detector.
 
 | Dev query | TP | FP | FN | TN | Precision | Recall | Negative FPR |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | buoy | 29 | 3 | 31 | 91 | 90.63% | 48.33% | 3.19% |
-| jetski | 16 | 3 | 34 | 101 | 84.21% | 32.00% | 2.88% |
+| jetski | 14 | 3 | 36 | 101 | 82.35% | 28.00% | 2.88% |
 | life saving appliances | 0 | 0 | 50 | 104 | N/A | 0.00% | 0.00% |
 
 | Held-out test query | TP | FP | FN | TN | Precision | Recall | Negative FPR |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| buoy | 72 | 15 | 112 | 155 | 82.76% | 39.13% | 8.82% |
-| jetski | 48 | 4 | 62 | 240 | 92.31% | 43.64% | 1.64% |
+| buoy | 70 | 15 | 114 | 155 | 82.35% | 38.04% | 8.82% |
+| jetski | 44 | 3 | 66 | 241 | 93.62% | 40.00% | 1.23% |
 | life saving appliances | 0 | 0 | 100 | 254 | N/A | 0.00% | 0.00% |
 
 Metrics are **frame-tag**, not IoU/AP: a positive frame contains at least one
@@ -98,22 +102,24 @@ Audit SHA-256 values:
 Real `EdgemlEngine.analyze`: detector, ByteTrack, sighting aggregator and optional
 open-vocabulary crop/grid matcher. Excludes JPEG decoding, network/RPC and model
 session creation. Same first 12 test images by manifest order, two repeats,
-24 timed frames per condition, fresh tracker source per frame. Text cache is
-emptied per condition, one first-frame warm-up is measured separately, then
+24 timed frames per condition, fresh tracker source per frame. Each condition
+creates fresh engine sessions, tiling cursors, tracker state and text cache
+(session creation excluded); one first-frame warm-up is measured separately, then
 cached-prompt timings follow. It does not measure sustained same-video tracking.
 
 | Prompts | Mean ms/frame | Median ms | p95 ms | Mean delta vs 0 | First-frame ms |
 |---:|---:|---:|---:|---:|---:|
-| 0 | 249.58 | 274.80 | 369.85 | — | 1344.68 |
-| 1 | 907.25 | 908.74 | 1022.46 | +657.66 | 1254.15 |
-| 5 | 850.03 | 825.78 | 1097.65 | +600.45 | 1657.61 |
+| 0 | 649.82 | 680.30 | 981.62 | — | 2739.32 |
+| 1 | 1772.64 | 1897.61 | 2160.77 | +1122.82 | 2013.99 |
+| 5 | 2006.61 | 1979.77 | 2478.90 | +1356.79 | 2834.41 |
 
-One and five prompts share the same image region work; their small-sample
-ordering reflects measurement variation, not a speedup from additional prompts.
-First-frame 0 includes first-use runtime warm-up; 1/5 include cold text caches
-but already initialized sessions, so those cold values are not directly
-comparable. CPU cost is substantial: **this configuration is not 5-FPS capable
-with active open vocabulary**. Validate target edge hardware and ingest cadence
+One and five prompts share the same image region generator; small-sample timing
+includes variation from live tile admission/cursors, crop counts and CPU work,
+not only the small text-similarity matrix. First-frame values include first-use
+runtime warm-up and cold text caches (for 1/5); they are not process start-up
+timings. CPU cost is substantial: **this configuration is not 5-FPS capable,
+including its existing tiled baseline**. Active prompts add roughly 1.1–1.4 s
+per frame on this VM. Validate target edge hardware and ingest cadence
 before deployment. Maximum prompt and region counts bound work, not a hard
 wall-clock latency guarantee.
 

@@ -15,13 +15,13 @@ import os
 from pathlib import Path
 import platform
 import subprocess
-import time
 
 import cv2
 import numpy as np
 import requests
 
 from edgeml.embed.clip_embedder import ClipEmbedder
+from edgeml.detectors.live_tiled import LiveTiledDetector
 from edgeml.runtime.detectors import load_detector
 from edgeml.sidecar.open_vocab import ONNXTextTower, OpenVocabulary, TextCache, regions
 
@@ -99,7 +99,7 @@ def main(args):
     clip = ClipEmbedder("mobileclip-s1", backend="ort", onnx_dir=args.models / "mobileclip-s1", threads=4)
     text = TextCache(ONNXTextTower(args.text, threads=4))
     matcher = OpenVocabulary(clip, text)
-    detector = load_detector(args.models / "yolo11n-640/model.onnx", engine="ort", threads=4, score_thr=.05)
+    detector = LiveTiledDetector(load_detector(args.models / "yolo11n-640/model.onnx", engine="ort", threads=4, score_thr=.05))
     features = args.output / "features"
     features.mkdir(exist_ok=True)
     scores, margins = [], []
@@ -136,7 +136,8 @@ def main(args):
               "dev": metrics(images, predictions, "dev"), "test": metrics(images, predictions, "test"),
               "hardware": {"platform": platform.platform(), "cpu_count": os.cpu_count(),
                            "cpu": subprocess.check_output(["lscpu"], text=True)},
-              "catalog": str(args.catalog), "queries": QUERIES}
+              "catalog": str(args.catalog), "queries": QUERIES,
+              "detector": detector.info(), "mean_regions": float(np.mean([len(s) for s in scores]))}
     (args.output / "metrics.json").write_text(json.dumps(result, indent=2)+"\n")
     print(json.dumps({k: v for k, v in result.items() if k != "hardware"}, indent=2), flush=True)
 
