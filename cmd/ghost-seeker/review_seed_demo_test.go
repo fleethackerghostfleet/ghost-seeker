@@ -50,7 +50,7 @@ func testDemoReviewSeedAutoEscalation(t *testing.T, backfill int) {
 			for _, det := range item.Dets {
 				whale = whale || det.Class == "marine mammal"
 			}
-			if item.Img == "" || !whale || !item.FeedFirst || item.Manual != 1 || item.Tier != 1 || item.Reviewed || item.Sent || item.AutoSent {
+			if item.Img == "" || !whale || item.FeedFirst || item.Manual != 0 || item.Reviewed || item.Dismissed || item.Sent || item.AutoSent {
 				t.Fatalf("invalid first review item: %+v", item)
 			}
 			var frame *catalog.LibraryImage
@@ -78,11 +78,17 @@ func testDemoReviewSeedAutoEscalation(t *testing.T, backfill int) {
 		}
 	}
 	assertSeed()
+	if _, _, ok := seedReviewAfterReset(data, generator, data.Epoch(), time.Now(), "maritime", nil); ok {
+		t.Fatal("reseeded without reset")
+	}
 	for epoch := uint64(0); epoch < 2; epoch++ {
 		data.Reset()
-		item, extra := whales.tick(data, generator, time.Now(), "maritime", nil)
-		if item == nil || !item.ReviewFirst || data.Epoch() != epoch+1 {
+		if _, next, ok := seedReviewAfterReset(data, generator, epoch, time.Now(), "maritime", nil); !ok || next != epoch+1 {
 			t.Fatal("reset did not seed review")
+		}
+		item, extra := whales.tick(data, generator, time.Now(), "maritime", nil)
+		if item == nil || item.ReviewFirst || !item.FeedFirst || item.Manual != 1 {
+			t.Fatal("reset changed the feed whale")
 		}
 		data.Add(item, extra)
 		assertSeed()

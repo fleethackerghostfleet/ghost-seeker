@@ -78,6 +78,15 @@ test('demo first-review flag precedes priority once; absent capability preserves
  h.run(`findItem('whale').reviewed=false;DEMO_REVIEW_FIRST=false`);assert.equal(h.run('rvQueue()[0].id'),'priority');
 });
 
+test('separate unreviewed whale precedes the manually pinned feed whale in Operator Review',()=>{
+ const h=setup();
+ h.run(`items=[{...raw('feed-whale',1),manual:1,reviewed:true,feedFirst:true,dets:[{cls:'marine mammal',conf:.95}]},raw('priority',1),{...raw('review-whale',3),manual:0,reviewed:false,dismissed:false,reviewFirst:true,dets:[{cls:'marine mammal',conf:.95}]}].map(normalizeItem);DEMO_REVIEW_FIRST=true`);
+ assert.equal(h.run('rvQueue()[0].id'),'review-whale');
+ assert.equal(h.run('rvQueue()[0].manual'),0);
+ assert.equal(h.run('rvQueue()[0].dets[0].cls'),'marine mammal');
+ assert.equal(h.run("rvQueue().some(item=>item.id==='feed-whale')"),false);
+});
+
 test('scene arrivals do not replace stable Review selection or become its next item',()=>{
  const h=setup();h.run(`start();emit('item',{item:{...raw('ocean',4),live:{event:'scene'}},stats:{}})`);active(h);
  assert.equal(h.run('rvQueue().some(isScene)'),false);
