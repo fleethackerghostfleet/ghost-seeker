@@ -785,7 +785,6 @@ func (s *Scheduler) observeMetaOnly(bps float64, now time.Time) {
 	}
 	s.stats.MetaOnly = mode
 	if mode {
-		s.stats.MetaOnlySince = s.lowband.Since()
 		if s.stats.MetaOnlySince.IsZero() {
 			s.stats.MetaOnlySince = now
 		}

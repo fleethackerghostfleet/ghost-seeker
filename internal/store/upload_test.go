@@ -20,10 +20,15 @@ func TestResetPreservesMetadataOnlyMode(t *testing.T) {
 			} else {
 				s.SetEMCON(true)
 			}
+			before, _ := s.Stats()
+			s.AdvanceUploads(time.Second)
 			s.Reset()
 			_, stats, _, _ := s.Snapshot()
 			if !stats.MetaOnly || stats.MetaOnlyReason != reason || stats.MetaOnlySince == nil {
 				t.Fatalf("reset lost metadata-only state: %+v", stats)
+			}
+			if !stats.MetaOnlySince.Equal(*before.MetaOnlySince) {
+				t.Fatalf("reset changed continuous metadata-only start: %v -> %v", before.MetaOnlySince, stats.MetaOnlySince)
 			}
 		})
 	}
