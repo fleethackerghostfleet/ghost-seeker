@@ -57,6 +57,7 @@ const positiveActions = `prioriti\w*|boost|show|report|focus`
 
 var (
 	negativePattern  = regexp.MustCompile(`\b(` + negativeActions + `)\b`)
+	positivePattern  = regexp.MustCompile(`\b(` + positiveActions + `)\b`)
 	onlyPattern      = regexp.MustCompile(`\b(only|exclusively|nothing (else|but))\b`)
 	splitPattern     = regexp.MustCompile(`[,;.]|\bbut\b|\balso\b|\bthen\b`)
 	andActionPattern = regexp.MustCompile(`\band\s+(` + negativeActions + `|` + positiveActions + `)\b`)
@@ -85,6 +86,38 @@ var edgeConceptPatterns = []classPattern{
 	{"marine mammal", regexp.MustCompile(`\b(marine mammals?|(?:killer |humpback )?whales?|dolphins?|porpoises?|orcas?|cetaceans?)\b`)},
 }
 
+// ObservationClasses resolves the subject of a class-only observation. A nearby
+// object is context, not another requested class or a proximity constraint.
+func ObservationClasses(text string) []string {
+	text = strings.Join(strings.Fields(strings.ToLower(text)), " ")
+	if subject, context, ok := strings.Cut(text, " near "); ok {
+		context = strings.TrimPrefix(context, "the ")
+		_, known := canonicalClass(context, true)
+		for _, pattern := range genericPatterns {
+			known = known || (context != "" && pattern.re.FindString(context) == context)
+		}
+		if !known {
+			return nil
+		}
+		text = subject
+	} else {
+		text = strings.TrimSuffix(text, " spotted")
+	}
+	text = strings.TrimPrefix(text, "the ")
+	for _, pattern := range genericPatterns {
+		if text != "" && pattern.re.FindString(text) == text {
+			return append([]string{}, pattern.classes...)
+		}
+	}
+	if alias, ok := catalog.CanonicalAlias(text); ok {
+		text = alias
+	}
+	if class, ok := canonicalClass(text, true); ok {
+		return []string{class}
+	}
+	return nil
+}
+
 func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 	text = strings.ToLower(text)
 	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
@@ -96,6 +129,19 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 	for _, clause := range clauses {
 		if strings.TrimSpace(clause) == "" {
 			continue
+		}
+		if edgeSubtypes {
+			observation, action := strings.TrimSpace(clause), "boost"
+			if loc := negativePattern.FindStringIndex(observation); loc != nil && loc[0] == 0 {
+				action = "suppress"
+				observation = strings.TrimSpace(observation[loc[1]:])
+			} else if loc := positivePattern.FindStringIndex(observation); loc != nil && loc[0] == 0 {
+				observation = strings.TrimPrefix(strings.TrimSpace(observation[loc[1]:]), "on ")
+			}
+			if classes := ObservationClasses(observation); len(classes) > 0 {
+				rules = append(rules, Rule{Type: action, Classes: classes})
+				continue
+			}
 		}
 		negative := negativePattern.MatchString(clause)
 		only := onlyPattern.MatchString(clause)
