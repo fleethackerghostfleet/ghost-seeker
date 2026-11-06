@@ -24,6 +24,29 @@ type failingSaveBackend struct {
 	policy.Backend
 }
 
+func TestPolicyBurstAdminRestoreAndExpiry(t *testing.T) {
+	backend := policy.NewMemBackend()
+	data := store.New(10)
+	app := New(data, WithAdmin(true), WithAdminToken("test-token"), WithPolicyBackend(backend))
+	raw := `{"layers":[{"echelon":"ECHELON_COMMAND","issuedBy":"CTF-99","emcon":{"mode":"EMCON_MODE_BURST"}}]}`
+	response := rawPolicyRequest(app, http.MethodPut, "/api/policy", raw)
+	if response.Code != http.StatusOK {
+		t.Fatalf("admin status=%d: %s", response.Code, response.Body.String())
+	}
+	if stats, _ := data.Stats(); !stats.MetaOnly || stats.MetaOnlyReason != "emcon" {
+		t.Fatalf("admin BURST did not reach store: %+v", stats)
+	}
+	restored := store.New(10)
+	rt := newPolicyRuntime(serverOptions{backend: backend}, restored)
+	if stats, _ := restored.Stats(); !stats.MetaOnly || stats.MetaOnlyReason != "emcon" {
+		t.Fatalf("restored BURST did not reach store: %+v", stats)
+	}
+	rt.expire(time.Now().Add(13 * time.Hour))
+	if stats, _ := restored.Stats(); stats.MetaOnly {
+		t.Fatalf("expired BURST remains active: %+v", stats)
+	}
+}
+
 func (failingSaveBackend) SavePolicyState(context.Context, *pb.Policy, int64) error {
 	return errors.New("save failed")
 }

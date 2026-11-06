@@ -224,6 +224,7 @@ func (rt *policyRuntime) expire(now time.Time) {
 	_ = rt.guard.MarkExpired(context.Background(), now)
 	rt.higherLayers = nil
 	rt.store.SetPolicyDirectives(nil, nil)
+	rt.store.SetEMCON(false)
 	rt.mu.Unlock()
 	if rt.onChange != nil {
 		rt.onChange()
@@ -258,7 +259,8 @@ func (rt *policyRuntime) operatorLayer() *pb.PolicyLayer {
 }
 
 func (rt *policyRuntime) syncStore(p *pb.Policy, now time.Time) {
-	accepted, _, conflicts := policy.MergeRules(p.Layers, rt.nodeID, now)
+	accepted, emcon, conflicts := policy.MergeRules(p.Layers, rt.nodeID, now)
+	rt.store.SetEMCON(emcon.GetMode() == pb.EmconMode_EMCON_MODE_BURST)
 	source := make([]command.Directive, 0)
 	for _, item := range accepted {
 		if item.Layer.Echelon == pb.Echelon_ECHELON_SHIP && item.Layer.IssuedBy == "TAO" {
@@ -505,7 +507,6 @@ func (s *Server) setPolicyEMCON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.policy.operatorEMCON = &pb.EmconSetting{Mode: mode, SetBy: opauth.Actor(r.Context(), "TAO"), Echelon: pb.Echelon_ECHELON_SHIP}
-	s.store.SetEMCON(mode == pb.EmconMode_EMCON_MODE_BURST)
 	accepted, err := s.policy.apply("ui", opauth.Actor(r.Context(), "TAO"), "EMCON "+emconModeName(mode), time.Now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
