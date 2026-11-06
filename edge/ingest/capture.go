@@ -49,16 +49,14 @@ func enrichCapture(it *pb.Item, data []byte) {
 	} else {
 		put("heading", fmt.Sprintf("%.2f", it.Geo.HeadingDeg), false)
 	}
-	if _, ok := tags["subtype"]; !ok {
-		label := "unclassified contact"
-		conf := "0.70"
-		if len(f.Detections) > 0 && f.Detections[0].Label != "" {
-			label = f.Detections[0].Label
-			conf = strconv.FormatFloat(float64(f.Detections[0].Confidence), 'f', 3, 32)
-		}
-		put("subtype", label, true)
-		put("subtype_conf", conf, true)
+	label := "unclassified contact"
+	conf := "0.70"
+	if len(f.Detections) > 0 && f.Detections[0].Label != "" {
+		label = f.Detections[0].Label
+		conf = strconv.FormatFloat(float64(f.Detections[0].Confidence), 'f', 3, 32)
 	}
+	put("subtype", label, true)
+	put("subtype_conf", conf, true)
 	put("unknownness", strconv.FormatFloat(float64(f.Unknownness), 'f', 3, 32), false)
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err == nil {
