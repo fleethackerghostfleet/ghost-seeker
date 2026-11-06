@@ -229,7 +229,7 @@ func canonicalClass(label string, edgeSubtypes bool) (string, bool) {
 	if label == "" {
 		return "", false
 	}
-	if _, ok := catalog.Classes[label]; ok {
+	if _, ok := catalog.Classes[label]; ok && (!catalog.EdgeSubtypes[label] || edgeSubtypes) {
 		return label, true
 	}
 	if edgeSubtypes {

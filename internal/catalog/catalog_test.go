@@ -7,7 +7,7 @@ import (
 )
 
 func TestRealDatasetClassesHaveModelWeightsWithoutChangingPools(t *testing.T) {
-	if got := Classes["marine mammal"]; got != (Class{Group: "other", Length: .1, Aspect: .4, Label: "Marine mammal (whale)"}) || EdgeSubtypes["marine mammal"] {
+	if got := Classes["marine mammal"]; got != (Class{Group: "other", Length: .1, Aspect: .4, Label: "Marine mammal (whale)"}) || !EdgeSubtypes["marine mammal"] {
 		t.Fatalf("marine mammal class = %+v", got)
 	}
 	for name, want := range map[string]float64{"maritime": .1, "air": .05, "sar": .1} {
