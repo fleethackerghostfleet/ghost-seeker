@@ -24,8 +24,8 @@ tasks:
   - name: deploy-ship-bundle
     description: Deploy to the current cluster using administrator-supplied site config and existing Secrets.
     actions:
-      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to ship site uds-config.yaml}" uds deploy "dist/release/${VERSION:?Set VERSION}/uds-bundle-ghost-seeker-ship-${ARCH:-amd64}-${VERSION}.tar.zst" --confirm'
+      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to ship site uds-config.yaml}" uds deploy "${BUNDLE_DIR:-dist}/uds-bundle-ghost-seeker-ship-${ARCH:-amd64}-${VERSION:-$(cat VERSION)}.tar.zst" --confirm'
   - name: deploy-shore-bundle
     description: Deploy to the current cluster using administrator-supplied site config and existing Secrets.
     actions:
-      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to shore site uds-config.yaml}" uds deploy "dist/release/${VERSION:?Set VERSION}/uds-bundle-ghost-seeker-shore-${ARCH:-amd64}-${VERSION}.tar.zst" --confirm'
+      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to shore site uds-config.yaml}" uds deploy "${BUNDLE_DIR:-dist}/uds-bundle-ghost-seeker-shore-${ARCH:-amd64}-${VERSION:-$(cat VERSION)}.tar.zst" --confirm'

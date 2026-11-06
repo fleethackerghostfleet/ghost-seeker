@@ -15,6 +15,12 @@ immutability when publishing. `make images` alone uses a fresh tag but does not
 change deployment pins. `make zarf-ship`, `make zarf-shore`, then the
 `create-ship-bundle` / `create-shore-bundle` UDS tasks build the deliverables.
 
+The `deploy-ship-bundle` / `deploy-shore-bundle` tasks default to standalone
+bundles in `dist`, with the version read from `VERSION` (override with the
+`VERSION` environment variable). To deploy a release build instead, export
+`VERSION=<release-version>` and `BUNDLE_DIR="dist/release/$VERSION"` before
+running the deploy task. Both flows require the site's `UDS_CONFIG`.
+
 ## Release build
 
 Install the pinned tools in `docs/VERIFY.md` (Go 1.26.10, Zarf v0.89.0,
