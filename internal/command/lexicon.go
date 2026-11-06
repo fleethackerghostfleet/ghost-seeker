@@ -298,13 +298,21 @@ func normalizeDirective(text string, edgeSubtypes bool) normalized {
 	text = normalizeWindows(text)
 	// "everything else can wait" narrows to the named contacts; a positive
 	// "and other contacts" is left alone.
-	text = elseClausePattern.ReplaceAllStringFunc(text, func(match string) string {
-		if negativeRewrites.MatchString(match) || postNegativeRewrites.MatchString(match) || negativePattern.MatchString(match) {
+	// The deferral may follow ("everything else can wait") or lead the
+	// clause ("ignore birds and everything else").
+	var narrowed strings.Builder
+	last := 0
+	for _, loc := range elseClausePattern.FindAllStringIndex(text, -1) {
+		clauseStart := strings.LastIndexAny(text[:loc[0]], ",;.") + 1
+		clause := text[clauseStart:loc[1]]
+		if negativeRewrites.MatchString(clause) || postNegativeRewrites.MatchString(clause) || negativePattern.MatchString(clause) {
 			out.onlyOthers = true
-			return ","
+			narrowed.WriteString(text[last:loc[0]])
+			narrowed.WriteString(",")
+			last = loc[1]
 		}
-		return match
-	})
+	}
+	text = narrowed.String() + text[last:]
 	placeholders := make([]string, 0)
 	hold := func(value string) string {
 		placeholders = append(placeholders, value)
