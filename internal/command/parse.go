@@ -25,7 +25,7 @@ var synonymPatterns = []classPattern{
 	{"tanker", regexp.MustCompile(`\b(tankers?|oilers?)\b`)},
 	{"cargo ship", regexp.MustCompile(`\b(cargo( ships?| vessels?)?|container ?ships?|freighters?|merchant( ships?| vessels?)?|bulk carriers?)\b`)},
 	{"fishing vessel", regexp.MustCompile(`\b(fishing( vessels?| boats?)?|trawlers?|fishermen)\b`)},
-	{"small boat", regexp.MustCompile(`\b(small boats?|skiffs?|speed ?boats?|rhibs?|dinghy|dinghies|go-?fasts?|small craft|jet ?skis?|boats?)\b`)},
+	{"small boat", regexp.MustCompile(`\b(sail\s?boats?|sailing (boats?|vessels?|yachts?)|yachts?|sloops?|catamarans?|schooners?|small boats?|skiffs?|speed ?boats?|rhibs?|dinghy|dinghies|go-?fasts?|small craft|jet ?skis?|boats?)\b`)},
 	{"military aircraft", regexp.MustCompile(`\b(military (aircraft|planes?|jets?)|fighters?|fighter jets?|jets?|bombers?|p-?8s?|patrol aircraft|warplanes?)\b`)},
 	{"civil aircraft", regexp.MustCompile(`\b(airliners?|civil(ian)? (aircraft|planes?)|commercial (aircraft|planes?|flights?)|passenger (jets?|planes?)|private (jets?|planes?))\b`)},
 	{"helicopter", regexp.MustCompile(`\b(helicopters?|helos?|rotary[- ]wing|rotorcraft|choppers?)\b`)},
@@ -65,7 +65,7 @@ func ParseDirective(text string) []Rule {
 }
 
 var windowPattern = regexp.MustCompile(`\b(last|past)\s+(?:(\d+)\s*(minutes?|mins?|hours?|h)|(?:an?\s+)?hour)\b`)
-var grammarPattern = regexp.MustCompile(`\b(prioriti\w*|boost|show|focus|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
+var grammarPattern = regexp.MustCompile(`\b(prioriti\w*|boost|show|report|focus|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
 var wordPattern = regexp.MustCompile(`[a-z][a-z0-9-]*`)
 
 // nearShorePattern scopes a clause to the harbor-scene cameras unless it
@@ -74,6 +74,15 @@ var nearShorePattern = regexp.MustCompile(`\b(?:near(?:-|\s+the\s+|\s*)shore|ins
 var negatedShorePattern = regexp.MustCompile(`\b(?:not|never|away from|far from)\s+$`)
 
 func ParseDirectiveDetailed(text string) ([]Rule, []string) {
+	return parseDirectiveDetailed(text, false)
+}
+
+var edgeConceptPatterns = []classPattern{
+	{"sailboat", regexp.MustCompile(`\b(sail\s?boats?|sailing (boats?|vessels?|yachts?)|yachts?|sloops?|catamarans?|schooners?)\b`)},
+	{"marine mammal", regexp.MustCompile(`\b(marine mammals?|(?:killer |humpback )?whales?|dolphins?|porpoises?|orcas?|cetaceans?)\b`)},
+}
+
+func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 	text = strings.ToLower(text)
 	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
 	text = andNegPattern.ReplaceAllString(text, "; $1")
@@ -119,7 +128,11 @@ func ParseDirectiveDetailed(text string) ([]Rule, []string) {
 		}
 		classes := make([]string, 0)
 		seen := make(map[string]bool)
-		for _, pattern := range synonymPatterns {
+		patterns := synonymPatterns
+		if edgeSubtypes {
+			patterns = append(append([]classPattern{}, edgeConceptPatterns...), patterns...)
+		}
+		for _, pattern := range patterns {
 			if pattern.re.MatchString(clause) {
 				if !seen[pattern.class] {
 					classes = append(classes, pattern.class)

@@ -147,13 +147,36 @@ func TestSetPolicyInterpretFallbackOmitsCompiled(t *testing.T) {
 	b := New(shore.URL, "", nil)
 	b.Compiler = &command.Compiler{}
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"ignore sailboats"}`))
+	req := httptest.NewRequest("POST", "/api/shore/policy", strings.NewReader(`{"text":"ignore coast guard"}`))
 	b.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), `"compiled"`) {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
-	if !reflect.DeepEqual(got.Interest.SuppressLabels, []string{"sailboat"}) {
+	if !reflect.DeepEqual(got.Interest.SuppressLabels, []string{"coast guard"}) {
 		t.Fatalf("interpret suppression labels = %v", got.Interest.SuppressLabels)
+	}
+}
+
+func TestSetPolicyUnknownConceptKeepsCompiledReadback(t *testing.T) {
+	var got pb.Policy
+	shore := fakeShore(t, &got)
+	defer shore.Close()
+	b := New(shore.URL, "", nil)
+	b.Compiler = &command.Compiler{EdgeSubtypes: true}
+	rec := httptest.NewRecorder()
+	b.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy", strings.NewReader(`{"text":"prioritize unicorns"}`)))
+	var response struct {
+		Compiled *command.Compiled
+		Readback string
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || response.Compiled == nil || !strings.HasPrefix(response.Readback, `Not supported: "unicorns"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if len(got.GetInterest().GetBoostLabels())+len(got.GetInterest().GetSuppressLabels()) != 0 {
+		t.Fatalf("invented policy labels: %v", &got)
 	}
 }
 

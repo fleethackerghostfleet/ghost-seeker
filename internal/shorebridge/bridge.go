@@ -1134,8 +1134,14 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
 			if !droppedScopedRules && pol.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
-				compiled = nil
+				if compiled == nil {
+					pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
+				} else {
+					pol.Interest.SuppressLabels, pol.Interest.BoostLabels = interpretKnown(ruleText)
+					if len(pol.Interest.SuppressLabels)+len(pol.Interest.BoostLabels) > 0 {
+						compiled = nil
+					}
+				}
 			}
 		}
 	}

@@ -451,7 +451,13 @@ never its own eviction victim.
 - NL directives compile in `internal/command`, optionally through a local
   OpenAI-compatible LLM (`GS_LLM_URL`, `GS_LLM_MODEL`, `GS_LLM_TIMEOUT`) with
   JSON-schema constraints, regex fallback, deterministic readback and
-  guardrails before apply.
+  guardrails before apply. Offline sailboat requests map to the broader
+  `small boat` class (including other small boats); live shore preserves the
+  `sailboat` subtype and maps whales/dolphins to `marine mammal`. Simulation
+  has no marine-mammal class. Unsupported terms are named in the readback
+  alongside available sensor classes, without requiring a model. The opt-in
+  Granite/research adapter still blocks unsupported or qualified concepts;
+  no new detector classes are created.
 - Unit authentication is on by default, and operator authentication gates
   ConsoleService and blobs. Policy signing remains opt-in. No service provides
   TLS; see [Security](docs/SECURITY.md) for deployment requirements and residuals.
