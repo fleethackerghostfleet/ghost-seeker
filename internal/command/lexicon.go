@@ -297,6 +297,15 @@ func normalizeDirective(text string, edgeSubtypes bool) normalized {
 	out := normalized{}
 	text, out.resolutions = correctSpelling(text)
 	text = normalizeWindows(text)
+	var observations strings.Builder
+	start := 0
+	for _, loc := range splitPattern.FindAllStringIndex(text, -1) {
+		observations.WriteString(StripObservationContext(text[start:loc[0]]))
+		observations.WriteString(" " + text[loc[0]:loc[1]] + " ")
+		start = loc[1]
+	}
+	observations.WriteString(StripObservationContext(text[start:]))
+	text = observations.String()
 	// "everything else can wait" and "ignore birds and everything else"
 	// narrow to the named contacts; a positive "and other contacts" is left
 	// alone. The governing clause starts after the last separator or

@@ -1,6 +1,7 @@
 package command
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -97,6 +98,34 @@ func TestObservationContextQualifiers(t *testing.T) {
 			rules, unknown := parseDirectiveDetailed(tc.text, edge)
 			if len(rules) != 1 || rules[0].Type != tc.action || !reflect.DeepEqual(rules[0].Classes, []string{"marine mammal"}) || rules[0].WithinMin != tc.within || len(unknown) != 0 || (len(tc.sources) > 0 && !reflect.DeepEqual(rules[0].Sources, tc.sources)) {
 				t.Errorf("edge=%v %q: rules=%+v unknown=%v", edge, tc.text, rules, unknown)
+			}
+		}
+	}
+}
+
+func TestOpenObservationCompilePaths(t *testing.T) {
+	for _, edge := range []bool{false, true} {
+		compiler := &Compiler{EdgeSubtypes: edge}
+		for _, tc := range []struct {
+			text, action string
+			within       int
+			sources      []string
+		}{
+			{"prioritize whales near the ship", "boost", 0, nil},
+			{"ignore whales near the ship", "suppress", 0, nil},
+			{"prioritize whales near the ship last 30 minutes", "boost", 30, nil},
+			{"ignore whales near the ship from UAV-3", "suppress", 0, []string{"UAV-3"}},
+			{"prioritize whales", "boost", 0, nil},
+			{"prioritize whales near the cargo ship last 30 minutes", "boost", 30, nil},
+		} {
+			for _, got := range []Compiled{compiler.Compile(context.Background(), tc.text), compiler.CompileRules(tc.text)} {
+				if got.Blocked || len(got.Rules) != 1 || len(got.Unknown) != 0 {
+					t.Fatalf("edge=%v %q: %+v", edge, tc.text, got)
+				}
+				rule := got.Rules[0]
+				if rule.Type != tc.action || !reflect.DeepEqual(rule.Classes, []string{"marine mammal"}) || rule.WithinMin != tc.within || !reflect.DeepEqual(rule.Sources, append([]string{}, tc.sources...)) {
+					t.Errorf("edge=%v %q: %+v", edge, tc.text, got)
+				}
 			}
 		}
 	}
