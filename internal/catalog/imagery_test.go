@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"archive/zip"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,13 @@ import (
 )
 
 func TestLibraryImages(t *testing.T) {
+	ocean, err := os.ReadFile(filepath.Join("..", "..", "web", "static", "imagery", "empty-ocean.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.HasPrefix(ocean, []byte("version https://git-lfs.github.com/spec/v1\n")) {
+		t.Skip("empty-ocean.zip is a Git LFS pointer; run git lfs pull --include web/static/imagery/empty-ocean.zip")
+	}
 	sources := make(map[string]Source, len(Sources))
 	for _, source := range Sources {
 		sources[source.ID] = source

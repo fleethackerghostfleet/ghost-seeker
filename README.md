@@ -68,6 +68,8 @@ scenarios/              replay scenarios (datasets + operator events)
 
 ## Quick start
 
+Fetch the console's ocean imagery with `git lfs pull --include web/static/imagery/empty-ocean.zip`; archive-dependent tests skip while it remains an LFS pointer.
+
 Requires Go 1.26.10+ (pinned in `go.mod` and the container builder). No CGO, no GPU. The demo imagery in `frames/` is Git LFS: run `git lfs pull` after cloning, or the default replay scenario finds only pointer files.
 
 ```sh

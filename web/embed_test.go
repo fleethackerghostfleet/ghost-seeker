@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +26,13 @@ func TestHandlerDoesNotListDirectories(t *testing.T) {
 }
 
 func TestEmptyOceanArchiveServed(t *testing.T) {
+	ocean, err := files.ReadFile("static/imagery/empty-ocean.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.HasPrefix(ocean, []byte("version https://git-lfs.github.com/spec/v1\n")) {
+		t.Skip("empty-ocean.zip is a Git LFS pointer; run git lfs pull --include web/static/imagery/empty-ocean.zip")
+	}
 	for _, path := range []string{"/imagery/empty-ocean/sec_0001.jpg", "/imagery/empty-ocean/sec_0010.jpg"} {
 		response := httptest.NewRecorder()
 		Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
