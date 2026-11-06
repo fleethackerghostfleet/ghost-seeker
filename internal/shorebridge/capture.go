@@ -20,6 +20,9 @@ func populateCapture(item *command.Item, o *Object) {
 	synthetic := strings.Split(tags["synthetic"], ",")
 	mark := func(field, key string) {
 		if slices.Contains(synthetic, key) {
+			if !slices.Contains(c.Synthetic, field) {
+				c.Synthetic = append(c.Synthetic, field)
+			}
 			return
 		}
 		c.Synthetic = slices.DeleteFunc(c.Synthetic, func(s string) bool { return s == field })

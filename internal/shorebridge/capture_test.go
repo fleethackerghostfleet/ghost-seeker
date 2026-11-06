@@ -11,7 +11,7 @@ import (
 
 func TestLiveCapture(t *testing.T) {
 	for _, scene := range []bool{false, true} {
-		c := &Console{dbIDs: map[string]int{}}
+		c := NewConsole(New("", "", nil))
 		b := &Card{item: &pb.Item{Geo: &pb.Geo{Lat: 0, Lon: -76, HeadingDeg: 0}, ContentHash: "real-hash"}, Source: "EO-P7", Forms: map[string]FormStatus{}, Tags: map[string]string{"heading": "0", "width_px": "640", "height_px": "480", "subtype": "tanker", "subtype_conf": "0.91", "unknownness": "0", "sighting_id": "track-real", "synthetic": "geo,width_px"}}
 		o := &Object{Key: "capture", Best: b, Scene: scene, Frames: 8, FramesKnown: true}
 		item := c.buildItem(o, objectScore{})
