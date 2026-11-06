@@ -82,7 +82,11 @@ func TestSplitPolicyErrorsAndLongestAlias(t *testing.T) {
 }
 
 func TestReplayRejectsUnavailableAndEscapingFiles(t *testing.T) {
-	root := t.TempDir()
+	parent := t.TempDir()
+	root := filepath.Join(parent, "images")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := NewReplay(nil, root, Seed); err == nil {
 		t.Fatal("empty replay accepted")
 	}
@@ -92,9 +96,12 @@ func TestReplayRejectsUnavailableAndEscapingFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "one.jpg"), []byte("image"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	outside := filepath.Join(t.TempDir(), "outside.jpg")
+	outside := filepath.Join(parent, "outside.jpg")
 	if err := os.WriteFile(outside, []byte("image"), 0600); err != nil {
 		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "..", "outside.jpg")); err != nil || string(data) != "image" {
+		t.Fatalf("traversal target control: data=%q err=%v", data, err)
 	}
 	if err := os.Symlink(outside, filepath.Join(root, "escape.jpg")); err != nil {
 		t.Fatal(err)
@@ -122,16 +129,24 @@ func TestReplayRejectsUnavailableAndEscapingFiles(t *testing.T) {
 }
 
 func TestDatasetImageHTTPBoundaries(t *testing.T) {
-	root := t.TempDir()
+	parent := t.TempDir()
+	root := filepath.Join(parent, "images")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(root, "frame.jpg"), []byte("image"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(filepath.Join(root, "directory"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	outside := filepath.Join(t.TempDir(), "secret.jpg")
-	if err := os.WriteFile(outside, []byte("private"), 0600); err != nil {
+	const secret = "private-dataset-secret"
+	outside := filepath.Join(parent, "secret.jpg")
+	if err := os.WriteFile(outside, []byte(secret), 0600); err != nil {
 		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "..", "secret.jpg")); err != nil || string(data) != secret {
+		t.Fatalf("traversal target control: data=%q err=%v", data, err)
 	}
 	if err := os.Symlink(outside, filepath.Join(root, "escape.jpg")); err != nil {
 		t.Fatal(err)
@@ -146,6 +161,7 @@ func TestDatasetImageHTTPBoundaries(t *testing.T) {
 		{"GET", "frame.jpg", "bytes=1-3", 206, "mag"}, {"GET", "frame.jpg", "bytes=99-", 416, ""},
 		{"POST", "frame.jpg", "", 405, ""}, {"GET", "missing.jpg", "", 404, ""},
 		{"GET", "directory", "", 404, ""}, {"GET", "escape.jpg", "", 404, ""},
+		{"GET", "../secret.jpg", "", 404, ""},
 		{"GET", "%2e%2e/secret.jpg", "", 404, ""}, {"GET", "..%5csecret.jpg", "", 404, ""},
 	} {
 		r := httptest.NewRequest(tc.method, "/dataset-images/"+tc.path, nil)
@@ -154,6 +170,9 @@ func TestDatasetImageHTTPBoundaries(t *testing.T) {
 		h.ServeHTTP(w, r)
 		if w.Code != tc.status {
 			t.Fatalf("%+v: status=%d body=%s", tc, w.Code, w.Body)
+		}
+		if strings.Contains(w.Body.String(), secret) {
+			t.Fatalf("%+v: response leaked parent file contents", tc)
 		}
 		if tc.status == 200 || tc.status == 206 {
 			if w.Body.String() != tc.body || w.Header().Get("Content-Type") != "image/jpeg" {
