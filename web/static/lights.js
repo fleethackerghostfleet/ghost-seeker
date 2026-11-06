@@ -12,7 +12,7 @@
  function badge(item){return eligible(item)&&item.dets?.some(d=>d.sig)?'<span class="night-badge" title="Navigation-light interpretation — verify visually">☾ Lights</span>':''}
  function section(item,classes={}){
   if(!eligible(item))return '';
-  return `<section class="dsec night-lights"><h4>Navigation lights (night)</h4>${(item.dets||[]).map((d,i)=>`<div class="light-contact${d.sig?.lowConfidence?' light-low-confidence':''}">${icon(d.lights)}<div><b>${escape(classes[d.cls]?.lab||d.cls)} · contact ${i+1}</b><p>${escape(d.sig?.line||'No recognized light pattern')}</p>${d.sig?`<small>${escape(d.sig.ref)} · ${escape(d.sig.aspect?.replaceAll('_',' ')||'unknown')}</small>`:''}<div><span class="light-caveat">${escape(caveat(d.sig))}</span></div></div></div>`).join('')}</section>`;
+  return `<section class="dsec night-lights"><h3>Navigation lights (night)</h3>${(item.dets||[]).map((d,i)=>`<div class="light-contact${d.sig?.lowConfidence?' light-low-confidence':''}">${icon(d.lights)}<div><b>${escape(classes[d.cls]?.lab||d.cls)} · contact ${i+1}</b><p>${escape(d.sig?.line||'No recognized light pattern')}</p>${d.sig?`<small>${escape(d.sig.ref)} · ${escape(d.sig.aspect?.replaceAll('_',' ')||'unknown')}</small>`:''}<div><span class="light-caveat">${escape(caveat(d.sig))}</span></div></div></div>`).join('')}</section>`;
  }
  function why(item){
   if(!eligible(item))return [];

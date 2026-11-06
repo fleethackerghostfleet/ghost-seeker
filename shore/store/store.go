@@ -9,10 +9,12 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -56,6 +58,7 @@ CREATE TABLE IF NOT EXISTS forms (
   kind INTEGER NOT NULL,
   total INTEGER NOT NULL,
   received INTEGER NOT NULL DEFAULT 0,
+  received_ranges TEXT NOT NULL DEFAULT '[]',
   complete INTEGER NOT NULL DEFAULT 0,
   hash TEXT NOT NULL DEFAULT '',
   mime TEXT NOT NULL DEFAULT '',
@@ -88,7 +91,19 @@ func Open(dataDir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(schema); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("schema: %w", err)
+	}
+	var hasRanges int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('forms') WHERE name='received_ranges'`).Scan(&hasRanges); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("inspect forms schema: %w", err)
+	}
+	if hasRanges == 0 {
+		if _, err := db.Exec(`ALTER TABLE forms ADD COLUMN received_ranges TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate forms ranges: %w", err)
+		}
 	}
 	if _, err := db.Exec(apiSchema); err != nil {
 		db.Close()
@@ -182,9 +197,10 @@ const MaxBlobBytes = 256 << 20
 const MaxChunkBytes = 4 << 20
 
 // WriteChunk stores a chunk at its offset and returns the new contiguous
-// receive count and whether the form is complete. Out-of-order or duplicate
-// chunks are safe: bytes are written in place and "received" only advances
-// contiguously (chunks arrive in order from one edge in practice).
+// receive count and whether the form is complete. Persisted merged byte ranges
+// let gap-filling chunks advance past earlier out-of-order writes. Overlaps and
+// duplicates are safe. If the range cap is exceeded, only the contiguous prefix
+// is retained; discarded ranges must be retransmitted before being acknowledged.
 func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at time.Time) (int64, bool, error) {
 	s.blobMu.Lock()
 	defer s.blobMu.Unlock()
@@ -225,7 +241,8 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	var received int64
 	var complete int
 	var hash string
-	err = s.db.QueryRowContext(ctx, `SELECT received, complete, hash FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash)
+	var rangesJSON string
+	err = s.db.QueryRowContext(ctx, `SELECT received, complete, hash, received_ranges FROM forms WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)).Scan(&received, &complete, &hash, &rangesJSON)
 	if err == nil && complete == 1 && (c.ContentHash == "" || c.ContentHash == hash) {
 		return c.TotalBytes, true, nil
 	}
@@ -234,10 +251,12 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		// after an original pull), possibly mid-transfer: start over with
 		// the new content.
 		received, complete = 0, 0
+		rangesJSON = "[]"
 		_ = os.Remove(partial)
 	}
 	if _, statErr := os.Stat(partial); errors.Is(statErr, os.ErrNotExist) {
 		received = 0
+		rangesJSON = "[]"
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return 0, false, err
@@ -262,11 +281,7 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	} else if err != nil {
 		return 0, false, err
 	}
-	if c.Offset <= received {
-		if end := c.Offset + int64(len(c.Data)); end > received {
-			received = end
-		}
-	}
+	received, rangesJSON = mergeReceived(received, rangesJSON, c.Offset, c.Offset+n)
 	done := received >= c.TotalBytes && c.TotalBytes > 0
 	if done && c.ContentHash != "" {
 		data, err := os.ReadFile(partial)
@@ -276,7 +291,9 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		sum := sha256.Sum256(data)
 		if hex.EncodeToString(sum[:]) != c.ContentHash {
 			// Corrupt: restart this form.
-			_, _ = s.db.ExecContext(ctx, `UPDATE forms SET received=0,complete=0,complete_at=0 WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form))
+			if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=0, complete=0, complete_at=0, received_ranges='[]' WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)); err != nil {
+				return 0, false, err
+			}
 			return 0, false, fmt.Errorf("hash mismatch for %s/%v", c.ItemId, c.Form)
 		}
 	}
@@ -287,14 +304,43 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		}
 		cpl = 1
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=?, complete=?, hash=?, mime=?, total=?,
+	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=?, received_ranges=?, complete=?, hash=?, mime=?, total=?,
 		first_at=CASE WHEN first_at=0 THEN ? ELSE first_at END,
 		complete_at=CASE WHEN ?=1 THEN ? ELSE 0 END
 		WHERE item_id=? AND kind=?`,
-		received, cpl, c.ContentHash, c.Mime, c.TotalBytes, at.UnixMilli(), cpl, at.UnixMilli(), c.ItemId, int(c.Form)); err != nil {
+		received, rangesJSON, cpl, c.ContentHash, c.Mime, c.TotalBytes, at.UnixMilli(), cpl, at.UnixMilli(), c.ItemId, int(c.Form)); err != nil {
 		return 0, false, err
 	}
 	return received, done, nil
+}
+
+const maxReceivedRanges = 256
+
+// The prefix is stored in received; only disjoint ranges beyond it need JSON.
+func mergeReceived(received int64, raw string, start, end int64) (int64, string) {
+	var ranges [][2]int64
+	if err := json.Unmarshal([]byte(raw), &ranges); err != nil || len(ranges) > maxReceivedRanges {
+		ranges = nil
+	}
+	if end > start {
+		ranges = append(ranges, [2]int64{start, end})
+	}
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i][0] < ranges[j][0] })
+	merged := make([][2]int64, 0, len(ranges))
+	for _, r := range ranges {
+		if r[0] <= received {
+			received = max(received, r[1])
+		} else if len(merged) > 0 && r[0] <= merged[len(merged)-1][1] {
+			merged[len(merged)-1][1] = max(merged[len(merged)-1][1], r[1])
+		} else {
+			merged = append(merged, r)
+		}
+	}
+	if len(merged) > maxReceivedRanges {
+		return received, "[]"
+	}
+	encoded, _ := json.Marshal(merged)
+	return received, string(encoded)
 }
 
 // SetFeatures stores the decoded FACT for an item.

@@ -23,6 +23,17 @@ func main() {
 	}
 	defer s.Close()
 	log.Printf("grader http://%s journal=%s", *addr, s.Path())
-	server := &http.Server{Addr: *addr, Handler: s.Handler(allowHosts...), ReadHeaderTimeout: 5 * time.Second}
+	server := newHTTPServer(*addr, s.Handler(allowHosts...))
 	log.Fatal(server.ListenAndServe())
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr: addr, Handler: handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
 }

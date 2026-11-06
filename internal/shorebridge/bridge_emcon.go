@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -33,7 +34,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	mode, ok := parseEMCON(in.Mode)

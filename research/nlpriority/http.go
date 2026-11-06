@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 )
 
 func (s *Service) Handler(webDir string) http.Handler {
@@ -98,12 +100,12 @@ func decode(w http.ResponseWriter, r *http.Request, out any) bool {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 50<<20))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(out); err != nil {
-		writeJSON(w, 400, map[string]string{"error": "invalid request JSON: " + err.Error()})
+		writeJSON(w, httpx.RequestBodyStatus(err), map[string]string{"error": "invalid request JSON: " + err.Error()})
 		return false
 	}
 	var extra any
-	if dec.Decode(&extra) != io.EOF {
-		writeJSON(w, 400, map[string]string{"error": "request must contain one JSON value"})
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeJSON(w, httpx.RequestBodyStatus(err), map[string]string{"error": "request must contain one JSON value"})
 		return false
 	}
 	return true

@@ -5,6 +5,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 )
 
@@ -45,7 +46,11 @@ func (s *Server) resetDemo(w http.ResponseWriter, r *http.Request) {
 		Confirm string `json:"confirm"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	if err := decodeJSON(r.Body, &body); err != nil || body.Confirm != "reset" {
+	if err := decodeJSON(r.Body, &body); err != nil {
+		writeError(w, httpx.RequestBodyStatus(err), "confirm must be reset")
+		return
+	}
+	if body.Confirm != "reset" {
 		writeError(w, http.StatusBadRequest, "confirm must be reset")
 		return
 	}

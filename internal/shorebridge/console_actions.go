@@ -2,6 +2,7 @@ package shorebridge
 
 import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"log"
@@ -19,7 +20,7 @@ func (c *Console) patchItem(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.Manual != nil && (*body.Manual < 0 || *body.Manual > 4) {
@@ -80,7 +81,7 @@ func (c *Console) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.Decision != "" && !store.Decisions[body.Decision] {
@@ -135,7 +136,7 @@ func (c *Console) fullRes(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	by := opauth.Actor(r.Context(), strings.TrimSpace(body.By))
@@ -183,7 +184,7 @@ func (c *Console) pull(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	id := r.PathValue("id")

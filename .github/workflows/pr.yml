@@ -1,0 +1,49 @@
+name: Quick checks
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'frames/**'
+  push:
+    branches: [dev]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'frames/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - name: Fetch embedded empty-ocean demo frames
+        run: git lfs pull --include="web/static/imagery/empty-ocean.zip" --exclude=""
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go vet ./...
+      - run: go test ./...
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test web/*.test.cjs

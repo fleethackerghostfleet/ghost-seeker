@@ -44,6 +44,7 @@ func (b *Bridge) Handler() http.Handler {
 			pr.Out.Header.Del("Authorization")
 			b.authorize(pr.Out)
 		}}
+		rp.Transport = b.client.Transport
 		rp.ModifyResponse = func(res *http.Response) error {
 			if res.Header.Get("Content-Security-Policy") == "" {
 				res.Header.Set("Content-Security-Policy", "default-src 'none'; sandbox")

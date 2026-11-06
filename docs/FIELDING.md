@@ -1,8 +1,8 @@
 # Ghost Seeker fielding
 
 This is a **demo package, not an accredited operational system**. Unit
-SyncService authentication is on by default; edge storage caps are opt-in. There is no TLS
-or deployment-specific security review. Use only in an isolated, approved
+SyncService authentication is on by default; edge storage caps and shore/edge
+listener TLS are opt-in. There is no deployment-specific security review. Use only in an isolated, approved
 environment. The operator application is in-memory; shore and edge data are
 SQLite databases.
 
@@ -158,8 +158,10 @@ database. Edge storage caps are opt-in; see [Edge storage caps](#edge-storage-ca
 | Toxiproxy admin API | 8474 | Compose demo only |
 
 SyncService unit JWT authentication is on by default. The opaque operator bearer
-token gates every ConsoleService RPC and `/blob/` request. Neither service
-provides TLS. Do not expose them to an untrusted network.
+token gates every ConsoleService RPC and `/blob/` request. Both nodes support
+opt-in TLS 1.3; the Compose/Zarf defaults above remain HTTP. See
+[listener TLS deployment notes](../deploy/README.md) before exposing them outside
+an isolated network.
 
 ## Compose demonstration
 
@@ -257,8 +259,9 @@ upload are unchanged. Run edge and shore with explicit operator credentials
 (`GS_OPERATOR_TOKEN_FILE`, `-dev-token-file none`) and provision the unit JWT
 and shore signing key as described above. The push API accepts the configured
 operator bearer token **or** that edge's configured unit JWT. Shore's output
-API requires its operator credential, not the unit JWT. Use TLS at an approved
-reverse proxy and private links; the built-in HTTP listeners do not provide TLS.
+API requires its operator credential, not the unit JWT. Enable built-in listener
+TLS or use an approved TLS reverse proxy and private links; see
+[listener TLS deployment notes](../deploy/README.md).
 
 ### Push JPEG / PNG
 
@@ -492,7 +495,8 @@ key must be non-default and at least 32 bytes. Missing, invalid, or expired
 tokens return `Unauthenticated`; an `ExchangeRequest.edge_id` that differs
 from `sub` returns `PermissionDenied`. Unit authentication protects
 SyncService. The opaque operator bearer token gates ConsoleService and
-`/blob/` requests. Neither service has TLS.
+`/blob/` requests. Server TLS is available on both nodes but must be explicitly
+enabled; authentication alone does not encrypt the link.
 
 `*_FILE` credentials take precedence over literal environment values. A
 nonempty file path is read at startup and a missing file is an error. Shore
