@@ -42,9 +42,13 @@ def prepare(models, sums, output):
             raise ValueError(f"model checksum mismatch: {name}")
         paths.append((path, source))
         normalized.append(f"{digest.lower()}  {path.as_posix()}\n")
-    required = {Path("catalog/colregs_lights.json"), Path("catalog/colregs_night_config.json")}
-    if required - {p for p, _ in paths}:
-        raise ValueError("MODEL_SUMS missing required catalog entries")
+    if not paths:
+        raise ValueError("MODEL_SUMS must list at least one model file")
+    required_catalog = {Path("catalog/colregs_lights.json"), Path("catalog/colregs_night_config.json")}
+    missing_catalog = required_catalog - {path for path, source in paths}
+    if missing_catalog:
+        raise ValueError("MODEL_SUMS missing required catalog entries: " + ", ".join(
+            str(path) for path in sorted(missing_catalog)))
     out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
     if any(out.iterdir()):
