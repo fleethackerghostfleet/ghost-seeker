@@ -15,9 +15,10 @@ import (
 const rulesEvalFloor = 39
 
 type evalCase struct {
-	ID     string         `json:"id"`
-	Text   string         `json:"text"`
-	Expect map[string]any `json:"expect"`
+	ID       string         `json:"id"`
+	Text     string         `json:"text"`
+	Requires string         `json:"requires,omitempty"`
+	Expect   map[string]any `json:"expect"`
 }
 
 type evalResult struct {
@@ -57,7 +58,12 @@ func TestEvalLLMPath(t *testing.T) {
 
 func loadEvalCases(t *testing.T) []evalCase {
 	t.Helper()
-	data, err := os.ReadFile("testdata/eval_set.json")
+	return loadEvalFile(t, "testdata/eval_set.json")
+}
+
+func loadEvalFile(t *testing.T, path string) []evalCase {
+	t.Helper()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
