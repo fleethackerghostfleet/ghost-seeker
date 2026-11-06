@@ -4,6 +4,7 @@ import argparse
 import csv
 import io
 import itertools
+import hashlib
 import re
 import subprocess
 import sys
@@ -346,6 +347,57 @@ def check_tls_wiring(documents: list[dict], variables: dict[str, str]) -> None:
             require(parsed.scheme == "https", f"{variable}: local TLS shore requires an HTTPS URL")
 
 
+def check_models(package: dict, documents: list[dict]) -> None:
+    entries = {entry["name"]: entry for entry in package.get("variables", [])}
+    for name in ("MODEL_SHA256", "MODEL_DETECTOR", "MODEL_EMBED"):
+        require(bool(entries.get(name, {}).get("pattern")), f"{name} must have a pattern")
+    require(entries["MODEL_SHA256"].get("default") == hashlib.sha256(
+        (ROOT.parent / "models/SHA256SUMS").read_bytes()).hexdigest(),
+        "MODEL_SHA256 default must match committed model SHA256SUMS")
+    sums = (ROOT.parent / "models/SHA256SUMS").read_text().splitlines()
+    for filename in ("colregs_lights.json", "colregs_night_config.json"):
+        digest = hashlib.sha256((ROOT.parents[1] / "internal/catalog" / filename).read_bytes()).hexdigest()
+        require(f"{digest}  catalog/{filename}" in sums,
+                f"catalog checksum must match internal/catalog/{filename}")
+    component = next(c for c in package["components"] if c["name"] == "edge-inference")
+    require(all(group.get("template") is True for group in component["manifests"]),
+            "edge-inference must use template: true")
+    workload = next(d for d in documents if d["kind"] == "Deployment"
+                    and d["metadata"]["name"] == "edgeml-sidecar")
+    pod, _ = workload_containers(workload)
+    init = next((c for c in pod.get("initContainers", []) if c["name"] == "models"), {})
+    image = init.get("image", "")
+    require(image.startswith("ghost-seeker/edgeml-models:") and image in component["images"],
+            "models initContainer must use a listed edgeml-models image")
+    script = "\n".join(init.get("args", []))
+    require('echo "$MODEL_SHA256  /models-src/SHA256SUMS" | sha256sum -c' in script
+            and 'test -n "$MODEL_SHA256"' in script
+            and 'sha256sum -c SHA256SUMS' in script,
+            "models initContainer must verify MODEL_SHA256 and model checksums")
+    sidecar = next(c for c in pod["containers"] if c["name"] == "edgeml-sidecar")
+    args = sidecar.get("args", [])
+    require("--mock" not in args and "--detector" in args
+            and args[args.index("--detector") + 1].startswith("/models/"),
+            "sidecar must use a real --detector under /models/")
+    require("--embed" in args and args[args.index("--embed") + 1].startswith(("/models/", "none")),
+            "sidecar must use the configured model embedding directory")
+    require('if [ "$MODEL_EMBED" != none ]' in script
+            and 'meta.json model.onnx text_cache.json unknown_calib.npz' in script,
+            "models initContainer must check embedding files are listed")
+    require(any(m.get("name") == "models" and m.get("mountPath") == "/models"
+                and m.get("readOnly") is True for m in sidecar.get("volumeMounts", [])),
+            "sidecar must mount /models readOnly")
+    require(any(m.get("name") == "catalog" and m.get("mountPath") == "/opt/venv/lib/internal/catalog"
+                and m.get("readOnly") is True for m in sidecar.get("volumeMounts", [])),
+            "sidecar must mount catalog readOnly at its runtime path")
+    require(any(m.get("name") == "catalog" and m.get("mountPath") == "/catalog"
+                for m in init.get("volumeMounts", []))
+            and any(v.get("name") == "catalog" and "emptyDir" in v for v in pod.get("volumes", []))
+            and 'cp /models/catalog/*.json /catalog/' in script
+            and "sed -n 's@  catalog/@  @p' /models/SHA256SUMS | sha256sum -c" in script,
+            "models initContainer must copy and verify the catalog emptyDir")
+
+
 def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     package_file = ROOT / "zarf.yaml"
     package = yaml.safe_load(package_file.read_text())
@@ -376,6 +428,7 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     all_manifest_paths = sorted((ROOT / "manifests").glob("*.yaml"))
     require(bool(all_manifest_paths), "no manifests/*.yaml files found")
     parsed = render_manifests(package, overrides)
+    check_models(package, [doc for docs in parsed.values() for doc in docs])
     require(set(parsed) == set(all_manifest_paths), "every manifest must be packaged")
     check_tls_wiring([document for docs in parsed.values() for document in docs], variables)
     for filename, config_name in (("shore.yaml", "shore-config"), ("edge.yaml", "edge-config")):
@@ -444,9 +497,9 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
                     manifest_images.add(image)
                     require(bool(container.get("resources", {}).get("limits")),
                             f"{component}: container {name} has no resource limits")
-                    require(bool(container.get("readinessProbe")),
+                    require(container in pod_spec.get("initContainers", []) or bool(container.get("readinessProbe")),
                             f"{component}: container {name} has no readinessProbe")
-                    require(bool(container.get("livenessProbe")),
+                    require(container in pod_spec.get("initContainers", []) or bool(container.get("livenessProbe")),
                             f"{component}: container {name} has no livenessProbe")
                     container_security = container.get("securityContext", {})
                     pod_security = pod_spec.get("securityContext", {})

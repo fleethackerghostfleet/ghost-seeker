@@ -18,6 +18,10 @@ SHORE_IMAGE := ghost-seeker/shore:0.1.0
 EDGE_IMAGE := ghost-seeker/edge:0.1.0
 OPERATOR_IMAGE := ghost-seeker/operator:0.1.0
 EDGEML_IMAGE := ghost-seeker/edgeml-sidecar:0.1.0
+EDGEML_TRACKING ?= 1
+MODELS_IMAGE := ghost-seeker/edgeml-models:0.1.0
+MODEL_SUMS ?= deploy/models/SHA256SUMS
+BUSYBOX_IMAGE ?=
 IMAGES := $(SHORE_IMAGE) $(EDGE_IMAGE) $(OPERATOR_IMAGE) $(EDGEML_IMAGE)
 
 gen:            ## regenerate Go from proto (needs buf, protoc-gen-go, protoc-gen-connect-go)
@@ -136,15 +140,25 @@ compose-demo-logs:
 compose-demo-down: ## stop the Docker demo and delete its data + credentials (next up is a fresh replay)
 	$(DEMO_COMPOSE_CMD) down -v --remove-orphans
 
+.PHONY: model-image
+model-image:
+	@test -n "$(MODEL_SUMS)" || { echo 'error: MODEL_SUMS is required (sha256sum file relative to MODELS)' >&2; exit 1; }
+	$(if $(filter file,$(origin MODELS)),sh deploy/models/fetch.sh dist/models,@true)
+	@context=$$(mktemp -d); trap 'rm -rf "$$context"' EXIT; \
+	python3 deploy/models/prepare.py "$(if $(filter file,$(origin MODELS)),dist/models/files,$(MODELS))" "$(MODEL_SUMS)" "$$context" && \
+	cp deploy/models/THIRD_PARTY_NOTICES.md "$$context/THIRD_PARTY_NOTICES.md" && \
+	docker build $(if $(BUSYBOX_IMAGE),--build-arg BUSYBOX_IMAGE=$(BUSYBOX_IMAGE)) -f deploy/models/Dockerfile -t $(MODELS_IMAGE) "$$context"
+
 images:
 	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
 	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
 	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
-	docker build $(PY_BUILD_ARG) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
+	docker build $(PY_BUILD_ARG) --build-arg WITH_TRACKING=$(EDGEML_TRACKING) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
+	$(if $(MODEL_SUMS),$(MAKE) model-image,@echo 'skipped edgeml-models: set MODEL_SUMS=...')
 
 images-save:
 	mkdir -p dist
-	docker save -o dist/ghost-seeker-images.tar $(IMAGES)
+	docker save -o dist/ghost-seeker-images.tar $(IMAGES) $(if $(MODEL_SUMS),$(MODELS_IMAGE))
 
 images-load:
 	docker load -i dist/ghost-seeker-images.tar
@@ -152,7 +166,7 @@ images-load:
 package-check:
 	sh deploy/zarf/check.sh
 
-zarf-package:
+zarf-package: model-image
 	mkdir -p dist
 	zarf package create deploy/zarf --confirm --output dist
 

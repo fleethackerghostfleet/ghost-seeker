@@ -7,6 +7,21 @@ metadata:
   description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: MODEL_SHA256
+    description: SHA256 of the approved model image SHA256SUMS file; required for inference readiness.
+    default: 41f9db8eaaa64a34803f1a145468d80a66910ad63572ddf24b9c9c95d6fb4875
+    pattern: '^([a-fA-F0-9]{64})?$'
+    prompt: false
+  - name: MODEL_DETECTOR
+    description: Approved detector path relative to /models.
+    default: yolo11n-640/model.onnx
+    pattern: '^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*)*$'
+    prompt: false
+  - name: MODEL_EMBED
+    description: Embedding directory relative to /models, or none to disable.
+    default: mobileclip-s1
+    pattern: '^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*)*$'
+    prompt: false
   - name: SHORE_EGRESS_CIDR
     description: Approved destination CIDR for edge/operator to routed shore sync, console and API. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
     default: 192.0.2.0/32
@@ -214,8 +229,10 @@ components:
     description: Optional CPU edgeml sidecar in this cluster (the INFER_URL default); deploy it or point INFER_URL at another sidecar.
     images:
       - ghost-seeker/edgeml-sidecar:0.1.0
+      - ghost-seeker/edgeml-models:0.1.0
     manifests:
       - name: edge-inference
+        template: true
         namespace: ghost-seeker
         files:
           - manifests/edge-inference.yaml
