@@ -28,14 +28,16 @@ type Fact struct {
 	Override   string            `json:"override,omitempty"`
 	OverrideBy string            `json:"override_by,omitempty"`
 	Tags       map[string]string `json:"tags,omitempty"`
-	Priority   float64           `json:"p,omitempty"`
-	Tier       int               `json:"q,omitempty"`
+	Priority   float64           `json:"p,omitempty"` // edge ranking when this FACT was generated, not a live queue rank
+	Tier       int               `json:"q,omitempty"` // policy tier known at generation; omitted when unknown
 	// Embedding is omitted from FACT to keep it under 1 KB; shore can pull it
 	// later as part of a richer form if needed.
 }
 
 // WithScore adds edge-known ranking to the compact FACT without requiring
 // callers to duplicate the item/feature projection.
+// Ranking is a generation-time snapshot; queue rescoring and pulls do not
+// rewrite it or requeue metadata already received on shore.
 func WithScore(it *pb.Item, score float64, tier int) *Fact {
 	f := FromItem(it)
 	f.Priority, f.Tier = score, tier

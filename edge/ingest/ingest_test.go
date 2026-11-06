@@ -158,6 +158,47 @@ func TestGeneratedFactsCarryCurrentScoreAndKnownTier(t *testing.T) {
 	check(row, 2)
 }
 
+func TestFactRankIsGenerationSnapshot(t *testing.T) {
+	g, st, clk := newIngester(t, DedupNaive, &scripted{})
+	ctx := context.Background()
+	row, err := g.Ingest(ctx, capture(clk, 40))
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := mustRead(t, st, row.Item.Id, pb.FormKind_FORM_KIND_FACT)
+	initialPriority := row.Score.Priority
+	if _, _, err := g.sch.ApplyPolicy(ctx, &pb.Policy{Interest: &pb.Interest{TierLabels: map[string]int32{"boat": 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustRead(t, st, row.Item.Id, pb.FormKind_FORM_KIND_FACT); !bytes.Equal(got, initial) {
+		t.Fatal("queue rescore changed the FACT snapshot")
+	}
+	factState := row.Form(pb.FormKind_FORM_KIND_FACT)
+	if err := st.SetAcked(ctx, row.Item.Id, pb.FormKind_FORM_KIND_FACT, factState.Bytes, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.sch.Pull(ctx, &pb.Pull{ItemId: row.Item.Id, Form: pb.FormKind_FORM_KIND_FULL, PriorityBoost: 10}); err != nil {
+		t.Fatal(err)
+	}
+	row, err = st.Get(ctx, row.Item.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f struct {
+		Priority float64 `json:"p"`
+		Tier     int     `json:"q"`
+	}
+	if err := json.Unmarshal(mustRead(t, st, row.Item.Id, pb.FormKind_FORM_KIND_FACT), &f); err != nil {
+		t.Fatal(err)
+	}
+	if f.Priority != initialPriority || f.Tier != 0 || row.Score.Priority <= initialPriority {
+		t.Fatalf("snapshot p=%v q=%v; initial p=%v, current queue p=%v", f.Priority, f.Tier, initialPriority, row.Score.Priority)
+	}
+	if !row.Form(pb.FormKind_FORM_KIND_FACT).Complete || !bytes.Equal(mustRead(t, st, row.Item.Id, pb.FormKind_FORM_KIND_FACT), initial) {
+		t.Fatal("pull requeued an already received FACT")
+	}
+}
+
 func TestDarkContactSightingsFeatureAndTag(t *testing.T) {
 	g, _, _ := newIngester(t, DedupSightings, &scripted{})
 	box := &pb.Box{X: 0.4, Y: 0.4, W: 0.1, H: 0.1}
