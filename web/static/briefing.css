@@ -1,5 +1,6 @@
 .brief-workspace{display:grid;grid-template-columns:var(--width-briefing,290px) minmax(0,1fr);min-height:0;flex:1;overflow:auto}
 .brief-controls{background:var(--panel);border-right:1px solid var(--line);padding:20px;overflow:auto}
+.brief-controls h2{font-size:1.17em;margin:1em 0}
 .brief-controls label{display:block;font-weight:600;margin:20px 0 7px}
 .brief-controls input,.brief-controls select,.brief-controls textarea{width:100%;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:9px}
 .brief-controls textarea{resize:vertical;line-height:1.5}

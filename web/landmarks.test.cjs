@@ -33,6 +33,15 @@ test('Commander retains its main and uses the same nonvisual heading treatment a
  assert.match(read('cdr.css'),/h2\{margin:20px 0 8px;font-size:0\.6875rem/);
 });
 
+test('briefing workspace follows h1 with h2 while drawer detection headings stay beneath h2',()=>{
+ const html=read('index.html'),workspace=html.slice(html.indexOf('<section class="page" id="pgBrief"'),html.indexOf('<div class="cardmenu"'));
+ assert.deepEqual([...workspace.matchAll(/<h([1-6])\b/g)].map(m=>+m[1]),[1,2]);
+ assert.match(workspace,/<h2>Selected observations <span id="briefCount">0<\/span><\/h2>/);
+ assert.match(read('briefing.css'),/\.brief-controls h2\{font-size:1\.17em;margin:1em 0\}/);
+ assert.match(read('briefing.js'),/createElement\('h3'\);heading.textContent='Select ships for a briefing'/);
+ assert.match(read('app.js'),/<div class="dhead"><div><h2>/);
+});
+
 test('classification banners and panel resizing controls stay in named landmarks without selector-breaking wrappers',()=>{
  for(const name of ['index.html','cdr.html']){
   const html=read(name),banners=[...html.matchAll(/<div class="banner"[^>]*>/g)];assert.equal(banners.length,2);
