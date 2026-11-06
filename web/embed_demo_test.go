@@ -11,6 +11,13 @@ import (
 )
 
 func TestEmptyOceanArchiveServed(t *testing.T) {
+	for _, path := range []string{"/imagery/empty-ocean/"} {
+		response := httptest.NewRecorder()
+		Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("%s: %d", path, response.Code)
+		}
+	}
 	ocean, err := files.ReadFile("static/imagery/empty-ocean.zip")
 	if err != nil {
 		t.Fatal(err)
@@ -29,11 +36,9 @@ func TestEmptyOceanArchiveServed(t *testing.T) {
 			t.Fatalf("native frame: %+v %v", cfg, err)
 		}
 	}
-	for _, path := range []string{"/imagery/empty-ocean/", "/imagery/empty-ocean/missing.jpg"} {
-		response := httptest.NewRecorder()
-		Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
-		if response.Code != http.StatusNotFound {
-			t.Fatalf("%s: %d", path, response.Code)
-		}
+	response := httptest.NewRecorder()
+	Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/imagery/empty-ocean/missing.jpg", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("missing frame: %d", response.Code)
 	}
 }
