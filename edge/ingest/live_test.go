@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/gif"
 	"io"
@@ -180,7 +181,7 @@ func TestSpoolReservesBeforeReadingOrDecoding(t *testing.T) {
 		t.Fatal(err)
 	}
 	q.reserve()
-	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, time.Millisecond); err != nil {
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, spoolStamps(path)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -190,7 +191,7 @@ func TestSpoolReservesBeforeReadingOrDecoding(t *testing.T) {
 		t.Fatal("stole an existing reservation")
 	}
 	<-q.slots
-	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, time.Millisecond); err != nil {
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, spoolStamps(path)); err != nil {
 		t.Fatal(err)
 	}
 	failed, err := os.ReadDir(filepath.Join(dir, "failed"))
@@ -393,7 +394,7 @@ func TestSpoolProcessedFailedAndStable(t *testing.T) {
 	jpg := encJPEG(t, scene(40, 30))
 	_ = os.WriteFile(path, jpg, 0600)
 	_ = os.WriteFile(path+".json", []byte(`{"source":"sidecar-camera","sensor_type":"eo"}`), 0600)
-	if err := spoolFile(context.Background(), q, path, Metadata{Source: "default"}, 1<<20, time.Millisecond); err != nil {
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "default"}, 1<<20, spoolStamps(path)); err != nil {
 		t.Fatal(err)
 	}
 	files, _ := filepath.Glob(filepath.Join(dir, "processed", "*.jpg"))
@@ -405,7 +406,7 @@ func TestSpoolProcessedFailedAndStable(t *testing.T) {
 	}
 	bad := filepath.Join(dir, "bad.png")
 	_ = os.WriteFile(bad, []byte("not image"), 0600)
-	if err := spoolFile(context.Background(), q, bad, Metadata{Source: "default"}, 1<<20, time.Millisecond); err != nil {
+	if err := spoolFile(context.Background(), q, bad, Metadata{Source: "default"}, 1<<20, spoolStamps(bad)); err != nil {
 		t.Fatal(err)
 	}
 	files, _ = filepath.Glob(filepath.Join(dir, "failed", "*.png"))
@@ -414,13 +415,9 @@ func TestSpoolProcessedFailedAndStable(t *testing.T) {
 	}
 	partial := filepath.Join(dir, "partial.jpg")
 	_ = os.WriteFile(partial, jpg[:len(jpg)/2], 0600)
-	done := make(chan error, 1)
-	go func() {
-		done <- spoolFile(context.Background(), q, partial, Metadata{Source: "cam"}, 1<<20, 80*time.Millisecond)
-	}()
-	time.Sleep(20 * time.Millisecond)
+	before := spoolStamps(partial)
 	_ = os.WriteFile(partial, jpg, 0600)
-	if err := <-done; err != nil {
+	if err := spoolFile(context.Background(), q, partial, Metadata{Source: "cam"}, 1<<20, before); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(partial); err != nil {
@@ -431,6 +428,36 @@ func TestSpoolProcessedFailedAndStable(t *testing.T) {
 	if err := Watch(ctx, q, dir, Metadata{Source: "cam"}, 1<<20, time.Millisecond); err == nil {
 		t.Fatal("watch ignored cancellation")
 	}
+}
+
+func TestSpoolBatchThroughput(t *testing.T) {
+	q, dir := runningQueue(t, 1), t.TempDir()
+	jpg := encJPEG(t, scene(40, 30))
+	for i := range 50 {
+		path := filepath.Join(dir, fmt.Sprintf("%02d.jpg", i))
+		if err := os.WriteFile(path, jpg, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path+".json", []byte(`{"source":"batch-camera"}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const poll = 250 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 6*poll)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- Watch(ctx, q, dir, Metadata{Source: "default"}, 1<<20, poll) }()
+	defer func() { cancel(); <-done }()
+	start := time.Now()
+	for ctx.Err() == nil {
+		files, _ := filepath.Glob(filepath.Join(dir, "processed", "*.jpg"))
+		if len(files) == 50 {
+			t.Logf("50 files completed in %s (poll %s)", time.Since(start), poll)
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("50-file batch took more than six poll intervals")
 }
 
 func TestMJPEGReconnectFrameCapAndRate(t *testing.T) {

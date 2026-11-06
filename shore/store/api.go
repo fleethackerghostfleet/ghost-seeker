@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 )
 
 // The receipt and event sequences are separate: list pagination sees each item
@@ -110,14 +111,72 @@ func (s *Store) Receipt(ctx context.Context, id string) (Receipt, error) {
 	return r, err
 }
 
+// ReceiptsByIDs ranks the entire store once, then selects the requested items.
+func (s *Store) ReceiptsByIDs(ctx context.Context, ids []string) (map[string]Receipt, error) {
+	out := make(map[string]Receipt, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	q, err := s.db.QueryContext(ctx, `WITH ranked AS (
+ SELECT r.seq,r.item_id,ROW_NUMBER() OVER(ORDER BY i.priority DESC,r.seq) AS rank,COUNT(*) OVER() AS total
+ FROM api_receipts r JOIN items i ON i.id=r.item_id)
+ SELECT seq,item_id,rank,total FROM ranked WHERE item_id IN (`+strings.Repeat("?,", len(ids)-1)+`?)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer q.Close()
+	for q.Next() {
+		var r Receipt
+		if err := q.Scan(&r.Sequence, &r.ID, &r.Rank, &r.Total); err != nil {
+			return nil, err
+		}
+		out[r.ID] = r
+	}
+	return out, q.Err()
+}
+
 type Event struct {
 	Sequence int64
 	ID       string
 	Kind     string
 }
 
+const DefaultEventRetain = 100000
+
+var ErrCursorExpired = errors.New("stream cursor expired; resync via GET /api/v1/items")
+var ErrCursorAhead = errors.New("stream cursor is ahead of this store")
+
+// PruneEvents keeps the newest retain entries without renumbering cursors.
+func (s *Store) PruneEvents(ctx context.Context, retain int) error {
+	if retain < 1 {
+		return errors.New("API event retention must be positive")
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM api_events WHERE seq < COALESCE(
+ (SELECT seq FROM api_events ORDER BY seq DESC LIMIT 1 OFFSET ?),0)`, retain-1)
+	return err
+}
+
 func (s *Store) Events(ctx context.Context, since int64, limit int) ([]Event, error) {
-	q, err := s.db.QueryContext(ctx, `SELECT seq,item_id,kind FROM api_events WHERE seq>? ORDER BY seq LIMIT ?`, since, limit)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var oldest, latest int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT MIN(seq) FROM api_events),0),COALESCE((SELECT MAX(seq) FROM api_events),0)`).Scan(&oldest, &latest); err != nil {
+		return nil, err
+	}
+	if since < oldest-1 {
+		return nil, ErrCursorExpired
+	}
+	if since > latest {
+		return nil, ErrCursorAhead
+	}
+	q, err := tx.QueryContext(ctx, `SELECT seq,item_id,kind FROM api_events WHERE seq>? ORDER BY seq LIMIT ?`, since, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +189,13 @@ func (s *Store) Events(ctx context.Context, since int64, limit int) ([]Event, er
 		}
 		out = append(out, e)
 	}
-	return out, q.Err()
+	if err := q.Err(); err != nil {
+		return nil, err
+	}
+	if err := q.Close(); err != nil {
+		return nil, err
+	}
+	return out, tx.Commit()
 }
 
 func (s *Store) EventCursor(ctx context.Context) (int64, error) {
