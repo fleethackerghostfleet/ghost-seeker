@@ -32,6 +32,9 @@ func Generate(seed int64, n int) []Frame {
 
 // GenerateWithUnknowns keeps the original capture RNG independent of unknown injection.
 func GenerateWithUnknowns(seed int64, n int, inject bool) []Frame {
+	if len(catalog.Library) == 0 {
+		return nil // production builds embed no demo library
+	}
 	rng := rand.New(rand.NewSource(seed))
 	frames := make([]Frame, 0, n)
 	for len(frames) < n {

@@ -27,7 +27,8 @@ spec:
           args:
             - "--listen"
             - "0.0.0.0:9090"
-            - "--mock"
+            - "--detector"
+            - "/models/yolo11n-640/model.onnx"
           ports:
             - name: http
               containerPort: 9090
