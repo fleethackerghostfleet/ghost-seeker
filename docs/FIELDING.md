@@ -279,7 +279,7 @@ and heading in degrees clockwise from north) and up to 64 string tags:
 }
 ```
 
-The example helper requires curl 7.87+ and does not print the token or put it
+The example helper requires curl 7.76+ and does not print the token or put it
 in curl's command-line arguments. Do not use `curl -v`, shell tracing or URLs
 containing credentials. A token file is preferred; `GS_OPERATOR_TOKEN` is also
 supported by the helper.

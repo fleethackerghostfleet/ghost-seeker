@@ -26,17 +26,18 @@ fi
 case "$token" in *"$(printf '\r')"*|*'
 '*) echo 'invalid bearer credential' >&2; exit 2;; esac
 url=${EDGE_URL:-http://127.0.0.1:8081}
+source=$(printf '%s' "$source" | sed 's/:/%3A/g;s|/|%2F|g')
+url="${url%/}/api/v1/ingest/frames?source=$source"
 if [ "$#" -eq 3 ]; then
   [ -f "$3" ] || { echo 'metadata file not found' >&2; exit 2; }
   printf 'Authorization: Bearer %s\n' "$token" |
     curl --silent --show-error --fail-with-body --header @- \
-      --url-query "source=$source" \
       --form "frame=@\"$frame\";type=$type" --form "meta=<\"$3\";type=application/json" \
-      "${url%/}/api/v1/ingest/frames"
+      "$url"
 else
   printf 'Authorization: Bearer %s\n' "$token" |
     curl --silent --show-error --fail-with-body --header @- \
-      --url-query "source=$source" --header "Content-Type: $type" \
-      --data-binary "@$frame" "${url%/}/api/v1/ingest/frames"
+      --header "Content-Type: $type" \
+      --data-binary "@$frame" "$url"
 fi
 printf '\n'
