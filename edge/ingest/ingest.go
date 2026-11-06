@@ -483,6 +483,10 @@ func (g *Ingester) applyFeatures(it *pb.Item, resp *pb.AnalyzeResponse, s *pb.Si
 	}
 	f.Tags["sighting_id"] = s.Id
 	f.Tags["event"] = eventTag(s.Event)
+	delete(f.Tags, "new_contact")
+	if s.Event == pb.Sighting_EVENT_OPEN && s.NewContact {
+		f.Tags["new_contact"] = "1"
+	}
 	if s.Subtype != "" {
 		f.Tags["subtype"] = s.Subtype
 	}

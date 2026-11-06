@@ -56,10 +56,22 @@ const (
 // operator interest, and detection confidence.
 func Default() *Engine {
 	return &Engine{
-		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}, PersonInWater{}},
+		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}, PersonInWater{}, NewContact{}},
 		Weights: map[string]float64{"base": 1, "unknown": 3, "interest": 1, "confidence": 0.5,
-			"dark": catalog.NightConfig.DarkContact.PriorityWeight, "mob": 4},
+			"dark": catalog.NightConfig.DarkContact.PriorityWeight, "mob": 4, "new_contact": 1},
 	}
+}
+
+// NewContact boosts first sightings of objects absent from the source's recent history.
+type NewContact struct{}
+
+func (NewContact) Name() string { return "new_contact" }
+
+func (NewContact) Score(it *pb.Item, ctx *Context) Result {
+	if it.GetFeatures().GetTags()["new_contact"] == "1" {
+		return Result{Value: 1, Note: "new contact in this source"}
+	}
+	return Result{}
 }
 
 func (e *Engine) weight(name string, p *pb.Policy) float64 {

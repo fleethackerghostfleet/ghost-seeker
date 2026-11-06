@@ -13,6 +13,22 @@ relabeling can demote unknown vessel contacts, and CPU rises about 82→437 ms/f
 
 # edgeml contracts (v1)
 
+## Thermal hotspot fallback (opt-in)
+
+`EdgemlEngine` and the sidecar CLI default to **thermal fallback off**.
+Bare `--thermal-fallback` opts in with frozen proposer/gate defaults; the flag
+also accepts JSON overrides, e.g. `--thermal-fallback '{"mode":"when_empty"}'`.
+JSON `false`/`null` disables it. Programmatic callers opt in with
+`thermal_fallback={}` or `True`; `False`/`None` disables it.
+
+This is a safety default, not retuning: held-out annotation-empty IR sea crops
+yielded **1.005 FP/crop**, **28%** nonempty, and thermal sightings receive
+unknownness ≥0.9 by default. Unknown-first scoring can therefore elevate a
+stream of false high-priority contacts. No deploy/compose manifest opts in.
+Thermal-on measurements in `reports/THERMAL_HOTSPOT.md` remain opt-in evidence,
+not default-path latency or precision. The independent `new_contact` scorer
+remains enabled at weight 1.
+
 ## Live directive vocabulary (existing InferenceService v1 wire)
 
 `AnalyzeRequest.known_labels` retains its closed-set meaning. Entries prefixed

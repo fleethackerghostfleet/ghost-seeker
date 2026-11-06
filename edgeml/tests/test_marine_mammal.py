@@ -226,7 +226,7 @@ def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
     assert default_engine.detector.detect(IMAGE)[0].label == 'boat'
     assert clip.calls == []
     assert not MarineMammalConfig().enabled
-    engine = EdgemlEngine('fake', tmp_path, agg={'min_hits': 1}, marine_mammal={'enabled': True})
+    engine = EdgemlEngine('fake', tmp_path, agg={'min_hits': 1}, marine_mammal={'enabled': True}, thermal_fallback=True)
 
     def open_detect(image, detections, labels):
         assert labels == ['bird']
@@ -240,8 +240,9 @@ def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
     assert response['sightings'][0]['subtype'] == 'dolphin'
     assert response['detections'][-1]['label'] == 'bird'
     assert response['detections'][-1]['confidence'] == .91
-    engine.detector.base.base.detect = lambda image: []
-    engine.detector.cfg.scan_stride = 2
+    marine = engine.detector.base
+    marine.base.base.detect = lambda image: []
+    marine.cfg.scan_stride = 2
     for frame in range(1, 4):
         for source in ('camera-a', 'camera-b'):
             response = engine.analyze(source, IMAGE, frame * 1000, [], False)
