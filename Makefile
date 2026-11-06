@@ -161,6 +161,18 @@ zarf-package:
 	mkdir -p dist
 	zarf package create deploy/zarf --confirm --output dist
 
+UDS_CORE_VERSION := 1.14.3
+UDS_DEPLOY_ARGS ?=
+.PHONY: uds-core-dev uds-bundle uds-deploy-dev
+uds-core-dev: ## install pinned UDS Core k3d-slim-dev (creates a local cluster, binds 80/443)
+	uds deploy oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:$(UDS_CORE_VERSION) --confirm
+
+uds-bundle: zarf-package ## bundle the app for an existing UDS Core cluster (make images first)
+	uds create deploy/uds --confirm --output dist
+
+uds-deploy-dev: ## deploy the built app bundle to Core; provision Secrets/model PVC first (deploy/uds/README.md)
+	uds deploy dist/uds-bundle-ghost-seeker-amd64-0.1.0.tar.zst --confirm $(UDS_DEPLOY_ARGS)
+
 clean:
 	rm -rf $(BIN) data sim-results.json
 

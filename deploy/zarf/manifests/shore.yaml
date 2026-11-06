@@ -6,7 +6,8 @@ metadata:
 data:
   DATA_DIR: /data
   LISTEN: :8080
-  GS_PUBLIC_HOSTS: "###ZARF_VAR_SHORE_PUBLIC_HOSTS###"
+  GS_PUBLIC_HOSTS: "###ZARF_VAR_SHORE_PUBLIC_HOSTS###,###ZARF_VAR_SHORE_HOST###.###ZARF_VAR_UDS_DOMAIN###"
+  GS_CORS_ORIGINS: "https://###ZARF_VAR_OPERATOR_HOST###.###ZARF_VAR_UDS_DOMAIN###"
   UI_DIR: /ui
   INFER_URL: "###ZARF_VAR_SHORE_INFER_URL###"
   GS_REQUIRE_AUTH: "###ZARF_VAR_SHORE_REQUIRE_AUTH###"
@@ -52,6 +53,8 @@ spec:
             - configMapRef:
                 name: shore-config
           env:
+            - name: GS_POLICY_SIGNING_KEY
+              value: /run/policy/signing-key.json
             - name: GS_DEV_TOKEN_FILE
               value: none
             - name: GS_SIGNING_KEY
@@ -91,6 +94,9 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: policy-signing
+              mountPath: /run/policy
+              readOnly: true
 {{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
             - name: listener-tls
               mountPath: /run/listener-tls
@@ -101,6 +107,13 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: policy-signing
+          secret:
+            secretName: "###ZARF_VAR_POLICY_SIGNING_SECRET###"
+            defaultMode: 0440
+            items:
+              - key: signing-key.json
+                path: signing-key.json
 {{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
         - name: listener-tls
           secret:

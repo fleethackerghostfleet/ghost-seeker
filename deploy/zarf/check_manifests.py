@@ -346,6 +346,80 @@ def check_tls_wiring(documents: list[dict], variables: dict[str, str]) -> None:
             require(parsed.scheme == "https", f"{variable}: local TLS shore requires an HTTPS URL")
 
 
+def check_uds_wiring(documents: list[dict], variables: dict[str, str]) -> None:
+    namespace = next(doc for doc in documents if doc["kind"] == "Namespace")
+    require(namespace["metadata"].get("labels", {}).get("istio.io/dataplane-mode") == "ambient",
+            "UDS namespace must enroll in the ambient mesh")
+    packages = [doc for doc in documents if doc["kind"] == "Package"]
+    require(len(packages) == 1 and packages[0]["apiVersion"] == "uds.dev/v1alpha1"
+            and packages[0]["metadata"] == {"name": "ghost-seeker", "namespace": "ghost-seeker"},
+            "one namespaced UDS Package is required")
+    spec = packages[0]["spec"]
+    network = spec["network"]
+    require(network.get("serviceMesh") == {"mode": "ambient"}, "UDS mesh mode must be ambient")
+    flows = [("edge", "shore", 8080), ("edge", "edgeml-sidecar", 9090), ("operator", "shore", 8080)]
+    if variables["SHORE_INFER_URL"]:
+        flows.append(("shore", "edgeml-sidecar", 9090))
+    expected = []
+    for source, target, port in flows:
+        for direction, local, remote in (("Egress", source, target), ("Ingress", target, source)):
+            expected.append({"direction": direction, "selector": {"app": local},
+                             "remoteNamespace": "ghost-seeker", "remoteSelector": {"app": remote}, "port": port})
+    if variables["UDS_CROSS_CLUSTER_SHORE"] == "true":
+        cidr = ipaddress.ip_network(variables["SHORE_EGRESS_CIDR"], strict=True)
+        require(cidr.prefixlen > 0 and str(cidr) not in {"192.0.2.0/32"},
+                "UDS routed shore requires an explicit narrow site CIDR")
+        expected.append({"direction": "Egress", "selector": {"app": "edge"},
+                         "remoteCidr": str(cidr), "port": int(variables["SHORE_EGRESS_PORT"])})
+    require(network.get("allow") == expected, "UDS allow rules must match the configured least-privilege flows")
+    exposes = [{"service": "operator", "selector": {"app": "operator"}, "port": 8090,
+                "gateway": "tenant", "host": variables["OPERATOR_HOST"]}]
+    if variables["UDS_EXPOSE_SHORE"] == "true":
+        exposes.append({"service": "shore", "selector": {"app": "shore"}, "port": 8080,
+                        "gateway": "tenant", "host": variables["SHORE_HOST"]})
+    require(network.get("expose") == exposes, "UDS gateway exposure must match selected services")
+    require("monitor" not in spec, "no Prometheus endpoint is implemented")
+    clients = spec.get("sso", [])
+    require(len(clients) == 1 and clients[0].get("enabled") is (variables["UDS_SSO_CLIENT_ENABLED"] == "true")
+            and "enableAuthserviceSelector" not in clients[0], "SSO is registration only, never trusted-header authentication")
+    workloads = {doc["metadata"]["name"]: doc for doc in documents if doc["kind"] in WORKLOAD_KINDS}
+    operator_pod, operator_containers = workload_containers(workloads["operator"])
+    operator = next(item for item in operator_containers if item["name"] == "operator")
+    require("-review-log=/data/reviews.jsonl" in operator["args"]
+            and any(v.get("persistentVolumeClaim", {}).get("claimName") == "operator-data"
+                    for v in operator_pod["volumes"])
+            and {"name": "data", "mountPath": "/data"} in operator["volumeMounts"],
+            "operator review log must use a writable persistent volume")
+    for name, workload in workloads.items():
+        pod, containers = workload_containers(workload)
+        require(not any("hostPath" in volume for volume in pod.get("volumes", [])), "UDS forbids hostPath volumes")
+        require(pod.get("securityContext", {}).get("runAsUser") == (10001 if name == "edgeml-sidecar" else 65532),
+                "UDS workloads must retain numeric non-root UIDs")
+        for container in containers:
+            security = container.get("securityContext", {})
+            require(security.get("allowPrivilegeEscalation") is False and not security.get("privileged", False)
+                    and security.get("capabilities", {}).get("drop") == ["ALL"],
+                    "UDS requires no privilege escalation and drop ALL")
+    for name, volume, secret, filename, env_name in (
+        ("shore", "policy-signing", variables["POLICY_SIGNING_SECRET"], "signing-key.json", "GS_POLICY_SIGNING_KEY"),
+        ("edge", "policy-keys", variables["POLICY_KEYS_SECRET"], "keyring.json", "GS_POLICY_KEYS"),
+    ):
+        pod, containers = workload_containers(workloads[name])
+        container = next(item for item in containers if item["name"] == name)
+        check_secret_mount(pod, container, volume, secret, "/run/policy", {filename})
+        environment = {entry["name"]: entry.get("value") for entry in container.get("env", [])}
+        config = next(doc["data"] for doc in documents if doc["kind"] == "ConfigMap"
+                      and doc["metadata"]["name"] == f"{name}-config")
+        require((environment | config).get(env_name) == f"/run/policy/{filename}", "policy key env must reference mounted files")
+        if name == "edge":
+            require(config.get("GS_REQUIRE_SIGNED_POLICY") == variables["REQUIRE_SIGNED_POLICY"],
+                    "edge must require signed policy as configured")
+        host = f"{variables[f'{name.upper()}_HOST']}.{variables['UDS_DOMAIN']}"
+        require(host in config.get("GS_PUBLIC_HOSTS", "").split(","), "gateway hostname missing from Host allowlist")
+        require(config.get("GS_CORS_ORIGINS") == f"https://{variables['OPERATOR_HOST']}.{variables['UDS_DOMAIN']}",
+                "CORS must allow only the operator gateway origin")
+
+
 def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     package_file = ROOT / "zarf.yaml"
     package = yaml.safe_load(package_file.read_text())
@@ -353,6 +427,8 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     require(package.get("kind") == "ZarfPackageConfig", "zarf.yaml must be a ZarfPackageConfig")
     overrides = overrides or {}
     variables = package_variables(package, overrides)
+    require(next(entry for entry in package["variables"] if entry["name"] == "REQUIRE_SIGNED_POLICY")["default"] == "true",
+            "package must require signed policy by default")
     declared = {
         component["name"]: set(component.get("images", []))
         for component in package.get("components", [])
@@ -378,6 +454,7 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     parsed = render_manifests(package, overrides)
     require(set(parsed) == set(all_manifest_paths), "every manifest must be packaged")
     check_tls_wiring([document for docs in parsed.values() for document in docs], variables)
+    check_uds_wiring([document for docs in parsed.values() for document in docs], variables)
     for filename, config_name in (("shore.yaml", "shore-config"), ("edge.yaml", "edge-config")):
         documents = parsed[ROOT / "manifests" / filename]
         config = next(

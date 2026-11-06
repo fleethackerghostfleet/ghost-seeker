@@ -1,13 +1,18 @@
 # Deployment networking and transport
 
 The Zarf package in `deploy/zarf` uses the dedicated `ghost-seeker` namespace.
+It now requires **UDS Core 1.14.3** and installs a `uds.dev/v1alpha1` Package
+alongside its namespace. See [the UDS bundle instructions](uds/README.md) for
+Core prerequisites, tenant gateway exposure, signed-policy Secrets and storage.
 Its required namespace component installs default-deny **ingress and egress**
 for every pod, including extra workloads. Each optional component packages its
 own workload-specific allows; an edge-only install does not depend on the
 operator, shore or inference component to install its egress permissions.
 
-These policies require a NetworkPolicy-enforcing CNI. They have static schema,
-selector, packaging and traffic-matrix tests, not a live-cluster enforcement test.
+These portable policies require a NetworkPolicy-enforcing CNI. They have static
+schema, selector, packaging and traffic-matrix tests. UDS additionally generates
+mesh AuthorizationPolicies and its own least-privilege network rules; its
+Package does not enable the optional operator-to-edge polling flow below.
 Additional policies are additive and can widen access. Authentication and TLS
 remain mandatory; allowing a TCP port does not restrict HTTP paths.
 

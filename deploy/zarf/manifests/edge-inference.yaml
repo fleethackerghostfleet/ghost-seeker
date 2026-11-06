@@ -64,7 +64,13 @@ spec:
               mountPath: /tmp
       volumes:
         - name: models
+{{ if ne "###ZARF_VAR_MODELS_PVC###" "" }}
+          persistentVolumeClaim:
+            claimName: "###ZARF_VAR_MODELS_PVC###"
+            readOnly: true
+{{ else }}
           emptyDir: {}
+{{ end }}
         - name: tmp
           emptyDir: {}
 ---
