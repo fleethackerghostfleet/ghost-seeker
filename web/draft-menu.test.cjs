@@ -11,9 +11,10 @@ test('unverified addressee placeholders stay amber and invalid while remaining i
   assert(h.nodes.oprepPreview.textContent.includes(placeholder));
   control.value='VERIFIED OPERATOR ADDRESSEE';h.form.input();
   assert.equal(control['aria-invalid'],'false');assert.equal(control.classList['oprep-missing'],false);
-  for(const value of [placeholder,'  [recipient verify ]  ','']){
+  for(const value of [placeholder,'COMSIXTHFLT, '+placeholder,placeholder+', VERIFIED ADDRESSEE','  [recipient verify ]  ','']){
    control.value=value;h.form.input();
    assert.equal(control['aria-invalid'],'true');assert.equal(control.classList['oprep-missing'],true);
+   if(value.trim())assert(h.nodes.oprepPreview.textContent.includes(value.trim().toUpperCase()));
   }
  }
 });
