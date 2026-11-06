@@ -31,12 +31,11 @@ if command -v kubeconform >/dev/null 2>&1; then
       -e 's,###ZARF_VAR_SHORE_REQUIRE_AUTH###,false,g' \
       -e 's,###ZARF_VAR_EDGE_MAX_BYTES###,0,g' \
       -e 's,###ZARF_VAR_EDGE_MAX_ITEMS###,0,g' \
-      -e 's,###ZARF_VAR_INFER_URL###,mock,g' \
+      -e 's,###ZARF_VAR_INFER_URL###,http://edgeml-sidecar:9090,g' \
+      -e 's,###ZARF_VAR_SHORE_INFER_URL###,,g' \
       -e 's,###ZARF_VAR_SHORE_STORAGE###,5Gi,g' \
       -e 's,###ZARF_VAR_EDGE_STORAGE###,10Gi,g' \
       -e 's,###ZARF_VAR_FRAMES_HOSTPATH###,/var/lib/ghost-seeker/frames,g' \
-      -e 's,###ZARF_VAR_FRAMES_DIR###,,g' \
-      -e 's,###ZARF_VAR_SCENARIO###,,g' \
       "$manifest" > "$tmp/$(basename "$manifest")"
   done
   if kubeconform -strict -summary "$tmp" >"$tmp/kubeconform.log" 2>&1; then

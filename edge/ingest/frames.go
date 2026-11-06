@@ -204,6 +204,12 @@ func (r *Replay) Burst(source string, fps float64, d time.Duration) {
 }
 
 func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
+	return r.nextAdmitted(ctx, nil, nil)
+}
+
+// Timing waits precede admission; a returned capture owns one slot, while
+// skipped frames, errors and exhaustion leave no reservation outstanding.
+func (r *Replay) nextAdmitted(ctx context.Context, acquire func() error, release func()) (*Capture, bool, error) {
 	for r.i < len(r.queue) {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
@@ -225,11 +231,19 @@ func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
 				return nil, false, err
 			}
 		}
+		if acquire != nil {
+			if err := acquire(); err != nil {
+				return nil, false, err
+			}
+		}
 		f := r.queue[r.i]
 		c := f.Capture
 		if f.read != nil {
 			data, err := f.read()
 			if err != nil {
+				if release != nil {
+					release()
+				}
 				if ctx.Err() != nil {
 					return nil, false, ctx.Err()
 				}
