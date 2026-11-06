@@ -107,6 +107,15 @@ The operator web app also supports optional **offline CAC/PIV mutual-TLS login**
 operator/viewer roles. See [CAC/PIV mode (offline)](docs/SECURITY.md#1a-cacpiv-mode-offline)
 for deployment, air-gap trust/CRL loading, and a synthetic demo PKI generator. Token mode remains the default.
 
+Shore and edge also support opt-in **server TLS 1.3**: set both `-tls-cert` /
+`GS_TLS_CERT` and `-tls-key` / `GS_TLS_KEY`. Setting only one is a startup error;
+setting neither preserves plain HTTP. For a private-CA HTTPS shore, edge accepts
+`-shore-ca` / `GS_SHORE_CA` (PEM bundle added to system roots). The live operator
+accepts the same CA option for its shore **and edge** console RPCs and shore
+blob/API proxy. Hostname verification stays enabled. See
+[listener TLS](docs/SECURITY.md#1b-shore-and-edge-listener-tls-opt-in) and
+[deployment notes](deploy/README.md); Compose/Zarf defaults remain HTTP.
+
 Shore ConsoleService, the edge console, `/blob/` on both and the operator web app share one
 **operator bearer token**: `-operator-token` / `GS_OPERATOR_TOKEN` or `-operator-token-file` /
 `GS_OPERATOR_TOKEN_FILE` (production, required), or `-dev-token-file` / `GS_DEV_TOKEN_FILE`
@@ -158,8 +167,9 @@ Go duration (e.g. `5m`). Tokens use **HS256** and require `sub` (edge node ID),
 every received message on streaming handlers (the current proto only defines
 unary Exchange). No relay role or three-tier relay is implemented. The edge reads
 its token at startup: provision a fresh token and restart before expiry. This is
-sync authentication only, not operator/ConsoleService auth or TLS; deploy behind
-an approved TLS boundary and restrict console access to a trusted network.
+sync authentication only, not operator/ConsoleService auth or transport encryption;
+enable listener TLS or deploy behind an approved TLS boundary, and restrict console
+access to a trusted network.
 
 Caps count retained item rows and the sum of their form payload sizes, not
 SQLite/WAL overhead or audit history. Negative caps are rejected; either cap may
@@ -453,8 +463,9 @@ never its own eviction victim.
   JSON-schema constraints, regex fallback, deterministic readback and
   guardrails before apply.
 - Unit authentication is on by default, and operator authentication gates
-  ConsoleService and blobs. Policy signing remains opt-in. No service provides
-  TLS; see [Security](docs/SECURITY.md) for deployment requirements and residuals.
+  ConsoleService and blobs. Policy signing remains opt-in. Shore/edge server TLS
+  is opt-in; the operator supports PIV/mTLS. Plain HTTP remains the default; see
+  [Security](docs/SECURITY.md) for deployment requirements and residuals.
 - Capture input is frame/scenario replay; no live camera ingestion is implemented.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
 - Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;

@@ -43,7 +43,10 @@ func main() {
 	id := flag.String("id", env("EDGE_ID", "edge-1"), "edge id")
 	data := flag.String("data", env("DATA_DIR", "data/edge"), "data directory")
 	listen := flag.String("listen", env("LISTEN", ":8081"), "console listen address")
+	tlsCert := flag.String("tls-cert", env("GS_TLS_CERT", ""), "optional HTTPS server certificate (PEM; requires -tls-key)")
+	tlsKey := flag.String("tls-key", env("GS_TLS_KEY", ""), "optional HTTPS server private key (PEM; requires -tls-cert)")
 	shoreURL := flag.String("shore", env("SHORE_URL", "http://localhost:8080"), "shore base URL (put Toxiproxy here to degrade)")
+	shoreCA := flag.String("shore-ca", env("GS_SHORE_CA", ""), "optional PEM CA bundle added to system roots for HTTPS shore")
 	inferURL := flag.String("infer", env("INFER_URL", "mock"), "inference sidecar URL, or 'mock'")
 	sceneEvery := flag.Duration("scene-every", 60*time.Second, "sightings mode: store at most one object-free 'scene' frame (FACT+THUMB) per source per interval; 0 = one item per frame")
 	prioritizer := flag.String("prioritizer", env("PRIORITIZER", "edgeml"), "edgeml (object-level: unknownness, labels, confidence) | tomer (algorithm/ghost_priority image-level score; sidecar must run --prioritizer tomer|both)")
@@ -81,6 +84,10 @@ func main() {
 	corsOrigins := flag.String("cors-origins", env("GS_CORS_ORIGINS", ""), "comma-separated browser origins allowed to call the API cross-origin (default: same-origin only)")
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
 	flag.Parse()
+	tlsConfig, err := httpx.ServerTLS(*tlsCert, *tlsKey)
+	fatal(err)
+	shoreTransport, err := httpx.ClientTransport(*shoreCA)
+	fatal(err)
 	if *liveBytes <= 0 || *liveQueue < 1 || *liveQueue > 256 || *watchPoll <= 0 || *mjpegFPS <= 0 || *mjpegFPS > 60 || math.IsNaN(*mjpegFPS) {
 		fatal(fmt.Errorf("invalid live ingest limits"))
 	}
@@ -113,7 +120,7 @@ func main() {
 		fatal(err)
 	}
 	clk := clock.Real{}
-	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9), token)
+	lk := link.NewConnectWithClient(*shoreURL, &http.Client{Timeout: 5 * time.Minute, Transport: shoreTransport}, link.NewEstimator(*initBps, 300, 1e9), token)
 	cfg := scheduler.DefaultConfig(*id)
 	cfg.Tick = *tick
 	cfg.RequireSignedPolicy = *requireSignedPolicy
@@ -211,8 +218,8 @@ func main() {
 		defer c()
 		_ = srv.Shutdown(sctx)
 	}()
-	log.Info("edge console", "listen", *listen, "shore", *shoreURL, "infer", *inferURL)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	log.Info("edge console", "listen", *listen, "shore", *shoreURL, "infer", *inferURL, "tls", tlsConfig != nil)
+	if err := httpx.ListenAndServe(srv, tlsConfig); err != nil && err != http.ErrServerClosed {
 		fatal(err)
 	}
 }
