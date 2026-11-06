@@ -49,25 +49,34 @@ Key behaviours (all covered by `go test ./...` and the simulator):
 ## Layout
 
 ```
-proto/ghostseeker/v1/   contracts: Item/Form, Policy (interest, thresholds, EMCON),
-                        SyncService (edge↔shore), ConsoleService (UI), InferenceService
-gen/                    generated Go (buf + connect-go); committed, regenerate with `make gen`
-edge/                   store (SQLite + blobs), scoring (pluggable scorers), scheduler,
-                        link (Connect transport + simulator with link traces), ingest, inference, console
-shore/                  store, sync receiver, console
-internal/               fact format, virtual clock, scenario loader, http helpers
-cmd/edge cmd/shore      the two services
-cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JSON metrics
+.github/                PR production gate and manual verification workflows
 algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
-inference/              reference/contract notes + manual model-free stub; running sidecar is edgeml/
+cmd/                    edge/shore services, operator app, simulator, benchmarks, R&D tools,
+                        policy/unit credential tools and synthetic PIV test PKI generator
+datasets/               dataset registry, ingestion scripts and review metadata
+deploy/                 container builds, Compose demo/Toxiproxy topology, Zarf package with ingress/egress NetworkPolicies
+docs/                   fielding, security, verification, API contract and report documentation
+edge/                   SQLite/blob store, scoring, scheduler, link transport, replay/live ingest, inference, console
 edgeml/                 Python detection/tracking/sighting pipeline, real-model sidecar, evaluation reports
-deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf package with ingress/egress NetworkPolicies
 frames/                 demo imagery (Git LFS zips)
-cmd/ghost-seeker web/   operator web app (Go, in-memory simulation, SSE feed); see "Operator web app" below
-ui/                     API notes for wiring the web app to the edge/shore consoles
-ui-mockup/              static design reference, not served; live workbench is web/static/workbench.js
+gen/                    generated Go (buf + connect-go); committed, regenerate with `make gen`
+inference/              reference/contract notes + manual model-free stub; running sidecar is edgeml/
+internal/               command compiler, catalog, auth, operator server/shore bridge, scenario and shared helpers
+proto/                  ghostseeker/v1 protobuf contracts for items/forms, policies, sync, console and inference
+research/               image-priority experiments, NL compiler service/adapter and evaluations
+rnd/                    R&D testset/grading documentation and versioned metadata (images stored separately)
 scenarios/              replay scenarios (datasets + operator events)
+scripts/                live-frame upload helper
+shore/                  store, sync receiver, console and durable REST/SSE API
+tools/                  verification runner/tests and image-generation utilities
+ui/                     edge/shore console UI and API notes
+ui-mockup/              static design reference, not served; live workbench is web/static/workbench.js
+web/                    embedded operator app assets and Node tests (simulation and live-shore modes)
 ```
+
+Local runs may also create ignored top-level `bin/` (built binaries), `data/`
+(runtime state) and `dist/` (build/package artifacts). These are not source
+directories in a fresh checkout; `.git/` is local Git metadata.
 
 ## Quick start
 
@@ -483,7 +492,6 @@ never its own eviction victim.
   ConsoleService and blobs. Policy signing remains opt-in. Shore/edge server TLS
   is opt-in; the operator supports PIV/mTLS. Plain HTTP remains the default; see
   [Security](docs/SECURITY.md) for deployment requirements and residuals.
-- Capture input is frame/scenario replay; no live camera ingestion is implemented.
 - Sailboat footage used by `scenarios/sailboats_example.json` is in
   `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled; the boat is not
   visible in every frame, so the scenario's sailboat labels are mock hints).
