@@ -955,9 +955,7 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
-	if b.linkOverride {
-		mux.HandleFunc("POST /api/shore/link", b.setLink)
-	}
+	b.registerDemoRoutes(mux)
 	if u, err := url.Parse(b.shore); err == nil {
 		rp := httputil.NewSingleHostReverseProxy(u)
 		director := rp.Director
@@ -982,39 +980,11 @@ func (b *Bridge) Handler() http.Handler {
 			w.Header().Del("X-Content-Type-Options")
 			rp.ServeHTTP(w, r)
 		}))
+		// The live operator app's token/PIV session protects this read-only
+		// proxy. It exposes shore's durable contract, never the UI overlay.
+		mux.Handle("GET /api/v1/", rp)
 	}
 	return mux
-}
-
-// WithLinkOverride lets a presenter pin the demo link rate (POST /api/shore/link).
-func (b *Bridge) WithLinkOverride(on bool) *Bridge {
-	b.linkOverride = on
-	return b
-}
-
-// setLink pins the demo link rate ({"bps": N}) or restores the automatic
-// distribution ({"auto": true}), so a presenter can make a backlog build.
-func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
-	s, ok := b.link.(LinkSetter)
-	if !ok {
-		http.Error(w, "link is not controlled by this process", http.StatusConflict)
-		return
-	}
-	var in struct {
-		Bps  *int64 `json:"bps"`
-		Auto bool   `json:"auto"`
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
-	if err := decodeJSONBody(r.Body, &in); err != nil || (!in.Auto && (in.Bps == nil || *in.Bps < 0)) {
-		http.Error(w, `body must be {"bps": N>=0} or {"auto": true}`, http.StatusBadRequest)
-		return
-	}
-	if in.Auto {
-		s.SetAuto()
-	} else {
-		s.SetFixed(*in.Bps)
-	}
-	writeJSON(w, b.linkStatus())
 }
 
 func (b *Bridge) linkStatus() LinkStatus {

@@ -17,6 +17,7 @@ name: ghost-seeker-demo
 x-build: &go-build
   context: ../..
   dockerfile: deploy/Dockerfile
+  args: { GO_TAGS: "" }   # demo build: simulation, replay and demo auth compiled in
 
 services:
   init:
