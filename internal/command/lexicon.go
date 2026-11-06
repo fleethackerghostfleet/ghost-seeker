@@ -82,6 +82,9 @@ var attrRewrites = []struct {
 var ownShipPattern = regexp.MustCompile(`\b(toward|towards|to|at|on|for|approaching|approach|closing on|nearing|near|by|around|alongside|close to|next to|beside)\s+(?:the |our |my )?(?:own ?ship|ship|fleet|carrier|strike group|task force|convoy|formation|battle ?group|us|me|our position|my position|our way)\b`)
 var bareOwnShipPattern = regexp.MustCompile(`\b(?:own ?ship|our (?:own )?ship)\b`)
 
+// carrierOriginPattern is where aircraft come from, not a warship to boost.
+var carrierOriginPattern = regexp.MustCompile(`\b(?:(?:launch\w*|flying|taking off|operating) )?(?:from|off(?: of)?|aboard|on board)\s+(?:the |our |an? )?(?:aircraft )?carriers?\b`)
+
 var sourceAliases = []struct {
 	re *regexp.Regexp
 	id string
@@ -350,6 +353,7 @@ func normalizeDirective(text string, edgeSubtypes bool) normalized {
 		return hold("approaching")
 	})
 	text = bareOwnShipPattern.ReplaceAllString(text, " ")
+	text = carrierOriginPattern.ReplaceAllString(text, " ")
 	concepts := simConcepts
 	if edgeSubtypes {
 		concepts = edgeConcepts

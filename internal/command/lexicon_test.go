@@ -12,6 +12,14 @@ func TestOpenLanguageReviewRegressions(t *testing.T) {
 	if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"tanker"}) {
 		t.Fatalf("LNG carriers: %+v", got.Rules)
 	}
+	got = compiler.Compile(context.Background(), "prioritize helicopters from the carrier")
+	if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"helicopter"}) {
+		t.Fatalf("helicopters from the carrier: %+v", got.Rules)
+	}
+	got = compiler.Compile(context.Background(), "prioritize carriers")
+	if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"warship"}) {
+		t.Fatalf("carriers: %+v", got.Rules)
+	}
 	got = compiler.Compile(context.Background(), "focus on warships and other contacts from UAV-3")
 	for _, rule := range got.Rules {
 		if rule.Only {
