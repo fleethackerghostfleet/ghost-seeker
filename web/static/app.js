@@ -4,6 +4,8 @@ let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendin
 /* LIVE is the shore block of the snapshot when the console runs on a shore node (-shore); null on the simulation. */
 let LIVE=null;
 let feedReasons=new Map();
+const metadataCache=new Map();
+let metadataExpanded=false;
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
 const fmtRate=bps=>bps>0&&bps<8e4?'<0.01 MB/s':`${(Math.max(0,bps)/8e6).toFixed(2)} MB/s`;
@@ -18,8 +20,9 @@ function formChipsHTML(it){
 }
 function uploadState(it){
  let u=it.upload,form='';
+ const liveForms=it.live?.forms||{};
  if(it.live){
-  const forms=it.live.forms||{};
+  const forms=liveForms;
   const imageForms=['thumb','crop','full'];
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
@@ -30,17 +33,20 @@ function uploadState(it){
  const full=it.live?.forms?.full;
  const sceneHeld=isScene(it)&&!['partial','received'].includes(full?.state)&&!(full?.received>0)&&!pulling.has(it.live.itemId);
  const done=!sceneHeld&&!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
+ const metadataDone=it.live?formsStateDone(it.live,'fact'):!!u?.metadataDone;
  const background=sceneHeld||!it.live&&it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
  const sending=!done&&!held&&!paused&&!background&&!!u?.active;
  const queued=!done&&!held&&!background&&!sending;
+ const metadataOnly=metadataDone&&!held&&!background&&(it.live?!['thumb','crop','full'].some(k=>formsStateDone(it.live,k)):!done);
  const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
- const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
- return{bytes,sent,done,queued,label,form,held,next,paused,background,sending};
+ const label=(done?'✓ Uploaded':metadataOnly?'Metadata on shore · image queued':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form&&!metadataOnly?` · ${form}`:'');
+ return{bytes,sent,done,queued,label,form,held,next,paused,background,sending,metadataDone,metadataOnly};
 }
+function formsStateDone(live,name){return live?.forms?.[name]?.state==='received'}
 function uploadHTML(it){
  const u=uploadState(it);
- return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+ return`<div class="upload-info${u.done?' uploaded':u.metadataOnly?' metadata-only':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done||u.metadataOnly?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
 }
 function sendMark(it){
  const u=uploadState(it);
@@ -96,10 +102,12 @@ function bandControls(it){
 function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${imageFor(it)}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
 function preserveBandFocus(render){
  const button=document.activeElement?.closest?.('.band-controls button');
+ const metadata=document.activeElement?.matches?.('[data-meta-summary]')?'[data-meta-summary]':document.activeElement?.id==='metadataCopy'?'#metadataCopy':null;
  const surface=button?.closest('#rvMain, #drawer, #zoom');
  const item=button?.dataset.bandItem,band=button?.dataset.band;
  render();
  if(surface)[...surface.querySelectorAll('[data-band-item]')].find(b=>b.dataset.bandItem===item&&b.dataset.band===band)?.focus({preventScroll:true});
+ if(metadata)document.querySelector(metadata)?.focus({preventScroll:true});
 }
 function renderPolicyControls(summary){
  const root=$('emconControl'),active=document.activeElement?.closest?.('#emconSeg button'),mode=active?.dataset.mode;
@@ -170,6 +178,7 @@ function mergeItem(raw,fresh=true){
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
+ metadataCache.clear();
  const selection=state.sel;
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused){
@@ -208,6 +217,7 @@ function applyItemUpdate(raw){
   renderStats();return;
  }
  const item=normalizeItem(raw);mergeItem(item,false);
+ metadataCache.delete(item.id);
  if(state.sel===item.id)renderDetail();
  renderFeed();renderStats();renderRp(true);if(state.page==='rv'&&!rv.busy)renderReview();
 }
@@ -298,6 +308,7 @@ async function init(){
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
+  if(e.target.closest?.('.metadata-panel'))return;
   if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
   if(state.page==='rv'&&k==='w'){e.preventDefault();openReviewNote();return}
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
@@ -458,10 +469,11 @@ function renderDirBar(){
  $('dirBar').innerHTML=d.length?`<span>Directives:</span>${d.slice(0,2).map(x=>`<span class="pill" title="${esc(x.text)}">${esc(x.text)}</span>`).join('')}${d.length>2?`<span>+${d.length-2}</span>`:''}<a href="#reprioritize">Edit</a>`:`<span>Base model only</span><a href="#reprioritize">Set priorities →</a>`;
 }
 function renderStats(){
+ renderMetadataMode();
  const vis=items.filter(i=>state.src==='ALL'||i.src.id===state.src);
- const uploads=vis.filter(i=>!i.dismissed).map(uploadState),done=uploads.filter(u=>u.done).length,queued=uploads.filter(u=>u.queued).length,held=uploads.filter(u=>u.held).length,kept=uploads.filter(u=>u.background).length;
+ const uploads=vis.filter(i=>!i.dismissed).map(uploadState),done=uploads.filter(u=>u.done).length,queued=uploads.filter(u=>u.queued&&!u.metadataOnly).length,held=uploads.filter(u=>u.held).length,kept=uploads.filter(u=>u.background).length,metadata=uploads.filter(u=>u.metadataOnly).length;
  const sending=uploads.filter(u=>u.sending).length;
- const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
+ const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${metadata?` · ${metadata} metadata only`:''}${kept?` · ${kept} kept on ship`:''}`;
  $('hsImgs').textContent=vis.length;$('rvSentN').textContent=vis.filter(humanSent).length;$('hsP1').textContent=vis.filter(i=>i.tier===1).length;$('hsCdr').textContent=cdr;
  const unrevLive=vis.filter(i=>!isScene(i)&&!i.reviewed&&!i.dismissed).length;
  if(LIVE){renderLiveStrip();$('rvCount').textContent=unrevLive||'';if(state.page==='rv')rvProgress();if(state.page==='details')renderDetails();return}
@@ -526,6 +538,13 @@ function renderSimLink(){
  const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
  el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'');
 }
+function metaOnlyChip(data,bps){if(!data?.metaOnly)return'';const reason=data.metaOnlyReason==='emcon'?'EMCON burst':`link ${Math.round((bps||data.linkBps||0)/1000)} kbps`;return`<span class="meta-only-chip" title="Link below 8 kbps for 2 min — only metadata is sent; images resume after 2 min above 16 kbps">Metadata only · ${reason}</span>`}
+function renderMetadataMode(){
+ let root=document.querySelector('header .metadata-mode');
+ if(!root){const anchor=document.querySelector('header .hstats');if(!anchor)return;anchor.insertAdjacentHTML('beforebegin','<span class="metadata-mode"></span>');root=document.querySelector('header .metadata-mode')}
+ const data=LIVE?LIVE.edge:stats,rate=LIVE?(LIVE.link?.controllable?LIVE.link.bps:LIVE.edge?.estimateBps||LIVE.shore?.estimateBps):stats.linkBps;
+ root.innerHTML=metaOnlyChip(data,rate);root.hidden=!data?.metaOnly;
+}
 const pulling=new Set();
 function renderCameras(){
  const el=$('cameras');if(!el)return;const cams=LIVE?.cameras||[];el.hidden=!LIVE||!cams.length;if(el.hidden){el.innerHTML='';return}
@@ -565,6 +584,53 @@ function renderZoomContent(){const it=items.find(i=>i.id===state.sel);if(!it){cl
  z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
 function closeDetail(){closeZoom();const prev=items.find(i=>i.id===state.sel);state.sel=null;document.body.classList.remove('drawer-open');prev&&updateCard(prev)}
 function step(dir){const l=visible().l;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
+function metadataValue(value,path,synthetic){
+ if(value===null||value===undefined||value==='')return'';
+ const format=v=>v&&typeof v==='object'?Array.isArray(v)?v.map(format).join(' · '):Object.entries(v).map(([k,x])=>`${k}: ${format(x)}`).join(' · '):String(v??'');
+ const text=format(value);
+ return`${esc(text)}${synthetic?'<sup class="synthetic-marker" title="Synthetic value">sim</sup>':''}`;
+}
+function metadataRows(value,group,path='',synthetic=[]){
+ if(!value||typeof value!=='object')return'';
+ return Object.entries(value).map(([key,val])=>{
+  const p=path?`${path}.${key}`:key,mark=synthetic.some(k=>String(k).toLowerCase()===p.toLowerCase()||String(k).toLowerCase()===key.toLowerCase()||String(k).toLowerCase().startsWith(p.toLowerCase()+'.')||String(k).toLowerCase().startsWith(p.toLowerCase()+'['));
+  if(group==='transfer'&&val&&typeof val==='object'){
+   const done=val.done||val.state==='received',sent=val.sent??val.received??0,bytes=val.bytes||0;
+   const status=done?'on shore':val.state||'queued';
+   const text=`${status} · ${fmtBytes(bytes)}${done&&val.doneAt?` · ${String(val.doneAt).replace(/^.*T/,'').replace(/\.\d+Z$/,'Z')}`:!done?` · ${Math.round(100*sent/Math.max(1,bytes))}%`:''}`;
+   return`<tr><th>${esc(key)}</th><td>${metadataValue(text,p,mark)}</td></tr>`;
+  }
+  if(Array.isArray(val)&&val.some(v=>v&&typeof v==='object'))return val.map((v,n)=>`<tr><th>${esc(key)} ${n+1}</th><td>${metadataValue(v,`${p}[${n}]`,mark)}</td></tr>`).join('');
+  const label=group==='scoring'?({edge:'Ship score',central:'Shore score'}[key]||key):key;
+  const display=key==='imageSize'?fmtBytes(val):group==='scoring'&&typeof val==='number'&&!Number.isInteger(val)?val.toFixed(3):val;
+  return`<tr><th>${esc(label.replace(/([a-z])([A-Z])/g,'$1 $2'))}</th><td>${metadataValue(display,p,mark)}</td></tr>`;
+ }).join('');
+}
+function metadataHTML(record){
+ const groups=[['capture','Capture'],['model','Model classification'],['scoring','Scoring'],['operator','Operator'],['transfer','Transfer']];
+ const synthetic=record?.synthetic||[];
+ return groups.map(([key,label])=>record?.[key]?`<section class="metadata-group"><h5>${label}</h5><table>${metadataRows(record[key],key,key,synthetic)}</table></section>`:'').join('')||'<p class="hint">Metadata unavailable.</p>';
+}
+async function loadMetadata(it,panel){
+ if(!panel||!panel.open)return;
+ const cached=metadataCache.get(it.id);
+ if(cached?.data){const body=panel.querySelector('.metadata-content');if(body)body.innerHTML=metadataHTML(cached.data);return}
+ if(cached?.loading)return;
+ const entry={loading:true};metadataCache.set(it.id,entry);
+ const body=panel.querySelector('.metadata-content');if(body)body.innerHTML='<p class="hint">Loading metadata…</p>';
+ const currentPanel=()=>state.sel===it.id?$('metadataPanel'):panel.isConnected?panel:null;
+ try{const data=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);if(metadataCache.get(it.id)!==entry)return;metadataCache.set(it.id,{data});const current=currentPanel();if(current?.isConnected&&current.open){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=metadataHTML(data)}}catch(error){if(metadataCache.get(it.id)!==entry)return;metadataCache.delete(it.id);const current=currentPanel();if(current?.isConnected){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=`<p class="hint">${esc(error.message)}</p>`}}
+}
+function metadataPanelHTML(it){
+ const cached=metadataCache.get(it.id),size=cached?.data?.transfer?.metadata?.bytes||it.upload?.metadataBytes||it.live?.forms?.fact?.bytes||1024;
+ return`<details class="metadata-panel" id="metadataPanel" ${metadataExpanded?'open':''}><summary data-meta-summary><span class="metadata-caret">${metadataExpanded?'▾':'▸'}</span> Metadata · ${fmtBytes(size)}</summary><div class="metadata-content">${cached?.data?metadataHTML(cached.data):'<p class="hint">Open to load metadata.</p>'}</div><button type="button" class="btn sm metadata-copy" id="metadataCopy">Copy JSON</button></details>`;
+}
+function bindMetadataPanel(it){
+ const panel=$('metadataPanel');if(!panel)return;
+ panel.addEventListener?.('toggle',()=>{if(!panel.isConnected)return;metadataExpanded=panel.open;const caret=panel.querySelector('.metadata-caret');if(caret)caret.textContent=panel.open?'▾':'▸';if(panel.open)loadMetadata(it,panel)});
+ $('metadataCopy')?.addEventListener?.('click',async e=>{e.stopPropagation();const data=metadataCache.get(it.id)?.data;if(!data)return;try{await navigator.clipboard.writeText(JSON.stringify(data,null,2));toast('Metadata JSON copied')}catch{toast('Could not copy metadata JSON')}});
+ if(panel.open)loadMetadata(it,panel);
+}
 function buildWhy(it,rows){
  const why=[...liveWhy(it),...gsLights.why(it)];const top=rows[0];
  rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
@@ -581,8 +647,8 @@ function renderDetailContent(){
  const it=items.find(i=>i.id===state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
-	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
+	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;bindMetadataPanel(it);return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
  const why=buildWhy(it,rows);
@@ -606,10 +672,11 @@ function renderDetailContent(){
   </ul></div>`}
   ${uploadControlsHTML(it)}
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
+  ${metadataPanelHTML(it)}
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
- briefing.renderDetections(it);
+ bindMetadataPanel(it);briefing.renderDetections(it);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
  for(const [id,override] of [['aUploadNext','next'],['aUploadHold','hold']])$(id).onclick=async()=>{if(it.live||LIVE||uploadState(it).done)return;try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:it.upload?.override===override?'':override});cdr=result.cdr;applyItemUpdate(result.item)}catch(error){toast(error.message)}};

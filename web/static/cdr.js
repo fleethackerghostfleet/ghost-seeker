@@ -20,7 +20,9 @@ function norm(it){
  it.ts=new Date(it.ts);it.src=SRC[typeof it.src==='string'?it.src:it.src.id]||{id:String(it.src),name:String(it.src),scene:'open',mode:'eo'};
  it.sentAt=it.sentAt?new Date(it.sentAt):null;it.decidedAt=it.decidedAt?new Date(it.decidedAt):null;return it;
 }
-const onShore=it=>it.live?it.live.event!=='scene'&&Object.values(it.live.forms||{}).some(f=>f.state==='received'):!!(it.upload?.received||it.upload?.done);
+const hasImage=it=>it.live?!!it.live.imageForm||['thumb','crop','full'].some(k=>it.live.forms?.[k]?.state==='received'):!!(it.upload?.received||it.upload?.done);
+const metadataOnly=it=>it.live?it.live.event!=='scene'&&it.live.forms?.fact?.state==='received'&&!hasImage(it):!!it.upload?.metadataDone&&!hasImage(it);
+const onShore=it=>it.live?it.live.event!=='scene'&&Object.values(it.live.forms||{}).some(f=>f.state==='received'):!!(it.upload?.received||it.upload?.done||it.upload?.metadataDone);
 const awaiting=it=>onShore(it)&&it.sent&&!it.decision;
 function upsert(raw){
  const it=norm(raw),had=items.get(it.id);
@@ -32,7 +34,7 @@ const pending=()=>[...items.values()].filter(awaiting).sort((a,b)=>a.tier-b.tier
 const received=()=>[...items.values()].filter(onShore).sort((a,b)=>b.ts-a.ts);
 const decided=()=>[...items.values()].filter(i=>i.decision).sort((a,b)=>b.decidedAt-a.decidedAt);
 const list=()=>view.tab==='received'?received():view.tab==='pending'?pending():decided();
-const receipt=it=>it.live?it.live.imageForm?'Image received':'Summary only · image not received':it.fullRes&&!it.upload?.done?'Image received · full-size transfer pending':'Image received';
+const receipt=it=>metadataOnly(it)?'Metadata on shore · image queued':it.live?it.live.imageForm?'Image received':'Summary only · image not received':it.fullRes&&!it.upload?.done?'Image received · full-size transfer pending':'Image received';
 const reportStatus=it=>it.decision?DEC[it.decision].lab:it.sent?'Awaiting command decision':it.reviewed?'Reviewed on watch floor':'Not yet reviewed on watch floor';
 function ensureSel(){if(!items.has(view.sel)||!list().some(i=>i.id===view.sel))view.sel=list()[0]?.id||null}
 
@@ -69,8 +71,8 @@ function renderQueue(){
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
-  <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
-  <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
+  <div class="th${metadataOnly(it)?' metadata-thumb':''}">${metadataOnly(it)?'<div class="cdr-placeholder">Image not yet received · metadata on shore</div>':`<img src="${imageFor(it)}" alt="">`}<span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
+  <div class="rm"><b>${esc(title(it))}</b>${metadataOnly(it)?'<span class="metadata-badge">Metadata only</span>':''}<span>${esc(it.src.name)}</span>
   <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
  $('qlist').querySelector('.row.on')?.scrollIntoView({block:'nearest'});
 }
@@ -79,7 +81,7 @@ function renderStage(){
  if(!it){
   $('stage').innerHTML=`<div class="idle"><b>${view.tab==='received'?'Waiting for ship data':view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='received'?'Ship backlog is not a shore receipt.':view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';return;
  }
- $('stage').innerHTML=`<div class="frame"><img src="${imageFor(it)}" alt=""><div class="bx">${boxes(it)}</div></div>
+ $('stage').innerHTML=`<div class="frame${metadataOnly(it)?' metadata-frame':''}">${metadataOnly(it)?'<div class="cdr-placeholder">Image not yet received · metadata on shore</div>':`<img src="${imageFor(it)}" alt="">`}<div class="bx">${metadataOnly(it)?'':boxes(it)}</div></div>
  <div class="facts"><div><span>Source</span><b>${esc(it.src.name)}</b></div><div><span>Location</span><b>${esc(it.src.loc||'—')}</b></div>
  <div><span>Captured</span><b class="mono">${zulu(it.ts)} · ${ago(it.ts)} ago</b></div><div><span>Record</span><b class="mono">#${it.dbId} · FRM ${it.frame}</b></div></div>
  <div class="shore-receipt"><b>${esc(receipt(it))}</b><span>${esc(reportStatus(it))}</span>${it.live?`<ul>${['fact','thumb','crop','full'].map(k=>`<li>${{fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'}[k]}: ${esc(it.live.forms?.[k]?.state||'not offered')}</li>`).join('')}</ul>`:''}</div>

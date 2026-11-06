@@ -70,7 +70,10 @@ test('live shore receipt distinguishes summary from images and ignores partial-o
  ];
  vm.runInContext('rows.forEach(upsert);view.sel="summary";renderQueue();renderStage()',context);
  assert.equal(vm.runInContext('received().length',context),1);
- assert.match(elements.get('stage').innerHTML,/Summary only · image not received/);
+ assert.match(elements.get('stage').innerHTML,/Metadata on shore · image queued/);
+ assert.match(elements.get('qlist').innerHTML,/Metadata only/);
+ assert.match(elements.get('stage').innerHTML,/Image not yet received · metadata on shore/);
+ assert.doesNotMatch(elements.get('stage').innerHTML,/<img/);
  assert.match(elements.get('stage').innerHTML,/Preview: partial/);
  assert.doesNotMatch(elements.get('brief').innerHTML,/<textarea|class="dec"/);
  assert.match(elements.get('brief').innerHTML,/when the watch floor sends a report/);
@@ -79,6 +82,22 @@ test('live shore receipt distinguishes summary from images and ignores partial-o
  vm.runInContext('upsert(rows[0]);renderStage()',context);
  assert.match(elements.get('stage').innerHTML,/Image received/);
  assert.doesNotMatch(elements.get('stage').innerHTML,/Summary only/);
+});
+
+test('simulation metadata receipts appear under Received without loading images and remain actionable after escalation',async()=>{
+ const {elements,context}=setup();
+ context.row={id:'metadata',src:'BY-12',ts:new Date(),tier:2,central:.7,edge:.6,dets:[],det:[],upload:{metadataDone:true,done:false},sent:true};
+ vm.runInContext('upsert(row);view.sel=row.id;renderQueue();renderStage()',context);
+ assert.equal(vm.runInContext('received().length',context),1);
+ assert.equal(vm.runInContext('pending().length',context),1);
+ assert.match(elements.get('qlist').innerHTML,/Metadata only/);
+ assert.match(elements.get('stage').innerHTML,/Image not yet received · metadata on shore/);
+ assert.doesNotMatch(elements.get('qlist').innerHTML+elements.get('stage').innerHTML,/<img/);
+ assert.match(elements.get('brief').innerHTML,/class="dec"/);
+ context.row.upload.done=true;
+ vm.runInContext('upsert(row);renderQueue();renderStage()',context);
+ assert.doesNotMatch(elements.get('qlist').innerHTML,/Metadata only/);
+ assert.match(elements.get('stage').innerHTML,/<img/);
 });
 
 test('awareness-only receipts cannot use command decision API',async()=>{

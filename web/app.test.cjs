@@ -1195,3 +1195,88 @@ test('empty water processing chain explains local retention without claiming sho
  assert.match(html,/Priority scoring \(simulated\)/);
  assert.doesNotMatch(html,/0\.02 ≥ 0\.20|Sent to shore:/);
 });
+
+test('metadata panel is initially collapsed, lazily loads, caches and renders synthetic fields',async()=>{
+ const c=setup();
+ vm.runInContext(`
+  calls=[];metadataBody={innerHTML:''};caret={textContent:''};
+  panel={open:false,isConnected:true,querySelector:s=>s==='.metadata-content'?metadataBody:caret,addEventListener:(name,fn)=>{if(name==='toggle')toggleMetadata=fn}};
+  originalDollar=$;$=id=>id==='metadataPanel'?panel:originalDollar(id);
+  request=async(...args)=>{calls.push(args);return {capture:{lat:36.9},model:{},scoring:{tier:2},operator:{},transfer:{},synthetic:['capture.lat']}};
+  item={id:'a/b',upload:{metadataBytes:1024}};
+ `,c);
+ assert.doesNotMatch(vm.runInContext('metadataPanelHTML(item)',c),/id="metadataPanel" open/);
+ assert.match(vm.runInContext('metadataPanelHTML(item)',c),/▸.*Metadata · 1\.0 KB/);
+ vm.runInContext('bindMetadataPanel(item)',c);
+ assert.equal(vm.runInContext('calls.length',c),0);
+ vm.runInContext('panel.open=true;toggleMetadata()',c);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('calls[0][0]',c),'/api/items/a%2Fb/metadata');
+ assert.match(vm.runInContext('metadataBody.innerHTML',c),/Capture.*Synthetic value.*sim/s);
+ assert.match(vm.runInContext('metadataPanelHTML({id:"next"})',c),/id="metadataPanel" open/);
+ await vm.runInContext('loadMetadata(item,panel)',c);
+ assert.equal(vm.runInContext('calls.length',c),1);
+ vm.runInContext('metadataCache.delete(item.id)',c);
+ await vm.runInContext('loadMetadata(item,panel)',c);
+ assert.equal(vm.runInContext('calls.length',c),2);
+});
+
+test('metadata panel handles empty records, escapes values, and allows retry after a failed request',async()=>{
+ const c=setup();
+ assert.match(vm.runInContext('metadataHTML({})',c),/Metadata unavailable/);
+ assert.doesNotMatch(vm.runInContext('metadataHTML({capture:{source:"<script>"}})',c),/<script>/);
+ vm.runInContext(`body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};request=async()=>{throw new Error('Offline')}`,c);
+ await vm.runInContext('loadMetadata({id:"failed"},panel)',c);
+ assert.match(vm.runInContext('body.innerHTML',c),/Offline/);
+ assert.equal(vm.runInContext('metadataCache.has("failed")',c),false);
+});
+
+test('metadata fetch completion fills the current panel after an in-flight rerender',async()=>{
+ const c=setup();
+ vm.runInContext(`state.sel='x';oldBody={innerHTML:''};newBody={innerHTML:''};oldPanel={open:true,isConnected:true,querySelector:()=>oldBody};newPanel={open:true,isConnected:true,querySelector:()=>newBody};request=()=>new Promise(resolve=>{finishMetadata=resolve});originalDollar=$;$=id=>id==='metadataPanel'?newPanel:originalDollar(id);pendingMetadata=loadMetadata({id:'x'},oldPanel);oldPanel.isConnected=false;finishMetadata({capture:{source:'camera'}})`,c);
+ await vm.runInContext('pendingMetadata',c);
+ assert.match(vm.runInContext('newBody.innerHTML',c),/camera/);
+});
+
+test('metadata-only upload labels do not claim image receipt in simulation or live mode',()=>{
+ const c=setup();
+ vm.runInContext(`sim={upload:{bytes:1000,sent:0,metadataDone:true}};live={live:{forms:{fact:{state:'received'},thumb:{state:'pending',bytes:1000}}}}`,c);
+ for(const item of ['sim','live']){
+  assert.match(vm.runInContext(`uploadHTML(${item})`,c),/Metadata on shore · image queued/);
+  assert.doesNotMatch(vm.runInContext(`uploadHTML(${item})`,c),/✓|Uploaded/);
+  assert.equal(vm.runInContext(`sendMark(${item}).text`,c),'');
+ }
+ vm.runInContext("live.live.forms.thumb.state='received'",c);
+ assert.equal(vm.runInContext('uploadState(live).metadataOnly',c),false);
+ assert.equal(vm.runInContext('sendMark(live).text',c),'✓');
+ vm.runInContext('items=[{...sim,src:{id:"EO-P7"}}];fullRenderStats()',c);
+ assert.match(c.$('uploadSummary').textContent,/0 uploaded · 1 metadata only/);
+});
+
+test('metadata-only chip follows simulation and live state with a quiet explanatory tooltip',()=>{
+ const c=setup();
+ assert.equal(vm.runInContext('metaOnlyChip({},4000)',c),'');
+ assert.equal(vm.runInContext('metaOnlyChip({metaOnly:false},4000)',c),'');
+ assert.match(vm.runInContext('metaOnlyChip({metaOnly:true},4000)',c),/Metadata only · link 4 kbps/);
+ assert.match(vm.runInContext('metaOnlyChip({metaOnly:true,metaOnlyReason:"emcon"},4000)',c),/Metadata only · EMCON burst/);
+ assert.match(vm.runInContext('metaOnlyChip({metaOnly:true},4000)',c),/Link below 8 kbps for 2 min/);
+ assert.match(source,/const data=LIVE\?LIVE.edge:stats/);
+});
+
+test('metadata summary and copy retain focus on rerender and do not dispatch review hotkeys',()=>{
+ const c=setup();
+ vm.runInContext(`handlers={};document.addEventListener=(type,fn)=>{handlers[type]=fn};rvAct=()=>{throw new Error('review key fired')};state.page='rv'`,c);
+ const start=source.indexOf(" document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ vm.runInContext(source.slice(start,end),c);
+ for(const key of ['Enter',' ','1','2','3','4','b','ArrowRight','f','Escape']){
+  c.event={key,target:{tagName:'SUMMARY',closest:selector=>selector==='.metadata-panel'?{}:null},preventDefault(){throw new Error('native key blocked')}};
+  vm.runInContext('handlers.keydown(event)',c);
+ }
+ for(const id of ['summary','metadataCopy']){
+  c.document.activeElement={id,matches:()=>id==='summary'};
+  let focused=false;c.document.querySelector=()=>({focus(){focused=true}});
+  vm.runInContext('preserveBandFocus(()=>{})',c);
+  assert.equal(focused,true);
+ }
+});
