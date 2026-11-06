@@ -155,14 +155,13 @@ func (q *Queue) reserve() bool {
 	}
 }
 
-func (q *Queue) waitSlot(ctx context.Context, key string) error {
+func (q *Queue) waitSlot(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if q.reserve() {
 		return nil
 	}
-	q.count(key, func(s *SourceStats) { s.Rejected++ })
 	select {
 	case q.slots <- struct{}{}:
 		return nil

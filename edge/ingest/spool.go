@@ -172,7 +172,7 @@ func pause(ctx context.Context, d time.Duration) error {
 // Pump fans any existing Source (including replay) into the single live writer.
 func Pump(ctx context.Context, q *Queue, src Source, transport string) error {
 	for {
-		if err := q.waitSlot(ctx, transport); err != nil {
+		if err := q.waitSlot(ctx); err != nil {
 			return err
 		}
 		c, done, err := src.Next(ctx)

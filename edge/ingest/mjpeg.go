@@ -122,7 +122,7 @@ func mjpegConnection(ctx context.Context, client *http.Client, q *Queue, rawURL 
 
 func mjpegFrame(ctx context.Context, q *Queue, frame io.Reader, m Metadata, maxBytes int64) error {
 	key := "mjpeg:" + m.Source
-	if err := q.waitSlot(ctx, key); err != nil {
+	if err := q.waitSlot(ctx); err != nil {
 		return err
 	}
 	reserved := true

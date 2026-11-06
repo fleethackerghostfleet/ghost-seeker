@@ -235,6 +235,31 @@ func TestLocalProducersWaitForAdmissionBeforeReading(t *testing.T) {
 	}
 }
 
+func TestWaitingCameraFrameDoesNotCountAsRejected(t *testing.T) {
+	q := runningQueue(t, 1)
+	q.reserve()
+	data := encJPEG(t, scene(30, 20))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- mjpegFrame(ctx, q, bytes.NewReader(data), Metadata{Source: "waiting"}, 1<<20) }()
+	select {
+	case err := <-done:
+		t.Fatal("camera did not wait for admission", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	<-q.slots
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	q.mu.Lock()
+	stats := q.stats["mjpeg:waiting"]
+	q.mu.Unlock()
+	if stats.Rejected != 0 || stats.Accepted != 1 || stats.Processed != 1 {
+		t.Fatal("waiting frame incorrectly rejected", stats)
+	}
+}
+
 func TestLivePushSizeMetadataAndBackpressure(t *testing.T) {
 	q := NewQueue(1)
 	jpg := encJPEG(t, scene(40, 30))
