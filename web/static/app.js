@@ -1,5 +1,6 @@
 let SOURCES=[],SRC={},CLS={},MODELS={},ATTR_LAB={},EXAMPLES=[];
 let DATASET_MODE=false;
+let DEMO_REVIEW_FIRST=false;
 let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[],policy:null};
 let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null,policyAuditTimer=null,policyRawTouched=false,policyRawLoaded=false;
 let indexedItems=null,itemByID=new Map(),indexedPending=null,pendingByID=new Map();
@@ -266,7 +267,7 @@ function clearDemoItems(){
 // them all false, and a missing block is treated the same way.
 function gsFeatures(config){
  const f=config&&typeof config.features==='object'&&config.features||{};
- return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true};
+ return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true,demoDraftSend:f.demoDraftSend===true};
 }
 function applyFeatures(features){
  document.body.classList.toggle('no-sim',!features.simulation);
@@ -367,6 +368,8 @@ async function init(){
  const config=await request('/api/config');
  const features=gsFeatures(config);
  applyFeatures(features);
+ oprep.configure(features);
+ DEMO_REVIEW_FIRST=config.features?.demoReviewFirst===true;
  setupDemoReset(features.demoReset);
  setupTeamSync(!!config.reviewSync);
  DATASET_MODE=features.dataset;
@@ -894,6 +897,7 @@ function renderDetailContent(){
   <div class="dsec"><h3>Detections</h3><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>esc(ATTR_LAB[a])).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
   ${gsLights.section(it,CLS)}
   <div class="dsec" id="briefDetections"></div>
+  <div class="dsec"><h3>Special incident reporting</h3><button class="btn" id="oprepOpen">Draft OPREP-3 NAVY BLUE (whale strike)</button></div>
   <div class="dsec"><h3>Why this priority</h3><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   ${it.live?liveLadderHTML(it):DATASET_MODE?processingHTML(it):`<div class="dsec"><h3>Processing chain</h3><ul class="tl">
    <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${esc(it.src.hw)} · ${esc(it.src.em)} · ${it.background?'empty water retained locally for demo · no automatic upload':`score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}`}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
@@ -908,6 +912,7 @@ function renderDetailContent(){
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
  bindMetadataPanel(it);briefing.renderDetections(it);
+ $('oprepOpen').onclick=event=>openItemOprep(it,event.currentTarget,()=>state.sel===it.id);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
  for(const [id,override] of [['aUploadNext','next'],['aUploadHold','hold']]){const b=$(id);if(b)b.onclick=async()=>{if(it.live||LIVE||uploadState(it).done)return;try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:it.upload?.override===override?'':override});cdr=result.cdr;applyItemUpdate(result.item)}catch(error){toast(error.message)}}}
@@ -1015,7 +1020,7 @@ async function answerTeamProposal(answer){
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
  finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
-function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
+function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(DEMO_REVIEW_FIRST?Number(!!b.reviewFirst)-Number(!!a.reviewFirst):0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
@@ -1093,6 +1098,14 @@ function renderNext(it){
  box.innerHTML=(rv.last?`<span class="rvnext-done">${esc(rv.last)}</span>`:'')+`<span class="rvnext-step"><b>Next:</b> ${step}</span>`;
 }
 function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)return;box.classList.remove('flash');void box.offsetWidth;box.classList.add('flash')}
+async function openItemOprep(it,button,isCurrent,type='whale'){
+ button.disabled=true;
+ let metadata=metadataCache.get(it.id)?.data,unavailable=false;
+ try{if(!metadata||metadataCache.get(it.id)?.stale){metadata=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);metadataCache.set(it.id,{data:metadata})}}
+ catch{unavailable=true}
+ finally{button.disabled=false}
+ if(isCurrent())oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable,type);
+}
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
@@ -1100,6 +1113,9 @@ function renderReviewContent(){
  const current=rv.cur?findItem(rv.cur.id):rv.busy?null:rvQueue()[0];
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
+ const report=$('rvOprep');report.disabled=!it||unavailable;
+ if(report.disabled)oprep.closeMenu();
+ report.onclick=()=>{if(it&&!report.disabled){if(oprep.menuOpen())oprep.closeMenu();else return oprep.showMenu(type=>openItemOprep(it,report,()=>state.page==='rv'&&rv.cur?.id===it.id&&!!findItem(it.id),type))}};
  rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||rv.busy||(!it&&b.dataset.a!=='undo')||(unavailable&&!['skip','undo'].includes(b.dataset.a))});
  if(!it){rv.shown=null;rv.displayed=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>${rv.busy?'Saving review…':'All caught up'}</b><div>${rv.busy?'The next image will appear when the save completes.':'New images will appear here as sensors report.'}</div></div><div class="rvflash" id="rvFlash"></div>`;return}

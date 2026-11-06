@@ -86,7 +86,8 @@ const (
 )
 
 type Item struct {
-	Capture *CaptureMeta `json:"capture,omitempty"`
+	ReviewFirst bool         `json:"reviewFirst,omitempty"`
+	Capture     *CaptureMeta `json:"capture,omitempty"`
 
 	Background       bool       `json:"background,omitempty"`
 	DetectorNegative bool       `json:"detectorNegative,omitempty"`
