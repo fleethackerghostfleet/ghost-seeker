@@ -8,3 +8,5 @@
 .oprep-actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 .oprep-provenance{color:var(--accent,#006c72)}
 @media(max-width:760px){.oprep-layout{grid-template-columns:1fr}}
+
+#oprepForm .oprep-missing{outline:2px solid #d99400;outline-offset:1px;background:#fff1cc;color:#332200}
