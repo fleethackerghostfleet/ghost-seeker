@@ -19,6 +19,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 )
 
 const DefaultMaxFrameBytes int64 = 32 << 20
@@ -207,7 +208,8 @@ func (q *Queue) Handler(operator, unit string, maxBytes int64) http.Handler {
 		maxBytes = DefaultMaxFrameBytes
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !opauth.Equal(operator, opauth.BearerToken(r)) && !opauth.Equal(unit, opauth.BearerToken(r)) {
+		bearer := opauth.BearerToken(r)
+		if !opauth.Equal(operator, bearer) && !(opauth.Equal(unit, bearer) && unitauth.ConfiguredTokenActive(unit)) {
 			opauth.Unauthorized(w)
 			return
 		}

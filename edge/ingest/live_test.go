@@ -17,6 +17,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const liveTestToken = "synthetic-live-test-operator"
@@ -65,7 +68,11 @@ func multipartFrame(t *testing.T, data []byte, meta string) ([]byte, string) {
 
 func TestLivePushValidationAndDuplicate(t *testing.T) {
 	q := runningQueue(t, 2)
-	h := q.Handler(liveTestToken, "synthetic-unit-token", 1<<20)
+	unit, err := unitauth.Mint("test-edge", strings.Repeat("k", 32), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := q.Handler(liveTestToken, unit, 1<<20)
 	jpg := encJPEG(t, scene(40, 30))
 	var gifBytes bytes.Buffer
 	_ = gif.Encode(&gifBytes, image.NewGray(image.Rect(0, 0, 10, 10)), nil)
@@ -99,7 +106,7 @@ func TestLivePushValidationAndDuplicate(t *testing.T) {
 	}
 	var first, second Result
 	_ = json.Unmarshal(w.Body.Bytes(), &first)
-	w = requestFrame(h, jpg, "image/jpeg", "?source=cam-a", "synthetic-unit-token")
+	w = requestFrame(h, jpg, "image/jpeg", "?source=cam-a", unit)
 	_ = json.Unmarshal(w.Body.Bytes(), &second)
 	if w.Code != 202 || first.ID == "" || first.Duplicate || first.ID != second.ID || !second.Duplicate {
 		t.Fatalf("duplicate result: %+v %+v: %d", first, second, w.Code)
@@ -117,6 +124,44 @@ func TestLivePushValidationAndDuplicate(t *testing.T) {
 	s := health.Sources["push:cam-a"]
 	if s.Accepted != 2 || s.Processed != 2 || s.Duplicates != 1 || s.LastFrame == nil {
 		t.Fatal(w.Body.String())
+	}
+}
+
+func TestLivePushRejectsInactiveUnitCredential(t *testing.T) {
+	q := runningQueue(t, 1)
+	jpg := encJPEG(t, scene(20, 20))
+	for _, tc := range []struct {
+		name          string
+		exp, nbf, iat int64
+	}{
+		{"expired", time.Now().Unix() - 60, 0, 0},
+		{"no expiry", 0, 0, 0},
+		{"not yet valid", time.Now().Unix() + 3600, time.Now().Unix() + 60, 0},
+		{"future issue", time.Now().Unix() + 3600, 0, time.Now().Unix() + 60},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := jwt.MapClaims{"sub": "test-edge", "role": "unit"}
+			if tc.exp != 0 {
+				c["exp"] = tc.exp
+			}
+			if tc.nbf != 0 {
+				c["nbf"] = tc.nbf
+			}
+			if tc.iat != 0 {
+				c["iat"] = tc.iat
+			}
+			unit, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(strings.Repeat("k", 32)))
+			if err != nil {
+				t.Fatal("mint fixture failed")
+			}
+			h := q.Handler(liveTestToken, unit, 1<<20)
+			if w := requestFrame(h, jpg, "image/jpeg", "?source=cam", unit); w.Code != 401 {
+				t.Fatal("inactive configured unit accepted", w.Code)
+			}
+			if w := requestFrame(h, jpg, "image/jpeg", "?source=cam", liveTestToken); w.Code != 202 {
+				t.Fatal("operator credential blocked", w.Code)
+			}
+		})
 	}
 }
 
