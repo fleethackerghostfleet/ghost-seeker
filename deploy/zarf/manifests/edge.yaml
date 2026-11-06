@@ -38,6 +38,8 @@ spec:
       labels:
         app: edge
     spec:
+      imagePullSecrets:
+        - name: private-registry
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -47,7 +49,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: edge
-          image: ghost-seeker/edge:prod-b6e0f0fa18d1-20261106160717-221ead34
+          image: "###ZARF_REGISTRY###/ghost-seeker/edge:prod-b6e0f0fa18d1-20261106160717-221ead34"
           imagePullPolicy: IfNotPresent
 {{ if or (ne "###ZARF_VAR_EDGE_TLS_SECRET###" "") (ne "###ZARF_VAR_SHORE_CA_SECRET###" "") }}
           args:

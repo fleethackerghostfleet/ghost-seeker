@@ -31,6 +31,8 @@ spec:
       labels:
         app: shore
     spec:
+      imagePullSecrets:
+        - name: private-registry
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -40,7 +42,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: shore
-          image: ghost-seeker/shore:prod-b6e0f0fa18d1-20261106160717-221ead34
+          image: "###ZARF_REGISTRY###/ghost-seeker/shore:prod-b6e0f0fa18d1-20261106160717-221ead34"
           imagePullPolicy: IfNotPresent
 {{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
           args:

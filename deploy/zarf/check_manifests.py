@@ -46,6 +46,10 @@ def workload_containers(document: dict) -> tuple[dict, list[dict]]:
     return pod_spec, containers
 
 
+def source_image(image: str) -> str:
+    return re.sub(r"^[^/]+/(?=ghost-seeker/)", "", image)
+
+
 def selected_workloads(selector: dict, namespace: str, workloads: list[dict]) -> list[dict]:
     require(isinstance(selector, dict) and set(selector) <= {"matchLabels"},
             "network policy selectors must use matchLabels")
@@ -366,7 +370,7 @@ def check_models(package: dict, documents: list[dict]) -> None:
                     and d["metadata"]["name"] == "edgeml-sidecar")
     pod, _ = workload_containers(workload)
     init = next((c for c in pod.get("initContainers", []) if c["name"] == "models"), {})
-    image = init.get("image", "")
+    image = source_image(init.get("image", ""))
     require(image.startswith("ghost-seeker/edgeml-models:") and image in component["images"],
             "models initContainer must use a listed edgeml-models image")
     script = "\n".join(init.get("args", []))
@@ -654,7 +658,7 @@ def check_split(role: str, overrides: dict[str, str] | None = None) -> dict[Path
     require(local == {("Egress", source, target, port), ("Ingress", target, source, port)},
             "every in-mesh flow requires the exact ingress/egress pair")
     listed = {i for c in package["components"] for i in c.get("images", [])}
-    actual = {c["image"] for d in documents if d["kind"] in WORKLOAD_KINDS for c in workload_containers(d)[1]}
+    actual = {source_image(c["image"]) for d in documents if d["kind"] in WORKLOAD_KINDS for c in workload_containers(d)[1]}
     require(listed == actual, "split package image list drift")
     from pin_images import check_lock
     require(actual <= set(check_lock().values()), "split package must use locked immutable images")
@@ -763,7 +767,7 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
                     name = container.get("name", "<unnamed>")
                     image = container.get("image")
                     require(bool(image), f"{component}: container {name} has no image")
-                    manifest_images.add(image)
+                    manifest_images.add(source_image(image))
                     require(bool(container.get("resources", {}).get("limits")),
                             f"{component}: container {name} has no resource limits")
                     require(container in pod_spec.get("initContainers", []) or bool(container.get("readinessProbe")),
