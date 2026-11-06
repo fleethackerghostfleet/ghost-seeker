@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 
 from ..types import box_iou
 
@@ -15,18 +16,23 @@ class NewContactDetector:
         self.history = {}
 
     @staticmethod
-    def _observations(state):
+    def _observations(state, cutoff=-math.inf, before=None):
         trajectory = getattr(state, "traj", ()) or [(0, state.last_seen_t, state.s.box, 0)]
-        return [(ob[1], tuple(ob[2])) for ob in trajectory]
+        end = len(trajectory) if before is None else bisect_right(trajectory, before, key=lambda ob: ob[1])
+        for index in range(end - 1, -1, -1):
+            ob = trajectory[index]
+            if ob[1] < cutoff:
+                break
+            yield ob[1], tuple(ob[2])
 
     def observe(self, states, t_s):
         anchor = min([t_s] + [st.s.first_t_s for st in states.values() if st.status == "pending"])
         cutoff = anchor - self.memory_s
         for sid, state in states.items():
             if state.status in {"open", "closed"}:
-                observations = [ob for ob in self._observations(state) if ob[0] >= cutoff]
+                observations = list(self._observations(state, cutoff))
                 if observations:
-                    self.history[sid] = (state.s.first_t_s, observations)
+                    self.history[sid] = (state.s.first_t_s, observations[::-1])
         self.history = {sid: (first, [ob for ob in observations if ob[0] >= cutoff])
                         for sid, (first, observations) in self.history.items() if observations[-1][0] >= cutoff}
 
@@ -43,16 +49,16 @@ class NewContactDetector:
         own = states.get(sid)
         trajectory = getattr(own, "traj", ())
         box = trajectory[0][2] if trajectory else event.get("box") or event["best_box"]
-        candidates = dict(self.history)
+        candidates = {sid: (first, reversed(observations)) for sid, (first, observations) in self.history.items()}
         for other_id, other in states.items():
             if other.status in {"open", "closed"}:
-                candidates[other_id] = (other.s.first_t_s, self._observations(other))
+                candidates[other_id] = (other.s.first_t_s, self._observations(other, before=first_t))
             else:
                 candidates.pop(other_id, None)
         for other_id, (other_first, observations) in candidates.items():
             if other_id == sid or other_first >= first_t:
                 continue
-            prior = next((ob for ob in reversed(observations) if ob[0] <= first_t), None)
+            prior = next((ob for ob in observations if ob[0] <= first_t), None)
             if prior is not None and first_t - prior[0] <= self.memory_s and self.near(box, prior[1]):
                 return False
         return True

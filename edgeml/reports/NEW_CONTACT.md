@@ -337,3 +337,28 @@ Deployment/compose scan found **no** `--thermal-fallback` or
 `thermal_fallback` opt-ins. The independent new-contact scorer remains on at
 weight 1. Full `make verify` was not repeated for these review changes; the
 historical verifier limitation above remains explicit.
+
+### Bounded-history performance correction
+
+The subsequent performance-only review fix walks trajectories backwards only
+to the observation cutoff, rather than copying lifetime trajectories every
+frame. Current-state lookups binary-search the chronological trajectory to
+the last timestamp at/before `first_t_s`, then consume only that observation;
+even a long confirmation lag does not scan the intervening future trajectory.
+Copied detector history remains window-bounded (with the pending-lag anchor
+described above). No aggregator trajectory or event semantics changed.
+
+A 10,000-point regression retains only 31 inclusive one-second observations
+for the 30-second window and reads only 32 trajectory points during snapshot.
+Looking up time 1 from the far end reads at most 16 points. Twenty full-scan
+equivalence cases cover live and evicted states, old/current/future first
+times and memory boundaries; existing moving-contact, pruning, pending-lag,
+empty-state and source-isolation tests also pass.
+
+Quality tables/assets are retained from the measured `6a7954a` replay based on
+those equivalence tests; no full evaluation was rerun for this optimization.
+The timing table above is **pre-optimization**, not a new measurement of this
+bounded implementation. Final checks: **722 passed in 8.43s** and
+`make prod-gate`: **PASS**. Logs: `~/data/review277-bounded-pytest.log` and
+`~/data/review277-bounded-prod-gate.log`. Go/Node inputs are unchanged from the
+earlier successful checks.

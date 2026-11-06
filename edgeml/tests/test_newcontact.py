@@ -94,6 +94,46 @@ def test_history_is_copied_source_local_pruned_and_kept_for_confirmation_lag():
     assert detector.is_new(event([0, 0, 10, 10], first=40.), {})
 
 
+def test_long_lived_trajectory_work_is_bounded_to_memory_and_lookup():
+    class CountedTrajectory(list):
+        reads = 0
+
+        def __getitem__(self, index):
+            self.reads += 1
+            return super().__getitem__(index)
+
+        def __iter__(self):
+            raise AssertionError("must not scan the full trajectory")
+
+    trajectory = CountedTrajectory((i, float(i), [0, 0, 10, 10], .9) for i in range(10000))
+    old = state([0, 0, 10, 10], seen=9999., traj=trajectory)
+    detector = NewContactDetector()
+    detector.observe({"old": old}, 9999.)
+    assert len(detector.history["old"][1]) == 31
+    assert detector.history["old"][1][0][0] == 9969.
+    assert trajectory.reads == 32
+    trajectory.reads = 0
+    assert not detector.is_new(event([0, 0, 10, 10], first=1.), {"old": old})
+    assert trajectory.reads <= 16
+
+
+@pytest.mark.parametrize("first", [0., 1., 100., 9968., 9969., 9990., 9995., 9999., 10029., 10030.])
+@pytest.mark.parametrize("evicted", [False, True])
+def test_bounded_lookup_matches_full_scan(first, evicted):
+    trajectory = [(i, float(i), [i % 80, 0, 10, 10], .9) for i in range(10000)]
+    old = state(trajectory[-1][2], seen=9999., traj=trajectory)
+    detector = NewContactDetector()
+    detector.observe({"old": old}, 9999.)
+    expected_history = [(ob[1], tuple(ob[2])) for ob in trajectory if ob[1] >= 9969.]
+    assert detector.history["old"] == (old.s.first_t_s, expected_history)
+    observations = expected_history if evicted else [(ob[1], tuple(ob[2])) for ob in trajectory]
+    prior = next((ob for ob in reversed(observations) if ob[0] <= first), None)
+    box = [5, 0, 10, 10]
+    expected = not (old.s.first_t_s < first and prior is not None
+                    and first - prior[0] <= detector.memory_s and detector.near(box, prior[1]))
+    assert detector.is_new(event(box, first=first), {} if evicted else {"old": old}) is expected
+
+
 @pytest.mark.parametrize("start,current,expected", [
     ([0, 0, 10, 10], [100, 100, 10, 10], False),
     ([100, 100, 10, 10], [0, 0, 10, 10], True),
