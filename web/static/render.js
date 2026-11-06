@@ -119,6 +119,31 @@ function factPlaceholder(){
  ctx.font=`${Math.round(H/18)}px ui-monospace,monospace`;ctx.fillText('no image has crossed the link yet',W/2,H/2+H/12);
  return cv.toDataURL('image/png');
 }
+function renderImageHTML(root,html){
+ const template=document.createElement('template');template.innerHTML=html;
+ const key=node=>node.nodeType===1?(node.id||node.getAttribute('data-id')||node.getAttribute('data-why')):null;
+ const compatible=(a,b)=>a.nodeType===b.nodeType&&a.nodeName===b.nodeName&&key(a)===key(b);
+ function patch(parent,next){
+  let cursor=parent.firstChild;
+  for(const desired of [...next.childNodes]){
+   let current=cursor;
+   if(!current||!compatible(current,desired))current=key(desired)?[...parent.childNodes].find(node=>compatible(node,desired)):null;
+   if(!current){current=desired.cloneNode(true);parent.insertBefore(current,cursor)}
+   else{
+    if(current!==cursor)parent.insertBefore(current,cursor);
+    if(current.nodeType===1){
+     for(const attr of [...current.attributes])if(!desired.hasAttribute(attr.name))current.removeAttribute(attr.name);
+     for(const attr of [...desired.attributes])if(current.getAttribute(attr.name)!==attr.value)current.setAttribute(attr.name,attr.value);
+     patch(current,desired);
+     if(current.nodeName==='SELECT')current.value=desired.value;
+    }else if(current.nodeValue!==desired.nodeValue)current.nodeValue=desired.nodeValue;
+   }
+   cursor=current.nextSibling;
+  }
+  while(cursor){const next=cursor.nextSibling;cursor.remove();cursor=next}
+ }
+ patch(root,template.content);
+}
 function imageFor(item){
  if(!imageCache.has(item.id))imageCache.set(item.id,item.img?`/${item.img}`:item.live?factPlaceholder():renderImage(item));
  return imageCache.get(item.id);
