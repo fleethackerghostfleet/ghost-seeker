@@ -133,7 +133,7 @@ func (s *Store) Reset() uint64 {
 	defer s.mu.Unlock()
 	s.items = nil
 	s.cdr = 0
-	s.stats = command.Stats{LinkBPS: s.linkBPS, LinkFixed: s.stats.LinkFixed}
+	s.stats = command.Stats{LinkBPS: s.linkBPS, LinkFixed: s.stats.LinkFixed, MetaOnlySince: s.stats.MetaOnlySince}
 	s.observeLink()
 	s.uploadRemainder = 0
 	s.epoch++
