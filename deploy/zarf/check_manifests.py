@@ -577,13 +577,9 @@ def check_split(role: str, overrides: dict[str, str] | None = None) -> dict[Path
         endpoint = urlsplit(values["SHORE_URL"])
         require(not endpoint.username and not endpoint.password and not endpoint.query and not endpoint.fragment
                 and endpoint.path in {"", "/"}, "shore endpoint must be an origin without credentials")
-        if values["SHORE_TRANSPORT"] == "external":
-            require(endpoint.scheme == "https" and bool(endpoint.hostname) and endpoint.port == 443,
-                    "cross-cluster shore requires TLS on port 443 and HTTP/2")
-        else:
-            require(endpoint.scheme == "http" and bool(endpoint.hostname)
-                    and endpoint.hostname.endswith(".svc.cluster.local") and endpoint.port == 8080,
-                    "plaintext shore is only allowed within the STRICT mTLS mesh")
+        require(values["SHORE_TRANSPORT"] == "external", "split packages require gateway transport")
+        require(endpoint.scheme == "https" and bool(endpoint.hostname) and endpoint.port == 443,
+                "cross-cluster shore requires TLS on port 443 and HTTP/2")
         require(values["FRAMES_SOURCE"] == "pvc", "UDS requires PVC frames")
     else:
         require(values["SHORE_REQUIRE_AUTH"] == "true", "shore auth cannot be disabled")

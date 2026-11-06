@@ -151,8 +151,8 @@ variables:
     prompt: false
   - name: SHORE_TRANSPORT
     default: external
-    pattern: "^(external|in-mesh)$"
-    description: External TLS gateway or explicitly co-located STRICT mTLS Service.
+    pattern: "^external$"
+    description: Split packages always synchronize through the TLS gateway, including on a shared cluster.
   - name: SHORE_URL
     description: Edge-to-shore URL; its default switches to HTTPS with SHORE_TLS_SECRET. Custom URLs must explicitly use https for TLS endpoints.
     default: "https://shore.uds.dev:443"
@@ -180,9 +180,6 @@ components:
               case "${ZARF_VAR_SHORE_TRANSPORT:-}" in
                 external)
                   case "${ZARF_VAR_SHORE_URL:-}" in https://*:443) ;; *) echo "External shore requires https://host:443 and HTTP/2" >&2; exit 1 ;; esac
-                  ;;
-                in-mesh)
-                  case "${ZARF_VAR_SHORE_URL:-}" in http://*.svc.cluster.local:8080) ;; *) echo "In-mesh shore must use a cluster Service FQDN on 8080" >&2; exit 1 ;; esac
                   ;;
                 *) exit 1 ;;
               esac

@@ -64,8 +64,9 @@ class SplitProductionTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 validator.check_split("ship", {"SHORE_URL": url})
         validator.check_split("ship", {"SHORE_URL": "https://shore.fleet.example:443", "SHORE_CA_SECRET": "fleet-ca"})
-        validator.check_split("ship", {"SHORE_TRANSPORT": "in-mesh", "SHORE_URL": "http://shore.ghost-seeker-shore.svc.cluster.local:8080",
-                                      "SHORE_EGRESS_PORT": "8080"})
+        with self.assertRaisesRegex(ValueError, "Zarf variable pattern"):
+            validator.check_split("ship", {"SHORE_TRANSPORT": "in-mesh", "SHORE_URL": "http://shore.ghost-seeker-shore.svc.cluster.local:8080",
+                                          "SHORE_EGRESS_PORT": "8080"})
 
     def test_broad_cidrs_listener_tls_hostpath_and_disabled_auth_rejected(self):
         for role, override in (("ship", {"SHORE_EGRESS_CIDR": "0.0.0.0/0"}),

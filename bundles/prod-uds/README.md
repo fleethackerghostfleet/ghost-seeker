@@ -73,9 +73,10 @@ when changing the shore domain/host. TLS hostname verification remains enabled.
 For a private CA, create `SHORE_CA_SECRET` in the **ship namespace**, containing
 `ca.crt`; empty uses system roots. The client negotiates HTTP/2 (ALPN); all
 proxies/load balancers on the route must preserve HTTP/2 and gRPC trailers.
-Shore's Service retains `appProtocol: http2`. Only for a co-located shore in the
-**same** STRICT mTLS mesh may `SHORE_TRANSPORT=in-mesh` select an explicit
-`http://shore.<namespace>.svc.cluster.local:8080` endpoint with matching policy.
+Shore's Service retains `appProtocol: http2`. Split packages require
+`SHORE_TRANSPORT=external` even on a shared cluster: use the shore TLS gateway
+and approved gateway egress CIDR/port. Direct cross-namespace h2c is not exposed
+by these packages. The legacy combined package retains its local h2c path.
 
 ## Site variables and boundaries
 
