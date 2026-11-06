@@ -33,12 +33,8 @@ func TestOfflineConceptMapping(t *testing.T) {
 		}
 		for _, text := range []string{"prioritize whales", "report dolphins", "report marine mammals", "prioritize orcas"} {
 			got := compiler.CompileRules(text)
-			if edge {
-				if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"marine mammal"}) || len(got.Unknown) != 0 {
-					t.Fatalf("live mammal mapping %q: %+v", text, got)
-				}
-			} else if len(got.Rules) != 0 || !strings.HasPrefix(got.Readback, "Not supported:") || strings.Contains(got.Readback, "this sensor can detect: marine mammal") {
-				t.Fatalf("unsupported simulation mammal %q: %+v", text, got)
+			if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"marine mammal"}) || len(got.Unknown) != 0 {
+				t.Fatalf("edge=%v mammal mapping %q: %+v", edge, text, got)
 			}
 		}
 	}

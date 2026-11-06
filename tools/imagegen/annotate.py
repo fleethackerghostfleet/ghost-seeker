@@ -6,8 +6,8 @@ G=os.path.expanduser('~/genimg')
 SCENE={'EO-P7':'harbor','IR-HE':'harbor','BY-12':'open','UAV-3':'aerial','SKY-1':'sky','SAR-7':'sat'}
 POOLS={
  "harbor":["cargo ship","tanker","small boat","fishing vessel","warship","person","bird","buoy","helicopter","drone"],
- "open":["cargo ship","tanker","warship","submarine","fishing vessel","small boat","debris","bird","military aircraft","helicopter"],
- "aerial":["small boat","cargo ship","fishing vessel","warship","debris","person","submarine","tanker"],
+ "open":["cargo ship","tanker","warship","submarine","fishing vessel","small boat","debris","bird","military aircraft","helicopter","marine mammal"],
+ "aerial":["small boat","cargo ship","fishing vessel","warship","debris","person","submarine","tanker","marine mammal"],
  "sky":["civil aircraft","military aircraft","helicopter","drone","bird"],
  "sat":["cargo ship","tanker","warship","fishing vessel","small boat"],
 }
@@ -30,7 +30,7 @@ def ann(fn):
   buf=io.BytesIO(); im.save(buf,'JPEG',quality=90)
   cls=POOLS[scene]
   prompt=("You are labeling a synthetic surveillance image for an object detector. Detect every clearly visible object of these classes: "+", ".join(cls)+
-   ". 'small boat' = launches, RIBs, motorboats, skiffs; 'warship' = navy gray combatants; 'person' = person in the water. Ignore objects tinier than about 1% of the image width, cranes, buildings, land and the camera housing. "
+   ". 'small boat' = launches, RIBs, motorboats, skiffs; 'warship' = navy gray combatants; 'person' = person in the water; 'marine mammal' = whales, orcas, dolphins (body, back, tail fluke or blow). Ignore objects tinier than about 1% of the image width, cranes, buildings, land and the camera housing. "
    "Each box must tightly enclose the whole object along its full length, whatever its orientation. Return a JSON array of objects {\"label\": <one of the classes exactly>, \"box_2d\": [ymin, xmin, ymax, xmax]} with coordinates normalized to 0-1000. Return [] if none. At most 6 objects, largest/most important first.")
   for att in range(4):
    d=post({'contents':[{'role':'user','parts':[{'inlineData':{'mimeType':'image/jpeg','data':base64.b64encode(buf.getvalue()).decode()}},{'text':prompt}]}],
