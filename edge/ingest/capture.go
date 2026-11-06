@@ -51,12 +51,14 @@ func enrichCapture(it *pb.Item, data []byte) {
 	}
 	label := "unclassified contact"
 	conf := "0.70"
+	classificationSynthetic := true
 	if len(f.Detections) > 0 && f.Detections[0].Label != "" {
+		classificationSynthetic = false
 		label = f.Detections[0].Label
 		conf = strconv.FormatFloat(float64(f.Detections[0].Confidence), 'f', 3, 32)
 	}
-	put("subtype", label, true)
-	put("subtype_conf", conf, true)
+	put("subtype", label, classificationSynthetic)
+	put("subtype_conf", conf, classificationSynthetic)
 	put("unknownness", strconv.FormatFloat(float64(f.Unknownness), 'f', 3, 32), false)
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err == nil {

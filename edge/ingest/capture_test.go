@@ -75,3 +75,21 @@ func TestCaptureAddsMissingSubtypeConfidence(t *testing.T) {
 		t.Fatalf("missing confidence or overwritten subtype: %v", a.Features.Tags)
 	}
 }
+
+func TestCaptureClassificationProvenance(t *testing.T) {
+	for _, real := range []bool{false, true} {
+		a := &pb.Item{Features: &pb.Features{}}
+		if real {
+			a.Features.Detections = []*pb.Detection{{Label: "tanker", Confidence: .91}}
+		}
+		enrichCapture(a, nil)
+		for _, key := range []string{"subtype", "subtype_conf"} {
+			if strings.Contains(a.Features.Tags["synthetic"], key) == real {
+				t.Fatalf("incorrect provenance for %s: %v", key, a.Features.Tags)
+			}
+		}
+		if real && (a.Features.Tags["subtype"] != "tanker" || a.Features.Tags["subtype_conf"] != "0.910") {
+			t.Fatalf("real classification lost: %v", a.Features.Tags)
+		}
+	}
+}
