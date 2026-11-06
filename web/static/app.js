@@ -249,7 +249,24 @@ function clearDemoItems(){
  lastReview=null;$('reviewNoteBox').hidden=true;
  if(typeof workbench!=='undefined')workbench.clearItems();
 }
+// Server-reported capabilities (/api/config "features"). Demo-only controls
+// exist only when the server says so; production (-tags prod) builds report
+// them all false, and a missing block is treated the same way.
+function gsFeatures(config){
+ const f=config&&typeof config.features==='object'&&config.features||{};
+ return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true};
+}
+function applyFeatures(features){
+ document.body.classList.toggle('no-sim',!features.simulation);
+ document.body.classList.toggle('prod',features.profile==='prod');
+ if(!features.dataset){const el=$('datasetStrip');if(el){el.hidden=true;el.remove?.()}}
+ if(!features.simulation){
+  $('simStrip').hidden=true;
+  for(const el of document.querySelectorAll('.sim-only'))el.hidden=true;
+ }
+}
 function setupDemoReset(enabled){
+ if(!enabled){for(const id of ['resetDemoBtn','resetDemoDialog']){const el=$(id);if(el){el.hidden=true;el.remove?.()}}return}
  $('resetDemoBtn').hidden=!enabled||(typeof gsAuth!=='undefined'&&gsAuth.viewer());
  $('resetDemoBtn').onclick=()=>{$('resetDemoDialog').showModal();$('resetDemoCancel').focus()};
  $('resetDemoCancel').onclick=()=>$('resetDemoDialog').close();
@@ -335,9 +352,11 @@ function openStream(){
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
  const config=await request('/api/config');
- setupDemoReset(config.demoReset===true);
+ const features=gsFeatures(config);
+ applyFeatures(features);
+ setupDemoReset(features.demoReset);
  setupTeamSync(!!config.reviewSync);
- DATASET_MODE=!!config.datasetMode;
+ DATASET_MODE=features.dataset;
  SOURCES=[{id:'ALL',name:DATASET_MODE?'All sources (combined)':'All sensors (combined)'},...config.sources];
  SRC=Object.fromEntries(SOURCES.map(source=>[source.id,source]));
  CLS=config.classes;MODELS=config.models;ATTR_LAB=config.attrLabels;EXAMPLES=config.examples;
