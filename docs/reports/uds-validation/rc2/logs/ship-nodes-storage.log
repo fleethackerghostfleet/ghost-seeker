@@ -1,6 +1,0 @@
-$ kubectl --context k3d-uds-ship get nodes,storageclasses
-NAME                         STATUS   ROLES           AGE     VERSION
-node/k3d-uds-ship-server-0   Ready    control-plane   4m34s   v1.37.1+k3s1
-
-NAME                                               PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
-storageclass.storage.k8s.io/local-path (default)   rancher.io/local-path   Delete          WaitForFirstConsumer   true                   4m1s

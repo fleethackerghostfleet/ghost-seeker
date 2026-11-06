@@ -1,2 +1,0 @@
-$ sudo -n nsenter -t 147674 -n curl --noproxy '*' --max-time 8 -sS -o /dev/null -w 'HTTP %{http_code} protocol=%{http_version} verify=%{ssl_verify_result}\n' https://1.1.1.1/
-HTTP 301 protocol=2 verify=0

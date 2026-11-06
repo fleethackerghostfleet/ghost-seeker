@@ -1,2 +1,0 @@
-ok  	github.com/fleethackerghostfleet/ghost-seeker/scripts/uds/link-shaper	(cached)
-?   	github.com/fleethackerghostfleet/ghost-seeker/scripts/uds/sync-probe	[no test files]

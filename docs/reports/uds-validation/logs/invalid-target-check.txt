@@ -1,1 +1,0 @@
-TARGET must be shore, ship or both

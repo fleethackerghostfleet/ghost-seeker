@@ -1,8 +1,0 @@
-$ kubectl --context k3d-uds-shore -n ghost-seeker-shore get pods,pvc
-NAME                           READY   STATUS    RESTARTS   AGE
-pod/operator-c98bfdc85-4dkr2   2/2     Running   0          9s
-pod/shore-0                    2/2     Running   0          17s
-
-NAME                                  STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
-persistentvolumeclaim/data-shore-0    Bound    pvc-e00beba2-35f6-4f87-a66a-4b64f30ff3ff   5Gi        RWO            local-path     <unset>                 17s
-persistentvolumeclaim/operator-data   Bound    pvc-7eb9bcf9-6b7d-4975-b173-20d313d9c5ea   1Gi        RWO            local-path     <unset>                 9s

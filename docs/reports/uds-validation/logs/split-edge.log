@@ -1,1 +1,0 @@
-time=2026-11-06T16:34:53.476Z level=INFO msg="edge console" listen=:8081 shore=https://shore.uds.dev:443 infer=http://edgeml-sidecar:9090 tls=false

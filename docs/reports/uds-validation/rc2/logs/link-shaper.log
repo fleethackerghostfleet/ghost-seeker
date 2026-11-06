@@ -1,7 +1,0 @@
-2026/11/06 17:27:14 TCP shaper listen=172.19.0.1:443 target=127.0.0.1:9443 bps=16000000 control=/home/ubuntu/.local/share/uds-rc2/state/link.sock
-2026/11/06 17:27:38 rate set to 16000000 bits/s
-2026/11/06 17:28:25 rate set to 0 bits/s
-2026/11/06 17:28:31 rate set to 64000 bits/s
-2026/11/06 17:28:46 rate set to 16000000 bits/s
-2026/11/06 17:28:49 rate set to 16000000 bits/s
-2026/11/06 17:30:21 rate set to 16000000 bits/s

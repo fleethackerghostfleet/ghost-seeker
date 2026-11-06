@@ -1,1 +1,0 @@
-{"nodeId":"edge-1","role":"edge","heartbeat":{"sentAtUnixMs":"1793984720486","policyId":"default","linkEstimateBps":10331101.095348466},"link":{"up":true,"estimateBps":10331101.095348466,"lastSuccessUnixMs":"1793984720261"},"itemsTotal":"7","itemsComplete":"7","itemsManifested":"7","bytesSent":"1520887","policyId":"default","prioritizer":"edgeml"}

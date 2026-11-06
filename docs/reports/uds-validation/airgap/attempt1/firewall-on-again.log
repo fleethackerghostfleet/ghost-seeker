@@ -1,8 +1,0 @@
-RETURN  all opt -- in * out *  0.0.0.0/0  -> 172.19.0.0/16   /* ghost-seeker-uds-airgap:intra */
-DROP  all opt -- in * out *  0.0.0.0/0  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:deny */
-RETURN  tcp opt -- in * out *  0.0.0.0/0  -> 0.0.0.0/0   tcp dpt:443 /* ghost-seeker-uds-airgap:shaper */
-RETURN  all opt -- in * out *  0.0.0.0/0  -> 0.0.0.0/0   ctdir REPLY /* ghost-seeker-uds-airgap:reply */
-DROP  all opt -- in * out *  0.0.0.0/0  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:deny */
-GS-UDS-AG-FWD  all opt -- in * out *  172.19.0.0/16  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:forward */
-GS-UDS-AG-HOST  all opt -- in * out *  172.19.0.0/16  -> 172.19.0.1   /* ghost-seeker-uds-airgap:host */
-ON: ship forwarding restricted to its Docker subnet; host gateway restricted to TCP/443 and host-initiated replies

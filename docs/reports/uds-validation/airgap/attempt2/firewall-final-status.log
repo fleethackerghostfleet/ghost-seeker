@@ -1,4 +1,0 @@
-OFF
-OCI runtime exec failed: exec failed: unable to start container process: exec: "iptables": executable file not found in $PATH
-k3d-uds-ship-serverlb Docker DNS: UNBLOCKED
-k3d-uds-ship-server-0 Docker DNS: UNBLOCKED

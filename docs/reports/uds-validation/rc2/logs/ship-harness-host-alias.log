@@ -1,2 +1,0 @@
-$ kubectl --context k3d-uds-ship patch statefulset edge -n ghost-seeker-ship --type=merge -p '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"172.19.0.1","hostnames":["shore.uds.dev"]}]}}}}'
-statefulset.apps/edge patched
