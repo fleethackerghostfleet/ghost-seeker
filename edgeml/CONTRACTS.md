@@ -1,3 +1,12 @@
+# Marine-mammal live verification
+
+MobileCLIP-S1 verification emits the existing detection label `marine mammal` and
+sighting subtypes `whale`, `blow`, `fluke`, `dolphin`. The tracker/aggregator preserve
+verified subtype provenance instead of reclassifying it as a generic vessel.
+`--marine-mammal on|off` defaults to on (requires MobileCLIP-S1 `--embed`);
+`--mm JSON` overrides the bounded crop/scan configuration. Text prototypes are bundled;
+runtime inference remains ORT-only. Defaults require operational calibration.
+
 # edgeml contracts (v1)
 
 ## Live directive vocabulary (existing InferenceService v1 wire)

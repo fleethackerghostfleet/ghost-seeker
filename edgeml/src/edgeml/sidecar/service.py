@@ -88,6 +88,8 @@ class _Source:
 def _wire_subtype(ev: dict) -> str:
     """The proto has no tentative flag: a tentative sighting is tagged ``subtype="tentative"``; on confirmation the edge
     only retags on a non-empty subtype, so a confirmation without a classifier subtype retags with the coarse label."""
+    if ev.get('label') == 'marine mammal' and ev.get('subtype') in ('whale', 'blow', 'fluke', 'dolphin'):
+        return ev['subtype']
     if ev.get("tentative"):
         return "tentative"
     return ev.get("subtype") or ((ev.get("label") or "") if ev.get("reason") == "confirmed" else "")
@@ -108,7 +110,8 @@ class EdgemlEngine:
     def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
-                 text_tower: str = "cache", anomaly_fallback: Optional[dict] = None, live_tiling: Optional[dict] = None):
+                 text_tower: str = "cache", anomaly_fallback: Optional[dict] = None, live_tiling: Optional[dict] = None,
+                 marine_mammal: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
@@ -142,6 +145,8 @@ class EdgemlEngine:
             self.classifier = load_classifier(self.embedder, embed_dir=d)
             self.unknown_calib = self.classifier.calibration_path
             self.clip_name = getattr(clip, "name", meta["model"])
+        from .marine_mammal import wrap_detector
+        self.detector = wrap_detector(self.detector, self.embedder, marine_mammal, score_thr)
         # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
         # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
         self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
@@ -172,7 +177,9 @@ class EdgemlEngine:
                 kw = {"asso_func": self.asso, "max_lost_s": self.max_lost_s, "det_thresh": self.score_thr,
                       "low_thresh": self.det_low_thr, **self.trk_params}        # --trk may override any of these
                 tracker = make_tracker(self.tracker_variant, fps=self.fps, **kw)
-                agg = _ZeroShotAggregator(name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
+                from .marine_mammal import MarineTracker, make_aggregator
+                tracker = MarineTracker(tracker)
+                agg = make_aggregator(_make_zeroshot_aggregator_class(), name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
                 src = self.sources[name] = _Source(tracker=tracker, agg=agg)
             return src
 

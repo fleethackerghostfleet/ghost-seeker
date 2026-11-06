@@ -1,5 +1,15 @@
 # edgeml sidecar — `InferenceService` over Connect/HTTP+JSON
 
+## Marine mammals
+
+With MobileCLIP-S1 `--embed`, marine-mammal verification is on by default.
+`--marine-mammal off` disables it; `--mm '{"crop_thr":0.9,"scan_thr":0.95,"scan_stride":5,"max_crops":8}'`
+overrides `MarineMammalConfig`. Threshold defaults are provisional pending calibration.
+Candidate YOLO crops and, on open-water frames, a bounded whole-frame/overlapping-grid scan
+produce `marine mammal` frame detections and tracked sightings, with sighting subtypes
+`whale`, `blow`, `fluke`, or `dolphin`. No torch is needed at runtime: additional text
+embeddings ship in the package. Other embedding models skip verification with a log message.
+
 The sidecar wraps the `edgeml` pipeline (detect → boxmot track → `SightingAggregator` → MobileCLIP zero-shot)
 behind the `ghostseeker.v1.InferenceService` contract the Go edge already speaks (`edge/inference.Remote`,
 `connect.WithProtoJSON()`), and adds **sightings** to `AnalyzeResponse` so the edge can store one item per object
