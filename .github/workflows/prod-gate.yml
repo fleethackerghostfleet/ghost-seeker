@@ -4,7 +4,7 @@ name: prod-gate
 # required on `prod` in branch protection (docs/FIELDING.md).
 on:
   pull_request:
-    branches: [prod, dev]
+    branches: [prod, prod-uds, dev]
   workflow_dispatch:
 
 permissions:
@@ -31,3 +31,18 @@ jobs:
           grep -q -- '--- PASS: TestProdContract' contract.log
       - name: make prod-gate
         run: make prod-gate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Zarf v0.89.0
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://github.com/zarf-dev/zarf/releases/download/v0.89.0/zarf_v0.89.0_Linux_amd64 -o "$HOME/.local/bin/zarf"
+          echo "0d08597326701d642e42656df109a85bce55a5eb37ef912b830b0e31fa0a6110  $HOME/.local/bin/zarf" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/zarf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check Zarf manifests (Python)
+        run: |
+          python3 -m pip install PyYAML==6.0.2
+          python3 -m unittest discover -s deploy/zarf -p 'test_check_manifests.py'
+          python3 deploy/zarf/check_manifests.py
