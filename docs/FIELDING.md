@@ -606,6 +606,104 @@ enables tracking as before. Source-based experiments are documented separately i
 The Kubernetes manifests have not been deployed to a cluster. Real-model
 inference in this deployment package and a field installation remain unverified.
 
+## Deploying on UDS
+
+Use a Kubernetes cluster supported by UDS Core, Docker, Make, Python 3 with
+PyYAML, and the build tools in [VERIFY.md](VERIFY.md). This packages only the
+production profile; no demo auth, replay or synthetic input is enabled.
+The local dev task also requires k3d 5.7.1 or later on PATH (the pinned
+uds-k3d bundle invokes the host k3d binary).
+
+| Tool/package | Pinned version |
+| --- | --- |
+| uds-cli | 0.41.0 |
+| Zarf (also embedded in uds-cli) | 0.89.0 |
+| UDS Core | 1.16.0-upstream |
+| UDS Core IL flavor | 1.16.0-registry1 (requires registry1 access) |
+| Local development bundle | k3d-core-slim-dev:1.16.0 |
+| uds-k3d | 0.21.3; the pinned slim-dev bundle ships 0.21.2 |
+
+Core 1.16.0 is the highest released non-RC semver; the GitHub Latest badge
+on 1.14.3 reflects publication order, not the version selected here.
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+uds run images
+uds run zarf-package
+uds run create-bundle
+# Copy bundles/prod-uds/uds-config.yaml to a site-controlled configuration,
+# replace the documentation CIDRs and supply Core gateway/registry settings.
+export UDS_CONFIG=/path/to/site/uds-config.yaml
+uds run deploy-bundle
+# Alternative: local disposable k3d development cluster (not production):
+uds run dev
+```
+
+Image builds honor GO_IMAGE and PY_IMAGE. If Docker Hub rate-limits pulls:
+```sh
+GO_IMAGE=mirror.gcr.io/library/golang:1.26.10-alpine \
+PY_IMAGE=mirror.gcr.io/library/python:3.11-slim uds run images
+```
+
+The production bundle includes signed Zarf init v0.89.0, Core, and the local
+Ghost Seeker package from dist, selecting uds-package and edge-inference.
+For an existing Core cluster deploy just the local Zarf package with
+`--components uds-package,edge-inference`. Do not install a second Core.
+The dev task generates fresh shore-auth, operator-auth and edge-auth secrets
+without displaying or writing credentials to disk. It replaces existing dev
+credentials; it is not a production credential rotation workflow.
+
+| Variable | Default / purpose |
+| --- | --- |
+| DOMAIN | uds.dev; must match Core's shared DOMAIN |
+| OPERATOR_GATEWAY_HOST | ghost-seeker; exposes https://ghost-seeker.DOMAIN |
+| SHORE_GATEWAY_HOST | shore; exposes https://shore.DOMAIN |
+| SHORE_PUBLIC_HOSTS | Existing internal host allowlist, extended automatically with SHORE_GATEWAY_HOST.DOMAIN |
+| SHORE_TLS_SECRET, EDGE_TLS_SECRET | Must be empty when uds-package is selected |
+| SHORE/EDGE/OPERATOR/INFERENCE_INGRESS_CIDR | Narrow approved source networks; documentation-only defaults |
+| SHORE/EDGE/INFERENCE/CAMERA/LLM/RESEARCH/OCSP/MODEL_EGRESS_CIDR | Narrow approved destination networks; documentation-only defaults |
+| Corresponding *_EGRESS_PORT | TCP endpoint port: 8080/8081/9090/80/8080/8097/80/443 respectively |
+
+The Package is applied immediately after the unlabeled namespace, before any
+workloads. UDS Core labels the namespace for sidecar injection. The tenant
+gateway terminates TLS using its gateway certificate, sets X-Forwarded-Proto
+to https, and connects through STRICT mTLS sidecars to plain HTTP apps.
+Operator SameOrigin honors that forwarded scheme. Shore's Host allowlist
+includes the gateway hostname. Only shore's /api/v1/ and
+/ghostseeker.v1.SyncService/ prefixes are exposed; the operator console is
+exposed separately and edge is not exposed. App operator-token/PIV auth
+remains in force; there is no Keycloak/Package SSO integration.
+
+Do not enable in-pod listener TLS: gateway-to-sidecar HTTP routing and HTTP
+probe rewriting depend on plaintext app listeners. The optional uds-package
+component fails deployment if either listener TLS Secret variable is set.
+Keep the existing HTTP probes: Istio rewrites them to sidecar port 15020.
+
+Existing default-deny and allow NetworkPolicies remain unchanged. Kubernetes
+policies are additive: Package rules mirror every non-DNS app flow, while UDS
+adds DNS, istiod 15012 egress, monitoring 15020 and gateway ingress. Port
+15008 HBONE is ambient-only and is not needed in sidecar mode.
+
+**Out-of-mesh clients:** a CIDR allow rule alone does not bypass STRICT mTLS.
+CIDR-sourced external ingress reaches these pods only via the gateway. Use
+the exposed shore sync/API hostname for ship-to-shore clients. Edge has no
+gateway exposure; plan sensor delivery through a mesh-enrolled client or a
+separately reviewed ingress design rather than weakening mTLS/default-deny.
+
+Before real-cluster deployment provide:
+
+- DNS mapping *.DOMAIN to the tenant gateway load balancer and a valid TLS
+  certificate configured on that gateway.
+- A registry: the included Zarf init registry or an explicitly configured
+  external registry with required credentials and offline image availability.
+- Model files for edge-inference using the existing model volume contract;
+  this package does not download model weights or rearrange that volume.
+- Production auth secrets from the Sync authentication section below, before
+  workloads start. No production secrets belong in uds-config.yaml.
+- Site-specific narrow *_CIDR values and matching endpoint ports; example
+  192.0.2.0/24 and 198.51.100.0/24 addresses are documentation networks, not
+  working endpoints. Never use 0.0.0.0/0 or ::/0.
+
 ## Sync authentication
 
 SyncService unit authentication is on by default. Shore requires a signing key

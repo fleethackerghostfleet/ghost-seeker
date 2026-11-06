@@ -398,6 +398,87 @@ def check_models(package: dict, documents: list[dict]) -> None:
             "models initContainer must copy and verify the catalog emptyDir")
 
 
+def check_uds_package(documents: list[dict], package: dict, rendered: list[dict]) -> None:
+    variables = {entry["name"]: entry for entry in package["variables"]}
+    packages = [doc for doc in documents if doc["kind"] == "Package"]
+    require(len(packages) == 1, "exactly one UDS Package required")
+    uds = packages[0]
+    namespaces = {doc["metadata"]["name"] for doc in documents if doc["kind"] == "Namespace"}
+    require(uds["apiVersion"] == "uds.dev/v1alpha1"
+            and uds["metadata"]["name"] == "ghost-seeker"
+            and uds["metadata"]["namespace"] in namespaces, "UDS Package identity/namespace invalid")
+    require("sso" not in uds["spec"], "UDS Package must not configure sso")
+    network = uds["spec"]["network"]
+    require(network.get("serviceMesh") == {"mode": "sidecar"}, "UDS requires sidecar mode")
+    exposes = network.get("expose", [])
+    require({e.get("service") for e in exposes} == {"operator", "shore"} and len(exposes) == 2,
+            "UDS exposes must be operator and shore only")
+    for expose in exposes:
+        require(expose.get("gateway") == "tenant", "UDS expose must use tenant gateway")
+        host = VARIABLE_PATTERN.fullmatch(expose.get("host", ""))
+        require(host is not None and host[1] in variables and variables[host[1]].get("default"),
+                "UDS expose host must be a declared variable with non-empty default")
+        services = [d for d in documents if d["kind"] == "Service"
+                    and d["metadata"]["name"] == expose["service"]
+                    and d["metadata"].get("namespace") == uds["metadata"]["namespace"]]
+        require(len(services) == 1 and services[0]["spec"]["selector"] == expose.get("selector")
+                and any(p["port"] == expose.get("port") for p in services[0]["spec"]["ports"]),
+                "UDS expose Service/port/selector mismatch")
+        require(bool(selected_workloads({"matchLabels": expose["selector"]},
+                                       uds["metadata"]["namespace"],
+                                       [d for d in documents if d["kind"] in WORKLOAD_KINDS])),
+                "UDS expose selector matches no workload")
+        if expose["service"] == "shore":
+            require(expose.get("match") == [
+                {"name": "versioned-api", "uri": {"prefix": "/api/v1/"}},
+                {"name": "ship-sync", "uri": {"prefix": "/ghostseeker.v1.SyncService/"}}],
+                "shore expose must restrict API and sync prefixes")
+    expected = set()
+    def flow(direction, selector, peer, port):
+        return (direction, tuple(sorted(selector.items())), peer, str(port))
+    for policy in (d for d in documents if d["kind"] == "NetworkPolicy"):
+        spec = policy["spec"]
+        direction = spec["policyTypes"][0]
+        for rule in spec.get(direction.lower(), []):
+            for peer in rule.get("from" if direction == "Ingress" else "to", []):
+                if "namespaceSelector" in peer:
+                    continue
+                remote = ("selector", tuple(sorted(peer["podSelector"]["matchLabels"].items()))) if "podSelector" in peer else ("cidr", peer["ipBlock"]["cidr"])
+                for port in rule["ports"]:
+                    expected.add(flow(direction, spec["podSelector"]["matchLabels"], remote, port["port"]))
+    actual = set()
+    for allow in network.get("allow", []):
+        require(set(allow) <= {"description", "direction", "selector", "port", "remoteSelector", "remoteCidr"},
+                "UDS allow forbids Anywhere, wildcard namespaces and unsupported fields")
+        require(bool(allow.get("description")), "UDS allow needs description")
+        require(("remoteSelector" in allow) != ("remoteCidr" in allow), "UDS allow needs one remote")
+        if "remoteCidr" in allow:
+            match = VARIABLE_PATTERN.fullmatch(allow["remoteCidr"])
+            require(match is not None and match[1].endswith("_CIDR") and match[1] in variables,
+                    "UDS remoteCidr must use a declared *_CIDR variable")
+            require(ipaddress.ip_network(variables[match[1]]["default"], strict=True).prefixlen > 0,
+                    "UDS unrestricted remoteCidr default")
+            remote = ("cidr", allow["remoteCidr"])
+        else:
+            remote = ("selector", tuple(sorted(allow["remoteSelector"].items())))
+        actual.add(flow(allow["direction"], allow["selector"], remote, allow["port"]))
+    require(actual == expected, "UDS allow parity drift from non-DNS NetworkPolicies")
+    values = package_variables(package, {})
+    expected_host = values["SHORE_GATEWAY_HOST"] + "." + values["DOMAIN"]
+    shore = next(d for d in rendered if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "shore-config")
+    require(expected_host in shore["data"]["GS_PUBLIC_HOSTS"].split(","), "shore public host missing gateway host")
+    components = package["components"]
+    index = next(i for i, c in enumerate(components) if c["name"] == "uds-package")
+    component = components[index]
+    require(index == 1 and components[0]["name"] == "namespace"
+            and component.get("required") is False and component.get("default") is False,
+            "uds-package must be optional/default false immediately after namespace")
+    actions = component.get("actions", {}).get("onDeploy", {}).get("before", [])
+    guard = "\n".join(a.get("cmd", "") for a in actions)
+    require(all(s in guard for s in ("ZARF_VAR_SHORE_TLS_SECRET", "ZARF_VAR_EDGE_TLS_SECRET",
+                                    "exit 1", "STRICT mTLS")), "uds-package TLS guard missing")
+
+
 def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     package_file = ROOT / "zarf.yaml"
     package = yaml.safe_load(package_file.read_text())
@@ -431,6 +512,10 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     check_models(package, [doc for docs in parsed.values() for doc in docs])
     require(set(parsed) == set(all_manifest_paths), "every manifest must be packaged")
     check_tls_wiring([document for docs in parsed.values() for document in docs], variables)
+    raw = [doc for path in all_manifest_paths if path.name.startswith("network-") or path.name == "uds-package.yaml"
+           for doc in read_documents(path)]
+    raw += [doc for docs in parsed.values() for doc in docs if doc["kind"] not in {"Package", "NetworkPolicy"}]
+    check_uds_package(raw, package, [doc for docs in parsed.values() for doc in docs])
     for filename, config_name in (("shore.yaml", "shore-config"), ("edge.yaml", "edge-config")):
         documents = parsed[ROOT / "manifests" / filename]
         config = next(

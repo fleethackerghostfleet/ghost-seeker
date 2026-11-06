@@ -1,6 +1,12 @@
+import base64
 import copy
+import hashlib
+import hmac
 import ipaddress
 import itertools
+import json
+import subprocess
+from urllib.parse import urlsplit
 import unittest
 from unittest import mock
 from unittest.mock import patch
@@ -9,6 +15,139 @@ import yaml
 
 import check_manifests as validator
 import check_manifests as checker
+import dev_auth
+
+
+class DevAuthTests(unittest.TestCase):
+    def test_fresh_secrets_share_operator_token_and_valid_unit_signature(self):
+        with patch.object(dev_auth, "apply") as apply:
+            dev_auth.main()
+        documents = [call.args[0] for call in apply.call_args_list]
+        self.assertEqual(documents[0]["kind"], "Namespace")
+        secrets = {d["metadata"]["name"]: d["stringData"] for d in documents[1:]}
+        operator = secrets["operator-auth"]["operator-token"]
+        self.assertGreaterEqual(len(operator), 32)
+        self.assertEqual(secrets["shore-auth"]["operator-token"], operator)
+        self.assertEqual(secrets["edge-auth"]["operator-token"], operator)
+        token = secrets["edge-auth"]["unit-token"]
+        header, claims, signature = token.split(".")
+        expected = hmac.new(secrets["shore-auth"]["signing-key"].encode(),
+                            (header + "." + claims).encode(), hashlib.sha256).digest()
+        self.assertEqual(base64.urlsafe_b64decode(signature + "="), expected)
+        self.assertEqual(json.loads(base64.urlsafe_b64decode(claims + "=" * (-len(claims) % 4)))["sub"], "edge-1")
+        with patch.object(dev_auth, "apply") as again:
+            dev_auth.main()
+        self.assertNotEqual(again.call_args_list[1].args[0]["stringData"]["operator-token"], operator)
+
+    def test_apply_does_not_echo_credentials_and_propagates_errors(self):
+        with patch.object(dev_auth.subprocess, "run") as run:
+            dev_auth.apply({})
+            self.assertTrue(run.call_args.kwargs["check"])
+            self.assertEqual(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
+            run.side_effect = subprocess.CalledProcessError(1, "kubectl")
+            with self.assertRaises(subprocess.CalledProcessError):
+                dev_auth.apply({})
+
+
+class UDSPackageTests(unittest.TestCase):
+    def test_example_config_preserves_sync_host(self):
+        config = yaml.safe_load((validator.ROOT.parents[1] / "bundles/prod-uds/uds-config.yaml").read_text())
+        overrides = config.get("variables", {}).get("ghost-seeker", {})
+        package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
+        values = validator.package_variables(package, overrides)
+        self.assertIn(urlsplit(values["SHORE_URL"]).hostname,
+                      values["SHORE_PUBLIC_HOSTS"].split(","))
+
+    def setUp(self):
+        self.package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
+        self.documents = [doc for path in (validator.ROOT / "manifests").glob("*.yaml")
+                          if path.name.startswith("network-") or path.name == "uds-package.yaml"
+                          for doc in validator.read_documents(path)]
+        self.rendered = [doc for docs in validator.render_manifests(self.package, {}).values() for doc in docs]
+        self.documents += [doc for doc in self.rendered if doc["kind"] not in {"Package", "NetworkPolicy"}]
+        self.uds = next(d for d in self.documents if d["kind"] == "Package")
+
+    def validate(self):
+        validator.check_uds_package(self.documents, self.package, self.rendered)
+
+    def test_valid(self):
+        self.validate()
+
+    def test_invalid_package_contracts(self):
+        cases = [
+            ("apiVersion", "wrong", "identity"),
+            ("kind", "Wrong", "exactly one"),
+        ]
+        for field, value, message in cases:
+            with self.subTest(field=field):
+                old = self.uds[field]
+                self.uds[field] = value
+                with self.assertRaisesRegex(ValueError, message):
+                    self.validate()
+                self.uds[field] = old
+
+    def test_reject_network_drift(self):
+        original = copy.deepcopy(self.uds["spec"]["network"])
+        mutations = [
+            (lambda n: n["allow"][0].update(remoteGenerated="Anywhere"), "forbids"),
+            (lambda n: n["allow"][0].update(remoteNamespace="*"), "forbids"),
+            (lambda n: n["allow"][0].update(remoteNamespace=""), "forbids"),
+            (lambda n: n["allow"][2].update(remoteCidr="0.0.0.0/0"), "remoteCidr"),
+            (lambda n: n["expose"][0].pop("host"), "host"),
+            (lambda n: n["expose"][0].update(host="###ZARF_VAR_UNDECLARED###"), "host"),
+            (lambda n: n["expose"][0].update(port=1234), "Service"),
+            (lambda n: n["expose"][0].update(selector={"app": "edge"}), "Service"),
+            (lambda n: n["expose"][0].update(gateway="admin"), "tenant"),
+            (lambda n: n["expose"][1].pop("match"), "prefixes"),
+            (lambda n: n["allow"].pop(), "parity"),
+            (lambda n: n.update(allow=[]), "parity"),
+            (lambda n: n.update(expose=[]), "exposes"),
+            (lambda n: n.update(serviceMesh={"mode": "ambient"}), "sidecar"),
+        ]
+        for mutate, message in mutations:
+            with self.subTest(message=message):
+                self.uds["spec"]["network"] = copy.deepcopy(original)
+                mutate(self.uds["spec"]["network"])
+                with self.assertRaisesRegex(ValueError, message):
+                    self.validate()
+
+    def test_cidr_defaults_must_be_narrow(self):
+        variable = next(v for v in self.package["variables"] if v["name"] == "SHORE_EGRESS_CIDR")
+        for cidr in ("0.0.0.0/0", "::/0"):
+            variable["default"] = cidr
+            with self.assertRaisesRegex(ValueError, "unrestricted"):
+                self.validate()
+
+    def test_public_host_missing(self):
+        shore = next(d for d in self.rendered if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "shore-config")
+        shore["data"]["GS_PUBLIC_HOSTS"] = "localhost"
+        with self.assertRaisesRegex(ValueError, "public host"):
+            self.validate()
+
+    def test_empty_host_default(self):
+        next(v for v in self.package["variables"] if v["name"] == "OPERATOR_GATEWAY_HOST")["default"] = ""
+        with self.assertRaisesRegex(ValueError, "host"):
+            self.validate()
+
+    def test_sso_forbidden(self):
+        self.uds["spec"]["sso"] = []
+        with self.assertRaisesRegex(ValueError, "sso"):
+            self.validate()
+
+    def test_namespace_must_be_declared(self):
+        self.uds["metadata"]["namespace"] = "other"
+        with self.assertRaisesRegex(ValueError, "namespace"):
+            self.validate()
+
+    def test_component_contract(self):
+        component = next(c for c in self.package["components"] if c["name"] == "uds-package")
+        component["default"] = True
+        with self.assertRaisesRegex(ValueError, "optional"):
+            self.validate()
+        component["default"] = False
+        component.pop("actions")
+        with self.assertRaisesRegex(ValueError, "TLS guard"):
+            self.validate()
 
 
 class NetworkPolicyTests(unittest.TestCase):
@@ -368,7 +507,8 @@ class TLSManifestTests(unittest.TestCase):
                 self.assertNotIn("args", container)
             else:
                 self.assertEqual(container["args"], ["-addr=:8090", "-shore=http://shore:8080",
-                                                      "-edge=", "-link-listen="])
+                                                      "-edge=", "-link-listen=",
+                                                      "-review-log=/data/reviews.jsonl"])
             for probe in ("readinessProbe", "livenessProbe"):
                 self.assertNotIn("scheme", container[probe]["httpGet"])
             pod = self.workload(documents, name)["spec"]["template"]["spec"]

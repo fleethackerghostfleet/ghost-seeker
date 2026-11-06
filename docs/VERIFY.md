@@ -31,6 +31,8 @@ mkdir -p "$HOME/.local/bin"
 curl -fsSL https://github.com/bufbuild/buf/releases/download/v1.47.2/buf-Linux-x86_64 -o "$HOME/.local/bin/buf"
 curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar -xz -C "$HOME/.local/bin" kubeconform
 curl -fsSL https://github.com/zarf-dev/zarf/releases/download/v0.89.0/zarf_v0.89.0_Linux_amd64 -o "$HOME/.local/bin/zarf"
+curl -fsSL https://github.com/defenseunicorns/uds-cli/releases/download/v0.41.0/uds-cli_v0.41.0_Linux_amd64 -o "$HOME/.local/bin/uds"
+chmod +x "$HOME/.local/bin/uds"
 chmod +x "$HOME/.local/bin/buf" "$HOME/.local/bin/zarf"
 ```
 

@@ -1,0 +1,146 @@
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  name: ghost-seeker
+  namespace: ghost-seeker
+spec:
+  network:
+    serviceMesh:
+      mode: sidecar
+    expose:
+      - service: operator
+        selector: {app: operator}
+        port: 8090
+        gateway: tenant
+        host: "###ZARF_VAR_OPERATOR_GATEWAY_HOST###"
+      - service: shore
+        selector: {app: shore}
+        port: 8080
+        gateway: tenant
+        host: "###ZARF_VAR_SHORE_GATEWAY_HOST###"
+        match:
+          - name: versioned-api
+            uri: {prefix: /api/v1/}
+          - name: ship-sync
+            uri: {prefix: /ghostseeker.v1.SyncService/}
+    allow:
+      - description: edge egress shore
+        direction: Egress
+        selector: {app: edge}
+        port: 8080
+        remoteSelector: {app: shore}
+      - description: edge egress edgeml-sidecar
+        direction: Egress
+        selector: {app: edge}
+        port: 9090
+        remoteSelector: {app: edgeml-sidecar}
+      - description: edge egress routed SHORE
+        direction: Egress
+        selector: {app: edge}
+        port: ###ZARF_VAR_SHORE_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_SHORE_EGRESS_CIDR###"
+      - description: edge egress routed INFERENCE
+        direction: Egress
+        selector: {app: edge}
+        port: ###ZARF_VAR_INFERENCE_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_INFERENCE_EGRESS_CIDR###"
+      - description: edge egress routed CAMERA
+        direction: Egress
+        selector: {app: edge}
+        port: ###ZARF_VAR_CAMERA_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_CAMERA_EGRESS_CIDR###"
+      - description: edgeml-sidecar egress routed MODEL
+        direction: Egress
+        selector: {app: edgeml-sidecar}
+        port: ###ZARF_VAR_MODEL_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_MODEL_EGRESS_CIDR###"
+      - description: edgeml-sidecar ingress edge
+        direction: Ingress
+        selector: {app: edgeml-sidecar}
+        port: 9090
+        remoteSelector: {app: edge}
+      - description: edgeml-sidecar ingress shore
+        direction: Ingress
+        selector: {app: edgeml-sidecar}
+        port: 9090
+        remoteSelector: {app: shore}
+      - description: edgeml-sidecar ingress routed INFERENCE
+        direction: Ingress
+        selector: {app: edgeml-sidecar}
+        port: 9090
+        remoteCidr: "###ZARF_VAR_INFERENCE_INGRESS_CIDR###"
+      - description: edge ingress operator
+        direction: Ingress
+        selector: {app: edge}
+        port: 8081
+        remoteSelector: {app: operator}
+      - description: edge ingress routed EDGE
+        direction: Ingress
+        selector: {app: edge}
+        port: 8081
+        remoteCidr: "###ZARF_VAR_EDGE_INGRESS_CIDR###"
+      - description: operator egress shore
+        direction: Egress
+        selector: {app: operator}
+        port: 8080
+        remoteSelector: {app: shore}
+      - description: operator egress edge
+        direction: Egress
+        selector: {app: operator}
+        port: 8081
+        remoteSelector: {app: edge}
+      - description: operator egress routed SHORE
+        direction: Egress
+        selector: {app: operator}
+        port: ###ZARF_VAR_SHORE_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_SHORE_EGRESS_CIDR###"
+      - description: operator egress routed EDGE
+        direction: Egress
+        selector: {app: operator}
+        port: ###ZARF_VAR_EDGE_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_EDGE_EGRESS_CIDR###"
+      - description: operator egress routed LLM
+        direction: Egress
+        selector: {app: operator}
+        port: ###ZARF_VAR_LLM_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_LLM_EGRESS_CIDR###"
+      - description: operator egress routed RESEARCH
+        direction: Egress
+        selector: {app: operator}
+        port: ###ZARF_VAR_RESEARCH_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_RESEARCH_EGRESS_CIDR###"
+      - description: operator egress routed OCSP
+        direction: Egress
+        selector: {app: operator}
+        port: ###ZARF_VAR_OCSP_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_OCSP_EGRESS_CIDR###"
+      - description: operator ingress routed OPERATOR
+        direction: Ingress
+        selector: {app: operator}
+        port: 8090
+        remoteCidr: "###ZARF_VAR_OPERATOR_INGRESS_CIDR###"
+      - description: shore egress edgeml-sidecar
+        direction: Egress
+        selector: {app: shore}
+        port: 9090
+        remoteSelector: {app: edgeml-sidecar}
+      - description: shore egress routed INFERENCE
+        direction: Egress
+        selector: {app: shore}
+        port: ###ZARF_VAR_INFERENCE_EGRESS_PORT###
+        remoteCidr: "###ZARF_VAR_INFERENCE_EGRESS_CIDR###"
+      - description: shore ingress operator
+        direction: Ingress
+        selector: {app: shore}
+        port: 8080
+        remoteSelector: {app: operator}
+      - description: shore ingress edge
+        direction: Ingress
+        selector: {app: shore}
+        port: 8080
+        remoteSelector: {app: edge}
+      - description: shore ingress routed SHORE
+        direction: Ingress
+        selector: {app: shore}
+        port: 8080
+        remoteCidr: "###ZARF_VAR_SHORE_INGRESS_CIDR###"

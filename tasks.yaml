@@ -1,0 +1,26 @@
+tasks:
+  - name: images
+    description: Build production images (honors GO_IMAGE and PY_IMAGE).
+    actions:
+      - cmd: make images
+  - name: zarf-package
+    description: Package local production images.
+    actions:
+      - cmd: make zarf-package
+  - name: create-bundle
+    description: Create the pinned production UDS bundle.
+    actions:
+      - cmd: uds create bundles/prod-uds --confirm --output dist
+  - name: deploy-bundle
+    description: Deploy with the UDS_CONFIG environment variable pointing at site configuration.
+    actions:
+      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to site uds-config.yaml}" uds deploy dist/uds-bundle-ghost-seeker-prod-uds-amd64-0.1.0.tar.zst --confirm'
+  - name: dev
+    description: Deploy local slim UDS Core and Ghost Seeker with fresh development auth.
+    actions:
+      - cmd: uds deploy ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.16.0 --confirm
+      - cmd: python3 deploy/zarf/dev_auth.py
+        mute: true
+      - cmd: uds zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst --confirm --components uds-package,edge-inference
+      - description: Restart workloads so they read the fresh credentials
+        cmd: uds zarf tools kubectl rollout restart deployment,statefulset -n ghost-seeker
