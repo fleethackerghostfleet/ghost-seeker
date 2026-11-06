@@ -158,3 +158,47 @@ zarf-package:
 
 clean:
 	rm -rf $(BIN) data sim-results.json
+
+SECURITY_PYTHON ?= python3
+BANDIT ?= .venv/security/bin/bandit
+PIP_AUDIT ?= .venv/security/bin/pip-audit
+SHIPPED_PYTHON ?= .venv/shipped/bin/python
+SECURITY_REPORTS := dist/security
+GITLEAKS_LOG_OPTS ?= --all
+
+.PHONY: security security-secrets security-go security-python security-licenses security-config sbom scan
+security: security-secrets security-go security-python security-licenses security-config
+
+security-secrets:
+	mkdir -p $(SECURITY_REPORTS)
+	gitleaks git --redact --baseline-path=docs/security/gitleaks-baseline.json --log-opts="$(GITLEAKS_LOG_OPTS)" --report-format=json --report-path=$(SECURITY_REPORTS)/gitleaks.json
+
+security-go:
+	$(SECURITY_PYTHON) scripts/security.py gosec
+	govulncheck ./...
+	govulncheck -tags prod ./...
+
+security-python:
+	mkdir -p $(SECURITY_REPORTS)
+	$(BANDIT) -r edgeml/src -lll -f json -o $(SECURITY_REPORTS)/bandit.json
+	$(SHIPPED_PYTHON) -m pip freeze --exclude edgeml --exclude pip --exclude setuptools > $(SECURITY_REPORTS)/python-requirements.txt
+	$(PIP_AUDIT) -r $(SECURITY_REPORTS)/python-requirements.txt --no-deps --disable-pip -f json -o $(SECURITY_REPORTS)/pip-audit.json
+
+security-licenses:
+	SHIPPED_PYTHON=$(SHIPPED_PYTHON) $(SECURITY_PYTHON) scripts/security.py licenses
+
+security-config:
+	mkdir -p $(SECURITY_REPORTS)
+	$(SECURITY_PYTHON) deploy/zarf/check_manifests.py --output-dir $(SECURITY_REPORTS)/manifests
+	trivy config --severity HIGH,CRITICAL --exit-code 1 --format json --output $(SECURITY_REPORTS)/config.json $(SECURITY_REPORTS)/manifests
+
+sbom:
+	mkdir -p $(SECURITY_REPORTS)
+	@set -e; for image in $(IMAGES); do name=$$(basename $$image); name=$${name%:*}; \
+	  syft docker:$$image -o cyclonedx-json=$(SECURITY_REPORTS)/$$name.cdx.json -o spdx-json=$(SECURITY_REPORTS)/$$name.spdx.json; done
+
+scan:
+	mkdir -p $(SECURITY_REPORTS)
+	@status=0; for image in $(IMAGES); do name=$$(basename $$image); name=$${name%:*}; \
+	  trivy image --image-src docker --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 \
+	    --format json --output $(SECURITY_REPORTS)/$$name.trivy.json $$image || status=1; done; exit $$status

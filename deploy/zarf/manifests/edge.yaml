@@ -14,7 +14,6 @@ data:
   UI_DIR: /ui
   GS_EDGE_MAX_BYTES: "###ZARF_VAR_EDGE_MAX_BYTES###"
   GS_EDGE_MAX_ITEMS: "###ZARF_VAR_EDGE_MAX_ITEMS###"
-  GS_DEV_TOKEN_FILE: none
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -65,6 +64,8 @@ spec:
             - configMapRef:
                 name: edge-config
           env:
+            - name: GS_DEV_TOKEN_FILE
+              value: none
             - name: GS_UNIT_TOKEN
               valueFrom:
                 secretKeyRef:
