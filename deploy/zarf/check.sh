@@ -18,6 +18,7 @@ if ! command -v "$PYTHON" >/dev/null 2>&1; then
   exit 0
 fi
 "$PYTHON" "$SCRIPT_DIR/check_manifests.py"
+"$PYTHON" -m unittest discover -s "$SCRIPT_DIR" -p 'test_*.py'
 
 if command -v kubeconform >/dev/null 2>&1; then
   tmp=$(mktemp -d)
@@ -36,6 +37,10 @@ if command -v kubeconform >/dev/null 2>&1; then
       -e 's,###ZARF_VAR_SHORE_STORAGE###,5Gi,g' \
       -e 's,###ZARF_VAR_EDGE_STORAGE###,10Gi,g' \
       -e 's,###ZARF_VAR_FRAMES_HOSTPATH###,/var/lib/ghost-seeker/frames,g' \
+      -e 's,###ZARF_VAR_SHORE_INGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_EDGE_INGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_OPERATOR_INGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_INFERENCE_INGRESS_CIDR###,192.0.2.0/32,g' \
       "$manifest" > "$tmp/$(basename "$manifest")"
   done
   if kubeconform -strict -summary "$tmp" >"$tmp/kubeconform.log" 2>&1; then

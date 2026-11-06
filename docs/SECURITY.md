@@ -291,6 +291,32 @@ curl -s -o /dev/null -w '%{http_code}\n' -d '{}' localhost:8080/ghostseeker.v1.C
 Delete `data/operator.token` to rotate. The Docker compose topology is the production posture
 (explicit `GS_OPERATOR_TOKEN`, `GS_DEV_TOKEN_FILE=none`).
 
+## 5a. Zarf network isolation
+
+The Zarf package includes `networking.k8s.io/v1` NetworkPolicies: namespace-wide
+default-deny **ingress** in the required namespace component, and explicit TCP
+allows alongside each optional workload. All packaged workloads currently use
+the dedicated `ghost-seeker` namespace. Same-namespace pod labels admit
+operator → shore:8080/edge:8081, edge → shore:8080/inference:9090, and optional
+shore text search → inference:9090. Operator-to-edge is ready for deployments
+that configure it; the packaged operator currently disables that connection.
+
+External browsers, API/sensor clients, and routed ship/shore connections use
+configurable source `ipBlock`s, not pod labels from another cluster. Set
+`OPERATOR_INGRESS_CIDR` (UI:8090), `SHORE_INGRESS_CIDR` (sync/API/console:8080),
+`EDGE_INGRESS_CIDR` (console/sensor push:8081), and, if needed,
+`INFERENCE_INGRESS_CIDR` (remote inference:9090). Defaults are documentation-only
+`192.0.2.0/32`, not deployment source addresses. Use approved, narrow CIDRs as
+observed after routing/NAT. See [Fielding](FIELDING.md#zarf-network-isolation)
+for the traffic matrix and split-cluster setup.
+
+These are L3/L4 rules: allowing shore TCP 8080 does not limit clients to
+`/api/v1`; SyncService, ConsoleService and blobs share that listener. Authentication,
+TLS termination and any path restrictions remain separate requirements. Policies
+do not create ingress gateways, expose ClusterIP Services, or constrain
+`kubectl port-forward` authorization. Enforcing CNI support is required; Kubernetes
+API acceptance alone does not prove isolation. Other policies can add permissions.
+
 ## 6. Residual risk / not in scope here
 
 * No TLS inside the repo: terminate TLS in front of every listener; the operator token and
@@ -301,6 +327,12 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
   opt-in: configure shore's `-policy-signing-key` and edge's
   `-require-signed-policy` / `-policy-keys`.
 * Sessions live in process memory: a web-app restart signs everyone out (by design).
+* Zarf ingress rules have static validation and traffic-matrix regression tests,
+  not a runtime cluster/CNI test. Egress is intentionally unrestricted: shore,
+  inference and camera destinations are configurable and deployment-specific;
+  model provisioning/registries and DNS also need a site inventory. A complete
+  egress policy (including DNS) remains a deployment hardening task. Default-deny
+  applies to every pod in `ghost-seeker`, including any extra workloads placed there.
 
 ## 7. Deep scan: before / after
 
