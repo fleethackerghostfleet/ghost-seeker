@@ -1,5 +1,8 @@
 # Thermal hotspot fallback: development record
 
+Companion: [new-contact MOT birth evaluation](NEW_CONTACT.md) (RGB tracking
+sequences, no IR tuning or evaluation in that step).
+
 ## Data boundary
 
 No `ir_maritime_vessels` images, annotations, or splits were used for threshold
@@ -433,3 +436,82 @@ contiguous end-to-end benchmark. Engine latency refresh intentionally skipped.
 Final B2 full suite: `645 passed in 8.47s`. Earlier protocol failures are resolved
 by current origin/dev; no protocol changes made here. Log:
 `~/data/thermal-b2-pytest.log`; evaluator log: `~/data/thermal-eval-b2.log`.
+
+## Step D: live-path refresh after open-vocabulary rebase
+
+Rebased onto `origin/dev` **908cce2** (#271). The service conflict keeps both
+the thermal-aware frame unknownness calculation (including duplicates) and
+the new open-vocabulary detection hook. Composition remains native ONNX →
+default live tiling/MOB → optional anomaly → thermal fallback. No thermal
+proposer, modality-gate or new-contact defaults changed.
+
+Regression tests now exercise an active open-vocabulary prompt alongside a
+thermal OPEN: its `thermal contact` label, unknownness floor and `newContact`
+survive, as do the stored edge label and `new_contact=1` tag when the same
+frame also matches a different open-vocabulary label. Whole-word matching
+accepts `thermal contact(s)` without matching `hypothermal contact` or
+`thermal contactless`. Production code needed no additional label/tag rewrite.
+
+Reran `eval_thermal.py` on test/dev, the same YOLO-empty subsets and deterministic
+empty crops, **including fresh real-engine paired latency this time**:
+
+```sh
+OMP_NUM_THREADS=4 .venv/bin/python edgeml/tools/eval_thermal.py \
+  --output ~/data/thermal_eval_rebased \
+  --cache ~/data/thermal_eval_yolo_cache.json
+```
+
+Current `results.json` / `crops.json` assets are this refresh; the separately
+named **before cover-threshold fix** assets and historical rows remain intact.
+YOLO native/tile outputs are reused from the validated model/config/image cache;
+engine latency runs its own fresh inference. The live detector reconstruction
+is still valid with #271: prompt results are appended after the base detections,
+not rewritten into them. These benchmarks pass no open-vocabulary prompt and
+disable embeddings, so they are not a prompt-encoder latency/quality evaluation.
+
+| Rebased actual live | Center P/R/F1 % | IoU .3 P/R/F1 % | IoU .5 P/R/F1 % | Proposals/frame |
+|---|---|---|---|---:|
+| test | 68.04 / 32.23 / 43.74 | 57.89 / 27.42 / 37.21 | 53.87 / 25.52 / 34.63 | 1.887 |
+| dev (evaluation only) | 39.94 / 43.78 / 41.77 | 23.19 / 25.42 / 24.25 | 18.28 / 20.04 / 19.12 | 2.142 |
+
+All detection/matching metrics reproduce B2 exactly. On the same native
+YOLO-empty subsets (432 test / 275 dev frames), actual-live recovered center /
+IoU .3 / IoU .5 matches are **156 / 36 / 19** test and **115 / 7 / 6** dev;
+center subset recall **12.81% / 30.42%**. Same 200 IR crops: **201** false
+contacts, **1.005/crop**, **28%** nonempty, **15.974/MP**. Same 14 grayscale
+SMD tuning negatives: **1** false contact, **.0714/frame**, **7.14%** nonempty,
+**.0344/MP**. These controls remain annotation-empty, not audited negatives.
+
+### Refreshed latency (mean / p50 / p95 milliseconds)
+
+Intel Xeon virtual CPU, 4 threads, affinity CPUs 0–3. The independent held-out
+MOT replay used CPUs 4–7 concurrently; Go/Python checks were also confined to
+that other CPU set. This is a shared-VM timing observation, not an isolated
+hardware throughput claim. Same independent still-frame protocol as Step B:
+1,081 IR test images, 62 FVessel RGB images, warmed models, sources cleared per
+image, alternating thermal on/off order, no embeddings/prompts.
+
+| Measurement | Mean / p50 / p95 ms |
+|---|---|
+| Proposer (IR test) | 4.846 / 3.785 / 10.829 |
+| RGB gate, standalone repeated sample | 2.635 / 2.553 / 2.827 |
+| Cached native+tile fusion reconstruction | 139.216 / 97.880 / 292.567 |
+| Engine IR, thermal off | 91.552 / 56.802 / 207.422 |
+| Engine IR, thermal on | 92.931 / 59.937 / 210.541 |
+| Engine IR, paired on − off | 1.379 / 1.696 / 31.224 |
+| Engine RGB, thermal off | 175.071 / 169.107 / 202.891 |
+| Engine RGB, thermal on | 174.365 / 171.054 / 201.551 |
+| Engine RGB, paired on − off | −0.706 / 1.639 / 13.870 |
+| RGB wrapper thermal stage in engine | 2.322 / 2.263 / 2.757 |
+| RGB gate measured in engine loop | 2.235 / 2.166 / 2.609 |
+
+**0/62 RGB gate positives**: thermal cost is gate-only plus bookkeeping in
+that sample. The noisy negative mean whole-engine delta does not mean a
+negative gate cost or a speedup. Original cached YOLO costs are not fresh
+measurements and must not be compared causally with new engine timing; the
+reconstructed row excludes cache/hash/merge bookkeeping. No performance
+improvement is attributed to #271 from these changing VM timings.
+
+Evaluator log: `~/data/thermal-eval-rebased.log`. New-contact birth signaling,
+its precision/recall trade-off and microsecond cost are in
+[NEW_CONTACT.md](NEW_CONTACT.md).

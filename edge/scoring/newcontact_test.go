@@ -47,3 +47,12 @@ func TestNewContactBoost(t *testing.T) {
 		t.Fatal("zero policy weight must disable new-contact boost")
 	}
 }
+
+func TestThermalLabelWholeWordMatch(t *testing.T) {
+	for label, want := range map[string]bool{"thermal contact": true, "thermal contacts": true,
+		"hypothermal contact": false, "thermal contactless": false} {
+		if got := hasLabel([]string{label}, "thermal contact"); got != want {
+			t.Fatalf("hasLabel(%q, thermal contact) = %v", label, got)
+		}
+	}
+}

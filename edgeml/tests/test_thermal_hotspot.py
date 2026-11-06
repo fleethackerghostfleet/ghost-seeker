@@ -80,7 +80,8 @@ def test_invalid(kwargs):
 
 
 @pytest.mark.parametrize("zs,floor", [(None, .9), (.1, .9), (.98, .95)])
-def test_engine_unknown_first(monkeypatch, zs, floor):
+@pytest.mark.parametrize("with_prompt", [False, True])
+def test_engine_unknown_first(monkeypatch, zs, floor, with_prompt):
     from edgeml.runtime import detectors
     from edgeml.sidecar import service
     import edgeml.tracking as tracking
@@ -95,10 +96,16 @@ def test_engine_unknown_first(monkeypatch, zs, floor):
     if zs is not None:
         engine.classifier = SimpleNamespace(classify=lambda x: [{"subtype": "tanker", "unknownness": zs}])
         engine.embedder = SimpleNamespace(embed_crops=lambda crops: np.tile([1., 0.], (len(crops), 1)))
-    responses = [engine.analyze("ir", sea(), None, [], False) for _ in range(5)]
+    if with_prompt:
+        engine.open_vocab = SimpleNamespace(detect=Mock(return_value=[{"label": "life raft", "confidence": .8,
+                                                                      "box": {"x": .2, "y": .2, "w": .1, "h": .1}}]))
+    responses = [engine.analyze("ir", sea(), None, ["open-vocab:life raft"] if with_prompt else [], False) for _ in range(5)]
     sightings = [s for r in responses for s in r["sightings"]]
     assert sightings and any(s["event"] == "EVENT_OPEN" for s in sightings)
     assert all(s["keyDetection"]["label"] == "thermal contact" and s["unknownness"] >= max(zs or 0, floor) for s in sightings)
+    assert all(s.get("newContact", False) == (s["event"] == "EVENT_OPEN") for s in sightings)
+    if with_prompt:
+        assert all(any(d["label"] == "life raft" for d in r["detections"]) for r in responses)
     assert all(r["unknownness"] >= max(zs or 0, floor) for r in responses if r["sightings"])
     color = sea(); color[..., 0] = 0
     rgb = engine.analyze("rgb", color, None, [], False)

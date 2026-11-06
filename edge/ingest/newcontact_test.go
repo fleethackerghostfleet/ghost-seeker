@@ -61,3 +61,23 @@ func TestNewContactClearedOnMetadataAndKeyUpdates(t *testing.T) {
 		}
 	}
 }
+
+func TestThermalNewContactSurvivesOpenVocabularyMatch(t *testing.T) {
+	open := sighting("thermal", pb.Sighting_EVENT_OPEN, true, "thermal contact")
+	open.KeyDetection.Label = "thermal contact"
+	open.NewContact = true
+	an := &scripted{script: map[int][]*pb.Sighting{1: {open}},
+		detections: map[int][]*pb.Detection{1: {{Label: "life raft", Confidence: .8}}}}
+	g, st, clk := newIngester(t, DedupSightings, an)
+	ctx := context.Background()
+	if _, _, err := g.sch.ApplyPolicy(ctx, &pb.Policy{Interest: &pb.Interest{BoostLabels: []string{"life raft"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Ingest(ctx, capture(clk, 1)); err != nil {
+		t.Fatal(err)
+	}
+	row, err := st.Get(ctx, g.sightings["thermal"])
+	if err != nil || row == nil || row.Item.Features.Tags["new_contact"] != "1" || row.Item.Features.Detections[0].Label != "thermal contact" {
+		t.Fatalf("thermal OPEN mangled by open-vocabulary handling: %v %v", row, err)
+	}
+}
