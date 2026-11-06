@@ -127,13 +127,20 @@ def main():
     elif phase == 'deploy':
         deploy()
     elif phase == 'evidence':
+        directory = os.environ.get('EVIDENCE_DIR')
+        if not directory:
+            raise ValueError('Set EVIDENCE_DIR to an unused capture directory; reuse that path for screenshots')
+        directory = Path(directory).expanduser().resolve()
+        if directory.exists():
+            raise FileExistsError('Evidence directory already exists: '+str(directory))
         run('rc2-evidence', ['python3', '-B', ROOT/'scripts/uds/two-cluster-evidence.py'],
-            {'EVIDENCE_DIR': str(REPORT/'evidence'), 'SSE_IDLE_SECONDS': '40'})
+            {'EVIDENCE_DIR': str(directory), 'SSE_IDLE_SECONDS': '40'})
         run('shore-gateway-access', kube('shore', '-n', 'istio-tenant-gateway', 'logs',
             'deployment/tenant-ingressgateway', '-c', 'istio-proxy', '--since=20m'))
     elif phase == 'screenshots':
         run('rc2-screenshots', ['python3', '-B', ROOT/'scripts/uds/two-cluster-screenshots.py'],
-            {'EVIDENCE_DIR': str(REPORT/'evidence'), 'SCREENSHOT_DIR': str(REPORT/'img')})
+            {'EVIDENCE_DIR': os.environ.get('EVIDENCE_DIR', str(REPORT/'evidence')),
+             'SCREENSHOT_DIR': os.environ.get('SCREENSHOT_DIR', str(REPORT/'img'))})
     elif phase == 'airgap':
         run('rc2-airgap', ['python3', '-B', ROOT/'scripts/uds/two-cluster-airgap-verify.py'],
             {'AIRGAP_RESTART_ONLY': '1', 'AIRGAP_EVIDENCE_DIR': str(REPORT/'airgap')})

@@ -139,6 +139,16 @@ separately from all earlier local-build runs. Command/output transcript, auth
 script body without expanded values, configs, deployment logs and checksums are
 under `logs/`. Harness Python tests: **16 passed** (`logs/harness-tests.txt`).
 
+For a new capture, explicitly select an unused directory; the driver never
+overwrites the committed evidence. Keep the same path for screenshots:
+
+```bash
+export EVIDENCE_DIR="$HOME/.local/share/uds-rc2/captures/$(date -u +%Y%m%dT%H%M%SZ)"
+export SCREENSHOT_DIR="$EVIDENCE_DIR/img"
+python3 scripts/uds/two-cluster-rc2.py evidence
+python3 scripts/uds/two-cluster-rc2.py screenshots
+```
+
 Real input provenance/hashes are captured in `evidence/inputs.json` and
 `airgap/restarted-offline-input.json`. Sources are the existing SMD onboard and
 maritime timelapse archives in this checkout. Licensing remains unresolved:

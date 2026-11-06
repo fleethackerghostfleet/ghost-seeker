@@ -1,5 +1,6 @@
 import importlib.util
 import hashlib
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -52,6 +53,8 @@ class ReleaseIntegrityTest(unittest.TestCase):
         self.logs = self.root/'logs'
         self.assets.mkdir()
         self.logs.mkdir()
+        limit = self.root/'inotify'
+        limit.write_text('1024')
         self.names = [f'{kind}-ghost-seeker-{role}-amd64-0.1.0-rc2.tar.zst'
                       for kind in ('uds-bundle', 'zarf-package') for role in ('ship', 'shore')]
         entries = []
@@ -61,7 +64,7 @@ class ReleaseIntegrityTest(unittest.TestCase):
             entries.append(hashlib.sha256(data).hexdigest()+'  '+name)
         self.manifest = '\n'.join(entries)+'\n'
         (self.assets/'SHA256SUMS').write_text(self.manifest)
-        for key, value in [('ASSETS', self.assets), ('LOGS', self.logs)]:
+        for key, value in [('ASSETS', self.assets), ('LOGS', self.logs), ('INOTIFY_LIMIT', limit)]:
             context = patch.object(rc2, key, value)
             context.start()
             self.addCleanup(context.stop)
@@ -123,6 +126,48 @@ class BootstrapPreflightTest(unittest.TestCase):
                     self.assertRaisesRegex(RuntimeError, 'missing tool'):
                 rc2.bootstrap()
             self.assertEqual([call.args[0] for call in run.call_args_list], ['version-k3d'])
+
+
+class EvidenceDirectoryTest(unittest.TestCase):
+    def test_explicit_unused_directory_is_forwarded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root/'fresh-capture'
+            with patch.object(rc2, 'LOGS', root), patch.dict(os.environ, {'EVIDENCE_DIR': str(target)}), \
+                    patch.object(rc2.sys, 'argv', ['rc2', 'evidence']), patch.object(rc2, 'run') as run:
+                rc2.main()
+            self.assertEqual(run.call_args_list[0].args[2]['EVIDENCE_DIR'], str(target))
+            self.assertFalse(target.exists())
+
+    def test_missing_or_empty_directory_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for environment in [{}, {'EVIDENCE_DIR': ''}]:
+                with self.subTest(environment=environment), patch.object(rc2, 'LOGS', Path(directory)), \
+                        patch.dict(os.environ, environment, clear=True), \
+                        patch.object(rc2.sys, 'argv', ['rc2', 'evidence']), patch.object(rc2, 'run') as run, \
+                        self.assertRaisesRegex(ValueError, 'Set EVIDENCE_DIR'):
+                    rc2.main()
+                run.assert_not_called()
+
+    def test_existing_directory_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root/'original'
+            marker.write_text('preserved')
+            with patch.object(rc2, 'LOGS', root), patch.dict(os.environ, {'EVIDENCE_DIR': str(root)}), \
+                    patch.object(rc2.sys, 'argv', ['rc2', 'evidence']), patch.object(rc2, 'run') as run, \
+                    self.assertRaises(FileExistsError):
+                rc2.main()
+            run.assert_not_called()
+            self.assertEqual(marker.read_text(), 'preserved')
+
+    def test_screenshots_use_the_selected_capture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            values = {'EVIDENCE_DIR': directory, 'SCREENSHOT_DIR': directory+'/img'}
+            with patch.object(rc2, 'LOGS', Path(directory)), patch.dict(os.environ, values), \
+                    patch.object(rc2.sys, 'argv', ['rc2', 'screenshots']), patch.object(rc2, 'run') as run:
+                rc2.main()
+            self.assertEqual(run.call_args.args[2], values)
 
 
 if __name__ == '__main__':
