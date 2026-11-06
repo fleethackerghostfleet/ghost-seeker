@@ -1,11 +1,38 @@
 package scoring
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 )
+
+func TestWhaleDirectiveBoostsMarineMammalWireLabels(t *testing.T) {
+	compiler := &command.Compiler{EdgeSubtypes: true}
+	compiled := compiler.Compile(context.Background(), "look for whales")
+	if len(compiled.Rules) != 1 || len(compiled.Rules[0].Classes) != 1 || compiled.Rules[0].Classes[0] != "marine mammal" {
+		t.Fatalf("whale directive did not compile to marine mammal: %+v", compiled)
+	}
+	ctx := &Context{Now: time.Now(), Policy: &pb.Policy{Interest: &pb.Interest{BoostLabels: compiled.Rules[0].Classes}}}
+	if labels := openvocab.Labels(ctx.Policy); len(labels) != 0 {
+		t.Fatalf("closed marine mammal directive must not request open-vocabulary inference: %v", labels)
+	}
+	for _, label := range []string{"marine mammal", "marine_mammal", "Marine Mammals"} {
+		t.Run(label, func(t *testing.T) {
+			it := img(label, .9, 0)
+			it.Features.Tags = map[string]string{"subtype": "dolphin"}
+			if result := (Interest{}).Score(it, ctx); result.Multiplier <= 1 {
+				t.Fatalf("marine mammal wire label not boosted: %+v", result)
+			}
+		})
+	}
+	if result := (Interest{}).Score(img("boat", .9, 0), ctx); result.Multiplier > 1 {
+		t.Fatalf("unrelated boat boosted by whale directive: %+v", result)
+	}
+}
 
 func img(label string, conf, unk float32) *pb.Item {
 	it := &pb.Item{Type: pb.ItemType_ITEM_TYPE_IMAGE, CapturedAtUnixMs: time.Now().UnixMilli(), Features: &pb.Features{Unknownness: unk}}
