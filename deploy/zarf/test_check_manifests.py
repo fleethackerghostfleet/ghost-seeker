@@ -118,6 +118,20 @@ class SplitProductionTests(unittest.TestCase):
         self.assertEqual(len(locked), 5)
         self.assertTrue(all(re.fullmatch(pin_images.TAG_PATTERN, ref.rsplit(":", 1)[1]) for ref in locked.values()))
 
+    def test_workloads_use_zarf_registry_and_explicit_pull_credentials(self):
+        for role in ("ship", "shore"):
+            for path, documents in self.rendered[role].items():
+                for document in documents:
+                    if document["kind"] not in validator.WORKLOAD_KINDS:
+                        continue
+                    pod, containers = validator.workload_containers(document)
+                    self.assertIn({"name": "private-registry"}, pod.get("imagePullSecrets", []))
+                    for container in containers:
+                        image = container["image"]
+                        self.assertNotEqual(image, validator.source_image(image))
+                        self.assertIn('image: "###ZARF_REGISTRY###/' + validator.source_image(image) + '"',
+                                      path.read_text())
+
     def test_namespace_and_paired_flows_cannot_be_broadened(self):
         original = validator.read_documents
         for role in ("ship", "shore"):

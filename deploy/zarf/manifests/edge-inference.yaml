@@ -13,6 +13,8 @@ spec:
       labels:
         app: edgeml-sidecar
     spec:
+      imagePullSecrets:
+        - name: private-registry
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -22,7 +24,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: models
-          image: ghost-seeker/edgeml-models:prod-b6e0f0fa18d1-20261106160717-221ead34
+          image: "###ZARF_REGISTRY###/ghost-seeker/edgeml-models:prod-b6e0f0fa18d1-20261106160717-221ead34"
           imagePullPolicy: IfNotPresent
           command: ["sh", "-ec"]
           args:
@@ -66,7 +68,7 @@ spec:
               mountPath: /models
       containers:
         - name: edgeml-sidecar
-          image: ghost-seeker/edgeml-sidecar:prod-b6e0f0fa18d1-20261106160717-221ead34
+          image: "###ZARF_REGISTRY###/ghost-seeker/edgeml-sidecar:prod-b6e0f0fa18d1-20261106160717-221ead34"
           imagePullPolicy: IfNotPresent
           args:
             - "--listen"

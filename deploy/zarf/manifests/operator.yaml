@@ -31,6 +31,8 @@ spec:
       labels:
         app: operator
     spec:
+      imagePullSecrets:
+        - name: private-registry
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -40,7 +42,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: operator
-          image: ghost-seeker/operator:prod-b6e0f0fa18d1-20261106160717-221ead34
+          image: "###ZARF_REGISTRY###/ghost-seeker/operator:prod-b6e0f0fa18d1-20261106160717-221ead34"
           imagePullPolicy: IfNotPresent
           args:
             - "-addr=:8090"
