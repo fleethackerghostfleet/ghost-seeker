@@ -35,6 +35,8 @@ There are no cloud-account credentials or GitHub write tokens required by the ve
 
 ## Run against a clean commit
 
+Run `git lfs pull --include web/static/imagery/empty-ocean.zip` first; archive-dependent tests skip while this asset remains an LFS pointer.
+
 ```sh
 . .venv/bin/activate
 make verify
