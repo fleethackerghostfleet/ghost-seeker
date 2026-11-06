@@ -61,7 +61,7 @@ cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JS
 algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
 inference/              reference/contract notes + manual model-free stub; running sidecar is edgeml/
 edgeml/                 Python detection/tracking/sighting pipeline, real-model sidecar, evaluation reports
-deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
+deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf package with ingress/egress NetworkPolicies
 frames/                 demo imagery (Git LFS zips)
 cmd/ghost-seeker web/   operator web app (Go, in-memory simulation, SSE feed); see "Operator web app" below
 ui/                     API notes for wiring the web app to the edge/shore consoles
@@ -79,6 +79,7 @@ Requires Go 1.26.10+ (pinned in `go.mod` and the container builder). No CGO, no 
 make build                 # bin/edge bin/ghost-seeker bin/shore bin/sim
 make sim                   # FIFO vs prioritized, 90 simulated minutes of contested SATCOM, seconds of wall time
 ./bin/sim -trace starlink_turns -duration 60m          # traces: steady_64k trickle_2k4 starlink_turns satcom_contested los_bursty
+go run ./cmd/sim -scenario scenarios/sailboats_example.json # sailboat lane replay with bundled LFS archives
 ```
 
 Live, two processes, replaying the frame zips through the mock analyzer:
@@ -458,6 +459,11 @@ never its own eviction victim.
 
 ## Status / not done
 
+- Zarf includes namespace-wide default-deny ingress/egress and workload-specific
+  service/DNS allows. Configure external ingress source and egress destination
+  CIDRs/ports before deployment; policies require an enforcing CNI. Cluster
+  enforcement has not been runtime-tested. See [network isolation](docs/FIELDING.md#zarf-network-isolation)
+  and [egress variables](deploy/README.md#external-egress-variables).
 - Inference: Go mock, model-free Python stub, and an implemented CPU sidecar
   with ONNX Runtime/OpenVINO detection, tracking, MobileCLIP classification,
   and sighting aggregation. Real models must be provisioned separately; see
@@ -478,6 +484,6 @@ never its own eviction victim.
   is opt-in; the operator supports PIV/mTLS. Plain HTTP remains the default; see
   [Security](docs/SECURITY.md) for deployment requirements and residuals.
 - Capture input is frame/scenario replay; no live camera ingestion is implemented.
-- Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
-  the boat is not visible in every frame). `scenarios/sailboats_example.json`
-  still uses a placeholder path for the sailboat set.
+- Sailboat footage used by `scenarios/sailboats_example.json` is in
+  `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled; the boat is not
+  visible in every frame, so the scenario's sailboat labels are mock hints).

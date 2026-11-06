@@ -26,7 +26,7 @@ test('lights: eligibility is strict and missing sensor metadata stays ineligible
 
 test('lights: absent detections yield an empty section without badges or explanations', () => {
  const lights = load();
- assert.equal(lights.section(item()), '<section class="dsec night-lights"><h4>Navigation lights (night)</h4></section>');
+ assert.equal(lights.section(item()), '<section class="dsec night-lights"><h3>Navigation lights (night)</h3></section>');
  assert.equal(lights.badge(item()), '');
  assert.equal(lights.why(item()).length, 0);
  assert.equal(lights.icon(), '');

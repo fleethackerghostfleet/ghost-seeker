@@ -1,9 +1,9 @@
 {
-  "name": "sailboat lane demo (fill in dataset paths)",
+  "name": "sailboat lane demo",
   "period_s": 10,
   "sets": [
     {"Path": "../frames/Cargo_Ship_Uncut_View_frames.zip", "Source": "cam-fwd", "Label": "cargo ship", "Conf": 0.92, "Every": 60, "Limit": 150},
-    {"Path": "/path/to/sailboats", "Source": "cam-port", "Label": "sailboat", "Conf": 0.9, "Every": 1, "Limit": 200},
+    {"Path": "../frames/Sailboat_on_the_horizon_frames.zip", "Source": "cam-port", "Label": "sailboat", "Conf": 0.9, "Every": 1, "Limit": 200},
     {"Path": "../frames/Dolphins_Pungo_Ferry_Bridge_frames.zip", "Source": "cam-port", "Unknownness": 0.9, "Truth": "dolphin"}
   ],
   "events": [
