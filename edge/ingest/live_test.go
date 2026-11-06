@@ -1,0 +1,512 @@
+package ingest
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"image"
+	"image/gif"
+	"io"
+	"mime/multipart"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/textproto"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
+	"github.com/golang-jwt/jwt/v5"
+)
+
+const liveTestToken = "synthetic-live-test-operator"
+
+func runningQueue(t *testing.T, capacity int) *Queue {
+	t.Helper()
+	g, _ := newFormsIngester(t, DefaultConfig())
+	q := NewQueue(capacity)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); _ = g.Run(ctx, q) }()
+	t.Cleanup(func() { cancel(); <-done })
+	return q
+}
+
+func requestFrame(h http.Handler, data []byte, contentType, query, token string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest("POST", "/api/v1/ingest/frames"+query, bytes.NewReader(data))
+	r.Header.Set("Content-Type", contentType)
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+func multipartFrame(t *testing.T, data []byte, meta string) ([]byte, string) {
+	t.Helper()
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+	p, err := w.CreateFormField("meta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(p, meta)
+	p, err = w.CreatePart(textproto.MIMEHeader{"Content-Disposition": {`form-data; name="frame"; filename="frame.jpg"`}, "Content-Type": {"image/jpeg"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = p.Write(data)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes(), w.FormDataContentType()
+}
+
+func TestLivePushValidationAndDuplicate(t *testing.T) {
+	q := runningQueue(t, 2)
+	unit, err := unitauth.Mint("test-edge", strings.Repeat("k", 32), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := q.Handler(liveTestToken, unit, 1<<20)
+	jpg := encJPEG(t, scene(40, 30))
+	var gifBytes bytes.Buffer
+	_ = gif.Encode(&gifBytes, image.NewGray(image.Rect(0, 0, 10, 10)), nil)
+	cases := []struct {
+		name, typ, query, token string
+		data                    []byte
+		status                  int
+	}{
+		{"no auth", "image/jpeg", "?source=cam-a", "", jpg, 401},
+		{"wrong auth", "image/jpeg", "?source=cam-a", "invalid", jpg, 401},
+		{"source required", "image/jpeg", "", liveTestToken, jpg, 400},
+		{"source unsafe", "image/jpeg", "?source=%3Cscript%3E", liveTestToken, jpg, 400},
+		{"bad timestamp", "image/jpeg", "?source=cam-a&captured_at=bad", liveTestToken, jpg, 400},
+		{"non image", "text/plain", "?source=cam-a", liveTestToken, jpg, 415},
+		{"corrupt", "image/jpeg", "?source=cam-a", liveTestToken, []byte("bad"), 400},
+		{"mismatch", "image/png", "?source=cam-a", liveTestToken, jpg, 400},
+		{"gif", "image/jpeg", "?source=cam-a", liveTestToken, gifBytes.Bytes(), 400},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := requestFrame(h, tc.data, tc.typ, tc.query, tc.token)
+			if w.Code != tc.status {
+				t.Fatalf("status %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+	data, typ := multipartFrame(t, jpg, `{"source":"cam-a","captured_at":"2026-11-05T12:13:14Z","sensor_type":"ir","geo":{"lat":12,"lon":34,"alt":7,"heading":90},"tags":{"sensor":"forward"}}`)
+	w := requestFrame(h, data, typ, "", liveTestToken)
+	if w.Code != 202 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var first, second Result
+	_ = json.Unmarshal(w.Body.Bytes(), &first)
+	w = requestFrame(h, jpg, "image/jpeg", "?source=cam-a", unit)
+	_ = json.Unmarshal(w.Body.Bytes(), &second)
+	if w.Code != 202 || first.ID == "" || first.Duplicate || first.ID != second.ID || !second.Duplicate {
+		t.Fatalf("duplicate result: %+v %+v: %d", first, second, w.Code)
+	}
+	w = requestFrame(h, encPNG(t, scene(11, 12)), "image/png", "?source=cam-b", liveTestToken)
+	if w.Code != 202 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	q.Health(w, httptest.NewRequest("GET", "/api/v1/health", nil))
+	var health struct {
+		Sources map[string]SourceStats `json:"sources"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &health)
+	s := health.Sources["push:cam-a"]
+	if s.Accepted != 2 || s.Processed != 2 || s.Duplicates != 1 || s.LastFrame == nil {
+		t.Fatal(w.Body.String())
+	}
+}
+
+func TestLivePushRejectsInactiveUnitCredential(t *testing.T) {
+	q := runningQueue(t, 1)
+	jpg := encJPEG(t, scene(20, 20))
+	for _, tc := range []struct {
+		name          string
+		exp, nbf, iat int64
+	}{
+		{"expired", time.Now().Unix() - 60, 0, 0},
+		{"no expiry", 0, 0, 0},
+		{"not yet valid", time.Now().Unix() + 3600, time.Now().Unix() + 60, 0},
+		{"future issue", time.Now().Unix() + 3600, 0, time.Now().Unix() + 60},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := jwt.MapClaims{"sub": "test-edge", "role": "unit"}
+			if tc.exp != 0 {
+				c["exp"] = tc.exp
+			}
+			if tc.nbf != 0 {
+				c["nbf"] = tc.nbf
+			}
+			if tc.iat != 0 {
+				c["iat"] = tc.iat
+			}
+			unit, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString([]byte(strings.Repeat("k", 32)))
+			if err != nil {
+				t.Fatal("mint fixture failed")
+			}
+			h := q.Handler(liveTestToken, unit, 1<<20)
+			if w := requestFrame(h, jpg, "image/jpeg", "?source=cam", unit); w.Code != 401 {
+				t.Fatal("inactive configured unit accepted", w.Code)
+			}
+			if w := requestFrame(h, jpg, "image/jpeg", "?source=cam", liveTestToken); w.Code != 202 {
+				t.Fatal("operator credential blocked", w.Code)
+			}
+		})
+	}
+}
+
+func TestSpoolReservesBeforeReadingOrDecoding(t *testing.T) {
+	dir, q := t.TempDir(), NewQueue(1)
+	for _, sub := range []string{"processed", "failed"} {
+		if err := os.Mkdir(filepath.Join(dir, sub), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(dir, "bad.jpg")
+	if err := os.WriteFile(path, []byte("not a JPEG"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	q.reserve()
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("full queue decoded/moved frame before admission", err)
+	}
+	if len(q.slots) != 1 {
+		t.Fatal("stole an existing reservation")
+	}
+	<-q.slots
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "spool-camera"}, 1<<20, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := os.ReadDir(filepath.Join(dir, "failed"))
+	if err != nil || len(failed) != 1 || len(q.slots) != 0 {
+		t.Fatal("decode failure did not release admission", err, len(failed), len(q.slots))
+	}
+}
+
+type observedReader struct{ calls int }
+
+func (r *observedReader) Read(b []byte) (int, error) { r.calls++; return 0, io.EOF }
+
+type observedSource struct{ calls int }
+
+func (s *observedSource) Next(context.Context) (*Capture, bool, error) {
+	s.calls++
+	return nil, true, nil
+}
+
+func TestLocalProducersWaitForAdmissionBeforeReading(t *testing.T) {
+	q := NewQueue(1)
+	q.reserve()
+	frame, source := &observedReader{}, &observedSource{}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := mjpegFrame(ctx, q, frame, Metadata{Source: "camera"}, 1<<20); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel2()
+	if err := Pump(ctx2, q, source, "replay"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	if frame.calls != 0 || source.calls != 0 || len(q.slots) != 1 {
+		t.Fatal("local reader allocated outside admission", frame.calls, source.calls, len(q.slots))
+	}
+	<-q.slots
+	if err := mjpegFrame(context.Background(), q, frame, Metadata{Source: "camera"}, 1<<20); err == nil || len(q.slots) != 0 {
+		t.Fatal("bad camera frame leaked admission", err)
+	}
+	if err := Pump(context.Background(), q, source, "replay"); err != nil || len(q.slots) != 0 || source.calls != 1 {
+		t.Fatal("finished source leaked admission", err)
+	}
+}
+
+func TestWaitingCameraFrameDoesNotCountAsRejected(t *testing.T) {
+	q := runningQueue(t, 1)
+	q.reserve()
+	data := encJPEG(t, scene(30, 20))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- mjpegFrame(ctx, q, bytes.NewReader(data), Metadata{Source: "waiting"}, 1<<20) }()
+	select {
+	case err := <-done:
+		t.Fatal("camera did not wait for admission", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	<-q.slots
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	q.mu.Lock()
+	stats := q.stats["mjpeg:waiting"]
+	q.mu.Unlock()
+	if stats.Rejected != 0 || stats.Accepted != 1 || stats.Processed != 1 {
+		t.Fatal("waiting frame incorrectly rejected", stats)
+	}
+}
+
+type gatedReplayClock struct{ entered, release chan struct{} }
+
+func (c gatedReplayClock) Now() time.Time { return time.Now() }
+func (c gatedReplayClock) Sleep(ctx context.Context, _ time.Duration) error {
+	select {
+	case c.entered <- struct{}{}:
+	default:
+	}
+	select {
+	case <-c.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestIdleReplayLeavesSingleSlotAvailableForLivePush(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"0.jpg", "1.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), encJPEG(t, scene(30, 20)), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clk := gatedReplayClock{make(chan struct{}, 1), make(chan struct{})}
+	replay, err := NewReplay(clk, time.Hour, FrameSet{Path: dir, Source: "replay-camera"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := runningQueue(t, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- Pump(ctx, q, replay, "replay"); close(done) }()
+	defer func() { cancel(); <-done }()
+	select {
+	case <-clk.entered:
+	case <-ctx.Done():
+		t.Fatal("replay did not reach idle interval")
+	}
+	if len(q.slots) != 0 {
+		t.Fatal("idle replay holds admission")
+	}
+	w := requestFrame(q.Handler(liveTestToken, "", 1<<20), encJPEG(t, scene(31, 21)), "image/jpeg", "?source=live-camera", liveTestToken)
+	if w.Code != 202 {
+		t.Fatal("idle replay blocked live push", w.Code)
+	}
+	close(clk.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if len(q.slots) != 0 {
+		t.Fatal("completed replay leaked admission")
+	}
+}
+
+func TestReplaySkipsUnreadableFrameWithoutLeakingAdmission(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"0.jpg", "1.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), encJPEG(t, scene(30, 20)), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replay, err := NewReplay(clock.NewVirtual(time.Now()), time.Second, FrameSet{Path: dir, Source: "replay-camera"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "0.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	q := runningQueue(t, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := Pump(ctx, q, replay, "replay"); err != nil {
+		t.Fatal(err)
+	}
+	if len(q.slots) != 0 {
+		t.Fatal("unreadable replay leaked admission")
+	}
+}
+
+func TestLivePushSizeMetadataAndBackpressure(t *testing.T) {
+	q := NewQueue(1)
+	jpg := encJPEG(t, scene(40, 30))
+	h := q.Handler(liveTestToken, "", 32)
+	if w := requestFrame(h, jpg, "image/jpeg", "?source=cam", liveTestToken); w.Code != 413 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	data, typ := multipartFrame(t, jpg, `{"source":"cam"}`)
+	if w := requestFrame(h, data, typ, "", liveTestToken); w.Code != 413 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	for _, meta := range []string{`{`, `{"source":"cam","geo":{"lat":91,"lon":0}}`, `{"source":"cam","geo":{"lat":0}}`, `{"source":"cam","geo":{"lat":0,"lon":0,"heading":360}}`, `{"source":"cam","sensor_type":"bad type"}`, `{"source":"cam","tags":{"bad key":"x"}}`, strings.Repeat(" ", 65537)} {
+		data, typ = multipartFrame(t, jpg, meta)
+		if w := requestFrame(q.Handler(liveTestToken, "", 1<<20), data, typ, "", liveTestToken); w.Code != 400 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	if len(q.slots) != 0 {
+		t.Fatal("invalid requests leaked admission slots")
+	}
+	q.reserve()
+	w := requestFrame(q.Handler(liveTestToken, "", 1<<20), jpg, "image/jpeg", "?source=cam", liveTestToken)
+	if w.Code != 429 || w.Header().Get("Retry-After") == "" {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	<-q.slots
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c, err := (Metadata{Source: "cam"}).Capture(jpg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = q.Push(ctx, c, "test")
+	// Cancellation after acceptance may leave an admitted capture for the
+	// writer; cancellation before acceptance must not add any other slot.
+	if len(q.slots) > 1 {
+		t.Fatal("unbounded admission")
+	}
+}
+
+func TestSpoolProcessedFailedAndStable(t *testing.T) {
+	q := runningQueue(t, 1)
+	dir := t.TempDir()
+	for _, sub := range []string{"processed", "failed"} {
+		if err := os.Mkdir(filepath.Join(dir, sub), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(dir, "good.jpg")
+	jpg := encJPEG(t, scene(40, 30))
+	_ = os.WriteFile(path, jpg, 0600)
+	_ = os.WriteFile(path+".json", []byte(`{"source":"sidecar-camera","sensor_type":"eo"}`), 0600)
+	if err := spoolFile(context.Background(), q, path, Metadata{Source: "default"}, 1<<20, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "processed", "*.jpg"))
+	if len(files) != 1 {
+		t.Fatal(files)
+	}
+	if _, err := os.Stat(files[0] + ".json"); err != nil {
+		t.Fatal(err)
+	}
+	bad := filepath.Join(dir, "bad.png")
+	_ = os.WriteFile(bad, []byte("not image"), 0600)
+	if err := spoolFile(context.Background(), q, bad, Metadata{Source: "default"}, 1<<20, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	files, _ = filepath.Glob(filepath.Join(dir, "failed", "*.png"))
+	if len(files) != 1 {
+		t.Fatal(files)
+	}
+	partial := filepath.Join(dir, "partial.jpg")
+	_ = os.WriteFile(partial, jpg[:len(jpg)/2], 0600)
+	done := make(chan error, 1)
+	go func() {
+		done <- spoolFile(context.Background(), q, partial, Metadata{Source: "cam"}, 1<<20, 80*time.Millisecond)
+	}()
+	time.Sleep(20 * time.Millisecond)
+	_ = os.WriteFile(partial, jpg, 0600)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(partial); err != nil {
+		t.Fatal("unstable frame consumed", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := Watch(ctx, q, dir, Metadata{Source: "cam"}, 1<<20, time.Millisecond); err == nil {
+		t.Fatal("watch ignored cancellation")
+	}
+}
+
+func TestMJPEGReconnectFrameCapAndRate(t *testing.T) {
+	q := runningQueue(t, 2)
+	jpg := encJPEG(t, scene(40, 30))
+	var connections atomic.Int32
+	cam := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connections.Add(1)
+		mw := multipart.NewWriter(w)
+		w.Header().Set("Content-Type", `multipart/x-mixed-replace; boundary=`+mw.Boundary())
+		for range 2 {
+			p, _ := mw.CreatePart(textproto.MIMEHeader{"Content-Type": {"image/jpeg"}})
+			_, _ = p.Write(jpg)
+		}
+		_ = mw.Close()
+	}))
+	defer cam.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 700*time.Millisecond)
+	defer cancel()
+	err := PullMJPEG(ctx, q, cam.URL, Metadata{Source: "camera"}, 1<<20, 10)
+	if err == nil || connections.Load() < 2 {
+		t.Fatalf("reconnect: %v %d", err, connections.Load())
+	}
+	q.mu.Lock()
+	s := q.stats["mjpeg:camera"]
+	q.mu.Unlock()
+	if s.Processed < 3 || s.Processed > 7 {
+		t.Fatalf("frame-rate cap not respected: %+v", s)
+	}
+	if err := mjpegConnection(context.Background(), cam.Client(), q, cam.URL, Metadata{Source: "camera"}, 32, time.Millisecond); err == nil {
+		t.Fatal("oversize MJPEG frame accepted")
+	}
+	if err := PullMJPEG(context.Background(), q, "file:///tmp/cam", Metadata{Source: "camera"}, 32, 1); err == nil {
+		t.Fatal("file URL accepted")
+	}
+}
+
+func TestMJPEGContinuousStreamUsesIdleNotLifetimeDeadline(t *testing.T) {
+	q := runningQueue(t, 1)
+	jpg := encJPEG(t, scene(40, 30))
+	camera := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mw := multipart.NewWriter(w)
+		w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary="+mw.Boundary())
+		for range 6 {
+			p, err := mw.CreatePart(textproto.MIMEHeader{"Content-Type": {"image/jpeg"}})
+			if err != nil {
+				return
+			}
+			if _, err := p.Write(jpg); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			if err := pause(r.Context(), 30*time.Millisecond); err != nil {
+				return
+			}
+		}
+		<-r.Context().Done()
+	}))
+	defer camera.Close()
+	client := newMJPEGClient(100 * time.Millisecond)
+	defer client.CloseIdleConnections()
+	if client.Timeout != 0 {
+		t.Fatal("continuous camera has a total response lifetime cap")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	err := mjpegConnection(ctx, client, q, camera.URL, Metadata{Source: "continuous"}, 1<<20, time.Millisecond)
+	var timeout net.Error
+	if !errors.As(err, &timeout) || !timeout.Timeout() || ctx.Err() != nil {
+		t.Fatalf("idle camera did not time out: %v", err)
+	}
+	q.mu.Lock()
+	processed := q.stats["mjpeg:continuous"].Processed
+	q.mu.Unlock()
+	if processed < 4 || time.Since(start) < 200*time.Millisecond {
+		t.Fatal("healthy stream was cut off by total lifetime", processed)
+	}
+}

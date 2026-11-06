@@ -12,6 +12,9 @@ let feedFocusID=null;
 let LIVE=null;
 let snapshotEpoch=null,resetRevision=0;
 let feedReasons=new Map();
+const metadataCache=new Map();
+let metadataExpanded=false;
+let metadataEMCON='NORMAL';
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
 const fmtRate=bps=>bps>0&&bps<8e4?'<0.01 MB/s':`${(Math.max(0,bps)/8e6).toFixed(2)} MB/s`;
@@ -27,8 +30,9 @@ function formChipsHTML(it){
 }
 function uploadState(it,describe=true){
  let u=it.upload,form='';
+ const liveForms=it.live?.forms||{};
  if(it.live){
-  const forms=it.live.forms||{};
+  const forms=liveForms;
   const imageForms=['thumb','crop','full'];
   const key=imageForms.find(k=>forms[k]?.state==='partial')||imageForms.find(k=>forms[k]?.state==='pending')||(imageForms.includes(it.live.imageForm)?it.live.imageForm:null)||['full','crop','thumb'].find(k=>forms[k]?.state==='received')||imageForms.find(k=>forms[k]?.state==='offered');
   form=FORM_NAME[key]||'';
@@ -39,17 +43,20 @@ function uploadState(it,describe=true){
  const full=it.live?.forms?.full;
  const sceneHeld=isScene(it)&&!['partial','received'].includes(full?.state)&&!(full?.received>0)&&!pulling.has(it.live.itemId);
  const done=!sceneHeld&&!!u?.done&&bytes>0,held=!it.live&&!done&&u?.override==='hold',next=!it.live&&!done&&u?.override==='next';
+ const metadataDone=it.live?formsStateDone(it.live,'fact'):!!u?.metadataDone;
  const background=sceneHeld||!it.live&&it.background&&!done&&!held&&!it.manual&&!it.sent&&!it.fullRes&&!next;
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
  const sending=!done&&!held&&!paused&&!background&&!!u?.active;
  const queued=!done&&!held&&!background&&!sending;
+ const metadataOnly=metadataDone&&!held&&!background&&(it.live?!['thumb','crop','full'].some(k=>formsStateDone(it.live,k)):!done);
  const transfer=describe?`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`:'';
- const label=describe?(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:''):'';
- return{bytes,sent,done,queued,label,form,held,next,paused,background,sending};
+ const label=describe?(done?'✓ Uploaded':metadataOnly?'Metadata on shore · image queued':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form&&!metadataOnly?` · ${form}`:''):'';
+ return{bytes,sent,done,queued,label,form,held,next,paused,background,sending,metadataDone,metadataOnly};
 }
+function formsStateDone(live,name){return live?.forms?.[name]?.state==='received'}
 function uploadHTML(it){
  const u=uploadState(it);
- return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
+ return`<div class="upload-info${u.done?' uploaded':u.metadataOnly?' metadata-only':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done||u.metadataOnly?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
 }
 function sendMark(it){
  const u=uploadState(it,false);
@@ -105,10 +112,12 @@ function bandControls(it){
 function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${esc(imageFor(it))}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
 function preserveBandFocus(render){
  const button=document.activeElement?.closest?.('.band-controls button');
+ const metadata=document.activeElement?.matches?.('[data-meta-summary]')?'[data-meta-summary]':document.activeElement?.id==='metadataCopy'?'#metadataCopy':null;
  const surface=button?.closest('#rvMain, #drawer, #zoom');
  const item=button?.dataset.bandItem,band=button?.dataset.band;
  render();
  if(surface)[...surface.querySelectorAll('[data-band-item]')].find(b=>b.dataset.bandItem===item&&b.dataset.band===band)?.focus({preventScroll:true});
+ if(metadata)document.querySelector(metadata)?.focus({preventScroll:true});
 }
 function renderPolicyControls(summary){
  const root=$('emconControl'),active=document.activeElement?.closest?.('#emconSeg button'),mode=active?.dataset.mode;
@@ -127,6 +136,7 @@ function renderPolicyPanels(summary){
 }
 function renderPolicySummary(summary){
  state.policy=summary||null;renderPolicyControls(summary||{});renderPolicyPanels(summary||{});
+ refreshMetadataEMCON(summary?.emcon?.mode);
 }
 async function loadRawPolicy(force){
  if(policyRawTouched&&!force)return;
@@ -201,6 +211,7 @@ function renderAll(){
 function mergeItem(raw,fresh=true){
  const item=normalizeItem(raw);if(evictedIDs.has(item.id))return;
  const previous=findItem(item.id);
+ invalidateMetadata(item,previous);
  if(previous){
   const el=previous.el;
   for(const key of Object.keys(previous))if(!Object.hasOwn(item,key))delete previous[key];
@@ -217,7 +228,7 @@ function applySnapshot(data){
  if(reset)clearDemoItems();
  data.items=data.items.map(normalizeItem);
  const selection=state.sel;
- for(const item of data.items)dirtyItems.add(item.id);
+ for(const item of data.items){dirtyItems.add(item.id);invalidateMetadata(item,findItem(item.id))}
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused&&!reset){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
@@ -231,6 +242,7 @@ function applySnapshot(data){
   pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
  }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
+ for(const id of metadataCache.keys())if(!retained.has(id))metadataCache.delete(id);
  state.model=data.state.model;state.directives=data.state.directives;
  applyLive(data.live);
  renderPolicySummary(data.policy);
@@ -243,13 +255,30 @@ function applySnapshot(data){
 function clearDemoItems(){
  ++resetRevision;items=[];pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
  dirtyItems.clear();feedOrdered=[];renderedFeedReasons.clear();resetFeedWindow();
- imageCache.clear();selectedBands.clear();feedReasons.clear();pulling.clear();
+ imageCache.clear();metadataCache.clear();selectedBands.clear();feedReasons.clear();pulling.clear();
  closeDetail();closeCardMenu();$('drawer').innerHTML='';
  rv={cur:null,shown:null,displayed:null,navigation:rv.navigation+1,order:rv.order,done:0,agree:0,undo:[],busy:false,skipped:{},ask:null,askBusy:false,last:''};
  lastReview=null;$('reviewNoteBox').hidden=true;
  if(typeof workbench!=='undefined')workbench.clearItems();
 }
+// Server-reported capabilities (/api/config "features"). Demo-only controls
+// exist only when the server says so; production (-tags prod) builds report
+// them all false, and a missing block is treated the same way.
+function gsFeatures(config){
+ const f=config&&typeof config.features==='object'&&config.features||{};
+ return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true};
+}
+function applyFeatures(features){
+ document.body.classList.toggle('no-sim',!features.simulation);
+ document.body.classList.toggle('prod',features.profile==='prod');
+ if(!features.dataset){const el=$('datasetStrip');if(el){el.hidden=true;el.remove?.()}}
+ if(!features.simulation){
+  $('simStrip').hidden=true;
+  for(const el of document.querySelectorAll('.sim-only'))el.hidden=true;
+ }
+}
 function setupDemoReset(enabled){
+ if(!enabled){for(const id of ['resetDemoBtn','resetDemoDialog']){const el=$(id);if(el){el.hidden=true;el.remove?.()}}return}
  $('resetDemoBtn').hidden=!enabled||(typeof gsAuth!=='undefined'&&gsAuth.viewer());
  $('resetDemoBtn').onclick=()=>{$('resetDemoDialog').showModal();$('resetDemoCancel').focus()};
  $('resetDemoCancel').onclick=()=>$('resetDemoDialog').close();
@@ -263,6 +292,7 @@ function applyLive(live){
  LIVE=live||null;const cl=document.body?.classList;if(cl?.toggle)cl.toggle('live',!!LIVE);
  renderLive();
  if(!LIVE)return;
+ refreshMetadataEMCON(LIVE.policy?.emcon?.mode);
  mergeLiveConfig(LIVE);
  const banner=document.querySelector?.('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE';
 }
@@ -326,7 +356,7 @@ function openStream(){
   applyLive(JSON.parse(event.data));renderStats();if(state.page==='feed')renderCameras();
  });
  stream.addEventListener('evict',event=>{
-  const {id}=JSON.parse(event.data);evictedIDs.add(id);imageCache.delete(id);pendingItems=pendingItems.filter(data=>data.item.id!==id);
+  const {id}=JSON.parse(event.data);evictedIDs.add(id);imageCache.delete(id);metadataCache.delete(id);pendingItems=pendingItems.filter(data=>data.item.id!==id);
   items=items.filter(item=>item.id!==id);
   if(state.sel===id)closeDetail();
   scheduleFeedFlush();
@@ -335,9 +365,11 @@ function openStream(){
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
  const config=await request('/api/config');
- setupDemoReset(config.demoReset===true);
+ const features=gsFeatures(config);
+ applyFeatures(features);
+ setupDemoReset(features.demoReset);
  setupTeamSync(!!config.reviewSync);
- DATASET_MODE=!!config.datasetMode;
+ DATASET_MODE=features.dataset;
  SOURCES=[{id:'ALL',name:DATASET_MODE?'All sources (combined)':'All sensors (combined)'},...config.sources];
  SRC=Object.fromEntries(SOURCES.map(source=>[source.id,source]));
  CLS=config.classes;MODELS=config.models;ATTR_LAB=config.attrLabels;EXAMPLES=config.examples;
@@ -374,6 +406,7 @@ async function init(){
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
+  if(e.target.closest?.('.metadata-panel'))return;
   if(e.defaultPrevented||e.target.isContentEditable)return;
   if((k==='enter'||k===' ')&&(tg==='BUTTON'||e.target.closest?.('button, a[href], summary, header, .band-controls')))return;
   if(state.page==='rv'&&k==='w'){e.preventDefault();openReviewNote();return}
@@ -602,14 +635,15 @@ function renderDirBar(){
  $('dirBar').innerHTML=d.length?`<span>Directives:</span>${d.slice(0,2).map(x=>`<span class="pill" title="${esc(x.text)}">${esc(x.text)}</span>`).join('')}${d.length>2?`<span>+${d.length-2}</span>`:''}<a href="#reprioritize">Edit</a>`:`<span>Base model only</span><a href="#reprioritize">Set priorities →</a>`;
 }
 function renderStats(){
- let total=0,p1=0,allP1=0,unrev=0,sending=0,done=0,queued=0,held=0,kept=0,humanSentCount=0;
+ renderMetadataMode();
+ let metadata=0,total=0,p1=0,allP1=0,unrev=0,sending=0,done=0,queued=0,held=0,kept=0,humanSentCount=0;
  for(const it of items){
   if(it.tier===1)allP1++;
   if(state.src!=='ALL'&&it.src.id!==state.src)continue;
   total++;if(it.tier===1)p1++;if(!isEmptyWater(it)&&!it.reviewed&&!it.dismissed)unrev++;if(humanSent(it))humanSentCount++;
-  if(!it.dismissed){const u=uploadState(it,false);if(u.done)done++;if(u.queued)queued++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
+  if(!it.dismissed){const u=uploadState(it,false);if(u.done)done++;if(u.queued&&!u.metadataOnly)queued++;if(u.metadataOnly)metadata++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
  }
- const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
+ const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${metadata?` · ${metadata} metadata only`:''}${kept?` · ${kept} kept on ship`:''}`;
  $('hsImgs').textContent=total;$('rvSentN').textContent=humanSentCount;$('hsP1').textContent=p1;$('hsCdr').textContent=cdr;
  $('rvCount').textContent=unrev||'';if(state.page==='rv')rvProgress();
  if(LIVE){renderLiveStrip();if(state.page==='details')renderDetails();return}
@@ -673,6 +707,13 @@ function renderSimLink(){
  const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
  el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'');
 }
+function metaOnlyChip(data,bps){if(!data?.metaOnly)return'';const reason=data.metaOnlyReason==='emcon'?'EMCON burst':`link ${Math.round((bps||data.linkBps||0)/1000)} kbps`;return`<span class="meta-only-chip" title="Link below 8 kbps for 2 min — only metadata is sent; images resume after 2 min above 16 kbps">Metadata only · ${reason}</span>`}
+function renderMetadataMode(){
+ let root=document.querySelector('header .metadata-mode');
+ if(!root){const anchor=document.querySelector('header .hstats');if(!anchor)return;anchor.insertAdjacentHTML('beforebegin','<span class="metadata-mode"></span>');root=document.querySelector('header .metadata-mode')}
+ const data=LIVE?LIVE.edge:stats,rate=LIVE?(LIVE.link?.controllable?LIVE.link.bps:LIVE.edge?.estimateBps||LIVE.shore?.estimateBps):stats.linkBps;
+ root.innerHTML=metaOnlyChip(data,rate);root.hidden=!data?.metaOnly;
+}
 const pulling=new Set();
 function renderCameras(){
  const el=$('cameras');if(!el)return;const cams=LIVE?.cameras||[];el.hidden=!LIVE||!cams.length;if(el.hidden){el.innerHTML='';return}
@@ -717,6 +758,76 @@ function renderZoomContent(){const it=findItem(state.sel);if(!it){closeZoom();re
  z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
 function closeDetail(){closeZoom();selectFeedItem(null);document.body.classList.remove('drawer-open')}
 function step(dir){const l=feedOrdered;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
+function metadataHTML(record){
+ if(!record||!Object.keys(record).length)return'<p class="hint">Metadata unavailable.</p>';
+ const c=record.capture||{},m=record.model||{},s=record.scoring||{},o=record.operator||{},t=record.transfer||{};
+ const synthetic=[...(record.synthetic||[]),...(c.synthetic||[])];
+ const marked=keys=>keys.some(key=>synthetic.some(k=>k===key||k===key.split('.').pop()));
+ const row=(label,value,keys=[],title='')=>value===undefined||value===null||value===''?'':`<tr><th>${esc(label)}</th><td${title?` title="${esc(title)}"`:''}>${esc(value)}${marked(keys)?'<sup class="synthetic-marker" title="Synthetic value">sim</sup>':''}</td></tr>`;
+ const group=(name,rows)=>rows?`<section class="metadata-group"><h5>${name}</h5><table>${rows}</table></section>`:'';
+ const number=(v,d=2)=>typeof v==='number'&&Number.isFinite(v)?v.toFixed(d):'';
+ const name=v=>String(v||'').replace(/_/g,' ').replace(/^\w/,x=>x.toUpperCase());
+ const sensor={...(SRC[c.source]||{}),...(c.sensor||{})};
+ const position=c.lat!==undefined&&c.lon!==undefined?`${number(c.lat,4)}, ${number(c.lon,4)}${c.headingDeg!==undefined?` · ${number(c.headingDeg,0)}°`:''}`:'';
+ const hash=c.contentHash||'';
+ const image=[c.imageSize>0?`${number(c.imageSize/(1024*1024))} MB`:'',c.widthPx>0&&c.heightPx>0?`${c.widthPx} × ${c.heightPx}`:''].filter(Boolean).join(' · ');
+ const capture=row('Time (UTC Z)',c.time)+row('Sensor',[sensor.name||c.source,sensor.hardware||sensor.hw,sensor.emcon].filter(Boolean).join(' · '))+row('Position',position,['capture.lat','capture.lon','capture.headingDeg'])+row('Altitude',c.altM?`${number(c.altM,0)} m`:'',['capture.altM'])+row('Frame / record',[c.frame?`Frame ${c.frame}`:'',c.record?`#${c.record}`:''].filter(Boolean).join(' / '))+row('Content hash',hash.length>24?hash.slice(0,24)+'…':hash,['capture.contentHash'],hash)+row('Image size',image,['capture.widthPx','capture.heightPx'])+row('Field of view',c.fovDeg?`${number(c.fovDeg,0)}°`:'',['capture.fovDeg']);
+ const dets=m.detections||[];
+ const detections=dets.map((d,n)=>{const b=d.box||{},box=['x','y','w','h'].every(k=>typeof b[k]==='number')?` · box ${['x','y','w','h'].map(k=>Math.round(b[k])).join(',')}`:'';return row(`Detection ${n+1}`,`${clsOf(d.class).lab} · conf ${number(d.confidence)}${box}`)}).join('');
+ const ships=dets.map(d=>d.shipClass).filter(Boolean);
+ const shipText=ships.map(ship=>[ship.label||name(ship.type),ship.aspect,ship.size,ship.markings?`markings ${ship.markings}`:'',(ship.features||[]).join(', '),ship.model].filter(Boolean).join(' · ')).join('; ');
+ const behavior=[...new Set(dets.flatMap(d=>Object.entries(d.attrs||{}).filter(([,v])=>v===true).map(([key])=>ATTR_LAB[key]||name(key))))].join(' · ');
+ const lights=dets.map(d=>d.signal?[d.signal.line||d.signal.meaning,d.signal.ref,d.signal.aspect].filter(Boolean).join(' · '):(d.lights||[]).map(light=>`${name(light.colour)}${light.flashing?' flashing':''} · conf ${number(light.conf)}`).join(', ')).filter(Boolean).join('; ');
+ const model=row('Model',m.name||m.id)+detections+row('Subtype (zero-shot)',m.subtype?`${name(m.subtype)}${m.subtypeConf?` · ${number(m.subtypeConf)}`:''}`:'',['model.subtype','model.subtypeConf'])+row('Ship class',shipText)+row('Behavior',behavior||'None')+row('Night lights / COLREGS',lights||'None')+row('Unknownness',number(m.unknownness),['model.unknownness'])+row('Tracked object',m.trackId?`${m.trackId}${m.trackFrames?` · ${m.trackFrames} frames`:''}`:'',['model.trackId','model.trackFrames']);
+ const scoring=row('Ship score',number(s.edge,3))+row('Shore score',number(s.central,3))+row('Tier',s.tier?`P${s.tier} · ${TNAME[s.tier]||''}`:'')+row('Top reasons',(s.topReasons||[]).map(v=>ATTR_LAB[v]||clsOf(v).lab||name(v)).join(' · ')||'None')+row('Filter',s.filtered?`${name(s.filtered)}${s.dupOf?` · repeat of ${s.dupOf}`:''}`:'None');
+ const operator=row('Label override',o.labelOverride?name(o.labelOverride):'None')+row('Manual tier',o.manualTier?`P${o.manualTier} · ${TNAME[o.manualTier]||''}`:'None (model priority)')+row('Reviewed',o.humanReviewed?'Human reviewed':o.reviewed?'Reviewed':'Not reviewed')+row('Commander decision',o.decision?name(o.decision):'Pending');
+ const transfer=(label,value)=>{if(!value)return'';const done=value.done||value.state==='received',bytes=value.bytes||0,sent=value.sent??value.received??0;return row(label,[done?'on shore':value.state||'queued',bytes?fmtBytes(bytes):'',done&&value.doneAt?String(value.doneAt).replace(/^.*T/,'').replace(/\.\d+Z$/,'Z'):!done&&bytes?`${Math.round(100*sent/bytes)}%`:''].filter(Boolean).join(' · '))};
+ return group('Capture',capture)+group('Model classification',model)+group('Scoring',scoring)+group('Operator',operator)+group('Transfer',transfer('Metadata',t.metadata)+transfer('Image',t.image));
+}
+function refreshMetadataEMCON(mode){
+ if(!mode||mode===metadataEMCON)return;
+ metadataEMCON=mode;
+ for(const [id,cached] of metadataCache)metadataCache.set(id,{data:cached.data,stale:true});
+ const it=findItem(state.sel);if(it)loadMetadata(it,$('metadataPanel'));
+}
+function metadataVersion(it){
+ const version={};
+ for(const key of ['src','ts','frame','dbId','capture','dets','det','edge','central','tier','manual','reviewed','humanReviewed','decision','filtered','dupOf'])version[key]=it[key];
+ if(it.live){
+  const {itemId,subtype,label,override,unknownness,imageForm}=it.live;
+  const forms=Object.fromEntries(Object.entries(it.live.forms||{}).map(([key,{state,bytes}])=>[key,{state,bytes}]));
+  version.live={itemId,subtype,label,override,unknownness,imageForm,forms};
+ }else{
+  version.kb=it.kb;
+  const {metadataBytes,metadataDone,metadataDoneAt,bytes,done}=it.upload||{};
+  version.upload={metadataBytes,metadataDone,metadataDoneAt,bytes,done};
+ }
+ return JSON.stringify(version);
+}
+function invalidateMetadata(it,previous){
+ const cached=metadataCache.get(it.id);
+ if(cached&&(!previous||metadataVersion(it)!==metadataVersion(previous)))metadataCache.set(it.id,{data:cached.data,stale:true});
+}
+async function loadMetadata(it,panel){
+ if(!panel||!panel.open)return;
+ const cached=metadataCache.get(it.id);
+ if(cached?.data){const body=panel.querySelector('.metadata-content');if(body)body.innerHTML=metadataHTML(cached.data);if(!cached.stale)return}
+ if(cached?.loading)return;
+ const entry={data:cached?.data,loading:true};metadataCache.set(it.id,entry);
+ const body=panel.querySelector('.metadata-content');if(body&&!entry.data)body.innerHTML='<p class="hint">Loading metadata…</p>';
+ const currentPanel=()=>state.sel===it.id?$('metadataPanel'):panel.isConnected?panel:null;
+ try{const data=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);if(metadataCache.get(it.id)!==entry)return;metadataCache.set(it.id,{data});const current=currentPanel();if(current?.isConnected&&current.open){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=metadataHTML(data)}}catch(error){if(metadataCache.get(it.id)!==entry)return;if(entry.data)metadataCache.set(it.id,{data:entry.data,stale:true});else metadataCache.delete(it.id);const current=currentPanel();if(current?.isConnected){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=`${entry.data?metadataHTML(entry.data):''}<p class="hint">${esc(error.message)}</p>`}}
+}
+function metadataPanelHTML(it){
+ const cached=metadataCache.get(it.id),size=cached?.data?.transfer?.metadata?.bytes||it.upload?.metadataBytes||it.live?.forms?.fact?.bytes||1024;
+ return`<details class="metadata-panel" id="metadataPanel" ${metadataExpanded?'open':''}><summary data-meta-summary><span class="metadata-caret">${metadataExpanded?'▾':'▸'}</span> Metadata · ${fmtBytes(size)}</summary><div class="metadata-content">${cached?.data?metadataHTML(cached.data):'<p class="hint">Open to load metadata.</p>'}</div><button type="button" class="btn sm metadata-copy" id="metadataCopy">Copy JSON</button></details>`;
+}
+function bindMetadataPanel(it){
+ const panel=$('metadataPanel');if(!panel)return;
+ panel.addEventListener?.('toggle',()=>{if(!panel.isConnected)return;metadataExpanded=panel.open;const caret=panel.querySelector('.metadata-caret');if(caret)caret.textContent=panel.open?'▾':'▸';if(panel.open)loadMetadata(it,panel)});
+ $('metadataCopy')?.addEventListener?.('click',async e=>{e.stopPropagation();const data=metadataCache.get(it.id)?.data;if(!data)return;try{await navigator.clipboard.writeText(JSON.stringify(data,null,2));toast('Metadata JSON copied')}catch{toast('Could not copy metadata JSON')}});
+ if(panel.open)loadMetadata(it,panel);
+}
 function buildWhy(it,rows){
  const why=[...liveWhy(it),...gsLights.why(it)];const top=rows[0];
  rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
@@ -766,8 +877,8 @@ function renderDetailContent(){
  const it=findItem(state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';closeDetail();return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
-	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
+	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;bindMetadataPanel(it);return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
  const why=buildWhy(it,rows);
@@ -792,10 +903,11 @@ function renderDetailContent(){
   </ul></div>`}
   ${DATASET_MODE?'':uploadControlsHTML(it)}
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
+  ${metadataPanelHTML(it)}
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
- briefing.renderDetections(it);
+ bindMetadataPanel(it);briefing.renderDetections(it);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
  for(const [id,override] of [['aUploadNext','next'],['aUploadHold','hold']]){const b=$(id);if(b)b.onclick=async()=>{if(it.live||LIVE||uploadState(it).done)return;try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:it.upload?.override===override?'':override});cdr=result.cdr;applyItemUpdate(result.item)}catch(error){toast(error.message)}}}

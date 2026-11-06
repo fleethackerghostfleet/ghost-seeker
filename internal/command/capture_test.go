@@ -1,11 +1,8 @@
 package command
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"fmt"
-	"image"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,8 +11,15 @@ import (
 	"testing"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
-	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
+
+func TestCaptureUsesDatasetHash(t *testing.T) {
+	it := Item{ID: "dataset", Img: "/api/dataset/images/frame.jpg", SHA256: fmt.Sprintf("%064x", 42)}
+	EnsureCapture(&it)
+	if it.Capture.ContentHash != it.SHA256 || slices.Contains(it.Capture.Synthetic, "contentHash") {
+		t.Fatalf("dataset hash not preserved: %+v", it.Capture)
+	}
+}
 
 func TestCaptureDeterministic(t *testing.T) {
 	for _, image := range []string{"", "missing.jpg", "eo-p7-01.jpg"} {
@@ -83,21 +87,5 @@ func TestCaptureSeedSeparatesTracks(t *testing.T) {
 	}
 	if a.Capture.ContentHash != b.Capture.ContentHash {
 		t.Fatal("real content hash changed with capture seed")
-	}
-}
-
-func TestEmbeddedImageMetadata(t *testing.T) {
-	t.Chdir(t.TempDir())
-	data, err := fs.ReadFile(web.Imagery(), "eo-p7-02.jpg")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := imageMetadata("eo-p7-02.jpg")
-	if got.hash != fmt.Sprintf("%x", sha256.Sum256(data)) || got.w != cfg.Width || got.h != cfg.Height {
-		t.Fatalf("incorrect embedded metadata: %+v", got)
 	}
 }

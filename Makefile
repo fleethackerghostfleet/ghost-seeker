@@ -6,7 +6,7 @@ BIN := bin
 
 all: build
 
-.PHONY: verify
+.PHONY: verify prod-gate build-prod
 verify:         ## all CI checks locally; fails on missing tools or dirty source
 	$(VERIFY_PYTHON) tools/verify.py
 
@@ -29,6 +29,13 @@ build:
 
 test:
 	$(GO) vet ./... && $(GO) test ./...
+
+build-prod:     ## production binaries (-tags prod: demo features compiled out)
+	mkdir -p $(BIN)/prod
+	CGO_ENABLED=0 $(GO) build -tags prod -trimpath -ldflags="-s -w" -o $(BIN)/prod/ ./cmd/...
+
+prod-gate:      ## production contract (AGENTS.md); must pass before any PR to prod
+	GO=$(GO) ./scripts/prod-gate.sh
 
 sim: build      ## FIFO vs prioritized on a contested SATCOM trace, 90 simulated minutes
 	$(BIN)/sim -trace satcom_contested -duration 90m -out sim-results.json

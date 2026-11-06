@@ -3,7 +3,7 @@
 services:
   ghost-seeker-piv:
     profiles: ["piv"]
-    build: { context: ../.., dockerfile: deploy/Dockerfile, target: operator }
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: operator, args: { GO_TAGS: "" } }
     image: ghost-seeker/operator:0.1.0
     command: ["-addr", ":8443", "-shore", "http://shore:8080", "-edge", "http://edge:8081", "-link-listen", ""]
     environment:
@@ -28,7 +28,7 @@ services:
     depends_on: [shore]
 
   shore:
-    build: { context: ../.., dockerfile: deploy/Dockerfile, target: shore }
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: shore, args: { GO_TAGS: "" } }
     image: ghost-seeker/shore:0.1.0
     entrypoint: ["/usr/local/bin/shore"]
     command: ["-data", "/data/shore", "-listen", ":8080", "-ui", "/ui"]
@@ -52,7 +52,7 @@ services:
     depends_on: [shore]
 
   edge:
-    build: { context: ../.., dockerfile: deploy/Dockerfile, target: edge }
+    build: { context: ../.., dockerfile: deploy/Dockerfile, target: edge, args: { GO_TAGS: "" } }
     image: ghost-seeker/edge:0.1.0
     command: ["-data", "/data/edge", "-listen", ":8081", "-shore", "http://link:18080", "-frames", "/frames", "-period", "2s", "-ui", "/ui"]
     environment:

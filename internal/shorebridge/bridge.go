@@ -29,6 +29,7 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	edgefact "github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
@@ -69,14 +70,16 @@ type Bridge struct {
 	// nil keeps the simple Interpret path.
 	Compiler *command.Compiler
 
-	mu         sync.Mutex
-	snap       []byte
-	lastGood   *Snapshot
-	lastPolicy *pb.Policy
-	subs       map[chan []byte]struct{}
-	records    map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
-	operator   string
-	edgeNodeID string
+	mu           sync.Mutex
+	snap         []byte
+	subs         map[chan []byte]struct{}
+	records      map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
+	facts        map[string]*edgefact.Fact
+	factVersions map[string]string
+	operator     string
+	edgeNodeID   string
+	lastGood     *Snapshot
+	lastPolicy   *pb.Policy
 
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
 	nextExpiry time.Time                   // earliest timed rule/EMCON/policy deadline seen by the poller
@@ -85,14 +88,16 @@ type Bridge struct {
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	return &Bridge{
-		shore:    strings.TrimRight(shoreURL, "/"),
-		edge:     strings.TrimRight(edgeURL, "/"),
-		link:     link,
-		client:   &http.Client{Timeout: 10 * time.Second},
-		subs:     map[chan []byte]struct{}{},
-		records:  map[string]contactReport{},
-		poke:     make(chan struct{}, 1),
-		operator: DefaultOperator,
+		shore:        strings.TrimRight(shoreURL, "/"),
+		edge:         strings.TrimRight(edgeURL, "/"),
+		link:         link,
+		client:       &http.Client{Timeout: 10 * time.Second},
+		subs:         map[chan []byte]struct{}{},
+		records:      map[string]contactReport{},
+		facts:        map[string]*edgefact.Fact{},
+		factVersions: map[string]string{},
+		poke:         make(chan struct{}, 1),
+		operator:     DefaultOperator,
 	}
 }
 
@@ -183,22 +188,25 @@ type Object struct {
 }
 
 type NodeStatus struct {
-	OK          bool    `json:"ok"`
-	ItemsTotal  int64   `json:"itemsTotal"`
-	Deduped     int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
-	Prioritizer string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
-	Evicted     int64   `json:"itemsEvicted"`
-	ItemsUnique int64   `json:"itemsComplete"`
-	Unknown     int64   `json:"itemsUnknown"`
-	Bytes       int64   `json:"bytes"`
-	Queued      int64   `json:"queuedItems"`
-	QueuedBytes int64   `json:"queuedBytes"`
-	LinkUp      bool    `json:"linkUp"`
-	Failures    int64   `json:"consecutiveFailures"`
-	EstimateBps float64 `json:"estimateBps"`
-	PolicyID    string  `json:"policyId"`
-	LastSeenMs  int64   `json:"lastSeenMs"`
-	Error       string  `json:"error,omitempty"`
+	OK             bool    `json:"ok"`
+	ItemsTotal     int64   `json:"itemsTotal"`
+	Deduped        int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
+	Prioritizer    string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
+	Evicted        int64   `json:"itemsEvicted"`
+	ItemsUnique    int64   `json:"itemsComplete"`
+	Unknown        int64   `json:"itemsUnknown"`
+	Bytes          int64   `json:"bytes"`
+	Queued         int64   `json:"queuedItems"`
+	QueuedBytes    int64   `json:"queuedBytes"`
+	LinkUp         bool    `json:"linkUp"`
+	Failures       int64   `json:"consecutiveFailures"`
+	EstimateBps    float64 `json:"estimateBps"`
+	PolicyID       string  `json:"policyId"`
+	LastSeenMs     int64   `json:"lastSeenMs"`
+	MetaOnly       bool    `json:"metaOnly"`
+	MetaOnlySince  int64   `json:"metaOnlySince,omitempty"`
+	MetaOnlyReason string  `json:"metaOnlyReason,omitempty"`
+	Error          string  `json:"error,omitempty"`
 }
 
 type Snapshot struct {
@@ -465,6 +473,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 		}
 		b.mu.Unlock()
 	} else {
+		b.updateFactVersions(items)
 		snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
 		for _, o := range snap.Objects {
 			o.detectionMin = currentPolicy.GetThresholds().GetDetectionMinConf()
@@ -575,6 +584,81 @@ func (b *Bridge) fetchRecord(ctx context.Context, id string) contactReport {
 	return rep
 }
 
+func (b *Bridge) updateFactVersions(items []*pb.ItemView) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, v := range items {
+		for _, form := range v.GetItem().GetForms() {
+			if form.GetKind() != pb.FormKind_FORM_KIND_FACT {
+				continue
+			}
+			complete := false
+			for _, state := range v.GetFormStates() {
+				if state.GetKind() == pb.FormKind_FORM_KIND_FACT {
+					complete = state.GetComplete()
+				}
+			}
+			id := v.GetItem().GetId()
+			version := fmt.Sprintf("%s:%d:%t", form.GetContentHash(), form.GetBytes(), complete)
+			if b.factVersions[id] != version {
+				delete(b.facts, id)
+				b.factVersions[id] = version
+			}
+		}
+	}
+}
+
+func (b *Bridge) fetchFact(ctx context.Context, id string) *edgefact.Fact {
+	b.mu.Lock()
+	if f, ok := b.facts[id]; ok {
+		b.mu.Unlock()
+		return f
+	}
+	version := b.factVersions[id]
+	b.mu.Unlock()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.shore+"/blob/"+id+"/fact", nil)
+	if err != nil {
+		return nil
+	}
+	b.authorize(req)
+	res, err := b.client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return nil
+	}
+	var f edgefact.Fact
+	if json.Unmarshal(raw, &f) != nil || f.ID == "" {
+		var env struct {
+			Fact json.RawMessage `json:"fact"`
+			Data json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal(raw, &env) != nil {
+			return nil
+		}
+		for _, part := range [][]byte{env.Fact, env.Data} {
+			if len(part) > 0 && json.Unmarshal(part, &f) == nil && f.ID != "" {
+				break
+			}
+		}
+	}
+	if f.ID == "" {
+		return nil
+	}
+	b.mu.Lock()
+	if b.factVersions[id] == version {
+		b.facts[id] = &f
+	}
+	b.mu.Unlock()
+	return &f
+}
+
 func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 	n := NodeStatus{
 		OK:          true,
@@ -592,6 +676,7 @@ func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 		EstimateBps: st.GetLink().GetEstimateBps(),
 		PolicyID:    st.GetPolicyId(),
 		LastSeenMs:  st.GetLink().GetLastSuccessUnixMs(),
+		MetaOnly:    st.GetMetaOnly(), MetaOnlySince: st.GetMetaOnlySinceUnixMs(), MetaOnlyReason: st.GetMetaOnlyReason(),
 	}
 	if n.EstimateBps == 0 {
 		n.EstimateBps = float64(st.GetHeartbeat().GetLinkEstimateBps())
@@ -955,9 +1040,7 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
-	if b.linkOverride {
-		mux.HandleFunc("POST /api/shore/link", b.setLink)
-	}
+	b.registerDemoRoutes(mux)
 	if u, err := url.Parse(b.shore); err == nil {
 		rp := httputil.NewSingleHostReverseProxy(u)
 		director := rp.Director
@@ -982,39 +1065,11 @@ func (b *Bridge) Handler() http.Handler {
 			w.Header().Del("X-Content-Type-Options")
 			rp.ServeHTTP(w, r)
 		}))
+		// The live operator app's token/PIV session protects this read-only
+		// proxy. It exposes shore's durable contract, never the UI overlay.
+		mux.Handle("GET /api/v1/", rp)
 	}
 	return mux
-}
-
-// WithLinkOverride lets a presenter pin the demo link rate (POST /api/shore/link).
-func (b *Bridge) WithLinkOverride(on bool) *Bridge {
-	b.linkOverride = on
-	return b
-}
-
-// setLink pins the demo link rate ({"bps": N}) or restores the automatic
-// distribution ({"auto": true}), so a presenter can make a backlog build.
-func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
-	s, ok := b.link.(LinkSetter)
-	if !ok {
-		http.Error(w, "link is not controlled by this process", http.StatusConflict)
-		return
-	}
-	var in struct {
-		Bps  *int64 `json:"bps"`
-		Auto bool   `json:"auto"`
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
-	if err := decodeJSONBody(r.Body, &in); err != nil || (!in.Auto && (in.Bps == nil || *in.Bps < 0)) {
-		http.Error(w, `body must be {"bps": N>=0} or {"auto": true}`, http.StatusBadRequest)
-		return
-	}
-	if in.Auto {
-		s.SetAuto()
-	} else {
-		s.SetFixed(*in.Bps)
-	}
-	writeJSON(w, b.linkStatus())
 }
 
 func (b *Bridge) linkStatus() LinkStatus {

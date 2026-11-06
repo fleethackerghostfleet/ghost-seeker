@@ -33,12 +33,12 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 )
 
 // Capture is one thing a source produced.
 type Capture struct {
+	complete   func(*store.Row, error, bool)
 	SceneEvery *time.Duration
 	Type       pb.ItemType
 	Data       []byte // image bytes, record JSON, telemetry blob
@@ -187,7 +187,12 @@ func (g *Ingester) Run(ctx context.Context, src Source) error {
 		if done {
 			return nil
 		}
-		if _, err := g.Ingest(ctx, c); err != nil {
+		dups := g.Deduped()
+		row, err := g.Ingest(ctx, c)
+		if c.complete != nil {
+			c.complete(row, err, g.Deduped() > dups)
+		}
+		if err != nil {
 			g.log.Warn("ingest", "err", err)
 		} else if !seenSources[c.Source] {
 			seenSources[c.Source] = true
@@ -328,7 +333,7 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 	default:
 		payloads[pb.FormKind_FORM_KIND_FULL] = c.Data
 	}
-	payloads[pb.FormKind_FORM_KIND_FACT] = fact.FromItem(it).Marshal()
+	payloads[pb.FormKind_FORM_KIND_FACT] = g.sch.BuildFact(it, 0).Marshal()
 	if c.Type == pb.ItemType_ITEM_TYPE_RECORD || c.Type == pb.ItemType_ITEM_TYPE_DIGEST {
 		// For records the payload is small and is the fact.
 		payloads[pb.FormKind_FORM_KIND_FACT] = c.Data
