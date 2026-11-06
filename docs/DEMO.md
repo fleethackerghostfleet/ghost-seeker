@@ -150,9 +150,9 @@ The headless `make demo` comparison fetches only the eval clips (no bucket frame
 discovery/sync) and keeps the committed three-clip scenario and its GT data.
 
 The visual simulator and live shaper use the demo's automatic normal rate model.
-`-sim-link-bps=N` pins simulated uploads; legacy `-link-bps=N` still pins the live
+`-sim-link-bps=N` sets a nominal simulated upload rate (varies within ±15%, resampled every 5 s); legacy `-link-bps=N` still pins the live
 shaper and aliases the simulator override when `-sim-link-bps` is not set to a
-fixed rate. Zero represents an outage; `-1` selects the automatic model.
+nominal rate. Zero represents an outage; `-1` selects the automatic model.
 
 Optional environment controls (apply when running `make demo-clips`):
 - `INCLUDE_BUCKET_FRAMES=0`: eval clips only.

@@ -705,7 +705,7 @@ function linkPanelHTML(bps,note,measuring){
 }
 function renderSimLink(){
  const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
- el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'');
+ el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,'');
 }
 function metaOnlyChip(data,bps){if(!data?.metaOnly)return'';const reason=data.metaOnlyReason==='emcon'?'EMCON burst':`link ${Math.round((bps||data.linkBps||0)/1000)} kbps`;return`<span class="meta-only-chip" title="Link below 8 kbps for 2 min — only metadata is sent; images resume after 2 min above 16 kbps">Metadata only · ${reason}</span>`}
 function renderMetadataMode(){

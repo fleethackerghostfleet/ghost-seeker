@@ -3,6 +3,7 @@
 package main
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -35,7 +36,12 @@ func TestSimulationUplinkUsesCurrentBandwidthAndOutages(t *testing.T) {
 func TestSimulationUplinkFixedOverride(t *testing.T) {
 	for _, rate := range []int64{0, 8000} {
 		data := store.New(1)
-		u := newSimulationUplink(data, rate, func() float64 { t.Fatal("fixed override sampled bandwidth"); return 0 })
+		u := newSimulationUplink(data, rate, func() float64 {
+			if rate == 0 {
+				t.Fatal("outage sampled bandwidth")
+			}
+			return 0
+		})
 		data.Add(&command.Item{ID: "image", KB: 100}, 0)
 		u.advance(10 * time.Second)
 		it, _ := data.GetItem("image")
@@ -44,6 +50,46 @@ func TestSimulationUplinkFixedOverride(t *testing.T) {
 		}
 		if _, stats, _, _ := data.Snapshot(); !stats.LinkFixed || stats.LinkBPS != rate {
 			t.Fatalf("fixed rate %d: stats %+v", rate, stats)
+		}
+	}
+}
+
+func TestSimulationUplinkNominalRateWanders(t *testing.T) {
+	const nominal int64 = 1_000_000
+	data := store.New(1)
+	rng := rand.New(rand.NewSource(42))
+	u := newSimulationUplink(data, nominal, rng.NormFloat64)
+	var total int64
+	low, high := nominal, nominal
+	for range 10000 {
+		before, _ := data.Stats()
+		u.advance(4 * time.Second)
+		unchanged, _ := data.Stats()
+		if unchanged.LinkBPS != before.LinkBPS {
+			t.Fatal("rate changed before resample interval")
+		}
+		u.advance(time.Second)
+		stats, _ := data.Stats()
+		if stats.LinkBPS < nominal*85/100 || stats.LinkBPS > nominal*115/100 || !stats.LinkFixed {
+			t.Fatalf("nominal rate out of bounds: %+v", stats)
+		}
+		low, high = min(low, stats.LinkBPS), max(high, stats.LinkBPS)
+		total += stats.LinkBPS
+	}
+	mean := total / 10000
+	if low >= nominal || high <= nominal || mean < nominal*98/100 || mean > nominal*102/100 {
+		t.Fatalf("rate did not wander around nominal: min=%d max=%d mean=%d", low, high, mean)
+	}
+	for _, z := range []float64{-100, 100} {
+		u.sample = func() float64 { return z }
+		u.advance(5 * time.Second)
+		stats, _ := data.Stats()
+		want := nominal * 85 / 100
+		if z > 0 {
+			want = nominal * 115 / 100
+		}
+		if stats.LinkBPS != want {
+			t.Fatalf("extreme sample %v: got %d, want %d", z, stats.LinkBPS, want)
 		}
 	}
 }

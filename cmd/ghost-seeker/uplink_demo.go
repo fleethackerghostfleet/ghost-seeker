@@ -15,13 +15,24 @@ type simulationUplink struct {
 	distribution *shaper.NormalDistribution
 	sample       func() float64
 	untilSample  time.Duration
+	fixedBPS     int64
 }
 
 func newSimulationUplink(data *store.Store, fixedBPS int64, sample func() float64) *simulationUplink {
-	u := &simulationUplink{data: data, sample: sample}
+	u := &simulationUplink{data: data, sample: sample, fixedBPS: fixedBPS}
 	if fixedBPS >= 0 {
 		data.SetLinkBPS(fixedBPS)
 		data.SetLinkFixed(true)
+		if fixedBPS == 0 {
+			return u
+		}
+		u.distribution = &shaper.NormalDistribution{
+			MinBps:  fixedBPS - fixedBPS*15/100,
+			MaxBps:  fixedBPS + fixedBPS*15/100,
+			MeanBps: float64(fixedBPS), StdDevBps: float64(fixedBPS) * .05,
+			IntervalMS: 5000,
+		}
+		u.untilSample = time.Duration(u.distribution.IntervalMS) * time.Millisecond
 		return u
 	}
 	u.distribution = shaper.NewNormal("").Distribution()
@@ -41,6 +52,10 @@ func (u *simulationUplink) advance(elapsed time.Duration) []command.Item {
 		elapsed -= step
 		u.untilSample -= step
 		if u.untilSample == 0 {
+			if u.fixedBPS > 0 {
+				stats, _ := u.data.Stats()
+				u.distribution.MeanBps = float64(u.fixedBPS) + .8*(float64(stats.LinkBPS)-float64(u.fixedBPS))
+			}
 			updates = append(updates, u.data.SetLinkBPS(u.distribution.Rate(u.sample()))...)
 			u.untilSample = time.Duration(u.distribution.IntervalMS) * time.Millisecond
 		}
