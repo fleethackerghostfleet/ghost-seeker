@@ -55,6 +55,23 @@ def test_crop_relabel_and_non_candidates():
     assert embedder.calls == [1]
 
 
+def test_verifier_consumes_live_tiled_results_and_scans_without_usable_detections():
+    from edgeml.detectors.live_tiled import LiveTiledDetector
+
+    base = SimpleNamespace(name='fake', detect=lambda image: [Detection([0, 30, 20, 20], .8, 'person')])
+    tiled = LiveTiledDetector(base, horizon_fn=lambda image: 10)
+    assert tiled.detect(IMAGE)[0].label == 'person in water'
+    embedder = Embedder()
+    detector = MarineMammalFusionDetector(tiled, MarineMammalVerifier(embedder))
+    assert detector.detect(IMAGE)[0].label == 'marine mammal'
+    assert embedder.calls == [1]
+    base.detect = lambda image: [Detection([0, 0, 10, 10], .1, 'airplane')]
+    detector.frame = 0
+    result = detector.detect(IMAGE)
+    assert result[-1].label == 'marine mammal'
+    assert embedder.calls[-1] == 7
+
+
 @pytest.mark.parametrize('positive', [True, False])
 def test_open_water_and_stride(positive):
     detector, embedder = fusion(positive=positive, scan_stride=2)

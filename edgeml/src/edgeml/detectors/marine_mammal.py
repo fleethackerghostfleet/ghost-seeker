@@ -32,7 +32,7 @@ MODEL = 'mobileclip-s1'
 @dataclass
 class MarineMammalConfig:
     enabled: bool = True
-    candidate_labels: tuple = ('boat', 'bird', 'surfboard', 'kite', 'person', 'anomaly', 'unknown')
+    candidate_labels: tuple = ('boat', 'bird', 'surfboard', 'kite', 'person', 'person in water', 'anomaly', 'unknown')
     candidate_min: float = 0.05
     top_k: int = 4
     context: float = 0.2
