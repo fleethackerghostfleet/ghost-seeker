@@ -179,7 +179,7 @@ def test_live_eval_uses_engine_stack(monkeypatch, tmp_path, readable):
         return [MarineMammalDetection([0, 0, 10, 10], .97, 'marine mammal', subtype='whale')]
 
     detector.detect = detect
-    monkeypatch.setattr(service, 'EdgemlEngine', lambda *a, **kw: SimpleNamespace(detector=detector, score_thr=.35))
+    monkeypatch.setattr(service, 'EdgemlEngine', lambda *a, **kw: SimpleNamespace(detector=detector, score_thr=.35, open_vocab=None))
     monkeypatch.setattr(module.cv2, 'imread', lambda path: IMAGE if readable else None)
     source, output = tmp_path / 'input.jsonl', tmp_path / 'scores.jsonl'
     source.write_text(json.dumps(dict(path='frame.jpg', label=1, source='public:pos', subtype='dolphin')) + '\n')
@@ -213,7 +213,16 @@ def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
         update=lambda dets, image, frame, t: [Track(1, dets[0].box, dets[0].score, dets[0].label, frame, t, extra={'det_ind': 0})]))
     monkeypatch.setattr(service, 'frame_report', lambda *a, **kw: None)
     engine = EdgemlEngine('fake', tmp_path, agg={'min_hits': 1})
-    response = engine.analyze('cam', IMAGE, 1000, [], False)
+
+    def open_detect(image, detections, labels):
+        assert labels == ['bird']
+        assert detections[0].label == 'marine mammal'
+        return [dict(label='bird', confidence=.91, box=dict(x=0., y=0., w=.5, h=.5))]
+
+    engine.open_vocab = SimpleNamespace(detect=open_detect)
+    response = engine.analyze('cam', IMAGE, 1000, ['open-vocab:bird'], False)
     assert response['detections'][0]['label'] == 'marine mammal'
     assert response['sightings'][0]['keyDetection']['label'] == 'marine mammal'
     assert response['sightings'][0]['subtype'] == 'dolphin'
+    assert response['detections'][-1]['label'] == 'bird'
+    assert response['detections'][-1]['confidence'] == .91

@@ -78,6 +78,7 @@ def main():
                 result = dict(detector.last_scores)
                 yolo_ms = total_ms - result['mm_ms']
                 result.update(total_ms=total_ms, tiles=detector.base.n_calls - 1,
+                              open_vocabulary_available=engine.open_vocab is not None, open_labels=[],
                               emitted=any(d.label == 'marine mammal' and d.score >= engine.score_thr for d in detections))
             else:
                 detections = detector.detect(image)

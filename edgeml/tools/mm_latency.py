@@ -41,7 +41,8 @@ def main():
             elapsed.append(1000 * (time.perf_counter() - start))
             counts.append(0 if mode == 'baseline' else fusion.last_scores['crops'])
         output[mode] = dict(n=len(elapsed), mean_ms=float(np.mean(elapsed)),
-                            p95_ms=float(np.percentile(elapsed, 95)), mean_crops=float(np.mean(counts)))
+                            p95_ms=float(np.percentile(elapsed, 95)), mean_crops=float(np.mean(counts)),
+                            open_vocabulary_available=engine.open_vocab is not None, open_labels=[])
     with open(args.out, 'w') as stream:
         json.dump(output, stream, indent=2)
     print(json.dumps(output, indent=2))

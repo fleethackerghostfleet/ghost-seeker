@@ -2,7 +2,8 @@
 
 ## 0. Scope and operating point
 
-CPU YOLO11n + the sidecar's `LiveTiledDetector` + MobileCLIP-S1 verifier. No
+Rebased onto `origin/dev` at `908cce2` (including PR #271), with the same frozen
+thresholds. CPU YOLO11n + the sidecar's `LiveTiledDetector` + MobileCLIP-S1 verifier. No
 training, new prompts, image relabeling, or test-driven threshold changes.
 The dev-only optimum under **v3-negative FP ≤ 10/1000** is:
 
@@ -92,6 +93,39 @@ to a local JSONL cache. Joint threshold sweeps use that cache, without rerunning
 models. Thresholds were written to `live_frozen.json` and code **before** opening
 the held-out inference run. Test inference is run once; cached threshold replay
 is checked against the actual emitted frame detections. No test tuning follows.
+The initial held-out run was once before PR #271; a second run was explicitly
+requested after rebasing. It uses the identical frozen thresholds, not a new
+calibration. Dev is also rerun as a fixed-threshold regression check.
+
+### PR #271 integration and open-vocabulary gating
+
+No service conflict occurred on rebase. `EdgemlEngine` wraps the final tiled
+detector in MM during construction. `analyze` calls that detector first and
+appends open-vocabulary results afterward, outside the MM detector and tracker.
+Thus MM cannot relabel an appended open-vocabulary result. An engine test checks
+this order using an appended `bird` result and an MM-labelled tracked result.
+
+Open-vocabulary inference is **request-driven**, not unconditional default image
+embedding: `labels_from_wire` requires `open-vocab:` prefixes, and `analyze`
+only calls `open_vocab.detect` when that list is nonempty. Default known labels
+are closed labels. A whale directive compiles to closed `marine mammal`, so
+`openvocab.Labels` does not add an open-vocabulary request either. This export
+directory has no `text_model.onnx` / `tokenizer.json`; default cache-only mode
+therefore also reports open-vocabulary unavailable. Rebased score caches record
+`open_labels=[]` and capability availability. No nondefault prompt or torch
+text fallback was injected into these default-path evaluations/latency tests.
+
+For active nondefault open-vocabulary requests, the full frame may be embedded
+again after MM; candidate crops have different padding and scan grids differ.
+There is no cross-stage image-feature reuse. Adding a bounded per-frame feature
+cache across the detector and service would be broader than this integration,
+so it is not done here. The new service text cache does not replace the bundled
+MM prompt JSON: MM initializes its prototypes once, before that cache exists.
+
+The Go scoring regression compiles `look for whales` in edge-subtype mode and
+checks boosts for `marine mammal`, `marine_mammal`, and `Marine Mammals` with a
+`dolphin` subtype. The new whole-word matcher retains normalized equality;
+`marine mammal` remains closed vocabulary. An unrelated boat is not boosted.
 
 ## 3. Frame results
 
@@ -161,10 +195,10 @@ which object or patch caused each hit.
 
 | mode (50 real dev frames) | mean ms/frame | p95 ms/frame | mean CLIP crops/frame |
 |---|---:|---:|---:|
-| YOLO live baseline, MM off | 85.60 | 146.61 | 0.00 |
-| +MM crop only | 160.63 | 277.61 | 1.82 |
-| +MM scan only | 259.23 | 419.14 | 4.06 |
-| +MM both | 344.77 | 580.11 | 5.72 |
+| YOLO live baseline, MM off | 81.78 | 145.16 | 0.00 |
+| +MM crop only | 161.97 | 311.57 | 1.82 |
+| +MM scan only | 348.28 | 564.57 | 4.06 |
+| +MM both | 436.62 | 611.42 | 5.72 |
 
 Measured serially on 50 evenly spaced **dev** rows, four ORT threads and four
 OpenCV threads, x86-64 Intel Xeon VM (8 exposed cores), ORT 1.23.2. Model loading
@@ -218,6 +252,26 @@ $PY edgeml/tools/mm_calibrate.py --dev "$DATA/live_dev_scores.jsonl" --frozen "$
 $PY edgeml/tools/mm_latency.py --input "$DATA/split_dev.jsonl" --out "$DATA/live_latency.json"
 ```
 
+The PR #271 rerun uses the existing frozen file, with **no calibration command**:
+
+```sh
+$PY edgeml/tools/mm_eval.py --live --input "$DATA/split_dev.jsonl" --out "$DATA/rebase271_dev_scores.jsonl"
+$PY edgeml/tools/mm_eval.py --live --input "$DATA/split_test.jsonl" --out "$DATA/rebase271_test_scores.jsonl"
+$PY edgeml/tools/mm_calibrate.py --dev "$DATA/rebase271_dev_scores.jsonl" --frozen "$DATA/live_frozen.json" --test "$DATA/rebase271_test_scores.jsonl" --out "$DATA/rebase271_metrics.json"
+$PY edgeml/tools/mm_latency.py --input "$DATA/split_dev.jsonl" --out "$DATA/rebase271_latency.json"
+```
+
+All 1274 rerun dev crop maxima, scan maxima and tile counts are identical to the
+initial cache; predictions at the frozen thresholds are unchanged. The initial
+dev cache's `emitted` field used the pre-calibration thresholds, so regression
+comparison replays its raw scores with the frozen thresholds rather than
+comparing that old field directly. All 1470 held-out crop maxima, scan maxima,
+tile counts and emitted predictions are also identical. Every frozen-threshold
+metric group, including subtype recall, is unchanged; the results tables above
+therefore remain the measured rebased values. The latency table is replaced by
+the rebased measurement; timing differences are shared-VM variation, not added
+open-vocabulary image work (the default request gate is empty in every mode).
+
 Exports: `~/models/D/yolo11n-640/model.onnx` SHA-256
 `cf094973e1f946b2e86883120ddc455a0e33bb07f89096ac1d8bac14ac9833b6`;
 `~/models/D/mobileclip-s1/model.onnx` SHA-256
@@ -236,11 +290,11 @@ were unaffected; subtype tables above use the supplied labels.
 
 ```text
 python -m pytest -q edgeml/tests:
-631 passed, 3 skipped in 6.87s
+640 passed, 3 skipped in 7.20s
 
 make test:
 exit 0 (go vet ./... && go test ./...)
-ok  github.com/fleethackerghostfleet/ghost-seeker/web  0.013s
+ok  github.com/fleethackerghostfleet/ghost-seeker/web  (cached)
 
 node --test web/*.test.cjs:
 # tests 387
@@ -251,9 +305,13 @@ make prod-gate:
 prod-gate: PASS
 ```
 
-Full logs: `~/data/whale_eval/{pytest_calibration,make_test,node_test}.txt` and
+Full rebased logs: `~/data/whale_eval/rebase271_{pytest,make_test,node_test}.txt` and
 `~/data/whale_eval/prod_gate.txt`. All four commands exited zero. Go 1.26.10
 and Node 22.16.0 were installed under `~/tools` because neither runtime was
 initially on this VM; their bin directories were added to the checks' PATH,
 with `GOTOOLCHAIN=local`. No build/CI configuration was changed. No UI surface
 changed and no visual verification was performed in this step.
+
+The rebased checks include the Go whale-directive regression in both normal and
+prod builds, and the Python engine ordering test with an appended open-vocabulary
+result. No changes to `service.py` were necessary on this rebase.
