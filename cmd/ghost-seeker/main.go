@@ -201,6 +201,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 	// overrides) and link status stay under /api/shore/ and blobs are proxied.
 	mux := http.NewServeMux()
 	mux.Handle("/api/shore/", bridge.Handler())
+	mux.Handle("/api/v1/", bridge.Handler())
 	mux.Handle("/blob/", bridge.Handler())
 	mux.Handle("/api/", console.Handler())
 	mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))

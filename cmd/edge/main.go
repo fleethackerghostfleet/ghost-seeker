@@ -8,7 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -29,6 +31,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
@@ -44,6 +47,13 @@ func main() {
 	prioritizer := flag.String("prioritizer", env("PRIORITIZER", "edgeml"), "edgeml (object-level: unknownness, labels, confidence) | tomer (algorithm/ghost_priority image-level score; sidecar must run --prioritizer tomer|both)")
 	dedup := flag.String("dedup", env("DEDUP", "hash"), "naive (item per frame) | hash (exact-duplicate frames fold) | sightings (one item per object; needs a sidecar that returns sightings)")
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
+	watchDir := flag.String("watch-dir", env("GS_WATCH_DIR", ""), "live image spool directory (writable; optional <image>.json sidecar)")
+	liveSource := flag.String("live-source", env("GS_LIVE_SOURCE", "camera-1"), "default camera id for spool/MJPEG")
+	liveBytes := flag.Int64("ingest-max-bytes", ingest.DefaultMaxFrameBytes, "maximum live frame request/file bytes")
+	liveQueue := flag.Int("ingest-queue", 4, "maximum live frames being read, queued or processed")
+	watchPoll := flag.Duration("watch-poll", 500*time.Millisecond, "spool poll/stability interval")
+	mjpegURL := flag.String("mjpeg-url", env("GS_MJPEG_URL", ""), "optional HTTP multipart MJPEG camera URL")
+	mjpegFPS := flag.Float64("mjpeg-fps", 2, "maximum MJPEG frames per second (0 < fps <= 60)")
 	tick := flag.Duration("tick", 3*time.Second, "scheduler tick")
 	initBps := flag.Float64("init-bps", 64000, "initial link estimate (bits/s)")
 	icfg := ingest.DefaultConfig()
@@ -67,6 +77,18 @@ func main() {
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
 	replay := registerReplayFlags()
 	flag.Parse()
+	if *liveBytes <= 0 || *liveQueue < 1 || *liveQueue > 256 || *watchPoll <= 0 || *mjpegFPS <= 0 || *mjpegFPS > 60 || math.IsNaN(*mjpegFPS) {
+		fatal(fmt.Errorf("invalid live ingest limits"))
+	}
+	if (*watchDir != "" || *mjpegURL != "") && !ids.ValidName(*liveSource) {
+		fatal(fmt.Errorf("invalid live source id"))
+	}
+	if *mjpegURL != "" {
+		u, err := url.Parse(*mjpegURL)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			fatal(fmt.Errorf("mjpeg-url must be HTTP(S)"))
+		}
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(log)
 	token, err := unitauth.Credential(*tokenFlag, *tokenFile)
@@ -120,11 +142,29 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() { _ = sch.Run(ctx) }()
+	queue := ingest.NewQueue(*liveQueue)
+	go func() { _ = ing.Run(ctx, queue) }()
+	if *watchDir != "" {
+		go func() {
+			if err := ingest.Watch(ctx, queue, *watchDir, ingest.Metadata{Source: *liveSource}, *liveBytes, *watchPoll); err != nil && ctx.Err() == nil {
+				log.Error("spool stopped", "err", err)
+			}
+		}()
+	}
+	if *mjpegURL != "" {
+		go func() {
+			if err := ingest.PullMJPEG(ctx, queue, *mjpegURL, ingest.Metadata{Source: *liveSource}, *liveBytes, *mjpegFPS); err != nil && ctx.Err() == nil {
+				log.Error("MJPEG stopped", "err", err)
+			}
+		}()
+	}
 
-	startReplay(ctx, replay, ing, clk, log)
+	startReplay(ctx, replay, ing, queue, clk, log)
 
 	svc := &console.Service{NodeID: *id, St: st, Sch: sch, Clk: clk, Deduped: ing.Deduped, Prioritizer: *prioritizer, Frames: ing.Frames}
 	mux := http.NewServeMux()
+	mux.Handle("/api/v1/ingest/frames", queue.Handler(operator, token, *liveBytes))
+	mux.Handle("GET /api/v1/health", opauth.RequireBearer(operator, http.HandlerFunc(queue.Health)))
 	path, h := ghostseekerv1connect.NewConsoleServiceHandler(svc, connect.WithReadMaxBytes(1<<20))
 	mux.Handle(path, opauth.RequireBearer(operator, h))
 	mux.Handle("/blob/", opauth.RequireBearer(operator, svc.BlobHandler()))

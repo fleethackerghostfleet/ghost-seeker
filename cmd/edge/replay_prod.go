@@ -13,7 +13,8 @@ import (
 )
 
 // Production builds have no built-in analyzer stand-in and no scenario/frame
-// replay: frames come from the live input stream and are scored by the
+// replay: frames come from the live inputs in main.go (POST
+// /api/v1/ingest/frames, -watch-dir, -mjpeg-url) and are scored by the
 // inference sidecar.
 
 const (
@@ -32,4 +33,5 @@ func newAnalyzer(url string) (inference.Analyzer, error) {
 	return inference.NewRemote(url), nil
 }
 
-func startReplay(context.Context, *replayFlags, *ingest.Ingester, clock.Clock, *slog.Logger) {}
+func startReplay(context.Context, *replayFlags, *ingest.Ingester, *ingest.Queue, clock.Clock, *slog.Logger) {
+}

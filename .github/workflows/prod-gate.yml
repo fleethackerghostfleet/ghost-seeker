@@ -23,7 +23,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: TestProdContract (prod build, must run)
+        run: |
+          go test -tags prod -count=1 -v -run '^TestProdContract' ./... | tee contract.log
+          grep -q -- '--- PASS: TestProdContract' contract.log
       - name: make prod-gate
-        env:
-          PROD_GATE_TARGET: ${{ github.base_ref }}
         run: make prod-gate

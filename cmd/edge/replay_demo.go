@@ -43,7 +43,7 @@ func newAnalyzer(url string) (inference.Analyzer, error) {
 	return inference.NewRemote(url), nil
 }
 
-func startReplay(ctx context.Context, r *replayFlags, ing *ingest.Ingester, clk clock.Clock, log *slog.Logger) {
+func startReplay(ctx context.Context, r *replayFlags, ing *ingest.Ingester, queue *ingest.Queue, clk clock.Clock, log *slog.Logger) {
 	var err error
 	if *r.scenario != "" || *r.frames != "" {
 		var sc *scenario.Scenario
@@ -67,10 +67,10 @@ func startReplay(ctx context.Context, r *replayFlags, ing *ingest.Ingester, clk 
 		}
 		log.Info("replaying", "frames", src.Len(), "period", *r.period)
 		go func() {
-			if err := ing.Run(ctx, src); err != nil && ctx.Err() == nil {
+			if err := ingest.Pump(ctx, queue, src, "replay"); err != nil && ctx.Err() == nil {
 				log.Error("replay", "err", err)
 			}
-			log.Info("replay finished", "items", ing.Count, "dups", ing.Dups)
+			log.Info("replay finished")
 		}()
 	}
 }

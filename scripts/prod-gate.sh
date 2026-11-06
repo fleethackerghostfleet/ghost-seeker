@@ -29,6 +29,14 @@ grep -E '^(--- (PASS|FAIL)|FAIL|ok ).*' "$out/contract.log" | grep -v 'no test f
 ran=$(grep -c '^--- PASS: TestProdContract' "$out/contract.log" || true)
 [ "$ran" -gt 0 ] || fail "no TestProdContract* tests ran"
 echo "$ran TestProdContract* tests passed"
+# Every contract package must still have passing TestProdContract* tests
+# (go test -v prints a package's test lines before its ok line).
+awk '/^--- PASS: TestProdContract/{n++} /^(ok|FAIL)[ \t]/{print $2, n+0; n=0}' "$out/contract.log" >"$out/contract.pkgs"
+mod=$("$GO" list -m)
+for pkg in shore/api cmd/ghost-seeker cmd/edge cmd/shore internal/server internal/opauth internal/catalog web; do
+  n=$(awk -v p="$mod/$pkg" '$1 == p {print $2}' "$out/contract.pkgs")
+  [ "${n:-0}" -gt 0 ] || fail "no passing TestProdContract* tests in $pkg"
+done
 
 step "prod binaries: no demo symbols"
 # Symbols that only demo wiring links in (go tool nm needs unstripped binaries).
@@ -69,6 +77,17 @@ for bin in "$out"/bin/*; do
   fi
 done
 
+step "prod binaries keep the live input and output API"
+edge_flags=$("$out/bin/edge" -h 2>&1 || true)
+for f in infer watch-dir live-source ingest-max-bytes ingest-queue watch-poll mjpeg-url mjpeg-fps operator-token-file; do
+  grep -qE "^  -$f( |$)" <<<"$edge_flags" || fail "edge lost live flag -$f"
+done
+grep -qE '^  -shore( |$)' <<<"$("$out/bin/ghost-seeker" -h 2>&1 || true)" || fail "ghost-seeker lost -shore"
+grep -aq '/api/v1/ingest/frames' "$out/bin/edge" || fail "edge lost POST /api/v1/ingest/frames"
+for route in 'GET /api/v1/items' 'GET /api/v1/items/{id}' 'GET /api/v1/items/{id}/image' 'GET /api/v1/stream' 'GET /api/v1/health'; do
+  grep -aqF "$route" "$out/bin/shore" || fail "shore lost $route"
+done
+
 step "ghost-seeker (prod) refuses to start without live mode"
 if msg=$("$out/bin/ghost-seeker" -addr 127.0.0.1:0 2>&1); then
   fail "ghost-seeker started without -shore"
@@ -90,10 +109,11 @@ fi
 
 step "output API contract"
 if [ -f docs/api/openapi.yaml ]; then
-  grep -q '/api/v1' docs/api/openapi.yaml || fail "docs/api/openapi.yaml does not document /api/v1"
+  for path in /api/v1/items /api/v1/stream /api/v1/ingest/frames; do
+    grep -qF "$path" docs/api/openapi.yaml || fail "docs/api/openapi.yaml does not document $path"
+  done
 else
-  echo "WARNING: docs/api/openapi.yaml not present yet; the /api/v1 output API must be documented there before any PR to prod"
-  [ "${PROD_GATE_TARGET:-}" != prod ] || fail "docs/api/openapi.yaml missing (required for PRs to prod)"
+  fail "docs/api/openapi.yaml missing: the /api/v1 output API must be documented"
 fi
 
 if [ "$failures" -gt 0 ]; then

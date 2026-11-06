@@ -97,6 +97,13 @@ variables.
 | `-scenario` | `SCENARIO` | empty | Demo builds only: scenario JSON to replay |
 | `-frames` | `FRAMES_DIR` | empty | Demo builds only: frame directory to replay |
 | `-period` | — | `5s` | Replay capture period |
+| `-watch-dir` | `GS_WATCH_DIR` | empty | Writable live image spool directory |
+| `-live-source` | `GS_LIVE_SOURCE` | `camera-1` | Default spool/MJPEG source ID |
+| `-ingest-max-bytes` | — | `33554432` | Maximum live request/file/frame bytes (32 MiB) |
+| `-ingest-queue` | — | `4` | Admission slots shared by push, spool, MJPEG and replay |
+| `-watch-poll` | — | `500ms` | Spool polling and stability interval |
+| `-mjpeg-url` | `GS_MJPEG_URL` | empty | HTTP(S) multipart MJPEG source |
+| `-mjpeg-fps` | — | `2` | Maximum accepted MJPEG frames per second (up to 60) |
 | `-tick` | — | `3s` | Scheduler tick |
 | `-init-bps` | — | `64000` | Initial link estimate in bits/s |
 
@@ -229,12 +236,188 @@ zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
 Edge can point across clusters to a separately routed sidecar if the network
 permits it.
 
-Production images have no scenario/frame replay (`-scenario`, `-frames`,
-`SCENARIO` and `FRAMES_DIR` exist only in demo builds); the edge captures from
-the live input stream. The packaged edge mounts the node directory
-`FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`) read-only at
-`/frames` for sensor frame drops. Replaying the demo clips needs a demo build
-(`make compose-demo`, or `docker build --build-arg GO_TAGS= ...`).
+The edge captures from the authenticated push API and the optional live
+sources below (`-watch-dir` spool, `-mjpeg-url`). The packaged edge mounts the
+node directory `FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`)
+read-only at `/frames`; a spool requires a separate **writable** mount and
+`-watch-dir`. Production images have no scenario/frame replay (`-scenario`,
+`-frames`, `-period`, `SCENARIO` and `FRAMES_DIR` exist only in demo builds,
+[Production profile](#production-profile-and-prod-gate)). To replay the demo
+clips with a demo build (`docker build --build-arg GO_TAGS= ...`), copy
+`scenarios/ghostfleet_demo` (including the `frames/` downloaded by
+`make demo-clips`) onto the node and point the edge at it:
+
+```sh
+zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
+  --confirm --components=edge \
+  --set-variables=FRAMES_HOSTPATH=/srv/ghost-seeker,SCENARIO=/frames/ghostfleet_demo/scenario.json
+```
+
+## Live input
+
+All live inputs feed the same `edge/ingest.Source` / `Ingester.Run` pipeline as
+replay: analysis, deduplication, scoring, local storage, scheduling and eventual
+upload are unchanged. Run edge and shore with explicit operator credentials
+(`GS_OPERATOR_TOKEN_FILE`, `-dev-token-file none`) and provision the unit JWT
+and shore signing key as described above. The push API accepts the configured
+operator bearer token **or** that edge's configured unit JWT. Shore's output
+API requires its operator credential, not the unit JWT. Use TLS at an approved
+reverse proxy and private links; the built-in HTTP listeners do not provide TLS.
+
+### Push JPEG / PNG
+
+`POST /api/v1/ingest/frames` accepts raw `image/jpeg` / `image/png` with query
+parameters `source`, `captured_at`, `sensor_type`, or `multipart/form-data` with
+a `frame` image part and a `meta` JSON part. `source` is required: 1–128 ASCII
+letters, digits or `_.:/-`. `captured_at` is RFC3339 (defaults to receipt time).
+Multipart metadata also supports `geo` (lat/lon, optional altitude in metres
+and heading in degrees clockwise from north) and up to 64 string tags:
+
+```json
+{
+  "source": "bow-ir",
+  "captured_at": "2026-11-05T01:02:03Z",
+  "geo": {"lat": 36.9, "lon": -76.3, "alt": 4.5, "heading": 90},
+  "sensor_type": "ir",
+  "tags": {"mission": "coastal-watch"}
+}
+```
+
+The example helper requires curl 7.76+ and does not print the token or put it
+in curl's command-line arguments. Do not use `curl -v`, shell tracing or URLs
+containing credentials. A token file is preferred; `GS_OPERATOR_TOKEN` is also
+supported by the helper.
+
+```sh
+export EDGE_URL=http://127.0.0.1:8081
+export GS_OPERATOR_TOKEN_FILE=/run/secrets/operator.token
+scripts/push-frame.sh bow-eo frame.jpg             # raw body
+scripts/push-frame.sh bow-ir frame.jpg meta.json   # multipart (meta overrides defaults)
+```
+
+`202 {"id":"…","duplicate":false}` means the edge has stored/scored the
+capture, **not** that shore has received it. Duplicates return the folded item
+ID with `duplicate:true`; sightings warm-up / scene-cadence folds can return an
+empty ID when no item is created. Retries may fold duplicates. `429` with
+`Retry-After: 1` means all admission slots are occupied; back off and retry.
+Bodies are capped at 32 MiB by default (including multipart overhead), metadata
+at 64 KiB, and decoded images at 50 MP. Malformed images return `400`, oversized
+bodies `413`, and unsupported content types `415`. The queue is shared, not one
+queue per camera. Size it with the compressed **and decoded** image footprint
+in mind, and configure edge disk retention caps separately.
+
+### File spool and MJPEG
+
+```sh
+./bin/edge -watch-dir /var/spool/ghost-seeker -live-source bow-eo \
+  -mjpeg-url http://camera.internal/video.mjpeg -mjpeg-fps 2 \
+  -shore http://shore.internal:8080 -dev-token-file none
+```
+
+Drop uniquely named `.jpg`, `.jpeg` or `.png` regular files in the spool root;
+optional metadata goes in `<image>.json` (for example `frame.jpg.json`). Publish
+the sidecar first, then atomically rename a completed image into the root.
+Size and modification time of **both** files must stay unchanged over a poll
+interval; a paused writer can still appear stable, so atomic publication is
+recommended. Symlinks and subdirectories are ignored. Files move to `processed/`
+only after the edge ingester succeeds (including duplicate folds), or `failed/`
+on invalid input/ingest failure, together with the sidecar. Queue saturation
+leaves the image pending for a later poll. Preserve the writable spool across
+restarts; it is the durable input buffer, unlike the in-memory push queue.
+
+MJPEG expects `multipart/x-mixed-replace` containing JPEG parts; the reader is
+throttled to the FPS cap (camera TCP backpressure applies). Disconnects and malformed responses reconnect with
+bounded exponential backoff (250 ms–30 s). Each frame uses the configured
+`-live-source`, capture time now, and sensor type `eo`. Push, spool, MJPEG and
+replay can run concurrently. Authenticated `GET /api/v1/health` on edge reports
+in-flight/capacity and per-transport/source accepted, processed, duplicate,
+rejected and failed counters plus `last_frame_at`. Counters reset on restart;
+label cardinality is bounded (overflow goes to `other`).
+
+### RTSP without CGO
+
+Use an external ffmpeg process to publish to the spool atomically. This keeps
+RTSP/video codecs out of the Go binaries:
+
+```sh
+ffmpeg -rtsp_transport tcp -i "$RTSP_URL" -vf fps=1 \
+  -f image2 -atomic_writing 1 -strftime 1 \
+  /var/spool/ghost-seeker/bow-%Y%m%d-%H%M%S.jpg
+```
+
+Use a unique prefix per camera and a matching `-live-source` / sidecar. Another
+adapter can pipe ffmpeg JPEG frames into `scripts/push-frame.sh` one complete
+frame at a time; it must split frames, supply metadata and honor `429`.
+Do not include credentials in logged RTSP URLs.
+
+## Shore output API (v1)
+
+Shore is the source of truth. All `/api/v1` routes require the operator bearer
+credential and are read-only; a live `ghost-seeker -shore` operator app also
+proxies these GET routes using its existing authenticated operator/PIV session
+gate (viewer access is sufficient). There is no separate public feed. Unit
+JWTs authorize sync, not reads. The standalone shore listener supports bearer
+auth; PIV/browser sessions are provided by the operator app, not shore itself.
+The OpenAPI 3.1 contract is [api/openapi.yaml](api/openapi.yaml), also available
+from authenticated `GET /api/v1/openapi.yaml`.
+
+```sh
+# Use a protected curl header file containing Authorization: Bearer <token>.
+curl -fsS --header @/run/secrets/operator.header \
+  'http://shore.internal:8080/api/v1/items?since=0&source=bow-eo&limit=100'
+curl -fsS --header @/run/secrets/operator.header \
+  'http://shore.internal:8080/api/v1/items/ITEM_ID'
+curl -fsS --header @/run/secrets/operator.header \
+  'http://shore.internal:8080/api/v1/items/ITEM_ID/image?form=thumb' -o thumb.jpg
+curl -N --header @/run/secrets/operator.header \
+  --header 'Last-Event-ID: STREAM_CURSOR' \
+  'http://shore.internal:8080/api/v1/stream'
+```
+
+- `/items` pages in first-manifest receipt order, unaffected by capture time or
+  reprioritization. `next_cursor` is exclusive: use it as the next `since`.
+  Optional filters: `tier=P1|P2|P3|P4`, exact `source`; `limit` is 1–500 (100
+  default). A bounded filtered scan may return an empty page with an advanced
+  cursor; continue until the cursor stops advancing. **List and stream cursors
+  are separate sequences and must not be interchanged.**
+- `/items/{id}` includes the last edge-reported score, current shore-relative
+  tier (or policy pin), explanatory reasons, contacts and ship-type tags,
+  source/timestamps/geo/sensor/tags, form availability, directive matches and
+  persisted label overrides. Empty arrays mean no persisted evidence. Reasons
+  describe current shore evidence, not a reconstruction of the historical
+  edge scoring context. Commander/review overlays that exist only in an
+  operator UI's memory are not fabricated or persisted by this API.
+- `/items/{id}/image?form=thumb|crop|full` defaults to thumb. A missing,
+  incomplete, or non-image form returns `404`; it never falls back to an
+  unrequested form. Uploads can arrive after the manifest. Form replacements
+  are staged and atomically published only after completion/hash validation;
+  already-open readers keep a whole committed version, never partial bytes.
+- `/stream` sends `event: item`, decimal `id:` and JSON
+  `{cursor,event,item}` for new/updated manifests, features, completed forms,
+  policy and persisted decisions. Order is shore arrival/journal order (edge
+  scheduling sends prioritized manifests); relative tier changes caused by
+  arrivals or priority changes also notify the affected existing items. This is
+  not mutable tier order. Each event
+  carries the **latest** item state, not an immutable historical snapshot.
+  Save the last fully processed event ID and reconnect with `Last-Event-ID`
+  (or `?since=`). Resume is exclusive and survives shore restarts, provided its
+  SQLite store is retained. No cursor means replay from the beginning; use the
+  `stream_cursor` from `/health` to start at the current tail. Cursors ahead of
+  the journal are rejected. Receipt/event journals grow with retained shore
+  history; back them up with the database.
+- SSE heartbeat comments arrive every 15 s. At most 64 streams are admitted
+  (`429` above that); each client fetches at most 32 journal records at once.
+  Slow/broken writers time out after 10 s rather than accumulating a queue;
+  reconnect using the saved event cursor. Reverse proxies must disable
+  response buffering and allow streaming connections.
+- `/health` returns `status`, manifested item count and `stream_cursor`.
+
+Run the live edge/shore/OpenAPI contract gate in either build:
+
+```sh
+go test -run TestProdContract ./...
+go test -tags prod -run TestProdContract ./...
+```
 
 Changing ConfigMap-backed settings (`INFER_URL`, edge caps, and
 `SHORE_REQUIRE_AUTH`) or rotating Secret-backed credentials requires restarting
