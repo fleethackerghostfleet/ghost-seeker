@@ -15,6 +15,7 @@ func TestHandlerDoesNotListDirectories(t *testing.T) {
 		want int
 	}{
 		{path: "/fonts/", want: http.StatusNotFound},
+		{path: "/imagery/empty-ocean/", want: http.StatusNotFound},
 		{path: "/", want: http.StatusOK},
 	} {
 		response := httptest.NewRecorder()
@@ -44,7 +45,7 @@ func TestEmptyOceanArchiveServed(t *testing.T) {
 			t.Fatalf("native frame: %+v %v", cfg, err)
 		}
 	}
-	for _, path := range []string{"/imagery/empty-ocean/", "/imagery/empty-ocean/missing.jpg"} {
+	for _, path := range []string{"/imagery/empty-ocean/missing.jpg"} {
 		response := httptest.NewRecorder()
 		Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
 		if response.Code != http.StatusNotFound {
