@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/unitauth"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -257,6 +258,86 @@ func TestWaitingCameraFrameDoesNotCountAsRejected(t *testing.T) {
 	q.mu.Unlock()
 	if stats.Rejected != 0 || stats.Accepted != 1 || stats.Processed != 1 {
 		t.Fatal("waiting frame incorrectly rejected", stats)
+	}
+}
+
+type gatedReplayClock struct{ entered, release chan struct{} }
+
+func (c gatedReplayClock) Now() time.Time { return time.Now() }
+func (c gatedReplayClock) Sleep(ctx context.Context, _ time.Duration) error {
+	select {
+	case c.entered <- struct{}{}:
+	default:
+	}
+	select {
+	case <-c.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestIdleReplayLeavesSingleSlotAvailableForLivePush(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"0.jpg", "1.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), encJPEG(t, scene(30, 20)), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clk := gatedReplayClock{make(chan struct{}, 1), make(chan struct{})}
+	replay, err := NewReplay(clk, time.Hour, FrameSet{Path: dir, Source: "replay-camera"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := runningQueue(t, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- Pump(ctx, q, replay, "replay"); close(done) }()
+	defer func() { cancel(); <-done }()
+	select {
+	case <-clk.entered:
+	case <-ctx.Done():
+		t.Fatal("replay did not reach idle interval")
+	}
+	if len(q.slots) != 0 {
+		t.Fatal("idle replay holds admission")
+	}
+	w := requestFrame(q.Handler(liveTestToken, "", 1<<20), encJPEG(t, scene(31, 21)), "image/jpeg", "?source=live-camera", liveTestToken)
+	if w.Code != 202 {
+		t.Fatal("idle replay blocked live push", w.Code)
+	}
+	close(clk.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if len(q.slots) != 0 {
+		t.Fatal("completed replay leaked admission")
+	}
+}
+
+func TestReplaySkipsUnreadableFrameWithoutLeakingAdmission(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"0.jpg", "1.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), encJPEG(t, scene(30, 20)), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replay, err := NewReplay(clock.NewVirtual(time.Now()), time.Second, FrameSet{Path: dir, Source: "replay-camera"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "0.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	q := runningQueue(t, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := Pump(ctx, q, replay, "replay"); err != nil {
+		t.Fatal(err)
+	}
+	if len(q.slots) != 0 {
+		t.Fatal("unreadable replay leaked admission")
 	}
 }
 

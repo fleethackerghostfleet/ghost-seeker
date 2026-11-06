@@ -172,16 +172,11 @@ func pause(ctx context.Context, d time.Duration) error {
 // Pump fans any existing Source (including replay) into the single live writer.
 func Pump(ctx context.Context, q *Queue, src Source, transport string) error {
 	for {
-		if err := q.waitSlot(ctx); err != nil {
-			return err
-		}
-		c, done, err := src.Next(ctx)
+		c, done, err := q.nextCapture(ctx, src)
 		if err != nil {
-			<-q.slots
 			return err
 		}
 		if done {
-			<-q.slots
 			return nil
 		}
 		_, err = q.submit(ctx, c, transport+":"+c.Source)
@@ -189,4 +184,22 @@ func Pump(ctx context.Context, q *Queue, src Source, transport string) error {
 			return ctx.Err()
 		}
 	}
+}
+
+type admittedSource interface {
+	nextAdmitted(context.Context, func() error, func()) (*Capture, bool, error)
+}
+
+func (q *Queue) nextCapture(ctx context.Context, src Source) (*Capture, bool, error) {
+	if src, ok := src.(admittedSource); ok {
+		return src.nextAdmitted(ctx, func() error { return q.waitSlot(ctx) }, func() { <-q.slots })
+	}
+	if err := q.waitSlot(ctx); err != nil {
+		return nil, false, err
+	}
+	c, done, err := src.Next(ctx)
+	if done || err != nil {
+		<-q.slots
+	}
+	return c, done, err
 }
