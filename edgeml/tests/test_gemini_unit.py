@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -127,8 +128,11 @@ def test_token_refresh_boundary_and_thread_local_session(gemini, monkeypatch):
     assert calls[0][1] == {"check": True, "capture_output": True, "text": True}
     first = gemini.session()
     assert gemini.session() is first
-    gemini.THREAD_LOCAL = SimpleNamespace()
-    assert gemini.session() is not first
+    other = []
+    worker = threading.Thread(target=lambda: other.extend([gemini.session(), gemini.session()]))
+    worker.start(); worker.join()
+    assert other[0] is other[1] and other[0] is not first
+    assert gemini.session() is first
 
 
 @pytest.mark.parametrize("field,bad", [("label", "invalid"), ("box_2d", [0, 1, 2, True]),
