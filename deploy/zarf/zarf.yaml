@@ -194,9 +194,9 @@ variables:
 
   - name: NAMESPACE
     default: "ghost-seeker"
-    description: "Application namespace; create it and auth Secrets before deploying."
+    description: "Legacy combined package namespace is fixed; use split UDS packages for configurable namespaces."
     prompt: false
-    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    pattern: '^ghost-seeker$'
   - name: SHORE_AUTH_SECRET
     default: "shore-auth"
     description: "Existing Secret containing shore authentication material."

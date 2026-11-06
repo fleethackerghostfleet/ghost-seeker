@@ -21,6 +21,11 @@ import pin_images
 
 
 class SplitProductionTests(unittest.TestCase):
+    def test_legacy_namespace_cannot_diverge_from_network_policies(self):
+        package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
+        with self.assertRaisesRegex(ValueError, "Zarf variable pattern"):
+            validator.package_variables(package, {"NAMESPACE": "unprotected"})
+
     @classmethod
     def setUpClass(cls):
         cls.rendered = {role: validator.check_split(role) for role in ("ship", "shore")}
