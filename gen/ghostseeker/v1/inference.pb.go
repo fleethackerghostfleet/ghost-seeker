@@ -463,8 +463,9 @@ type Sighting struct {
 	FirstSeenUnixMs int64                  `protobuf:"varint,8,opt,name=first_seen_unix_ms,json=firstSeenUnixMs,proto3" json:"first_seen_unix_ms,omitempty"`
 	LastSeenUnixMs  int64                  `protobuf:"varint,9,opt,name=last_seen_unix_ms,json=lastSeenUnixMs,proto3" json:"last_seen_unix_ms,omitempty"`
 	NFrames         int32                  `protobuf:"varint,10,opt,name=n_frames,json=nFrames,proto3" json:"n_frames,omitempty"`
-	Embedding       []float32              `protobuf:"fixed32,11,rep,packed,name=embedding,proto3" json:"embedding,omitempty"` // key-crop embedding of this object (same space as AnalyzeResponse.embedding)
-	Unknownness     float32                `protobuf:"fixed32,12,opt,name=unknownness,proto3" json:"unknownness,omitempty"`    // zero-shot unknownness of this object's key crop
+	Embedding       []float32              `protobuf:"fixed32,11,rep,packed,name=embedding,proto3" json:"embedding,omitempty"`             // key-crop embedding of this object (same space as AnalyzeResponse.embedding)
+	Unknownness     float32                `protobuf:"fixed32,12,opt,name=unknownness,proto3" json:"unknownness,omitempty"`                // zero-shot unknownness of this object's key crop
+	NewContact      bool                   `protobuf:"varint,13,opt,name=new_contact,json=newContact,proto3" json:"new_contact,omitempty"` // true on OPEN when the object was not present in recent frames of this source
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -581,6 +582,13 @@ func (x *Sighting) GetUnknownness() float32 {
 		return x.Unknownness
 	}
 	return 0
+}
+
+func (x *Sighting) GetNewContact() bool {
+	if x != nil {
+		return x.NewContact
+	}
+	return false
 }
 
 // FormHint sizes a form without shipping its bytes.
@@ -939,7 +947,7 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\n" +
 	"latency_ms\x18\n" +
 	" \x01(\x03R\tlatencyMs\x12\x19\n" +
-	"\bframe_id\x18\v \x01(\tR\aframeId\"\xad\x04\n" +
+	"\bframe_id\x18\v \x01(\tR\aframeId\"\xce\x04\n" +
 	"\bSighting\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x124\n" +
 	"\x05event\x18\x02 \x01(\x0e2\x1e.ghostseeker.v1.Sighting.EventR\x05event\x12>\n" +
@@ -954,7 +962,9 @@ const file_ghostseeker_v1_inference_proto_rawDesc = "" +
 	"\bn_frames\x18\n" +
 	" \x01(\x05R\anFrames\x12\x1c\n" +
 	"\tembedding\x18\v \x03(\x02R\tembedding\x12 \n" +
-	"\vunknownness\x18\f \x01(\x02R\vunknownness\"f\n" +
+	"\vunknownness\x18\f \x01(\x02R\vunknownness\x12\x1f\n" +
+	"\vnew_contact\x18\r \x01(\bR\n" +
+	"newContact\"f\n" +
 	"\x05Event\x12\x15\n" +
 	"\x11EVENT_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +

@@ -1,0 +1,3682 @@
+{
+  "split": "dev",
+  "window_s": 5.0,
+  "iou_thr": 0.3,
+  "thermal_fallback": false,
+  "new_contact": {
+    "memory_s": 30,
+    "iou_thr": 0.3,
+    "dist_diag": 0.5
+  },
+  "cpu": "x86_64",
+  "affinity": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "threads": 4,
+  "pipeline_fingerprint": "4f5f2dbd00d9b9d4c8bb3d4deefea18e223b53c0508afb5a7030e184967563fb",
+  "skipped_incomplete": [
+    "ghost_fleet_5fps/Chase_N_Fish_Sharky",
+    "ghost_fleet_5fps/Far_away_but_did_you_see_that_splash"
+  ],
+  "summary": {
+    "yolo": {
+      "ghost_fleet_5fps": {
+        "open": {
+          "all": {
+            "tp": 12,
+            "fp": 23,
+            "births": 13,
+            "precision": 0.34285714285714286,
+            "recall": 0.9230769230769231,
+            "median_latency_s": 0.4
+          },
+          "mid_clip": {
+            "tp": 9,
+            "fp": 23,
+            "births": 10,
+            "precision": 0.28125,
+            "recall": 0.9,
+            "median_latency_s": 0.4
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 9,
+            "fp": 11,
+            "births": 13,
+            "precision": 0.45,
+            "recall": 0.6923076923076923,
+            "median_latency_s": 0.2
+          },
+          "mid_clip": {
+            "tp": 6,
+            "fp": 11,
+            "births": 10,
+            "precision": 0.35294117647058826,
+            "recall": 0.6,
+            "median_latency_s": 0.4
+          }
+        },
+        "suppressions": {
+          "suppressed": 15,
+          "correct_repeat": 0,
+          "matched_not_previously_reported": 3,
+          "unmatched": 12
+        },
+        "frames": 1160,
+        "clips": 7,
+        "is_new_us_per_frame": 1.6708784482758618,
+        "is_new_calls": 71,
+        "history_us_per_frame": 49.76476724137931
+      },
+      "fvessel_clip10": {
+        "open": {
+          "all": {
+            "tp": 8,
+            "fp": 49,
+            "births": 18,
+            "precision": 0.14035087719298245,
+            "recall": 0.4444444444444444,
+            "median_latency_s": 0.0
+          },
+          "mid_clip": {
+            "tp": 8,
+            "fp": 49,
+            "births": 18,
+            "precision": 0.14035087719298245,
+            "recall": 0.4444444444444444,
+            "median_latency_s": 0.0
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 8,
+            "fp": 35,
+            "births": 18,
+            "precision": 0.18604651162790697,
+            "recall": 0.4444444444444444,
+            "median_latency_s": 0.0
+          },
+          "mid_clip": {
+            "tp": 8,
+            "fp": 35,
+            "births": 18,
+            "precision": 0.18604651162790697,
+            "recall": 0.4444444444444444,
+            "median_latency_s": 0.0
+          }
+        },
+        "suppressions": {
+          "suppressed": 14,
+          "correct_repeat": 2,
+          "matched_not_previously_reported": 2,
+          "unmatched": 10
+        },
+        "frames": 1222,
+        "clips": 7,
+        "is_new_us_per_frame": 6.176969721767594,
+        "is_new_calls": 283,
+        "history_us_per_frame": 166.69330114566284
+      },
+      "pooled": {
+        "open": {
+          "all": {
+            "tp": 20,
+            "fp": 72,
+            "births": 31,
+            "precision": 0.21739130434782608,
+            "recall": 0.6451612903225806,
+            "median_latency_s": 0.30000000000000004
+          },
+          "mid_clip": {
+            "tp": 17,
+            "fp": 72,
+            "births": 28,
+            "precision": 0.19101123595505617,
+            "recall": 0.6071428571428571,
+            "median_latency_s": 0.4
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 17,
+            "fp": 46,
+            "births": 31,
+            "precision": 0.2698412698412698,
+            "recall": 0.5483870967741935,
+            "median_latency_s": 0.2
+          },
+          "mid_clip": {
+            "tp": 14,
+            "fp": 46,
+            "births": 28,
+            "precision": 0.23333333333333334,
+            "recall": 0.5,
+            "median_latency_s": 0.30000000000000004
+          }
+        },
+        "suppressions": {
+          "suppressed": 29,
+          "correct_repeat": 2,
+          "matched_not_previously_reported": 5,
+          "unmatched": 22
+        },
+        "frames": 2382,
+        "clips": 14,
+        "is_new_us_per_frame": 3.9825675902602855,
+        "is_new_calls": 354,
+        "history_us_per_frame": 109.75077413937868
+      }
+    },
+    "oracle-d0.3": {
+      "ghost_fleet_5fps": {
+        "open": {
+          "all": {
+            "tp": 10,
+            "fp": 4,
+            "births": 13,
+            "precision": 0.7142857142857143,
+            "recall": 0.7692307692307693,
+            "median_latency_s": 1.0
+          },
+          "mid_clip": {
+            "tp": 7,
+            "fp": 4,
+            "births": 10,
+            "precision": 0.6363636363636364,
+            "recall": 0.7,
+            "median_latency_s": 1.0
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 9,
+            "fp": 1,
+            "births": 13,
+            "precision": 0.9,
+            "recall": 0.6923076923076923,
+            "median_latency_s": 1.0
+          },
+          "mid_clip": {
+            "tp": 6,
+            "fp": 1,
+            "births": 10,
+            "precision": 0.8571428571428571,
+            "recall": 0.6,
+            "median_latency_s": 1.0
+          }
+        },
+        "suppressions": {
+          "suppressed": 4,
+          "correct_repeat": 2,
+          "matched_not_previously_reported": 1,
+          "unmatched": 1
+        },
+        "frames": 1160,
+        "clips": 7,
+        "is_new_us_per_frame": 0.2076344827586207,
+        "is_new_calls": 24,
+        "history_us_per_frame": 11.208625862068965
+      },
+      "fvessel_clip10": {
+        "open": {
+          "all": {
+            "tp": 17,
+            "fp": 1,
+            "births": 18,
+            "precision": 0.9444444444444444,
+            "recall": 0.9444444444444444,
+            "median_latency_s": 3.0
+          },
+          "mid_clip": {
+            "tp": 17,
+            "fp": 1,
+            "births": 18,
+            "precision": 0.9444444444444444,
+            "recall": 0.9444444444444444,
+            "median_latency_s": 3.0
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 17,
+            "fp": 1,
+            "births": 18,
+            "precision": 0.9444444444444444,
+            "recall": 0.9444444444444444,
+            "median_latency_s": 3.0
+          },
+          "mid_clip": {
+            "tp": 17,
+            "fp": 1,
+            "births": 18,
+            "precision": 0.9444444444444444,
+            "recall": 0.9444444444444444,
+            "median_latency_s": 3.0
+          }
+        },
+        "suppressions": {
+          "suppressed": 0,
+          "correct_repeat": 0,
+          "matched_not_previously_reported": 0,
+          "unmatched": 0
+        },
+        "frames": 1222,
+        "clips": 7,
+        "is_new_us_per_frame": 2.133827332242226,
+        "is_new_calls": 101,
+        "history_us_per_frame": 63.0114705400982
+      },
+      "pooled": {
+        "open": {
+          "all": {
+            "tp": 27,
+            "fp": 5,
+            "births": 31,
+            "precision": 0.84375,
+            "recall": 0.8709677419354839,
+            "median_latency_s": 3.0
+          },
+          "mid_clip": {
+            "tp": 24,
+            "fp": 5,
+            "births": 28,
+            "precision": 0.8275862068965517,
+            "recall": 0.8571428571428571,
+            "median_latency_s": 3.0
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 26,
+            "fp": 2,
+            "births": 31,
+            "precision": 0.9285714285714286,
+            "recall": 0.8387096774193549,
+            "median_latency_s": 3.0
+          },
+          "mid_clip": {
+            "tp": 23,
+            "fp": 2,
+            "births": 28,
+            "precision": 0.92,
+            "recall": 0.8214285714285714,
+            "median_latency_s": 3.0
+          }
+        },
+        "suppressions": {
+          "suppressed": 4,
+          "correct_repeat": 2,
+          "matched_not_previously_reported": 1,
+          "unmatched": 1
+        },
+        "frames": 2382,
+        "clips": 14,
+        "is_new_us_per_frame": 1.1957989084802687,
+        "is_new_calls": 125,
+        "history_us_per_frame": 37.78422460117548
+      }
+    }
+  },
+  "complete_gt_only": {
+    "yolo": {
+      "open": {
+        "all": {
+          "tp": 11,
+          "fp": 57,
+          "births": 22,
+          "precision": 0.16176470588235295,
+          "recall": 0.5,
+          "median_latency_s": 0.2
+        },
+        "mid_clip": {
+          "tp": 9,
+          "fp": 57,
+          "births": 20,
+          "precision": 0.13636363636363635,
+          "recall": 0.45,
+          "median_latency_s": 0.0
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 11,
+          "fp": 38,
+          "births": 22,
+          "precision": 0.22448979591836735,
+          "recall": 0.5,
+          "median_latency_s": 0.2
+        },
+        "mid_clip": {
+          "tp": 9,
+          "fp": 38,
+          "births": 20,
+          "precision": 0.19148936170212766,
+          "recall": 0.45,
+          "median_latency_s": 0.0
+        }
+      },
+      "suppressions": {
+        "suppressed": 19,
+        "correct_repeat": 2,
+        "matched_not_previously_reported": 2,
+        "unmatched": 15
+      },
+      "frames": 1721,
+      "clips": 10,
+      "is_new_us_per_frame": 4.638338756536897,
+      "is_new_calls": 305,
+      "history_us_per_frame": 132.65089540964553
+    },
+    "oracle-d0.3": {
+      "open": {
+        "all": {
+          "tp": 21,
+          "fp": 2,
+          "births": 22,
+          "precision": 0.9130434782608695,
+          "recall": 0.9545454545454546,
+          "median_latency_s": 3.0
+        },
+        "mid_clip": {
+          "tp": 19,
+          "fp": 2,
+          "births": 20,
+          "precision": 0.9047619047619048,
+          "recall": 0.95,
+          "median_latency_s": 3.0
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 20,
+          "fp": 1,
+          "births": 22,
+          "precision": 0.9523809523809523,
+          "recall": 0.9090909090909091,
+          "median_latency_s": 3.0
+        },
+        "mid_clip": {
+          "tp": 18,
+          "fp": 1,
+          "births": 20,
+          "precision": 0.9473684210526315,
+          "recall": 0.9,
+          "median_latency_s": 3.0
+        }
+      },
+      "suppressions": {
+        "suppressed": 2,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 1
+      },
+      "frames": 1721,
+      "clips": 10,
+      "is_new_us_per_frame": 1.5756327716443927,
+      "is_new_calls": 108,
+      "history_us_per_frame": 47.7379128413713
+    }
+  },
+  "sequences": [
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "A_ship_in_the_distance",
+      "mode": "yolo",
+      "frames": 46,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 9213,
+      "is_new_calls": 1,
+      "history_ns": 1091144,
+      "replay_s": 6.553041836000375,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/A_ship_in_the_distance:0001",
+          "score": 0.44982,
+          "box": [
+            414.6012,
+            860.544,
+            146.92319999999998,
+            24.192
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "A_ship_in_the_distance",
+      "mode": "oracle-d0.3",
+      "frames": 46,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 8670,
+      "is_new_calls": 1,
+      "history_ns": 557567,
+      "replay_s": 1.8045593070000905,
+      "opens": [
+        {
+          "frame": 6,
+          "id": "ghost_fleet_5fps/A_ship_in_the_distance:0001",
+          "score": 0.99,
+          "box": [
+            430.9092,
+            859.4879999999999,
+            151.98839999999998,
+            35.2896
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Canadian_Coast_Guard_Helicopter_Landing",
+      "mode": "yolo",
+      "frames": 151,
+      "fps": 5.0,
+      "license": "Facebook reel by Canadian Coast Guard; no redistribution license stated; internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 1189463,
+      "is_new_calls": 25,
+      "history_ns": 19428601,
+      "replay_s": 22.67781727700003,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0001",
+          "score": 0.93289,
+          "box": [
+            344.3364,
+            845.0688,
+            274.5144,
+            284.1408
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0002",
+          "score": 0.45222,
+          "box": [
+            769.014,
+            782.5344,
+            48.7836,
+            5.9904
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 42,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0003",
+          "score": 0.35274,
+          "box": [
+            17.118,
+            1392.1152000000002,
+            695.5740000000001,
+            526.7136
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 44,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0004",
+          "score": 0.44331,
+          "box": [
+            440.8668,
+            653.5104,
+            32.184,
+            8.832
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 45,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0005",
+          "score": 0.64284,
+          "box": [
+            438.318,
+            1718.5728000000001,
+            267.5052,
+            200.448
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 50,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0006",
+          "score": 0.85893,
+          "box": [
+            425.8872,
+            747.9744000000001,
+            190.82520000000002,
+            376.5888
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 61,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0007",
+          "score": 0.80235,
+          "box": [
+            384.72839999999997,
+            994.8288000000001,
+            245.4516,
+            247.68
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 69,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0008",
+          "score": 0.68525,
+          "box": [
+            391.9104,
+            1547.616,
+            299.0736,
+            107.1168
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 113,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0009",
+          "score": 0.597,
+          "box": [
+            574.9164,
+            483.072,
+            38.804399999999994,
+            87.8208
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 146,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0013",
+          "score": 0.52651,
+          "box": [
+            483.8832,
+            589.4015999999999,
+            40.6512,
+            61.3056
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 148,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0014",
+          "score": 0.41143,
+          "box": [
+            733.752,
+            591.6288000000001,
+            35.046,
+            63.187200000000004
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 8,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 7
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 9,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 9,
+          "births": 1,
+          "ignored_startup_signals": 1,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 2,
+          "births": 1,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Canadian_Coast_Guard_Helicopter_Landing",
+      "mode": "oracle-d0.3",
+      "frames": 151,
+      "fps": 5.0,
+      "license": "Facebook reel by Canadian Coast Guard; no redistribution license stated; internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 11831,
+      "is_new_calls": 4,
+      "history_ns": 3110185,
+      "replay_s": 6.112399044000085,
+      "opens": [
+        {
+          "frame": 6,
+          "id": "ghost_fleet_5fps/Canadian_Coast_Guard_Helicopter_Landing:0001",
+          "score": 0.99,
+          "box": [
+            326.4624,
+            819.552,
+            300.996,
+            313.5552
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Cruise_ship_Mediterranean_sunset_off_Italy",
+      "mode": "yolo",
+      "frames": 153,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 143743,
+      "is_new_calls": 9,
+      "history_ns": 5231497,
+      "replay_s": 32.2970988269999,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0001",
+          "score": 0.64673,
+          "box": [
+            473.0076,
+            664.7232,
+            128.034,
+            55.0848
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 66,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0003",
+          "score": 0.79416,
+          "box": [
+            469.0116,
+            710.2656,
+            134.5572,
+            53.87520000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 72,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0002",
+          "score": 0.5306,
+          "box": [
+            305.4888,
+            713.376,
+            128.142,
+            51.552
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 137,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0005",
+          "score": 0.65471,
+          "box": [
+            750.7728,
+            689.7216,
+            101.8764,
+            38.0544
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 2,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            1.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 1,
+          "latencies_s": [
+            1.4
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            1.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 1,
+          "latencies_s": [
+            1.4
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Cruise_ship_Mediterranean_sunset_off_Italy",
+      "mode": "oracle-d0.3",
+      "frames": 153,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 95457,
+      "is_new_calls": 6,
+      "history_ns": 2853675,
+      "replay_s": 6.173691530999349,
+      "opens": [
+        {
+          "frame": 6,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0001",
+          "score": 0.99,
+          "box": [
+            462.726,
+            657.7728,
+            140.00039999999998,
+            70.00319999999999
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 63,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0002",
+          "score": 0.99,
+          "box": [
+            352.998,
+            700.992,
+            140.00039999999998,
+            70.00319999999999
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 139,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0004",
+          "score": 0.99,
+          "box": [
+            576.6012,
+            662.9952000000001,
+            140.00039999999998,
+            70.00319999999999
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 144,
+          "id": "ghost_fleet_5fps/Cruise_ship_Mediterranean_sunset_off_Italy:0003",
+          "score": 0.99,
+          "box": [
+            834.6024,
+            669.1968,
+            140.00039999999998,
+            70.00319999999999
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 2,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.8,
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 1,
+          "latencies_s": [
+            0.8,
+            1.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 1,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Sailing_POV_Corfu_Paxos",
+      "mode": "yolo",
+      "frames": 300,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 281368,
+      "is_new_calls": 12,
+      "history_ns": 18270336,
+      "replay_s": 68.16565329700006,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Sailing_POV_Corfu_Paxos:0001",
+          "score": 0.45157,
+          "box": [
+            899.2836,
+            820.416,
+            55.8468,
+            56.736
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 91,
+          "id": "ghost_fleet_5fps/Sailing_POV_Corfu_Paxos:0002",
+          "score": 0.53058,
+          "box": [
+            924.102,
+            851.1551999999999,
+            53.5464,
+            57.3312
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 135,
+          "id": "ghost_fleet_5fps/Sailing_POV_Corfu_Paxos:0003",
+          "score": 0.82305,
+          "box": [
+            377.56800000000004,
+            995.1168,
+            257.39639999999997,
+            93.3312
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 147,
+          "id": "ghost_fleet_5fps/Sailing_POV_Corfu_Paxos:0004",
+          "score": 0.76233,
+          "box": [
+            328.8276,
+            645.7344,
+            444.7224,
+            443.616
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 165,
+          "id": "ghost_fleet_5fps/Sailing_POV_Corfu_Paxos:0005",
+          "score": 0.47643,
+          "box": [
+            510.9804,
+            962.1504,
+            168.156,
+            127.0656
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 202,
+          "id": "ghost_fleet_5fps/Sailing_POV_Corfu_Paxos:0006",
+          "score": 0.48293,
+          "box": [
+            754.326,
+            793.0944,
+            53.9676,
+            58.6176
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 4,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 4
+      },
+      "open": {
+        "all": {
+          "tp": 0,
+          "fp": 6,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 6,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 0,
+          "fp": 2,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 2,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Sailing_POV_Corfu_Paxos",
+      "mode": "oracle-d0.3",
+      "frames": 300,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 0,
+      "is_new_calls": 0,
+      "history_ns": 1745689,
+      "replay_s": 15.649864732999959,
+      "opens": [],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Ship_in_the_Distance_Utopia_of_the_Seas",
+      "mode": "yolo",
+      "frames": 75,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 105669,
+      "is_new_calls": 6,
+      "history_ns": 2460020,
+      "replay_s": 19.034280715000023,
+      "opens": [
+        {
+          "frame": 17,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas:0001",
+          "score": 0.394,
+          "box": [
+            528.0120000000001,
+            973.6704,
+            53.6328,
+            17.472
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 25,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas:0002",
+          "score": 0.51758,
+          "box": [
+            495.2124,
+            1066.176,
+            69.6276,
+            24.652800000000003
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 60,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas:0003",
+          "score": 0.75289,
+          "box": [
+            167.8536,
+            1129.8624,
+            89.52120000000001,
+            71.232
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 60,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas:0004",
+          "score": 0.71137,
+          "box": [
+            257.5044,
+            1021.5936,
+            451.2996,
+            145.056
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            3.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            3.4
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Ship_in_the_Distance_Utopia_of_the_Seas",
+      "mode": "oracle-d0.3",
+      "frames": 75,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 40172,
+      "is_new_calls": 3,
+      "history_ns": 608477,
+      "replay_s": 3.170683363000535,
+      "opens": [
+        {
+          "frame": 48,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas:0001",
+          "score": 0.99,
+          "box": [
+            464.2056,
+            1141.6896,
+            127.97999999999999,
+            52.7424
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 62,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas:0003",
+          "score": 0.99,
+          "box": [
+            212.16600000000003,
+            1167.4944,
+            90.9252,
+            72.8256
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 62,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Utopia_of_the_Seas:0002",
+          "score": 0.99,
+          "box": [
+            278.1864,
+            1048.8,
+            507.6108,
+            163.6032
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 1,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Submarine_surfacing",
+      "mode": "yolo",
+      "frames": 372,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 119032,
+      "is_new_calls": 8,
+      "history_ns": 9657416,
+      "replay_s": 24.970368640999368,
+      "opens": [
+        {
+          "frame": 174,
+          "id": "ghost_fleet_5fps/Submarine_surfacing:0001",
+          "score": 0.84703,
+          "box": [
+            30.208,
+            148.2768,
+            128.96,
+            98.1144
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 290,
+          "id": "ghost_fleet_5fps/Submarine_surfacing:0002",
+          "score": 0.61599,
+          "box": [
+            382.7456,
+            350.784,
+            23.6032,
+            39.9816
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 306,
+          "id": "ghost_fleet_5fps/Submarine_surfacing:0003",
+          "score": 0.55404,
+          "box": [
+            257.28000000000003,
+            302.8104,
+            302.5408,
+            157.4136
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 313,
+          "id": "ghost_fleet_5fps/Submarine_surfacing:0005",
+          "score": 0.84788,
+          "box": [
+            2.8928,
+            298.9368,
+            58.815999999999995,
+            123.01920000000001
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            3.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            3.2
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 2,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Submarine_surfacing",
+      "mode": "oracle-d0.3",
+      "frames": 372,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 55311,
+      "is_new_calls": 6,
+      "history_ns": 3452484,
+      "replay_s": 7.43252579899945,
+      "opens": [
+        {
+          "frame": 178,
+          "id": "ghost_fleet_5fps/Submarine_surfacing:0001",
+          "score": 0.99,
+          "box": [
+            0.1408,
+            93.36240000000001,
+            146.7392,
+            105.6312
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 293,
+          "id": "ghost_fleet_5fps/Submarine_surfacing:0002",
+          "score": 0.99,
+          "box": [
+            372.2368,
+            346.65840000000003,
+            135.232,
+            79.2576
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 297,
+          "id": "ghost_fleet_5fps/Submarine_surfacing:0003",
+          "score": 0.99,
+          "box": [
+            328.0512,
+            323.8704,
+            686.0415999999999,
+            118.6848
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 1,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Two_Dolphins_near_the_coast_of_Gibraltar",
+      "mode": "yolo",
+      "frames": 63,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 89731,
+      "is_new_calls": 10,
+      "history_ns": 1588116,
+      "replay_s": 11.036491658999694,
+      "opens": [
+        {
+          "frame": 8,
+          "id": "ghost_fleet_5fps/Two_Dolphins_near_the_coast_of_Gibraltar:0001",
+          "score": 0.75236,
+          "box": [
+            798.39,
+            444.5568,
+            34.732800000000005,
+            49.075199999999995
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 31,
+          "id": "ghost_fleet_5fps/Two_Dolphins_near_the_coast_of_Gibraltar:0005",
+          "score": 0.60764,
+          "box": [
+            545.7239999999999,
+            587.4816,
+            16.210800000000003,
+            36.1536
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 31,
+          "id": "ghost_fleet_5fps/Two_Dolphins_near_the_coast_of_Gibraltar:0006",
+          "score": 0.39828,
+          "box": [
+            335.1672,
+            484.0704,
+            24.602400000000003,
+            37.92
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 39,
+          "id": "ghost_fleet_5fps/Two_Dolphins_near_the_coast_of_Gibraltar:0003",
+          "score": 0.62349,
+          "box": [
+            557.442,
+            561.8688,
+            17.8956,
+            36.0192
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 39,
+          "id": "ghost_fleet_5fps/Two_Dolphins_near_the_coast_of_Gibraltar:0004",
+          "score": 0.60579,
+          "box": [
+            351.8424,
+            466.50239999999997,
+            18.5004,
+            28.7232
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 2,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 2,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 3,
+          "fp": 2,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 2,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4,
+            0.4,
+            0.4
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Two_Dolphins_near_the_coast_of_Gibraltar",
+      "mode": "oracle-d0.3",
+      "frames": 63,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 29415,
+      "is_new_calls": 4,
+      "history_ns": 673929,
+      "replay_s": 2.8368683509997936,
+      "opens": [
+        {
+          "frame": 11,
+          "id": "ghost_fleet_5fps/Two_Dolphins_near_the_coast_of_Gibraltar:0002",
+          "score": 0.99,
+          "box": [
+            791.4564,
+            514.0608,
+            35.0676,
+            28.1856
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 39,
+          "id": "ghost_fleet_5fps/Two_Dolphins_near_the_coast_of_Gibraltar:0003",
+          "score": 0.99,
+          "box": [
+            337.5648,
+            467.40479999999997,
+            27.6696,
+            37.8048
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip01",
+      "mode": "yolo",
+      "frames": 111,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 390786,
+      "is_new_calls": 20,
+      "history_ns": 16205794,
+      "replay_s": 23.627835825999682,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip01:0001",
+          "score": 0.54684,
+          "box": [
+            272.6656,
+            675.072,
+            474.624,
+            82.8864
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip01:0003",
+          "score": 0.44971,
+          "box": [
+            1355.9808,
+            665.136,
+            126.9248,
+            28.396800000000002
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip01:0002",
+          "score": 0.52629,
+          "box": [
+            506.88,
+            705.5424,
+            143.0016,
+            44.3808
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 19,
+          "id": "fvessel_clip10/fvessel_clip01:0004",
+          "score": 0.3811,
+          "box": [
+            104.8064,
+            788.6448,
+            89.3952,
+            27.647999999999996
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 103,
+          "id": "fvessel_clip10/fvessel_clip01:0009",
+          "score": 0.38772,
+          "box": [
+            118.8096,
+            785.6928,
+            56.7296,
+            25.0272
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 108,
+          "id": "fvessel_clip10/fvessel_clip01:0010",
+          "score": 0.4199,
+          "box": [
+            1203.0976,
+            668.8656,
+            114.25280000000001,
+            27.763199999999998
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip01",
+      "mode": "oracle-d0.3",
+      "frames": 111,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 36607,
+      "is_new_calls": 6,
+      "history_ns": 4868607,
+      "replay_s": 8.851561049999873,
+      "opens": [
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip01:0001",
+          "score": 0.99,
+          "box": [
+            1352.3968,
+            648.0,
+            125.00479999999999,
+            54.9936
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 6,
+          "id": "fvessel_clip10/fvessel_clip01:0002",
+          "score": 0.99,
+          "box": [
+            356.6848,
+            680.2272,
+            441.3696,
+            86.7168
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip02",
+      "mode": "yolo",
+      "frames": 96,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 206388,
+      "is_new_calls": 18,
+      "history_ns": 6720389,
+      "replay_s": 22.151800001000083,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip02:0001",
+          "score": 0.74688,
+          "box": [
+            363.92960000000005,
+            370.5552,
+            117.91359999999999,
+            99.8208
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 11,
+          "id": "fvessel_clip10/fvessel_clip02:0003",
+          "score": 0.50831,
+          "box": [
+            566.016,
+            200.0592,
+            682.8543999999999,
+            276.94079999999997
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 16,
+          "id": "fvessel_clip10/fvessel_clip02:0004",
+          "score": 0.39859,
+          "box": [
+            1431.5264,
+            234.99360000000001,
+            331.2128,
+            246.4128
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 84,
+          "id": "fvessel_clip10/fvessel_clip02:0012",
+          "score": 0.81329,
+          "box": [
+            1024.6399999999999,
+            353.9952,
+            325.76,
+            121.1904
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 0,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 0,
+          "fp": 3,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 3,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip02",
+      "mode": "oracle-d0.3",
+      "frames": 96,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 45535,
+      "is_new_calls": 9,
+      "history_ns": 3345473,
+      "replay_s": 7.536946878999515,
+      "opens": [
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip02:0001",
+          "score": 0.99,
+          "box": [
+            1502.5919999999999,
+            432.0,
+            328.01279999999997,
+            58.00320000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 6,
+          "id": "fvessel_clip10/fvessel_clip02:0002",
+          "score": 0.99,
+          "box": [
+            468.22400000000005,
+            365.7312,
+            677.5552,
+            118.0512
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip03",
+      "mode": "yolo",
+      "frames": 222,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 500545,
+      "is_new_calls": 40,
+      "history_ns": 19460856,
+      "replay_s": 60.23842583300029,
+      "opens": [
+        {
+          "frame": 3,
+          "id": "fvessel_clip10/fvessel_clip03:0001",
+          "score": 0.86455,
+          "box": [
+            2257.1264,
+            941.0976,
+            130.0992,
+            379.4544
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip03:0003",
+          "score": 0.5513,
+          "box": [
+            1673.216,
+            480.7728,
+            135.0144,
+            27.36
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 56,
+          "id": "fvessel_clip10/fvessel_clip03:0007",
+          "score": 0.52454,
+          "box": [
+            1463.7312,
+            469.67040000000003,
+            164.0192,
+            31.406399999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 67,
+          "id": "fvessel_clip10/fvessel_clip03:0008",
+          "score": 0.52037,
+          "box": [
+            1976.7296,
+            502.9056,
+            36.6592,
+            20.6352
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 105,
+          "id": "fvessel_clip10/fvessel_clip03:0009",
+          "score": 0.63652,
+          "box": [
+            0.07680000000000001,
+            421.1712,
+            42.5728,
+            53.7696
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 113,
+          "id": "fvessel_clip10/fvessel_clip03:0010",
+          "score": 0.52043,
+          "box": [
+            30.3104,
+            186.13440000000003,
+            286.4128,
+            298.18080000000003
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 139,
+          "id": "fvessel_clip10/fvessel_clip03:0014",
+          "score": 0.67525,
+          "box": [
+            586.6752,
+            389.46239999999995,
+            505.13919999999996,
+            103.63680000000001
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 183,
+          "id": "fvessel_clip10/fvessel_clip03:0018",
+          "score": 0.56383,
+          "box": [
+            1904.8192,
+            482.35679999999996,
+            170.6752,
+            48.988800000000005
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 3,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 2
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 7,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 7,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            2.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 4,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            2.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip03",
+      "mode": "oracle-d0.3",
+      "frames": 222,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 56428,
+      "is_new_calls": 11,
+      "history_ns": 8739106,
+      "replay_s": 17.176486495000063,
+      "opens": [
+        {
+          "frame": 7,
+          "id": "fvessel_clip10/fvessel_clip03:0001",
+          "score": 0.99,
+          "box": [
+            1644.8768,
+            468.99359999999996,
+            144.9984,
+            45.99360000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 106,
+          "id": "fvessel_clip10/fvessel_clip03:0002",
+          "score": 0.99,
+          "box": [
+            0.0,
+            409.99679999999995,
+            174.0032,
+            69.9984
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip04",
+      "mode": "yolo",
+      "frames": 162,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 256607,
+      "is_new_calls": 35,
+      "history_ns": 22330680,
+      "replay_s": 33.84941758000059,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip04:0002",
+          "score": 0.42475,
+          "box": [
+            2318.7968,
+            1048.9248,
+            74.8288,
+            18.4896
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip04:0001",
+          "score": 0.50048,
+          "box": [
+            99.072,
+            1009.2816,
+            269.3632,
+            39.0816
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 58,
+          "id": "fvessel_clip10/fvessel_clip04:0009",
+          "score": 0.35658,
+          "box": [
+            509.4144,
+            1010.1744,
+            367.00159999999994,
+            44.2368
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 67,
+          "id": "fvessel_clip10/fvessel_clip04:0010",
+          "score": 0.47796,
+          "box": [
+            255.744,
+            1007.2368,
+            118.9376,
+            24.4224
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 87,
+          "id": "fvessel_clip10/fvessel_clip04:0011",
+          "score": 0.46107,
+          "box": [
+            918.7583999999999,
+            1010.2608,
+            208.5376,
+            24.9984
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 2,
+        "correct_repeat": 1,
+        "matched_not_previously_reported": 0,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 4,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 4,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 2,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 2,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip04",
+      "mode": "oracle-d0.3",
+      "frames": 162,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 98091,
+      "is_new_calls": 20,
+      "history_ns": 12366148,
+      "replay_s": 14.153704166000352,
+      "opens": [
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip04:0001",
+          "score": 0.99,
+          "box": [
+            589.1584,
+            1003.7952,
+            156.9024,
+            40.2048
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 6,
+          "id": "fvessel_clip10/fvessel_clip04:0002",
+          "score": 0.99,
+          "box": [
+            111.0528,
+            985.9968,
+            329.06239999999997,
+            58.9968
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 14,
+          "id": "fvessel_clip10/fvessel_clip04:0003",
+          "score": 0.99,
+          "box": [
+            2486.9888,
+            1003.0032,
+            72.0128,
+            44.0064
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            2.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            2.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip06",
+      "mode": "yolo",
+      "frames": 158,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 1614760,
+      "is_new_calls": 59,
+      "history_ns": 29838858,
+      "replay_s": 40.18483882200053,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip06:0001",
+          "score": 0.62489,
+          "box": [
+            262.6048,
+            536.256,
+            35.5584,
+            69.984
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip06:0003",
+          "score": 0.38221,
+          "box": [
+            2152.7039999999997,
+            495.84959999999995,
+            274.56,
+            56.9232
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip06:0002",
+          "score": 0.39983,
+          "box": [
+            183.52640000000002,
+            591.0048,
+            219.05919999999998,
+            25.848000000000003
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip06:0005",
+          "score": 0.77018,
+          "box": [
+            1613.6704,
+            459.23040000000003,
+            50.048,
+            64.44
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip06:0007",
+          "score": 0.56527,
+          "box": [
+            1913.4976000000001,
+            502.2144,
+            106.7008,
+            36.9216
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 6,
+          "id": "fvessel_clip10/fvessel_clip06:0008",
+          "score": 0.79521,
+          "box": [
+            1638.5024,
+            417.25440000000003,
+            385.33119999999997,
+            121.2192
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 48,
+          "id": "fvessel_clip10/fvessel_clip06:0010",
+          "score": 0.65653,
+          "box": [
+            13.5424,
+            419.09760000000006,
+            67.6352,
+            55.367999999999995
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 83,
+          "id": "fvessel_clip10/fvessel_clip06:0018",
+          "score": 0.83061,
+          "box": [
+            503.9872,
+            421.5168,
+            63.0272,
+            63.345600000000005
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 91,
+          "id": "fvessel_clip10/fvessel_clip06:0020",
+          "score": 0.49222,
+          "box": [
+            1706.6496000000002,
+            462.4704,
+            157.6704,
+            60.897600000000004
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 92,
+          "id": "fvessel_clip10/fvessel_clip06:0019",
+          "score": 0.85167,
+          "box": [
+            1024.0511999999999,
+            460.3968,
+            70.75840000000001,
+            40.9536
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 97,
+          "id": "fvessel_clip10/fvessel_clip06:0021",
+          "score": 0.75244,
+          "box": [
+            1024.896,
+            464.1264,
+            169.1648,
+            41.0544
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 103,
+          "id": "fvessel_clip10/fvessel_clip06:0025",
+          "score": 0.83833,
+          "box": [
+            2343.8848,
+            924.1487999999999,
+            103.06559999999999,
+            351.144
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 105,
+          "id": "fvessel_clip10/fvessel_clip06:0024",
+          "score": 0.88051,
+          "box": [
+            2258.3808,
+            915.1056,
+            125.6704,
+            104.5296
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 110,
+          "id": "fvessel_clip10/fvessel_clip06:0026",
+          "score": 0.84114,
+          "box": [
+            2467.0976,
+            939.6576,
+            97.792,
+            382.392
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 5,
+        "correct_repeat": 1,
+        "matched_not_previously_reported": 0,
+        "unmatched": 4
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 11,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            4.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 11,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            4.0,
+            2.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 3,
+          "fp": 6,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            4.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 6,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0,
+            4.0,
+            2.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip06",
+      "mode": "oracle-d0.3",
+      "frames": 158,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 109836,
+      "is_new_calls": 19,
+      "history_ns": 10218767,
+      "replay_s": 14.323093771000458,
+      "opens": [
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip06:0001",
+          "score": 0.99,
+          "box": [
+            2126.7968,
+            481.0032,
+            293.0176,
+            76.9968
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 6,
+          "id": "fvessel_clip10/fvessel_clip06:0002",
+          "score": 0.99,
+          "box": [
+            1644.1599999999999,
+            445.7232,
+            381.92639999999994,
+            101.0016
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 49,
+          "id": "fvessel_clip10/fvessel_clip06:0003",
+          "score": 0.99,
+          "box": [
+            17.2288,
+            416.2896,
+            113.792,
+            62.668800000000005
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip08",
+      "mode": "yolo",
+      "frames": 307,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 3459589,
+      "is_new_calls": 56,
+      "history_ns": 76869971,
+      "replay_s": 75.31421413099997,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip08:0001",
+          "score": 0.74701,
+          "box": [
+            307.7632,
+            996.8543999999999,
+            57.472,
+            20.2896
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip08:0004",
+          "score": 0.56388,
+          "box": [
+            1123.6607999999999,
+            986.8464,
+            27.110400000000002,
+            8.294400000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip08:0005",
+          "score": 0.54565,
+          "box": [
+            2121.8048,
+            951.6816,
+            53.964800000000004,
+            36.590399999999995
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip08:0006",
+          "score": 0.52374,
+          "box": [
+            1495.0911999999998,
+            952.5456,
+            139.1104,
+            34.675200000000004
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 11,
+          "id": "fvessel_clip10/fvessel_clip08:0008",
+          "score": 0.42386,
+          "box": [
+            50.816,
+            973.6415999999999,
+            33.4336,
+            13.4208
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 54,
+          "id": "fvessel_clip10/fvessel_clip08:0022",
+          "score": 0.58219,
+          "box": [
+            1382.7584,
+            957.1392000000001,
+            42.367999999999995,
+            28.44
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 102,
+          "id": "fvessel_clip10/fvessel_clip08:0027",
+          "score": 0.59718,
+          "box": [
+            34.815999999999995,
+            973.0224000000001,
+            119.5008,
+            27.576
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 228,
+          "id": "fvessel_clip10/fvessel_clip08:0036",
+          "score": 0.48169,
+          "box": [
+            1381.888,
+            957.6432,
+            83.0976,
+            47.9088
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 260,
+          "id": "fvessel_clip10/fvessel_clip08:0040",
+          "score": 0.46587,
+          "box": [
+            715.3664000000001,
+            951.9264,
+            67.91680000000001,
+            41.2416
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 297,
+          "id": "fvessel_clip10/fvessel_clip08:0042",
+          "score": 0.36737,
+          "box": [
+            541.5936,
+            859.8672,
+            69.1456,
+            134.97119999999998
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 2,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 2
+      },
+      "open": {
+        "all": {
+          "tp": 0,
+          "fp": 10,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 10,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 0,
+          "fp": 8,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 8,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip08",
+      "mode": "oracle-d0.3",
+      "frames": 307,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 72209,
+      "is_new_calls": 14,
+      "history_ns": 24677547,
+      "replay_s": 25.09884381699976,
+      "opens": [
+        {
+          "frame": 7,
+          "id": "fvessel_clip10/fvessel_clip08:0001",
+          "score": 0.99,
+          "box": [
+            2063.1552,
+            911.0880000000001,
+            505.8048,
+            78.1488
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 82,
+          "id": "fvessel_clip10/fvessel_clip08:0002",
+          "score": 0.99,
+          "box": [
+            1.92,
+            974.2031999999999,
+            29.9776,
+            25.804799999999997
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            3.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            3.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            3.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            3.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip10",
+      "mode": "yolo",
+      "frames": 166,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 1119582,
+      "is_new_calls": 55,
+      "history_ns": 32272666,
+      "replay_s": 46.025868890999845,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip10:0003",
+          "score": 0.5896,
+          "box": [
+            1125.4528,
+            987.0768,
+            24.166400000000003,
+            8.136
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip10:0002",
+          "score": 0.40001,
+          "box": [
+            145.5616,
+            953.3520000000001,
+            268.7488,
+            52.5024
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip10:0001",
+          "score": 0.50377,
+          "box": [
+            63.744,
+            880.5024,
+            449.6384,
+            126.51839999999999
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip10:0004",
+          "score": 0.70257,
+          "box": [
+            1920.0512,
+            942.6096,
+            30.3104,
+            47.3184
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 34,
+          "id": "fvessel_clip10/fvessel_clip10:0017",
+          "score": 0.39134,
+          "box": [
+            1239.9104,
+            803.7648,
+            595.712,
+            196.45919999999998
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 35,
+          "id": "fvessel_clip10/fvessel_clip10:0016",
+          "score": 0.52052,
+          "box": [
+            1937.9456,
+            1350.8064,
+            17.0496,
+            12.974400000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 71,
+          "id": "fvessel_clip10/fvessel_clip10:0026",
+          "score": 0.43439,
+          "box": [
+            1096.6272,
+            985.5648,
+            38.528,
+            14.328000000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 81,
+          "id": "fvessel_clip10/fvessel_clip10:0033",
+          "score": 0.78721,
+          "box": [
+            934.0160000000001,
+            1384.9056,
+            48.6656,
+            45.6048
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 149,
+          "id": "fvessel_clip10/fvessel_clip10:0049",
+          "score": 0.47064,
+          "box": [
+            1116.9792,
+            985.2335999999999,
+            30.438399999999998,
+            10.3248
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 151,
+          "id": "fvessel_clip10/fvessel_clip10:0050",
+          "score": 0.68552,
+          "box": [
+            673.1264,
+            955.6992,
+            187.0336,
+            43.7904
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 9,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 9,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 8,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 8,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip10",
+      "mode": "oracle-d0.3",
+      "frames": 166,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 2188831,
+      "is_new_calls": 22,
+      "history_ns": 12784369,
+      "replay_s": 14.764085822999732,
+      "opens": [
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip10:0001",
+          "score": 0.99,
+          "box": [
+            -0.8704000000000001,
+            948.96,
+            118.32319999999999,
+            43.0416
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip10:0003",
+          "score": 0.99,
+          "box": [
+            1642.8288,
+            924.9984000000001,
+            290.7136,
+            70.2
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 17,
+          "id": "fvessel_clip10/fvessel_clip10:0006",
+          "score": 0.99,
+          "box": [
+            263.7824,
+            942.9984,
+            298.0096,
+            63.9936
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 90,
+          "id": "fvessel_clip10/fvessel_clip10:0007",
+          "score": 0.99,
+          "box": [
+            2525.7983999999997,
+            956.2320000000001,
+            27.4688,
+            22.953599999999998
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 1,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            3.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 1,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            3.0,
+            2.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 3,
+          "fp": 1,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            3.0,
+            2.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 1,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            3.0,
+            2.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    }
+  ]
+}

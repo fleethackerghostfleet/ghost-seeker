@@ -247,6 +247,7 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 		it.Features.Tags = map[string]string{}
 	}
 	it.Features.Tags["event"] = eventTag(s.Event)
+	delete(it.Features.Tags, "new_contact")
 	if s.Subtype != "" {
 		it.Features.Tags["subtype"] = s.Subtype
 	}

@@ -2,9 +2,12 @@
 import logging
 
 from edgeml.detectors.marine_mammal import MarineMammalConfig, MarineMammalFusionDetector, MarineMammalVerifier
+from edgeml.detectors.thermal import ThermalFusionDetector
 
 
 def detect_frame(detector, image, frame_index):
+    if isinstance(detector, ThermalFusionDetector) and isinstance(detector.base, MarineMammalFusionDetector):
+        return detector.detect(image, frame_index=frame_index)
     if isinstance(detector, MarineMammalFusionDetector):
         return detector.detect(image, frame_index=frame_index)
     return detector.detect(image)

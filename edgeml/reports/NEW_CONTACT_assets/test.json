@@ -1,0 +1,3609 @@
+{
+  "split": "test",
+  "window_s": 5.0,
+  "iou_thr": 0.3,
+  "thermal_fallback": false,
+  "new_contact": {
+    "memory_s": 30,
+    "iou_thr": 0.3,
+    "dist_diag": 0.5
+  },
+  "cpu": "x86_64",
+  "affinity": [
+    4,
+    5,
+    6,
+    7
+  ],
+  "threads": 4,
+  "pipeline_fingerprint": "4f5f2dbd00d9b9d4c8bb3d4deefea18e223b53c0508afb5a7030e184967563fb",
+  "skipped_incomplete": [
+    "ghost_fleet_5fps/Dolphin_from_far_distance_in_Bay_of_Bengal"
+  ],
+  "summary": {
+    "yolo": {
+      "ghost_fleet_5fps": {
+        "open": {
+          "all": {
+            "tp": 15,
+            "fp": 60,
+            "births": 45,
+            "precision": 0.2,
+            "recall": 0.3333333333333333,
+            "median_latency_s": 0.4
+          },
+          "mid_clip": {
+            "tp": 9,
+            "fp": 60,
+            "births": 39,
+            "precision": 0.13043478260869565,
+            "recall": 0.23076923076923078,
+            "median_latency_s": 0.4
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 12,
+            "fp": 28,
+            "births": 45,
+            "precision": 0.3,
+            "recall": 0.26666666666666666,
+            "median_latency_s": 0.2
+          },
+          "mid_clip": {
+            "tp": 6,
+            "fp": 28,
+            "births": 39,
+            "precision": 0.17647058823529413,
+            "recall": 0.15384615384615385,
+            "median_latency_s": 0.30000000000000004
+          }
+        },
+        "suppressions": {
+          "suppressed": 35,
+          "correct_repeat": 3,
+          "matched_not_previously_reported": 5,
+          "unmatched": 27
+        },
+        "frames": 4641,
+        "clips": 8,
+        "is_new_us_per_frame": 4.268523378582202,
+        "is_new_calls": 273,
+        "history_us_per_frame": 263.41448351648353
+      },
+      "fvessel_clip10": {
+        "open": {
+          "all": {
+            "tp": 1,
+            "fp": 40,
+            "births": 7,
+            "precision": 0.024390243902439025,
+            "recall": 0.14285714285714285,
+            "median_latency_s": 0.0
+          },
+          "mid_clip": {
+            "tp": 1,
+            "fp": 40,
+            "births": 7,
+            "precision": 0.024390243902439025,
+            "recall": 0.14285714285714285,
+            "median_latency_s": 0.0
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 1,
+            "fp": 32,
+            "births": 7,
+            "precision": 0.030303030303030304,
+            "recall": 0.14285714285714285,
+            "median_latency_s": 0.0
+          },
+          "mid_clip": {
+            "tp": 1,
+            "fp": 32,
+            "births": 7,
+            "precision": 0.030303030303030304,
+            "recall": 0.14285714285714285,
+            "median_latency_s": 0.0
+          }
+        },
+        "suppressions": {
+          "suppressed": 8,
+          "correct_repeat": 1,
+          "matched_not_previously_reported": 1,
+          "unmatched": 6
+        },
+        "frames": 1189,
+        "clips": 2,
+        "is_new_us_per_frame": 11.278293523969722,
+        "is_new_calls": 179,
+        "history_us_per_frame": 342.3884322960471
+      },
+      "pooled": {
+        "open": {
+          "all": {
+            "tp": 16,
+            "fp": 100,
+            "births": 52,
+            "precision": 0.13793103448275862,
+            "recall": 0.3076923076923077,
+            "median_latency_s": 0.30000000000000004
+          },
+          "mid_clip": {
+            "tp": 10,
+            "fp": 100,
+            "births": 46,
+            "precision": 0.09090909090909091,
+            "recall": 0.21739130434782608,
+            "median_latency_s": 0.4
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 13,
+            "fp": 60,
+            "births": 52,
+            "precision": 0.1780821917808219,
+            "recall": 0.25,
+            "median_latency_s": 0.2
+          },
+          "mid_clip": {
+            "tp": 7,
+            "fp": 60,
+            "births": 46,
+            "precision": 0.1044776119402985,
+            "recall": 0.15217391304347827,
+            "median_latency_s": 0.2
+          }
+        },
+        "suppressions": {
+          "suppressed": 43,
+          "correct_repeat": 4,
+          "matched_not_previously_reported": 6,
+          "unmatched": 33
+        },
+        "frames": 5830,
+        "clips": 10,
+        "is_new_us_per_frame": 5.698131732418525,
+        "is_new_calls": 452,
+        "history_us_per_frame": 279.5208343053173
+      }
+    },
+    "oracle-d0.3": {
+      "ghost_fleet_5fps": {
+        "open": {
+          "all": {
+            "tp": 28,
+            "fp": 6,
+            "births": 45,
+            "precision": 0.8235294117647058,
+            "recall": 0.6222222222222222,
+            "median_latency_s": 0.8
+          },
+          "mid_clip": {
+            "tp": 22,
+            "fp": 6,
+            "births": 39,
+            "precision": 0.7857142857142857,
+            "recall": 0.5641025641025641,
+            "median_latency_s": 0.8
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 19,
+            "fp": 1,
+            "births": 45,
+            "precision": 0.95,
+            "recall": 0.4222222222222222,
+            "median_latency_s": 0.8
+          },
+          "mid_clip": {
+            "tp": 13,
+            "fp": 1,
+            "births": 39,
+            "precision": 0.9285714285714286,
+            "recall": 0.3333333333333333,
+            "median_latency_s": 0.8
+          }
+        },
+        "suppressions": {
+          "suppressed": 14,
+          "correct_repeat": 5,
+          "matched_not_previously_reported": 9,
+          "unmatched": 0
+        },
+        "frames": 4641,
+        "clips": 8,
+        "is_new_us_per_frame": 0.664038784744667,
+        "is_new_calls": 159,
+        "history_us_per_frame": 104.0257735401853
+      },
+      "fvessel_clip10": {
+        "open": {
+          "all": {
+            "tp": 7,
+            "fp": 0,
+            "births": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "median_latency_s": 3.0
+          },
+          "mid_clip": {
+            "tp": 7,
+            "fp": 0,
+            "births": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "median_latency_s": 3.0
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 7,
+            "fp": 0,
+            "births": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "median_latency_s": 3.0
+          },
+          "mid_clip": {
+            "tp": 7,
+            "fp": 0,
+            "births": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "median_latency_s": 3.0
+          }
+        },
+        "suppressions": {
+          "suppressed": 0,
+          "correct_repeat": 0,
+          "matched_not_previously_reported": 0,
+          "unmatched": 0
+        },
+        "frames": 1189,
+        "clips": 2,
+        "is_new_us_per_frame": 0.2717005887300252,
+        "is_new_calls": 50,
+        "history_us_per_frame": 50.72991841883936
+      },
+      "pooled": {
+        "open": {
+          "all": {
+            "tp": 35,
+            "fp": 6,
+            "births": 52,
+            "precision": 0.8536585365853658,
+            "recall": 0.6730769230769231,
+            "median_latency_s": 1.0
+          },
+          "mid_clip": {
+            "tp": 29,
+            "fp": 6,
+            "births": 46,
+            "precision": 0.8285714285714286,
+            "recall": 0.6304347826086957,
+            "median_latency_s": 1.0
+          }
+        },
+        "new_contact": {
+          "all": {
+            "tp": 26,
+            "fp": 1,
+            "births": 52,
+            "precision": 0.9629629629629629,
+            "recall": 0.5,
+            "median_latency_s": 1.0
+          },
+          "mid_clip": {
+            "tp": 20,
+            "fp": 1,
+            "births": 46,
+            "precision": 0.9523809523809523,
+            "recall": 0.43478260869565216,
+            "median_latency_s": 1.0
+          }
+        },
+        "suppressions": {
+          "suppressed": 14,
+          "correct_repeat": 5,
+          "matched_not_previously_reported": 9,
+          "unmatched": 0
+        },
+        "frames": 5830,
+        "clips": 10,
+        "is_new_us_per_frame": 0.5840233276157805,
+        "is_new_calls": 209,
+        "history_us_per_frame": 93.15634442538594
+      }
+    }
+  },
+  "complete_gt_only": {
+    "yolo": {
+      "open": {
+        "all": {
+          "tp": 10,
+          "fp": 66,
+          "births": 19,
+          "precision": 0.13157894736842105,
+          "recall": 0.5263157894736842,
+          "median_latency_s": 0.2
+        },
+        "mid_clip": {
+          "tp": 5,
+          "fp": 66,
+          "births": 14,
+          "precision": 0.07042253521126761,
+          "recall": 0.35714285714285715,
+          "median_latency_s": 0.4
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 10,
+          "fp": 49,
+          "births": 19,
+          "precision": 0.1694915254237288,
+          "recall": 0.5263157894736842,
+          "median_latency_s": 0.2
+        },
+        "mid_clip": {
+          "tp": 5,
+          "fp": 49,
+          "births": 14,
+          "precision": 0.09259259259259259,
+          "recall": 0.35714285714285715,
+          "median_latency_s": 0.4
+        }
+      },
+      "suppressions": {
+        "suppressed": 17,
+        "correct_repeat": 4,
+        "matched_not_previously_reported": 1,
+        "unmatched": 12
+      },
+      "frames": 4254,
+      "clips": 8,
+      "is_new_us_per_frame": 4.1610411377527035,
+      "is_new_calls": 310,
+      "history_us_per_frame": 252.7139553361542
+    },
+    "oracle-d0.3": {
+      "open": {
+        "all": {
+          "tp": 18,
+          "fp": 5,
+          "births": 19,
+          "precision": 0.782608695652174,
+          "recall": 0.9473684210526315,
+          "median_latency_s": 1.0
+        },
+        "mid_clip": {
+          "tp": 13,
+          "fp": 5,
+          "births": 14,
+          "precision": 0.7222222222222222,
+          "recall": 0.9285714285714286,
+          "median_latency_s": 2.0
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 17,
+          "fp": 1,
+          "births": 19,
+          "precision": 0.9444444444444444,
+          "recall": 0.8947368421052632,
+          "median_latency_s": 1.0
+        },
+        "mid_clip": {
+          "tp": 12,
+          "fp": 1,
+          "births": 14,
+          "precision": 0.9230769230769231,
+          "recall": 0.8571428571428571,
+          "median_latency_s": 2.5
+        }
+      },
+      "suppressions": {
+        "suppressed": 5,
+        "correct_repeat": 4,
+        "matched_not_previously_reported": 1,
+        "unmatched": 0
+      },
+      "frames": 4254,
+      "clips": 8,
+      "is_new_us_per_frame": 0.45547343676539725,
+      "is_new_calls": 136,
+      "history_us_per_frame": 88.20441302303713
+    }
+  },
+  "sequences": [
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Arriving_In_Norfolk_seg1h10",
+      "mode": "yolo",
+      "frames": 900,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 1972456,
+      "is_new_calls": 36,
+      "history_ns": 334559031,
+      "replay_s": 151.54245919000005,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0002",
+          "score": 0.5555,
+          "box": [
+            755.0208,
+            587.9196000000001,
+            133.8048,
+            28.6956
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0001",
+          "score": 0.72765,
+          "box": [
+            612.48,
+            592.4556,
+            23.712,
+            23.2092
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 15,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0003",
+          "score": 0.55019,
+          "box": [
+            736.3968,
+            606.852,
+            31.7184,
+            6.2856
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 183,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0004",
+          "score": 0.51868,
+          "box": [
+            888.5376,
+            594.7992,
+            9.8112,
+            8.6076
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 465,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0006",
+          "score": 0.61609,
+          "box": [
+            512.2176000000001,
+            540.7452,
+            154.52159999999998,
+            123.5736
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 656,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0007",
+          "score": 0.63584,
+          "box": [
+            1799.5776,
+            572.1192,
+            33.6,
+            12.312000000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 881,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0009",
+          "score": 0.54858,
+          "box": [
+            1677.2736,
+            208.9476,
+            19.104,
+            22.0428
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 4,
+          "births": 6,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.2,
+            2.8
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 4,
+          "births": 3,
+          "ignored_startup_signals": 3,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 3,
+          "fp": 3,
+          "births": 6,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.2,
+            2.8
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 3,
+          "births": 3,
+          "ignored_startup_signals": 3,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Arriving_In_Norfolk_seg1h10",
+      "mode": "oracle-d0.3",
+      "frames": 900,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 1165831,
+      "is_new_calls": 42,
+      "history_ns": 201488404,
+      "replay_s": 41.74288576700019,
+      "opens": [
+        {
+          "frame": 4,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0004",
+          "score": 0.99,
+          "box": [
+            890.5344,
+            591.0408,
+            15.6288,
+            12.0744
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 5,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0001",
+          "score": 0.99,
+          "box": [
+            605.472,
+            587.0016,
+            34.9632,
+            29.8944
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 5,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0003",
+          "score": 0.99,
+          "box": [
+            779.3471999999999,
+            583.6752,
+            95.0784,
+            33.1668
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 8,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0005",
+          "score": 0.99,
+          "box": [
+            740.1408,
+            603.5039999999999,
+            27.5136,
+            9.957600000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 523,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0006",
+          "score": 0.99,
+          "box": [
+            563.1744000000001,
+            615.0168,
+            42.8544,
+            16.243199999999998
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 567,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h10:0008",
+          "score": 0.99,
+          "box": [
+            883.3536,
+            592.8984,
+            20.4096,
+            14.202
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 1,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 5,
+          "fp": 1,
+          "births": 6,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.8,
+            0.8,
+            1.4,
+            0.8
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 3,
+          "latencies_s": [
+            0.2,
+            0.8
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 4,
+          "fp": 1,
+          "births": 6,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.8,
+            0.8,
+            1.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 1,
+          "births": 3,
+          "ignored_startup_signals": 3,
+          "latencies_s": [
+            0.2
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Arriving_In_Norfolk_seg1h13",
+      "mode": "yolo",
+      "frames": 900,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 1652484,
+      "is_new_calls": 37,
+      "history_ns": 127606152,
+      "replay_s": 153.0839519050005,
+      "opens": [
+        {
+          "frame": 12,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0001",
+          "score": 0.57195,
+          "box": [
+            1280.2368,
+            772.8480000000001,
+            71.808,
+            191.916
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 25,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0002",
+          "score": 0.53475,
+          "box": [
+            801.5808000000001,
+            594.1727999999999,
+            28.3008,
+            21.8592
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 33,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0003",
+          "score": 0.50923,
+          "box": [
+            336.2496,
+            625.9896,
+            7.8528,
+            13.446
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 118,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0007",
+          "score": 0.54474,
+          "box": [
+            1280.2368,
+            773.0748,
+            72.1152,
+            192.3048
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 228,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0011",
+          "score": 0.48611,
+          "box": [
+            1329.7728000000002,
+            733.05,
+            13.996799999999999,
+            27.6804
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 274,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0012",
+          "score": 0.56094,
+          "box": [
+            1760.3904,
+            592.7148,
+            26.496,
+            7.9488
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 321,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0013",
+          "score": 0.63271,
+          "box": [
+            625.8815999999999,
+            595.2851999999999,
+            13.92,
+            40.9428
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 425,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0014",
+          "score": 0.78539,
+          "box": [
+            512.0832,
+            584.8416,
+            48.288,
+            75.87
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 446,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0015",
+          "score": 0.62476,
+          "box": [
+            1844.2944,
+            551.9556,
+            35.5968,
+            7.732799999999999
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 658,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0016",
+          "score": 0.51631,
+          "box": [
+            1488.9216,
+            194.69160000000002,
+            25.056,
+            29.5272
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 660,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0018",
+          "score": 0.51097,
+          "box": [
+            1627.008,
+            100.17,
+            23.846400000000003,
+            35.7912
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 661,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0019",
+          "score": 0.5368,
+          "box": [
+            1705.4784,
+            42.01199999999999,
+            27.091199999999997,
+            41.0292
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 3,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 3
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 11,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            4.8
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 11,
+          "births": 3,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 8,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            4.8
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 8,
+          "births": 3,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Arriving_In_Norfolk_seg1h13",
+      "mode": "oracle-d0.3",
+      "frames": 900,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 156222,
+      "is_new_calls": 16,
+      "history_ns": 58562703,
+      "replay_s": 37.54116256599991,
+      "opens": [
+        {
+          "frame": 6,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0001",
+          "score": 0.99,
+          "box": [
+            805.5552,
+            592.7256,
+            29.068800000000003,
+            23.328000000000003
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 147,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0002",
+          "score": 0.99,
+          "box": [
+            1195.8912,
+            687.3984,
+            15.0528,
+            22.842
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 567,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0003",
+          "score": 0.99,
+          "box": [
+            824.448,
+            594.216,
+            20.256,
+            10.9188
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 855,
+          "id": "ghost_fleet_5fps/Arriving_In_Norfolk_seg1h13:0004",
+          "score": 0.99,
+          "box": [
+            777.1776,
+            590.8032,
+            21.9072,
+            11.1024
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 4,
+          "fp": 0,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6,
+            0.8,
+            1.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 1,
+          "latencies_s": [
+            0.6,
+            0.8,
+            1.4
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 4,
+          "fp": 0,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6,
+            0.8,
+            1.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 1,
+          "latencies_s": [
+            0.6,
+            0.8,
+            1.4
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats",
+      "mode": "yolo",
+      "frames": 676,
+      "fps": 5.0,
+      "license": "Creative Commons Attribution (YouTube CC BY, reuse allowed)",
+      "label_source": "teacher+human",
+      "is_new_ns": 13866555,
+      "is_new_calls": 105,
+      "history_ns": 426955146,
+      "replay_s": 118.2181235830003,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0001",
+          "score": 0.83697,
+          "box": [
+            584.736,
+            301.7088,
+            634.2144,
+            143.55360000000002
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 3,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0002",
+          "score": 0.42601,
+          "box": [
+            943.1424,
+            383.45399999999995,
+            46.867200000000004,
+            14.644799999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 9,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0004",
+          "score": 0.75656,
+          "box": [
+            531.84,
+            340.46999999999997,
+            107.9808,
+            108.2268
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 12,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0003",
+          "score": 0.68102,
+          "box": [
+            1024.3392000000001,
+            395.9496,
+            126.85440000000001,
+            99.0252
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 57,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0005",
+          "score": 0.47435,
+          "box": [
+            494.1696,
+            566.6544,
+            92.58239999999999,
+            23.5872
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 70,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0006",
+          "score": 0.40739,
+          "box": [
+            896.16,
+            497.12399999999997,
+            129.5232,
+            35.8776
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 101,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0009",
+          "score": 0.58074,
+          "box": [
+            178.65599999999998,
+            467.97479999999996,
+            156.288,
+            44.5608
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 114,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0012",
+          "score": 0.65563,
+          "box": [
+            1504.1664,
+            668.0015999999999,
+            119.4432,
+            44.4744
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 119,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0011",
+          "score": 0.72174,
+          "box": [
+            1421.6832,
+            326.37600000000003,
+            496.9728,
+            383.7672
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 166,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0013",
+          "score": 0.56819,
+          "box": [
+            1405.0176,
+            723.4272,
+            156.2304,
+            37.6704
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 172,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0014",
+          "score": 0.36002,
+          "box": [
+            1771.8144,
+            708.6744,
+            89.60640000000001,
+            45.4788
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 191,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0017",
+          "score": 0.69124,
+          "box": [
+            1201.824,
+            596.9916,
+            127.9296,
+            46.3644
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 192,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0019",
+          "score": 0.5354,
+          "box": [
+            1573.7088,
+            564.678,
+            109.3824,
+            44.658
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 192,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0020",
+          "score": 0.40994,
+          "box": [
+            1860.3072000000002,
+            569.3327999999999,
+            74.5152,
+            23.9004
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 248,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0022",
+          "score": 0.42914,
+          "box": [
+            958.3488,
+            291.2328,
+            55.2192,
+            74.4228
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 340,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0027",
+          "score": 0.59277,
+          "box": [
+            1618.9632000000001,
+            739.854,
+            44.812799999999996,
+            26.8812
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 389,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0028",
+          "score": 0.61238,
+          "box": [
+            512.5248,
+            526.5216,
+            639.36,
+            135.88559999999998
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 416,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0029",
+          "score": 0.81762,
+          "box": [
+            1280.5632,
+            340.78319999999997,
+            296.6976,
+            277.09560000000005
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 423,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0030",
+          "score": 0.60206,
+          "box": [
+            512.3136000000001,
+            492.3288,
+            637.3248,
+            136.9008
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 433,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0031",
+          "score": 0.41176,
+          "box": [
+            96.96000000000001,
+            179.4204,
+            194.74560000000002,
+            128.90879999999999
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 462,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0032",
+          "score": 0.87006,
+          "box": [
+            1280.6592,
+            382.4496,
+            247.43040000000002,
+            234.7272
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 508,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0034",
+          "score": 0.88992,
+          "box": [
+            659.5200000000001,
+            124.44839999999999,
+            372.3072,
+            192.4344
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 556,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0036",
+          "score": 0.72833,
+          "box": [
+            1024.0896,
+            372.168,
+            52.512,
+            121.6728
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 578,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0037",
+          "score": 0.88436,
+          "box": [
+            1024.3008,
+            365.08320000000003,
+            91.7376,
+            236.9628
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 582,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0039",
+          "score": 0.7285,
+          "box": [
+            1372.6848,
+            73.5156,
+            221.664,
+            59.486399999999996
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 583,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0038",
+          "score": 0.65163,
+          "box": [
+            1592.3328,
+            0.8208000000000001,
+            341.9904,
+            71.6256
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 584,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0040",
+          "score": 0.56669,
+          "box": [
+            1376.5248000000001,
+            22.6368,
+            116.2944,
+            32.184
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 612,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0042",
+          "score": 0.73262,
+          "box": [
+            1024.8768,
+            440.56440000000003,
+            169.6704,
+            190.4472
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 23,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 5,
+        "unmatched": 18
+      },
+      "open": {
+        "all": {
+          "tp": 5,
+          "fp": 23,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            4.0,
+            1.4,
+            0.2,
+            4.6,
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 5,
+          "fp": 23,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            4.0,
+            1.4,
+            0.2,
+            4.6,
+            0.2
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 3,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 3,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.2
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats",
+      "mode": "oracle-d0.3",
+      "frames": 676,
+      "fps": 5.0,
+      "license": "Creative Commons Attribution (YouTube CC BY, reuse allowed)",
+      "label_source": "teacher+human",
+      "is_new_ns": 1311050,
+      "is_new_calls": 57,
+      "history_ns": 109317212,
+      "replay_s": 29.1339478029995,
+      "opens": [
+        {
+          "frame": 10,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0001",
+          "score": 0.99,
+          "box": [
+            524.352,
+            302.6484,
+            684.6528000000001,
+            165.3372
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 16,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0002",
+          "score": 0.99,
+          "box": [
+            1113.504,
+            484.4556,
+            60.844800000000006,
+            19.818
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 19,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0003",
+          "score": 0.99,
+          "box": [
+            878.0928,
+            492.00480000000005,
+            49.9968,
+            19.2996
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 24,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0004",
+          "score": 0.99,
+          "box": [
+            1163.0592,
+            463.158,
+            49.2288,
+            21.103199999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 25,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0005",
+          "score": 0.99,
+          "box": [
+            1274.4192,
+            456.516,
+            44.928000000000004,
+            19.429199999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 31,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0006",
+          "score": 0.99,
+          "box": [
+            847.5264,
+            451.6128,
+            70.1952,
+            23.003999999999998
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 111,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0007",
+          "score": 0.99,
+          "box": [
+            380.4672,
+            265.3236,
+            1060.3584,
+            386.964
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 163,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0008",
+          "score": 0.99,
+          "box": [
+            1494.7008,
+            698.9004,
+            166.50240000000002,
+            49.204800000000006
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 168,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0010",
+          "score": 0.99,
+          "box": [
+            1215.0336,
+            665.9712,
+            134.41920000000002,
+            50.1768
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 172,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0009",
+          "score": 0.99,
+          "box": [
+            1722.4512,
+            703.512,
+            162.1824,
+            48.610800000000005
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 198,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0011",
+          "score": 0.99,
+          "box": [
+            1608.8256,
+            565.0128,
+            128.00639999999999,
+            59.9616
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 205,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0012",
+          "score": 0.99,
+          "box": [
+            1680.6912,
+            512.3304,
+            148.8192,
+            47.304
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 488,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0013",
+          "score": 0.99,
+          "box": [
+            516.96,
+            73.39680000000001,
+            394.464,
+            180.7164
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 584,
+          "id": "ghost_fleet_5fps/Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats:0014",
+          "score": 0.99,
+          "box": [
+            1386.7584,
+            84.078,
+            156.2688,
+            64.4436
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 9,
+        "correct_repeat": 1,
+        "matched_not_previously_reported": 8,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 13,
+          "fp": 1,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6,
+            1.2,
+            0.4,
+            0.6,
+            0.4,
+            0.8,
+            1.6,
+            0.2,
+            1.0,
+            0.4,
+            0.6,
+            0.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 13,
+          "fp": 1,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6,
+            1.2,
+            0.4,
+            0.6,
+            0.4,
+            0.8,
+            1.6,
+            0.2,
+            1.0,
+            0.4,
+            0.6,
+            0.6
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 5,
+          "fp": 0,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6,
+            0.4,
+            0.6,
+            0.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 5,
+          "fp": 0,
+          "births": 29,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.6,
+            0.4,
+            0.6,
+            0.6
+          ]
+        }
+      },
+      "gt_status": "partial"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Ferry_Passing_By_On_River",
+      "mode": "yolo",
+      "frames": 209,
+      "fps": 5.0,
+      "license": "Creative Commons Attribution (YouTube CC BY, reuse allowed)",
+      "label_source": "teacher+human",
+      "is_new_ns": 154352,
+      "is_new_calls": 8,
+      "history_ns": 8255366,
+      "replay_s": 31.223578511000596,
+      "opens": [
+        {
+          "frame": 70,
+          "id": "ghost_fleet_5fps/Ferry_Passing_By_On_River:0002",
+          "score": 0.54223,
+          "box": [
+            17.1456,
+            832.572,
+            80.9088,
+            63.774
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 93,
+          "id": "ghost_fleet_5fps/Ferry_Passing_By_On_River:0003",
+          "score": 0.83561,
+          "box": [
+            512.5056,
+            739.5948000000001,
+            278.4,
+            150.12
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 108,
+          "id": "ghost_fleet_5fps/Ferry_Passing_By_On_River:0004",
+          "score": 0.75966,
+          "box": [
+            1024.512,
+            765.072,
+            221.6832,
+            123.30359999999999
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 135,
+          "id": "ghost_fleet_5fps/Ferry_Passing_By_On_River:0006",
+          "score": 0.44557,
+          "box": [
+            1549.3247999999999,
+            782.0928,
+            346.54080000000005,
+            166.5792
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 3,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 3,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 2,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 2,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.4
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Ferry_Passing_By_On_River",
+      "mode": "oracle-d0.3",
+      "frames": 209,
+      "fps": 5.0,
+      "license": "Creative Commons Attribution (YouTube CC BY, reuse allowed)",
+      "label_source": "teacher+human",
+      "is_new_ns": 10960,
+      "is_new_calls": 3,
+      "history_ns": 3185351,
+      "replay_s": 8.305691675000162,
+      "opens": [
+        {
+          "frame": 73,
+          "id": "ghost_fleet_5fps/Ferry_Passing_By_On_River:0001",
+          "score": 0.99,
+          "box": [
+            3.5904,
+            779.5763999999999,
+            191.904,
+            117.8928
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Sailboat_on_the_horizon_seg0",
+      "mode": "yolo",
+      "frames": 900,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 459208,
+      "is_new_calls": 17,
+      "history_ns": 184481761,
+      "replay_s": 160.3154939800006,
+      "opens": [
+        {
+          "frame": 7,
+          "id": "ghost_fleet_5fps/Sailboat_on_the_horizon_seg0:0001",
+          "score": 0.53349,
+          "box": [
+            1894.656,
+            820.6056000000001,
+            23.5392,
+            107.3628
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 487,
+          "id": "ghost_fleet_5fps/Sailboat_on_the_horizon_seg0:0003",
+          "score": 0.49985,
+          "box": [
+            461.8752,
+            985.3919999999999,
+            44.544,
+            12.9276
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 554,
+          "id": "ghost_fleet_5fps/Sailboat_on_the_horizon_seg0:0004",
+          "score": 0.71072,
+          "box": [
+            1891.5264,
+            820.8,
+            23.9616,
+            105.8508
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.4
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.4
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 1,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2,
+            0.4
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Sailboat_on_the_horizon_seg0",
+      "mode": "oracle-d0.3",
+      "frames": 900,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 100342,
+      "is_new_calls": 14,
+      "history_ns": 59233323,
+      "replay_s": 35.7364296650012,
+      "opens": [
+        {
+          "frame": 11,
+          "id": "ghost_fleet_5fps/Sailboat_on_the_horizon_seg0:0001",
+          "score": 0.99,
+          "box": [
+            1882.0608,
+            821.0376,
+            39.36,
+            114.5988
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 556,
+          "id": "ghost_fleet_5fps/Sailboat_on_the_horizon_seg0:0002",
+          "score": 0.99,
+          "box": [
+            1878.24,
+            821.8044,
+            40.3584,
+            110.5596
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.8
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.8
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.8
+          ]
+        },
+        "mid_clip": {
+          "tp": 2,
+          "fp": 0,
+          "births": 2,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0,
+            0.8
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Ship_in_the_Distance_Ian",
+      "mode": "yolo",
+      "frames": 158,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 67584,
+      "is_new_calls": 8,
+      "history_ns": 10522216,
+      "replay_s": 25.686284481998882,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Ian:0001",
+          "score": 0.90328,
+          "box": [
+            136.6848,
+            389.394,
+            164.14079999999998,
+            109.08000000000001
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 57,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Ian:0002",
+          "score": 0.77107,
+          "box": [
+            512.064,
+            378.3132,
+            45.2928,
+            105.6348
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 1,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 1,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Ship_in_the_Distance_Ian",
+      "mode": "oracle-d0.3",
+      "frames": 158,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 11155,
+      "is_new_calls": 3,
+      "history_ns": 3430825,
+      "replay_s": 6.274655540999447,
+      "opens": [
+        {
+          "frame": 6,
+          "id": "ghost_fleet_5fps/Ship_in_the_Distance_Ian:0001",
+          "score": 0.99,
+          "box": [
+            151.64159999999998,
+            389.26439999999997,
+            171.2064,
+            111.5748
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Spotted_A_Submarine",
+      "mode": "yolo",
+      "frames": 745,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 1475661,
+      "is_new_calls": 53,
+      "history_ns": 120186276,
+      "replay_s": 113.26094097900022,
+      "opens": [
+        {
+          "frame": 38,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0001",
+          "score": 0.4099,
+          "box": [
+            58.444799999999994,
+            552.8628,
+            267.072,
+            46.5912
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 39,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0002",
+          "score": 0.50658,
+          "box": [
+            1193.3183999999999,
+            369.60839999999996,
+            223.5456,
+            172.85399999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 88,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0006",
+          "score": 0.53052,
+          "box": [
+            1078.0031999999999,
+            537.138,
+            52.4352,
+            9.7632
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 105,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0007",
+          "score": 0.64176,
+          "box": [
+            246.96959999999999,
+            581.1587999999999,
+            97.61280000000001,
+            25.898400000000002
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 128,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0010",
+          "score": 0.36203,
+          "box": [
+            765.6192,
+            519.804,
+            44.7936,
+            17.9388
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 146,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0013",
+          "score": 0.44571,
+          "box": [
+            1098.3744,
+            535.9176,
+            56.7168,
+            11.0268
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 229,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0016",
+          "score": 0.69455,
+          "box": [
+            928.8000000000001,
+            384.65279999999996,
+            276.384,
+            266.9544
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 255,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0017",
+          "score": 0.44429,
+          "box": [
+            450.27840000000003,
+            398.8008,
+            686.3424,
+            328.52520000000004
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 295,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0020",
+          "score": 0.57065,
+          "box": [
+            495.39840000000004,
+            444.5928,
+            642.3168000000001,
+            326.5704
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 490,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0023",
+          "score": 0.38213,
+          "box": [
+            679.7376,
+            410.0436,
+            662.7648,
+            343.10519999999997
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 590,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0025",
+          "score": 0.51956,
+          "box": [
+            1024.2624,
+            639.5436,
+            46.2528,
+            16.9452
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 597,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0027",
+          "score": 0.59169,
+          "box": [
+            1079.8464000000001,
+            519.966,
+            17.279999999999998,
+            9.860399999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 619,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0029",
+          "score": 0.36502,
+          "box": [
+            1301.1455999999998,
+            471.5172,
+            20.0256,
+            17.442
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 635,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0030",
+          "score": 0.54416,
+          "box": [
+            189.216,
+            443.34,
+            349.248,
+            264.3192
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 635,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0031",
+          "score": 0.47192,
+          "box": [
+            1791.7824,
+            648.1296,
+            111.1488,
+            68.796
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 5,
+        "correct_repeat": 3,
+        "matched_not_previously_reported": 0,
+        "unmatched": 2
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 14,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 14,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.6
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 9,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.6
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 9,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.6
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "Spotted_A_Submarine",
+      "mode": "oracle-d0.3",
+      "frames": 745,
+      "fps": 5.0,
+      "license": "Standard YouTube license (no license stated); internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 309567,
+      "is_new_calls": 21,
+      "history_ns": 44741172,
+      "replay_s": 30.30566246000126,
+      "opens": [
+        {
+          "frame": 36,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0001",
+          "score": 0.99,
+          "box": [
+            1219.7376,
+            361.03319999999997,
+            237.90720000000002,
+            177.498
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 46,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0002",
+          "score": 0.99,
+          "box": [
+            418.59839999999997,
+            346.2156,
+            1138.4064,
+            225.05040000000002
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 527,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0003",
+          "score": 0.99,
+          "box": [
+            67.2,
+            143.802,
+            1400.2944,
+            416.8044
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 601,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0004",
+          "score": 0.99,
+          "box": [
+            1168.8576,
+            372.59999999999997,
+            138.37439999999998,
+            136.9008
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 641,
+          "id": "ghost_fleet_5fps/Spotted_A_Submarine:0006",
+          "score": 0.99,
+          "box": [
+            -9.504000000000001,
+            442.3032,
+            1670.208,
+            277.6032
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 4,
+        "correct_repeat": 4,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 4,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 4,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "US_Destroyer_POV_Warship_Crossing",
+      "mode": "yolo",
+      "frames": 153,
+      "fps": 5.0,
+      "license": "Reddit repost of a released US Navy (DVIDS) video; no license stated; internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 161917,
+      "is_new_calls": 9,
+      "history_ns": 9940670,
+      "replay_s": 6.938631174998591,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/US_Destroyer_POV_Warship_Crossing:0001",
+          "score": 0.7728,
+          "box": [
+            456.54839999999996,
+            261.68624,
+            214.76391999999998,
+            106.17168
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "ghost_fleet_5fps/US_Destroyer_POV_Warship_Crossing:0002",
+          "score": 0.71501,
+          "box": [
+            343.96558,
+            168.52759999999998,
+            129.78238,
+            62.90344
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 90,
+          "id": "ghost_fleet_5fps/US_Destroyer_POV_Warship_Crossing:0003",
+          "score": 0.59138,
+          "box": [
+            810.41184,
+            81.81176,
+            47.1408,
+            30.6092
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 150,
+          "id": "ghost_fleet_5fps/US_Destroyer_POV_Warship_Crossing:0004",
+          "score": 0.61612,
+          "box": [
+            368.23626,
+            304.97808000000003,
+            291.75202,
+            157.10048
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 1,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 1
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 3,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 3,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 2,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.2
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 2,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "ghost_fleet_5fps",
+      "seq_id": "US_Destroyer_POV_Warship_Crossing",
+      "mode": "oracle-d0.3",
+      "frames": 153,
+      "fps": 5.0,
+      "license": "Reddit repost of a released US Navy (DVIDS) video; no license stated; internal use only",
+      "label_source": "teacher+human",
+      "is_new_ns": 16677,
+      "is_new_calls": 3,
+      "history_ns": 2824625,
+      "replay_s": 1.389377950999915,
+      "opens": [
+        {
+          "frame": 6,
+          "id": "ghost_fleet_5fps/US_Destroyer_POV_Warship_Crossing:0001",
+          "score": 0.99,
+          "box": [
+            338.73055999999997,
+            164.29376,
+            137.30612,
+            62.658
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 0,
+          "births": 1,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            1.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 0,
+          "births": 0,
+          "ignored_startup_signals": 1,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "complete"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip07",
+      "mode": "yolo",
+      "frames": 670,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 7377931,
+      "is_new_calls": 90,
+      "history_ns": 265745797,
+      "replay_s": 125.86649068900078,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip07:0002",
+          "score": 0.5642,
+          "box": [
+            1124.3519999999999,
+            986.0544000000001,
+            24.575999999999997,
+            9.1296
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip07:0001",
+          "score": 0.74889,
+          "box": [
+            290.1504,
+            994.896,
+            83.73760000000001,
+            25.1424
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip07:0003",
+          "score": 0.63761,
+          "box": [
+            1382.2975999999999,
+            960.2064,
+            42.24,
+            25.200000000000003
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 4,
+          "id": "fvessel_clip10/fvessel_clip07:0004",
+          "score": 0.53423,
+          "box": [
+            1970.3552,
+            950.3567999999999,
+            60.1856,
+            36.864000000000004
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 93,
+          "id": "fvessel_clip10/fvessel_clip07:0006",
+          "score": 0.42455,
+          "box": [
+            1368.704,
+            956.1744,
+            75.5712,
+            34.8048
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 126,
+          "id": "fvessel_clip10/fvessel_clip07:0009",
+          "score": 0.4173,
+          "box": [
+            1187.0720000000001,
+            957.2256,
+            57.1392,
+            33.912
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 189,
+          "id": "fvessel_clip10/fvessel_clip07:0012",
+          "score": 0.50977,
+          "box": [
+            1123.0464000000002,
+            987.3504,
+            20.9408,
+            7.8191999999999995
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 195,
+          "id": "fvessel_clip10/fvessel_clip07:0013",
+          "score": 0.93642,
+          "box": [
+            2121.1135999999997,
+            1161.1584,
+            266.6496,
+            276.0192
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 249,
+          "id": "fvessel_clip10/fvessel_clip07:0016",
+          "score": 0.48902,
+          "box": [
+            1546.0352,
+            1417.9535999999998,
+            39.936,
+            21.1392
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 251,
+          "id": "fvessel_clip10/fvessel_clip07:0018",
+          "score": 0.67089,
+          "box": [
+            1190.3488,
+            1384.6032,
+            86.01599999999999,
+            53.9424
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 270,
+          "id": "fvessel_clip10/fvessel_clip07:0019",
+          "score": 0.43234,
+          "box": [
+            515.712,
+            969.6816000000001,
+            80.38399999999999,
+            25.055999999999997
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 327,
+          "id": "fvessel_clip10/fvessel_clip07:0021",
+          "score": 0.61872,
+          "box": [
+            2142.1056,
+            246.9024,
+            49.5104,
+            35.8272
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 373,
+          "id": "fvessel_clip10/fvessel_clip07:0026",
+          "score": 0.57045,
+          "box": [
+            960.4096,
+            1394.8704,
+            80.64,
+            44.193599999999996
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 375,
+          "id": "fvessel_clip10/fvessel_clip07:0027",
+          "score": 0.71314,
+          "box": [
+            2524.2624,
+            933.3216000000001,
+            25.8304,
+            48.4128
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 379,
+          "id": "fvessel_clip10/fvessel_clip07:0030",
+          "score": 0.88523,
+          "box": [
+            846.1056000000001,
+            1373.2992,
+            74.9568,
+            57.931200000000004
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 423,
+          "id": "fvessel_clip10/fvessel_clip07:0044",
+          "score": 0.44312,
+          "box": [
+            1991.1936,
+            839.1743999999999,
+            489.6768,
+            162.1008
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 483,
+          "id": "fvessel_clip10/fvessel_clip07:0056",
+          "score": 0.7493,
+          "box": [
+            314.6496,
+            1000.2816,
+            35.84,
+            11.073599999999999
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 492,
+          "id": "fvessel_clip10/fvessel_clip07:0057",
+          "score": 0.62398,
+          "box": [
+            1536.4352,
+            938.6496,
+            239.4112,
+            57.12479999999999
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 550,
+          "id": "fvessel_clip10/fvessel_clip07:0058",
+          "score": 0.61748,
+          "box": [
+            0.128,
+            1268.7696,
+            13.952,
+            108.3456
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 602,
+          "id": "fvessel_clip10/fvessel_clip07:0059",
+          "score": 0.51219,
+          "box": [
+            2196.7616000000003,
+            35.208,
+            28.9536,
+            26.812800000000003
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 670,
+          "id": "fvessel_clip10/fvessel_clip07:0065",
+          "score": 0.42327,
+          "box": [
+            397.1328,
+            788.6448,
+            219.3664,
+            208.64159999999998
+          ],
+          "new_contact": false
+        }
+      ],
+      "suppressions": {
+        "suppressed": 4,
+        "correct_repeat": 1,
+        "matched_not_previously_reported": 1,
+        "unmatched": 2
+      },
+      "open": {
+        "all": {
+          "tp": 0,
+          "fp": 21,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 21,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 0,
+          "fp": 17,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        },
+        "mid_clip": {
+          "tp": 0,
+          "fp": 17,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": []
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip07",
+      "mode": "oracle-d0.3",
+      "frames": 670,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 190288,
+      "is_new_calls": 27,
+      "history_ns": 30848123,
+      "replay_s": 45.99524423100047,
+      "opens": [
+        {
+          "frame": 5,
+          "id": "fvessel_clip10/fvessel_clip07:0001",
+          "score": 0.99,
+          "box": [
+            1715.9935999999998,
+            933.9984000000001,
+            321.9968,
+            62.0064
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 6,
+          "id": "fvessel_clip10/fvessel_clip07:0002",
+          "score": 0.99,
+          "box": [
+            -1.664,
+            966.2256,
+            83.8912,
+            29.9952
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 303,
+          "id": "fvessel_clip10/fvessel_clip07:0003",
+          "score": 0.99,
+          "box": [
+            8.6272,
+            968.0976,
+            30.336,
+            37.9008
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 377,
+          "id": "fvessel_clip10/fvessel_clip07:0004",
+          "score": 0.99,
+          "box": [
+            2501.9904,
+            911.9952,
+            57.0112,
+            74.0016
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 4,
+          "fp": 0,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0,
+            4.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 4,
+          "fp": 0,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0,
+            4.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 4,
+          "fp": 0,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0,
+            4.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 4,
+          "fp": 0,
+          "births": 4,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            3.0,
+            4.0,
+            3.0,
+            4.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip09",
+      "mode": "yolo",
+      "frames": 519,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 6031960,
+      "is_new_calls": 89,
+      "history_ns": 141354049,
+      "replay_s": 101.05978676599989,
+      "opens": [
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip09:0002",
+          "score": 0.56466,
+          "box": [
+            1120.7168,
+            986.5152,
+            31.129600000000003,
+            9.2448
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 2,
+          "id": "fvessel_clip10/fvessel_clip09:0003",
+          "score": 0.40721,
+          "box": [
+            25.8816,
+            971.5391999999999,
+            113.71520000000001,
+            24.465600000000002
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 3,
+          "id": "fvessel_clip10/fvessel_clip09:0001",
+          "score": 0.75101,
+          "box": [
+            317.312,
+            1001.1312,
+            32.0512,
+            10.4544
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 6,
+          "id": "fvessel_clip10/fvessel_clip09:0004",
+          "score": 0.57914,
+          "box": [
+            1382.7584,
+            958.9104,
+            42.0352,
+            26.784
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 23,
+          "id": "fvessel_clip10/fvessel_clip09:0005",
+          "score": 0.76242,
+          "box": [
+            270.1568,
+            989.64,
+            44.595200000000006,
+            16.344
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 65,
+          "id": "fvessel_clip10/fvessel_clip09:0010",
+          "score": 0.63134,
+          "box": [
+            396.15999999999997,
+            970.0704000000001,
+            253.3632,
+            30.6432
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 79,
+          "id": "fvessel_clip10/fvessel_clip09:0012",
+          "score": 0.54456,
+          "box": [
+            1493.6064,
+            952.1136000000001,
+            141.9776,
+            34.5888
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 80,
+          "id": "fvessel_clip10/fvessel_clip09:0013",
+          "score": 0.62839,
+          "box": [
+            523.6736,
+            964.584,
+            91.54560000000001,
+            38.5056
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 117,
+          "id": "fvessel_clip10/fvessel_clip09:0014",
+          "score": 0.64733,
+          "box": [
+            2319.1551999999997,
+            954.072,
+            223.872,
+            27.0144
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 169,
+          "id": "fvessel_clip10/fvessel_clip09:0019",
+          "score": 0.55995,
+          "box": [
+            1123.7888,
+            987.0623999999999,
+            25.8048,
+            8.2368
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 179,
+          "id": "fvessel_clip10/fvessel_clip09:0021",
+          "score": 0.5274,
+          "box": [
+            1523.0976,
+            970.8768,
+            75.2896,
+            31.1472
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 219,
+          "id": "fvessel_clip10/fvessel_clip09:0024",
+          "score": 0.44547,
+          "box": [
+            2178.7136,
+            939.8592000000001,
+            53.73440000000001,
+            50.212799999999994
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 358,
+          "id": "fvessel_clip10/fvessel_clip09:0031",
+          "score": 0.83844,
+          "box": [
+            83.6352,
+            1247.4288,
+            74.64959999999999,
+            159.5808
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 359,
+          "id": "fvessel_clip10/fvessel_clip09:0033",
+          "score": 0.86858,
+          "box": [
+            321.1264,
+            1269.7632,
+            80.02560000000001,
+            164.76479999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 381,
+          "id": "fvessel_clip10/fvessel_clip09:0037",
+          "score": 0.35601,
+          "box": [
+            580.7616,
+            1365.2495999999999,
+            227.3792,
+            69.8256
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 383,
+          "id": "fvessel_clip10/fvessel_clip09:0038",
+          "score": 0.83502,
+          "box": [
+            294.5024,
+            1286.0352,
+            118.27199999999999,
+            141.66719999999998
+          ],
+          "new_contact": false
+        },
+        {
+          "frame": 384,
+          "id": "fvessel_clip10/fvessel_clip09:0039",
+          "score": 0.54157,
+          "box": [
+            405.5552,
+            1376.5392,
+            53.504,
+            62.5248
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 423,
+          "id": "fvessel_clip10/fvessel_clip09:0045",
+          "score": 0.56419,
+          "box": [
+            797.952,
+            968.5296000000001,
+            63.2576,
+            23.083199999999998
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 459,
+          "id": "fvessel_clip10/fvessel_clip09:0054",
+          "score": 0.55807,
+          "box": [
+            1123.072,
+            983.952,
+            27.699199999999998,
+            11.8224
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 481,
+          "id": "fvessel_clip10/fvessel_clip09:0055",
+          "score": 0.51086,
+          "box": [
+            729.8815999999999,
+            975.7296,
+            32.8192,
+            16.4304
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 4,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 4
+      },
+      "open": {
+        "all": {
+          "tp": 1,
+          "fp": 19,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 19,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 1,
+          "fp": 15,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 1,
+          "fp": 15,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            0.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    },
+    {
+      "dataset": "fvessel_clip10",
+      "seq_id": "fvessel_clip09",
+      "mode": "oracle-d0.3",
+      "frames": 519,
+      "fps": 1.0,
+      "license": "FVessel (github.com/gy65896/FVessel): academic/research use; redistribution of the video is per the authors' terms",
+      "label_source": "public_gt",
+      "is_new_ns": 132764,
+      "is_new_calls": 23,
+      "history_ns": 29469750,
+      "replay_s": 39.17649862599865,
+      "opens": [
+        {
+          "frame": 7,
+          "id": "fvessel_clip10/fvessel_clip09:0001",
+          "score": 0.99,
+          "box": [
+            1.152,
+            953.3232,
+            160.9984,
+            50.4864
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 89,
+          "id": "fvessel_clip10/fvessel_clip09:0002",
+          "score": 0.99,
+          "box": [
+            2514.9952,
+            944.0064000000001,
+            44.0064,
+            40.0032
+          ],
+          "new_contact": true
+        },
+        {
+          "frame": 371,
+          "id": "fvessel_clip10/fvessel_clip09:0003",
+          "score": 0.99,
+          "box": [
+            43.007999999999996,
+            974.9952000000001,
+            64.9984,
+            36.9936
+          ],
+          "new_contact": true
+        }
+      ],
+      "suppressions": {
+        "suppressed": 0,
+        "correct_repeat": 0,
+        "matched_not_previously_reported": 0,
+        "unmatched": 0
+      },
+      "open": {
+        "all": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0,
+            3.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "new_contact": {
+        "all": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0,
+            3.0
+          ]
+        },
+        "mid_clip": {
+          "tp": 3,
+          "fp": 0,
+          "births": 3,
+          "ignored_startup_signals": 0,
+          "latencies_s": [
+            5.0,
+            2.0,
+            3.0
+          ]
+        }
+      },
+      "gt_status": "public_gt"
+    }
+  ]
+}

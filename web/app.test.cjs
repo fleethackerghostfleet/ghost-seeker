@@ -9,6 +9,11 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('metadata renders extensible new_contact score reason',()=>{
+ const c=setup();
+ const html=vm.runInContext('metadataHTML({scoring:{topReasons:["new_contact"]}})',c);
+ assert.match(html,/new_contact/);
+});
 test('clear priority preview preserves detector-negative P4 pinning',()=>{
  const context=vm.createContext({});
  vm.runInContext(`
