@@ -1,12 +1,6 @@
 package catalog
 
-import (
-	_ "embed"
-	"encoding/json"
-)
-
-//go:embed imagery.json
-var imageryJSON []byte
+import "encoding/json"
 
 type Source struct {
 	Bands []string `json:"bands,omitempty"`

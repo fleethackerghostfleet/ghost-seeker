@@ -45,7 +45,7 @@ func Load(token, tokenFile, devFile string) (tok string, dev bool, err error) {
 	if devFile == "" || strings.EqualFold(devFile, "none") {
 		return "", false, errors.New("operator token required: set -operator-token / GS_OPERATOR_TOKEN or -operator-token-file / GS_OPERATOR_TOKEN_FILE (or -dev-token-file for a local demo)")
 	}
-	tok, err = loadOrCreate(devFile)
+	tok, err = loadDevToken(devFile)
 	if err != nil {
 		return "", false, fmt.Errorf("dev operator token: %w", err)
 	}

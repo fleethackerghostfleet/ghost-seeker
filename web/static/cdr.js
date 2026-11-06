@@ -163,7 +163,7 @@ function applySnapshot(m){
 }
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
- const c=await api('/api/config');datasetMode=!!c.datasetMode;
+ const c=await api('/api/config');datasetMode=c.features?.dataset===true;
  if(datasetMode){const banner=document.querySelector('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY · REAL IMAGERY · clean v2 dev · COMMANDER FINAL REVIEW'}
  SRC=Object.fromEntries(c.sources.map(s=>[s.id,s]));CLS=c.classes;MODELS=c.models;ATTR_LAB=c.attrLabels;
  $('tabs').onclick=e=>{const b=e.target.closest('button');if(b){setTab(b.dataset.t);view.sel=null;render()}};
