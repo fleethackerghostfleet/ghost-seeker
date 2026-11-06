@@ -111,7 +111,7 @@ class EdgemlEngine:
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
                  text_tower: str = "cache", anomaly_fallback: Optional[dict] = None, live_tiling: Optional[dict] = None,
-                 marine_mammal: Optional[dict] = None):
+                 marine_mammal: Optional[dict] = None, thermal_fallback: Optional[dict] | bool = True):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
@@ -147,6 +147,9 @@ class EdgemlEngine:
             self.clip_name = getattr(clip, "name", meta["model"])
         from .marine_mammal import wrap_detector
         self.detector = wrap_detector(self.detector, self.embedder, marine_mammal, score_thr)
+        from edgeml.detectors.thermal import configure_thermal
+
+        self.detector, self.thermal_unknownness_floor = configure_thermal(self.detector, thermal_fallback)
         # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
         # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
         self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
@@ -179,7 +182,8 @@ class EdgemlEngine:
                 tracker = make_tracker(self.tracker_variant, fps=self.fps, **kw)
                 from .marine_mammal import MarineTracker, make_aggregator
                 tracker = MarineTracker(tracker)
-                agg = make_aggregator(_make_zeroshot_aggregator_class(), name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
+                agg = make_aggregator(_make_zeroshot_aggregator_class(), name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE,
+                                      thermal_floor=getattr(self, "thermal_unknownness_floor", .9))
                 src = self.sources[name] = _Source(tracker=tracker, agg=agg)
             return src
 
@@ -220,11 +224,13 @@ class EdgemlEngine:
                 st = src.agg.states.get(sid) if sid else None
                 if st is not None and st.status == "open" and sid not in reported:
                     reported.add(sid)
+                    if st.s.label == "thermal contact":
+                        src.agg._apply(st)
                     sightings.append(self._duplicate(st, fi, W, H, base_ms, getattr(tr, "box", None)))
             emb = next((src.agg.states[ev["sighting_id"]].emb for ev in events
                         if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
                         and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
-            unknownness = max((float(ev.get("unknownness") or 0.0) for ev in events), default=0.0)
+            unknownness = max((float(ev.get("unknownness") or 0.0) for ev in sightings), default=0.0)
             open_dets = self.open_vocab.detect(image_bgr, dets, open_labels) if open_labels else []
             ms = (time.perf_counter() - t_start) * 1e3
             try:
@@ -269,11 +275,15 @@ class EdgemlEngine:
         return out
 
     def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int, track_box=None) -> dict:
+        from edgeml.detectors.thermal import thermal_unknown_first
+
+        thermal_unknown_first(st, getattr(self, "thermal_unknownness_floor", .9))
         s = st.s
         box = track_box if track_box is not None else s.best_box
         return {"id": s.sighting_id, "event": "EVENT_DUPLICATE",
                 "keyDetection": {"label": s.label or "", "confidence": _f(s.best_score), "box": _norm_box(box, W, H)},
                 "isKeyFrame": False, "subtype": s.subtype or "", "value": 0.0, "forms": [],
+                **({"unknownness": _f(s.unknownness)} if s.label == "thermal contact" else {}),
                 "firstSeenUnixMs": str(base_ms + int(s.first_t_s * 1000)), "lastSeenUnixMs": str(base_ms + int(s.last_t_s * 1000)),
                 "nFrames": int(s.n_frames)}
 
@@ -317,15 +327,19 @@ def _make_zeroshot_aggregator_class():
         """SightingAggregator whose ``subtype`` / ``unknownness`` / coarse ``label`` come from zero-shot MobileCLIP on
         the key-frame embedding the aggregator already computes (the E demo's DemoAggregator, minus the stats)."""
 
-        def __init__(self, *a, classifier=None, coarse=None, **kw):
+        def __init__(self, *a, classifier=None, coarse=None, thermal_floor=.9, **kw):
             super().__init__(*a, **kw)
             self.classifier, self.coarse = classifier, coarse or {}
+            self.thermal_floor = thermal_floor
             self.zs: dict[str, dict] = {}
 
         def _apply(self, st):
+            from edgeml.detectors.thermal import thermal_unknown_first
+
             if st.s.label in {"person", "person in water"}:
                 return
             if self.classifier is None or st.emb is None:
+                thermal_unknown_first(st, self.thermal_floor)
                 return
             z = self.zs.get(st.s.sighting_id)
             if z is None or z["key"] is not st.emb:
@@ -333,6 +347,7 @@ def _make_zeroshot_aggregator_class():
                 z = self.zs[st.s.sighting_id] = {"key": st.emb, "subtype": r["subtype"], "unknownness": float(r["unknownness"])}
             st.s.subtype, st.s.unknownness = z["subtype"], z["unknownness"]
             st.s.label = self.coarse.get(z["subtype"], "boat")
+            thermal_unknown_first(st, self.thermal_floor)
 
         def _snapshot(self, st):
             self._apply(st)

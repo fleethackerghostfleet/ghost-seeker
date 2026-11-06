@@ -29,7 +29,7 @@ def model_fakes(monkeypatch):
 def test_embedding_metadata_initialization_and_wrapper_forwarding(tmp_path, model_fakes):
     detector, clip, constructor = model_fakes
     (tmp_path / "meta.json").write_text(json.dumps({"model": "tiny", "precision": "fp16"}))
-    engine = service.EdgemlEngine("fixture.onnx", tmp_path, threads=2, agg={"min_hits": 3})
+    engine = service.EdgemlEngine("fixture.onnx", tmp_path, threads=2, agg={"min_hits": 3}, thermal_fallback=None)
     constructor.assert_called_once_with("tiny", backend="ort", onnx_dir=tmp_path, threads=2, precision="fp16")
     assert engine.detector.base is detector and engine.agg_params.min_hits == 3
     assert engine.unknown_calib == "fixture-calibration"
