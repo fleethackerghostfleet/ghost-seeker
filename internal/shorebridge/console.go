@@ -19,6 +19,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/buildprofile"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
@@ -933,7 +934,7 @@ func (c *Console) patchItem(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.Manual != nil && (*body.Manual < 0 || *body.Manual > 4) {
@@ -994,7 +995,7 @@ func (c *Console) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.Decision != "" && !store.Decisions[body.Decision] {
@@ -1049,7 +1050,7 @@ func (c *Console) fullRes(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	by := opauth.Actor(r.Context(), strings.TrimSpace(body.By))
@@ -1097,7 +1098,7 @@ func (c *Console) pull(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	id := r.PathValue("id")
@@ -1214,7 +1215,7 @@ func flatRules(rules []command.Rule) (kept []command.Rule, dropped bool) {
 	return kept, dropped
 }
 
-func (c *Console) compileDirective(ctx context.Context, text string, rules *[]command.Rule, durationMin int) compiledDirective {
+func (c *Console) compileDirective(ctx context.Context, text string, rules *[]command.Rule, durationMin int, rulesOnly bool) compiledDirective {
 	var out compiledDirective
 	out.Path = "rules"
 	out.Warnings = []string{}
@@ -1232,12 +1233,17 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 		}
 		out.Readback = tierReadback(out.Suppress, out.Boost, ruleTiers(out.Rules))
 	} else if c.b.Compiler != nil && strings.TrimSpace(ruleText) != "" {
-		comp := c.b.Compiler.Compile(ctx, ruleText)
+		var comp command.Compiled
+		if rulesOnly && c.b.Compiler.Research == nil {
+			comp = c.b.Compiler.CompileRules(ruleText)
+		} else {
+			comp = c.b.Compiler.Compile(ctx, ruleText)
+		}
 		if !comp.Blocked {
 			kept, dropped := flatRules(comp.Rules)
 			if dropped {
 				prior, path := comp.Warnings, comp.Path
-				comp = c.b.Compiler.Review(ruleText, kept, comp.DurationMin)
+				comp = c.b.Compiler.Review(ruleText, kept, comp.DurationMin, comp.Unknown...)
 				comp.Path = path
 				comp.Warnings = mergeWarnings(prior, comp.Warnings, []string{scopeWarning})
 			}
@@ -1247,7 +1253,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 		out.Path, out.Warnings, out.Blocked, out.DurationMin = comp.Path, comp.Warnings, comp.Blocked, comp.DurationMin
 		out.Readback = strings.TrimSpace(comp.Readback)
 		if len(out.Rules) == 0 && !out.Blocked && mode == "" && !strings.Contains(strings.Join(comp.Warnings, "\n"), "Not applied") {
-			out.Suppress, out.Boost = Interpret(ruleText)
+			out.Suppress, out.Boost = interpretKnown(ruleText)
 			out.Suppress, out.Boost = dedupe(out.Suppress), dedupe(out.Boost)
 			out.Rules = policyRules(flatDirectiveID, out.Suppress, out.Boost)
 			if len(out.Rules) > 0 {
@@ -1293,7 +1299,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	body.Text = strings.TrimSpace(body.Text)
@@ -1313,7 +1319,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
-	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin)
+	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin, false)
 	if cd.Blocked {
 		msg := "directive is blocked"
 		if cd.Compiled != nil {
@@ -1465,7 +1471,7 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	var checkRules []command.Rule
@@ -1490,9 +1496,9 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 	suppress, boost, rules := []string{}, []string{}, []command.Rule{}
 	if body.Rules != nil {
 		suppress, boost, rules = rulesFromBody("", body.Rules)
-	} else if c.b.Compiler != nil && c.b.Compiler.Research != nil && strings.TrimSpace(text) != "" {
+	} else if c.b.Compiler != nil && strings.TrimSpace(text) != "" {
 		// The model request must not hold the console's snapshot/overlay lock.
-		cd = c.compileDirective(r.Context(), text, nil, 0)
+		cd = c.compileDirective(r.Context(), text, nil, 0, true)
 		compiled = cd.Compiled
 		if !cd.Blocked {
 			suppress, boost, rules = cd.Suppress, cd.Boost, cd.Rules
@@ -1555,14 +1561,14 @@ func (c *Console) compile(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	if body.DurationMin < 0 || body.DurationMin > 10080 {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
-	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin)
+	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin, false)
 	warnings := cd.Warnings
 	if len(cd.Rules) == 0 && !cd.Blocked && cd.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		warnings = mergeWarnings(warnings, []string{"Nothing recognized — the shore interpreter maps object names after ignore/suppress or prioritize/boost."})

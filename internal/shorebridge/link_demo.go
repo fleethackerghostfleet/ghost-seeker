@@ -2,7 +2,11 @@
 
 package shorebridge
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
+)
 
 // WithLinkOverride lets a presenter pin the demo link rate (POST /api/shore/link).
 func (b *Bridge) WithLinkOverride(on bool) *Bridge {
@@ -29,7 +33,11 @@ func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
 		Auto bool   `json:"auto"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
-	if err := decodeJSONBody(r.Body, &in); err != nil || (!in.Auto && (in.Bps == nil || *in.Bps < 0)) {
+	if err := decodeJSONBody(r.Body, &in); err != nil {
+		http.Error(w, `body must be {"bps": N>=0} or {"auto": true}`, httpx.RequestBodyStatus(err))
+		return
+	}
+	if !in.Auto && (in.Bps == nil || *in.Bps < 0) {
 		http.Error(w, `body must be {"bps": N>=0} or {"auto": true}`, http.StatusBadRequest)
 		return
 	}
