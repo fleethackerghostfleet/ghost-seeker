@@ -59,6 +59,30 @@ func TestAutomaticLinkStatus(t *testing.T) {
 	}
 }
 
+func TestVersionedAPIProxyKeepsShoreCredentialsPrivate(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/stream" || r.URL.Query().Get("since") != "7" || r.Header.Get("Last-Event-ID") != "8" {
+			t.Error("proxy lost stream route/cursor")
+		}
+		if r.Header.Get("Cookie") != "" || r.Header.Get("Authorization") != "Bearer synthetic-shore-token" {
+			t.Error("proxy forwarded caller credentials instead of configured shore token")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "id: 9\nevent: item\ndata: {}\n\n")
+	}))
+	defer upstream.Close()
+	b := New(upstream.URL, "", nil).WithToken("synthetic-shore-token")
+	r := httptest.NewRequest("GET", "/api/v1/stream?since=7", nil)
+	r.Header.Set("Cookie", "session=private-browser-session")
+	r.Header.Set("Authorization", "Bearer caller-token")
+	r.Header.Set("Last-Event-ID", "8")
+	w := httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, r)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "text/event-stream" || !strings.Contains(w.Body.String(), "id: 9") {
+		t.Fatalf("proxy failed: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestNodeStatusEvictions(t *testing.T) {
 	if n := nodeStatus(&pb.GetStatusResponse{ItemsEvicted: 7}); n.Evicted != 7 {
 		t.Fatalf("evictions not forwarded: %+v", n)

@@ -27,6 +27,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
+	"github.com/fleethackerghostfleet/ghost-seeker/shore/api"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/console"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 	ssync "github.com/fleethackerghostfleet/ghost-seeker/shore/sync"
@@ -91,6 +92,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.Handle("/api/v1/", opauth.RequireBearer(operator, api.New(st).Handler()))
 	p, h := ghostseekerv1connect.NewSyncServiceHandler(ssync.Handler{Service: syncSvc}, append(link.HandlerOptions(), connect.WithInterceptors(auth), connect.WithReadMaxBytes(8<<20))...)
 	mux.Handle(p, h)
 	// Every ConsoleService RPC (present and future) and every blob sits behind

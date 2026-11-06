@@ -57,6 +57,9 @@ func (b *Bridge) Handler() http.Handler {
 			w.Header().Del("X-Content-Type-Options")
 			rp.ServeHTTP(w, r)
 		}))
+		// The live operator app's token/PIV session protects this read-only
+		// proxy. It exposes shore's durable contract, never the UI overlay.
+		mux.Handle("GET /api/v1/", rp)
 	}
 	return mux
 }
