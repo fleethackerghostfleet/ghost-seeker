@@ -133,7 +133,12 @@ var liveModels = map[string]catalog.Model{
 	liveModel: {Name: "Ship score", Desc: "The ship ranks objects using its scoring model and your priorities, with unfamiliar objects first. P1 Critical, P2 High, P3 Routine and P4 Low are priority groups within the current shore feed. Lowering an object's priority does not delete it.", W: map[string]float64{}, Lift: map[string]float64{}},
 }
 
-var liveExamples = []string{"ignore cargo ships", "prioritize submarines", "ignore birds and buoys", "prioritize unknown contacts"}
+var liveExamples = []string{
+	"Ignore the cargo ships, they are routine shipping lane traffic",
+	"Prioritize submarines first, they matter most today",
+	"Deprioritize birds and buoys so they stop cluttering the feed",
+	"Bring unknown contacts to the top so we can identify them",
+}
 
 func NewConsole(b *Bridge) *Console {
 	c := &Console{

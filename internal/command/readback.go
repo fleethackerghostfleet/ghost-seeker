@@ -7,6 +7,9 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
+// NoMatchReadback is shown when a directive yields no rules.
+const NoMatchReadback = "No matching imagery yet — the feed will update as it arrives."
+
 func readback(rules []Rule, durationMin int) string {
 	parts := make([]string, 0, len(rules)+1)
 	for _, rule := range rules {
@@ -25,7 +28,7 @@ func readback(rules []Rule, durationMin int) string {
 		}
 	}
 	if len(parts) == 0 {
-		return "No rules recognized."
+		return NoMatchReadback
 	}
 	if durationMin == 0 {
 		parts = append(parts, "Until cleared.")

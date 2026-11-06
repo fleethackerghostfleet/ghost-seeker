@@ -3,10 +3,7 @@ package command
 import (
 	"context"
 	"reflect"
-	"strings"
 	"testing"
-
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
 func TestOfflineConceptMapping(t *testing.T) {
@@ -37,7 +34,7 @@ func TestOfflineConceptMapping(t *testing.T) {
 				if len(got.Rules) != 1 || !reflect.DeepEqual(got.Rules[0].Classes, []string{"marine mammal"}) || len(got.Unknown) != 0 {
 					t.Fatalf("live mammal mapping %q: %+v", text, got)
 				}
-			} else if len(got.Rules) != 0 || !strings.HasPrefix(got.Readback, "Not supported:") || strings.Contains(got.Readback, "this sensor can detect: marine mammal") {
+			} else if len(got.Rules) != 0 || got.Readback != NoMatchReadback || len(got.Unknown) == 0 {
 				t.Fatalf("unsupported simulation mammal %q: %+v", text, got)
 			}
 		}
@@ -51,31 +48,21 @@ func TestOfflineConceptMapping(t *testing.T) {
 func TestUnsupportedReadback(t *testing.T) {
 	compiler := &Compiler{}
 	got := compiler.CompileRules("prioritize unicorns")
-	if len(got.Rules) != 0 || !strings.HasPrefix(got.Readback, `Not supported: "unicorns" — this sensor can detect: `) {
+	if len(got.Rules) != 0 || got.Readback != NoMatchReadback || !reflect.DeepEqual(got.Unknown, []string{"unicorns"}) {
 		t.Fatalf("unsupported readback: %+v", got)
 	}
-	labels := strings.TrimSuffix(strings.Split(got.Readback, "this sensor can detect: ")[1], ".")
-	for _, label := range strings.Split(labels, ", ") {
-		if _, ok := catalog.Classes[label]; !ok {
-			t.Errorf("invented simulation class %q", label)
-		}
-	}
-	if len(strings.Split(labels, ", ")) != len(catalog.Classes) {
-		t.Fatalf("incomplete supported list: %s", labels)
-	}
 	mixed := compiler.CompileRules("prioritize sailboats and unicorns")
-	if len(mixed.Rules) != 1 || !strings.HasPrefix(mixed.Readback, "Boost: small boat. Until cleared. Not supported:") {
+	if len(mixed.Rules) != 1 || mixed.Readback != "Boost: small boat. Until cleared." || len(mixed.Unknown) == 0 {
 		t.Fatalf("partial interpretation lost: %+v", mixed)
 	}
-	if empty := compiler.CompileRules(""); empty.Readback != "No rules recognized." || len(empty.Unknown) != 0 {
+	if empty := compiler.CompileRules(""); empty.Readback != NoMatchReadback || len(empty.Unknown) != 0 {
 		t.Fatalf("empty interpretation: %+v", empty)
 	}
 	compiler.Capabilities = testCapabilities{value: Capabilities{FixedLabels: []string{"person", "small boat"}}}
-	if got := compiler.CompileRules("report unicorns"); got.Readback != `Not supported: "unicorns" — this sensor can detect: person, small boat.` {
-		t.Fatalf("fixed sensor labels ignored: %+v", got)
-	}
 	live := (&Compiler{EdgeSubtypes: true}).CompileRules("report unicorns")
-	if !strings.Contains(live.Readback, "marine mammal") || !strings.Contains(live.Readback, "sailboat") {
-		t.Fatalf("live sensor classes missing: %+v", live)
+	for _, got := range []Compiled{compiler.CompileRules("report unicorns"), live} {
+		if got.Readback != NoMatchReadback {
+			t.Fatalf("vocabulary listed in readback: %+v", got)
+		}
 	}
 }

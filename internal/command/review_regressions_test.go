@@ -90,7 +90,7 @@ func TestLLMLiveSailboatSpecificity(t *testing.T) {
 	if got := compiler.Compile(context.Background(), "ignore sailboats for 30 minutes"); len(got.Rules) != 1 || got.Rules[0].Type != "suppress" || got.DurationMin != 30 {
 		t.Fatalf("action/duration lost: %+v", got)
 	}
-	if got := compiler.Compile(context.Background(), "prioritize sailboats and unicorns"); !strings.Contains(got.Readback, `Not supported: "unicorns"`) {
+	if got := compiler.Compile(context.Background(), "prioritize sailboats and unicorns"); !reflect.DeepEqual(got.Unknown, []string{"unicorns"}) || strings.Contains(got.Readback, "unicorns") {
 		t.Fatalf("unsupported term hidden: %+v", got)
 	}
 	if got := compiler.Compile(context.Background(), "prioritize small boats"); got.Path != "llm" || got.Rules[0].Classes[0] != "small boat" {

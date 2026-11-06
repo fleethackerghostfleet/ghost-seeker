@@ -181,7 +181,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	}
 	suppress, boost, rules := cd.Suppress, cd.Boost, cd.Rules
 	if len(rules) == 0 && cd.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects — try \"ignore cargo ships\" or \"prioritize submarines\".")
+		writeError(w, http.StatusUnprocessableEntity, command.NoMatchReadback)
 		return
 	}
 	pol := &pb.Policy{IssuedBy: opauth.Actor(r.Context(), c.b.issuer()), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost, TierLabels: ruleTiers(rules)}, Emcon: cd.Emcon}

@@ -141,7 +141,7 @@ func TestResearchCompilerAcceptsEdgeSubtypesOnlyInShoreMode(t *testing.T) {
 		if !result.Blocked || len(result.Rules) != 0 {
 			t.Fatalf("simulation mode accepted %s: %+v", concept, result)
 		}
-		if !strings.Contains(result.Readback, "Not supported:") || !strings.Contains(result.Readback, "this sensor can detect:") {
+		if !strings.Contains(result.Readback, "No matching imagery yet") || strings.Contains(result.Readback, "can detect") {
 			t.Fatalf("missing unsupported concept readback: %+v", result)
 		}
 	}

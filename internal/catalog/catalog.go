@@ -151,10 +151,10 @@ var EdgeW = map[string]float64{"vessel": .6, "aircraft": .65, "other": .45, "clu
 var AttrLabels = map[string]string{"approaching": "approaching", "new": "new / changed", "dark": "no AIS", "moving": "moving fast", "loitering": "loitering", "transient": "single-frame / noise-like"}
 
 var Examples = []string{
-	"Small boats approaching the pier at speed; ignore birds",
-	"Ships not broadcasting AIS",
-	"New aircraft entering the area",
-	"Any person in the water or debris",
-	"Loitering vessels near the harbor entrance",
-	"Only drones and helicopters",
+	"Show me small boats approaching the pier at speed, and ignore the birds",
+	"I want to see any new aircraft entering the area in the last 30 minutes",
+	"Look for people in the water and any floating debris",
+	"Watch for fishing vessels that have gone dark with no AIS",
+	"Keep an eye on small boats loitering near the harbor entrance",
+	"Focus only on drones and helicopters for the next 60 minutes",
 }

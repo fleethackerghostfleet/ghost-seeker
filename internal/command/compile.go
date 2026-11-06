@@ -3,7 +3,6 @@ package command
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
@@ -107,14 +106,6 @@ func (c *Compiler) finish(text string, rules []Rule, unknown []string, durationM
 	guardWarnings, blocked := guardrails(text, rules, caps, locks)
 	warnings = uniqueStrings(append(warnings, guardWarnings...))
 	readbackText := readback(rules, durationMin)
-	if len(unknown) > 0 {
-		unsupported := c.unsupportedReadback(unknown)
-		if len(rules) == 0 {
-			readbackText = unsupported
-		} else {
-			readbackText += " " + unsupported
-		}
-	}
 	return Compiled{
 		Rules: rules, Unknown: append([]string{}, unknown...), DurationMin: durationMin,
 		Path: path, Readback: readbackText, Warnings: warnings, Blocked: blocked,
@@ -122,28 +113,11 @@ func (c *Compiler) finish(text string, rules []Rule, unknown []string, durationM
 }
 
 func (c *Compiler) unsupportedReadback(concepts []string) string {
-	labels := make([]string, 0, len(catalog.Classes))
-	for label := range catalog.Classes {
-		labels = append(labels, label)
-	}
-	if c != nil && c.EdgeSubtypes {
-		for label := range catalog.EdgeSubtypes {
-			labels = append(labels, label)
-		}
-	}
-	if c != nil && c.Capabilities != nil {
-		caps := c.Capabilities.Capabilities()
-		if !caps.OpenVocabulary {
-			labels = append([]string{}, caps.FixedLabels...)
-		}
-	}
-	labels = uniqueStrings(labels)
-	sort.Strings(labels)
 	quoted := make([]string, len(concepts))
 	for i, concept := range concepts {
 		quoted[i] = fmt.Sprintf("%q", concept)
 	}
-	return "Not supported: " + strings.Join(quoted, ", ") + " — this sensor can detect: " + strings.Join(labels, ", ") + "."
+	return "No matching imagery yet for " + strings.Join(quoted, ", ") + " — the feed will update as it arrives."
 }
 
 func cloneRules(rules []Rule) []Rule {
