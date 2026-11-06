@@ -252,9 +252,14 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
+	compiler := s.directiveCompiler()
+	var precompiled command.Compiled
+	if body.Rules == nil {
+		// The LLM may take seconds; never hold the policy lock while it runs.
+		precompiled = compiler.Compile(r.Context(), body.Text)
+	}
 	s.policy.mu.Lock()
 	defer s.policy.mu.Unlock()
-	compiler := s.directiveCompiler()
 	var compiled command.Compiled
 	var rules []command.Rule
 	durationMin := body.DurationMin
@@ -263,7 +268,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		compiled = compiler.Review(body.Text, rules, durationMin)
 		durationMin = compiled.DurationMin
 	} else {
-		compiled = compiler.Compile(r.Context(), body.Text)
+		compiled = precompiled
 		rules = compiled.Rules
 		if durationMin == 0 {
 			durationMin = compiled.DurationMin
@@ -281,7 +286,9 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	if compiled.Blocked && (!lockBlocked || otherBlock) {
+	// Lock blocks are rechecked above under the policy lock: the compile ran
+	// without it, so a lock may have expired since.
+	if otherBlock {
 		message := ""
 		for _, warning := range compiled.Warnings {
 			if strings.HasPrefix(warning, "Blocked:") {
