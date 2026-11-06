@@ -15,12 +15,20 @@ def apply(document):
                    stdout=subprocess.DEVNULL)
 
 
+def exists(name):
+    return subprocess.run(["uds", "zarf", "tools", "kubectl", "get", "secret", name, "-n", "ghost-seeker"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
 def encoded(value):
     return base64.urlsafe_b64encode(value).rstrip(b"=")
 
 
 def main():
     apply({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "ghost-seeker"}})
+    # Running pods read these Secrets into env at start; keep existing credentials on redeploy.
+    if all(exists(name) for name in ("shore-auth", "operator-auth", "edge-auth")):
+        return
     operator = secrets.token_hex(32)
     signing = secrets.token_hex(32)
     header = encoded(b'{"alg":"HS256","typ":"JWT"}')
