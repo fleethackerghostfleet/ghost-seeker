@@ -85,9 +85,9 @@ var edgeConceptPatterns = []classPattern{
 	{"marine mammal", regexp.MustCompile(`\b(marine mammals?|(?:killer |humpback )?whales?|dolphins?|porpoises?|orcas?|cetaceans?)\b`)},
 }
 
-// ObservationClass resolves the subject of a class-only observation. A nearby
+// ObservationClasses resolves the subject of a class-only observation. A nearby
 // object is context, not another requested class or a proximity constraint.
-func ObservationClass(text string) (string, bool) {
+func ObservationClasses(text string) []string {
 	text = strings.Join(strings.Fields(strings.ToLower(text)), " ")
 	if subject, context, ok := strings.Cut(text, " near "); ok {
 		context = strings.TrimPrefix(context, "the ")
@@ -96,17 +96,25 @@ func ObservationClass(text string) (string, bool) {
 			known = known || (context != "" && pattern.re.FindString(context) == context)
 		}
 		if !known {
-			return "", false
+			return nil
 		}
 		text = subject
 	} else {
 		text = strings.TrimSuffix(text, " spotted")
 	}
 	text = strings.TrimPrefix(text, "the ")
+	for _, pattern := range genericPatterns {
+		if text != "" && pattern.re.FindString(text) == text {
+			return append([]string{}, pattern.classes...)
+		}
+	}
 	if alias, ok := catalog.CanonicalAlias(text); ok {
 		text = alias
 	}
-	return canonicalClass(text, true)
+	if class, ok := canonicalClass(text, true); ok {
+		return []string{class}
+	}
+	return nil
 }
 
 func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
@@ -122,8 +130,8 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 			continue
 		}
 		if edgeSubtypes {
-			if class, ok := ObservationClass(clause); ok {
-				rules = append(rules, Rule{Type: "boost", Classes: []string{class}})
+			if classes := ObservationClasses(clause); len(classes) > 0 {
+				rules = append(rules, Rule{Type: "boost", Classes: classes})
 				continue
 			}
 		}

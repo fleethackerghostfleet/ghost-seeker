@@ -25,8 +25,8 @@ func Interpret(text string) (suppress, boost []string) {
 		} else if verb, rest, ok := leadVerb(clause, boostVerbs); ok {
 			_ = verb
 			boost = append(boost, labels(rest)...)
-		} else if class, ok := command.ObservationClass(clause); ok {
-			boost = append(boost, class)
+		} else if classes := command.ObservationClasses(clause); len(classes) > 0 {
+			boost = append(boost, classes...)
 		}
 	}
 	return

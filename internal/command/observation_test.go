@@ -1,8 +1,11 @@
 package command
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
-func TestObservationClass(t *testing.T) {
+func TestObservationClasses(t *testing.T) {
 	for text, want := range map[string]string{
 		"whales spotted":            "marine mammal",
 		"whale near the ship":       "marine mammal",
@@ -12,9 +15,26 @@ func TestObservationClass(t *testing.T) {
 		"whale near shore":          "", "whale near the ship and ignore birds": "",
 		"": "", "unicorns spotted": "", "ignore whales": "", "whale near": "", "red whale spotted": "",
 	} {
-		got, ok := ObservationClass(text)
-		if got != want || ok != (want != "") {
-			t.Errorf("%q = %q, %v; want %q", text, got, ok, want)
+		got := ObservationClasses(text)
+		if (want == "" && len(got) != 0) || (want != "" && !reflect.DeepEqual(got, []string{want})) {
+			t.Errorf("%q = %v; want %q", text, got, want)
+		}
+	}
+}
+
+func TestGenericObservationClasses(t *testing.T) {
+	compiler := &Compiler{EdgeSubtypes: true}
+	for _, tc := range []struct{ text, directive string }{
+		{"vessel spotted", "prioritize vessels"},
+		{"aircraft near the ship", "prioritize aircraft"},
+	} {
+		want := compiler.CompileRules(tc.directive)
+		got := compiler.CompileRules(tc.text)
+		if !reflect.DeepEqual(got.Rules, want.Rules) || len(got.Unknown) != 0 {
+			t.Errorf("%q = %+v; want rules %+v", tc.text, got, want.Rules)
+		}
+		if classes := ObservationClasses(tc.text); !reflect.DeepEqual(classes, want.Rules[0].Classes) {
+			t.Errorf("%q observation = %v; want %v", tc.text, classes, want.Rules[0].Classes)
 		}
 	}
 }
