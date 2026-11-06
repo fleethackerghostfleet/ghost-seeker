@@ -1,4 +1,8 @@
 tasks:
+  - name: release
+    description: Build a versioned split production release (set VERSION).
+    actions:
+      - cmd: 'make release VERSION="${VERSION:?Set VERSION to x.y.z or x.y.z-rc1}" ARCH="${ARCH:-amd64}"'
   - name: images
     description: Build and pin a new immutable-tag production image set.
     actions:
@@ -20,8 +24,8 @@ tasks:
   - name: deploy-ship-bundle
     description: Deploy to the current cluster using administrator-supplied site config and existing Secrets.
     actions:
-      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to ship site uds-config.yaml}" uds deploy dist/uds-bundle-ghost-seeker-ship-amd64-0.1.0.tar.zst --confirm'
+      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to ship site uds-config.yaml}" uds deploy "${BUNDLE_DIR:-dist}/uds-bundle-ghost-seeker-ship-${ARCH:-amd64}-${VERSION:-$(cat VERSION)}.tar.zst" --confirm'
   - name: deploy-shore-bundle
     description: Deploy to the current cluster using administrator-supplied site config and existing Secrets.
     actions:
-      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to shore site uds-config.yaml}" uds deploy dist/uds-bundle-ghost-seeker-shore-amd64-0.1.0.tar.zst --confirm'
+      - cmd: 'UDS_CONFIG="${UDS_CONFIG:?Set UDS_CONFIG to shore site uds-config.yaml}" uds deploy "${BUNDLE_DIR:-dist}/uds-bundle-ghost-seeker-shore-${ARCH:-amd64}-${VERSION:-$(cat VERSION)}.tar.zst" --confirm'

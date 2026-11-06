@@ -15,6 +15,60 @@ immutability when publishing. `make images` alone uses a fresh tag but does not
 change deployment pins. `make zarf-ship`, `make zarf-shore`, then the
 `create-ship-bundle` / `create-shore-bundle` UDS tasks build the deliverables.
 
+The `deploy-ship-bundle` / `deploy-shore-bundle` tasks default to standalone
+bundles in `dist`, with the version read from `VERSION` (override with the
+`VERSION` environment variable). To deploy a release build instead, export
+`VERSION=<release-version>` and `BUNDLE_DIR="dist/release/$VERSION"` before
+running the deploy task. Both flows require the site's `UDS_CONFIG`.
+
+## Release build
+
+Install the pinned tools in `docs/VERIFY.md` (Go 1.26.10, Zarf v0.89.0,
+uds-cli v0.41.0), Docker with buildx, Python 3.11 and PyYAML. From a clean
+commit run `make release VERSION=0.1.0-rc1` (or `uds run release` with VERSION
+exported). `ARCH=amd64` is the default. `ALLOW_DIRTY=1` is an explicit local
+testing escape hatch; its manifest is marked dirty and is not a release from
+the recorded commit. Do not edit sources while a build is running.
+
+`VERSION` is the checked-in baseline for standalone packaging; `make
+package-check` rejects drift between it, split package metadata, bundle
+metadata and bundle package refs. The release VERSION argument overrides all
+four definitions together in an isolated source copy under
+`dist/release-work-<VERSION>`; source image pins are not modified. Existing
+output/work directories are refused, never silently overwritten. A failed
+build leaves these directories for diagnosis; archive/remove them before a
+retry. Fresh image tags intentionally contain SHA/time/randomness: this is a
+repeatable build procedure with recorded inputs, not a claim of byte-identical
+images (upstream base tags and Python dependency resolution are not immutable).
+
+The existing `make pin-images` path builds prod-tagged Go images, tracking-enabled
+inference (`EDGEML_TRACKING=1`), and checksum-verified models. Outputs in
+`dist/release/<VERSION>/` include both Zarf packages, both UDS bundles,
+`sbom/{ship,shore}/` exported Zarf SBOMs, the model `THIRD_PARTY_NOTICES.md`,
+`images.lock.json`, `release.json` (git SHA, architecture, refs, Docker image
+IDs and repository digests when present), and `SHA256SUMS`.
+Docker image IDs are recorded separately from repository digests: their meaning
+depends on the Docker storage backend. Model licensing remains
+**UNRESOLVED**: YOLO11n AGPL-3.0 and MobileCLIP Apple terms; notices and OCI
+labels are unchanged. No model redistribution approval is implied.
+
+Verify locally with `cd dist/release/<VERSION> && sha256sum -c SHA256SUMS`.
+Artifacts above 2,000,000,000 bytes also get 1 GiB `.part0000`, `.part0001`, ...
+files, each checksummed. Upload those parts rather than the oversized original
+to GitHub (2 GiB asset limit). Reassemble with
+`cat <artifact>.part* > <artifact>` in lexical order, then verify the original
+checksum. `SHA256SUMS` covers every file except itself; when downloading parts
+only, reassemble before checking the complete checksum list.
+
+For arm64 use `make release VERSION=<new-version> ARCH=arm64` on native arm64
+or a buildx builder with QEMU already configured. Every image is built with
+`DOCKER_DEFAULT_PLATFORM=linux/<ARCH>` and inspected for the requested arch.
+This host's builder advertises only amd64 variants, not arm64. No system-wide
+QEMU/binfmt changes are made by the release script. Emulated tracking-enabled
+PyTorch installs can take hours and are not built by default; arm64 release
+execution remains unverified. Prefer native arm64 and verify dependencies and
+model behavior there before fielding.
+
 ## Authentication is administrator-owned
 
 Create the configured namespace and Secrets **before** deploying. No production
