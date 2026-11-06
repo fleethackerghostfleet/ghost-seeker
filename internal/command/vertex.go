@@ -194,7 +194,7 @@ func (s *tokenSource) token(ctx context.Context) (string, error) {
 		value, ttl, err = metadataToken(ctx)
 	}
 	if s.command != "" || err != nil {
-		command := s.command
+		command := strings.TrimSpace(s.command)
 		if command == "" {
 			command = "gcloud auth print-access-token"
 		}
@@ -237,6 +237,9 @@ func commandToken(ctx context.Context, command string) (string, time.Duration, e
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return "", 0, fmt.Errorf("token command is empty")
+	}
 	output, err := exec.CommandContext(ctx, fields[0], fields[1:]...).Output()
 	if err != nil {
 		return "", 0, fmt.Errorf("token command failed")
