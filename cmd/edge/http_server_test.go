@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,43 +15,43 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 )
 
-type countingReader struct {
-	io.Reader
-	reads int
-}
-
-func (r *countingReader) Read(p []byte) (int, error) {
-	r.reads++
-	return r.Reader.Read(p)
-}
-
-func TestHTTPUpgradeDoesNotReadBodyBeforeGuards(t *testing.T) {
+func TestHTTPUpgradeRejectsIncompleteBody(t *testing.T) {
 	for _, tc := range []struct {
 		name, host, body string
+		length           int
 		status           int
 	}{
-		{"unauthorized", "localhost", "untrusted body", http.StatusUnauthorized},
-		{"empty", "localhost", "", http.StatusUnauthorized},
-		{"blocked host", "untrusted.invalid", "untrusted body", http.StatusForbidden},
+		{"unauthorized", "localhost", "partial body", 1 << 20, http.StatusUnauthorized},
+		{"empty", "localhost", "", 0, http.StatusUnauthorized},
+		{"blocked host", "untrusted.invalid", "partial body", 1 << 20, http.StatusForbidden},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			handler := httpx.CORSAllow(nil, httpx.NewHostAllowlist("127.0.0.1:0", nil),
 				opauth.RequireBearer("test-operator-token", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 					t.Error("unauthorized request reached the application")
 				})))
-			srv := newHTTPServer("127.0.0.1:0", handler)
-			body := &countingReader{Reader: strings.NewReader(tc.body)}
-			req := httptest.NewRequest(http.MethodPost, "http://"+tc.host+"/", body)
-			req.Header.Set("Connection", "Upgrade, HTTP2-Settings")
-			req.Header.Set("Upgrade", "h2c")
-			req.Header.Set("HTTP2-Settings", "AAMAAABk")
-			rec := httptest.NewRecorder()
-			srv.Handler.ServeHTTP(rec, req)
-			if rec.Code != tc.status {
-				t.Fatalf("status = %d, want %d", rec.Code, tc.status)
+			srv := httptest.NewUnstartedServer(handler)
+			srv.Config = newHTTPServer(srv.Listener.Addr().String(), handler)
+			srv.Start()
+			defer srv.Close()
+			conn, err := net.DialTimeout("tcp", srv.Listener.Addr().String(), 3*time.Second)
+			if err != nil {
+				t.Fatal(err)
 			}
-			if body.reads != 0 {
-				t.Fatalf("read untrusted body %d times before rejecting request", body.reads)
+			defer conn.Close()
+			if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := fmt.Fprintf(conn, "POST / HTTP/1.1\r\nHost: %s\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAMAAABk\r\nContent-Length: %d\r\n\r\n%s", tc.host, tc.length, tc.body); err != nil {
+				t.Fatal(err)
+			}
+			resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: http.MethodPost})
+			if err != nil {
+				t.Fatalf("no rejection after sending only %d of %d body bytes: %v", len(tc.body), tc.length, err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
 			}
 		})
 	}
