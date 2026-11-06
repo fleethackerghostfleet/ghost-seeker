@@ -101,7 +101,7 @@ session when checking the secure login screen. The override is not used by
 # toolchain: Go 1.26.10, Python >= 3.10, GitHub CLI signed in (gh auth login) for the demo data
 make build
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
-pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
+pip install -e "edgeml[tracking]" onnxruntime onnx --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
 make demo-clips        # refresh eval clips + discovered GCS sets (all gitignored)
 # INCLUDE_OCEAN_SCENES=1 make demo-clips   # opt into curated ocean scene tiles
 make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports + H's unknown_calib.npz)
@@ -197,8 +197,18 @@ shore store regardless of mode.
 
 ## 2. Live stack (four terminals + browser)
 
+Run `make demo-models` first, including for models cached by an older checkout.
+It uses Python 3's standard library to write `$(MODELS)/manifest.json` with
+SHA-256 hashes of every detector/embedding file (including calibration). This
+is **demo-only trust on first use**, not independently approved production
+provenance. Subsequent runs reject changed bytes instead of silently approving
+them; review intentional model updates before deleting the old manifest and
+rerunning the target. Compose and `make demo-sidecar` both pass the manifest;
+the language Compose override inherits the same sidecar command. Production
+verification remains mandatory and requires independently approved artifacts.
+
 ```sh
-make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
+make demo-sidecar      # real detector + embedding bundle, verified using ~/models/D/manifest.json
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
 make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
 make demo-edge         # replays scenario.generated.json, or scenario.json if nothing has been generated

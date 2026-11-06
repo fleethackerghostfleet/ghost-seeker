@@ -266,8 +266,11 @@ def test_cli_tomer_configuration_uses_only_fakes(monkeypatch):
     monkeypatch.setattr(tomer, "TomerPrioritizer", constructor)
     monkeypatch.setattr(server, "serve", serve)
     monkeypatch.setattr(cli.logging, "basicConfig", Mock())
+    verify = Mock()
+    monkeypatch.setattr(cli, "verify_models", verify)
     cli.main(["--prioritizer=tomer", "--tomer-model=model.onnx", "--tomer-policy=policy.json",
-              "--threads=2", "--tomer-window=3", "--tomer-dup-threshold=0.75", "--listen=127.0.0.1:0"])
+              "--model-manifest=manifest.json", "--threads=2", "--tomer-window=3", "--tomer-dup-threshold=0.75", "--listen=127.0.0.1:0"])
+    verify.assert_called_once_with(["model.onnx", "policy.json"], "manifest.json")
     noop.assert_called_once_with()
     constructor.assert_called_once_with("model.onnx", "policy.json", threads=2, window=3, dup_threshold=0.75)
     serve.assert_called_once_with(engine, "127.0.0.1:0", quiet=True, prioritizer=prioritizer, mode="tomer")

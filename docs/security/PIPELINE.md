@@ -229,6 +229,18 @@ operator-provisioned, read-only model bundle; its emptyDir remains a placeholder
 
 The approved manifest is JSON, relative to its own directory:
 
+**Demo exception to provenance approval, not verification:** `make demo-models`
+also creates `manifest.json` for the downloaded/cached YOLO and MobileCLIP
+directories, including calibration and auxiliary files. This demo-only helper
+trusts the local bytes on first use and records their SHA-256 as the revision;
+it does not attest upstream provenance. Existing manifests are checked, not
+silently refreshed when files change. Review an intentional demo bundle update
+before explicitly deleting its manifest and rerunning `make demo-models`.
+Demo Compose (including the language override) and `make demo-sidecar` pass
+this manifest with the models mounted read-only in Compose. Never use the
+demo helper to approve production artifacts: Zarf still requires an
+independently reviewed manifest. No unverified-model bypass was introduced.
+
 ```json
 {
   "schema_version": 1,

@@ -100,9 +100,11 @@ PY ?= python3
 demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unknown_calib.npz into $(MODELS) (GitHub release demo-data-v1 via gh, gcloud fallback)
 	@ok=1; for f in yolo11n-640/model.onnx yolo11n-640/meta.json mobileclip-s1/model.onnx mobileclip-s1/meta.json mobileclip-s1/text_cache.json; do test -s $(MODELS)/$$f || ok=; done; test -n "$$ok" && echo "have models in $(MODELS)" || \
 	  deploy/demo-data.sh models-D.tar.gz $(MODELS) 1 sh -c 'mkdir -p $(MODELS)/mobileclip-s1 && gcloud storage cp -r gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/yolo11n-640 $(MODELS)/ && gcloud storage cp gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/meta.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/model.onnx gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/text_cache.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/unknown_calib.npz $(MODELS)/mobileclip-s1/'
+	$(PY) scripts/demo_model_manifest.py "$(MODELS)"
 
-demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
-	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
+demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime onnx first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
+	@test -s "$(MODELS)/manifest.json" || { echo "error: demo model manifest missing — rerun 'make demo-models' (also upgrades cached bundles)"; exit 1; }
+	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --model-manifest $(MODELS)/manifest.json --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
 
 demo-edge: build demo-key ## replay the generated camera feed at 5 fps through the shaped link
 	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
@@ -121,6 +123,7 @@ DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) GS_DEMO_SCENARIO=$(notdir $(DEMO_SCENARIO
 compose-demo: ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
 	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO_SCENARIO)); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (see docs/DEMO.md)"; exit 1; }; done
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (needs gcloud; or MODELS=/path/to/D)"; exit 1; }
+	@test -s "$(MODELS)/manifest.json" || { echo "error: demo model manifest missing — rerun 'make demo-models' (also upgrades cached bundles)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d
 	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"
 	@echo "ship console: make compose-demo-ship   (prints a signed-in http://localhost:8081 URL; contains the demo operator token)"
