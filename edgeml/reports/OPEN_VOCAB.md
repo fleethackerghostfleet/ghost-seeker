@@ -36,6 +36,8 @@ localizer**. No model training or licensing decision was performed.
 * Optional ONNX text assets are loaded beside the existing image model. Missing
   assets advertise `openVocabulary=false` and arbitrary-text requests fail with
   `failed_precondition`. Image-only inference remains supported.
+  The Go remote retries that precondition once without open-vocabulary labels,
+  so stale policies or heterogeneous image-only edges do not drop live frames.
 
 ## Held-out evaluation
 
@@ -173,3 +175,8 @@ cover arbitrary-text service behavior, bounded labels/regions, shared LRU reuse,
 concurrency/eviction, invalid vectors, missing assets, threshold/negative gates,
 grid matching and verified optional-asset packaging. Production contract tests
 and the gate are unchanged; no protobuf or versioned shore API fields were added.
+
+Review regressions also exercise simultaneous OPEN/UPDATE/CLOSE sightings and
+grid matches, same-hash scenes/new labels versus true duplicate matches,
+image-only RPC fallback without losing frame context, and whole qualified
+concepts (for example `red sailboats`, never independent `red` + `sailboat`).

@@ -37,6 +37,11 @@ phrases is blocked. If independently authored policy layers together exceed
 five, the edge deterministically uses the first five normalized phrases in
 alphabetical order; it never sends an unbounded request.
 
+If an image-only sidecar rejects a stale open-vocabulary request with
+`failed_precondition`, the Go remote retries once with only the closed labels.
+The sidecar still reports `openVocabulary=false`; unavailable arbitrary-text
+matching does not prevent ordinary live-frame inference.
+
 The authenticated edge-only `GET /ship/inference` proxies these capabilities;
 shore caches them for 15 seconds and fails closed on unavailable/older edges.
 There are no protobuf fields or versioned shore `/api/v1` response changes.
