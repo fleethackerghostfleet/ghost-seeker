@@ -7,9 +7,11 @@ detection, optional embedding/zero-shot classification, optional tracking and
 observation aggregation, and optional frame/night-light prioritization. The
 [ingester](../../edge/ingest/ingest.go), [scoring catalog](../../internal/catalog/catalog.go)
 and [scheduler](../../edge/scheduler) turn observations and authorized policies
-into item priorities and bandwidth scheduling. Defaults matter: the Zarf sidecar
-loads a real detector with a verified manifest, does not pass `--embed`, and uses
-stateless detection when BoxMOT is absent. The tracking demo is not the approved
+into item priorities and bandwidth scheduling. Defaults matter: the Zarf package ships no
+model weights. The sidecar starts inference only after the operator provides an
+approved model bundle and its `manifest.json` in an existing PVC (`MODELS_PVC`).
+With that unset, `/models` is an empty volume and the sidecar refuses to load.
+It does not pass `--embed`, and uses stateless detection when BoxMOT is absent. The tracking demo is not the approved
 default fielding image.
 
 This is **prioritization/decision support, not engagement decisions**. No weapons
