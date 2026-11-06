@@ -120,6 +120,7 @@ variables.
 | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset | Signing-key file; takes precedence over literal key |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
 | `-edge` | `EDGE_ID` | empty | Edge ID to address downlink to; empty means all |
+| `-api-event-retain` | — | `100000` | Positive count of newest stream journal entries to keep; swept at startup and every second |
 
 ### `ghost-seeker` operator app
 
@@ -367,8 +368,10 @@ in mind, and configure edge disk retention caps separately.
 Drop uniquely named `.jpg`, `.jpeg` or `.png` regular files in the spool root;
 optional metadata goes in `<image>.json` (for example `frame.jpg.json`). Publish
 the sidecar first, then atomically rename a completed image into the root.
-Size and modification time of **both** files must stay unchanged over a poll
-interval; a paused writer can still appear stable, so atomic publication is
+Size and modification time of **both** files must stay unchanged between poll
+ticks; one stamp pass covers the whole batch and the next tick admits all stable
+files without a per-file sleep. A paused writer can still appear stable, so
+atomic publication is
 recommended. Symlinks and subdirectories are ignored. Files move to `processed/`
 only after the edge ingester succeeds (including duplicate folds), or `failed/`
 on invalid input/ingest failure, together with the sidecar. Queue saturation
@@ -451,14 +454,28 @@ curl -N --header @/run/secrets/operator.header \
   carries the **latest** item state, not an immutable historical snapshot.
   Save the last fully processed event ID and reconnect with `Last-Event-ID`
   (or `?since=`). Resume is exclusive and survives shore restarts, provided its
-  SQLite store is retained. No cursor means replay from the beginning; use the
+  SQLite store is retained and the cursor is within event retention. No cursor
+  means replay from the beginning; use the
   `stream_cursor` from `/health` to start at the current tail. Cursors ahead of
-  the journal are rejected. Receipt/event journals grow with retained shore
-  history; back them up with the database.
+  the journal are rejected. Shore retains the newest `-api-event-retain` events
+  (default `100000`, must be positive), pruning at startup and once per second.
+  Bursts can temporarily exceed that count between sweeps. A stream cursor
+  older than the oldest retained sequence minus one returns **410 Gone** with
+  a JSON error directing the client to `GET /api/v1/items`. An omitted/zero
+  cursor also gets 410 if the beginning was pruned. To resync, capture the
+  `/health` `stream_cursor` first, page `/items`, then resume streaming from that
+  saved cursor so updates during pagination are replayed. If pagination itself
+  outlasts retention, repeat the resync. Item/list receipt history is not pruned.
+  Back up the journals with the SQLite database.
 - SSE heartbeat comments arrive every 15 s. At most 64 streams are admitted
   (`429` above that); each client fetches at most 32 journal records at once.
+  Ranks are computed once per page; consecutive records for one item within
+  that page produce one latest-state event with the last record's cursor.
+  If that run includes a creation, the event kind remains `created`.
   Slow/broken writers time out after 10 s rather than accumulating a queue;
-  reconnect using the saved event cursor. Reverse proxies must disable
+  reconnect using the saved event cursor. A connected reader overtaken by
+  retention is disconnected; reconnecting with its expired cursor returns 410.
+  Reverse proxies must disable
   response buffering and allow streaming connections.
 - `/health` returns `status`, manifested item count and `stream_cursor`.
 
