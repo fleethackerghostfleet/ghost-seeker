@@ -218,8 +218,14 @@ When staging an edge-only cluster:
 ```sh
 zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
   --confirm --components=edge \
-  --set-variables=SHORE_URL=http://shore.example.internal:8080
+  --set-variables=SHORE_URL=http://shore.example.internal:8080 \
+  --set-variables=SHORE_EGRESS_CIDR=203.0.113.10/32 \
+  --set-variables=SHORE_EGRESS_PORT=8080
 ```
+
+`SHORE_EGRESS_CIDR`/`SHORE_EGRESS_PORT` must cover the address and port that
+`SHORE_URL` resolves to; the default-deny egress policy otherwise blocks the
+sync link.
 
 The packaged images are production builds (`-tags prod`, see
 [Production profile](#production-profile-and-prod-gate)): the edge has no
