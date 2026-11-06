@@ -155,6 +155,13 @@ class EdgemlEngine:
         self.frames = 0
         self.ms_total = 0.0
 
+        from .open_vocab import ONNXTextTower, OpenVocabulary, TextCache
+        self._onnx_text = None
+        if self.embedder and all((Path(embed).expanduser() / name).is_file() for name in ("text_model.onnx", "tokenizer.json")):
+            self._onnx_text = ONNXTextTower(Path(embed).expanduser(), threads)
+        self._cached_text = TextCache(self._encode_text)
+        self.open_vocab = OpenVocabulary(self.embedder, self._cached_text) if self.embedder and (self._onnx_text or text_tower == "torch") else None
+
     # -- per-source state ------------------------------------------------------------------------------------------
     def _source(self, name: str) -> _Source:
         with self._lock:
@@ -178,6 +185,13 @@ class EdgemlEngine:
 
     # -- rpc -------------------------------------------------------------------------------------------------------
     def analyze(self, source: str, image_bgr: np.ndarray, captured_ms: Optional[int], known_labels: list[str], want_embedding: bool) -> dict:
+        from .open_vocab import labels_from_wire
+        try:
+            open_labels = labels_from_wire(known_labels)
+        except ValueError as exc:
+            raise RpcError("invalid_argument", str(exc)) from exc
+        if open_labels and not self.open_vocab:
+            raise RpcError("failed_precondition", "open vocabulary requires text_model.onnx + tokenizer.json or --text-tower torch")
         src = self._source(source or "default")
         t_start = time.perf_counter()
         night_report = None
@@ -203,6 +217,7 @@ class EdgemlEngine:
                         if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
                         and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
             unknownness = max((float(ev.get("unknownness") or 0.0) for ev in events), default=0.0)
+            open_dets = self.open_vocab.detect(image_bgr, dets, open_labels) if open_labels else []
             ms = (time.perf_counter() - t_start) * 1e3
             try:
                 night_report = frame_report(image_bgr, [(d.label, d.score, d.box) for d in kept],
@@ -224,6 +239,7 @@ class EdgemlEngine:
                                  "reason": burst_result["reason"]}
         if emb is not None:
             resp["embedding"] = [round(float(v), 5) for v in np.asarray(emb).ravel()]
+        resp["detections"].extend(open_dets)
         return resp
 
     def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int, st=None) -> dict:
@@ -254,8 +270,13 @@ class EdgemlEngine:
                 "nFrames": int(s.n_frames)}
 
     def embed_text(self, texts: list[str]) -> list[list[float]]:
+        return [[round(float(v), 5) for v in row] for row in self._cached_text(texts)]
+
+    def _encode_text(self, texts):
         if self.embedder is None:
             raise RpcError("unimplemented", "sidecar started without --embed")
+        if self._onnx_text is not None:
+            return self._onnx_text(texts)
         try:
             vecs = self.embedder.embed_text(texts)
         except RuntimeError as e:
@@ -265,7 +286,7 @@ class EdgemlEngine:
         return [[round(float(v), 5) for v in row] for row in np.asarray(vecs, np.float32)]
 
     def _torch_text(self, texts):
-        # Opt-in slow path (loads torch + the MobileCLIP text tower once); never used by Analyze.
+        # Explicit opt-in fallback; offline ONNX is preferred for live use.
         if self._torch_clip is None:
             from edgeml.embed.clip_embedder import ClipEmbedder
 
@@ -273,7 +294,7 @@ class EdgemlEngine:
         return self._torch_clip.embed_text(texts)
 
     def capabilities(self) -> dict:
-        return {"modelId": self.model_id, "openVocabulary": self.embedder is not None, "fixedLabels": list(self.labels),
+        return {"modelId": self.model_id, "openVocabulary": self.open_vocab is not None, "fixedLabels": list(self.labels),
                 "embeddingDim": self.embedding_dim}
 
     def stats(self) -> dict:

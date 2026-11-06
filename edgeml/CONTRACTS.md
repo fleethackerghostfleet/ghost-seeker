@@ -1,5 +1,51 @@
 # edgeml contracts (v1)
 
+## Live directive vocabulary (existing InferenceService v1 wire)
+
+`AnalyzeRequest.known_labels` retains its closed-set meaning. Entries prefixed
+`open-vocab:` additionally request natural-language MobileCLIP matching, e.g.
+`open-vocab:orange life jackets`. Labels are lowercase ASCII noun phrases,
+1–64 characters and at most 7 words; whitespace is collapsed. There may be at
+most **5 distinct open labels** per request; malformed/overflow labels return
+`invalid_argument`. The prefix is not returned in detections: the normalized
+phrase itself is the label, so the compiled directive's boost/suppress rule
+matches it unchanged. Unknown unprefixed labels do not opt in.
+
+`Capabilities.open_vocabulary` is true only when the image embedder and an
+arbitrary-text encoder are available: paired `text_model.onnx` + `tokenizer.json`
+beside the MobileCLIP image model, or explicit `--text-tower torch`. Image-only
+installs continue working and advertise false; open-label Analyze calls then
+return `failed_precondition`. Existing fixed-label EmbedText cache calls remain
+available. Dynamic text embeddings use a thread-safe 128-entry LRU cache shared
+by EmbedText and Analyze (two templates per label plus seven generic negatives).
+No model/tokenizer network access occurs in the ONNX runtime.
+
+For each active phrase, Analyze scores up to 8 detector crops plus the whole
+frame and 2×2 coarse grid (13 regions maximum). Acceptance requires both cosine
+similarity and a positive-minus-best-generic-negative margin; defaults and
+held-out calibration are recorded in `reports/OPEN_VOCAB.md`. One best matching
+region per phrase is returned as a normal normalized-box detection. Confidence
+is an acceptance score `min(.99, .5 + margin)`, **not** a posterior probability
+or raw CLIP cosine. These are frame tags/coarse proposals, not new tracker IDs.
+The live Go ingester retains matching frames even during tracker warm-up and
+applies effective policy boosts to their detection labels. With no active
+prompts there is no additional image/text inference.
+
+The Go edge derives prompts from the effective merged policy, after expiry,
+target and lock processing. A single directive with more than five novel
+phrases is blocked. If independently authored policy layers together exceed
+five, the edge deterministically uses the first five normalized phrases in
+alphabetical order; it never sends an unbounded request.
+
+If an image-only sidecar rejects a stale open-vocabulary request with
+`failed_precondition`, the Go remote retries once with only the closed labels.
+The sidecar still reports `openVocabulary=false`; unavailable arbitrary-text
+matching does not prevent ordinary live-frame inference.
+
+The authenticated edge-only `GET /ship/inference` proxies these capabilities;
+shore caches them for 15 seconds and fails closed on unavailable/older edges.
+There are no protobuf fields or versioned shore `/api/v1` response changes.
+
 Every workstream codes against this file. To change it, open a PR against `edgeml/main` that edits this
 file and explains why.
 

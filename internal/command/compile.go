@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 )
 
 type Capabilities struct {
@@ -48,8 +49,14 @@ func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
 	}
 	durationMin, rest := extractDuration(text)
 	warnings := make([]string, 0)
+	if c.openVocabulary() {
+		rules, unknown := c.parse(rest)
+		if openVocabularyCount(rules) > 0 {
+			return c.finish(text, rules, unknown, durationMin, "rules/open-vocab", warnings)
+		}
+	}
 	if c != nil && c.EdgeSubtypes {
-		rules, unknown := parseDirectiveDetailed(rest, true)
+		rules, unknown := c.parse(rest)
 		for _, rule := range rules {
 			for _, class := range rule.Classes {
 				if catalog.EdgeSubtypes[class] {
@@ -77,13 +84,13 @@ func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
 		}
 		warnings = append(warnings, fmt.Sprintf("Local LLM unavailable (%s); used rule-based parser.", shortReason(err.Error(), 100)))
 	}
-	rules, unknown := parseDirectiveDetailed(rest, c != nil && c.EdgeSubtypes)
+	rules, unknown := c.parse(rest)
 	return c.finish(text, rules, unknown, durationMin, "rules", warnings)
 }
 
 func (c *Compiler) CompileRules(text string) Compiled {
 	durationMin, rest := extractDuration(text)
-	rules, unknown := parseDirectiveDetailed(rest, c != nil && c.EdgeSubtypes)
+	rules, unknown := c.parse(rest)
 	return c.finish(text, rules, unknown, durationMin, "rules", []string{})
 }
 
@@ -105,6 +112,10 @@ func (c *Compiler) finish(text string, rules []Rule, unknown []string, durationM
 		caps, locks = c.Capabilities, c.Locks
 	}
 	guardWarnings, blocked := guardrails(text, rules, caps, locks)
+	if openVocabularyCount(rules) > openvocab.MaxPrompts {
+		blocked = true
+		guardWarnings = append(guardWarnings, "Blocked: at most 5 open-vocabulary concepts can be active.")
+	}
 	warnings = uniqueStrings(append(warnings, guardWarnings...))
 	readbackText := readback(rules, durationMin)
 	if len(unknown) > 0 {

@@ -34,6 +34,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 )
 
 // Capture is one thing a source produced.
@@ -228,7 +229,8 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	var resp *pb.AnalyzeResponse
 	if image {
 		var err error
-		resp, err = g.an.Analyze(ctx, inference.Frame{Image: c.Data, Source: c.Source, CapturedAt: c.CapturedAt}, g.cfg.KnownLabels, c.Hints)
+		labels := append(append([]string{}, g.cfg.KnownLabels...), openvocab.Labels(g.sch.Policy())...)
+		resp, err = g.an.Analyze(ctx, inference.Frame{Image: c.Data, Source: c.Source, CapturedAt: c.CapturedAt}, labels, c.Hints)
 		if err != nil {
 			return nil, fmt.Errorf("analyze: %w", err)
 		}
@@ -249,6 +251,14 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		}
 		if g.cfg.Dedup == DedupSightings {
 			g.remember(c, hash)
+			if matches := openVocabularyMatches(resp, labels); len(matches) > 0 {
+				var sightingErr error
+				if len(resp.Sightings) > 0 {
+					_, sightingErr = g.applySightings(ctx, c, hash, resp)
+				}
+				row, err := g.openVocabularyFrame(ctx, c, hash, resp, matches)
+				return row, errors.Join(sightingErr, err)
+			}
 			if len(resp.Sightings) > 0 {
 				return g.applySightings(ctx, c, hash, resp)
 			}
@@ -265,6 +275,50 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		g.rememberTomer(resp, row.Item.Id)
 	}
 	return row, err
+}
+
+func openVocabularyMatches(resp *pb.AnalyzeResponse, labels []string) []string {
+	var matches []string
+	for _, label := range labels {
+		if !strings.HasPrefix(label, openvocab.Prefix) {
+			continue
+		}
+		for _, detection := range resp.GetDetections() {
+			if detection.GetLabel() == strings.TrimPrefix(label, openvocab.Prefix) {
+				matches = append(matches, detection.Label)
+				break
+			}
+		}
+	}
+	return matches
+}
+
+// Grid matches have no tracker identity; deduplicate only frames already
+// carrying every current match, never scenes or unrelated tracked contacts.
+func (g *Ingester) openVocabularyFrame(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse, matches []string) (*store.Row, error) {
+	ids, err := g.st.IDsByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		row, err := g.st.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if tags := row.Item.GetFeatures().GetTags(); tags["event"] == "scene" || tags["sighting_id"] != "" {
+			continue
+		}
+		stored := map[string]bool{}
+		for _, d := range row.Item.GetFeatures().GetDetections() {
+			stored[d.GetLabel()] = true
+		}
+		if slices.ContainsFunc(matches, func(label string) bool { return !stored[label] }) {
+			continue
+		}
+		atomic.AddInt64(&g.Dups, 1)
+		return row, nil
+	}
+	return g.newItem(ctx, c, hash, resp, nil)
 }
 
 const tomerRingSize = 512

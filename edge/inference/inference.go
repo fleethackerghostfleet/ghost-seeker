@@ -16,6 +16,7 @@ import (
 	"connectrpc.com/connect"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1/ghostseekerv1connect"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/vec"
 )
 
@@ -47,6 +48,19 @@ func (r *Remote) Analyze(ctx context.Context, f Frame, known []string, _ map[str
 		req.CapturedAtUnixMs = f.CapturedAt.UnixMilli()
 	}
 	resp, err := r.c.Analyze(ctx, connect.NewRequest(req))
+	if connect.CodeOf(err) == connect.CodeFailedPrecondition {
+		closed := make([]string, 0, len(known))
+		for _, label := range known {
+			if !strings.HasPrefix(label, openvocab.Prefix) {
+				closed = append(closed, label)
+			}
+		}
+		if len(closed) != len(known) {
+			// Text assets may disappear after policy compilation or on another edge.
+			req.KnownLabels = closed
+			resp, err = r.c.Analyze(ctx, connect.NewRequest(req))
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +77,14 @@ func (r *Remote) EmbedText(ctx context.Context, texts []string) ([][]float32, er
 		out[i] = e.Values
 	}
 	return out, nil
+}
+
+func (r *Remote) Capabilities(ctx context.Context) (*pb.CapabilitiesResponse, error) {
+	resp, err := r.c.Capabilities(ctx, connect.NewRequest(&pb.CapabilitiesRequest{}))
+	if err != nil {
+		return nil, err
+	}
+	return resp.Msg, nil
 }
 
 // Mock is a deterministic stand-in: it reads ground truth from hints

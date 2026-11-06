@@ -17,6 +17,7 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/openvocab"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/vec"
 )
 
@@ -341,9 +342,10 @@ func TierPin(it *pb.Item, p *pb.Policy) (label string, tier int32) {
 
 func hasLabel(labels []string, want string) bool {
 	w := norm(want)
+	closed := openvocab.Closed(strings.ToLower(strings.TrimSpace(want))) || openvocab.Closed(w)
 	for _, l := range labels {
 		n := norm(l)
-		if n == w || strings.Contains(n, w) || strings.Contains(w, n) {
+		if n == w || strings.Contains(" "+n+" ", " "+w+" ") || closed && (strings.Contains(n, w) || strings.Contains(w, n)) {
 			return true
 		}
 	}
