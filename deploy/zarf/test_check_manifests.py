@@ -128,6 +128,24 @@ class NetworkPolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not included in a component"):
                 validator.check()
 
+    def test_policy_in_other_component_is_rejected(self):
+        safe_load = yaml.safe_load
+
+        def moved_policy(raw):
+            package = safe_load(raw)
+            owner = next(c for c in package["components"]
+                         if any("manifests/network-shore.yaml" in g.get("files", []) for g in c.get("manifests", [])))
+            other = next(c for c in package["components"] if c is not owner and c.get("manifests"))
+            for group in owner["manifests"]:
+                if "manifests/network-shore.yaml" in group.get("files", []):
+                    group["files"].remove("manifests/network-shore.yaml")
+            other["manifests"][0]["files"].append("manifests/network-shore.yaml")
+            return package
+
+        with patch.object(validator.yaml, "safe_load", side_effect=moved_policy):
+            with self.assertRaisesRegex(ValueError, "same component as its target workload"):
+                validator.check()
+
 
 if __name__ == "__main__":
     unittest.main()

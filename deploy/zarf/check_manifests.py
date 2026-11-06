@@ -152,10 +152,25 @@ def check() -> None:
         used_variables.update(VARIABLE_PATTERN.findall(path.read_text()))
     undeclared = used_variables - variables
     require(not undeclared, f"undeclared Zarf variables used: {', '.join(sorted(undeclared))}")
-    packaged_paths = {path for files in component_files.values() for path in files}
+    owners: dict[Path, set[str]] = {}
+    for component, files in component_files.items():
+        for path in files:
+            owners.setdefault(path, set()).add(component)
     for path, documents in parsed.items():
-        if any(doc["kind"] == "NetworkPolicy" for doc in documents):
-            require(path in packaged_paths, f"{path.name}: NetworkPolicy not included in a component")
+        for policy in (doc for doc in documents if doc["kind"] == "NetworkPolicy"):
+            name = policy["metadata"]["name"]
+            require(path in owners, f"{path.name}: NetworkPolicy not included in a component")
+            labels = policy.get("spec", {}).get("podSelector", {}).get("matchLabels")
+            if not labels:
+                continue
+            workload_owners = {component for workload_path, workload_docs in parsed.items()
+                               for doc in workload_docs if doc["kind"] in WORKLOAD_KINDS
+                               and doc["metadata"].get("namespace") == policy["metadata"].get("namespace")
+                               and all(doc["spec"]["template"]["metadata"]["labels"].get(k) == v
+                                       for k, v in labels.items())
+                               for component in owners.get(workload_path, set())}
+            require(bool(workload_owners & owners[path]),
+                    f"{name}: allow policy must be packaged in the same component as its target workload")
     policy_count = check_network_policies(
         [doc for documents in parsed.values() for doc in documents],
         {entry["name"]: entry for entry in package["variables"]},
