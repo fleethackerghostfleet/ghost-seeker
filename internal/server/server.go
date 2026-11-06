@@ -286,7 +286,9 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	if compiled.Blocked && (!lockBlocked || otherBlock) {
+	// Lock blocks are rechecked above under the policy lock: the compile ran
+	// without it, so a lock may have expired since.
+	if otherBlock {
 		message := ""
 		for _, warning := range compiled.Warnings {
 			if strings.HasPrefix(warning, "Blocked:") {
