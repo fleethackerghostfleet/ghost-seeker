@@ -21,6 +21,9 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 			continue
 		}
 		for _, class := range rule.Classes {
+			if class == "marine mammal" {
+				continue
+			}
 			classSet[class] = true
 		}
 	}

@@ -53,6 +53,7 @@ func TestGuardrailsEverything(t *testing.T) {
 		"ignore everything except drones",
 		"ignore everything except warships",
 		"ships and aircraft",
+		"prioritize ships, aircraft, people, debris, birds and whales",
 	} {
 		if got := (&Compiler{}).CompileRules(text); got.Blocked {
 			t.Errorf("%q should not be blocked: %v", text, got.Warnings)
