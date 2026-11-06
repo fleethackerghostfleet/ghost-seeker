@@ -556,6 +556,40 @@ func TestProdContractStreamCoalescesConsecutivePageUpdates(t *testing.T) {
 	}
 }
 
+func TestProdContractStreamCoalescesCreationWithLatestState(t *testing.T) {
+	s := newRig(t)
+	if err := s.st.UpsertManifest(s.ctx, "contract-edge", &pb.ManifestEntry{ItemId: "coalesced-new", Type: pb.ItemType_ITEM_TYPE_IMAGE}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	for _, revision := range []string{"first", "latest"} {
+		if err := s.st.SetFeatures(s.ctx, "coalesced-new", &pb.Features{Tags: map[string]string{"revision": revision}}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tail, err := s.st.EventCursor(s.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, reader, cancel := s.stream(t, "0")
+	cursor, event := readEvent(t, s.contract, reader)
+	item := event["item"].(map[string]any)
+	if event["event"] != "created" || cursor != strconv.FormatInt(tail, 10) || item["tags"].(map[string]any)["revision"] != "latest" {
+		t.Fatal("coalesced creation lost its kind, latest state, or final cursor", cursor, event)
+	}
+	cancel()
+	stream.Body.Close()
+	resumed, resumeReader, resumeCancel := s.stream(t, cursor)
+	defer resumeCancel()
+	defer resumed.Body.Close()
+	if err := s.st.SetFeatures(s.ctx, "coalesced-new", &pb.Features{Tags: map[string]string{"revision": "after-resume"}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	next, update := readEvent(t, s.contract, resumeReader)
+	if update["event"] != "updated" || next != strconv.FormatInt(tail+1, 10) {
+		t.Fatal("resume replayed a creation instead of the subsequent update", next, update)
+	}
+}
+
 func TestProdContractStreamPolicyScale(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

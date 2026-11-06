@@ -123,6 +123,9 @@ func coalesceEvents(events []store.Event) []store.Event {
 	updates := events[:0]
 	for _, event := range events {
 		if len(updates) > 0 && updates[len(updates)-1].ID == event.ID {
+			if updates[len(updates)-1].Kind == "created" {
+				event.Kind = "created"
+			}
 			updates[len(updates)-1] = event
 		} else {
 			updates = append(updates, event)

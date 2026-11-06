@@ -416,6 +416,7 @@ curl -N --header @/run/secrets/operator.header \
   (`429` above that); each client fetches at most 32 journal records at once.
   Ranks are computed once per page; consecutive records for one item within
   that page produce one latest-state event with the last record's cursor.
+  If that run includes a creation, the event kind remains `created`.
   Slow/broken writers time out after 10 s rather than accumulating a queue;
   reconnect using the saved event cursor. A connected reader overtaken by
   retention is disconnected; reconnecting with its expired cursor returns 410.

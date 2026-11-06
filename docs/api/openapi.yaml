@@ -131,6 +131,7 @@ paths:
         concurrent clients, 10-second write deadlines. Ranks are computed once
         per page. Consecutive updates for the same item within a page are
         coalesced into one latest-state snapshot using the last event cursor.
+        A coalesced run containing a creation keeps the created event kind.
         Slow readers disconnect
         and should reconnect using the last consumed id. Shore keeps the newest
         100000 journal entries by default (-api-event-retain), swept at startup
