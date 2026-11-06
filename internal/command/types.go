@@ -209,7 +209,7 @@ type Stats struct {
 	DB                int `json:"db"`
 	// LinkBPS is the simulated ship-to-shore rate in bits/s (0 = outage).
 	LinkBPS int64 `json:"linkBps"`
-	// LinkFixed is true when -sim-link-bps pins the rate (no resampling).
+	// LinkFixed is true when -sim-link-bps overrides automatic ship bandwidth.
 	LinkFixed      bool       `json:"linkFixed,omitempty"`
 	MetaOnly       bool       `json:"metaOnly,omitempty"`
 	MetaOnlySince  *time.Time `json:"metaOnlySince,omitempty"`
