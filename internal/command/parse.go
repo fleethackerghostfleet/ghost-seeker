@@ -52,11 +52,14 @@ var attributePatterns = []struct {
 	{"loitering", regexp.MustCompile(`\b(loiter\w*|stationary|idle|anchored|circling|lingering|drifting|holding)\b`)},
 }
 
+const negativeActions = `ignore|deprioriti\w*|de-prioriti\w*|exclude|suppress|filter out|skip|hide|less important|lower priority|don'?t care|not interested|no need|downrank`
+const positiveActions = `prioriti\w*|boost|show|report|focus`
+
 var (
-	negativePattern = regexp.MustCompile(`\b(ignore|deprioriti\w*|de-prioriti\w*|exclude|suppress|filter out|skip|hide|less important|lower priority|don'?t care|not interested|no need|downrank)\b`)
-	onlyPattern     = regexp.MustCompile(`\b(only|exclusively|nothing (else|but))\b`)
-	splitPattern    = regexp.MustCompile(`[,;.]|\bbut\b|\balso\b|\bthen\b`)
-	andNegPattern   = regexp.MustCompile(`\band (ignore|deprioriti|exclude|suppress|skip|hide|filter|don)`)
+	negativePattern  = regexp.MustCompile(`\b(` + negativeActions + `)\b`)
+	onlyPattern      = regexp.MustCompile(`\b(only|exclusively|nothing (else|but))\b`)
+	splitPattern     = regexp.MustCompile(`[,;.]|\bbut\b|\balso\b|\bthen\b`)
+	andActionPattern = regexp.MustCompile(`\band\s+(` + negativeActions + `|` + positiveActions + `)\b`)
 )
 
 func ParseDirective(text string) []Rule {
@@ -65,7 +68,7 @@ func ParseDirective(text string) []Rule {
 }
 
 var windowPattern = regexp.MustCompile(`\b(last|past)\s+(?:(\d+)\s*(minutes?|mins?|hours?|h)|(?:an?\s+)?hour)\b`)
-var grammarPattern = regexp.MustCompile(`\b(prioriti\w*|boost|show|report|focus|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
+var grammarPattern = regexp.MustCompile(`\b(` + positiveActions + `|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
 var wordPattern = regexp.MustCompile(`[a-z][a-z0-9-]*`)
 
 // nearShorePattern scopes a clause to the harbor-scene cameras unless it
@@ -85,7 +88,7 @@ var edgeConceptPatterns = []classPattern{
 func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 	text = strings.ToLower(text)
 	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
-	text = andNegPattern.ReplaceAllString(text, "; $1")
+	text = andActionPattern.ReplaceAllString(text, "; $1")
 	clauses := splitPattern.Split(text, -1)
 	rules := make([]Rule, 0)
 	unknown := make([]string, 0)
