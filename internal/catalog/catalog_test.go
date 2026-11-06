@@ -7,6 +7,14 @@ import (
 )
 
 func TestRealDatasetClassesHaveModelWeightsWithoutChangingPools(t *testing.T) {
+	if got := Classes["marine mammal"]; got != (Class{Group: "other", Length: .1, Aspect: .4, Label: "Marine mammal (whale)"}) || EdgeSubtypes["marine mammal"] {
+		t.Fatalf("marine mammal class = %+v", got)
+	}
+	for name, want := range map[string]float64{"maritime": .1, "air": .05, "sar": .1} {
+		if got := Models[name].W["marine mammal"]; got != want {
+			t.Errorf("%s mammal weight = %v; want %v", name, got, want)
+		}
+	}
 	if got := Classes["vessel"]; got.Group != "vessel" || got.Label != "Vessel — type not classified" {
 		t.Fatalf("vessel class = %+v", got)
 	}
@@ -22,6 +30,9 @@ func TestRealDatasetClassesHaveModelWeightsWithoutChangingPools(t *testing.T) {
 		}
 	}
 	for scene, pool := range Pools {
+		if _, ok := pool["marine mammal"]; ok {
+			t.Errorf("%s simulation pool includes marine mammal", scene)
+		}
 		if _, ok := pool["vessel"]; ok {
 			t.Errorf("%s simulation pool includes vessel", scene)
 		}

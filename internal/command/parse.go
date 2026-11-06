@@ -19,6 +19,7 @@ type genericPattern struct {
 }
 
 var synonymPatterns = []classPattern{
+	{"marine mammal", regexp.MustCompile(`\b(marine mammals?|(?:killer |humpback )?whales?|dolphins?|porpoises?|orcas?|cetaceans?|seals?|sea lions?|manatees?)\b`)},
 	{"unknown", regexp.MustCompile(`\b((unknown|unidentified) (objects?|contacts?)|unclassified)\b`)},
 	{"warship", regexp.MustCompile(`\b(warships?|destroyers?|frigates?|cruisers?|corvettes?|combatants?|navy (ship|vessel)s?|naval (ship|vessel)s?|military (ship|vessel)s?|grey hulls?|gray hulls?)\b`)},
 	{"submarine", regexp.MustCompile(`\b(submarines?|subs?|periscopes?|submersibles?)\b`)},
@@ -69,7 +70,7 @@ func ParseDirective(text string) []Rule {
 }
 
 var windowPattern = regexp.MustCompile(`\b(last|past)\s+(?:(\d+)\s*(minutes?|mins?|hours?|h)|(?:an?\s+)?hour)\b`)
-var grammarPattern = regexp.MustCompile(`\b(` + positiveActions + `|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
+var grammarPattern = regexp.MustCompile(`\b(` + positiveActions + `|look|for|on|only|exclusively|nothing|else|and|or|the|a|an|any|all|object|objects|with|without|no|from|in|of|to|more|please|not|at)\b`)
 var wordPattern = regexp.MustCompile(`[a-z][a-z0-9-]*`)
 
 // nearShorePattern scopes a clause to the harbor-scene cameras unless it
@@ -83,12 +84,11 @@ func ParseDirectiveDetailed(text string) ([]Rule, []string) {
 
 var edgeConceptPatterns = []classPattern{
 	{"sailboat", regexp.MustCompile(`\b(sail\s?boats?|sailing (boats?|vessels?|yachts?)|yachts?|sloops?|catamarans?|schooners?)\b`)},
-	{"marine mammal", regexp.MustCompile(`\b(marine mammals?|(?:killer |humpback )?whales?|dolphins?|porpoises?|orcas?|cetaceans?)\b`)},
 }
 
 // ObservationClasses resolves the subject of a class-only observation. A nearby
 // object is context, not another requested class or a proximity constraint.
-func ObservationClasses(text string) []string {
+func StripObservationContext(text string) string {
 	text = strings.Join(strings.Fields(strings.ToLower(text)), " ")
 	if subject, context, ok := strings.Cut(text, " near "); ok {
 		context = strings.TrimPrefix(context, "the ")
@@ -96,13 +96,22 @@ func ObservationClasses(text string) []string {
 		for _, pattern := range genericPatterns {
 			known = known || (context != "" && pattern.re.FindString(context) == context)
 		}
-		if !known {
-			return nil
+		recognized := false
+		for _, pattern := range append(append([]classPattern{}, synonymPatterns...), edgeConceptPatterns...) {
+			recognized = recognized || pattern.re.MatchString(subject)
 		}
-		text = subject
-	} else {
-		text = strings.TrimSuffix(text, " spotted")
+		for _, pattern := range genericPatterns {
+			recognized = recognized || pattern.re.MatchString(subject)
+		}
+		if known && recognized {
+			return subject
+		}
 	}
+	return strings.TrimSuffix(strings.TrimSuffix(text, " spotted"), " sighted")
+}
+
+func ObservationClasses(text string) []string {
+	text = StripObservationContext(text)
 	text = strings.TrimPrefix(text, "the ")
 	for _, pattern := range genericPatterns {
 		if text != "" && pattern.re.FindString(text) == text {
@@ -127,21 +136,9 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 	unknown := make([]string, 0)
 	unknownSeen := make(map[string]bool)
 	for _, clause := range clauses {
+		clause = StripObservationContext(clause)
 		if strings.TrimSpace(clause) == "" {
 			continue
-		}
-		if edgeSubtypes {
-			observation, action := strings.TrimSpace(clause), "boost"
-			if loc := negativePattern.FindStringIndex(observation); loc != nil && loc[0] == 0 {
-				action = "suppress"
-				observation = strings.TrimSpace(observation[loc[1]:])
-			} else if loc := positivePattern.FindStringIndex(observation); loc != nil && loc[0] == 0 {
-				observation = strings.TrimPrefix(strings.TrimSpace(observation[loc[1]:]), "on ")
-			}
-			if classes := ObservationClasses(observation); len(classes) > 0 {
-				rules = append(rules, Rule{Type: action, Classes: classes})
-				continue
-			}
 		}
 		negative := negativePattern.MatchString(clause)
 		only := onlyPattern.MatchString(clause)
