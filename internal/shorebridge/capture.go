@@ -1,6 +1,7 @@
 package shorebridge
 
 import (
+	"hash/crc32"
 	"math"
 	"slices"
 	"strconv"
@@ -10,12 +11,14 @@ import (
 )
 
 func populateCapture(item *command.Item, o *Object) {
+	b := o.Best
 	base := *item
 	base.Live, base.Dets = nil, nil
+	base.Img = ""
+	base.Seed = crc32.ChecksumIEEE([]byte(b.ID))
 	command.EnsureCapture(&base)
 	item.Capture = base.Capture
 	c := item.Capture
-	b := o.Best
 	tags := b.Tags
 	synthetic := strings.Split(tags["synthetic"], ",")
 	mark := func(field, key string) {

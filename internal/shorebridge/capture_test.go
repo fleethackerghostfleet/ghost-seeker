@@ -41,3 +41,20 @@ func TestLiveCaptureFallback(t *testing.T) {
 		t.Fatalf("invalid fallback: %+v", a.Capture)
 	}
 }
+
+func TestLiveCaptureIdentityAcrossForms(t *testing.T) {
+	a := &command.Item{SourceID: "camera"}
+	b := &command.Item{SourceID: "camera"}
+	first := &Object{Best: &Card{ID: "edge-item-one"}}
+	second := &Object{Best: &Card{ID: "edge-item-two"}}
+	populateCapture(a, first)
+	populateCapture(b, second)
+	if a.Capture.TrackID == b.Capture.TrackID {
+		t.Fatal("distinct edge items share synthetic track")
+	}
+	arrived := &command.Item{SourceID: "camera", Img: "blob/edge-item-one/thumb?v=123"}
+	populateCapture(arrived, first)
+	if !reflect.DeepEqual(a.Capture, arrived.Capture) {
+		t.Fatal("form arrival changed fallback metadata")
+	}
+}
