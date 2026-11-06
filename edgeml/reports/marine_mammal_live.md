@@ -10,7 +10,8 @@ The dev-only optimum under **v3-negative FP ≤ 10/1000** is:
 * `crop_thr = 0.9480436444282532`
 * `scan_thr = 0.7265272736549377`
 
-These are the shipped `MarineMammalConfig` defaults. Selection maximizes pooled
+These are the shipped `MarineMammalConfig` threshold defaults; verification is
+**disabled by default** and must be explicitly enabled. Selection maximizes pooled
 dev frame F1, subject to the v3-negative constraint, over all distinct observed
 crop/scan scores ≥ the engine's 0.35 reporting threshold, plus 0.35 and 1.
 Ties prefer higher F1, fewer pooled false positives, then higher thresholds.
@@ -222,15 +223,30 @@ only, scan only, or both. All use the same image order with tiler cursor/cost
 state reset per mode. These measurements are not RPC/end-to-end latency and
 are not guaranteed fleet-device performance.
 
-Defaults: MM enabled when MobileCLIP-S1 `--embed` is supplied; no embed means
-logged skip, not a synthetic fallback. `--marine-mammal off` disables MM without
-an environment variable. `--mm JSON` overrides the dataclass. Candidate minimum
+Defaults: MM is **off**, even when MobileCLIP-S1 `--embed` is supplied. Enable
+with `--marine-mammal on` or `--mm '{"enabled":true}'`; JSON overrides the flag,
+including `enabled`. Programmatic callers pass `marine_mammal={"enabled": True}`.
+No embed means logged skip, not a synthetic fallback. `--marine-mammal off`
+disables MM without an environment variable. `--mm JSON` overrides the dataclass. Candidate minimum
 0.05, top four crops, context padding 0.2; whole-frame plus overlapping 2×3 grid,
 overlap 0.2; **eight total CLIP crops/frame**, crop proposals taking priority;
 **scan_stride=5**, first frame eligible. The cap can truncate scan tiles. There
 is no MM wall-clock deadline. Live tiling separately defaults to at most two
 640px tiles above 1280×720 pixels, overlap 0.2, 3500ms soft budget and cost
 margin 1.2. In-flight ONNX calls cannot be preempted.
+
+PR #274 reviewer safety change: default-on crop verification could relabel real
+boats/unknown contacts as mammals and zero their unknownness, demoting real
+unknown vessel contacts. Held-out v3 precision is only **28.4%**, with **46.4
+FP/1000 negatives**, dominated by **45/58 FPs in the submarine clip**, while CPU
+rises about **82→437 ms/frame**. Verification is therefore experimental opt-in,
+not the production default. Thresholds are unchanged; eval/latency tools now
+explicitly enable MM to retain the experimental configuration underlying these
+tables. No inference rerun or threshold retuning was performed for this switch.
+No deploy manifest currently passes a marine-mammal flag; none was changed.
+Opt-in switch checks: `644 passed, 3 skipped in 10.00s`; `make test` exited 0;
+`make prod-gate` printed `prod-gate: PASS`. Logs are
+`~/data/whale_eval/optin274_{pytest,make_test}.txt` and `prod_gate.txt`.
 
 ## 5. Limitations
 

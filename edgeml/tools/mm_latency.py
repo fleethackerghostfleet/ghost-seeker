@@ -21,7 +21,7 @@ def main():
     rows = read_rows(args.input)
     selected = [rows[i] for i in np.linspace(0, len(rows) - 1, args.limit, dtype=int)]
     engine = EdgemlEngine('~/models/D/yolo11n-640/model.onnx', '~/models/D/mobileclip-s1',
-                         engine='ort', threads=4)
+                         engine='ort', threads=4, marine_mammal={'enabled': True})
     fusion = engine.detector
     cfg = fusion.cfg
     output = {}

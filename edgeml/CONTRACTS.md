@@ -3,9 +3,13 @@
 MobileCLIP-S1 verification emits the existing detection label `marine mammal` and
 sighting subtypes `whale`, `blow`, `fluke`, `dolphin`. The tracker/aggregator preserve
 verified subtype provenance instead of reclassifying it as a generic vessel.
-`--marine-mammal on|off` defaults to on (requires MobileCLIP-S1 `--embed`);
-`--mm JSON` overrides the bounded crop/scan configuration. Text prototypes are bundled;
+`--marine-mammal on|off` defaults to off; opt in with `--marine-mammal on`
+(requires MobileCLIP-S1 `--embed`). `--mm '{"enabled":true}'` also enables it;
+JSON overrides the flag and bounded crop/scan configuration. Text prototypes are bundled;
 runtime inference remains ORT-only. Defaults require operational calibration.
+Thresholds remain frozen. Opt-in is required because held-out v3 precision was
+28.4%, with 46.4 FP/1000 negatives (45/58 FPs from the submarine clip): false
+relabeling can demote unknown vessel contacts, and CPU rises about 82→437 ms/frame.
 
 # edgeml contracts (v1)
 

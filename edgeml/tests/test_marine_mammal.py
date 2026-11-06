@@ -35,7 +35,7 @@ IMAGE = np.zeros((60, 90, 3), np.uint8)
 def fusion(detections=(), positive=True, **kwargs):
     embedder = Embedder(positive)
     base = SimpleNamespace(name='fake', detect=lambda image: list(detections))
-    return MarineMammalFusionDetector(base, MarineMammalVerifier(embedder), MarineMammalConfig(**kwargs)), embedder
+    return MarineMammalFusionDetector(base, MarineMammalVerifier(embedder), MarineMammalConfig(**{'enabled': True, **kwargs})), embedder
 
 
 def test_verifier_batch_and_empty():
@@ -62,7 +62,7 @@ def test_verifier_consumes_live_tiled_results_and_scans_without_usable_detection
     tiled = LiveTiledDetector(base, horizon_fn=lambda image: 10)
     assert tiled.detect(IMAGE)[0].label == 'person in water'
     embedder = Embedder()
-    detector = MarineMammalFusionDetector(tiled, MarineMammalVerifier(embedder))
+    detector = MarineMammalFusionDetector(tiled, MarineMammalVerifier(embedder), MarineMammalConfig(enabled=True))
     assert detector.detect(IMAGE)[0].label == 'marine mammal'
     assert embedder.calls == [1]
     base.detect = lambda image: [Detection([0, 0, 10, 10], .1, 'airplane')]
@@ -221,7 +221,12 @@ def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
     monkeypatch.setattr(tracking, 'make_tracker', lambda *a, **kw: SimpleNamespace(
         update=lambda dets, image, frame, t: [Track(1, d.box, d.score, d.label, frame, t, extra={'det_ind': 0}) for d in dets[:1]]))
     monkeypatch.setattr(service, 'frame_report', lambda *a, **kw: None)
-    engine = EdgemlEngine('fake', tmp_path, agg={'min_hits': 1})
+    default_engine = EdgemlEngine('fake', tmp_path, agg={'min_hits': 1})
+    assert not isinstance(default_engine.detector, MarineMammalFusionDetector)
+    assert default_engine.detector.detect(IMAGE)[0].label == 'boat'
+    assert clip.calls == []
+    assert not MarineMammalConfig().enabled
+    engine = EdgemlEngine('fake', tmp_path, agg={'min_hits': 1}, marine_mammal={'enabled': True})
 
     def open_detect(image, detections, labels):
         assert labels == ['bird']

@@ -53,13 +53,13 @@ def main():
         from edgeml.sidecar.service import EdgemlEngine
 
         engine = EdgemlEngine(args.detector, args.embed, engine='ort', threads=args.threads,
-                              marine_mammal=json.loads(args.mm))
+                              marine_mammal={'enabled': True, **json.loads(args.mm)})
         detector = engine.detector
     else:
         detector = load_detector(Path(args.detector).expanduser(), engine='ort', threads=args.threads, score_thr=0.05)
         embedder = ClipEmbedder('mobileclip-s1', backend='ort', onnx_dir=Path(args.embed).expanduser(), threads=args.threads)
         verifier = MarineMammalVerifier(embedder)
-        cfg = MarineMammalConfig(**json.loads(args.mm))
+        cfg = MarineMammalConfig(**{'enabled': True, **json.loads(args.mm)})
     timings = []
     with args.input.open() as source, args.out.open('w') as output:
         for index, line in enumerate(source):
