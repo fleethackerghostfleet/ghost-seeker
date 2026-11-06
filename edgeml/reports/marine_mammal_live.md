@@ -315,3 +315,23 @@ changed and no visual verification was performed in this step.
 The rebased checks include the Go whale-directive regression in both normal and
 prod builds, and the Python engine ordering test with an appended open-vocabulary
 result. No changes to `service.py` were necessary on this rebase.
+
+### Full clean-commit verification
+
+```text
+make verify VERIFY_PYTHON=/home/ubuntu/venvs/edgeml/bin/python
+make_verify=0
+PASS package: /home/ubuntu/repos/ghost-seeker/dist/verify/6ace995ba037-by3ubsp3/package.log
+PASS images: /home/ubuntu/repos/ghost-seeker/dist/verify/6ace995ba037-by3ubsp3/images.log
+Verification passed: /home/ubuntu/repos/ghost-seeker/dist/verify/6ace995ba037-by3ubsp3/report.json
+```
+
+This checks clean code commit `6ace995ba037`; the subsequent commit only records
+this verification result in this report. All 15 verifier checks passed, including
+race tests, vulnerabilities, protobuf freshness, strict package validation and
+all Docker images. Docker Hub did not return 429, so mirror overrides were not
+needed. Full console output is `~/data/whale_eval/rebase271_verify.txt`.
+The missing auxiliary tools were installed using the pinned versions in
+`docs/VERIFY.md` / CI (buf 1.47.2, kubeconform 0.6.7, Zarf 0.89.0 and the pinned
+Go protobuf plugins), without changing repository configuration. No service was
+started and ports 8105/8106/8109 were not touched.
