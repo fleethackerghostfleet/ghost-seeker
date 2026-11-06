@@ -27,37 +27,65 @@ func Watch(ctx context.Context, q *Queue, dir string, defaults Metadata, maxByte
 			return err
 		}
 	}
+	tick := time.NewTicker(poll)
+	defer tick.Stop()
+	previous := map[string]spoolStamp{}
 	for ctx.Err() == nil {
-		d, err := os.Open(dir)
+		current, err := scanSpool(dir)
 		if err != nil {
 			return err
 		}
-		for ctx.Err() == nil {
-			entries, err := d.ReadDir(128)
-			for _, entry := range entries {
-				ext := strings.ToLower(filepath.Ext(entry.Name()))
-				if entry.Type()&os.ModeSymlink != 0 || entry.IsDir() || (ext != ".jpg" && ext != ".jpeg" && ext != ".png") {
-					continue
-				}
-				if err := spoolFile(ctx, q, filepath.Join(dir, entry.Name()), defaults, maxBytes, poll); err != nil && ctx.Err() == nil {
-					d.Close()
-					return err
-				}
+		for path, stamps := range current {
+			if err := ctx.Err(); err != nil {
+				return err
 			}
-			if err != nil {
-				d.Close()
-				if err != io.EOF {
-					return err
-				}
-				break
+			if previous[path] != stamps {
+				continue
+			}
+			if err := spoolFile(ctx, q, path, defaults, maxBytes, stamps); err != nil {
+				return err
 			}
 		}
-		d.Close()
-		if err := pause(ctx, poll); err != nil {
-			return err
+		previous = current
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
 		}
 	}
 	return ctx.Err()
+}
+
+type spoolStamp struct{ image, meta fileStamp }
+
+func spoolStamps(path string) spoolStamp { return spoolStamp{stamp(path), stamp(path + ".json")} }
+
+func scanSpool(dir string) (map[string]spoolStamp, error) {
+	d, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer d.Close()
+	stamps := map[string]spoolStamp{}
+	for {
+		entries, err := d.ReadDir(128)
+		for _, entry := range entries {
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if entry.Type()&os.ModeSymlink != 0 || entry.IsDir() || (ext != ".jpg" && ext != ".jpeg" && ext != ".png") {
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			if s := spoolStamps(path); s.image.exists {
+				stamps[path] = s
+			}
+		}
+		if err == io.EOF {
+			return stamps, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 }
 
 type fileStamp struct {
@@ -74,15 +102,9 @@ func stamp(path string) fileStamp {
 	return fileStamp{size: f.Size(), at: f.ModTime(), exists: true}
 }
 
-func spoolFile(ctx context.Context, q *Queue, path string, defaults Metadata, maxBytes int64, settle time.Duration) error {
-	a, meta := stamp(path), stamp(path+".json")
-	if !a.exists {
-		return nil
-	}
-	if err := pause(ctx, settle); err != nil {
-		return err
-	}
-	if a != stamp(path) || meta != stamp(path+".json") {
+func spoolFile(ctx context.Context, q *Queue, path string, defaults Metadata, maxBytes int64, stable spoolStamp) error {
+	a, meta := stable.image, stable.meta
+	if !a.exists || stable != spoolStamps(path) {
 		return nil
 	}
 	if !q.reserve() {
