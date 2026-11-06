@@ -115,6 +115,7 @@ type Item struct {
 	BaseTier         int        `json:"baseTier"`
 	Tier             int        `json:"tier"`
 	Manual           int        `json:"manual"`
+	FeedFirst        bool       `json:"feedFirst,omitempty"`
 	Reviewed         bool       `json:"reviewed"`
 	Dismissed        bool       `json:"dismissed"`
 	Sent             bool       `json:"sent"`

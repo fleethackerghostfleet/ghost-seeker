@@ -203,6 +203,16 @@ test('scene sources interleave inside P4 without moving contact tiers',()=>{
  assert.ok(ids.findIndex(id=>id.startsWith('ocean-'))<=8);
  assert.equal(ids.length,17);
 });
+test('priority feed puts a feedFirst item first within its tier only',()=>{
+ const c=setup();
+ vm.runInContext(`
+  items=[normalizeItem({...raw('p1-high',1),central:.99}),normalizeItem({...raw('whale',1),central:.85,feedFirst:true}),normalizeItem({...raw('p1-mid',1),central:.9}),normalizeItem({...raw('p2-pinned',2),central:.7,feedFirst:true})];
+  state.src='ALL';state.tier='all';state.sort='pri';
+ `,c);
+ const ids=JSON.parse(vm.runInContext('JSON.stringify(visible().l.map(i=>i.id))',c));
+ assert.equal(ids[0],'whale');
+ assert.equal(ids.at(-1),'p2-pinned');
+});
 test('learning acceptance sends the advertised tier for the whole class',async()=>{
  const context=setup();
  vm.runInContext("calls=[];CLS={tanker:{lab:'Tanker'}};request=async(...args)=>{calls.push(args)}",context);
