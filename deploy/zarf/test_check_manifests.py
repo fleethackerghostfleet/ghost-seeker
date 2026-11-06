@@ -263,7 +263,8 @@ class NetworkPolicyTests(unittest.TestCase):
                 other["manifests"][0]["files"].append(path)
                 return package
 
-            with self.subTest(policy=filename), patch.object(validator.yaml, "safe_load", side_effect=moved_policy):
+            with self.subTest(policy=filename), patch.object(validator.yaml, "safe_load", side_effect=moved_policy), \
+                    patch.object(validator, "render_manifests", return_value=self.parsed):
                 with self.assertRaisesRegex(ValueError, "packaged.*component"):
                     validator.check()
 
