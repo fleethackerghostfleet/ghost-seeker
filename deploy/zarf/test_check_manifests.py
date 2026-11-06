@@ -762,6 +762,41 @@ class TLSManifestTests(unittest.TestCase):
                 checker.render_manifests(self.package, {})
 
 
+class FramesTests(unittest.TestCase):
+    def setUp(self):
+        self.package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
+
+    def render(self, overrides):
+        documents = [d for docs in validator.render_manifests(self.package, overrides).values() for d in docs]
+        validator.check_frames(documents, validator.package_variables(self.package, overrides))
+        return documents
+
+    def test_default_hostpath_and_custom_path(self):
+        self.render({})
+        self.render({"FRAMES_HOSTPATH": "/sensor/live"})
+
+    def test_pvc_default_and_custom_storage(self):
+        self.render({"FRAMES_SOURCE": "pvc"})
+        self.render({"FRAMES_SOURCE": "pvc", "FRAMES_STORAGE": "20Gi", "FRAMES_STORAGE_CLASS": "sensor"})
+
+    def test_invalid_and_empty_source_rejected(self):
+        for source in ("", "emptyDir", "PVC"):
+            with self.assertRaisesRegex(ValueError, "FRAMES_SOURCE"):
+                validator.package_variables(self.package, {"FRAMES_SOURCE": source})
+
+    def test_uds_hostpath_anywhere_rejected(self):
+        documents = self.render({"FRAMES_SOURCE": "pvc"})
+        documents.append({"kind": "Pod", "spec": {"volumes": [{"hostPath": {"path": "/sensor"}}]}})
+        with self.assertRaisesRegex(ValueError, "any hostPath"):
+            validator.check_frames(documents, validator.package_variables(self.package, {"FRAMES_SOURCE": "pvc"}))
+
+    def test_uds_guard(self):
+        guard = next(c for c in self.package["components"] if c["name"] == "uds-package")["actions"]["onDeploy"]["before"][0]["cmd"]
+        for source, expected in (("pvc", 0), ("hostPath", 1), ("", 1)):
+            result = subprocess.run(["sh", "-c", guard], env={"ZARF_VAR_FRAMES_SOURCE": source}, capture_output=True)
+            self.assertEqual(result.returncode, expected)
+
+
 class ModelTests(unittest.TestCase):
     def setUp(self):
         self.package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
@@ -822,16 +857,14 @@ class ModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "match committed"):
             self.validate()
 
-    def test_catalog_runtime_mount_required(self):
-        mounts = self.pod["containers"][0]["volumeMounts"]
-        next(m for m in mounts if m["name"] == "catalog")["readOnly"] = False
-        with self.assertRaisesRegex(ValueError, "catalog readOnly"):
+    def test_catalog_volume_rejected(self):
+        self.pod["volumes"].append({"name": "catalog", "emptyDir": {}})
+        with self.assertRaisesRegex(ValueError, "catalog packaged in its image"):
             self.validate()
 
-    def test_catalog_copy_required(self):
-        self.pod["initContainers"][0]["args"][0] = self.pod["initContainers"][0]["args"][0].replace(
-            "cp /models/catalog/*.json /catalog/", "true")
-        with self.assertRaisesRegex(ValueError, "catalog emptyDir"):
+    def test_catalog_mount_rejected(self):
+        self.pod["containers"][0]["volumeMounts"].append({"name": "catalog", "mountPath": "/catalog"})
+        with self.assertRaisesRegex(ValueError, "catalog packaged in its image"):
             self.validate()
 
     def test_catalog_pins_match_source(self):

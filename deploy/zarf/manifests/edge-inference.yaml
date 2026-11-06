@@ -40,9 +40,6 @@ spec:
               cp -R /models-src/. /models/
               cd /models
               sha256sum -c SHA256SUMS
-              cp /models/catalog/*.json /catalog/
-              cd /catalog
-              sed -n 's@  catalog/@  @p' /models/SHA256SUMS | sha256sum -c
           env:
             - name: MODEL_SHA256
               value: "###ZARF_VAR_MODEL_SHA256###"
@@ -66,8 +63,6 @@ spec:
           volumeMounts:
             - name: models
               mountPath: /models
-            - name: catalog
-              mountPath: /catalog
       containers:
         - name: edgeml-sidecar
           image: ghost-seeker/edgeml-sidecar:0.1.0
@@ -109,12 +104,7 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
-            - name: catalog
-              mountPath: /opt/venv/lib/internal/catalog
-              readOnly: true
       volumes:
-        - name: catalog
-          emptyDir: {}
         - name: models
           emptyDir: {}
         - name: tmp
