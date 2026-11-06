@@ -42,7 +42,7 @@ test('operator review explains that number keys assign a new image priority',()=
  const html=read('index.html');
  assert.match(html,/<p class="rvinstructions"><b>Change this image's priority:<\/b> press 1–4 to set it to P1–P4 and save your review\. Space \/ Enter agrees with the model's suggested priority\.<\/p>/);
  for(const [tier,label] of [[1,'Critical'],[2,'High'],[3,'Routine'],[4,'Low']]){
-  assert.ok(html.includes(`data-a="${tier}"><span class="kb-act">Set P${tier} ${label} &amp; next</span><kbd>${tier}</kbd></button>`));
+  assert.ok(html.includes(`data-a="${tier}"><span class="model-badge">MODEL</span><span class="kb-act">Set P${tier} ${label} &amp; next</span><kbd>${tier}</kbd></button>`));
  }
 });
 
