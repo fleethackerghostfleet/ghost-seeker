@@ -545,10 +545,10 @@ function setupFeedKeyboard(){
   next.el?.focus();
  };
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.tabIndex=-1;el.setAttribute('role','button');el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.tabIndex=-1;el.setAttribute('role','button');el.innerHTML='<span class="card-context sr-only"></span>'+cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent&&it.autoSent?' sent':''}${humanSent(it)?' hsent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
- el.setAttribute('aria-description',`P${tier} ${TNAME[tier]} image from ${it.src.name||it.src.id}. Open image details`);
+ el.querySelector('.card-context').textContent=`P${tier} ${TNAME[tier]} image from ${it.src.name||it.src.id}. Open image details`;
  const reviewMark=el.querySelector('.rvk');reviewMark.title=humanReviewed(it)?'Human reviewed':'Not reviewed';reviewMark.setAttribute('aria-label',reviewMark.title);
  const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low`:'';
  el.querySelector('.night-badge')?.remove();if(!DATASET_MODE)el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));

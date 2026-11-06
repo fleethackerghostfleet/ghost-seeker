@@ -25,10 +25,18 @@ test('dialogs and detail icon buttons have descriptive names',()=>{
  assert.equal(closeButtons.length,2);
  for(const [button] of closeButtons)assert.match(button,/aria-label="Close image details"/);
 });
-test('feed card names come from visible contents, with extra context as a description',()=>{
+test('feed card names include context outside the optional thumbnail overlays',()=>{
  const update=app.slice(app.indexOf('function updateCard('),app.indexOf('function toggleFeedFilters('));
  assert.doesNotMatch(update,/el\.setAttribute\('aria-label'/);
- assert.match(update,/el\.setAttribute\('aria-description'/);
+ assert.doesNotMatch(update,/el\.setAttribute\('aria-description'/);
+ assert.match(update,/el\.querySelector\('\.card-context'\)\.textContent=/);
+ assert.match(app,/el\.innerHTML='<span class="card-context sr-only"><\/span>'\+cardHTML\(it\)/);
+ const css=read('style.css');
+ const hidden=css.match(/\.sr-only\{([^}]+)\}/)[1];
+ assert.match(hidden,/clip-path:inset\(50%\)/);
+ assert.doesNotMatch(hidden,/display:none|visibility:hidden/);
+ assert.match(css,/\.hide-ov \.card \.ov/);
+ assert.doesNotMatch(css,/\.hide-\w+[^{}]*\.card-context/);
  assert.match(app,/el\.setAttribute\('role','button'\)/);
 });
 test('Commander scroll panes are named and reachable by native keyboard focus',()=>{
