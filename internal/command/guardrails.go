@@ -10,6 +10,9 @@ import (
 var (
 	everythingPattern           = regexp.MustCompile(`\b(everything|anything|all (contacts|objects|targets|classes|tracks)|every (contact|object|target|track))\b`)
 	dropEverythingPrefixPattern = regexp.MustCompile(`\bdrop\s+$`)
+	// "anything that looks like a missile boat", "everything else can wait",
+	// "anything new from the drone": the word is qualified, not a blanket ask.
+	qualifiedEverythingPattern = regexp.MustCompile(`^\s+(that|which|who|like|resembling|looking|else|new|from|near|in|on|at|by|around|approaching|heading|coming|moving|loitering|flying|floating|with|without|dark|unidentified|unknown|suspicious|inbound|showing|sitting|hanging)\b`)
 )
 
 func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockChecker) ([]string, bool) {
@@ -38,6 +41,9 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 			}
 			if strings.EqualFold(clause[match[0]:match[1]], "everything") &&
 				dropEverythingPrefixPattern.MatchString(clause[:match[0]]) {
+				continue
+			}
+			if qualifiedEverythingPattern.MatchString(clause[match[1]:]) {
 				continue
 			}
 			blocked = true
