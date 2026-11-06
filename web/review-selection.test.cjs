@@ -9,6 +9,7 @@ function setup(){
  const elements=new Map(),timers=new Map();let next=0;
  const context=vm.createContext({
   imageCache:new Map(),
+  oprep:{closeMenu(){},menuOpen:()=>false,showMenu:callback=>callback('whale')},
   setTimeout:(fn,ms)=>{const id=++next;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),
   document:{body:{classList:{remove(){},toggle(){}}},querySelector:()=>null},
   $:id=>{if(!elements.has(id))elements.set(id,{style:{},children:[],classList:{toggle(){},add(){},remove(){}},querySelector:()=>null,querySelectorAll:()=>[],setAttribute(){}});return elements.get(id)},
@@ -31,10 +32,51 @@ function setup(){
  `,context);
  return {context,run:code=>vm.runInContext(code,context),finish(ms){const entries=[...timers].filter(([,t])=>t.ms===ms);for(const [id,t]of entries){timers.delete(id);t.fn()}}};
 }
+test('review OPREP opens current image with shared metadata loading and trigger',async()=>{
+ const h=setup();
+ h.run(`start();calls=[];requests=[];oprep.open=(...args)=>calls.push(args);request=async url=>{requests.push(url);return {capture:{lat:32,lon:-117}}}`);
+ await h.context.$('rvOprep').onclick();
+ assert.equal(h.run('requests[0]'),'/api/items/active/metadata');
+ assert.equal(h.run('calls[0][0].id'),'active');
+ assert.equal(h.run('calls[0][3]'),h.context.$('rvOprep'));
+ assert.equal(h.run('calls[0][4].capture.lat'),32);
+ assert.equal(h.run('calls[0][5]'),false);
+ await h.context.$('rvOprep').onclick();
+ assert.equal(h.run('requests.length'),1);
+ assert.equal(h.context.$('rvOprep').disabled,false);
+});
+test('review OPREP keeps metadata-unavailable fallback and avoids stale selection',async()=>{
+ const h=setup();
+ h.run(`start();calls=[];oprep.open=(...args)=>calls.push(args);request=async()=>{throw Error('offline')}`);
+ await h.context.$('rvOprep').onclick();
+ assert.equal(h.run('calls[0][0].id'),'active');
+ assert.equal(h.run('calls[0][5]'),true);
+ h.run('calls=[];request=()=>new Promise(resolve=>complete=resolve)');
+ const opening=h.context.$('rvOprep').onclick();
+ h.run('rvAct("skip");complete({capture:{lat:1,lon:2}})');
+ await opening;
+ assert.equal(h.run('calls.length'),0);
+});
+test('review OPREP is disabled for empty or unavailable review images',()=>{
+ const h=setup();h.run('start();items=[];renderReview()');
+ assert.equal(h.context.$('rvOprep').disabled,true);
+ h.run('rv.cur=null;renderReview()');
+ assert.equal(h.context.$('rvOprep').disabled,true);
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ assert.match(html,/<button class="btn" id="rvOprep"[^>]*aria-haspopup="menu"[^>]*disabled>Draft/);
+});
 function active(h,id='active'){
  assert.equal(h.run('rv.cur?.id'),id);
  assert.match(h.context.$('rvMain').innerHTML,new RegExp(`data-review-id="${id}"`));
 }
+
+test('demo first-review flag precedes priority once; absent capability preserves normal order',()=>{
+ const h=setup();
+ h.run(`items=[raw('priority',1),{...raw('whale',4),reviewFirst:true},raw('normal',3)].map(normalizeItem);DEMO_REVIEW_FIRST=true`);
+ assert.equal(h.run('rvQueue()[0].id'),'whale');
+ h.run(`findItem('whale').reviewed=true`);assert.equal(h.run('rvQueue()[0].id'),'priority');
+ h.run(`findItem('whale').reviewed=false;DEMO_REVIEW_FIRST=false`);assert.equal(h.run('rvQueue()[0].id'),'priority');
+});
 
 test('scene arrivals do not replace stable Review selection or become its next item',()=>{
  const h=setup();h.run(`start();emit('item',{item:{...raw('ocean',4),live:{event:'scene'}},stats:{}})`);active(h);

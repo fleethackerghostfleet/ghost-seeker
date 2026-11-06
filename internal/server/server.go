@@ -176,10 +176,10 @@ func (s *Server) config(w http.ResponseWriter, _ *http.Request) {
 		"attrLabels": catalog.AttrLabels, "examples": catalog.Examples,
 		"reviewSync": true, "datasetMode": s.datasetMode,
 		"demoReset": s.demoReset,
-		"features": map[string]any{
+		"features": demoDraftFeatures(map[string]any{
 			"profile": buildprofile.Name, "simulation": true, "demoReset": s.demoReset,
 			"dataset": s.datasetMode, "demoLinkControl": false,
-		},
+		}),
 	})
 }
 

@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/briefing.css">
+<link rel="stylesheet" href="/oprep.css">
 <link rel="stylesheet" href="/lights.css">
 <link rel="stylesheet" href="/auth.css">
 <link rel="stylesheet" href="/text-size.css">
@@ -134,6 +135,7 @@
   </div>
   <div class="rvmain" id="rvMain"></div>
   <div class="rvask" id="rvAsk" hidden></div>
+  <div class="draft-menu-wrap"><button class="btn" id="rvOprep" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="rvDraftMenu" disabled>Draft ▾</button><div id="rvDraftMenu" role="menu" aria-label="Draft report type" hidden></div></div>
   <p class="rvinstructions"><b>Change this image's priority:</b> press 1–4 to set it to P1–P4 and save your review. Space / Enter agrees with the model's suggested priority.</p>
   <div class="rvnext" id="rvNext" role="status" aria-live="polite"></div>
   <div class="rvkeys" id="rvKeys">
@@ -178,6 +180,33 @@
 <div id="panelResizers" class="panel-resizers" role="region" aria-label="Panel resizing controls"></div>
 <dialog id="resetDemoDialog" aria-labelledby="resetDemoTitle"><h3 id="resetDemoTitle">Reset demo?</h3><p>This clears all images, the ship-to-shore upload queue, the Commander list and decisions, and session counters.</p><p>Collection priorities, model, link settings and the review log are kept. New captures keep arriving.</p><div class="wb-row"><button class="btn" id="resetDemoCancel" autofocus>Cancel</button><button class="btn danger" id="resetDemoConfirm">Reset demo</button></div></dialog>
 <dialog id="settings" class="setdlg" aria-label="Display settings"></dialog>
+<dialog id="oprepDialog" aria-labelledby="oprepTitle" aria-describedby="oprepHint">
+ <h2 id="oprepTitle">Draft OPREP-3 NAVY BLUE — whale strike</h2>
+ <p id="oprepHint">Draft only. Confirm the reporting category, addressees and timelines against OPNAVINST 3100.6K and current fleet marine mammal strike guidance before release. Amber fields are empty and need input.</p>
+ <div class="oprep-actions"><button class="btn" id="oprepCopy" type="button">Copy to clipboard</button><button class="btn" id="oprepDownload" type="button">Download .txt</button><button class="btn" id="oprepSend" type="button" hidden>Send with image (demo)</button><button class="btn" id="oprepClose" type="button">Close</button></div>
+ <div id="oprepSendConfirmation" role="status" hidden><p id="oprepSendText"></p><img id="oprepSendImage" alt="Selected image queued in demo only"></div>
+ <p id="oprepStatus" role="status"></p>
+ <div class="oprep-layout"><form id="oprepForm">
+   <label for="oprep-originator">Originator ship<input id="oprep-originator" name="originator" autofocus></label>
+   <label for="oprep-to">TO addressees<input id="oprep-to" name="to"></label>
+   <label for="oprep-info">INFO addressees<input id="oprep-info" name="info"></label>
+   <label for="oprep-serial">Serial<input id="oprep-serial" name="serial"></label>
+   <label for="oprep-incidentTime">Incident time (ISO UTC)<input id="oprep-incidentTime" name="incidentTime"></label>
+   <label for="oprep-position">Position (latitude / longitude)<input id="oprep-position" name="position"></label>
+   <label for="oprep-course">Course<input id="oprep-course" name="course"></label>
+   <label for="oprep-sensorHeading">Sensor heading at capture (not ship course)<input id="oprep-sensorHeading" name="sensorHeading"></label>
+   <label for="oprep-speed">Speed<input id="oprep-speed" name="speed"></label>
+   <label for="oprep-species">Species<input id="oprep-species" name="species"></label>
+   <label for="oprep-size">Animal size estimate<input id="oprep-size" name="size"></label>
+   <label for="oprep-condition">Animal condition after strike<select id="oprep-condition" name="condition"><option value=""></option><option>ALIVE-INJURED</option><option>ALIVE-NO APPARENT INJURY</option><option>DEAD</option><option>NOT RESIGHTED</option></select></label>
+   <label for="oprep-damage">Ship damage<input id="oprep-damage" name="damage"></label>
+   <label for="oprep-injuries">Personnel injuries<input id="oprep-injuries" name="injuries"></label>
+   <label for="oprep-actions">Actions taken<textarea id="oprep-actions" name="actions"></textarea></label>
+   <label for="oprep-media">Media / public interest<input id="oprep-media" name="media"></label>
+   <label for="oprep-assessment">Commander's assessment<textarea id="oprep-assessment" name="assessment"></textarea></label>
+   <label for="oprep-evidence">Sensor evidence<textarea id="oprep-evidence" name="evidence"></textarea></label>
+ </form><section aria-labelledby="oprepPreviewTitle"><h3 id="oprepPreviewTitle">Live draft preview</h3><pre id="oprepPreview" tabindex="0" aria-label="Read-only OPREP message preview"></pre></section></div>
+</dialog>
 <script src="/settings.js" defer></script>
 <script src="/text-layout.js" defer></script>
 <script src="/resize.js" defer></script>
@@ -187,6 +216,8 @@
 <script src="/pptxgen.bundle.js" defer></script>
 <script src="/briefing-model.js" defer></script>
 <script src="/briefing.js" defer></script>
+<script src="/oprep-model.js" defer></script>
+<script src="/oprep.js" defer></script>
 <script src="/learn.js" defer></script>
 <script src="/policy.js" defer></script>
 <script src="/lights.js" defer></script>

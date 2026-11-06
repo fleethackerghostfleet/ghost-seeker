@@ -208,6 +208,8 @@ func refreshTimeScopes(app *server.Server) {
 }
 
 func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
+	first := sensor.DemoReviewSeed(time.Now())
+	data.Add(&first, 0)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	ts := time.Now().Add(-45 * time.Minute)
 	for kept := 0; kept < count; {
@@ -313,9 +315,15 @@ func captureDelay(rng *rand.Rand, mean time.Duration) time.Duration {
 func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server, uplink *simulationUplink, captureEvery time.Duration) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	last := time.Now()
+	epoch := data.Epoch()
 	for {
 		time.Sleep(captureDelay(rng, captureEvery))
 		now := time.Now()
+		if seed, next, ok := seedReviewAfterReset(data, epoch, now); ok {
+			epoch = next
+			stats, _ := data.Stats()
+			app.PublishItem(seed, stats)
+		}
 		updates := uplink.advance(now.Sub(last))
 		last = now
 		_, cdr := data.Stats()
@@ -337,6 +345,16 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 			app.PublishStats(stats)
 		}
 	}
+}
+
+func seedReviewAfterReset(data *store.Store, epoch uint64, now time.Time) (command.Item, uint64, bool) {
+	next := data.Epoch()
+	if next == epoch {
+		return command.Item{}, epoch, false
+	}
+	item := sensor.DemoReviewSeed(now)
+	stored, _ := data.Add(&item, 0)
+	return stored, next, true
 }
 
 func enableDemoLinkControl(b *shorebridge.Bridge, on bool) *shorebridge.Bridge {
