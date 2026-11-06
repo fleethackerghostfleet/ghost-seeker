@@ -74,7 +74,7 @@ func (s *Store) SeedUploaded(n int) {
 	}
 }
 
-// SetLinkFixed records that the simulated rate is pinned and never resampled.
+// SetLinkFixed records that -sim-link-bps overrides the automatic simulated rate.
 func (s *Store) SetLinkFixed(fixed bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
