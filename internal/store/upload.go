@@ -127,33 +127,39 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 	if budget == 0 {
 		return nil // sub-byte tick: keep Active so the UI does not flicker
 	}
-	queue := make([]int, 0, len(s.items))
+	metadataQueue := make([]int, 0, len(s.items))
+	imageQueue := make([]int, 0, len(s.items))
 	for i := range s.items {
 		item := s.items[i]
-		if !item.Upload.MetaDone && item.Upload.MetaBytes > 0 && !(item.Background && item.SourceID == "") {
-			queue = append(queue, i)
-			continue
+		if !item.Upload.MetaDone && item.Upload.MetaBytes > item.Upload.MetaSent {
+			metadataQueue = append(metadataQueue, i)
 		}
-		if item.Background && item.SourceID == "" && item.Manual == 0 && !item.Sent && !item.FullRes && item.Upload.Override != "next" {
+		// Background/scene images stay aboard until explicitly pulled. Their
+		// metadata is still eligible for the first pass above.
+		if item.Background && item.Manual == 0 && !item.Sent && !item.FullRes && item.Upload.Override != "next" {
 			continue
 		}
 		if !item.Upload.Done && item.Upload.Override != "hold" && (!s.stats.MetaOnly || item.Upload.Override == "next" || item.FullRes) {
-			queue = append(queue, i)
+			imageQueue = append(imageQueue, i)
 		}
 	}
-	sort.SliceStable(queue, func(i, j int) bool {
-		a, b := s.items[queue[i]], s.items[queue[j]]
-		if (a.Upload.Override == "next") != (b.Upload.Override == "next") {
-			return a.Upload.Override == "next"
-		}
-		if a.Upload.Override == "next" {
-			return a.Upload.NextOrder < b.Upload.NextOrder
-		}
-		if a.Tier != b.Tier {
-			return a.Tier < b.Tier
-		}
-		return a.Central > b.Central
-	})
+	queueOrder := func(queue []int) {
+		sort.SliceStable(queue, func(i, j int) bool {
+			a, b := s.items[queue[i]], s.items[queue[j]]
+			if (a.Upload.Override == "next") != (b.Upload.Override == "next") {
+				return a.Upload.Override == "next"
+			}
+			if a.Upload.Override == "next" {
+				return a.Upload.NextOrder < b.Upload.NextOrder
+			}
+			if a.Tier != b.Tier {
+				return a.Tier < b.Tier
+			}
+			return a.Central > b.Central
+		})
+	}
+	queueOrder(metadataQueue)
+	queueOrder(imageQueue)
 	wasActive := map[int]bool{}
 	for i := range s.items {
 		if s.items[i].Upload.Active {
@@ -168,7 +174,9 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 			}
 		}
 	}()
-	for _, i := range queue {
+	// Metadata gets the complete first pass. No image bytes are spent until
+	// every eligible item's metadata is complete, even if that leaves budget.
+	for _, i := range metadataQueue {
 		if budget == 0 {
 			break
 		}
@@ -183,14 +191,29 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 				now := s.clock
 				u.MetaDoneAt = &now
 			}
-		} else {
-			n = min(budget, u.Bytes-u.Sent)
-			u.Sent += n
 		}
 		s.stats.Bytes += int(n)
 		budget -= n
+		u.Active = n > 0
+		changed = append(changed, cloneItem(s.items[i]))
+	}
+	for _, item := range s.items {
+		if !item.Upload.MetaDone && item.Upload.MetaBytes > item.Upload.MetaSent {
+			return changed
+		}
+	}
+	for _, i := range imageQueue {
+		if budget == 0 {
+			break
+		}
+		delete(wasActive, i)
+		u := &s.items[i].Upload
+		n := min(budget, u.Bytes-u.Sent)
+		u.Sent += n
+		s.stats.Bytes += int(n)
+		budget -= n
 		u.Done = u.Sent == u.Bytes
-		u.Active = !u.Done
+		u.Active = n > 0 && !u.Done
 		if u.Done {
 			u.Received = true
 			u.Override = ""
