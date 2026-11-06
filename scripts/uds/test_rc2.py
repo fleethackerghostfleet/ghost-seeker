@@ -93,5 +93,37 @@ class ReleaseIntegrityTest(unittest.TestCase):
                 run.assert_not_called()
 
 
+class BootstrapPreflightTest(unittest.TestCase):
+    def test_low_or_invalid_inotify_limit_prevents_all_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            limit = Path(directory)/'inotify'
+            for value in ['128', '', 'invalid']:
+                with self.subTest(value=value):
+                    limit.write_text(value)
+                    with patch.object(rc2, 'INOTIFY_LIMIT', limit), patch.object(rc2, 'run') as run, \
+                            self.assertRaises((RuntimeError, ValueError)):
+                        rc2.bootstrap()
+                    run.assert_not_called()
+
+    def test_supported_inotify_limit_allows_bootstrap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            limit = Path(directory)/'inotify'
+            limit.write_text('1024')
+            with patch.object(rc2, 'INOTIFY_LIMIT', limit), patch.object(rc2, 'verify_release_assets'), \
+                    patch.object(rc2, 'run') as run:
+                rc2.bootstrap()
+            self.assertIn('delete-owned-clusters', [call.args[0] for call in run.call_args_list])
+
+    def test_tool_preflight_failure_prevents_deletion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            limit = Path(directory)/'inotify'
+            limit.write_text('1024')
+            with patch.object(rc2, 'INOTIFY_LIMIT', limit), patch.object(rc2, 'verify_release_assets'), \
+                    patch.object(rc2, 'run', side_effect=RuntimeError('missing tool')) as run, \
+                    self.assertRaisesRegex(RuntimeError, 'missing tool'):
+                rc2.bootstrap()
+            self.assertEqual([call.args[0] for call in run.call_args_list], ['version-k3d'])
+
+
 if __name__ == '__main__':
     unittest.main()

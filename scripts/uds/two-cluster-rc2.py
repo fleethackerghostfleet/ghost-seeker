@@ -15,6 +15,7 @@ STATE = ASSETS/'state'
 REPORT = ROOT/'docs/reports/uds-validation/rc2'
 LOGS = REPORT/'logs'
 CONFIG = ASSETS/'config'
+INOTIFY_LIMIT = Path('/proc/sys/fs/inotify/max_user_instances')
 ENV = dict(os.environ, STATE=str(STATE), SHORE_CONTEXT='k3d-uds-shore', SHIP_CONTEXT='k3d-uds-ship',
            SHORE_NS='ghost-seeker-shore', SHIP_NS='ghost-seeker-ship', EDGE_ID='ship-001')
 
@@ -72,6 +73,8 @@ def verify_release_assets():
 
 
 def bootstrap():
+    if int(INOTIFY_LIMIT.read_text()) < 1024:
+        raise RuntimeError('Two clusters require fs.inotify.max_user_instances >= 1024 before bootstrap')
     verify_release_assets()
     for command in [['k3d', 'version'], ['uds', 'version'], ['zarf', 'version'], ['kubectl', 'version', '--client'], ['curl', '--version']]:
         run('version-'+command[0], command)
@@ -82,7 +85,6 @@ def bootstrap():
     for role in ('ship', 'shore'):
         run('old-'+role+'-identity', kube(role, 'get', 'namespace', 'default', '-o', 'jsonpath={.metadata.uid}'))
     run('delete-owned-clusters', ['k3d', 'cluster', 'delete', 'uds-ship', 'uds-shore'])
-    assert int(Path('/proc/sys/fs/inotify/max_user_instances').read_text()) >= 1024
     for role, subnet, gateway in [('shore', '172.18.0.0/16', '172.18.0.1'), ('ship', '172.19.0.0/16', '172.19.0.1')]:
         run('create-'+role+'-network', ['docker', 'network', 'create', '--driver', 'bridge', '--subnet', subnet,
                                       '--gateway', gateway, 'k3d-uds-'+role])
