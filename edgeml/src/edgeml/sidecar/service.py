@@ -21,6 +21,7 @@ from typing import Optional
 import numpy as np
 
 from edgeml.nightlights import BurstController, frame_report
+from edgeml.tracking.newcontact import NewContactDetector
 
 FORM_KINDS = {"fact": "FORM_KIND_FACT", "thumb": "FORM_KIND_THUMB", "crop": "FORM_KIND_CROP", "full": "FORM_KIND_FULL"}
 EVENTS = {"open": "EVENT_OPEN", "update": "EVENT_UPDATE", "close": "EVENT_CLOSE", "duplicate": "EVENT_DUPLICATE"}
@@ -79,6 +80,7 @@ class _Source:
     tracker: object
     agg: object
     burst: BurstController = field(default_factory=BurstController.from_config)
+    new_contact: NewContactDetector = field(default_factory=NewContactDetector)
     frame_idx: int = 0
     t0_ms: Optional[int] = None
     size: Optional[tuple[int, int]] = None
@@ -111,11 +113,13 @@ class EdgemlEngine:
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
                  text_tower: str = "cache", anomaly_fallback: Optional[dict] = None, live_tiling: Optional[dict] = None,
-                 marine_mammal: Optional[dict] = None):
+                 marine_mammal: Optional[dict] = None, thermal_fallback: Optional[dict] | bool = False, new_contact: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
         self.threads, self.fps, self.tracker_variant, self.asso = threads, fps, tracker, asso
+        self.new_contact_config = dict(new_contact or {})
+        NewContactDetector(**self.new_contact_config)
         self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
         self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
         self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
@@ -147,6 +151,10 @@ class EdgemlEngine:
             self.clip_name = getattr(clip, "name", meta["model"])
         from .marine_mammal import wrap_detector
         self.detector = wrap_detector(self.detector, self.embedder, marine_mammal, score_thr)
+        from edgeml.detectors.thermal import configure_thermal
+
+        self.detector, self.thermal_unknownness_floor = configure_thermal(self.detector, thermal_fallback, score_thr=self.score_thr)
+        self.thermal_fallback_enabled = thermal_fallback is not None and thermal_fallback is not False
         # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
         # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
         self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
@@ -179,8 +187,10 @@ class EdgemlEngine:
                 tracker = make_tracker(self.tracker_variant, fps=self.fps, **kw)
                 from .marine_mammal import MarineTracker, make_aggregator
                 tracker = MarineTracker(tracker)
-                agg = make_aggregator(_make_zeroshot_aggregator_class(), name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE)
-                src = self.sources[name] = _Source(tracker=tracker, agg=agg)
+                agg = make_aggregator(_make_zeroshot_aggregator_class(), name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE,
+                                      thermal_floor=getattr(self, "thermal_unknownness_floor", .9))
+                src = self.sources[name] = _Source(tracker=tracker, agg=agg,
+                                                  new_contact=NewContactDetector(**getattr(self, "new_contact_config", {})))
             return src
 
     def _frame_time(self, src: _Source, captured_ms: Optional[int]) -> float:
@@ -211,20 +221,29 @@ class EdgemlEngine:
             dets = [d for d in detect_frame(self.detector, image_bgr, fi) if d.score >= self.det_low_thr]
             kept = [d for d in dets if d.score >= self.score_thr]
             tracks = src.tracker.update(dets, image_bgr, fi, t_s)
+            src.new_contact.observe(src.agg.states, t_s)
             events = src.agg.update(tracks, image_bgr, fi, t_s)
             base_ms = (captured_ms - int(t_s * 1000)) if captured_ms else int(time.time() * 1000) - int(t_s * 1000)
-            sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"])) for ev in events]
+            sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"]),
+                                       new_contact=src.new_contact.is_new(ev, src.agg.states)) for ev in events]
             reported = {ev["sighting_id"] for ev in events}
             for tr in tracks:
                 sid = src.agg.track_to_sid.get(tr.track_id)
                 st = src.agg.states.get(sid) if sid else None
                 if st is not None and st.status == "open" and sid not in reported:
                     reported.add(sid)
+                    if st.s.label == "thermal contact":
+                        src.agg._apply(st)
                     sightings.append(self._duplicate(st, fi, W, H, base_ms, getattr(tr, "box", None)))
             emb = next((src.agg.states[ev["sighting_id"]].emb for ev in events
                         if ev["event"] in ("open", "update") and ev["sighting_id"] in src.agg.states
                         and src.agg.states[ev["sighting_id"]].emb is not None), None) if want_embedding else None
             unknownness = max((float(ev.get("unknownness") or 0.0) for ev in events), default=0.0)
+            if getattr(self, "thermal_fallback_enabled", False):
+                thermal_unknownness = max((float(ev.get("unknownness") or 0.0) for ev in sightings
+                                           if ev["keyDetection"]["label"] == "thermal contact"), default=0.0)
+                if thermal_unknownness:
+                    unknownness = max(_f(unknownness), thermal_unknownness)
             open_dets = self.open_vocab.detect(image_bgr, dets, open_labels) if open_labels else []
             ms = (time.perf_counter() - t_start) * 1e3
             try:
@@ -250,7 +269,7 @@ class EdgemlEngine:
         resp["detections"].extend(open_dets)
         return resp
 
-    def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int, st=None) -> dict:
+    def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int, st=None, *, new_contact=False) -> dict:
         label = ev.get("label") or ""
         is_key = int(ev.get("best_frame_idx", -1)) == fi and ev["event"] != "close"
         # The edge crops the frame it holds (this one), so report the object's box in *this* frame unless this frame
@@ -266,14 +285,20 @@ class EdgemlEngine:
                "nFrames": int(ev.get("n_frames", 0))}
         if st is not None and st.emb is not None and ev["event"] in ("open", "update"):
             out["embedding"] = [round(float(v), 5) for v in np.asarray(st.emb).ravel()]
+        if new_contact and ev["event"] == "open":
+            out["newContact"] = True
         return out
 
     def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int, track_box=None) -> dict:
+        from edgeml.detectors.thermal import thermal_unknown_first
+
+        thermal_unknown_first(st, getattr(self, "thermal_unknownness_floor", .9))
         s = st.s
         box = track_box if track_box is not None else s.best_box
         return {"id": s.sighting_id, "event": "EVENT_DUPLICATE",
                 "keyDetection": {"label": s.label or "", "confidence": _f(s.best_score), "box": _norm_box(box, W, H)},
                 "isKeyFrame": False, "subtype": s.subtype or "", "value": 0.0, "forms": [],
+                **({"unknownness": _f(s.unknownness)} if s.label == "thermal contact" else {}),
                 "firstSeenUnixMs": str(base_ms + int(s.first_t_s * 1000)), "lastSeenUnixMs": str(base_ms + int(s.last_t_s * 1000)),
                 "nFrames": int(s.n_frames)}
 
@@ -317,15 +342,19 @@ def _make_zeroshot_aggregator_class():
         """SightingAggregator whose ``subtype`` / ``unknownness`` / coarse ``label`` come from zero-shot MobileCLIP on
         the key-frame embedding the aggregator already computes (the E demo's DemoAggregator, minus the stats)."""
 
-        def __init__(self, *a, classifier=None, coarse=None, **kw):
+        def __init__(self, *a, classifier=None, coarse=None, thermal_floor=.9, **kw):
             super().__init__(*a, **kw)
             self.classifier, self.coarse = classifier, coarse or {}
+            self.thermal_floor = thermal_floor
             self.zs: dict[str, dict] = {}
 
         def _apply(self, st):
+            from edgeml.detectors.thermal import thermal_unknown_first
+
             if st.s.label in {"person", "person in water"}:
                 return
             if self.classifier is None or st.emb is None:
+                thermal_unknown_first(st, self.thermal_floor)
                 return
             z = self.zs.get(st.s.sighting_id)
             if z is None or z["key"] is not st.emb:
@@ -333,6 +362,7 @@ def _make_zeroshot_aggregator_class():
                 z = self.zs[st.s.sighting_id] = {"key": st.emb, "subtype": r["subtype"], "unknownness": float(r["unknownness"])}
             st.s.subtype, st.s.unknownness = z["subtype"], z["unknownness"]
             st.s.label = self.coarse.get(z["subtype"], "boat")
+            thermal_unknown_first(st, self.thermal_floor)
 
         def _snapshot(self, st):
             self._apply(st)
@@ -445,6 +475,7 @@ class MockEngine:
             {"kind": "FORM_KIND_FACT", "bytes": "180", "jpegQuality": 0}, {"kind": "FORM_KIND_CROP", "bytes": "6000", "jpegQuality": 75},
             {"kind": "FORM_KIND_THUMB", "bytes": "4000", "jpegQuality": 55}, {"kind": "FORM_KIND_FULL", "bytes": str(int(image_bgr.nbytes // 20) or 1), "jpegQuality": 80}]
         resp["sightings"] = [{"id": sid, "event": event, "keyDetection": det, "isKeyFrame": key, "subtype": sc.subtype,
+                              **({"newContact": True} if event == "EVENT_OPEN" else {}),
                               "value": 0.8 if key else 0.0, "forms": forms, "firstSeenUnixMs": str(now - pos * 200),
                               "lastSeenUnixMs": str(now), "nFrames": pos + 1, "unknownness": 0.0,
                               **({"embedding": self._vec(sc.subtype)} if key else {})}]

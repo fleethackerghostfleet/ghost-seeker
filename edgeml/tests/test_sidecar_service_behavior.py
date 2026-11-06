@@ -1,5 +1,6 @@
 """Model-free service initialization, embedding failures and sighting wire semantics."""
 import json
+from threading import Lock
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -29,7 +30,7 @@ def model_fakes(monkeypatch):
 def test_embedding_metadata_initialization_and_wrapper_forwarding(tmp_path, model_fakes):
     detector, clip, constructor = model_fakes
     (tmp_path / "meta.json").write_text(json.dumps({"model": "tiny", "precision": "fp16"}))
-    engine = service.EdgemlEngine("fixture.onnx", tmp_path, threads=2, agg={"min_hits": 3})
+    engine = service.EdgemlEngine("fixture.onnx", tmp_path, threads=2, agg={"min_hits": 3}, thermal_fallback=None)
     constructor.assert_called_once_with("tiny", backend="ort", onnx_dir=tmp_path, threads=2, precision="fp16")
     assert engine.detector.base is detector and engine.agg_params.min_hits == 3
     assert engine.unknown_calib == "fixture-calibration"
@@ -90,7 +91,7 @@ def test_open_vocabulary_asset_negotiation_and_analysis_path(tmp_path, model_fak
     model_fakes[0].detect = Mock(return_value=[])
     src = SimpleNamespace(lock=__import__("threading").Lock(), frame_idx=0, t0_ms=None,
                           tracker=SimpleNamespace(update=Mock(return_value=[])),
-                          agg=SimpleNamespace(update=Mock(return_value=[]), states={}))
+                          agg=SimpleNamespace(update=Mock(return_value=[]), states={}), new_contact=service.NewContactDetector())
     engine._source = Mock(return_value=src)
     expected = {"label": "life raft", "confidence": .7, "box": {"x": 0., "y": 0., "w": .5, "h": .5}}
     engine.open_vocab.detect = Mock(return_value=[expected])
@@ -112,6 +113,74 @@ def test_frame_clock_is_per_source_clamps_early_timestamps_and_has_fps_fallback(
     a.frame_idx = 4
     assert engine._frame_time(a, None) == .6
     assert a.t0_ms == 10000 and b.t0_ms == 20000
+
+
+@pytest.fixture
+def frame_unknownness_engine(model_fakes, monkeypatch):
+    from edgeml.detectors.thermal import thermal_unknown_first
+
+    def build(thermal=False, label="boat"):
+        model_fakes[0].detect = Mock(return_value=[])
+        monkeypatch.setattr(service, "frame_report", lambda *a, **kw: None)
+        engine = service.EdgemlEngine("fixture.onnx", thermal_fallback=thermal, live_tiling={"enabled": False})
+        box = [4, 4, 10, 10]
+        states = {sid: SimpleNamespace(status="open", emb=None, last_seen_t=0., traj=[],
+                                      s=SimpleNamespace(sighting_id=sid, label=label, unknownness=.99,
+                                                        subtype=None, box=box, best_box=box, best_score=.9,
+                                                        first_t_s=0., last_t_s=0., n_frames=1))
+                  for sid in ("one", "two")}
+        agg = SimpleNamespace(states=states, track_to_sid={1: "one", 2: "two"},
+                              update=Mock(return_value=[]),
+                              _apply=lambda st: thermal_unknown_first(st, engine.thermal_unknownness_floor))
+        src = SimpleNamespace(lock=Lock(), frame_idx=0, t0_ms=None, agg=agg,
+                              tracker=SimpleNamespace(update=Mock(return_value=[])),
+                              new_contact=service.NewContactDetector())
+        monkeypatch.setattr(engine, "_source", lambda source: src)
+        image = np.zeros((32, 48, 3), np.uint8)
+        image[..., 0] = 255
+        return engine, src, image, box
+
+    return build
+
+
+@pytest.mark.parametrize("thermal", [False, {}])
+def test_rgb_frame_unknownness_matches_raw_events_for_open_update_close_duplicate_and_empty(frame_unknownness_engine, thermal):
+    engine, src, image, box = frame_unknownness_engine(thermal)
+
+    def event(kind, unknownness, sid="one"):
+        return {"event": kind, "sighting_id": sid, "label": "boat", "unknownness": unknownness,
+                "box": box, "best_box": box, "best_frame_idx": 1, "first_t_s": 0.}
+
+    track = Track(2, box, .9, "boat", 1, 0.)
+    frames = [([event("open", .211111)], []),
+              ([event("update", .722222)], [track]),
+              ([event("close", .355555)], []),
+              ([], [track]), ([], []),
+              ([event("update", float("nan")), event("close", .8, "two")], [])]
+    for events, tracks in frames:
+        src.agg.update.return_value = events
+        src.tracker.update.return_value = tracks
+        response = engine.analyze("rgb", image, None, [], False)
+        expected = service._f(max((float(ev.get("unknownness") or 0.) for ev in events), default=0.))
+        assert response["unknownness"] == expected
+        assert len(response["sightings"]) == len(events) + (1 if tracks else 0)
+        if events and events[0]["event"] == "update":
+            assert response["sightings"][0]["event"] == "EVENT_UPDATE"
+            assert not response["sightings"][0]["isKeyFrame"]
+        if tracks:
+            assert response["sightings"][-1]["event"] == "EVENT_DUPLICATE"
+            assert "unknownness" not in response["sightings"][-1]
+
+
+@pytest.mark.parametrize("thermal,expected", [(False, 0.), ({"unknownness_floor": .95}, .95)])
+def test_thermal_duplicate_frame_unknownness_floor_requires_opt_in(frame_unknownness_engine, thermal, expected):
+    engine, src, image, box = frame_unknownness_engine(thermal, "thermal contact")
+    src.agg.states["one"].s.unknownness = .1
+    src.tracker.update.return_value = [Track(1, box, .9, "thermal contact", 1, 0.)]
+    response = engine.analyze("cam", image, None, [], False)
+    assert src.agg.update.return_value == []
+    assert response["sightings"][0]["event"] == "EVENT_DUPLICATE"
+    assert response["unknownness"] == expected
 
 
 @pytest.mark.parametrize("event,key,box,has_embedding", [
