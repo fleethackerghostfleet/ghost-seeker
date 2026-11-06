@@ -7,15 +7,36 @@ import (
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/sensor"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
 func TestDemoReviewSeedStartupAndReset(t *testing.T) {
+	t.Run("default backfill", func(t *testing.T) { testDemoReviewSeedAutoEscalation(t, 84) })
+	t.Run("no backfill", func(t *testing.T) { testDemoReviewSeedAutoEscalation(t, 0) })
+}
+
+func testDemoReviewSeedAutoEscalation(t *testing.T, backfill int) {
 	data := store.New(100)
-	fillBacklog(data, sensor.NewGenerator(), 10)
+	fillBacklog(data, sensor.NewGenerator(), backfill)
 	assertSeed := func() {
 		t.Helper()
+		data.Add(&command.Item{ID: "ordinary-warship", TS: time.Now(), Dets: []command.Detection{{Class: "warship", Conf: .95}}}, 0)
+		escalated := false
+		for {
+			item, _, ok := data.AutoEscalate()
+			if !ok {
+				break
+			}
+			if item.ReviewFirst {
+				t.Fatal("auto-escalated the human-review seed")
+			}
+			escalated = escalated || item.ID == "ordinary-warship"
+		}
+		if !escalated {
+			t.Fatal("ordinary warship was not auto-escalated")
+		}
 		items, _, _, _ := data.Snapshot()
 		count := 0
 		for _, item := range items {
@@ -27,7 +48,7 @@ func TestDemoReviewSeedStartupAndReset(t *testing.T) {
 			for _, det := range item.Dets {
 				whale = whale || det.Class == "marine mammal"
 			}
-			if item.Img == "" || !whale || item.Reviewed {
+			if item.Img == "" || !whale || item.Reviewed || item.Sent || item.AutoSent {
 				t.Fatalf("invalid first review item: %+v", item)
 			}
 			var frame *catalog.LibraryImage
