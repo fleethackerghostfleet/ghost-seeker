@@ -416,6 +416,7 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 	}
 	bridge := shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID).WithLinkOverride(demoLinkControl)
 	compiler.Locks = bridge.PolicyLocks()
+	compiler.EdgeSubtypes = true
 	bridge.Compiler = compiler
 	console := shorebridge.NewConsole(bridge)
 	if reviewPath != "" {

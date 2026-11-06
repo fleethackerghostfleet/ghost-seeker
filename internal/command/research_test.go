@@ -115,16 +115,30 @@ func TestResearchCompilerEndpointConfiguration(t *testing.T) {
 	}
 }
 
-func TestResearchCompilerAcceptsEdgeSubtypes(t *testing.T) {
-	for concept, want := range map[string]string{"sailboat": "sailboat", "marine mammal": "marine mammal", "coast guard": "coast guard", "passenger ship": "passenger ship", "container ship": "cargo ship", "speedboat": "small boat"} {
+func TestResearchCompilerAcceptsEdgeSubtypesOnlyInShoreMode(t *testing.T) {
+	compile := func(concept string, edge bool) Compiled {
 		service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"rules":[{"concept":"` + concept + `","action":"boost","weight":2}]}`))
 		}))
+		defer service.Close()
 		client, _ := NewResearchClient(service.URL)
-		result := (&Compiler{Research: client}).Compile(context.Background(), "watch for "+concept)
-		service.Close()
-		if result.Blocked || len(result.Rules) != 1 || !reflect.DeepEqual(result.Rules[0].Classes, []string{want}) {
+		return (&Compiler{Research: client, EdgeSubtypes: edge}).Compile(context.Background(), "watch for "+concept)
+	}
+	for concept, want := range map[string]string{
+		"sailboat": "sailboat", "marine mammal": "marine mammal", "coast guard": "coast guard", "passenger ship": "passenger ship",
+		"container ship": "cargo ship", "speedboat": "small boat", "whales": "marine mammal", "ferries": "passenger ship",
+		"yacht": "sailboat", "freighter": "cargo ship", "trawlers": "fishing vessel",
+	} {
+		if result := compile(concept, true); result.Blocked || len(result.Rules) != 1 || !reflect.DeepEqual(result.Rules[0].Classes, []string{want}) {
 			t.Fatalf("%s: %+v", concept, result)
 		}
+	}
+	for _, concept := range []string{"sailboat", "whales", "red whale"} {
+		if result := compile(concept, false); !result.Blocked || len(result.Rules) != 0 {
+			t.Fatalf("simulation mode accepted %s: %+v", concept, result)
+		}
+	}
+	if result := compile("freighter", false); result.Blocked || !reflect.DeepEqual(result.Rules[0].Classes, []string{"cargo ship"}) {
+		t.Fatalf("catalog-class synonym blocked in simulation mode: %+v", result)
 	}
 }

@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
 // Core labels are detector categories, not a synonym dictionary.
@@ -41,12 +43,21 @@ func (c *Compiler) resolveConcepts(ctx context.Context, current []Rule, ops []op
 	seenKnown := fixedConcepts()
 	unknown := []string{}
 	seen := map[string]bool{}
+	resolved := map[string]string{}
+	changes := []ConceptResolution{}
 	add := func(s string) {
 		s = NormalizeConcept(s)
-		if s != "" && !fixed[s] && !seen[s] {
-			unknown = append(unknown, s)
-			seen[s] = true
+		if s == "" || fixed[s] || seen[s] {
+			return
 		}
+		seen[s] = true
+		// Whole-phrase synonyms of a fixed category resolve without Granite; qualified phrases still go to Granite.
+		if alias, ok := catalog.CanonicalAlias(s); ok && fixed[alias] {
+			resolved[s] = alias
+			changes = append(changes, ConceptResolution{Input: s, Canonical: alias, Reason: "Known synonym."})
+			return
+		}
+		unknown = append(unknown, s)
 	}
 	for _, r := range current {
 		add(r.Concept)
@@ -60,16 +71,14 @@ func (c *Compiler) resolveConcepts(ctx context.Context, current []Rule, ops []op
 			add(op.Concept)
 		}
 	}
-	if len(unknown) == 0 {
+	if len(unknown) == 0 && len(resolved) == 0 {
 		return current, ops, nil, nil
 	}
-	if c.URL == "" {
+	if len(unknown) > 0 && c.URL == "" {
 		return nil, nil, nil, errors.New("clarification required: Granite must be available to interpret unfamiliar category names")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	resolved := map[string]string{}
-	changes := []ConceptResolution{}
 	// Short individual enum responses are more reliable for this 350M model than
 	// a long batched mapping. All calls share one command deadline; none run per image.
 	for _, input := range unknown {
