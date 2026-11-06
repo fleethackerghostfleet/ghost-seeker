@@ -13,8 +13,9 @@
 <link rel="stylesheet" href="/themes.css">
 </head>
 <body class="commander">
-<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA · COMMANDER'S FINAL REVIEW</div>
+<div class="banner" role="region" aria-label="Classification marking">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA · COMMANDER'S FINAL REVIEW</div>
 <header>
+  <h1 class="sr-only">Commander View</h1>
   <img class="crest" src="/brand/logo.png" width="104" height="56" alt="Ghost Seeker">
   <div class="ttl"><b>Commander View</b><small>Received on shore · watch-floor reports · command decisions</small></div>
   <div class="live off" id="live"><i></i><span>CONNECTING</span></div>
@@ -44,7 +45,8 @@
   <aside class="brief" id="brief" tabindex="0" aria-label="Command assessment and decisions"></aside>
 </main>
 <div class="toast" id="toast"></div>
-<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
+<div class="banner" role="contentinfo" aria-label="Classification marking">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
+<div id="panelResizers" class="panel-resizers" role="region" aria-label="Panel resizing controls"></div>
 <script src="/render.js" defer></script>
 <script src="/settings.js" defer></script>
 <script src="/text-layout.js" defer></script>

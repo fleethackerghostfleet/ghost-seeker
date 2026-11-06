@@ -194,7 +194,7 @@ body.drawer-open .drawer{transform:none}
 .sc span{display:block;font-size:0.625rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .sc b{font-size:1.1875rem;font-variant-numeric:tabular-nums}
 .dsec{margin-bottom:14px}
-.dsec h4{margin:0 0 6px;font-size:0.65625rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dsec h3{margin:0 0 6px;font-size:0.65625rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 table{width:100%;border-collapse:collapse;font-size:0.75rem}
 td,th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{color:var(--muted);font-weight:600;font-size:0.65625rem;text-transform:uppercase;letter-spacing:.06em}
@@ -364,8 +364,8 @@ img[src^="/dataset-images/"]{object-fit:fill!important}
 /* Navy CIC console theme */
 header{height:52px;border-bottom:2px solid var(--line)}
 .logo b{font-weight:700;letter-spacing:.16em}
-nav a,.lbl,.hstat span,.btn,.seg button,button.live,.strip,.dsec h4,.sc span,th,.user{letter-spacing:.06em}
-nav a,.lbl,.hstat span,.btn,.seg button,button.live,.strip,.dsec h4,.sc span,th{text-transform:uppercase;font-weight:600}
+nav a,.lbl,.hstat span,.btn,.seg button,button.live,.strip,.dsec h3,.sc span,th,.user{letter-spacing:.06em}
+nav a,.lbl,.hstat span,.btn,.seg button,button.live,.strip,.dsec h3,.sc span,th{text-transform:uppercase;font-weight:600}
 nav a,.btn,.seg button{font-size:0.71875rem}
 nav a,.hstat span,.user,.logo small,button.live{white-space:nowrap}
 nav a.on{background:var(--panel2);border-bottom:3px solid var(--accent)}
