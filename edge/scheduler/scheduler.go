@@ -643,7 +643,7 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 
 	// 2. Payload candidates: the next form of every item.
 	minImg := policy.GetThresholds().GetMinPriorityForImages()
-	var cands []*cand
+	var cands, deferred []*cand
 	for _, r := range rows {
 		f := s.nextForm(r, emcon)
 		if f == nil {
@@ -672,6 +672,8 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 		for _, c := range cands {
 			if c.form.Kind == pb.FormKind_FORM_KIND_FACT || c.row.PullBoost > 0 {
 				filtered = append(filtered, c)
+			} else {
+				deferred = append(deferred, c)
 			}
 		}
 		cands = filtered
@@ -697,7 +699,6 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 	if maxChunk > s.cfg.MaxChunk {
 		maxChunk = s.cfg.MaxChunk
 	}
-	var deferred []*cand
 	for (len(cands) > 0 || len(deferred) > 0) && left >= s.cfg.MinChunk && len(plan.Chunks) < 256 {
 		if len(deferred) > 0 {
 			factPending := false

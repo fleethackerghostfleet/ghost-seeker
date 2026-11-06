@@ -219,13 +219,27 @@ func TestFactFirstBlocksOtherItems(t *testing.T) {
 	for _, r := range rows {
 		if r.Item.Id == first.Item.Id {
 			r.Form(pb.FormKind_FORM_KIND_FACT).Complete = true
+		} else {
+			for i := range r.Forms {
+				if r.Forms[i].Kind != pb.FormKind_FORM_KIND_FACT {
+					r.Forms[i].Complete = true
+				}
+			}
 		}
 	}
 	plan := s.BuildPlan(rows, 64000, clk.Now())
+	factDone, imageSent := false, false
 	for _, c := range plan.Chunks {
-		if c.ItemId != second.Item.Id && c.Form != pb.FormKind_FORM_KIND_FACT {
+		if c.ItemId == second.Item.Id && c.Form == pb.FormKind_FORM_KIND_FACT {
+			factDone = c.Offset+int64(len(c.Data)) >= c.TotalBytes
+		}
+		if c.Form != pb.FormKind_FORM_KIND_FACT && !factDone {
 			t.Fatalf("non-FACT sent with pending FACT: %+v", plan.Chunks)
 		}
+		imageSent = imageSent || c.ItemId == first.Item.Id
+	}
+	if !imageSent {
+		t.Fatal("image excluded despite leftover budget after all FACTs")
 	}
 }
 
