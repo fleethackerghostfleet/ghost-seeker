@@ -4,6 +4,7 @@ package catalog
 
 import (
 	"archive/zip"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,16 +30,6 @@ func TestLibraryImages(t *testing.T) {
 		}
 		for _, image := range images {
 			if image.Background {
-				archive, err := zip.OpenReader(filepath.Join("..", "..", "web", "static", "imagery", "empty-ocean.zip"))
-				if err != nil {
-					t.Fatal(err)
-				}
-				f, err := archive.Open(strings.TrimPrefix(image.File, "imagery/empty-ocean/"))
-				if err != nil {
-					t.Fatal(err)
-				}
-				f.Close()
-				archive.Close()
 				if len(image.Dets) != 0 {
 					t.Errorf("background %q has invented detections", image.File)
 				}
@@ -85,6 +76,31 @@ func TestLibraryImages(t *testing.T) {
 			t.Errorf("source %q has no library images", source.ID)
 		}
 	}
+	t.Run("EmptyOceanArchive", func(t *testing.T) {
+		ocean, err := os.ReadFile(filepath.Join("..", "..", "web", "static", "imagery", "empty-ocean.zip"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.HasPrefix(ocean, []byte("version https://git-lfs.github.com/spec/v1\n")) {
+			t.Skip("empty-ocean.zip is a Git LFS pointer; run git lfs pull --include web/static/imagery/empty-ocean.zip")
+		}
+		archive, err := zip.NewReader(bytes.NewReader(ocean), int64(len(ocean)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, images := range Library {
+			for _, image := range images {
+				if !image.Background {
+					continue
+				}
+				f, err := archive.Open(strings.TrimPrefix(image.File, "imagery/empty-ocean/"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.Close()
+			}
+		}
+	})
 }
 
 func TestNightConfig(t *testing.T) {

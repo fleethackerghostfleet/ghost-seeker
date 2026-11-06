@@ -35,6 +35,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	reviewPath := flag.String("review-log", "data/reviews.jsonl", "append-only review log (empty disables)")
 	shoreURL := flag.String("shore", "", "live mode: back the UI with this shore console (e.g. http://localhost:8080) instead of the internal simulation")
+	shoreCA := flag.String("shore-ca", os.Getenv("GS_SHORE_CA"), "live mode: optional PEM CA bundle added to system roots for HTTPS shore/edge consoles")
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–2 MB/s ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
@@ -132,7 +133,11 @@ func main() {
 	demo.logDevMode(devMode, *authMode)
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath, demo.linkControl(), *linkBps)
+		upstream, err := httpx.ClientTransport(*shoreCA)
+		if err != nil {
+			log.Fatal(err)
+		}
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath, demo.linkControl(), *linkBps, upstream)
 		return
 	}
 
@@ -158,7 +163,7 @@ func serve(addr string, handler http.Handler, transport ...*tls.Config) error {
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through, with an automatically varying normal rate.
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string, demoLinkControl bool, linkBps int64) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string, demoLinkControl bool, linkBps int64, upstream http.RoundTripper) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -176,11 +181,15 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 		if linkBps >= 0 {
 			log.Printf("link shaper on %s -> %s: fixed %d bits/s", linkListen, target, linkBps)
 		} else {
-			log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+			scheme := "http"
+			if strings.HasPrefix(shoreURL, "https://") {
+				scheme = "https"
+			}
+			log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore %s://localhost%s)", linkListen, target, scheme, linkListen)
 		}
 		link = sh
 	}
-	bridge := enableDemoLinkControl(shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID), demoLinkControl)
+	bridge := enableDemoLinkControl(shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID).WithTransport(upstream), demoLinkControl)
 	compiler.Locks = bridge.PolicyLocks()
 	compiler.EdgeSubtypes = true
 	bridge.Compiler = compiler

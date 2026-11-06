@@ -9,10 +9,13 @@ from urllib.parse import urlparse
 from .engine import ONNXEncoder, Vocabulary
 
 MAX_BODY = 24 * 1024 * 1024
+REQUEST_TIMEOUT_SECONDS = 10
 
 
 def handler_for(vocabulary):
     class Handler(BaseHTTPRequestHandler):
+        timeout = REQUEST_TIMEOUT_SECONDS
+
         def reply(self, status, payload):
             raw = json.dumps(payload, allow_nan=False).encode()
             self.send_response(status)
@@ -33,10 +36,26 @@ def handler_for(vocabulary):
 
         def do_POST(self):
             try:
-                size = int(self.headers.get("Content-Length", "0"))
-                if size <= 0 or size > MAX_BODY:
+                lengths = self.headers.get_all("Content-Length", [])
+                if self.headers.get("Transfer-Encoding") is not None or len(lengths) != 1:
+                    raise ValueError("a single Content-Length is required; Transfer-Encoding is unsupported")
+                length = lengths[0].strip(" \t")
+                if not length.isascii() or not length.isdecimal():
+                    raise ValueError("Content-Length must be a nonnegative integer")
+                size = int(length)
+                if size > MAX_BODY:
+                    self.close_connection = True
+                    return self.reply(413, {"error": "request body exceeds 24 MB"})
+                if size == 0:
                     raise ValueError("request body must be between 1 byte and 24 MB")
-                request = json.loads(self.rfile.read(size))
+                try:
+                    raw = self.rfile.read(size)
+                except TimeoutError:
+                    self.close_connection = True
+                    return self.reply(408, {"error": "request body timed out"})
+                if len(raw) != size:
+                    raise ValueError("incomplete request body")
+                request = json.loads(raw)
                 if not isinstance(request, dict):
                     raise ValueError("expected a JSON object")
                 path = urlparse(self.path).path
@@ -63,6 +82,7 @@ def handler_for(vocabulary):
                     return self.reply(404, {"error": "not found"})
                 self.reply(200, response)
             except (ValueError, TypeError, KeyError, OverflowError) as exc:
+                self.close_connection = True
                 self.reply(400, {"error": str(exc)})
             except Exception:
                 # No stack traces or partial result responses across the API boundary.

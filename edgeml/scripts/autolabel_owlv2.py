@@ -139,7 +139,12 @@ def sequence_frame_count(seq_dir: Path) -> int:
 
 def run(root: Path, stride_override: int | None = None) -> dict[str, Any]:
     sequences = sorted(path for path in root.iterdir() if (path / "seqinfo.ini").exists())
-    total_frames = sum(sequence_frame_count(path) for path in sequences)
+    if not sequences:
+        raise ValueError(f"No MOT sequences found in {root}")
+    frame_counts = [sequence_frame_count(path) for path in sequences]
+    if any(count <= 0 for count in frame_counts):
+        raise ValueError("MOT sequences must contain at least one frame")
+    total_frames = sum(frame_counts)
     processor, model, torch = load_model()
     prompts = list(dict.fromkeys([name.replace("_", " ") for name in GEMINI_LABELS] + ["ship", "boat", "vessel"]))
     first_seq = sequences[0]

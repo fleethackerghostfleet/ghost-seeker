@@ -5,7 +5,7 @@ const briefing=(()=>{
  function status(message){$('briefStatus').textContent=message}
  function renderDetections(item){
   const area=$('briefDetections');area.replaceChildren();
-  const heading=document.createElement('h4');heading.textContent='Select ships for a briefing';area.append(heading);
+  const heading=document.createElement('h3');heading.textContent='Select ships for a briefing';area.append(heading);
   item.dets.forEach((d,index)=>{
    if(CLS[d.cls]?.g!=='vessel')return;
    const key=JSON.stringify([item.id,index]),button=document.createElement('button');
