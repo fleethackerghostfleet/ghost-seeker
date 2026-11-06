@@ -58,6 +58,9 @@ func enrichCapture(it *pb.Item, data []byte) {
 		conf = strconv.FormatFloat(float64(f.Detections[0].Confidence), 'f', 3, 32)
 	}
 	put("subtype", label, classificationSynthetic)
+	if tags["subtype"] != label {
+		conf, classificationSynthetic = "0.70", true
+	}
 	put("subtype_conf", conf, classificationSynthetic)
 	put("unknownness", strconv.FormatFloat(float64(f.Unknownness), 'f', 3, 32), false)
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))

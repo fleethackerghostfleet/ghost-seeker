@@ -69,10 +69,16 @@ func TestCapturePreservesSidecar(t *testing.T) {
 }
 
 func TestCaptureAddsMissingSubtypeConfidence(t *testing.T) {
-	a := &pb.Item{Features: &pb.Features{Tags: map[string]string{"subtype": "tanker"}, Detections: []*pb.Detection{{Label: "vessel", Confidence: .92}}}}
-	enrichCapture(a, nil)
-	if a.Features.Tags["subtype"] != "tanker" || a.Features.Tags["subtype_conf"] != "0.920" {
-		t.Fatalf("missing confidence or overwritten subtype: %v", a.Features.Tags)
+	for _, label := range []string{"tanker", "vessel", ""} {
+		a := &pb.Item{Features: &pb.Features{Tags: map[string]string{"subtype": "tanker"}, Detections: []*pb.Detection{{Label: label, Confidence: .92}}}}
+		enrichCapture(a, nil)
+		wantConf, wantSynthetic := "0.70", true
+		if label == "tanker" {
+			wantConf, wantSynthetic = "0.920", false
+		}
+		if a.Features.Tags["subtype"] != "tanker" || a.Features.Tags["subtype_conf"] != wantConf || strings.Contains(a.Features.Tags["synthetic"], "subtype_conf") != wantSynthetic {
+			t.Fatalf("incorrect confidence for detection %q: %v", label, a.Features.Tags)
+		}
 	}
 }
 
