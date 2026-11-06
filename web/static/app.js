@@ -69,7 +69,7 @@ function applySendMark(el,it){
 function uploadControlsHTML(it){
  const u=uploadState(it),live=!!(LIVE||it.live),viewer=typeof gsAuth!=='undefined'&&gsAuth.viewer();
  const disabled=live||viewer||u.done,reason=live?'Transfer overrides are not supported by the live shore connection':viewer?'Viewer role is read-only':u.done?'Image is already uploaded':'Default: priority tier, then score. Operator overrides affect uploads only.';
- return`<div class="dsec upload-controls"><h4>Shore upload queue</h4>${uploadHTML(it)}<div class="actions"><button class="btn ${u.next?'done':''}" id="aUploadNext" aria-pressed="${u.next}" title="${esc(reason)}" ${disabled?'disabled':''}>${u.next?'Back to priority order':'Upload next'}</button><button class="btn ${u.held?'done':''}" id="aUploadHold" aria-pressed="${u.held}" title="${esc(reason)}" ${disabled?'disabled':''}>${u.held?'Release upload':'Hold upload'}</button></div></div>`;
+ return`<div class="dsec upload-controls"><h3>Shore upload queue</h3>${uploadHTML(it)}<div class="actions"><button class="btn ${u.next?'done':''}" id="aUploadNext" aria-pressed="${u.next}" title="${esc(reason)}" ${disabled?'disabled':''}>${u.next?'Back to priority order':'Upload next'}</button><button class="btn ${u.held?'done':''}" id="aUploadHold" aria-pressed="${u.held}" title="${esc(reason)}" ${disabled?'disabled':''}>${u.held?'Release upload':'Hold upload'}</button></div></div>`;
 }
 function mergeLiveConfig(live){
  if(!live)return;
@@ -559,10 +559,10 @@ function setupFeedKeyboard(){
   next.el?.focus();
  };
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.tabIndex=-1;el.setAttribute('role','button');el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.tabIndex=-1;el.setAttribute('role','button');el.innerHTML='<span class="card-context sr-only"></span>'+cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent&&it.autoSent?' sent':''}${humanSent(it)?' hsent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
- el.setAttribute('aria-label',`P${tier} ${TNAME[tier]} image from ${it.src.name||it.src.id}. Open image details`);
+ el.querySelector('.card-context').textContent=`P${tier} ${TNAME[tier]} image from ${it.src.name||it.src.id}. Open image details`;
  const reviewMark=el.querySelector('.rvk');reviewMark.title=humanReviewed(it)?'Human reviewed':'Not reviewed';reviewMark.setAttribute('aria-label',reviewMark.title);
  const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low`:'';
  el.querySelector('.night-badge')?.remove();if(!DATASET_MODE)el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
@@ -725,7 +725,7 @@ function liveLadderHTML(it){
  const l=it.live;if(!l)return'';const p=l.pull||{};
  const rows=FORMS.map(k=>{const f=l.forms[k]||{state:'none'};const st=f.state==='received'?`received · ${fmtBytes(f.bytes)}`:f.state==='partial'?`${fmtBytes(f.received)} of ${fmtBytes(f.bytes)} streaming`:f.state==='pending'?`waiting on the ship · ${fmtBytes(f.bytes)}`:f.state==='offered'?`on the ship, not sent · ${fmtBytes(f.bytes)}`:'not available';
   return`<tr class="${esc(f.state)}${l.imageForm===k?' shown':''}"><td>${FORM_NAME[k]}${l.imageForm===k?' <small>· shown</small>':''}</td><td>${esc(st)}</td></tr>`}).join('');
- return`<div class="dsec live-ladder"><h4>Image versions · shore record ${esc(l.itemID||l.itemId||'')}</h4>
+ return`<div class="dsec live-ladder"><h3>Image versions · shore record ${esc(l.itemID||l.itemId||'')}</h3>
   <div class="hint" style="margin-bottom:6px">Image shown: <b>${l.imageForm?FORM_NAME[l.imageForm]:'none — summary only'}</b>${l.sightingId?` · Tracked object <span class="mono">${esc(l.sightingId)}</span>`:' · object not yet tracked'}${l.framesKnown?` · ${l.frames} frames seen on the ship, ${l.reports} report${l.reports===1?'':'s'} sent`:` · ${l.reports} report${l.reports===1?'':'s'} so far`}${l.event?` · ${esc(l.event)}`:''}</div>
   <table class="ladder">${rows}</table>
   <div class="pullrow"><button class="btn ${p.enabled?'primary':''}" id="aPull" ${p.enabled&&!pulling.has(l.itemId)?'':'disabled'} title="${esc(p.reason||'')}">${pulling.has(l.itemId)?'requested…':esc(p.label||'Request full image')}</button><span class="hint">${esc(p.reason||'')}</span></div>
@@ -840,12 +840,12 @@ function buildWhy(it,rows){
  return why;
 }
 function processingHTML(it){
- if(DATASET_MODE)return `${detectorNegativeHTML(it)}<div class="dsec"><h4>Processing</h4><ul class="tl">
+ if(DATASET_MODE)return `${detectorNegativeHTML(it)}<div class="dsec"><h3>Processing</h3><ul class="tl">
   <li class="edge"><i></i><div>Clean v2 dev image<br><small>Real detector output · score ${it.edge.toFixed(2)} ${it.detectorNegative?'<':'≥'} 0.20</small></div></li>
   <li><i></i><div>Loaded for Operator Review<br><small>${esc(it.dataset_id)} · ${esc(it.image_id)}</small></div></li>
   <li><i></i><div>Priority scoring<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div></li>
  </ul></div>`;
- return `<div class="dsec"><h4>Processing chain</h4><ul class="tl">
+ return `<div class="dsec"><h3>Processing chain</h3><ul class="tl">
   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${esc(it.src.hw)} · ${esc(it.src.em)} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
   <li><i></i><div>Sent to shore<br><small>${esc(it.src.link)} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
   <li><i></i><div>Stored in imagery database<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
@@ -861,7 +861,7 @@ function captureHTML(it){
  const num=(key,dp=0)=>Number.isFinite(c[key])?c[key].toFixed(dp):c[key]??'—';
  const pct=key=>Number.isFinite(c[key])?`${(c[key]*100).toFixed(0)}%`:c[key]??'—';
  const row=(label,body)=>`<dt>${esc(label)}</dt><dd>${body}</dd>`;
- return `<section class="dsec capture"><h4>Capture</h4>${all?'<p class="capture-note" title="These values are simulated, not measured by a sensor.">All capture values shown are synthetic.</p>':''}<dl class="capture-grid">${
+ return `<section class="dsec capture"><h3>Capture</h3>${all?'<p class="capture-note" title="These values are simulated, not measured by a sensor.">All capture values shown are synthetic.</p>':''}<dl class="capture-grid">${
   row('Position',`${value('lat',num('lat',5))}, ${value('lon',num('lon',5))} · ${value('headingDeg',`${num('headingDeg',1)}°`)}`)+
   (c.altM!=null?row('Altitude',value('altM',`${num('altM',1)} m`)):'')+
   (c.fovDeg!=null?row('Field of view',value('fovDeg',`${num('fovDeg',1)}°`)):'')+
@@ -877,7 +877,7 @@ function renderDetailContent(){
  const it=findItem(state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';closeDetail();return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn" aria-label="Close image details">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;bindMetadataPanel(it);return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
@@ -885,17 +885,17 @@ function renderDetailContent(){
  const dl=it.central-it.base;
  const l=feedOrdered,idx=l.findIndex(x=>x.id===it.id);
  D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span></h2><small>${esc(it.src.name)} · <span class="mono" title="UTC time (Zulu)">${zulu(it.ts)}</span> · Stored image #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
-  <div class="dnav"><button id="dPrev" title="Previous (←)">‹</button><button id="dNext" title="Next (→)">›</button><button id="dClose" title="Close (Esc)">×</button></div></div>
+  <div class="dnav"><button id="dPrev" title="Previous (←)" aria-label="Previous image">‹</button><button id="dNext" title="Next (→)" aria-label="Next image">›</button><button id="dClose" title="Close (Esc)" aria-label="Close image details">×</button></div></div>
  <div class="dimg" id="dImg" title="Enlarge (F)">${largeImage(it)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
   ${captureHTML(it)}
-  <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">P${t} ${TNAME[t]}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
+  <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">P${t} ${TNAME[t]}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" aria-label="Reset priority to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
   <div class="scores"><div class="sc" title="${DATASET_MODE?'Detector triage score from real detections':it.live?'Ship score: importance relative to the highest score on shore':'Edge score: the ship’s initial estimate of importance'}"><span>${DATASET_MODE?'Detector score':'Ship score'}</span><b>${it.edge.toFixed(2)}</b></div><div class="sc" title="${DATASET_MODE?'Command-model score after active directives':it.live?'Shore score: relative importance after applying your directive':'Command score: importance after shore scoring and directives'}"><span>${DATASET_MODE?'Model score':'Shore score'}</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span title="How much active directives changed the base score">Change from directives</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
-  <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>esc(ATTR_LAB[a])).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
+  <div class="dsec"><h3>Detections</h3><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>esc(ATTR_LAB[a])).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
   ${gsLights.section(it,CLS)}
   <div class="dsec" id="briefDetections"></div>
-  <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
-  ${it.live?liveLadderHTML(it):DATASET_MODE?processingHTML(it):`<div class="dsec"><h4>Processing chain</h4><ul class="tl">
+  <div class="dsec"><h3>Why this priority</h3><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
+  ${it.live?liveLadderHTML(it):DATASET_MODE?processingHTML(it):`<div class="dsec"><h3>Processing chain</h3><ul class="tl">
    <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${esc(it.src.hw)} · ${esc(it.src.em)} · ${it.background?'empty water retained locally for demo · no automatic upload':`score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}`}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
    <li><i></i><div>Shore transfer: ${esc(uploadState(it).label)}<br><small>${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div></li>
    <li><i></i><div>Stored on ship<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>

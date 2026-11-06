@@ -229,6 +229,50 @@ docker compose -f deploy/compose/docker-compose.yml --profile piv up --build
 `-shore http://shore:8080` without inserting a second link shaper. The profile does not change
 shore/edge authentication or make their plain HTTP links suitable for untrusted networks.
 
+## 1b. Shore and edge listener TLS (opt-in)
+
+`cmd/shore` and `cmd/edge` retain HTTP by default. Supply both server files to
+enable HTTPS with TLS **1.3 minimum**; an unpaired flag/env setting, unreadable
+file or invalid key pair is a startup error, before opening data stores.
+
+| Binary | Flag | Environment | Purpose |
+|---|---|---|---|
+| shore, edge | `-tls-cert` | `GS_TLS_CERT` | PEM server certificate/chain |
+| shore, edge | `-tls-key` | `GS_TLS_KEY` | PEM private key; required with certificate |
+| edge | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for HTTPS sync to shore |
+| ghost-seeker (live mode) | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for shore **and edge** RPCs and shore blob/REST/SSE proxies |
+
+Clients use system roots when no CA file is supplied; a supplied bundle adds
+trust roots rather than replacing the system roots. Missing/empty/invalid CA
+bundles fail startup. HTTPS connections use TLS 1.3+, verify the peer chain and
+the URL hostname, and offer no verification bypass. A shared operator bundle
+can contain multiple private roots if shore and edge use different issuers.
+Certificates must cover the actual URL host/IP, including a TCP shaper's host
+when used. Private CAs must also be trusted by browsers accessing node consoles.
+
+This is server authentication, not client-certificate authentication for sync.
+Unit JWT and operator bearer checks remain required independently; the
+operator app's PIV client-authentication mode is unchanged. Protect private keys,
+provision certificate renewal and restart nodes to load replacements. Inference,
+MJPEG cameras and optional language-model services have separate clients; the
+shore CA option does not configure those connections.
+
+See [deployment notes](../deploy/README.md) for commands and required deployment
+overrides. Compose still needs site-specific TLS mounts, flags and probes. Zarf
+v0.89 supports opt-in TLS directly: empty `SHORE_TLS_SECRET`, `EDGE_TLS_SECRET`
+and `SHORE_CA_SECRET` defaults preserve the original HTTP manifests. Setting a
+listener Secret adds read-only `tls.crt`/`tls.key` mounts, paired server flags
+and HTTPS probes; setting the CA Secret mounts `ca.crt` and supplies `-shore-ca`
+to edge and operator. Configured Secrets/keys are required, with no HTTP fallback
+on missing or invalid credentials. The default local shore URLs upgrade to
+HTTPS with shore TLS; custom `SHORE_URL`/`OPERATOR_SHORE_URL` values must explicitly
+use the appropriate scheme. Keys remain in namespace-local Secrets, not in the
+package. Restrict Secret access, rotate credentials and restart pods to reload
+them. Kubernetes HTTPS health probes skip certificate verification; successful
+probes do not prove chain/hostname trust. Verify authenticated application
+connections separately. Operator browser TLS/PIV and inference/camera transport
+remain separate configuration boundaries.
+
 ## 2. CSRF / cross-origin
 
 * **Host header / DNS rebinding**: shore and edge reject requests with an unknown `Host` using
@@ -293,8 +337,9 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 
 ## 6. Residual risk / not in scope here
 
-* No TLS inside the repo: terminate TLS in front of every listener; the operator token and
-  session cookie are bearer secrets.
+* TLS is opt-in: enable shore/edge listener TLS (§1b) or terminate TLS at an approved
+  proxy. The operator app supports PIV/mTLS (§1a), but token mode defaults to HTTP
+  and needs a TLS boundary. Operator tokens and session cookies are bearer secrets.
 * The unit JWT authenticates the edge to shore; it does not authenticate plaintext
   shore responses to the edge. Use the TLS boundary above for transport protection.
   Ed25519 policy payload signing is implemented in `internal/policy` and remains

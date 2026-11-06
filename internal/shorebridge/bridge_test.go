@@ -436,7 +436,7 @@ func TestPolicyInfoAndLayeredDirectiveEMCON(t *testing.T) {
 	rec = httptest.NewRecorder()
 	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/emcon",
 		strings.NewReader(`{"mode":"NORMAL","padding":"`+strings.Repeat("x", 5<<10)+`"}`)))
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "invalid request body\n" {
+	if rec.Code != http.StatusRequestEntityTooLarge || rec.Body.String() != "invalid request body\n" {
 		t.Fatalf("oversized EMCON body status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
