@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inference-egress
+  namespace: ghost-seeker
+spec:
+  podSelector:
+    matchLabels:
+      app: edgeml-sidecar
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: "###ZARF_VAR_MODEL_EGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: ###ZARF_VAR_MODEL_EGRESS_PORT###

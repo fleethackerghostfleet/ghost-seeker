@@ -221,8 +221,14 @@ When staging an edge-only cluster:
 ```sh
 zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
   --confirm --components=edge \
-  --set-variables=SHORE_URL=http://shore.example.internal:8080
+  --set-variables=SHORE_URL=http://shore.example.internal:8080 \
+  --set-variables=SHORE_EGRESS_CIDR=203.0.113.10/32 \
+  --set-variables=SHORE_EGRESS_PORT=8080
 ```
+
+`SHORE_EGRESS_CIDR`/`SHORE_EGRESS_PORT` must cover the address and port that
+`SHORE_URL` resolves to; the default-deny egress policy otherwise blocks the
+sync link.
 
 The packaged images are production builds (`-tags prod`, see
 [Production profile](#production-profile-and-prod-gate)): the edge has no
@@ -244,8 +250,8 @@ permits it.
 All manifests use the dedicated `ghost-seeker` namespace; ship and shore are
 split by deploying component subsets into separate clusters, not by different
 hardcoded namespaces. The required namespace component installs default-deny
-ingress for **all** pods there. Each workload component installs its own allow
-policy, so an edge-only install still receives default-deny plus edge allows.
+ingress and egress for **all** pods there. Each workload component installs its own
+allow policies, so an edge-only install still receives default-deny plus edge allows.
 Existing workload definitions, Service types and ports are unchanged.
 
 | From | To / TCP port | Evidence / condition |
@@ -287,10 +293,13 @@ Existing additional NetworkPolicies may widen permissions because allows are add
 The Services remain ClusterIP; provision approved external routing/ingress
 separately. Policies allow a **port**, not a path: shore 8080 also serves sync,
 console and blobs, not just `/api/v1`. Keep application authentication and a TLS
-boundary; use a gateway for HTTP path restrictions. Egress remains unrestricted,
-including DNS. Remote shore/inference URLs, optional cameras, model provisioning
-and registries are not fully specified in the package, so a complete egress
-allowlist cannot be derived safely. Inventory them before adding egress isolation.
+boundary; use a gateway for HTTP path restrictions. Egress permits only the five
+internal service flows above, kube-system/kube-dns on UDP/TCP 53, and configured
+destination CIDR/port pairs. External egress defaults fail closed, independently
+of ingress source CIDRs and application URLs. Inventory remote shore/inference,
+optional camera, operator LLM/research/OCSP and any approved model mirror endpoints
+before deployment. See [deployment egress variables](../deploy/README.md#external-egress-variables)
+for the complete variable table, TLS/proxy ports and DNS/NAT caveats.
 
 ### Live edge input
 

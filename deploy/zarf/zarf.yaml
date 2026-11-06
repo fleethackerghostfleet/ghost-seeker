@@ -7,6 +7,70 @@ metadata:
   description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: SHORE_EGRESS_CIDR
+    description: Approved destination CIDR for edge/operator to routed shore sync, console and API. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: SHORE_EGRESS_PORT
+    description: TCP destination port for SHORE_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "8080"
+    prompt: false
+  - name: EDGE_EGRESS_CIDR
+    description: Approved destination CIDR for operator to routed edge console. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: EDGE_EGRESS_PORT
+    description: TCP destination port for EDGE_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "8081"
+    prompt: false
+  - name: INFERENCE_EGRESS_CIDR
+    description: Approved destination CIDR for edge/shore to remote inference or text embedding. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: INFERENCE_EGRESS_PORT
+    description: TCP destination port for INFERENCE_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "9090"
+    prompt: false
+  - name: CAMERA_EGRESS_CIDR
+    description: Approved destination CIDR for edge to optional GS_MJPEG_URL HTTP(S) camera pull. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: CAMERA_EGRESS_PORT
+    description: TCP destination port for CAMERA_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "80"
+    prompt: false
+  - name: LLM_EGRESS_CIDR
+    description: Approved destination CIDR for operator to optional GS_LLM_URL OpenAI-compatible endpoint or approved Vertex gateway. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: LLM_EGRESS_PORT
+    description: TCP destination port for LLM_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "8080"
+    prompt: false
+  - name: RESEARCH_EGRESS_CIDR
+    description: Approved destination CIDR for operator to optional GS_RESEARCH_COMPILER_URL service. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: RESEARCH_EGRESS_PORT
+    description: TCP destination port for RESEARCH_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "8097"
+    prompt: false
+  - name: OCSP_EGRESS_CIDR
+    description: Approved destination CIDR for operator to optional GS_PIV_OCSP_URL responder. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: OCSP_EGRESS_PORT
+    description: TCP destination port for OCSP_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "80"
+    prompt: false
+  - name: MODEL_EGRESS_CIDR
+    description: Approved destination CIDR for inference to optional approved model mirror in customized deployments; packaged runtime uses offline mounted models. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: MODEL_EGRESS_PORT
+    description: TCP destination port for MODEL_EGRESS_CIDR; match the configured endpoint, TLS gateway or proxy.
+    default: "443"
+    prompt: false
   - name: SHORE_INGRESS_CIDR
     description: Approved source CIDR as seen at shore for routed ship sync, remote operators and external API clients. Documentation-only default; set for the deployment (never 0.0.0.0/0).
     default: 192.0.2.0/32
@@ -101,6 +165,7 @@ components:
         files:
           - manifests/namespace.yaml
           - manifests/network-default-deny.yaml
+          - manifests/network-default-deny-egress.yaml
   - name: shore
     default: true
     required: false
@@ -114,6 +179,7 @@ components:
         files:
           - manifests/shore.yaml
           - manifests/network-shore.yaml
+          - manifests/network-shore-egress.yaml
   - name: operator
     default: true
     required: false
@@ -127,6 +193,7 @@ components:
         files:
           - manifests/operator.yaml
           - manifests/network-operator.yaml
+          - manifests/network-operator-egress.yaml
   - name: edge
     default: true
     required: false
@@ -140,6 +207,7 @@ components:
         files:
           - manifests/edge.yaml
           - manifests/network-edge.yaml
+          - manifests/network-edge-egress.yaml
   - name: edge-inference
     default: false
     required: false
@@ -152,3 +220,4 @@ components:
         files:
           - manifests/edge-inference.yaml
           - manifests/network-edge-inference.yaml
+          - manifests/network-edge-inference-egress.yaml
