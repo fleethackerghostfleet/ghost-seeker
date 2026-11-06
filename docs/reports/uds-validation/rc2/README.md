@@ -146,6 +146,8 @@ SMD is unknown/academic-research/quarantined per
 `edgeml/reports/DATA_CLEANUP.md`; timelapse permissions are unknown. Do not
 publicly redistribute these derived screenshots without resolving permissions.
 This is operator-directed live API ingestion, not a certified evaluation
-dataset, inference accuracy claim or fleet certification. Production prod-gate
-and full application suites were not rerun for these harness-only changes;
-they remain mandatory before a PR. No runtime blocker remains.
+dataset, inference accuracy claim or fleet certification. At the STEP 5 handoff,
+production prod-gate and full application suites had not been rerun. STEP 6 PR
+preparation subsequently passed `make test` (including vet), all 365 web tests,
+`make prod-gate`, and all 16 harness Python tests. Full outputs are external to
+the repository in `~/.local/share/uds-pr-prep/`. No runtime blocker remains.
