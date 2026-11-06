@@ -1096,7 +1096,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			if droppedScopedRules {
 				priorWarnings := c.Warnings
 				path := c.Path
-				c = b.Compiler.Review(ruleText, kept, c.DurationMin)
+				c = b.Compiler.Review(ruleText, kept, c.DurationMin, c.Unknown...)
 				c.Path = path
 				c.Warnings = mergeWarnings(priorWarnings, c.Warnings, []string{
 					"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.",
@@ -1111,10 +1111,20 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
 			if !droppedScopedRules && pol.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
-				compiled = nil
+				if compiled == nil {
+					pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
+				} else {
+					pol.Interest.SuppressLabels, pol.Interest.BoostLabels = interpretKnown(ruleText)
+					if len(pol.Interest.SuppressLabels)+len(pol.Interest.BoostLabels) > 0 {
+						compiled = nil
+					}
+				}
 			}
 		}
+	}
+	if compiled != nil && len(compiled.Unknown) > 0 && len(pol.Interest.SuppressLabels)+len(pol.Interest.BoostLabels) == 0 && mode == "" {
+		http.Error(w, compiled.Readback, http.StatusUnprocessableEntity)
+		return
 	}
 	if durationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(durationMin) * time.Minute).UnixMilli()
