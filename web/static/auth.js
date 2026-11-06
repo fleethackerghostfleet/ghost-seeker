@@ -1,13 +1,21 @@
 /* Shared browser identity and read-only affordances. Authorization stays server-side. */
 const gsAuth=(()=>{
  let identity={mode:'token',role:''};
- const writeControls='#rvKeys button,#rvAsk button,.tierbtns button,#dReset,#aCdr,#aFull,#aSim,#aDis,#aPull,[data-pull],#clearDir,#directives .x,#modelSel,#emconControl button,#linkPresets button,#wbAdd,#nlIn,#examples,#wbChips,#wbSuggestions,#wbReset,#wbUndo,#wbRedo,.wb-pin,.wb-actions,#wbAcceptFix,#wbHistory [data-revert],#wbApply,#wbConfirmApply,#polRawApply,#polRawValidate,.decs button,#reopen,#note';
+ const writeControls='#aUploadNext,#aUploadHold,#rvKeys button,#rvAsk button,.tierbtns button,#dReset,#aCdr,#aFull,#aSim,#aDis,#aPull,[data-pull],#clearDir,#directives .x,#modelSel,#emconControl button,#wbAdd,#nlIn,#examples,#wbChips,#wbSuggestions,#wbReset,#wbUndo,#wbRedo,.wb-pin,.wb-actions,#wbAcceptFix,#wbHistory [data-revert],#wbApply,#wbConfirmApply,#polRawApply,#polRawValidate,.decs button,#reopen,#note';
  const viewer=()=>identity.mode==='piv'&&identity.role==='viewer';
- const mayWrite=method=>!viewer()||['GET','HEAD'].includes(method.toUpperCase());
- function requireWrite(method){if(!mayWrite(method))throw new Error('read-only role')}
+ const reviewer=()=>identity.mode==='token'&&identity.role==='reviewer';
+ const reviewWritePath=path=>/^\/api\/items\/[^/]+\/review$/.test(path)||/^\/api\/reviews\/[^/]+\/(?:reason|undo)$/.test(path);
+ const mayWrite=(method,path='')=>{
+  const verb=method.toUpperCase();
+  if(['GET','HEAD'].includes(verb))return true;
+  if(viewer())return false;
+  if(reviewer())return verb==='POST'&&reviewWritePath(path);
+  return true;
+ };
+ function requireWrite(method,path=''){if(!mayWrite(method,path))throw new Error(viewer()?'read-only role':'review-only role')}
  function update(data){
-  identity=data;document.body.classList.toggle('role-viewer',viewer());document.body.classList.toggle('auth-piv',data.mode==='piv');
-  const logout=document.getElementById('authLogout');if(logout)logout.hidden=!(data.authenticated&&(data.mode==='piv'||!data.dev));
+  identity=data;document.body.classList.toggle('role-viewer',viewer());document.body.classList.toggle('role-reviewer',reviewer());document.body.classList.toggle('auth-piv',data.mode==='piv');
+  const logout=document.getElementById('authLogout');if(logout)logout.hidden=!(data.authenticated&&(data.mode==='piv'||!data.dev||reviewer()));
   const badge=document.getElementById('readOnlyBadge');if(badge)badge.hidden=!viewer();
   if(data.mode!=='piv')return;
   const user=document.querySelector('header .user,header .who');if(!user)return;
@@ -16,5 +24,5 @@ const gsAuth=(()=>{
  }
  async function init(){const response=await fetch('/api/auth');const data=await response.json();if(!response.ok)throw new Error(data.message||'Could not authenticate');update(data)}
  document.addEventListener('click',event=>{if(viewer()&&event.target.closest(writeControls)){event.preventDefault();event.stopImmediatePropagation()}},true);
- return{init,update,viewer,mayWrite,requireWrite,writeControls};
+ return{init,update,viewer,reviewer,mayWrite,requireWrite,writeControls};
 })();

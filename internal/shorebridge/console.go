@@ -20,6 +20,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
@@ -31,6 +32,8 @@ import (
 // the shore does not keep (manual tier, reviewed, dismissed, sent to the
 // commander, the commander's decision) is an in-memory overlay keyed by object.
 type Console struct {
+	objects map[string]*Object
+	reviews *reviews.Log
 	pol     *pb.Policy        // flattened shore policy the current view was built from
 	ruleFor map[string]string // lowercased label -> id of the directive that boosts/suppresses it
 	b       *Bridge
@@ -98,17 +101,18 @@ type Prioritization struct {
 // emcon/locks/conflicts fields mirror the simulation's policy summary so the
 // policy panels render from either backend.
 type LivePolicy struct {
-	ID        string           `json:"id,omitempty"`
-	Version   int64            `json:"version"`
-	Text      string           `json:"text"`
-	Suppress  []string         `json:"suppress"`
-	Boost     []string         `json:"boost"`
-	Readback  string           `json:"readback"`
-	Admin     bool             `json:"admin"`
-	NodeID    string           `json:"nodeId"`
-	EMCON     EmconSummary     `json:"emcon"`
-	Locks     []PolicyLock     `json:"locks"`
-	Conflicts []PolicyConflict `json:"conflicts"`
+	ID         string           `json:"id,omitempty"`
+	Version    int64            `json:"version"`
+	Text       string           `json:"text"`
+	Suppress   []string         `json:"suppress"`
+	Boost      []string         `json:"boost"`
+	TierLabels map[string]int32 `json:"tierLabels,omitempty"`
+	Readback   string           `json:"readback"`
+	Admin      bool             `json:"admin"`
+	NodeID     string           `json:"nodeId"`
+	EMCON      EmconSummary     `json:"emcon"`
+	Locks      []PolicyLock     `json:"locks"`
+	Conflicts  []PolicyConflict `json:"conflicts"`
 	// ExpiresAtUnixMs is 0 for an open-ended policy (the sim fills a default TTL; the shore keeps it until cleared).
 	ExpiresAtUnixMs int64 `json:"expiresAtUnixMs"`
 }
@@ -174,6 +178,7 @@ func (c *Console) onSnapshot(snap *Snapshot, pol *pb.Policy) {
 	defer c.mu.Unlock()
 	prev := c.base
 	c.base, c.order = map[string]*command.Item{}, nil
+	c.objects = map[string]*Object{}
 	c.policy = c.policyFrom(snap, pol)
 	// Once the edge tracks sightings, per-frame items without a sighting_id
 	// (the first frames before the tracker locked on) are duplicates of a
@@ -181,15 +186,16 @@ func (c *Console) onSnapshot(snap *Snapshot, pol *pb.Policy) {
 	sightingMode := snap.Counts.Grouped > 0
 	objects := make([]*Object, 0, len(snap.Objects))
 	for _, o := range snap.Objects {
-		if o.Best == nil || o.Scene || (sightingMode && o.SightingID == "") {
+		if o.Best == nil || (!o.Scene && sightingMode && o.SightingID == "") {
 			continue
 		}
 		objects = append(objects, o)
 	}
-	scores := scoreObjects(objects)
+	scores := scoreObjects(objects, c.policy.TierLabels)
 	for _, o := range objects {
 		item := c.buildItem(o, scores[o])
 		c.base[item.ID] = item
+		c.objects[item.ID] = o
 		c.order = append(c.order, item.ID)
 	}
 	c.live = LiveStatus{
@@ -229,28 +235,46 @@ type objectScore struct {
 // 0..1 scores by rank: Edge is the raw score normalized, Base the rank with
 // suppression ignored, Central the rank the shore actually uses (suppressed
 // objects sink to the bottom band but stay on the board).
-func scoreObjects(objs []*Object) map[*Object]objectScore {
+func scoreObjects(objs []*Object, pins ...map[string]int32) map[*Object]objectScore {
+	tiers := map[string]int32{}
+	if len(pins) > 0 {
+		tiers = pins[0]
+	}
 	out := make(map[*Object]objectScore, len(objs))
+	contacts := make([]*Object, 0, len(objs))
+	for _, o := range objs {
+		if o.Scene {
+			out[o] = objectScore{centralTier: 4, baseTier: 4}
+		} else {
+			contacts = append(contacts, o)
+		}
+	}
+	objs = contacts
 	maxScore := 0.0
 	for _, o := range objs {
-		maxScore = math.Max(maxScore, o.Best.Score)
+		maxScore = math.Max(maxScore, o.Score)
 	}
 	byScore := append([]*Object(nil), objs...)
-	sort.SliceStable(byScore, func(i, j int) bool { return byScore[i].Best.Score > byScore[j].Best.Score })
+	sort.SliceStable(byScore, func(i, j int) bool { return byScore[i].Score > byScore[j].Score })
 	ranked := make([]*Object, 0, len(objs))
 	for _, o := range byScore {
-		if !o.Suppressed {
+		_, tier := objectTierPin(o, tiers)
+		if !o.Suppressed && (tier < 1 || tier > 4) {
 			ranked = append(ranked, o)
 		}
 	}
 	for i, o := range byScore {
 		s := out[o]
 		if maxScore > 0 {
-			s.edge = o.Best.Score / maxScore
+			s.edge = o.Score / maxScore
 		}
 		s.base = rankScore(i, len(byScore))
 		s.baseTier = rankTier(i, len(byScore))
 		s.central, s.centralTier = 0.05+0.1*s.edge, 4
+		if _, tier := objectTierPin(o, tiers); tier >= 1 && tier <= 4 {
+			s.centralTier = int(tier)
+			s.central = [...]float64{0, .9, .7, .475, .175}[tier]
+		}
 		out[o] = s
 	}
 	for i, o := range ranked {
@@ -306,8 +330,10 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		cls = "unknown"
 	}
 	cls = strings.ToLower(cls)
-	c.ensureClass(cls)
-	if o.Label != "" {
+	if !o.Scene {
+		c.ensureClass(cls)
+	}
+	if !o.Scene && o.Label != "" {
 		c.ensureClass(strings.ToLower(o.Label))
 	}
 	src := c.ensureSource(b.Source)
@@ -343,10 +369,10 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 	}
 	live := &command.LiveMeta{
 		ItemID: b.ID, SightingID: o.SightingID, Subtype: o.Subtype, Label: o.Label, Override: b.Override, Event: o.Event,
-		Unknownness: b.Unknownness, Unknown: o.Unknown, Score: b.Score, Priority: o.Priority,
+		Unknownness: b.Unknownness, Unknown: o.Unknown, Score: o.Score, Priority: o.Priority,
 		Suppressed: o.Suppressed, Frames: o.Frames, FramesKnown: o.FramesKnown, Reports: o.Reports,
 		FirstMs: o.FirstMs, LastMs: o.LastMs, Forms: forms, ImageForm: b.ImageForm, FactURL: b.FactURL,
-		Pull: pullState(b.Forms["full"], false),
+		Pull: pullState(b.Forms["full"], o.Scene),
 	}
 	for _, card := range o.Items {
 		if card.Suppressed && card.SuppressedBy != "" {
@@ -355,6 +381,13 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		}
 	}
 	item.Live = live
+	if o.Scene {
+		item.Background = true
+		live.Event, live.Priority = "scene", "P4"
+		live.Label, live.Subtype, live.Override = "", "", ""
+		live.Unknown, live.Unknownness, live.Suppressed = false, 0, false
+		return item
+	}
 
 	det := command.Detection{Class: cls, Conf: b.Conf, Attrs: command.Attributes{}}
 	if b.Box != nil && b.ImageForm != "crop" { // a crop has no frame to place the box in
@@ -372,12 +405,20 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		score.Matched = true
 		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{l}, Attrs: []string{}, DirectiveID: c.directiveFor(l)})
 	}
+	if label, tier := objectTierPin(o, c.policy.TierLabels); tier >= 1 && tier <= 4 {
+		score.Matched = true
+		score.Notes = append(score.Notes, command.Rule{Type: "boost", Classes: []string{label}, Attrs: []string{}, Tier: int(tier), DirectiveID: c.directiveFor(label)})
+	}
 	item.Dets = append(item.Dets, det)
 	item.Det = append(item.Det, score)
 	return item
 }
 
-func matchLabel(labels []string, candidates ...string) string {
+func matchLabel(labels []string, override string, candidates ...string) string {
+	// Match the edge scorer: a human override replaces machine labels.
+	if override != "" {
+		candidates = []string{override}
+	}
 	for _, l := range labels {
 		for _, c := range candidates {
 			if c != "" && strings.EqualFold(l, c) {
@@ -577,9 +618,10 @@ func prioritizationMode(snap *Snapshot) Prioritization {
 func (c *Console) policyFrom(snap *Snapshot, pol *pb.Policy) LivePolicy {
 	p := LivePolicy{
 		ID: snap.PolicyID, Text: snap.Policy, Suppress: dedupe(snap.Suppress), Boost: dedupe(snap.Boost),
-		NodeID: "shore", EMCON: EmconSummary{Mode: "NORMAL"}, Locks: []PolicyLock{}, Conflicts: []PolicyConflict{},
+		TierLabels: snap.TierLabels,
+		NodeID:     "shore", EMCON: EmconSummary{Mode: "NORMAL"}, Locks: []PolicyLock{}, Conflicts: []PolicyConflict{},
 	}
-	p.Readback = Readback(p.Suppress, p.Boost)
+	p.Readback = tierReadback(p.Suppress, p.Boost, p.TierLabels)
 	c.pol, c.ruleFor = nil, nil
 	if pol == nil {
 		return p
@@ -597,8 +639,9 @@ func (c *Console) policyView(pol *pb.Policy, now time.Time) LivePolicy {
 	p := LivePolicy{
 		ID: pol.GetId(), Text: strings.TrimSpace(pol.GetText()), NodeID: "shore", Version: info.Version,
 		Suppress: dedupe(pol.GetInterest().GetSuppressLabels()), Boost: dedupe(pol.GetInterest().GetBoostLabels()),
-		EMCON: EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy},
-		Locks: info.Locks, Conflicts: info.Conflicts,
+		TierLabels: pol.GetInterest().GetTierLabels(),
+		EMCON:      EmconSummary{Mode: info.Emcon, SetBy: info.EmconSetBy, Locked: info.EmconLocked, LockedBy: info.EmconLockedBy},
+		Locks:      info.Locks, Conflicts: info.Conflicts,
 	}
 	directives := c.b.directives(pol, now)
 	c.pol, c.ruleFor = pol, map[string]string{}
@@ -619,7 +662,7 @@ func (c *Console) policyView(pol *pb.Policy, now time.Time) LivePolicy {
 		p.Readback = directivesReadback(directives)
 		return p
 	}
-	p.Readback = Readback(p.Suppress, p.Boost)
+	p.Readback = tierReadback(p.Suppress, p.Boost, p.TierLabels)
 	if p.ExpiresAtUnixMs > 0 {
 		until := time.UnixMilli(p.ExpiresAtUnixMs).UTC().Format("15:04Z")
 		p.Readback = strings.Replace(p.Readback, "Until cleared.", "Until "+until+".", 1)
@@ -675,6 +718,9 @@ func dedupe(labels []string) []string {
 
 func (c *Console) withOverlay(base *command.Item) command.Item {
 	item := *base
+	if isScene(base) {
+		return item
+	}
 	if o := c.overlay[item.ID]; o != nil {
 		item.Manual, item.Reviewed, item.Dismissed, item.Sent, item.SentAt = o.Manual, o.Reviewed, o.Dismissed, o.Sent, o.SentAt
 		item.Decision, item.DecisionNote, item.DecidedAt = o.Decision, o.DecisionNote, o.DecidedAt
@@ -684,6 +730,10 @@ func (c *Console) withOverlay(base *command.Item) command.Item {
 		item.Tier = item.Manual
 	}
 	return item
+}
+
+func isScene(item *command.Item) bool {
+	return item != nil && item.Live != nil && item.Live.Event == "scene"
 }
 
 func (c *Console) itemsLocked() []command.Item {
@@ -697,7 +747,7 @@ func (c *Console) itemsLocked() []command.Item {
 func (c *Console) cdrLocked() int {
 	n := 0
 	for id, o := range c.overlay {
-		if o.Sent && c.base[id] != nil {
+		if o.Sent && c.base[id] != nil && !isScene(c.base[id]) {
 			n++
 		}
 	}
@@ -706,7 +756,7 @@ func (c *Console) cdrLocked() int {
 
 func (c *Console) directivesLocked() []command.Directive {
 	if c.pol == nil {
-		rules := policyRules(flatDirectiveID, c.policy.Suppress, c.policy.Boost)
+		rules := policyRules(flatDirectiveID, c.policy.Suppress, c.policy.Boost, c.policy.TierLabels)
 		if len(rules) == 0 {
 			return []command.Directive{}
 		}
@@ -761,6 +811,11 @@ func (c *Console) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", c.config)
 	mux.HandleFunc("GET /api/stream", c.stream)
 	mux.HandleFunc("PATCH /api/items/{id}", c.patchItem)
+	mux.HandleFunc("POST /api/items/{id}/review", c.reviewItem)
+	mux.HandleFunc("POST /api/reviews/{id}/reason", c.correctReview)
+	mux.HandleFunc("POST /api/reviews/{id}/undo", c.correctReview)
+	mux.HandleFunc("GET /api/reviews/summary", c.reviewSummary)
+	mux.HandleFunc("GET /api/reviews/export", c.reviewExport)
 	mux.HandleFunc("POST /api/items/{id}/decision", c.decide)
 	mux.HandleFunc("POST /api/items/{id}/full-res", c.fullRes)
 	mux.HandleFunc("POST /api/items/{id}/pull", c.pull)
@@ -888,6 +943,11 @@ func (c *Console) patchItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
 		return
 	}
+	if isScene(base) {
+		c.mu.Unlock()
+		writeError(w, http.StatusConflict, "camera overviews cannot be reviewed or escalated")
+		return
+	}
 	o := c.overlayFor(id)
 	if body.Manual != nil {
 		o.Manual = *body.Manual
@@ -948,6 +1008,11 @@ func (c *Console) decide(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
 		return
 	}
+	if isScene(base) {
+		c.mu.Unlock()
+		writeError(w, http.StatusConflict, "camera overviews cannot be escalated")
+		return
+	}
 	o := c.overlayFor(id)
 	if !o.Sent && o.Decision != store.DecisionReturn {
 		c.mu.Unlock()
@@ -993,6 +1058,10 @@ func (c *Console) fullRes(w http.ResponseWriter, r *http.Request) {
 	c.mu.Unlock()
 	if base == nil || base.Live == nil {
 		writeError(w, http.StatusNotFound, store.ErrNotFound.Error())
+		return
+	}
+	if isScene(base) {
+		writeError(w, http.StatusConflict, "pull camera overviews from Cameras")
 		return
 	}
 	req := &pb.RequestPullRequest{Pull: &pb.Pull{ItemId: base.Live.ItemID, Form: pb.FormKind_FORM_KIND_FULL, RequestedBy: by, Original: true}}
@@ -1054,11 +1123,25 @@ func (c *Console) pull(w http.ResponseWriter, r *http.Request) {
 // rulesFromBody turns a directive (free text or explicit rules) into the
 // shore's suppress/boost label lists.
 func rulesFromBody(text string, rules *[]command.Rule) (suppress, boost []string, parsed []command.Rule) {
+	tiers := map[string]int32{}
 	if rules != nil && len(*rules) > 0 {
 		for _, r := range *rules {
 			labels := r.Classes
 			if len(labels) == 0 {
 				labels = r.Attrs
+			}
+			for _, label := range transportLabels(labels) {
+				key := normLabel(label)
+				if r.Tier > 0 {
+					tiers[key] = int32(r.Tier)
+					suppress = withoutLabels(suppress, map[string]bool{key: true})
+					boost = withoutLabels(boost, map[string]bool{key: true})
+				} else {
+					delete(tiers, key)
+				}
+			}
+			if r.Tier > 0 {
+				continue
 			}
 			switch r.Type {
 			case "suppress":
@@ -1070,8 +1153,27 @@ func rulesFromBody(text string, rules *[]command.Rule) (suppress, boost []string
 	} else if strings.TrimSpace(text) != "" {
 		suppress, boost = Interpret(text)
 	}
-	suppress, boost = dedupe(suppress), dedupe(boost)
-	return suppress, boost, policyRules(flatDirectiveID, suppress, boost)
+	suppress, boost = transportLabels(suppress), transportLabels(boost)
+	return suppress, boost, policyRules(flatDirectiveID, suppress, boost, tiers)
+}
+
+func ruleTiers(rules []command.Rule) map[string]int32 {
+	tiers := map[string]int32{}
+	for _, rule := range rules {
+		if rule.Tier > 0 {
+			for _, label := range transportLabels(rule.Classes) {
+				tiers[normLabel(label)] = int32(rule.Tier)
+			}
+		}
+	}
+	return tiers
+}
+
+func tierReadback(suppress, boost []string, tiers map[string]int32) string {
+	if len(tiers) == 0 {
+		return Readback(suppress, boost)
+	}
+	return (&command.Compiler{}).Review("", policyRules(flatDirectiveID, suppress, boost, tiers), 0).Readback
 }
 
 // compiled runs the shared NL compiler (#54) when the bridge has one, so the
@@ -1123,7 +1225,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 		if dropped {
 			out.Warnings = append(out.Warnings, scopeWarning)
 		}
-		out.Readback = Readback(out.Suppress, out.Boost)
+		out.Readback = tierReadback(out.Suppress, out.Boost, ruleTiers(out.Rules))
 	} else if c.b.Compiler != nil && strings.TrimSpace(ruleText) != "" {
 		comp := c.b.Compiler.Compile(ctx, ruleText)
 		if !comp.Blocked {
@@ -1135,9 +1237,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 				comp.Warnings = mergeWarnings(prior, comp.Warnings, []string{scopeWarning})
 			}
 		}
-		out.Suppress, out.Boost = rulesToLabels(comp.Rules)
-		out.Suppress, out.Boost = dedupe(out.Suppress), dedupe(out.Boost)
-		out.Rules = policyRules(flatDirectiveID, out.Suppress, out.Boost)
+		out.Suppress, out.Boost, out.Rules = rulesFromBody("", &comp.Rules)
 		out.Compiled = &comp
 		out.Path, out.Warnings, out.Blocked, out.DurationMin = comp.Path, comp.Warnings, comp.Blocked, comp.DurationMin
 		out.Readback = strings.TrimSpace(comp.Readback)
@@ -1191,6 +1291,14 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body.Text = strings.TrimSpace(body.Text)
+	if body.Rules != nil {
+		for _, rule := range *body.Rules {
+			if rule.Tier < 0 || rule.Tier > 4 {
+				writeError(w, http.StatusBadRequest, "target tier must be between 1 and 4")
+				return
+			}
+		}
+	}
 	if utf8.RuneCountInString(body.Text) > 500 {
 		writeError(w, http.StatusBadRequest, "text exceeds 500 characters")
 		return
@@ -1213,7 +1321,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects — try \"ignore cargo ships\" or \"prioritize submarines\".")
 		return
 	}
-	pol := &pb.Policy{IssuedBy: opauth.Actor(r.Context(), c.b.issuer()), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost}, Emcon: cd.Emcon}
+	pol := &pb.Policy{IssuedBy: opauth.Actor(r.Context(), c.b.issuer()), Text: body.Text, Interest: &pb.Interest{SuppressLabels: suppress, BoostLabels: boost, TierLabels: ruleTiers(rules)}, Emcon: cd.Emcon}
 	if cd.DurationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(cd.DurationMin) * time.Minute).UnixMilli()
 	}
@@ -1236,7 +1344,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	for i := range rules {
 		rules[i].DirectiveID = ruleID
 	}
-	readback := withDuration(Readback(suppress, boost), cd.DurationMin)
+	readback := withDuration(tierReadback(suppress, boost, ruleTiers(rules)), cd.DurationMin)
 	if cd.Compiled != nil || cd.Emcon != pb.EmconMode_EMCON_MODE_UNSPECIFIED {
 		readback = cd.Readback
 	}
@@ -1297,7 +1405,11 @@ type candidateResult struct {
 // predict applies draft rules on top of the standing policy to the current
 // items: a newly suppressed object sinks to P4 (still listed), a newly boosted
 // one rises a band. It is the live stand-in for the simulation's rescoring.
-func (c *Console) predictLocked(suppress, boost []string) ([]previewItem, [4]int, int) {
+func (c *Console) predictLocked(suppress, boost []string, pins ...map[string]int32) ([]previewItem, [4]int, int) {
+	var tiers map[string]int32
+	if len(pins) > 0 {
+		tiers = pins[0]
+	}
 	var counts [4]int
 	changed := 0
 	out := make([]previewItem, 0, len(c.order))
@@ -1305,16 +1417,26 @@ func (c *Console) predictLocked(suppress, boost []string) ([]previewItem, [4]int
 		item := c.withOverlay(c.base[id])
 		live := item.Live
 		tier, central := item.Tier, item.Central
-		if item.Manual == 0 {
-			switch {
-			case !live.Unknown && matchLabel(suppress, live.Override, live.Subtype, live.Label) != "":
-				tier, central = 4, round2(0.05+0.1*item.Edge)
-			case live.Suppressed && matchLabel(suppress, live.Override, live.Subtype, live.Label) == "" && matchLabel(c.policy.Suppress, live.Override, live.Subtype, live.Label) != "":
-				tier, central = item.BaseTier, item.Base // the draft lifts the standing suppression
+		if item.Manual == 0 && !isScene(&item) {
+			o := c.objects[id]
+			if o == nil {
+				o = &Object{Label: live.Label, Subtype: live.Subtype, Best: &Card{Label: live.Label, Override: live.Override}}
 			}
-			if matchLabel(boost, live.Override, live.Subtype, live.Label) != "" && tier > 1 && (!live.Suppressed || matchLabel(suppress, live.Override, live.Subtype, live.Label) == "") {
-				tier--
-				central = round2(math.Min(0.98, central+0.2))
+			_, target := objectTierPin(o, tiers)
+			if target > 0 {
+				tier = int(target)
+				central = [...]float64{0, .9, .7, .475, .175}[target]
+			} else {
+				switch {
+				case !live.Unknown && matchLabel(suppress, live.Override, live.Subtype, live.Label) != "":
+					tier, central = 4, round2(0.05+0.1*item.Edge)
+				case live.Suppressed && matchLabel(suppress, live.Override, live.Subtype, live.Label) == "" && matchLabel(c.policy.Suppress, live.Override, live.Subtype, live.Label) != "":
+					tier, central = item.BaseTier, item.Base // the draft lifts the standing suppression
+				}
+				if matchLabel(boost, live.Override, live.Subtype, live.Label) != "" && tier > 1 && (!live.Suppressed || matchLabel(suppress, live.Override, live.Subtype, live.Label) == "") {
+					tier--
+					central = round2(math.Min(0.98, central+0.2))
+				}
 			}
 		}
 		if tier != item.Tier {
@@ -1340,22 +1462,64 @@ func (c *Console) preview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	var checkRules []command.Rule
+	if body.Rules != nil {
+		checkRules = append(checkRules, (*body.Rules)...)
+	}
+	for _, candidate := range body.Candidates {
+		checkRules = append(checkRules, candidate.Rules...)
+	}
+	for _, rule := range checkRules {
+		if rule.Tier < 0 || rule.Tier > 4 {
+			writeError(w, http.StatusBadRequest, "target tier must be between 1 and 4")
+			return
+		}
+	}
 	text := ""
 	if body.Text != nil {
 		text = *body.Text
 	}
-	suppress, boost, rules := rulesFromBody(text, body.Rules)
+	var compiled *command.Compiled
+	var cd compiledDirective
+	suppress, boost, rules := []string{}, []string{}, []command.Rule{}
+	if body.Rules != nil {
+		suppress, boost, rules = rulesFromBody("", body.Rules)
+	} else if c.b.Compiler != nil && c.b.Compiler.Research != nil && strings.TrimSpace(text) != "" {
+		// The model request must not hold the console's snapshot/overlay lock.
+		cd = c.compileDirective(r.Context(), text, nil, 0)
+		compiled = cd.Compiled
+		if !cd.Blocked {
+			suppress, boost, rules = cd.Suppress, cd.Boost, cd.Rules
+		}
+	} else {
+		suppress, boost, rules = rulesFromBody(text, nil)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	items, counts, _ := c.predictLocked(suppress, boost)
+	items, counts, _ := c.predictLocked(suppress, boost, ruleTiers(rules))
+	if cd.Blocked {
+		counts = [4]int{}
+		for i, id := range c.order {
+			item := c.withOverlay(c.base[id])
+			items[i].Central, items[i].Tier = item.Central, item.Tier
+			counts[item.Tier-1]++
+		}
+	}
 	cands := []candidateResult{}
 	for _, cand := range body.Candidates {
 		rs := cand.Rules
-		s, b, _ := rulesFromBody("", &rs)
-		_, cc, changed := c.predictLocked(dedupe(append(append([]string{}, suppress...), s...)), dedupe(append(append([]string{}, boost...), b...)))
+		s, b, combined := rulesFromBody("", &rs)
+		_, cc, changed := c.predictLocked(s, b, ruleTiers(combined))
 		cands = append(cands, candidateResult{Key: cand.Key, Counts: cc, Changed: changed})
 	}
-	writeJSON(w, map[string]any{"rules": rules, "unknown": unknownWords(text, suppress, boost), "items": items, "counts": counts, "candidates": cands})
+	unknown := unknownWords(text, suppress, boost)
+	resolutions := []command.ResearchResolution{}
+	if compiled != nil {
+		unknown = compiled.Unknown
+		resolutions = compiled.Resolutions
+	}
+	writeJSON(w, map[string]any{"rules": rules, "unknown": unknown, "items": items, "counts": counts, "candidates": cands,
+		"path": cd.Path, "readback": cd.Readback, "warnings": cd.Warnings, "blocked": cd.Blocked, "resolutions": resolutions})
 }
 
 // unknownWords lists the directive's nouns the shore interpreter did not map.
@@ -1399,9 +1563,13 @@ func (c *Console) compile(w http.ResponseWriter, r *http.Request) {
 	if cd.Compiled != nil && cd.Compiled.Unknown != nil {
 		unknown = cd.Compiled.Unknown
 	}
+	resolutions := []command.ResearchResolution{}
+	if cd.Compiled != nil {
+		resolutions = cd.Compiled.Resolutions
+	}
 	writeJSON(w, map[string]any{
 		"rules": cd.Rules, "unknown": unknown, "durationMin": cd.DurationMin, "path": cd.Path,
-		"readback": cd.Readback, "warnings": warnings, "blocked": cd.Blocked,
+		"readback": cd.Readback, "warnings": warnings, "blocked": cd.Blocked, "resolutions": resolutions,
 	})
 }
 

@@ -1,3 +1,5 @@
+// Re-ranked images of one kind needed before a rule is suggested. Raise to make suggestions rarer.
+const SUGGESTION_MIN_RERANKS=3;
 function createLearner(){
  const records=[],cooldowns=new Map();
  const highRisk=new Set(['warship','military aircraft','submarine','person']);
@@ -24,7 +26,7 @@ function createLearner(){
    if(classes.length>1)ambiguous=classes.slice(0,3);
   }
   const index=records.findIndex(r=>r.id===item.id),previous=index<0?null:records.splice(index,1)[0];
-  const cls=ambiguous?null:top.cls,entry={id:item.id,cls,src:item.src,dir};
+  const cls=ambiguous?null:top.cls,entry={id:item.id,cls,src:item.src,dir,from:Number(item.sug)||0,to:Number(item.tier)||0};
   records.push(entry);
   if(cls&&previous?.cls!==cls)noteArrival(cls);
   if(records.length>200)records.shift();
@@ -46,14 +48,19 @@ function createLearner(){
   if(index<0)return false;
   records.splice(index,1);return true;
  }
+ function commonChange(changes){
+  const counts=new Map();let best={from:null,to:null},bestCount=0;
+  for(let i=changes.length-1;i>=0;i--){const{from,to}=changes[i];if(!from||!to||from===to)continue;const k=from*10+to,c=(counts.get(k)||0)+1;counts.set(k,c);if(c>bestCount){best={from,to};bestCount=c}}
+  return best;
+ }
  function suggestion(){
   const classes=[...new Set(records.filter(r=>r.cls&&!r.wrong).map(r=>r.cls))];
   for(const cls of classes){
    const window=records.filter(r=>r.cls===cls&&!r.wrong).slice(-8);
    for(const[dir,predicate]of [['lower',r=>r.dir>0],['raise',r=>r.dir<0]]){
     const lowered=window.filter(predicate);
-    if(lowered.length<5||lowered.length/window.length<.7||new Set(lowered.map(r=>r.src)).size<2||cooldowns.has(cooldownKey(cls,dir)))continue;
-    return{cls,dir,n:lowered.length,of:window.length,highRisk:highRisk.has(cls)};
+    if(lowered.length<SUGGESTION_MIN_RERANKS||lowered.length/window.length<.7||new Set(lowered.map(r=>r.src)).size<2||cooldowns.has(cooldownKey(cls,dir)))continue;
+    return{cls,dir,n:lowered.length,of:window.length,highRisk:highRisk.has(cls),...commonChange(lowered)};
    }
   }
   return null;

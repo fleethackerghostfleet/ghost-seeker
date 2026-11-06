@@ -34,20 +34,29 @@ type State struct {
 }
 
 type Store struct {
-	mu         sync.RWMutex
-	retain     int
-	items      []command.Item
-	stats      command.Stats
-	cdr        int
-	model      string
-	directives []command.Directive
+	mu              sync.RWMutex
+	retain          int
+	items           []command.Item
+	stats           command.Stats
+	cdr             int
+	model           string
+	directives      []command.Directive
+	linkBPS         int64
+	uploadRemainder int64
+	uploadOrder     uint64
+	dbSequence      int
+	epoch           uint64
 }
 
 func New(retain int) *Store {
 	if retain < 1 {
 		retain = 1
 	}
-	return &Store{retain: retain, model: "maritime"}
+	return &Store{retain: retain, model: "maritime", linkBPS: 256_000, stats: command.Stats{LinkBPS: 256_000}}
+}
+
+func (s *Store) RetainLimit() int {
+	return s.retain
 }
 
 func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
@@ -59,17 +68,36 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 		s.stats.Drop++
 		return command.Item{}, ""
 	}
-	s.stats.Keep++
-	s.stats.Bytes += item.KB
+	if item.Filtered != "" {
+		s.stats.Drop++
+	} else {
+		s.stats.Keep++
+	}
+	if item.DetectorNegative {
+		s.stats.DetectorNegatives++
+	}
 	s.stats.DB++
-	item.DBID = s.stats.DB + 180000
+	s.dbSequence++
+	item.DBID = s.dbSequence + 180000
 	command.Rescore(item, s.model, s.directives)
+	item.Upload = command.Upload{Bytes: int64(item.KB)*1024 + 512, BPS: s.linkBPS}
 	s.items = append(s.items, cloneItem(*item))
 	evicted := ""
 	if len(s.items) > s.retain {
-		oldest := oldestIndex(s.items[:len(s.items)-1], func(it command.Item) bool { return !it.Sent && it.Decision == "" })
+		candidates := s.items[:len(s.items)-1]
+		oldest := oldestIndex(candidates, func(it command.Item) bool {
+			return it.Filtered != "" && !it.Sent && it.Decision == "" && it.Manual == 0 && !it.Reviewed && !it.Dismissed
+		})
 		if oldest < 0 {
-			oldest = oldestIndex(s.items, func(command.Item) bool { return true })
+			oldest = oldestIndex(candidates, func(it command.Item) bool {
+				return !it.Sent && it.Decision == "" && !it.Reviewed && !it.Dismissed && it.Manual == 0 && !it.FullRes && it.Upload.Override == "" && (it.Upload.Done || it.Upload.Sent == 0)
+			})
+		}
+		if oldest < 0 {
+			oldest = oldestIndex(candidates, func(it command.Item) bool { return !it.Sent && it.Decision == "" })
+		}
+		if oldest < 0 {
+			oldest = oldestIndex(candidates, func(command.Item) bool { return true })
 		}
 		evicted = s.items[oldest].ID
 		if s.items[oldest].Sent {
@@ -82,6 +110,34 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 
 func (s *Store) Snapshot() ([]command.Item, command.Stats, int, State) {
 	return s.snapshot(false)
+}
+
+func (s *Store) Reset() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = nil
+	s.cdr = 0
+	s.stats = command.Stats{LinkBPS: s.linkBPS, LinkFixed: s.stats.LinkFixed}
+	s.uploadRemainder = 0
+	s.epoch++
+	return s.epoch
+}
+
+func (s *Store) Epoch() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.epoch
+}
+
+func (s *Store) Has(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Store) SnapshotWithDirectives() ([]command.Item, command.Stats, int, State) {
@@ -201,6 +257,11 @@ func (s *Store) SetPolicyDirectives(sourceDirectives []command.Directive, blocke
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := cloneDirectives(sourceDirectives)
+	for i := range next {
+		for j := range next[i].Rules {
+			next[i].Rules[j].DirectiveID = next[i].ID
+		}
+	}
 	for _, directive := range s.directives {
 		if directive.Source != "" {
 			continue
@@ -250,15 +311,35 @@ func (s *Store) RestoreDirectives(directives []command.Directive) {
 }
 
 func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *bool) (command.Item, int, bool) {
+	return s.patchItem(id, manual, reviewed, dismissed, sent, nil, time.Time{})
+}
+
+func (s *Store) ApplyReview(id string, manual *int, reviewed, dismissed, sent *bool, at time.Time) (command.Item, int, bool) {
+	return s.patchItem(id, manual, reviewed, dismissed, sent, nil, at)
+}
+
+func (s *Store) RestoreReview(before command.Item, at time.Time) (command.Item, int, bool) {
+	return s.patchItem(before.ID, &before.Manual, &before.Reviewed, &before.Dismissed, &before.Sent, &before, at)
+}
+
+func (s *Store) patchItem(id string, manual *int, reviewed, dismissed, sent *bool, before *command.Item, at time.Time) (command.Item, int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.patchItemLocked(id, manual, reviewed, dismissed, sent, before, at)
+}
+
+func (s *Store) patchItemLocked(id string, manual *int, reviewed, dismissed, sent *bool, before *command.Item, at time.Time) (command.Item, int, bool) {
 	for i := range s.items {
 		item := &s.items[i]
 		if item.ID != id {
 			continue
 		}
+		newerSend := before != nil && item.SentAt != nil && item.SentAt.After(at)
 		if manual != nil {
 			item.Manual = *manual
+		}
+		if manual != nil && *manual != 0 || reviewed != nil && *reviewed || dismissed != nil && *dismissed || sent != nil && *sent {
+			item.HumanReviewed = true
 		}
 		if reviewed != nil {
 			item.Reviewed = *reviewed
@@ -266,16 +347,25 @@ func (s *Store) PatchItem(id string, manual *int, reviewed, dismissed, sent *boo
 		if dismissed != nil {
 			item.Dismissed = *dismissed
 		}
-		if sent != nil && item.Sent != *sent {
+		if sent != nil && !newerSend && item.Sent != *sent {
 			if *sent {
 				s.cdr++
 				now := time.Now()
+				if !at.IsZero() && before == nil {
+					now = at
+				}
 				item.SentAt, item.Decision, item.DecisionNote, item.DecidedAt = &now, "", "", nil
 			} else {
 				s.cdr--
 				item.SentAt = nil
 			}
-			item.Sent = *sent
+			item.Sent, item.AutoSent = *sent, false
+		}
+		if before != nil {
+			item.HumanReviewed = before.HumanReviewed
+			if !newerSend {
+				item.AutoSent = before.AutoSent
+			}
 		}
 		command.Rescore(item, s.model, s.directives)
 		return cloneItem(*item), s.cdr, true
@@ -306,6 +396,13 @@ func (s *Store) RequestFullRes(id, by string) (command.Item, int, error) {
 		if !item.FullRes {
 			now := time.Now()
 			item.FullRes, item.FullResBy, item.FullResAt = true, string(r), &now
+			item.Upload.Bytes = max(item.Upload.Bytes*16, 4*1024*1024)
+			item.Upload.Sent = 0
+			item.Upload.Received = item.Upload.Received || item.Upload.Done
+			item.Upload.Done = false
+			s.uploadOrder++
+			item.Upload.Override, item.Upload.OverrideBy, item.Upload.OverrideAt = "next", string(r), &now
+			item.Upload.NextOrder = s.uploadOrder
 		}
 		return cloneItem(*item), s.cdr, nil
 	}
@@ -336,7 +433,7 @@ func (s *Store) Decide(id, decision, note string) (command.Item, int, error) {
 		now := time.Now()
 		switch {
 		case decision == DecisionReturn && item.Sent:
-			item.Sent, item.SentAt, item.Reviewed, item.Dismissed = false, nil, false, false
+			item.Sent, item.AutoSent, item.SentAt, item.Reviewed, item.Dismissed = false, false, nil, false, false
 			s.cdr--
 		case decision != DecisionReturn && !item.Sent:
 			item.Sent, item.SentAt, item.Reviewed = true, &now, true
@@ -370,7 +467,7 @@ func (s *Store) AutoEscalate() (command.Item, int, bool) {
 	}
 	item := &s.items[best]
 	now := time.Now()
-	item.Manual, item.Reviewed, item.Sent, item.SentAt = item.Tier, true, true, &now
+	item.Manual, item.Reviewed, item.Sent, item.AutoSent, item.SentAt = item.Tier, true, true, true, &now
 	s.cdr++
 	command.Rescore(item, s.model, s.directives)
 	return cloneItem(*item), s.cdr, true
@@ -420,8 +517,8 @@ func (s *Store) RescoreTimeScoped(now time.Time) bool {
 }
 
 func cloneItem(item command.Item) command.Item {
-	item.Dets = append([]command.Detection(nil), item.Dets...)
-	item.Det = append([]command.DetectionScore(nil), item.Det...)
+	item.Dets = append([]command.Detection{}, item.Dets...)
+	item.Det = append([]command.DetectionScore{}, item.Det...)
 	for i := range item.Det {
 		notes := make([]command.Rule, len(item.Det[i].Notes))
 		copy(notes, item.Det[i].Notes)

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ghost Seeker · Ship console</title>
+<style>
+:root{--bg:#0b1118;--panel:#121b26;--line:#233244;--fg:#dbe6f2;--dim:#8193a8;--acc:#4fb3ff;--warn:#ffb648;--bad:#ff6b6b;--ok:#4cd685}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
+header{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);background:#0e1620}
+header h1{font-size:16px;margin:0}header .pill{padding:2px 8px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--dim)}
+.pill b{color:var(--fg)}.up{color:var(--ok)!important}.down{color:var(--bad)!important}
+main{display:grid;grid-template-columns:380px 1fr;gap:14px;padding:14px}@media(max-width:900px){main{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
+label{display:block;color:var(--dim);font-size:12px;margin:6px 0 2px}input,select{width:100%;background:#0b1118;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:6px}
+button{background:#1b2a3b;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:5px 10px;cursor:pointer}button:hover{border-color:var(--acc)}
+button.primary{background:#14507d;border-color:#1f6aa3}button.on{background:var(--acc);color:#001;border-color:var(--acc)}
+.row{display:flex;gap:6px;align-items:center}.row>*{flex:1}.chips{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.chip{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#0f1822}
+.chip .x{flex:0 0 auto;padding:2px 8px}.boost{color:var(--ok)}.supp{color:var(--warn)}.dim{color:var(--dim)}.err{color:var(--bad);min-height:1.2em;margin-top:6px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle}th{color:var(--dim);font-weight:500;font-size:12px}
+td img{width:72px;height:48px;object-fit:cover;border-radius:3px;background:#000;display:block}td.num{font-variant-numeric:tabular-nums}
+.tag{font-size:11px;padding:1px 6px;border-radius:8px;border:1px solid var(--line)}.tag.s{color:var(--warn);border-color:var(--warn)}.tag.p{color:var(--acc);border-color:var(--acc)}
+.tabs{display:flex;gap:6px;margin-bottom:10px}.tabs button.on{background:var(--acc);color:#001}
+.frames{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.fr{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#0f1822;font-size:12px}
+.fr img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#000}.fr div{padding:3px 6px}.fr.folded,.fr.dropped{opacity:.55}
+.b{font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;border:1px solid}.b.new{color:var(--ok)}.b.folded{color:var(--dim)}.b.updated{color:var(--acc)}.b.closed,.b.dropped{color:var(--dim)}.b.error{color:var(--bad)}
+.fm{font-size:11px;margin-right:6px}.fm.sent{color:var(--ok)}.fm.part{color:var(--acc)}.fm.held{color:var(--dim)}
+.merged div{margin:3px 0}#login{max-width:420px;margin:60px auto}
+</style>
+<style>.docs-link{display:inline-flex;align-items:center;justify-content:center;flex:none;width:30px;height:30px;box-sizing:border-box;margin-left:auto;color:var(--muted,var(--dim,#8aa0b6));border:1px solid var(--line,#243445);border-radius:6px;text-decoration:none}.docs-link:hover,.docs-link:focus-visible{color:var(--text,var(--fg,#d6e2ee));border-color:currentColor}.docs-link:focus-visible{outline:2px solid currentColor;outline-offset:2px}.docs-link svg{width:18px;height:18px;pointer-events:none}</style>
+<body>
+<div id="login" hidden><section><header><h2>Ship console sign-in</h2><a class="docs-link" href="https://ghostfleet-docs.vercel.app" target="_blank" rel="noopener noreferrer" aria-label="Open documentation (new tab)" title="Open documentation (new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg></a></header><p class="dim">Paste the operator token (the URL printed by <code>make compose-demo</code> signs you in automatically).</p><input id="tok" type="password" placeholder="operator token"><p><button class="primary" id="tokGo">Sign in</button></p><div class="err" id="tokErr"></div></section></div>
+<div id="app" hidden>
+<header><h1>⚓ Ship console <span class="dim" id="node"></span></h1>
+<span class="pill">link <b id="link">…</b></span><span class="pill">EMCON <b id="emcon">…</b></span>
+<span class="pill">queued <b id="qItems">0</b> items · <b id="qBytes">0</b></span><span class="pill">sent <b id="sent">0</b></span>
+<span class="pill">camera frames <b id="frIn">0</b> (<b id="frRaw">0</b> raw) → contacts <b id="items">0</b> · duplicates folded <b id="dups">0</b></span><a class="docs-link" href="https://ghostfleet-docs.vercel.app" target="_blank" rel="noopener noreferrer" aria-label="Open documentation (new tab)" title="Open documentation (new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg></a></header>
+<main>
+<div>
+<section><h2>Ship directives</h2>
+<p class="dim" style="margin:0 0 6px">Rules set here re-rank this ship's uplink queue immediately and survive new shore policies. Shore/command locks still win; unrecognised (unknown) contacts are never held back.</p>
+<div class="row"><div><label>Prioritize (boost)</label><input id="boost" list="classes" placeholder="e.g. submarine"></div><div><label>Hold back (suppress)</label><input id="supp" list="classes" placeholder="e.g. cruise ship"></div></div>
+<div class="row"><div><label>For</label><select id="dur"><option value="0">until cleared</option><option value="5">5 min</option><option value="30">30 min</option><option value="120">2 h</option></select></div><div><label>Why (optional)</label><input id="why" maxlength="280" placeholder="note for shore"></div></div>
+<p><button class="primary" id="add">Apply to uplink</button></p>
+<div class="chips" id="rules"></div><div class="err" id="ruleErr"></div>
+</section>
+<section style="margin-top:14px"><h2>Transmit posture (ship)</h2>
+<div class="row" id="emconBtns"><button data-e="">Follow shore</button><button data-e="NORMAL">Normal</button><button data-e="BURST">Burst</button><button data-e="SILENT">Silent</button></div>
+<p class="dim" style="margin:6px 0 0">Silent = queue only, nothing uplinked. Burst = facts only.</p></section>
+<section style="margin-top:14px" class="merged"><h2>In effect on this ship</h2><div id="merged" class="dim">…</div></section>
+</div>
+<section><div class="tabs" id="tabs"><button data-t="queue" class="on">Uplink queue</button><button data-t="all">All contacts</button><button data-t="stream">Camera stream</button></div>
+<div id="t-queue"><h2>Uplink queue — what goes to shore next</h2>
+<p id="held" hidden style="color:var(--warn);margin:0 0 6px">EMCON SILENT: nothing is being transmitted. This is the order the held backlog goes in when transmission resumes.</p>
+<table><thead><tr><th>#</th><th></th><th>Contact</th><th>Next form</th><th>Bytes left</th><th>Priority</th><th></th></tr></thead><tbody id="q"></tbody></table>
+<p class="dim" id="qEmpty" hidden>Queue is empty: everything captured so far has reached shore. Press <b>Silent</b> to hold transmission and watch the backlog build, reprioritize it, then press <b>Follow shore</b> to release it in the new order.</p>
+</div>
+<div id="t-all" hidden><h2>Every contact the ship has made — ranked by priority</h2>
+<table><thead><tr><th>#</th><th></th><th>Contact</th><th>Camera</th><th>Priority</th><th>Dup frames folded</th><th>Sent to shore</th><th></th></tr></thead><tbody id="all"></tbody></table></div>
+<div id="t-stream" hidden><h2>Camera stream — every frame and what the ship did with it</h2><p class="dim" id="streamStats" style="margin:0 0 8px"></p><div class="frames" id="frames"></div></div>
+</section>
+</main></div>
+<datalist id="classes"><option>submarine<option>cruise ship<option>cargo ship<option>tanker<option>warship<option>fishing vessel<option>small boat<option>sailboat<option>boat<option>unknown<option>person<option>aircraft<option>helicopter<option>drone<option>buoy<option>debris</datalist>
+<script>
+const $=id=>document.getElementById(id);
+const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtB=n=>{n=+n||0;return n>=1e6?(n/1e6).toFixed(1)+' MB':n>=1e3?(n/1e3).toFixed(0)+' kB':n+' B'};
+const form=f=>String(f||'').replace('FORM_KIND_','');
+let token=sessionStorage.getItem('gsShipToken')||'';
+const m=location.hash.match(/token=([^&]+)/);if(m){token=decodeURIComponent(m[1]);sessionStorage.setItem('gsShipToken',token);history.replaceState(null,'',location.pathname+location.search)}
+let local=null,thumbs=new Map();
+async function call(path,body,method='POST'){const r=await fetch(path,{method,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+ if(r.status===401){showLogin('Token rejected');throw new Error('unauthorized')}const t=await r.text();if(!r.ok)throw new Error(t.trim()||r.statusText);return t?JSON.parse(t):{}}
+const rpc=(m,b)=>call('/ghostseeker.v1.ConsoleService/'+m,b||{});
+function showLogin(msg){$('app').hidden=true;$('login').hidden=false;$('tokErr').textContent=msg||''}
+$('tokGo').onclick=()=>{token=$('tok').value.trim();sessionStorage.setItem('gsShipToken',token);start()};
+function currentRules(){return (local?.rules||[]).map(r=>({boost:r.boostLabels||[],suppress:r.suppressLabels||[],weight:r.weight||0,text:r.text||'',expiresAtUnixMs:+r.expiresAtUnixMs||0}))}
+function currentEmcon(){return local?.emcon?.mode?local.emcon.mode.replace('EMCON_MODE_',''):''}
+async function push(rules,emcon){$('ruleErr').textContent='';try{const r=await call('/ship/policy',{by:'ship operator',rules,emcon});render(r)}catch(e){$('ruleErr').textContent=e.message}}
+$('add').onclick=()=>{const b=$('boost').value.trim(),s=$('supp').value.trim();if(!b&&!s){$('ruleErr').textContent='Enter a class to prioritize or hold back';return}
+ const mins=+$('dur').value,rule={boost:b?b.split(',').map(x=>x.trim()).filter(Boolean):[],suppress:s?s.split(',').map(x=>x.trim()).filter(Boolean):[],weight:b?4:0,text:$('why').value.trim()||[b&&'prioritize '+b,s&&'hold back '+s].filter(Boolean).join('; '),expiresAtUnixMs:mins?Date.now()+mins*60e3:0};
+ $('boost').value=$('supp').value=$('why').value='';push([...currentRules(),rule],currentEmcon())};
+$('emconBtns').onclick=e=>{const b=e.target.closest('button');if(b)push(currentRules(),b.dataset.e)};
+function render(p){local=p.local;const rules=local?.rules||[];
+ $('rules').innerHTML=rules.length?rules.map((r,i)=>`<div class="chip"><div>${(r.boostLabels||[]).map(l=>`<span class="boost">▲ ${h(l)}</span>`).join(' ')} ${(r.suppressLabels||[]).map(l=>`<span class="supp">▼ ${h(l)}</span>`).join(' ')}<div class="dim">${h(r.text)}${+r.expiresAtUnixMs?` · until ${new Date(+r.expiresAtUnixMs).toLocaleTimeString()}`:''}</div></div><button class="x" data-i="${i}" title="Remove">✕</button></div>`).join(''):'<span class="dim">No ship rules — the uplink follows shore policy.</span>';
+ $('rules').querySelectorAll('.x').forEach(b=>b.onclick=()=>{const rs=currentRules();rs.splice(+b.dataset.i,1);push(rs,currentEmcon())});
+ const em=currentEmcon();$('emconBtns').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.e===em));
+ const a=p.active||{},it=a.interest||{},conf=(a.conflicts||[]);
+ $('emcon').textContent=(a.emcon||'').replace('EMCON_MODE_','')+(a.emconSetting?.setBy?` (${a.emconSetting.setBy})`:'');
+ $('merged').innerHTML=`<div>Policy <b>${h(a.id||'default')}</b>${a.issuedBy?' from '+h(a.issuedBy):''}</div>`+
+  `<div>Boost: ${(it.boostLabels||[]).map(l=>`<span class="boost">${h(l)}</span>`).join(', ')||'—'}</div><div>Suppress: ${(it.suppressLabels||[]).map(l=>`<span class="supp">${h(l)}</span>`).join(', ')||'—'}</div>`+
+  (a.layers||[]).map(l=>`<div class="dim">layer ${h((l.echelon||'').replace('ECHELON_',''))} · ${h(l.issuedBy)} · ${(l.rules||[]).length} rule(s)${l.emcon?.mode?' · '+h(l.emcon.mode.replace('EMCON_MODE_','')):''}</div>`).join('')+
+  conf.map(c=>`<div style="color:var(--bad)">Blocked: ${h(c.ruleId)} — ${h(c.reason)}</div>`).join('')}
+async function thumb(id){if(thumbs.has(id))return thumbs.get(id);const p=fetch('/blob/'+encodeURIComponent(id)+'/thumb',{headers:{'Authorization':'Bearer '+token}}).then(r=>r.ok?r.blob():null).then(b=>b?URL.createObjectURL(b):'').catch(()=>'');thumbs.set(id,p);return p}
+async function sendNow(id,f){try{await rpc('RequestPull',{pull:{itemId:id,form:f,requestedBy:'ship operator'}});tick()}catch(e){alert(e.message)}}
+async function relabel(id,cur){const l=prompt('Correct the label for this contact',cur||'');if(!l)return;try{await rpc('OverrideLabel',{override:{itemId:id,label:l.trim(),by:'ship operator'}});tick()}catch(e){alert(e.message)}}
+let tab=(location.search.match(/tab=(\w+)/)||[])[1]||'queue',lastSeq=0,frameEls=[];const frURL=new Map();
+$('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.t;$('tabs').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));['queue','all','stream'].forEach(t=>$('t-'+t).hidden=t!==tab);tick()};
+const OUT={new:'NEW CONTACT',folded:'DUPLICATE — folded',updated:'BETTER KEY FRAME',closed:'TRACK CLOSED',dropped:'NOT KEPT',error:'ERROR'};
+function formCell(fs){return (fs||[]).map(f=>{const c=f.complete?'sent':f.acked>0?'part':'held';const t=f.complete?'✓':f.acked>0?Math.round(100*f.acked/f.bytes)+'%':'on ship';return `<span class="fm ${c}" title="${fmtB(f.bytes)}">${h(f.kind)} ${t}</span>`}).join('')}
+async function loadAll(){const d=await call('/ship/items',undefined,'GET');const items=(d.items||[]).filter(i=>i.type==='IMAGE');
+ $('all').innerHTML=items.map((it,i)=>`<tr><td class="num">${i+1}</td><td><img data-id="${h(it.id)}" alt=""></td><td><b>${h(it.override||it.label||(it.event==='scene'?'scene':'—'))}</b> ${it.suppressed?'<span class="tag s">held back</span>':''}${it.pulled?'<span class="tag p">send now</span>':''}${it.unknownness>=0.5?'<span class="tag">unknown</span>':''}<div class="dim" title="${h((it.reasons||[]).join('\n'))}">${h(it.id.slice(-8))}</div></td><td>${h(it.source)}</td><td class="num">${(+it.priority).toFixed(2)}</td><td class="num">${it.folded||0}</td><td>${formCell(it.forms)}</td><td><button data-send="${h(it.id)}" data-f="FORM_KIND_FULL">Send full</button> <button data-rl="${h(it.id)}" data-l="${h(it.label)}">Relabel</button></td></tr>`).join('');
+ $('all').querySelectorAll('img').forEach(async im=>{const u=await thumb(im.dataset.id);if(u)im.src=u;else im.style.visibility='hidden'});
+ $('all').querySelectorAll('[data-send]').forEach(b=>b.onclick=()=>sendNow(b.dataset.send,b.dataset.f));
+ $('all').querySelectorAll('[data-rl]').forEach(b=>b.onclick=()=>relabel(b.dataset.rl,b.dataset.l))}
+async function frameImg(seq,im){const r=await fetch('/ship/frames/'+seq,{headers:{'Authorization':'Bearer '+token}});if(r.ok){const u=URL.createObjectURL(await r.blob());frURL.set(seq,u);im.src=u}}
+async function loadStream(){const d=await call('/ship/frames?after='+lastSeq,undefined,'GET');const c=d.counts||{},tot=Object.values(c).reduce((a,b)=>a+b,0);
+ $('streamStats').textContent=`${tot} frames in · ${c.new||0} new contacts · ${c.folded||0} duplicates folded · ${c.updated||0} key-frame upgrades · ${c.dropped||0} not kept`;
+ for(const f of d.frames||[]){lastSeq=Math.max(lastSeq,f.seq);const el=document.createElement('div');el.className='fr '+f.outcome;
+  el.innerHTML=`<img alt=""><div><span class="b ${h(f.outcome)}">${h(OUT[f.outcome]||f.outcome)}</span></div><div>${h(f.label||'')}${f.itemId?` <span class="dim">→ …${h(f.itemId.slice(-6))}</span>`:''}</div><div class="dim">${h(f.source)} · ${new Date(f.atUnixMs).toLocaleTimeString()}</div>`;
+  $('frames').prepend(el);frameEls.unshift([f.seq,el]);frameImg(f.seq,el.querySelector('img'))}
+ while(frameEls.length>120){const [s,el]=frameEls.pop();el.remove();const u=frURL.get(s);if(u){URL.revokeObjectURL(u);frURL.delete(s)}}}
+async function tick(){try{
+ const st=await rpc('GetStatus');
+ if(st.role&&st.role!=='edge'){clearInterval(timer);document.body.innerHTML='<p style="padding:20px">This is the shore API. The ship console is on the edge (port 8081); the shore operator console is on port 8090.</p>';return}
+ const [q,p]=await Promise.all([rpc('GetQueue',{limit:40}),call('/ship/policy',undefined,'GET')]);
+ $('node').textContent=st.nodeId||'';const up=st.link?.up;$('link').textContent=(up?'up':'down')+(st.link?.estimateBps?` · ${(st.link.estimateBps/1e3).toFixed(1)} kbps`:'');$('link').className=up?'up':'down';
+ $('sent').textContent=fmtB(st.bytesSent);$('items').textContent=st.itemsTotal||0;$('dups').textContent=st.itemsDeduped||0;
+ $('held').hidden=!/SILENT/.test(p.active?.emcon||'');if(tab==='all')loadAll().catch(e=>console.warn(e));if(tab==='stream')loadStream().catch(e=>console.warn(e));
+ call('/ship/frames?after=999999999',undefined,'GET').then(d=>{const c=d.counts||{};$('frIn').textContent=Object.values(c).reduce((a,b)=>a+b,0);$('frRaw').textContent=fmtB(d.rawBytes)}).catch(()=>{});
+ $('qItems').textContent=q.totalItems||0;$('qBytes').textContent=fmtB(q.totalBytesRemaining);render(p);
+ const es=q.entries||[];$('qEmpty').hidden=es.length>0;
+ $('q').innerHTML=es.map((e,i)=>{const s=e.score||{},pull=(s.reasons||[]).some(r=>/pull/i.test(r.scorer||''));return `<tr><td class="num">${i+1}</td><td><img data-id="${h(e.itemId)}" alt=""></td><td><b>${h(e.topLabel||'—')}</b> ${s.suppressed?'<span class="tag s">held back</span>':''}${pull?'<span class="tag p">send now</span>':''}<div class="dim">${h(e.itemId.slice(-8))}</div></td><td>${h(form(e.form))}</td><td class="num">${fmtB(e.bytesRemaining)}</td><td class="num">${(+s.priority||0).toFixed(2)}</td><td><button data-send="${h(e.itemId)}" data-f="${h(e.form)}">Send now</button> <button data-rl="${h(e.itemId)}" data-l="${h(e.topLabel||'')}">Relabel</button></td></tr>`}).join('');
+ $('q').querySelectorAll('img').forEach(async im=>{const u=await thumb(im.dataset.id);if(u)im.src=u;else im.style.visibility='hidden'});
+ $('q').querySelectorAll('[data-send]').forEach(b=>b.onclick=()=>sendNow(b.dataset.send,b.dataset.f));
+ $('q').querySelectorAll('[data-rl]').forEach(b=>b.onclick=()=>relabel(b.dataset.rl,b.dataset.l));
+}catch(e){if(e.message!=='unauthorized')console.warn(e)}}
+let timer;function start(){$('tabs').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.t===tab));['queue','all','stream'].forEach(t=>$('t-'+t).hidden=t!==tab);if(!token){showLogin();return}$('login').hidden=true;$('app').hidden=false;clearInterval(timer);tick();timer=setInterval(tick,2000)}
+start();
+</script>

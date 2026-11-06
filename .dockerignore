@@ -15,3 +15,6 @@ sim-results.json
 **/__pycache__/
 **/*.pyc
 frames/*.zip
+
+# Optional research services have their own explicit Dockerfile allowlists.
+research/

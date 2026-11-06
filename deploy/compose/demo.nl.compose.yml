@@ -1,0 +1,48 @@
+# Opt-in language integration; combine with demo.compose.yml.
+# Product binaries talk HTTP to the isolated research compiler.
+services:
+  granite-fetch:
+    image: python:3.11-slim
+    profiles: [nl-setup]
+    volumes:
+      - "${NL_MODELS_DIR:-../../research/nl-priority/models}:/models"
+      - "../../research/nl-priority/tools/fetch_granite.py:/fetch_granite.py:ro"
+    command: [python, /fetch_granite.py, /models]
+  granite:
+    build:
+      context: ../..
+      dockerfile: research/nl-priority/Dockerfile.granite
+    volumes:
+      - "${NL_MODELS_DIR:-../../research/nl-priority/models}:/models:ro"
+    networks: [nl-runtime]
+    cpus: 2
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/health]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+  nl-compiler:
+    build:
+      context: ../..
+      dockerfile: research/nl-priority/Dockerfile
+    command: [--listen, ':8097', --data, /data, --web-dir, /web, --llm-url, 'http://granite:8080']
+    volumes: [nl-demo-state:/data]
+    networks: [nl-runtime]
+    depends_on:
+      granite: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8097/api/health]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  ui:
+    environment:
+      GS_RESEARCH_COMPILER_URL: http://nl-compiler:8097
+    networks: [default, nl-runtime]
+    depends_on:
+      nl-compiler: {condition: service_healthy}
+volumes:
+  nl-demo-state:
+networks:
+  nl-runtime:
+    internal: true

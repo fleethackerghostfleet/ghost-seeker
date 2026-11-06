@@ -1,0 +1,29 @@
+body{--night-filter:grayscale(1) sepia(1) hue-rotate(-50deg) saturate(5) brightness(.62) contrast(1.1)}
+body.night,body.night dialog{filter:var(--night-filter)}
+body.commander.theme-day{--bg:#e9eef2;--panel:#fff;--panel2:#f2f5f8;--line:#c3ced7;--text:#0f1c26;--muted:#4c5f6d;--gold:#806018;--good:#178a52}
+.commander.theme-day header{background:var(--panel2);border-color:var(--line)}
+.commander.theme-day .row.on{background:#e2e8ee}
+.commander.theme-day :is(kbd,.bar,.toast){background:#e2e8ee;border-color:var(--line)}
+.commander.theme-day #learned{background:#e2f3f7;color:#0b5566}
+.commander.theme-day .live{background:#e3f5ec;border-color:#9fd6b8}
+.commander.theme-day .av{background:#f5edd9}
+.commander.theme-red,.theme-red #settings{--bg:#090000;--panel:#160000;--panel2:#210000;--panel3:#300000;--line:#650000;--text:#e00000;--muted:#b00000;--accent:#d00000;--accent2:#680000;--gold:#cc0000;--good:#c00000;--p1:#e00000;--p2:#c00000;--p3:#a00000;--p4:#800000;color-scheme:dark;accent-color:var(--accent)}
+.commander.night,.theme-red #settings{filter:none}
+.commander.night img{filter:var(--night-filter)}
+.theme-red #settings .btn.primary{color:var(--text)}
+.theme-red #settings .btn:hover{border-color:var(--accent)}
+.theme-red #settings .btn.primary:hover{background:var(--panel3)}
+.theme-red #settings input{appearance:none;width:1em;height:1em;border:1px solid var(--muted);background:var(--panel);color:var(--text);display:inline-grid;place-content:center;flex:none}
+.theme-red #settings input:checked::before{content:'✓';color:var(--text);font-size:.85em;line-height:1}
+.theme-red #settings :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.commander.theme-red :is(header,.live,.row.on,#learned,kbd,.bar,.toast,.av){background:var(--panel2);border-color:var(--line);box-shadow:none}
+.commander.theme-red #learned{color:var(--text)}
+.commander.theme-red .read-only-badge{color:var(--text);border-color:var(--line)}
+.commander.theme-red .bar i{background:var(--p4)}
+.commander.theme-red :is(.banner,.tg,.box em,.pri .big){background:var(--accent);color:var(--bg)}
+.commander.theme-red :is(.box.lo,.why li,.chain,.dets td,.tabs button.on,.wf:hover){border-color:var(--line)}
+.commander.theme-red [style*="--c:"]{--c:var(--accent)!important}
+.commander.theme-red :is(.live i,.row.fresh){animation:none;box-shadow:none}
+.commander.theme-red .toast{transition-property:opacity,transform}
+.commander.theme-red textarea::placeholder{color:var(--muted)}
+.commander.theme-red ::-webkit-scrollbar-thumb{background:var(--line)}

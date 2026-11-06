@@ -63,7 +63,7 @@ func TestPIVApplication(t *testing.T) {
 	var audit bytes.Buffer
 	data := store.New(10)
 	data.Add(&command.Item{ID: "synthetic-item", TS: now}, 0)
-	app := server.New(data, server.WithAdmin(true), server.WithAdminToken("synthetic-admin-token"))
+	app := server.New(data, server.WithDemoReset(), server.WithAdmin(true), server.WithAdminToken("synthetic-admin-token"))
 	// Capture the upstream bridge identity without a real shore node.
 	var upstreamBy string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -168,6 +168,7 @@ func TestPIVApplication(t *testing.T) {
 		t.Fatalf("bridge actor: %q", upstreamBy)
 	}
 	request(viewerClient, "GET", "/api/config", "", nil, 200)
+	request(viewerClient, "POST", "/api/demo/reset", `{"confirm":"reset"}`, nil, 403)
 	body, _ = request(viewerClient, "POST", "/api/directives", `{"text":"small boats"}`, nil, 403)
 	if !strings.Contains(body, "read-only role") {
 		t.Fatal(body)

@@ -1,0 +1,698 @@
+{
+  "schemaVersion": 1,
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "architecture": "arm64",
+  "corpusSha256": "3c7596b94ec9a2ab2631bc3a379b92878a36413c69e9b19ce3cc14b2c73dd4b8",
+  "corpusVersion": 1,
+  "partialRun": false,
+  "evaluationStage": "regression",
+  "notes": [
+    "Targeted development regression for conversational routing, not a new held-out acceptance evaluation.",
+    "Look/find/interest requests mean boost; negative interest means suppress; stopping an active interest removes it.",
+    "The exact reported request and semantic regression examples were used during development."
+  ],
+  "summary": {
+    "all": {
+      "cases": 21,
+      "correct": 21,
+      "accuracy": 1.0,
+      "p50Ms": 1681.2258329591714,
+      "p95Ms": 2502.6094170170836
+    },
+    "supported": {
+      "cases": 15,
+      "correct": 15,
+      "accuracy": 1.0,
+      "p50Ms": 1748.7396249780431,
+      "p95Ms": 2543.798375001643
+    },
+    "path:granite+granite-concepts": {
+      "cases": 6,
+      "correct": 6,
+      "accuracy": 1.0,
+      "p50Ms": 2344.073458982166,
+      "p95Ms": 2543.798375001643
+    },
+    "category:conversational": {
+      "cases": 15,
+      "correct": 15,
+      "accuracy": 1.0,
+      "p50Ms": 1748.7396249780431,
+      "p95Ms": 2543.798375001643
+    },
+    "path:granite": {
+      "cases": 6,
+      "correct": 6,
+      "accuracy": 1.0,
+      "p50Ms": 1729.2552909930237,
+      "p95Ms": 1811.4904999965802
+    },
+    "path:rules+granite-concepts": {
+      "cases": 3,
+      "correct": 3,
+      "accuracy": 1.0,
+      "p50Ms": 699.2998329806142,
+      "p95Ms": 719.2899160436355
+    },
+    "unsupported": {
+      "cases": 6,
+      "correct": 6,
+      "accuracy": 1.0,
+      "p50Ms": 0.8986250031739473,
+      "p95Ms": 762.5047499896027
+    },
+    "path:rejected": {
+      "cases": 6,
+      "correct": 6,
+      "accuracy": 1.0,
+      "p50Ms": 0.8986250031739473,
+      "p95Ms": 762.5047499896027
+    },
+    "category:unrelated-or-ambiguous": {
+      "cases": 6,
+      "correct": 6,
+      "accuracy": 1.0,
+      "p50Ms": 0.8986250031739473,
+      "p95Ms": 762.5047499896027
+    }
+  },
+  "results": [
+    {
+      "id": "conversation-01",
+      "category": "conversational",
+      "text": "look for big ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite+granite-concepts",
+      "latencyMs": 2497.19774996629,
+      "expected": [
+        {
+          "concept": "big ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "big ship",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "big ship"
+        ],
+        "readback": "Prioritize big ship (2.0\u00d7)",
+        "path": "granite+granite-concepts",
+        "resolutions": [
+          {
+            "input": "big ship",
+            "canonical": "big ship",
+            "reason": "Preserved as a new visual concept."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-02",
+      "category": "conversational",
+      "text": "can you find fishing vessels",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite+granite-concepts",
+      "latencyMs": 2543.798375001643,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (2.0\u00d7)",
+        "path": "granite+granite-concepts",
+        "resolutions": [
+          {
+            "input": "fishing vessel",
+            "canonical": "fishing boat"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-03",
+      "category": "conversational",
+      "text": "I am interested in cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite",
+      "latencyMs": 1748.7396249780431,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize cargo ship (2.0\u00d7)",
+        "path": "granite"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-04",
+      "category": "conversational",
+      "text": "watch for red boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite+granite-concepts",
+      "latencyMs": 2342.650041973684,
+      "expected": [
+        {
+          "concept": "red boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "red boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "red boat"
+        ],
+        "readback": "Prioritize red boat (2.0\u00d7)",
+        "path": "granite+granite-concepts",
+        "resolutions": [
+          {
+            "input": "red boat",
+            "canonical": "red boat",
+            "reason": "Preserved as a new visual concept."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-05",
+      "category": "conversational",
+      "text": "find submarines",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite",
+      "latencyMs": 1665.3778330073692,
+      "expected": [
+        {
+          "concept": "submarine",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "submarine",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize submarine (2.0\u00d7)",
+        "path": "granite"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-06",
+      "category": "conversational",
+      "text": "help me spot tankers",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite",
+      "latencyMs": 1681.2258329591714,
+      "expected": [
+        {
+          "concept": "tanker",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "tanker",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize tanker (2.0\u00d7)",
+        "path": "granite"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-07",
+      "category": "conversational",
+      "text": "I would like to see sailboats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite",
+      "latencyMs": 1729.2552909930237,
+      "expected": [
+        {
+          "concept": "sailboat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "sailboat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize sailboat (2.0\u00d7)",
+        "path": "granite"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-08",
+      "category": "conversational",
+      "text": "show me big ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite+granite-concepts",
+      "latencyMs": 2344.073458982166,
+      "expected": [
+        {
+          "concept": "big ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "big ship",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "big ship"
+        ],
+        "readback": "Prioritize big ship (2.0\u00d7)",
+        "path": "granite+granite-concepts",
+        "resolutions": [
+          {
+            "input": "big ship",
+            "canonical": "big ship",
+            "reason": "Preserved as a new visual concept."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-09",
+      "category": "conversational",
+      "text": "look for cargo ships and submarines",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite",
+      "latencyMs": 1811.4904999965802,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "boost",
+          "weight": 2
+        },
+        {
+          "concept": "submarine",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "boost",
+            "weight": 2
+          },
+          {
+            "concept": "submarine",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize cargo ship (2.0\u00d7); Prioritize submarine (2.0\u00d7)",
+        "path": "granite"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-10",
+      "category": "conversational",
+      "text": "prioritize fishing vessels",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules+granite-concepts",
+      "latencyMs": 699.2998329806142,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (2.0\u00d7)",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "fishing vessel",
+            "canonical": "fishing boat"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-11",
+      "category": "conversational",
+      "text": "prioritize red fishing boats",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules+granite-concepts",
+      "latencyMs": 172.16812504921108,
+      "expected": [
+        {
+          "concept": "red fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "red fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "red fishing boat"
+        ],
+        "readback": "Prioritize red fishing boat (2.0\u00d7)",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "red fishing boat",
+            "canonical": "red fishing boat",
+            "reason": "Preserved as a new visual concept."
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-12",
+      "category": "conversational",
+      "text": "don't look for cargo ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite",
+      "latencyMs": 1741.2572089815512,
+      "expected": [
+        {
+          "concept": "cargo ship",
+          "action": "suppress",
+          "weight": 1
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "cargo ship",
+            "action": "suppress",
+            "weight": 1
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Deprioritize cargo ship",
+        "path": "granite"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-13",
+      "category": "conversational",
+      "text": "stop looking for fishing vessels",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "rules+granite-concepts",
+      "latencyMs": 719.2899160436355,
+      "expected": [],
+      "actual": {
+        "rules": [],
+        "vocabulary": [],
+        "readback": "Restore baseline priorities and remove added concepts.",
+        "path": "rules+granite-concepts",
+        "resolutions": [
+          {
+            "input": "fishing vessel",
+            "canonical": "fishing boat"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-14",
+      "category": "unrelated-or-ambiguous",
+      "text": "hello",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 762.5047499896027,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: describe the visual objects you want to see more or less of"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-15",
+      "category": "unrelated-or-ambiguous",
+      "text": "I am hungry",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 80.03979199565947,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: describe the visual objects you want to see more or less of"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-16",
+      "category": "unrelated-or-ambiguous",
+      "text": "what is the weather",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.6546250078827143,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: ask for visual objects to find or emphasize; factual questions do not change interests"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-17",
+      "category": "unrelated-or-ambiguous",
+      "text": "write a poem",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 82.39654201315716,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: describe the visual objects you want to see more or less of"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-18",
+      "category": "unrelated-or-ambiguous",
+      "text": "why is the sea blue",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.8986250031739473,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: ask for visual objects to find or emphasize; factual questions do not change interests"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-19",
+      "category": "unrelated-or-ambiguous",
+      "text": "look for those ones",
+      "supported": false,
+      "correct": true,
+      "status": 422,
+      "path": "rejected",
+      "latencyMs": 0.6000410066917539,
+      "expected": "reject",
+      "actual": {
+        "error": "clarification required: name the visual objects you want to find"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-20",
+      "category": "conversational",
+      "text": "how about fishing vessels",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite+granite-concepts",
+      "latencyMs": 1813.0971250357106,
+      "expected": [
+        {
+          "concept": "fishing boat",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "fishing boat",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [],
+        "readback": "Prioritize fishing boat (2.0\u00d7)",
+        "path": "granite+granite-concepts",
+        "resolutions": [
+          {
+            "input": "fishing vessel",
+            "canonical": "fishing boat"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation-21",
+      "category": "conversational",
+      "text": "I am looking for big ships",
+      "supported": true,
+      "correct": true,
+      "status": 200,
+      "path": "granite+granite-concepts",
+      "latencyMs": 2502.6094170170836,
+      "expected": [
+        {
+          "concept": "big ship",
+          "action": "boost",
+          "weight": 2
+        }
+      ],
+      "actual": {
+        "rules": [
+          {
+            "concept": "big ship",
+            "action": "boost",
+            "weight": 2
+          }
+        ],
+        "vocabulary": [
+          "big ship"
+        ],
+        "readback": "Prioritize big ship (2.0\u00d7)",
+        "path": "granite+granite-concepts",
+        "resolutions": [
+          {
+            "input": "big ship",
+            "canonical": "big ship",
+            "reason": "Preserved as a new visual concept."
+          }
+        ]
+      },
+      "error": null
+    }
+  ],
+  "acceptance": {
+    "supportedAccuracyAtLeast95Percent": true,
+    "allUnsupportedRejected": true,
+    "completeCorpus": true
+  },
+  "sourceFilesSHA256": {
+    "research/nlpriority/compiler.go": "c9d6df441caff1b4be857a3b11bf9174e12e440a5b7694caca87d3f227ea3580",
+    "research/nlpriority/scope.go": "5357b52fc0886cab619db34e24e0ef29a90791e18d2358f86e52bd6a81872d9c",
+    "research/nlpriority/semantics.go": "8a4e91882af67c503891dd7ded936ae11bcc66531ed6aa529e70b47bfd5dbfdf"
+  }
+}

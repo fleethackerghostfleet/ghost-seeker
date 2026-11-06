@@ -4,20 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ghost Seeker · Edge-to-Command Imagery Prioritization</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/briefing.css">
 <link rel="stylesheet" href="/lights.css">
 <link rel="stylesheet" href="/auth.css">
+<link rel="stylesheet" href="/text-size.css">
+<link rel="stylesheet" href="/themes.css">
 </head>
 <body>
-<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
+<div class="banner" id="classificationBanner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
 <header>
   <div class="logo">
     <svg width="30" height="30" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#4fc3d9" stroke-width="2"/><circle cx="16" cy="16" r="8" stroke="#4fc3d9" stroke-opacity=".5" stroke-width="1.5"/><path d="M16 16 L27 9" stroke="#4fc3d9" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="12.5" r="2" fill="#ff4d5e"/></svg>
     <div><b>GHOST SEEKER</b><small>Edge-to-Command Imagery Prioritization</small></div>
   </div>
-  <nav><a href="#feed" id="navFeed" class="on">Imagery Feed</a><a href="#review" id="navRv">Operator Review <span class="bdg" id="rvCount"></span></a><a href="#reprioritize" id="navRp">Collection Priorities <span class="bdg" id="dirCount"></span></a><a href="/cdr.html" target="_blank" rel="noopener">Commander View ↗</a></nav>
+  <div class="view-tabs" data-view-tabs>
+    <button type="button" class="view-tabs-arrow" data-scroll="left" aria-label="Scroll views left" aria-controls="viewTabs" title="Scroll views left" hidden><span aria-hidden="true">‹</span></button>
+    <nav id="viewTabs" aria-label="Application views"><a href="#feed" id="navFeed" class="on">Imagery Feed</a><a href="#review" id="navRv">Operator Review <span class="bdg" id="rvCount"></span></a><a href="#reprioritize" id="navRp">Collection Priorities <span class="bdg" id="dirCount"></span></a><a id="navCdr" href="/cdr.html" target="_blank" rel="noopener">Commander View ↗</a></nav>
+    <button type="button" class="view-tabs-arrow" data-scroll="right" aria-label="Scroll views right" aria-controls="viewTabs" title="Scroll views right" hidden><span aria-hidden="true">›</span></button>
+  </div>
   <button type="button" class="live" id="live"><i></i><span>FEED ACTIVE</span></button>
   <div id="emconControl"></div>
   <button class="btn sm setbtn" id="setBtn" title="Display settings" aria-label="Display settings">⚙ Settings</button>
@@ -28,39 +35,50 @@
     <div class="hstat"><b id="hsCdr" style="color:var(--good)">0</b><span>Sent to Commander</span></div>
   </div>
   <div class="clock mono" id="clock">--:--:--Z</div>
-  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:11px">Watch officer</span></div></div>
+  <div class="user"><div class="avatar" title="Tactical Action Officer · Watch officer">TAO</div><div>Tactical Action Officer<br><span style="font-size:0.6875rem">Watch officer</span></div></div>
   <span id="readOnlyBadge" class="read-only-badge" hidden>Read-only</span>
   <form id="authLogout" class="auth-logout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
+  <a class="docs-link" href="https://ghostfleet-docs.vercel.app" target="_blank" rel="noopener noreferrer" aria-label="Open documentation (new tab)" title="Open documentation (new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg></a>
 </header>
+<div id="shoreWarning" role="status" hidden>Shore unreachable — showing last-known data. Updates will resume automatically when shore returns.</div>
 
 <section class="page on" id="pgFeed">
- <div class="fhead">
-  <div class="toolbar">
-    <span class="lbl">Sensor</span>
+ <div class="fhead" id="feedHead">
+  <div class="toolbar" id="feedControls">
+    <span class="lbl" id="sourceLabel">Sensor</span>
     <select id="srcSel"></select>
+    <label class="feed-check"><input type="checkbox" id="showDuplicates"> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0</span></label>
+    <label class="feed-check" title="Hide images that have finished uploading to shore. Queued, uploading, held and kept-on-ship images stay visible."><input type="checkbox" id="hideUploaded"> Hide uploaded <span class="c" id="uploadedCount" title="Feed images fully uploaded to shore">0</span></label>
+    <label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter"><option value="all">All images</option><option value="sent">Sent by a person</option><option value="reviewed">Reviewed by a person</option><option value="unreviewed">Not reviewed yet</option></select></label><span class="feed-note" id="sentOrder" hidden>Only images sent by a person · newest first <button type="button" class="btn sm" id="sentShowAll">Show all images</button></span>
     <div class="seg" id="tierSeg"></div>
     <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
-    <span class="lbl">Size</span><div class="seg" id="densSeg" title="Thumbnail size"><button data-d="s">S</button><button data-d="m" class="on">M</button><button data-d="l">L</button></div>
+    <span class="lbl density-label">Size</span><div class="seg" id="densSeg"><button data-d="m" class="on">Small</button><button data-d="l">Large</button></div>
+    <button type="button" class="btn sm" id="feedFilters" aria-expanded="false" aria-controls="feedControls">Filters</button>
+    <button type="button" class="btn sm primary" id="clearFeedFilters" hidden>Clear filters</button>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
+    <button class="btn sm" id="resetDemoBtn" hidden>Reset demo</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
     <button class="btn sm" id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing (0)</button>
     <a class="btn sm" href="#briefing">Open briefing</a>
     <div class="spacer"></div>
     <div class="dirbar" id="dirBar"></div>
   </div>
+  <div class="upload-summary" id="uploadSummary" role="status"></div>
   <div class="strip" id="simStrip">
+    <div class="st link" id="stLink" title="Current ship-to-shore bandwidth. It changes automatically every 5 seconds; it is not adjustable."></div><span class="ar">›</span>
     <div class="st" id="st1" title="Images captured by sensors">Captured <b id="cCap">0</b></div><span class="ar">›</span>
     <div class="st" id="st2" title="Ship-side filtering keeps useful images and filters out low-value frames">Kept on ship <b id="cKeep">0</b> · filtered out <b id="cDrop">0</b></div><span class="ar">›</span>
     <div class="st" id="st3" title="Image data transmitted from ship to shore">Sent to shore <b id="cKB">0</b> MB</div><span class="ar">›</span>
-    <div class="st" id="st4" title="Images saved in storage">Stored <b id="cDb">0</b></div><span class="ar">›</span>
+    <div class="st" id="st4" title="Cumulative images saved on the ship since startup, including images later evicted from the retained feed">Saved on ship (total) <b id="cDb">0</b></div><span class="ar">›</span>
     <div class="st" id="st5" title="The scoring model ranks images using the base model and active directives">Scoring model: <b id="cModel"></b> · <b id="cP1">0</b> P1 Critical</div>
-    <span class="sv"><span id="cSaved">0%</span> of low-value frames filtered on the ship to save bandwidth</span>
+    <a class="btn sm details-link" href="#details">Details: counts &amp; filtered photos ›</a>
   </div>
+  <div class="strip" id="datasetStrip" hidden><b>REAL IMAGERY · clean v2 dev</b><span class="ar">›</span><span>Selected development images · locked test and quarantine sets excluded</span></div>
   <div class="strip live-strip" id="liveStrip" hidden></div>
   <div class="cameras" id="cameras" hidden></div>
  </div>
  <div class="fbody">
-  <div class="feed" id="feed"><div class="grid m" id="grid"></div><div class="empty" id="empty" style="display:none">No images match this filter yet…</div></div>
+  <div class="feed" id="feed"><div class="grid m" id="grid"></div><button class="btn feed-more" id="feedMore" hidden>Load more images</button><div class="empty" id="empty" style="display:none">No images match this filter yet…</div></div>
   <aside class="drawer" id="drawer"></aside>
   </div>
   <div class="zoom" id="zoom" hidden></div>
@@ -73,7 +91,7 @@
   <div id="wbHeld" class="wb-held" hidden>Feed paused — previewing the images on screen; new arrivals are queued. <button id="wbResume" class="btn sm">Resume feed</button></div>
   <div class="wb-layout">
    <aside>
-    <section class="panel"><h3>01 / Your directive</h3><label class="hint" for="nlIn">Describe what to prioritize or ignore</label><textarea id="nlIn" maxlength="500" placeholder="Prioritize boats; ignore birds"></textarea><div id="wbUnknown" class="hint"></div><p class="hint">Your words become rules below. You can edit those rules; typing again replaces your edits.</p><div class="examples" id="examples"></div><div class="wb-row"><h3>Your rules (draft)</h3><div class="spacer"></div><button id="wbAdd">+ Add rule</button></div><div id="wbChips"></div></section>
+    <section class="panel"><h3>01 / Your directive</h3><label class="hint" for="nlIn">Describe what to prioritize or ignore</label><textarea id="nlIn" maxlength="500" placeholder="Prioritize boats; ignore birds"></textarea><div id="wbUnknown" class="hint"></div><div id="wbInterpretation" aria-live="polite" hidden><p class="hint" id="wbCompiler"></p><p id="wbInterpretationReadback" class="wb-readback"></p><ul id="wbInterpretationWarnings" class="wb-warnings" hidden></ul></div><p class="hint">Your words become rules below. You can edit those rules; typing again replaces your edits.</p><div class="examples" id="examples"></div><div class="wb-row"><h3>Your rules (draft)</h3><div class="spacer"></div><button id="wbAdd">+ Add rule</button></div><div id="wbChips"></div></section>
     <section class="panel"><h3>02 / Make it specific</h3><p class="hint">Suggestions show how a rule could change priorities, before any image-specific exceptions you have selected.</p><div id="wbSuggestions"></div></section>
     <section class="panel"><div class="wb-row"><h3>Draft history</h3><div class="spacer"></div><button id="wbUndo" title="Ctrl+Z outside text fields">↶ Undo</button><button id="wbRedo" title="Ctrl+Shift+Z outside text fields">↷ Redo</button></div><p class="hint">Compare a version's recorded results with now, or restore its draft.</p><div id="wbHistory"></div></section>
    </aside>
@@ -99,33 +117,39 @@
 <dialog id="wbConfirm"><h3>Read back before applying</h3><p id="wbReadback" class="wb-readback"></p><small id="wbPath" class="hint"></small><ul id="wbWarnings" class="wb-warnings" hidden></ul><p id="wbConfirmText"></p><p class="hint">Adds draft rules to active directives and saves pinned exceptions. Other sessions will update.</p><div class="wb-row"><button id="wbConfirmApply" class="primary">Confirm</button><button id="wbEditApply">Edit</button><button id="wbCancelApply">Cancel</button></div></dialog>
 </section>
 <section class="page" id="pgRv">
-  <div class="rvcard"><label>Reviewer <input id="reviewerName" maxlength="80" placeholder="Required reviewer name"></label> <button class="btn sm" id="reviewerSave">Set / change reviewer</button> <span id="reviewerStatus"></span></div>
+  <div class="rvcard"><label>Reviewer <input id="reviewerName" maxlength="80" placeholder="Required reviewer name"></label> <button class="btn sm" id="reviewerSave">Set / change reviewer</button> <span id="reviewerStatus"></span> <label id="reviewSyncLabel" hidden><input type="checkbox" id="reviewSync"> Team sync</label></div>
   <div class="rvcard"><b>Review data</b> <span id="reviewData"></span> <a href="/api/reviews/export?format=csv">Export CSV</a> · <a href="/api/reviews/export?format=jsonl">JSONL</a> <button class="btn sm" id="reviewNoteOpen">Note on last review (W)</button><div id="reviewNoteBox" hidden><input id="reviewNote" maxlength="280" placeholder="Optional note; Enter saves, Esc cancels"></div></div>
   <div class="rvtop">
-    <div class="rvprog"><b id="rvDone">0</b> reviewed · <b id="rvLeft">0</b> remaining <span id="rvSrc"></span></div>
-    <div class="rvbar"><i id="rvBarI"></i></div>
+    <div class="rvprog"><span class="rvprog-lbl">Images left in feed to review:</span> <b id="rvLeft">0</b> · <b id="rvDone">0</b> reviewed <span id="rvSrc"></span></div>
+    <div class="rvbar" role="progressbar" aria-label="Feed reviewed so far"><i id="rvBarI"></i></div><span class="rvbar-lbl">feed reviewed</span>
     <div class="spacer"></div>
+    <button class="btn sm human-btn" id="rvSent">➤ What I sent (<span id="rvSentN">0</span>)</button>
     <div class="seg" id="rvOrder"><button data-o="pri" class="on">Highest priority first</button><button data-o="new">Newest first</button></div>
     <button class="btn sm" id="nightBtn">Night mode (N)</button>
     <a class="btn sm" href="#feed">Exit (Esc)</a>
   </div>
   <div class="rvmain" id="rvMain"></div>
   <div class="rvask" id="rvAsk" hidden></div>
+  <p class="rvinstructions"><b>Change this image's priority:</b> press 1–4 to set it to P1–P4 and save your review. Space / Enter agrees with the model's suggested priority.</p>
+  <div class="rvnext" id="rvNext" role="status" aria-live="polite"></div>
   <div class="rvkeys" id="rvKeys">
-    <button class="kb k1" data-a="1"><kbd>1</kbd>P1 Critical</button>
-    <button class="kb k2" data-a="2"><kbd>2</kbd>P2 High</button>
-    <button class="kb k3" data-a="3"><kbd>3</kbd>P3 Routine</button>
-    <button class="kb k4" data-a="4"><kbd>4</kbd>P4 Low</button>
+    <button class="kb k1" data-a="1"><span class="kb-act">Set P1 Critical &amp; next</span><kbd>1</kbd></button>
+    <button class="kb k2" data-a="2"><span class="kb-act">Set P2 High &amp; next</span><kbd>2</kbd></button>
+    <button class="kb k3" data-a="3"><span class="kb-act">Set P3 Routine &amp; next</span><kbd>3</kbd></button>
+    <button class="kb k4" data-a="4"><span class="kb-act">Set P4 Low &amp; next</span><kbd>4</kbd></button>
     <div class="kgap"></div>
-    <button class="kb acc" data-a="accept"><kbd>Space</kbd><span id="accLbl">Agree with suggested priority</span></button>
-    <button class="kb" title="Hide this image from the feed and mark it reviewed at P4 Low. The image remains stored." data-a="dismiss"><kbd>X</kbd>Not relevant</button>
-    <button class="kb cdrb" data-a="cdr"><kbd>C</kbd>Send to Commander</button>
+    <button class="kb acc" data-a="accept"><span class="kb-act" id="accLbl">Agree &amp; next</span><kbd>Space</kbd></button>
+    <button class="kb" title="Hide this image from the feed and mark it reviewed at P4 Low. The image remains stored." data-a="dismiss"><span class="kb-act">Not relevant: hide &amp; next</span><kbd>X</kbd></button>
+    <button class="kb cdrb" data-a="cdr"><span class="kb-act">Send to Commander now &amp; next</span><kbd>C</kbd></button>
     <div class="kgap"></div>
-    <button class="kb" data-a="skip" style="flex:.7"><kbd>→</kbd>Skip</button>
-    <button class="kb" data-a="undo" style="flex:.7"><kbd>Z</kbd>Undo</button>
+    <button class="kb" data-a="skip" style="flex:.7"><span class="kb-act">Skip for now</span><kbd>→</kbd></button>
+    <button class="kb" data-a="undo" style="flex:.7"><span class="kb-act">Undo last</span><kbd>Z</kbd></button>
   </div>
 </section>
-<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
+<section class="page" id="pgDetails" aria-label="Pipeline details">
+  <div class="details-head"><a class="btn sm" href="#feed">‹ Back to feed</a><h2>Details</h2></div>
+  <div id="detailsBody"></div>
+</section>
 <section class="page" id="pgBrief" aria-label="Briefing workspace">
  <div class="toolbar"><div><b>Briefing builder</b><div class="hint">Local evidence snapshot · no changes to review or command decisions</div></div><div class="spacer"></div><a class="btn" href="#feed">Back to imagery</a><button class="btn" id="briefRebuild">New snapshot from selection</button><button class="btn" id="briefPDF">Print / Save PDF</button><button class="btn primary" id="briefPPTX">Export PowerPoint</button></div>
  <div id="briefStatus" role="status" aria-live="polite"></div>
@@ -142,10 +166,15 @@
   <main id="briefPreview" aria-label="Briefing slide previews"></main>
  </div>
 </section>
+<div class="cardmenu" id="cardMenu" role="menu" hidden><button role="menuitem" class="cm-send" id="cmSendNow"><span>➤ Send now</span><small id="cmSendNowSub">Moves this image to the top of the send queue</small></button><button role="menuitem" id="cmOpen"><span>Open image details</span></button></div>
 <div class="toast" id="toast"></div>
+<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
+<dialog id="resetDemoDialog" aria-labelledby="resetDemoTitle"><h3 id="resetDemoTitle">Reset demo?</h3><p>This clears all images, the ship-to-shore upload queue, the Commander list and decisions, and session counters.</p><p>Collection priorities, model, link settings and the review log are kept. New captures keep arriving.</p><div class="wb-row"><button class="btn" id="resetDemoCancel" autofocus>Cancel</button><button class="btn danger" id="resetDemoConfirm">Reset demo</button></div></dialog>
 <dialog id="settings" class="setdlg"></dialog>
 <script src="/settings.js" defer></script>
+<script src="/text-layout.js" defer></script>
 <script src="/resize.js" defer></script>
+<script src="/view-tabs.js" defer></script>
 <script src="/render.js" defer></script>
 <script src="/workbench.js" defer></script>
 <script src="/pptxgen.bundle.js" defer></script>
