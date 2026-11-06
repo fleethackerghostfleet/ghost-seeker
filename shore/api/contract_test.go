@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
@@ -40,6 +42,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/api"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 	ssync "github.com/fleethackerghostfleet/ghost-seeker/shore/sync"
+	"google.golang.org/protobuf/proto"
 )
 
 const operator = "synthetic-contract-test-operator"
@@ -556,26 +559,30 @@ func TestProdContractStreamCoalescesConsecutivePageUpdates(t *testing.T) {
 func TestProdContractStreamPolicyScale(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	st, err := store.Open(t.TempDir())
+	dir := t.TempDir()
+	const count = 2000
+	seedStreamSnapshot(t, ctx, dir, count)
+	st, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	fixtureStart := time.Now()
-	const count = 2000
-	for i := range count {
-		m := &pb.ManifestEntry{ItemId: fmt.Sprintf("scale-%04d", i), Type: pb.ItemType_ITEM_TYPE_IMAGE, Source: "scale-camera", CapturedAtUnixMs: time.Now().UnixMilli(), Priority: float64(i%100) / 100}
-		if err := st.UpsertManifest(ctx, "scale-edge", m, time.Now()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Logf("seeded %d items in %s", count, time.Since(fixtureStart))
 	a := api.New(st)
 	a.Heartbeat = time.Hour
 	server := httptest.NewServer(opauth.RequireBearer(operator, a.Handler()))
 	defer server.Close()
 	cursor, _ := st.EventCursor(ctx)
-	requestCtx, stop := context.WithTimeout(ctx, 15*time.Second)
+	budget := 10 * time.Second
+	// Pure-Go SQLite pays substantial race instrumentation overhead; keep the
+	// production budget tight while still checking every item under -race.
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "-race" && setting.Value == "true" {
+				budget *= 10
+			}
+		}
+	}
+	requestCtx, stop := context.WithTimeout(ctx, budget+5*time.Second)
 	defer stop()
 	req, err := http.NewRequestWithContext(requestCtx, "GET", server.URL+"/api/v1/stream?since="+strconv.FormatInt(cursor, 10), nil)
 	if err != nil {
@@ -606,8 +613,52 @@ func TestProdContractStreamPolicyScale(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 	t.Logf("streamed policy update for %d items in %s", len(seen), elapsed)
-	if elapsed > 10*time.Second {
-		t.Fatal("2000-item policy stream exceeded 10 seconds", elapsed)
+	if elapsed > budget {
+		t.Fatal("2000-item policy stream exceeded budget", elapsed, budget)
+	}
+}
+
+func seedStreamSnapshot(t *testing.T, ctx context.Context, dir string, count int) {
+	t.Helper()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(dir, "shore.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Seed a pre-journal snapshot, not the unrelated per-arrival tier updates.
+	// Store.Open restores the trigger and backfills all receipts before streaming.
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER api_manifest_insert`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at,priority) VALUES(?,'scale-edge',?,?,?,?,?,?)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stmt.Close()
+	for i := range count {
+		m := &pb.ManifestEntry{ItemId: fmt.Sprintf("scale-%04d", i), Type: pb.ItemType_ITEM_TYPE_IMAGE, Source: "scale-camera", CapturedAtUnixMs: time.Now().UnixMilli(), Priority: float64(i%100) / 100}
+		raw, err := proto.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stmt.ExecContext(ctx, m.ItemId, int32(m.Type), m.CapturedAtUnixMs, m.Source, raw, m.CapturedAtUnixMs, m.Priority); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
 	}
 }
 
