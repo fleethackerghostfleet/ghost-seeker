@@ -17,7 +17,7 @@ function setup(){
  context.$=id=>{
   if(!elements.has(id))elements.set(id,{
    innerHTML:'',textContent:'',value:'',dataset:{},hidden:false,disabled:false,
-   classList:{toggle(){},add(){},remove(){}},
+   classList:{toggle(){},add(){},remove(){},contains(){return false}},
    querySelector:()=>null,querySelectorAll:()=>[],scrollIntoView(){},addEventListener(){},
   });
   return elements.get(id);
@@ -96,6 +96,66 @@ test('tab switches and next decisions reveal selection without scrolling page an
  assert.equal(queue.scrollTop,80);
  vm.runInContext('items.clear();ensureSel();renderQueue()',context);
  assert.match(queue.innerHTML,/No escalations/);
+});
+
+test('toasts avoid the semantic decision heading',()=>{
+ const {context}=setup(),toast=context.$('toast');
+ toast.classList={contains:c=>c==='on',add(){},remove(){}};
+ toast.style={};toast.getBoundingClientRect=()=>({height:80,left:100,right:600});context.innerHeight=390;
+ context.document.querySelectorAll=selector=>selector.includes('#brief h2:last-of-type')?[{getBoundingClientRect:()=>({top:0,bottom:260,left:100,right:600})}]:[];
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,'268px');
+});
+
+test('toasts avoid decision controls and fall back to document flow when no overlay fits',()=>{
+ const {context}=setup(),toast=context.$('toast'),classes=new Set();
+ toast.classList={contains:c=>classes.has(c),add:c=>classes.add(c),remove:c=>classes.delete(c)};
+ toast.style={};toast.getBoundingClientRect=()=>({height:80,left:100,right:600});context.innerHeight=390;
+ let controls=[];
+ context.document.querySelectorAll=()=>controls.map(r=>({getBoundingClientRect:()=>({left:0,right:800,...r})}));
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,undefined);
+ classes.add('on');
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,'8px');
+ controls=[{top:0,bottom:200}];
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,'208px');
+ controls=[{top:-100,bottom:500}];
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),true);
+ controls=[{top:200,bottom:390}];
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),true);
+ context.setTimeout=()=>0;context.clearTimeout=()=>{};
+ vm.runInContext("toast('Next escalation')",context);
+ assert.equal(toast.textContent,'Next escalation');
+ assert.equal(classes.has('inline'),false);
+ assert.equal(toast.style.top,'8px');
+});
+
+test('toasts use free space between both banners and overlapping decision obstacles',()=>{
+ const {context}=setup(),toast=context.$('toast'),classes=new Set(['on']);
+ toast.classList={contains:c=>classes.has(c),add:c=>classes.add(c),remove:c=>classes.delete(c)};
+ toast.style={};toast.getBoundingClientRect=()=>({height:80,left:100,right:600});context.innerHeight=768;
+ const controls=[{top:744,bottom:768},{top:0,bottom:24}];
+ context.document.querySelectorAll=selector=>{
+  assert.match(selector,/body>\.banner/);
+  return controls.map(r=>({getBoundingClientRect:()=>({left:0,right:800,...r})}));
+ };
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),false);
+ assert.equal(toast.style.top,'32px');
+ controls.push({top:48,bottom:400});
+ vm.runInContext('placeToast()',context);
+ assert.equal(toast.style.top,'408px');
+ controls.push({top:390,bottom:744});
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),true);
+ classes.delete('inline');controls.splice(2,2,{top:24,bottom:744,left:700,right:800});
+ vm.runInContext('placeToast()',context);
+ assert.equal(classes.has('inline'),false);
+ assert.equal(toast.style.top,'32px');
 });
 
 test('commander queue and note templates escape item ids',()=>{

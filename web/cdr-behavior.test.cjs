@@ -6,13 +6,18 @@ const {test}=require('node:test');
 const source=fs.readFileSync(path.join(__dirname,'static/cdr.js'),'utf8');
 function setup(){
  const nodes=new Map(),handlers={},calls=[];
- const context=vm.createContext({imageCache:new Map(),imageFor:()=>'/frame.jpg',zulu:()=> '12:00:00Z',setInterval(){},setTimeout(){},clearTimeout(){},
-  document:{querySelector:()=>null,addEventListener:(type,fn)=>handlers[type]=fn},
+ const context=vm.createContext({imageCache:new Map(),imageFor:()=>'/frame.jpg',zulu:()=> '12:00:00Z',setInterval(){},setTimeout(){},clearTimeout(){},innerHeight:768,
+  window:{addEventListener:(type,fn)=>handlers[type]=fn},
+  document:{querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(type,fn)=>handlers[type]=fn},
   EventSource:class{addEventListener(){}},
  });
  context.$=id=>{
-  if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',value:'',dataset:{},children:[],scrollTop:0,
-   classList:{toggle(){},add(){},remove(){}},querySelector:()=>null,focus(){this.focused=true},blur(){this.blurred=true}});
+  if(!nodes.has(id)){
+   const classes=new Set();
+   nodes.set(id,{innerHTML:'',textContent:'',value:'',dataset:{},children:[],scrollTop:0,style:{},
+    classList:{toggle(c,on=!classes.has(c)){if(on)classes.add(c);else classes.delete(c)},add(c){classes.add(c)},remove(c){classes.delete(c)},contains:c=>classes.has(c)},
+    getBoundingClientRect:()=>({top:8,bottom:48,left:0,right:600,height:40}),querySelector:()=>null,focus(){this.focused=true},blur(){this.blurred=true}});
+  }
   return nodes.get(id);
  };
  context.fetch=async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({sources:[{id:'EO',name:'Mast'}],classes:{},models:{},attrLabels:{}})}};

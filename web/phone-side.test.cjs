@@ -22,5 +22,5 @@ test('compact feed keeps its existing collapsible filters and desktop custom wid
 });
 test('in-flow band labels are not shifted out of uploading or uploaded cards',()=>{
  const textCSS=fs.readFileSync(path.join(__dirname,'static/text-size.css'),'utf8');
- assert.match(textCSS,/\.card:is\(\.sending,\.uploaded\) \.thumb>\.band-badge\{right:auto\}/);
+ assert.match(textCSS,/\.card:is\(\.sending,\.uploaded\) \.thumb-meta>:is\(\.band-badge,\.newtag,\.night-badge\)\{inset:auto\}/);
 });
