@@ -509,8 +509,8 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 		if skipForm(r, f) {
 			continue
 		}
-		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 {
-			return nil
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && !burstAllows(r, f.Kind) {
+			continue
 		}
 		return f
 	}
@@ -548,12 +548,20 @@ func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.Emcon
 		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) || skipForm(r, f) {
 			continue
 		}
-		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 {
-			return nil
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && !burstAllows(r, f.Kind) {
+			continue
 		}
 		return f
 	}
 	return nil
+}
+
+func burstAllows(r *store.Row, kind pb.FormKind) bool {
+	pulled := r.PullForm
+	if pulled == pb.FormKind_FORM_KIND_UNSPECIFIED {
+		pulled = pb.FormKind_FORM_KIND_FULL
+	}
+	return kind == pb.FormKind_FORM_KIND_FACT || (r.PullBoost > 0 && kind == pulled)
 }
 
 func (s *Scheduler) mkCand(r *store.Row, f *store.FormState, minImg float64) *cand {
