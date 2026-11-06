@@ -68,8 +68,8 @@ func (s *Store) SeedUploaded(n int) {
 	for _, i := range top[:min(n, len(top))] {
 		u := &s.items[i].Upload
 		now := s.clock
+		s.stats.Bytes += int(u.MetaBytes - u.MetaSent + u.Bytes - u.Sent)
 		u.MetaSent, u.MetaDone, u.MetaDoneAt = u.MetaBytes, true, &now
-		s.stats.Bytes += int(u.Bytes - u.Sent)
 		u.Sent, u.Done, u.Received, u.Active = u.Bytes, true, true, false
 	}
 }
