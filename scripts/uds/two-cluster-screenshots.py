@@ -7,6 +7,18 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
+def screenshot_paths(directory, root):
+    result = []
+    for path in sorted(directory.glob('*.png')):
+        path = path.resolve()
+        try:
+            path = path.relative_to(root.resolve())
+        except ValueError:
+            pass
+        result.append(str(path))
+    return result
+
+
 def main():
     root = Path(__file__).resolve().parents[2]
     report = root/'docs/reports/uds-validation'
@@ -52,8 +64,7 @@ def main():
                 status = page.locator('#detailsBody').inner_text()
                 (evidence/'visual-check.json').write_text(json.dumps(
                     {'url': page.url, 'item_id': identity, 'detail_text': detail, 'status_text': status,
-                     'tls_verification_disabled': False, 'screenshots': [str(path.relative_to(root))
-                     for path in sorted(directory.glob('*.png'))]}, indent=2)+'\n')
+                     'tls_verification_disabled': False, 'screenshots': screenshot_paths(directory, root)}, indent=2)+'\n')
                 print('Captured shore feed, P1 item detail and pipeline status: '+str(directory))
             finally:
                 context.close()
