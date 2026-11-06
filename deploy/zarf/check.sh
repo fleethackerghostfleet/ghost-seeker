@@ -41,6 +41,22 @@ if command -v kubeconform >/dev/null 2>&1; then
       -e 's,###ZARF_VAR_EDGE_INGRESS_CIDR###,192.0.2.0/32,g' \
       -e 's,###ZARF_VAR_OPERATOR_INGRESS_CIDR###,192.0.2.0/32,g' \
       -e 's,###ZARF_VAR_INFERENCE_INGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_SHORE_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_SHORE_EGRESS_PORT###,8080,g' \
+      -e 's,###ZARF_VAR_EDGE_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_EDGE_EGRESS_PORT###,8081,g' \
+      -e 's,###ZARF_VAR_INFERENCE_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_INFERENCE_EGRESS_PORT###,9090,g' \
+      -e 's,###ZARF_VAR_CAMERA_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_CAMERA_EGRESS_PORT###,80,g' \
+      -e 's,###ZARF_VAR_LLM_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_LLM_EGRESS_PORT###,8080,g' \
+      -e 's,###ZARF_VAR_RESEARCH_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_RESEARCH_EGRESS_PORT###,8097,g' \
+      -e 's,###ZARF_VAR_OCSP_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_OCSP_EGRESS_PORT###,80,g' \
+      -e 's,###ZARF_VAR_MODEL_EGRESS_CIDR###,192.0.2.0/32,g' \
+      -e 's,###ZARF_VAR_MODEL_EGRESS_PORT###,443,g' \
       "$manifest" > "$tmp/$(basename "$manifest")"
   done
   if kubeconform -strict -summary "$tmp" >"$tmp/kubeconform.log" 2>&1; then

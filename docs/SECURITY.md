@@ -294,8 +294,8 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 ## 5a. Zarf network isolation
 
 The Zarf package includes `networking.k8s.io/v1` NetworkPolicies: namespace-wide
-default-deny **ingress** in the required namespace component, and explicit TCP
-allows alongside each optional workload. All packaged workloads currently use
+default-deny **ingress and egress** in the required namespace component, and
+explicit allows alongside each optional workload. All packaged workloads currently use
 the dedicated `ghost-seeker` namespace. Same-namespace pod labels admit
 operator → shore:8080/edge:8081, edge → shore:8080/inference:9090, and optional
 shore text search → inference:9090. Operator-to-edge is ready for deployments
@@ -309,6 +309,26 @@ configurable source `ipBlock`s, not pod labels from another cluster. Set
 `192.0.2.0/32`, not deployment source addresses. Use approved, narrow CIDRs as
 observed after routing/NAT. See [Fielding](FIELDING.md#zarf-network-isolation)
 for the traffic matrix and split-cluster setup.
+
+Each workload can resolve DNS only to pods labeled `k8s-app: kube-dns` in the
+namespace labeled `kubernetes.io/metadata.name: kube-system`, over UDP/TCP 53.
+The namespace and pod selectors are combined in one peer (AND, not OR).
+The five internal service flows above have matching egress permissions.
+
+External egress uses destination `ipBlock`s and TCP ports. Set the needed
+`SHORE_EGRESS_CIDR`/`PORT`, `EDGE_EGRESS_CIDR`/`PORT`,
+`INFERENCE_EGRESS_CIDR`/`PORT`, `CAMERA_EGRESS_CIDR`/`PORT`,
+`LLM_EGRESS_CIDR`/`PORT`, `RESEARCH_EGRESS_CIDR`/`PORT`,
+`OCSP_EGRESS_CIDR`/`PORT`, and `MODEL_EGRESS_CIDR`/`PORT` variables (each `PORT`
+name has the same `_EGRESS_` prefix, e.g. `SHORE_EGRESS_PORT`). All destination
+CIDRs default to `192.0.2.0/32` so external paths fail closed until configured.
+Optional LLM/research compiler and PIV OCSP clients run in the **operator**,
+not shore; edge owns optional HTTP(S) MJPEG camera pulls. The packaged inference
+runtime uses offline, mounted models, not a public model hub; its optional model
+mirror permission is reserved for reviewed deployment customizations.
+See [deployment egress variables](../deploy/README.md#external-egress-variables)
+for defaults, source workloads and configuration requirements. These variables
+grant network access only; they do not enable or configure application features.
 
 These are L3/L4 rules: allowing shore TCP 8080 does not limit clients to
 `/api/v1`; SyncService, ConsoleService and blobs share that listener. Authentication,
@@ -327,12 +347,13 @@ API acceptance alone does not prove isolation. Other policies can add permission
   opt-in: configure shore's `-policy-signing-key` and edge's
   `-require-signed-policy` / `-policy-keys`.
 * Sessions live in process memory: a web-app restart signs everyone out (by design).
-* Zarf ingress rules have static validation and traffic-matrix regression tests,
-  not a runtime cluster/CNI test. Egress is intentionally unrestricted: shore,
-  inference and camera destinations are configurable and deployment-specific;
-  model provisioning/registries and DNS also need a site inventory. A complete
-  egress policy (including DNS) remains a deployment hardening task. Default-deny
-  applies to every pod in `ghost-seeker`, including any extra workloads placed there.
+* Zarf ingress/egress rules have static validation and traffic-matrix regression
+  tests, not a runtime cluster/CNI test. Inventory approved destination IPs,
+  gateways, proxies and ports; maintain CIDRs when DNS/CDN addresses change.
+  NetworkPolicy cannot enforce hostnames, HTTP paths or redirect destinations.
+  NodeLocal DNS or a differently labeled DNS service needs a reviewed site policy.
+  Default-deny applies to every pod in `ghost-seeker`, including extra workloads;
+  only explicit workload allows grant DNS or service access.
 
 ## 7. Deep scan: before / after
 
