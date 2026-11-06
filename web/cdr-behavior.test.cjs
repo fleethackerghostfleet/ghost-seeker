@@ -88,14 +88,18 @@ test('decision rejection preserves the note and undo stack; failed undo is retry
  assert.equal(h.run('view.undo.length'),0);assert.equal(h.run("items.get('a').decision"),undefined);
  assert.equal(h.run('view.tab'),'pending');assert.equal(h.run('view.sel'),'a');assert.equal(h.run('view.busy'),false);
 });
-test('a decision response from before a reset cannot resurrect an evicted image',async()=>{
+test('a decision response from before a reset cannot overwrite the same item in the new snapshot',async()=>{
  const h=setup();h.run("seed([item('a')]);view.sel='a'");
  let finish;h.context.fetch=()=>new Promise(resolve=>finish=resolve);
  const pending=h.run("decide('track')");
  assert.equal(h.run('view.busy'),true);
- h.run("applySnapshot({reset:true,epoch:2,state:{model:'maritime',directives:[]},items:[]})");
+ h.run("applySnapshot({reset:true,epoch:2,state:{model:'maritime',directives:[]},items:[item('a',{sent:false,tier:4,central:.2})]})");
+ assert.equal(h.run("items.has('a')"),true);
  finish({ok:true,json:async()=>({item:h.run("item('a',{decision:'track'})")})});
  assert.equal(await pending,false);
- assert.equal(h.run('items.size'),0);assert.equal(h.run('view.sel'),null);
+ assert.equal(h.run('items.size'),1);assert.equal(h.run('view.sel'),'a');
+ assert.equal(h.run("items.get('a').decision"),undefined);
+ assert.equal(h.run("items.get('a').sent"),false);
+ assert.equal(h.run("items.get('a').tier"),4);assert.equal(h.run("items.get('a').central"),.2);
  assert.equal(h.run('view.undo.length'),0);assert.equal(h.run('view.busy'),false);
 });
