@@ -1,8 +1,14 @@
-# Verification without GitHub Actions
+# Verification
 
-Hosted CI is manual-only (`workflow_dispatch`) to avoid automatic Actions usage.
-You do not need another organization, a GitHub plan upgrade, or a runner
-registration to run these checks. Local compute/Devin usage still has its own cost.
+Quick checks (`.github/workflows/pr.yml`) run automatically on pull requests into
+`dev` or `main` and pushes to `dev`: Go vet/tests and Node 22 web tests. Changes
+only to `docs/**`, `*.md`, or `frames/**` are ignored; newer runs cancel older
+runs for the same ref. The Go job fetches only the empty-ocean LFS asset.
+
+The full CI suite (`.github/workflows/ci.yml`) remains manual (`workflow_dispatch`),
+or can be run locally with `make verify`. You do not need another organization,
+a GitHub plan upgrade, or a runner registration for local verification.
+Local compute/Devin usage still has its own cost.
 
 ## Prepare a Linux verification host
 
@@ -70,8 +76,8 @@ an owner must approve an equivalent external check and the protection update;
 do not bypass it. Automatic verification is not provided by this local command:
 the author/reviewer must explicitly run it for each proposed merge commit.
 
-An owner can still manually run **CI** in GitHub's Actions tab, which uses hosted
-allowance/paid usage. Once billing is restored, re-enable `pull_request` and
-`push` to `main` in `.github/workflows/ci.yml` for automatic checks. An optional
-long-term replacement is a dedicated isolated self-hosted runner; that still
-uses the Actions service but not GitHub-hosted runner compute.
+Quick checks run automatically through `.github/workflows/pr.yml`; they do not
+replace the full suite. An owner can manually run **CI** in GitHub's Actions tab
+or run `make verify` locally. Hosted checks use Actions allowance/paid usage.
+An optional long-term replacement is a dedicated isolated self-hosted runner;
+that still uses the Actions service but not GitHub-hosted runner compute.
