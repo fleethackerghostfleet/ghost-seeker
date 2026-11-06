@@ -104,7 +104,7 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 		case r.URL.Path == "/logout" && r.Method == http.MethodPost:
 			s.logout(w, r)
 			return
-		case r.URL.Path == "/healthz":
+		case r.URL.Path == "/healthz" || publicBrandAsset(r):
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -155,6 +155,13 @@ func (s *Sessions) sessionRole(r *http.Request) string {
 		return binding.Role
 	}
 	return "operator"
+}
+
+// publicBrandAssets are the logo files the sign-in pages show before a session exists.
+var publicBrandAssets = map[string]bool{"/brand/logo.png": true, "/brand/favicon-32.png": true, "/brand/apple-touch-icon.png": true}
+
+func publicBrandAsset(r *http.Request) bool {
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && publicBrandAssets[r.URL.Path]
 }
 
 func reviewerRequestAllowed(r *http.Request) bool {
@@ -295,15 +302,15 @@ func safeNext(next string) string {
 
 func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Referrer-Policy", "same-origin") // so the form post carries a real Origin, not "null"
 	var b strings.Builder
-	b.WriteString(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title>` +
+	b.WriteString(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title>` + brandHead +
 		`<style>body{font:15px system-ui,sans-serif;background:#0b1118;color:#d6e2ee;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}` +
-		`form{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{font-size:18px;margin:0 0 4px}p{margin:4px 0 16px;color:#8aa0b6}` +
+		`form{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{margin:0 0 4px}h1 img{display:block}p{margin:4px 0 16px;color:#8aa0b6}` +
 		`input{width:100%;box-sizing:border-box;padding:9px;border-radius:6px;border:1px solid #2d4258;background:#0b1118;color:#fff;font-size:14px}` +
 		`button{margin-top:14px;width:100%;padding:9px;border:0;border-radius:6px;background:#1e88e5;color:#fff;font-weight:600;cursor:pointer}.err{color:#ff7b72}header{display:flex;align-items:center;gap:16px;margin-bottom:8px}` + httpx.DocsLinkCSS + `</style></head><body>` +
-		`<form method="post" action="/login"><header><h1>Ghost Seeker</h1>` + httpx.DocsLinkHTML + `</header>`)
+		`<form method="post" action="/login"><header>` + brandLogo + httpx.DocsLinkHTML + `</header>`)
 	if s.demoAcceptAnyToken {
 		b.WriteString(`<p>DEMO MODE: any non-empty token grants operator access.</p>`)
 	} else {
@@ -319,5 +326,10 @@ func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 		`<button type="submit">Sign in</button></form></body></html>`)
 	_, _ = w.Write([]byte(b.String()))
 }
+
+const (
+	brandHead = `<link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png"><link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">`
+	brandLogo = `<h1><img src="/brand/logo.png" width="178" height="96" alt="Ghost Seeker"></h1>`
+)
 
 const reviewJoinPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/#review"><title>Ghost Seeker review</title></head><body><p><a href="/#review">Start Operator Review</a></p></body></html>`

@@ -507,7 +507,7 @@ function detectorNegativeHTML(it){const label=detectorNegativeLabel(it);return l
 function reviewAcceptLabel(it){return it.detectorNegative?'Nothing here & next':`Agree (P${it.centralTier} ${TNAME[it.centralTier]}) & next`}
 function reviewKeyAction(key){return RVKEYS[key]}
 function cardHTML(it,mini){
- return`${detectorNegativeHTML(it)}<div class="thumb"><img src="${esc(imageFor(it))}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+ return`${detectorNegativeHTML(it)}<div class="thumb"><div class="thumb-image"><img src="${esc(imageFor(it))}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div></div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
 function sendNowBlocked(it){const u=uploadState(it);return it.live||LIVE?'Not available on the live shore connection':typeof gsAuth!=='undefined'&&gsAuth.viewer()?'Viewer role is read-only':u.done?'Already uploaded to shore':u.next?'Already at the top of the send queue':''}
 function openCardMenu(e){
@@ -728,7 +728,7 @@ function selectFeedItem(id){
  state.sel=id;if(id)dirtyItems.add(id);
  if(id&&revealFeedItem(id))renderFeed(true);else scheduleFeedFlush(true);
 }
-function openDetail(id){document.body.classList.add('drawer-open');selectFeedItem(id);const it=findItem(id);renderDetail();$('drawer').scrollTop=0;it&&it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
+function openDetail(id){const it=findItem(id);if(!it){closeDetail();toast('This image is no longer in the feed.');return}document.body.classList.add('drawer-open');selectFeedItem(id);renderDetail();$('drawer').scrollTop=0;it.el&&it.el.scrollIntoView({block:'nearest',behavior:'smooth'})}
 function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
 function renderZoom(){preserveBandFocus(renderZoomContent)}
@@ -763,7 +763,7 @@ function processingHTML(it){
 function renderDetail(){preserveBandFocus(renderDetailContent)}
 function renderDetailContent(){
  const it=findItem(state.sel);const D=$('drawer');
- if(!it){D.innerHTML='';return}
+ if(!it){D.innerHTML='';closeDetail();return}
 	if(isScene(it)){
 	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}</div>`;
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;return;

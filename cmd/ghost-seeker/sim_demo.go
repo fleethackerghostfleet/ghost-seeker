@@ -73,6 +73,9 @@ func registerDemoFlags() *demoFlags {
 func simulationAvailable() error { return nil }
 
 func (d *demoFlags) validate(authMode, shoreURL string) error {
+	if *d.simLinkBps < -1 {
+		return errors.New("-sim-link-bps must be >= -1")
+	}
 	if *d.captureEvery <= 0 {
 		return errors.New("-capture-every must be >0")
 	}
@@ -110,7 +113,8 @@ func (d *demoFlags) logDevMode(devMode bool, authMode string) {
 	}
 }
 
-func runSimulationMode(addr string, d *demoFlags, reviewPath string, reviewLogSet bool, compiler *command.Compiler, operator string, sessions *opauth.Sessions, transport *tls.Config) {
+func runSimulationMode(addr string, d *demoFlags, linkBps int64, reviewPath string, reviewLogSet bool, compiler *command.Compiler, operator string, sessions *opauth.Sessions, transport *tls.Config) {
+	*d.simLinkBps = simulationLinkRate(*d.simLinkBps, linkBps)
 	if !reviewLogSet && *d.datasetManifest != "" {
 		reviewPath = "data/reviews-real.jsonl"
 	}
@@ -334,4 +338,11 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 
 func enableDemoLinkControl(b *shorebridge.Bridge, on bool) *shorebridge.Bridge {
 	return b.WithLinkOverride(on)
+}
+
+func simulationLinkRate(rate, legacy int64) int64 {
+	if rate == -1 && legacy >= 0 {
+		return legacy
+	}
+	return rate
 }

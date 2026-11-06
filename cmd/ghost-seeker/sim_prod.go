@@ -33,7 +33,7 @@ func (*demoFlags) configureSessions(s *opauth.Sessions) *opauth.Sessions { retur
 
 func (*demoFlags) logDevMode(bool, string) {}
 
-func runSimulationMode(string, *demoFlags, string, bool, *command.Compiler, string, *opauth.Sessions, *tls.Config) {
+func runSimulationMode(string, *demoFlags, int64, string, bool, *command.Compiler, string, *opauth.Sessions, *tls.Config) {
 	log.Fatal(errLiveModeRequired)
 }
 

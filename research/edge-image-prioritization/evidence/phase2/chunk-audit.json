@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "checks": {
+    "runs": 432,
+    "chunks": 145425,
+    "segments": 153559,
+    "received_packets": 9502,
+    "started_packets": 10594
+  },
+  "packet_files_sha_verified": 18,
+  "audit_scope": "independent saved chunk events, offsets, dispatch, headers, receipt, capacity; no simulator import",
+  "auditor_sha256": "4574e9f8cf7f9abd6085c31c066bb98c44ec3ab537d8ae0fda5e1a36239e89b8"
+}

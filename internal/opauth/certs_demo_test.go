@@ -175,6 +175,9 @@ func TestPIVApplication(t *testing.T) {
 	if !strings.Contains(body, "read-only role") {
 		t.Fatal(body)
 	}
+	if body, _ = request(unknownClient, "GET", "/brand/logo.png", "", nil, 200); !strings.HasPrefix(body, "\x89PNG") {
+		t.Fatal("sign-in logo must load for a certificate that is not authorized")
+	}
 	body, _ = request(unknownClient, "GET", "/", "", nil, 403)
 	if !strings.Contains(body, "synthetic-unknown@mil") || !strings.Contains(body, "not authorized") {
 		t.Fatal(body)

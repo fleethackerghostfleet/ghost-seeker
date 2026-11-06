@@ -38,6 +38,7 @@ func main() {
 	operatorID := flag.String("operator-id", envOr("GS_OPERATOR_ID", shorebridge.DefaultOperator), "live mode: identity recorded as the issuer of policies edited from this console (never taken from the browser)")
 	edgeURL := flag.String("edge", "http://localhost:8081", "live mode: edge console, polled for the ship-side item count (optional)")
 	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–2 MB/s ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
+	linkBps := flag.Int64("link-bps", -1, "legacy fixed link rate in bits/s (live shaper, or simulation alias for -sim-link-bps)")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
 	researchCompilerURL := flag.String("research-compiler-url", os.Getenv("GS_RESEARCH_COMPILER_URL"), "opt-in local research language compiler origin (e.g. http://localhost:8097)")
@@ -65,6 +66,9 @@ func main() {
 	}
 	if err := demo.validate(*authMode, *shoreURL); err != nil {
 		log.Fatal(err)
+	}
+	if *linkBps < -1 {
+		log.Fatal("-link-bps must be >= -1")
 	}
 	if err := validateReviewLinkAuthMode(*authMode, *reviewLinkKeyFile, *shoreURL); err != nil {
 		log.Fatal(err)
@@ -128,11 +132,11 @@ func main() {
 	demo.logDevMode(devMode, *authMode)
 
 	if *shoreURL != "" {
-		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath, demo.linkControl())
+		runShoreMode(*addr, *shoreURL, *edgeURL, *linkListen, *poll, compiler, operator, sessions, *operatorID, transport, *reviewPath, demo.linkControl(), *linkBps)
 		return
 	}
 
-	runSimulationMode(*addr, demo, *reviewPath, reviewLogSet, compiler, operator, sessions, transport)
+	runSimulationMode(*addr, demo, *linkBps, *reviewPath, reviewLogSet, compiler, operator, sessions, transport)
 }
 
 func serve(addr string, handler http.Handler, transport ...*tls.Config) error {
@@ -154,7 +158,7 @@ func serve(addr string, handler http.Handler, transport ...*tls.Config) error {
 // runShoreMode serves the operator UI on top of a live shore node: the
 // bridge polls the shore ConsoleService and the shaper is the ship-to-shore
 // link the edge talks through, with an automatically varying normal rate.
-func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string, demoLinkControl bool) {
+func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration, compiler *command.Compiler, operator string, sessions *opauth.Sessions, operatorID string, transport *tls.Config, reviewPath string, demoLinkControl bool, linkBps int64) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var link shorebridge.LinkControl
@@ -163,17 +167,22 @@ func runShoreMode(addr, shoreURL, edgeURL, linkListen string, poll time.Duration
 		if err != nil {
 			log.Fatalf("-shore: %v", err)
 		}
-		sh := shaper.NewNormal(target)
+		sh := liveLinkShaper(target, linkBps)
 		go func() {
 			if err := sh.ListenAndServe(ctx, linkListen); err != nil {
 				log.Fatalf("shaper: %v", err)
 			}
 		}()
-		log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+		if linkBps >= 0 {
+			log.Printf("link shaper on %s -> %s: fixed %d bits/s", linkListen, target, linkBps)
+		} else {
+			log.Printf("link shaper on %s -> %s: automatic normal distribution, 0–2 MB/s, mean 0.5 MB/s, stddev 0.30 MB/s, ~5%% outages, every 5s (start the edge with -shore http://localhost%s)", linkListen, target, linkListen)
+		}
 		link = sh
 	}
 	bridge := enableDemoLinkControl(shorebridge.New(shoreURL, edgeURL, link).WithToken(operator).WithOperator(operatorID), demoLinkControl)
 	compiler.Locks = bridge.PolicyLocks()
+	compiler.EdgeSubtypes = true
 	bridge.Compiler = compiler
 	console := shorebridge.NewConsole(bridge)
 	if reviewPath != "" {
@@ -227,4 +236,11 @@ func shaperTarget(shoreURL string) (string, error) {
 		}
 	}
 	return host, nil
+}
+
+func liveLinkShaper(target string, rate int64) *shaper.Shaper {
+	if rate >= 0 {
+		return shaper.New(target, rate)
+	}
+	return shaper.NewNormal(target)
 }
