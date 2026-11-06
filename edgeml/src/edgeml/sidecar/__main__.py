@@ -35,6 +35,8 @@ def main(argv=None) -> None:
     ap.add_argument("--max-lost-s", type=float, default=6.0)
     ap.add_argument("--score-thr", type=float, default=0.35, help="new tracks / reports need a detection at least this confident")
     ap.add_argument("--det-low-thr", type=float, default=0.05)
+    ap.add_argument("--live-tiling", default="{}", metavar="JSON",
+                    help='Live CPU tiling overrides; e.g. {"enabled":false} disables extra passes, not MOB context')
     ap.add_argument("--agg", default=None, help='AggregatorParams overrides as JSON, e.g. \'{"min_hits":2}\'')
     ap.add_argument("--trk", default=None, help='TrackerParams overrides as JSON, e.g. \'{"tentative_thresh":null}\'')
     ap.add_argument("--text-tower", default="cache", choices=["cache", "torch"],
@@ -73,6 +75,7 @@ def main(argv=None) -> None:
                               max_lost_s=a.max_lost_s, score_thr=a.score_thr, det_low_thr=a.det_low_thr,
                               agg=json.loads(a.agg) if a.agg else None, trk=json.loads(a.trk) if a.trk else None,
                               text_tower=a.text_tower,
+                              live_tiling=json.loads(a.live_tiling),
                               anomaly_fallback=json.loads(a.anomaly_fallback) if a.anomaly_fallback is not None else None)
     prioritizer = None
     if a.prioritizer != "edgeml":

@@ -108,7 +108,7 @@ class EdgemlEngine:
     def __init__(self, detector: str | Path, embed: str | Path | None = None, *, threads: int = 4, fps: float = 5.0,
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
-                 text_tower: str = "cache", anomaly_fallback: Optional[dict] = None):
+                 text_tower: str = "cache", anomaly_fallback: Optional[dict] = None, live_tiling: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
@@ -117,6 +117,9 @@ class EdgemlEngine:
         self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
         self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
         self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, self.det_low_thr))
+        from edgeml.detectors.live_tiled import MOB_LABEL, LiveTiledDetector, LiveTilingConfig
+
+        self.detector = LiveTiledDetector(self.detector, LiveTilingConfig(**(live_tiling or {})), score_thr=score_thr)
         if anomaly_fallback is not None:
             # H: cheap "anything-on-water" proposer (horizon-band colour anomaly) fills in where YOLO11n is blind
             # (semi-submersibles, small debris); proposals carry label "anomaly" and feed the tracker like detections.
@@ -147,6 +150,8 @@ class EdgemlEngine:
         self.model_id = self.detector.name + (f"+{self.clip_name}" if self.clip_name else "")
         self.embedding_dim = int(self.embedder.dim) if self.embedder else 0
         self.labels = list(self.classifier.classes) if self.classifier else []
+        if MOB_LABEL not in self.labels:
+            self.labels.append(MOB_LABEL)
         self.frames = 0
         self.ms_total = 0.0
 
@@ -289,6 +294,8 @@ def _make_zeroshot_aggregator_class():
             self.zs: dict[str, dict] = {}
 
         def _apply(self, st):
+            if st.s.label in {"person", "person in water"}:
+                return
             if self.classifier is None or st.emb is None:
                 return
             z = self.zs.get(st.s.sighting_id)

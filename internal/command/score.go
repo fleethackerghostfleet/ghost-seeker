@@ -11,7 +11,7 @@ import (
 func RuleMatch(r Rule, d Detection) bool {
 	classMatch := len(r.Classes) == 0
 	for _, class := range r.Classes {
-		if class == d.Class {
+		if class == d.Class || class == "person" && d.Class == "person in water" {
 			classMatch = true
 			break
 		}
