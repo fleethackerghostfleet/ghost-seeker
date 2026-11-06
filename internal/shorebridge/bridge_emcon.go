@@ -3,15 +3,14 @@ package shorebridge
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
-	"time"
-
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"net/http"
+	"strings"
+	"time"
 )
 
 // cachedEmcon is the EMCON label of the last snapshot the poller built ("" if none).

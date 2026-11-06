@@ -30,9 +30,7 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
-	if b.linkOverride {
-		mux.HandleFunc("POST /api/shore/link", b.setLink)
-	}
+	b.registerDemoRoutes(mux)
 	if u, err := url.Parse(b.shore); err == nil {
 		rp := httputil.NewSingleHostReverseProxy(u)
 		director := rp.Director

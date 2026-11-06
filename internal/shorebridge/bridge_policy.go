@@ -4,18 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"strings"
-	"time"
-	"unicode/utf8"
-
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 type policyBody struct {

@@ -3,12 +3,11 @@ package shorebridge
 import (
 	"context"
 	"fmt"
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"math"
 	"net/http"
 	"strings"
-
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
 
 // rulesFromBody turns a directive (free text or explicit rules) into the

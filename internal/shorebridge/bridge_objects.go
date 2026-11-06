@@ -2,12 +2,11 @@ package shorebridge
 
 import (
 	"fmt"
-	"sort"
-	"strings"
-
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/scoring"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"sort"
+	"strings"
 )
 
 // ---- grouping ----

@@ -3,12 +3,11 @@ package shorebridge
 import (
 	"context"
 	"encoding/json"
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"io"
 	"log"
 	"net/http"
 	"time"
-
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 )
 
 // maxRecordFetchesPerRefresh bounds the extra /blob/{id}/fact reads one poll

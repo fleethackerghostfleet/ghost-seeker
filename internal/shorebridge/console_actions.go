@@ -1,14 +1,13 @@
 package shorebridge
 
 import (
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
 func (c *Console) patchItem(w http.ResponseWriter, r *http.Request) {

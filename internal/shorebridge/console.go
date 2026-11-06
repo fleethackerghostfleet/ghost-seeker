@@ -1,13 +1,12 @@
 package shorebridge
 
 import (
-	"sync"
-	"time"
-
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
+	"sync"
+	"time"
 )
 
 // Console serves the operator console's API (what web/static/app.js and

@@ -1,14 +1,13 @@
 package shorebridge
 
 import (
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"log"
 	"net/http"
 	"strings"
 	"unicode/utf8"
-
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 )
 
 func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {

@@ -6,14 +6,13 @@
 package shorebridge
 
 import (
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 )
 
 const consolePath = "/ghostseeker.v1.ConsoleService/"

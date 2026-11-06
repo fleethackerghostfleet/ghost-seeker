@@ -2,12 +2,11 @@ package shorebridge
 
 import (
 	"fmt"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"math"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
 
 type objectScore struct {

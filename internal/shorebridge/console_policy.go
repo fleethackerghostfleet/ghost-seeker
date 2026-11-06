@@ -2,15 +2,14 @@ package shorebridge
 
 import (
 	"errors"
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 )
 
 func prioritizationMode(snap *Snapshot) Prioritization {

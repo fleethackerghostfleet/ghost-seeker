@@ -3,15 +3,14 @@ package shorebridge
 import (
 	"encoding/json"
 	"fmt"
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-
-	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
 type sseEvent struct {

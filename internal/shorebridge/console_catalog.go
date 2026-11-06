@@ -2,13 +2,12 @@ package shorebridge
 
 import (
 	"fmt"
-	"sort"
-	"strings"
-	"unicode/utf8"
-
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
+	"sort"
+	"strings"
+	"unicode/utf8"
 )
 
 func (c *Console) ensureClass(label string) {
