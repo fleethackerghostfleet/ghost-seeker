@@ -68,8 +68,8 @@ func (s *Store) SeedUploaded(n int) {
 	for _, i := range top[:min(n, len(top))] {
 		u := &s.items[i].Upload
 		now := s.clock
+		s.stats.Bytes += int(u.MetaBytes - u.MetaSent + u.Bytes - u.Sent)
 		u.MetaSent, u.MetaDone, u.MetaDoneAt = u.MetaBytes, true, &now
-		s.stats.Bytes += int(u.Bytes - u.Sent)
 		u.Sent, u.Done, u.Received, u.Active = u.Bytes, true, true, false
 	}
 }
@@ -236,11 +236,10 @@ func (s *Store) observeLink() {
 		s.stats.MetaOnlyReason = ""
 	}
 	if s.stats.MetaOnly {
-		since := s.lowband.Since()
-		if s.emconBurst && since.IsZero() {
-			since = s.clock
+		if s.stats.MetaOnlySince == nil {
+			since := s.clock
+			s.stats.MetaOnlySince = &since
 		}
-		s.stats.MetaOnlySince = &since
 	} else {
 		s.stats.MetaOnlySince = nil
 	}

@@ -509,8 +509,8 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 		if skipForm(r, f) {
 			continue
 		}
-		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 {
-			return nil
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && !burstAllows(r, f.Kind) {
+			continue
 		}
 		return f
 	}
@@ -548,12 +548,20 @@ func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.Emcon
 		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) || skipForm(r, f) {
 			continue
 		}
-		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 {
-			return nil
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && !burstAllows(r, f.Kind) {
+			continue
 		}
 		return f
 	}
 	return nil
+}
+
+func burstAllows(r *store.Row, kind pb.FormKind) bool {
+	pulled := r.PullForm
+	if pulled == pb.FormKind_FORM_KIND_UNSPECIFIED {
+		pulled = pb.FormKind_FORM_KIND_FULL
+	}
+	return kind == pb.FormKind_FORM_KIND_FACT || (r.PullBoost > 0 && kind == pulled)
 }
 
 func (s *Scheduler) mkCand(r *store.Row, f *store.FormState, minImg float64) *cand {
@@ -687,7 +695,9 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 		cands = filtered
 	}
 	sortCands(cands)
-	for _, c := range cands {
+	sortCands(deferred)
+	queued := append(append([]*cand(nil), cands...), deferred...)
+	for _, c := range queued {
 		label, _ := scoring.TopLabel(c.row.Item, 0)
 		plan.Queue = append(plan.Queue, &pb.QueueEntry{ItemId: c.row.Item.Id, Form: c.form.Kind,
 			BytesRemaining: c.remaining, Rank: c.rank, Score: c.row.Score, TopLabel: label})
@@ -775,7 +785,6 @@ func (s *Scheduler) observeMetaOnly(bps float64, now time.Time) {
 	}
 	s.stats.MetaOnly = mode
 	if mode {
-		s.stats.MetaOnlySince = s.lowband.Since()
 		if s.stats.MetaOnlySince.IsZero() {
 			s.stats.MetaOnlySince = now
 		}

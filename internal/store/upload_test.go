@@ -20,10 +20,15 @@ func TestResetPreservesMetadataOnlyMode(t *testing.T) {
 			} else {
 				s.SetEMCON(true)
 			}
+			before, _ := s.Stats()
+			s.AdvanceUploads(time.Second)
 			s.Reset()
 			_, stats, _, _ := s.Snapshot()
 			if !stats.MetaOnly || stats.MetaOnlyReason != reason || stats.MetaOnlySince == nil {
 				t.Fatalf("reset lost metadata-only state: %+v", stats)
+			}
+			if !stats.MetaOnlySince.Equal(*before.MetaOnlySince) {
+				t.Fatalf("reset changed continuous metadata-only start: %v -> %v", before.MetaOnlySince, stats.MetaOnlySince)
 			}
 		})
 	}
@@ -344,8 +349,33 @@ func TestSeedUploadedPrefersCommanderSendsAndCountsBytes(t *testing.T) {
 		if it.Upload.Done != it.Sent {
 			t.Fatalf("%s: sent=%v but upload done=%v", it.ID, it.Sent, it.Upload.Done)
 		}
-		if it.Upload.Done && int64(stats.Bytes) != it.Upload.Bytes {
-			t.Fatalf("stats.Bytes %d, want %d", stats.Bytes, it.Upload.Bytes)
+		if it.Upload.Done && int64(stats.Bytes) != it.Upload.MetaBytes+it.Upload.Bytes {
+			t.Fatalf("stats.Bytes %d, want %d", stats.Bytes, it.Upload.MetaBytes+it.Upload.Bytes)
 		}
+	}
+}
+
+func TestSeedUploadedCountsOnlyRemainingBytes(t *testing.T) {
+	for _, progress := range []struct{ meta, image int64 }{{0, 0}, {40, 0}, {100, 400}, {100, 1000}} {
+		s := New(1)
+		s.items = []command.Item{{ID: "seed", Tier: 1, Upload: command.Upload{MetaBytes: 100, MetaSent: progress.meta, Bytes: 1000, Sent: progress.image}}}
+		s.stats.Bytes = int(progress.meta + progress.image)
+		s.SeedUploaded(1)
+		item, _ := s.GetItem("seed")
+		stats, _ := s.Stats()
+		if stats.Bytes != 1100 || !item.Upload.MetaDone || !item.Upload.Done || item.Upload.MetaSent != 100 || item.Upload.Sent != 1000 {
+			t.Fatalf("progress=%+v stats=%+v upload=%+v", progress, stats, item.Upload)
+		}
+		s.SeedUploaded(1)
+		stats, _ = s.Stats()
+		if stats.Bytes != 1100 {
+			t.Fatalf("reseed double counted: %+v", stats)
+		}
+	}
+	s := New(1)
+	s.SeedUploaded(1)
+	stats, _ := s.Stats()
+	if stats.Bytes != 0 {
+		t.Fatalf("empty store counted bytes: %+v", stats)
 	}
 }
