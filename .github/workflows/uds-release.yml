@@ -182,6 +182,16 @@ jobs:
         run: |
           cd "dist/release/$VERSION"
           sha256sum -c SHA256SUMS
+      - name: Reserve GitHub Release before publishing OCI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_SHA" --draft \
+            --title "UDS $VERSION" "${flags[@]}" \
+            --notes "Production amd64 SHIP/SHORE release from $RELEASE_SHA. Model licensing remains UNRESOLVED; see THIRD_PARTY_NOTICES.md. Extract sbom.tar.gz before running sha256sum -c SHA256SUMS. For oversized artifacts, concatenate the .partNNNN files in lexical order to restore the original before checking SHA256SUMS. OCI bundles: $OCI_REPOSITORY/ghost-seeker-{ship,shore}:$VERSION; Zarf packages use tag $VERSION-zarf."
       - name: Log in to GHCR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -206,17 +216,12 @@ jobs:
             sha256sum sbom.tar.gz.part* >> SHA256SUMS
           fi
           sha256sum -c SHA256SUMS
-      - name: Create GitHub Release and upload assets
+      - name: Upload assets and publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd "dist/release/$VERSION"
-          flags=()
-          if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_SHA" --draft \
-            --title "UDS $VERSION" "${flags[@]}" \
-            --notes "Production amd64 SHIP/SHORE release from $RELEASE_SHA. Model licensing remains UNRESOLVED; see THIRD_PARTY_NOTICES.md. Extract sbom.tar.gz before running sha256sum -c SHA256SUMS. For oversized artifacts, concatenate the .partNNNN files in lexical order to restore the original before checking SHA256SUMS. OCI bundles: $OCI_REPOSITORY/ghost-seeker-{ship,shore}:$VERSION; Zarf packages use tag $VERSION-zarf."
           mapfile -d '' assets < <(find . -maxdepth 1 -type f -size -2000000001c -print0)
           test "${#assets[@]}" -gt 0
           gh release upload "$RELEASE_TAG" "${assets[@]}"
