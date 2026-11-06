@@ -1,0 +1,34 @@
+{
+  "training": {
+    "dataset_dir": "/home/student-01-b9735e502d8f/shore-run-a-v2/roboflow",
+    "output_dir": "/home/student-01-b9735e502d8f/shore-run-a-v2",
+    "epochs": 12,
+    "batch_size": 8,
+    "grad_accum_steps": 2,
+    "lr": 0.0001,
+    "lr_encoder": 1.5e-05,
+    "lr_drop": 6,
+    "warmup_epochs": 0.25,
+    "use_ema": true,
+    "early_stopping": true,
+    "early_stopping_patience": 3,
+    "early_stopping_min_delta": 0.001,
+    "early_stopping_use_ema": false,
+    "run_test": false,
+    "tensorboard": false,
+    "wandb": false,
+    "num_workers": 4,
+    "multi_scale": false,
+    "expanded_scales": false,
+    "checkpoint_interval": 12
+  },
+  "resolution": 512,
+  "gradient_checkpointing": false,
+  "budget_minutes": 100.0,
+  "initial_weights": "COCO RF-DETR-Small",
+  "partition_sha256": {
+    "train": "83b7c5a1d1fc07bcc4f78861ebd397d6995f5af0138a798dd8fe5208ee0ab60c",
+    "valid": "695c77a453d9ced442dab8401d42b958f2a87cff2f9e5ccb38b6a160f7c51b2f"
+  },
+  "seed": 42
+}

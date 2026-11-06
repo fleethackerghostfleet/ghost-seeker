@@ -78,6 +78,8 @@ type Bridge struct {
 	factVersions map[string]string
 	operator     string
 	edgeNodeID   string
+	lastGood     *Snapshot
+	lastPolicy   *pb.Policy
 
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
 	nextExpiry time.Time                   // earliest timed rule/EMCON/policy deadline seen by the poller
@@ -405,6 +407,8 @@ func (b *Bridge) refresh(ctx context.Context) {
 	var storedPolicy *pb.Policy
 	if err := b.call(ctx, b.shore, "GetPolicy", &pb.GetPolicyRequest{}, &pol); err == nil {
 		storedPolicy = pol.GetPolicy()
+	} else {
+		snap.Shore.Error = "upstream shore error"
 	}
 	if b.edge != "" {
 		var est pb.GetStatusResponse
@@ -456,13 +460,30 @@ func (b *Bridge) refresh(ctx context.Context) {
 			break
 		}
 	}
-	b.updateFactVersions(items)
-	snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
-	for _, o := range snap.Objects {
-		o.detectionMin = currentPolicy.GetThresholds().GetDetectionMinConf()
-	}
-	if len(snap.TierLabels) > 0 {
-		assignTiers(snap.Objects, snap.TierLabels)
+	if snap.Shore.Error != "" {
+		snap.Shore.OK = false
+		b.mu.Lock()
+		if b.lastGood != nil {
+			previous := *b.lastGood
+			previous.TS, previous.Link, previous.Edge = snap.TS, snap.Link, snap.Edge
+			previous.Shore.OK = false
+			previous.Shore.Error = snap.Shore.Error
+			snap = &previous
+			currentPolicy = b.lastPolicy
+		}
+		b.mu.Unlock()
+	} else {
+		b.updateFactVersions(items)
+		snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
+		for _, o := range snap.Objects {
+			o.detectionMin = currentPolicy.GetThresholds().GetDetectionMinConf()
+		}
+		if len(snap.TierLabels) > 0 {
+			assignTiers(snap.Objects, snap.TierLabels)
+		}
+		b.mu.Lock()
+		b.lastGood, b.lastPolicy = snap, currentPolicy
+		b.mu.Unlock()
 	}
 	if b.onSnapshot != nil {
 		b.onSnapshot(snap, currentPolicy)

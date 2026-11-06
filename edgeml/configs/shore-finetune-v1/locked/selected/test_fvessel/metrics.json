@@ -1,0 +1,158 @@
+{
+  "tau": 0.33542555570602417,
+  "strata": {
+    "all": {
+      "vessels": 1754,
+      "detected": 1190,
+      "recall": 0.6784492588369442,
+      "recall_cp95_lower": 0.6596078197128827,
+      "precision": 0.9296875,
+      "false_positives": 90,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.75,
+      "sources": 2,
+      "AP50": 0.7911717223124544
+    },
+    "day": {
+      "vessels": 1754,
+      "detected": 1190,
+      "recall": 0.6784492588369442,
+      "recall_cp95_lower": 0.6596078197128827,
+      "precision": 0.9296875,
+      "false_positives": 90,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.75,
+      "sources": 2,
+      "AP50": 0.7911717223124544
+    },
+    "low_light": {
+      "vessels": 0,
+      "detected": 0,
+      "recall": null,
+      "recall_cp95_lower": null,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 0,
+      "fp_per_empty_frame": null,
+      "sources": 0,
+      "AP50": null
+    },
+    "tiny": {
+      "vessels": 0,
+      "detected": 0,
+      "recall": null,
+      "recall_cp95_lower": null,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.0,
+      "sources": 0,
+      "AP50": null
+    },
+    "small": {
+      "vessels": 1,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": 0.0,
+      "false_positives": 2,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.0020920502092050207
+    },
+    "medium": {
+      "vessels": 871,
+      "detected": 344,
+      "recall": 0.3949483352468427,
+      "recall_cp95_lower": 0.3674232800612855,
+      "precision": 0.8132387706855791,
+      "false_positives": 79,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.25,
+      "sources": 2,
+      "AP50": 0.5271600837395267
+    },
+    "large": {
+      "vessels": 882,
+      "detected": 846,
+      "recall": 0.9591836734693877,
+      "recall_cp95_lower": 0.9464534814469463,
+      "precision": 0.9894736842105263,
+      "false_positives": 9,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.5,
+      "sources": 2,
+      "AP50": 0.9852398093585215
+    },
+    "day_tiny": {
+      "vessels": 0,
+      "detected": 0,
+      "recall": null,
+      "recall_cp95_lower": null,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.0,
+      "sources": 0,
+      "AP50": null
+    },
+    "day_small": {
+      "vessels": 1,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": 0.0,
+      "false_positives": 2,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.0020920502092050207
+    },
+    "day_medium": {
+      "vessels": 871,
+      "detected": 344,
+      "recall": 0.3949483352468427,
+      "recall_cp95_lower": 0.3674232800612855,
+      "precision": 0.8132387706855791,
+      "false_positives": 79,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.25,
+      "sources": 2,
+      "AP50": 0.5271600837395267
+    },
+    "day_large": {
+      "vessels": 882,
+      "detected": 846,
+      "recall": 0.9591836734693877,
+      "recall_cp95_lower": 0.9464534814469463,
+      "precision": 0.9894736842105263,
+      "false_positives": 9,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.5,
+      "sources": 2,
+      "AP50": 0.9852398093585215
+    },
+    "day_medium_large": {
+      "vessels": 1753,
+      "detected": 1190,
+      "recall": 0.6788362806617227,
+      "recall_cp95_lower": 0.6599946553399442,
+      "precision": 0.9311424100156495,
+      "false_positives": 88,
+      "empty_frames": 4,
+      "fp_per_empty_frame": 0.75,
+      "sources": 2,
+      "AP50": 0.7946391503575819
+    }
+  },
+  "AP50": 0.7911717223124544,
+  "R4": {
+    "windows": 1747,
+    "detected_windows": 1258,
+    "eligible_tracks": 7,
+    "recall": 0.7200915855752719,
+    "window_seconds": 2,
+    "sliding": true
+  }
+}

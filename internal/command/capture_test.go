@@ -17,6 +17,14 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
+func TestCaptureUsesDatasetHash(t *testing.T) {
+	it := Item{ID: "dataset", Img: "/api/dataset/images/frame.jpg", SHA256: fmt.Sprintf("%064x", 42)}
+	EnsureCapture(&it)
+	if it.Capture.ContentHash != it.SHA256 || slices.Contains(it.Capture.Synthetic, "contentHash") {
+		t.Fatalf("dataset hash not preserved: %+v", it.Capture)
+	}
+}
+
 func TestCaptureDeterministic(t *testing.T) {
 	for _, image := range []string{"", "missing.jpg", "eo-p7-01.jpg"} {
 		a := Item{Img: image, SourceID: "EO-P7", Seed: 42, Frame: 12}

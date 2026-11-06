@@ -127,6 +127,9 @@ func EnsureCapture(it *Item) {
 	if m.hash != "" {
 		c.ContentHash = m.hash
 		remove("contentHash")
+	} else if it.SHA256 != "" {
+		c.ContentHash = it.SHA256
+		remove("contentHash")
 	}
 	if m.w > 0 {
 		c.WidthPx, c.HeightPx = m.w, m.h

@@ -1,0 +1,202 @@
+{
+  "created_utc": "2026-11-05T18:22:44.448261+00:00",
+  "valid_coco_sha256": "695c77a453d9ced442dab8401d42b958f2a87cff2f9e5ccb38b6a160f7c51b2f",
+  "criterion": "max(min(day_small CP95, day_medium_large CP95)); ties sum CP95, then lower valid p95 latency",
+  "threshold_rule": "maximize pooled valid recall subject to pooled precision >= 0.90",
+  "within_run_checkpoint_rule": "library best valid COCO mAP across regular and EMA",
+  "locked_inference_started_at_freeze": false,
+  "candidates": {
+    "A": {
+      "run": "A",
+      "mode": "native",
+      "resolution": 512,
+      "weights_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/shore/runs/finetune-20261105-v1/A/checkpoint_best_total.pth",
+      "weights_sha256": "bf6a0f273d022e876a087cbc5656bfc67d211cf54bdbe5d0c58205c2e1163319",
+      "threshold_file": "A/threshold.json",
+      "threshold_sha256": "5b08eb438b8ed9389d80d32cb78fe1b5de3f6205c58dbc64810944c1061dfc1f",
+      "tau": 0.3326205015182495,
+      "selection_key": [
+        0.7439700277327829,
+        1.592292179123219,
+        -83.15036820076784
+      ],
+      "day_small": {
+        "vessels": 1626,
+        "detected": 1239,
+        "recall": 0.7619926199261993,
+        "recall_cp95_lower": 0.7439700277327829,
+        "precision": 0.9372163388804842,
+        "false_positives": 83,
+        "empty_frames": 17,
+        "fp_per_empty_frame": 0.0,
+        "sources": 4,
+        "AP50": 0.6352449200919512
+      },
+      "day_medium_large": {
+        "vessels": 12455,
+        "detected": 10632,
+        "recall": 0.853633079084705,
+        "recall_cp95_lower": 0.8483221513904362,
+        "precision": 0.875421984355702,
+        "false_positives": 1513,
+        "empty_frames": 17,
+        "fp_per_empty_frame": 0.0,
+        "sources": 6,
+        "AP50": 0.8990596095897795
+      },
+      "all": {
+        "vessels": 17633,
+        "detected": 14752,
+        "recall": 0.8366131684908977,
+        "recall_cp95_lower": 0.8319641527496443,
+        "precision": 0.9000610128126907,
+        "false_positives": 1638,
+        "empty_frames": 17,
+        "fp_per_empty_frame": 0.0,
+        "sources": 7,
+        "AP50": 0.8742154682472217
+      },
+      "latency": {
+        "n_1080p": 2423,
+        "p50_ms": 82.1089099990786,
+        "p95_ms": 83.15036820076784,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "scope": "decode excluded; synchronized preprocessing+inference; five warmups excluded"
+      }
+    },
+    "B": {
+      "run": "B",
+      "mode": "high_res",
+      "resolution": 1024,
+      "weights_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/shore/runs/finetune-20261105-v1/B/checkpoint_best_total.pth",
+      "weights_sha256": "c68087d91c5a05414d4446d9be72b091efc901742493c37f24ef482e3c98696b",
+      "threshold_file": "B/threshold.json",
+      "threshold_sha256": "6198f706b19dc6457ea3f6e1573a014d4c7a860206535bb51a73c7a6d8080387",
+      "tau": 0.33542555570602417,
+      "selection_key": [
+        0.8396904849657685,
+        1.6806773336217515,
+        -88.86246110032516
+      ],
+      "day_small": {
+        "vessels": 1626,
+        "detected": 1392,
+        "recall": 0.8560885608856088,
+        "recall_cp95_lower": 0.840986848655983,
+        "precision": 0.942450914014895,
+        "false_positives": 85,
+        "empty_frames": 17,
+        "fp_per_empty_frame": 0.0,
+        "sources": 4,
+        "AP50": 0.7823045796691168
+      },
+      "day_medium_large": {
+        "vessels": 12455,
+        "detected": 10526,
+        "recall": 0.8451224407868326,
+        "recall_cp95_lower": 0.8396904849657685,
+        "precision": 0.9058519793459553,
+        "false_positives": 1094,
+        "empty_frames": 17,
+        "fp_per_empty_frame": 0.23529411764705882,
+        "sources": 6,
+        "AP50": 0.9281271536663445
+      },
+      "all": {
+        "vessels": 17633,
+        "detected": 15092,
+        "recall": 0.8558951965065502,
+        "recall_cp95_lower": 0.8514732102997715,
+        "precision": 0.9000477099236641,
+        "false_positives": 1676,
+        "empty_frames": 17,
+        "fp_per_empty_frame": 0.23529411764705882,
+        "sources": 7,
+        "AP50": 0.9152713643195659
+      },
+      "latency": {
+        "n_1080p": 2423,
+        "p50_ms": 88.0585639988567,
+        "p95_ms": 88.86246110032516,
+        "gpu": "NVIDIA A100-SXM4-40GB",
+        "scope": "decode excluded; synchronized preprocessing+inference; five warmups excluded"
+      }
+    }
+  },
+  "selected": {
+    "run": "B",
+    "mode": "high_res",
+    "resolution": 1024,
+    "weights_uri": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/shore/runs/finetune-20261105-v1/B/checkpoint_best_total.pth",
+    "weights_sha256": "c68087d91c5a05414d4446d9be72b091efc901742493c37f24ef482e3c98696b",
+    "threshold_file": "B/threshold.json",
+    "threshold_sha256": "6198f706b19dc6457ea3f6e1573a014d4c7a860206535bb51a73c7a6d8080387",
+    "tau": 0.33542555570602417,
+    "selection_key": [
+      0.8396904849657685,
+      1.6806773336217515,
+      -88.86246110032516
+    ],
+    "day_small": {
+      "vessels": 1626,
+      "detected": 1392,
+      "recall": 0.8560885608856088,
+      "recall_cp95_lower": 0.840986848655983,
+      "precision": 0.942450914014895,
+      "false_positives": 85,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 4,
+      "AP50": 0.7823045796691168
+    },
+    "day_medium_large": {
+      "vessels": 12455,
+      "detected": 10526,
+      "recall": 0.8451224407868326,
+      "recall_cp95_lower": 0.8396904849657685,
+      "precision": 0.9058519793459553,
+      "false_positives": 1094,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.23529411764705882,
+      "sources": 6,
+      "AP50": 0.9281271536663445
+    },
+    "all": {
+      "vessels": 17633,
+      "detected": 15092,
+      "recall": 0.8558951965065502,
+      "recall_cp95_lower": 0.8514732102997715,
+      "precision": 0.9000477099236641,
+      "false_positives": 1676,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.23529411764705882,
+      "sources": 7,
+      "AP50": 0.9152713643195659
+    },
+    "latency": {
+      "n_1080p": 2423,
+      "p50_ms": 88.0585639988567,
+      "p95_ms": 88.86246110032516,
+      "gpu": "NVIDIA A100-SXM4-40GB",
+      "scope": "decode excluded; synchronized preprocessing+inference; five warmups excluded"
+    }
+  },
+  "reference": {
+    "run": "zero_shot_native",
+    "mode": "native",
+    "resolution": 512,
+    "weights_sha256": "d81979a9213a2109345158ce9232668df4c1ae52e9b8db3f2ec0a8cbad959b33",
+    "threshold_file": "edgeml/configs/shore-baseline-v1/native/threshold.json",
+    "threshold_sha256": "da6d843233891c42b1c9ac4fc49161ebc5d101e62cc03d66f1c4667967108841",
+    "tau": 0.4311056137084961
+  },
+  "locked_sets": [
+    "test_sg",
+    "test_gf",
+    "test_fvessel",
+    "test_smd",
+    "test_seaships"
+  ],
+  "test_policy": "one prediction per actual image for each frozen model; no post-test tuning; five synthetic warmups",
+  "artifact_prefix": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/shore/runs/finetune-20261105-v1"
+}

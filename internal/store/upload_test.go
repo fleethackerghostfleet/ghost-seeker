@@ -9,6 +9,26 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
 
+func TestResetPreservesMetadataOnlyMode(t *testing.T) {
+	for _, reason := range []string{"link", "emcon"} {
+		t.Run(reason, func(t *testing.T) {
+			s := New(1)
+			if reason == "link" {
+				s.SetLowbandHold(time.Second)
+				s.SetLinkBPS(4000)
+				s.AdvanceUploads(time.Second)
+			} else {
+				s.SetEMCON(true)
+			}
+			s.Reset()
+			_, stats, _, _ := s.Snapshot()
+			if !stats.MetaOnly || stats.MetaOnlyReason != reason || stats.MetaOnlySince == nil {
+				t.Fatalf("reset lost metadata-only state: %+v", stats)
+			}
+		})
+	}
+}
+
 func TestUploadNextRecordsOperatorSend(t *testing.T) {
 	for _, automatic := range []bool{false, true} {
 		s := New(1)

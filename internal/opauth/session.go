@@ -28,6 +28,7 @@ const CookieName = "gs_session"
 // redirect to /login.
 type Sessions struct {
 	token               string
+	reviewJoinKey       string
 	dev                 bool
 	anyPeer             bool
 	demoAcceptAnyToken  bool
@@ -44,11 +45,17 @@ type Sessions struct {
 
 // NewSessions builds the session layer for token; dev enables loopback auto-login.
 func NewSessions(token string, dev bool) *Sessions {
-	return &Sessions{token: token, dev: dev, ttl: 12 * time.Hour, now: time.Now, sessions: map[string]time.Time{}}
+	return &Sessions{token: token, dev: dev, ttl: 12 * time.Hour, now: time.Now, bindings: map[string]pivauth.Principal{}, sessions: map[string]time.Time{}}
 }
 
 // Dev reports whether loopback auto-login is on.
 func (s *Sessions) Dev() bool { return s.dev }
+
+// WithReviewJoinKey enables the reviewer-only bearer join path.
+func (s *Sessions) WithReviewJoinKey(key string) *Sessions {
+	s.reviewJoinKey = key
+	return s
+}
 
 // DemoAcceptAnyToken permits any non-empty login token for demos only.
 // Certificate authentication does not use token login.
@@ -86,6 +93,27 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			s.wrapCerts(next).ServeHTTP(w, r)
 			return
 		}
+		if s.reviewJoinKey != "" && strings.HasPrefix(r.URL.Path, "/join/") {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			key := strings.TrimPrefix(r.URL.Path, "/join/")
+			if r.Method != http.MethodGet || key == "" || strings.Contains(key, "/") || !Equal(s.reviewJoinKey, key) {
+				http.NotFound(w, r)
+				return
+			}
+			s.issue(w, r, pivauth.Principal{Role: "reviewer"})
+			// A same-origin refresh, not a 303: browsers drop SameSite=Strict
+			// cookies on redirects that continue a cross-site navigation
+			// (a link clicked in chat or email).
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(reviewJoinPage))
+			return
+		}
+		authed := s.authenticated(r)
+		if authed && s.sessionRole(r) == "reviewer" && !reviewerRequestAllowed(r) {
+			forbiddenReviewer(w)
+			return
+		}
 		switch {
 		case r.URL.Path == "/login":
 			s.login(w, r)
@@ -93,11 +121,10 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 		case r.URL.Path == "/logout" && r.Method == http.MethodPost:
 			s.logout(w, r)
 			return
-		case r.URL.Path == "/healthz":
+		case r.URL.Path == "/healthz" || publicBrandAsset(r):
 			next.ServeHTTP(w, r)
 			return
 		}
-		authed := s.authenticated(r)
 		if !authed && s.local(r) {
 			s.issue(w, r)
 			authed = true
@@ -107,7 +134,7 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 			role := ""
 			if authed {
-				role = "operator"
+				role = s.sessionRole(r)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"authenticated": authed, "dev": s.dev, "mode": "token", "id": "", "name": "", "role": role})
 			return
@@ -120,9 +147,66 @@ func (s *Sessions) Wrap(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 			return
 		}
-		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, Principal{Role: "operator", Mode: "token"}))
+		principal := Principal{Role: s.sessionRole(r), Mode: "token"}
+		if principal.Role == "reviewer" && !reviewerRequestAllowed(r) {
+			forbiddenReviewer(w)
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, principal))
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Sessions) sessionRole(r *http.Request) string {
+	if Equal(s.token, BearerToken(r)) {
+		return "operator"
+	}
+	cookie, err := r.Cookie(CookieName)
+	if err != nil {
+		return "operator"
+	}
+	s.mu.Lock()
+	binding, ok := s.bindings[cookie.Value]
+	s.mu.Unlock()
+	if ok && binding.Role != "" {
+		return binding.Role
+	}
+	return "operator"
+}
+
+// publicBrandAssets are the logo files the sign-in pages show before a session exists.
+var publicBrandAssets = map[string]bool{"/brand/logo.png": true, "/brand/favicon-32.png": true, "/brand/apple-touch-icon.png": true}
+
+func publicBrandAsset(r *http.Request) bool {
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && publicBrandAssets[r.URL.Path]
+}
+
+func reviewerRequestAllowed(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || (r.Method == http.MethodPost && r.URL.Path == "/logout") {
+		return true
+	}
+	if r.Method != http.MethodPost {
+		return false
+	}
+	path := r.URL.EscapedPath()
+	return pathResourceAction(path, "/api/items/", "/review") ||
+		pathResourceAction(path, "/api/reviews/", "/reason") ||
+		pathResourceAction(path, "/api/reviews/", "/undo")
+}
+
+func pathResourceAction(path, prefix, suffix string) bool {
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	return id != "" && !strings.Contains(id, "/")
+}
+
+func forbiddenReviewer(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]string{"code": "forbidden", "message": "reviewer sessions are limited to review actions"})
 }
 
 func (s *Sessions) authenticated(r *http.Request) bool {
@@ -141,6 +225,7 @@ func (s *Sessions) authenticated(r *http.Request) bool {
 	}
 	if s.now().After(exp) {
 		delete(s.sessions, c.Value)
+		delete(s.bindings, c.Value)
 		return false
 	}
 	return true
@@ -212,6 +297,7 @@ func (s *Sessions) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(CookieName); err == nil {
 		s.mu.Lock()
 		delete(s.sessions, c.Value)
+		delete(s.bindings, c.Value)
 		s.mu.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: secure(r), MaxAge: -1})
@@ -233,15 +319,15 @@ func safeNext(next string) string {
 
 func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Referrer-Policy", "same-origin") // so the form post carries a real Origin, not "null"
 	var b strings.Builder
-	b.WriteString(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title>` +
+	b.WriteString(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title>` + brandHead +
 		`<style>body{font:15px system-ui,sans-serif;background:#0b1118;color:#d6e2ee;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}` +
-		`form{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{font-size:18px;margin:0 0 4px}p{margin:4px 0 16px;color:#8aa0b6}` +
+		`form{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{margin:0 0 4px}h1 img{display:block}p{margin:4px 0 16px;color:#8aa0b6}` +
 		`input{width:100%;box-sizing:border-box;padding:9px;border-radius:6px;border:1px solid #2d4258;background:#0b1118;color:#fff;font-size:14px}` +
 		`button{margin-top:14px;width:100%;padding:9px;border:0;border-radius:6px;background:#1e88e5;color:#fff;font-weight:600;cursor:pointer}.err{color:#ff7b72}header{display:flex;align-items:center;gap:16px;margin-bottom:8px}` + httpx.DocsLinkCSS + `</style></head><body>` +
-		`<form method="post" action="/login"><header><h1>Ghost Seeker</h1>` + httpx.DocsLinkHTML + `</header>`)
+		`<form method="post" action="/login"><header>` + brandLogo + httpx.DocsLinkHTML + `</header>`)
 	if s.demoAcceptAnyToken {
 		b.WriteString(`<p>DEMO MODE: any non-empty token grants operator access.</p>`)
 	} else {
@@ -257,3 +343,10 @@ func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 		`<button type="submit">Sign in</button></form></body></html>`)
 	_, _ = w.Write([]byte(b.String()))
 }
+
+const (
+	brandHead = `<link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png"><link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">`
+	brandLogo = `<h1><img src="/brand/logo.png" width="178" height="96" alt="Ghost Seeker"></h1>`
+)
+
+const reviewJoinPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/#review"><title>Ghost Seeker review</title></head><body><p><a href="/#review">Start Operator Review</a></p></body></html>`

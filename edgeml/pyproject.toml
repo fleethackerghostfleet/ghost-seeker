@@ -12,7 +12,7 @@ dependencies = ["numpy", "opencv-python-headless", "pyyaml", "scipy"]
 eval = ["pycocotools", "faster-coco-eval", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git", "matplotlib"]
 tracking = ["boxmot>=13", "lap"]
 detect = ["ultralytics>=8.3", "torch", "torchvision"]
-test = ["pytest", "requests", "Pillow"]
+test = ["pytest", "requests", "Pillow", "pycocotools"]
 audit = ["pyarrow", "google-cloud-storage", "google-cloud-bigquery"]
 # workstream B detectors (GPU eval box); CPU boxes install [onnx] only
 gpu = ["torch", "torchvision", "ultralytics>=8.3", "transformers>=4.50", "timm", "huggingface_hub", "onnxruntime-gpu",

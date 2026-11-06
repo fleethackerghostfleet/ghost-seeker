@@ -2,6 +2,7 @@
 
 Sets (split rule from configs/splits.yaml -- tune on dev, run test sets once with the final config):
   seaships_train  SeaShips7000 train      (probe training only)
+  ir_train/ir_dev/ir_test, sds_train/sds_test   clean v3 recording splits (IR: license unknown, internal dev only)
   seaships_dev    SeaShips7000 valid      (dev)
   gf_dev          ghost_fleet_5fps dev clips, tracks with an unambiguous type (human label from clip + QA sheet)
   seaships_test   SeaShips7000 test       (locked test)
@@ -40,7 +41,12 @@ GF_TRACKS = {
                 ("Cruise_Ship_Docked_in_Ocean_with_Dingy_Boats", 10): "passenger"},
 }
 SEASHIPS_SPLIT = {"seaships_train": ("train", 100), "seaships_dev": ("valid", 50), "seaships_test": ("test", 50)}
-GEMINI_CAP = {"seaships_dev": 30, "seaships_test": 30}  # per native class
+GEMINI_CAP = {"seaships_dev": 30, "seaships_test": 30, "ir_dev": 30, "ir_test": 30, "sds_test": 30}  # per native class
+# clean v3 sets (split by recording, edgeml/tools/clean_v3.py): (catalog dataset, eval_split, per native class)
+CLEAN_V3_SETS = {"ir_train": ("ir_maritime_vessels", "train", 150), "ir_dev": ("ir_maritime_vessels", "dev", 60),
+                 "ir_test": ("ir_maritime_vessels", "test", 60), "sds_train": ("seadronessee", "train", 300),
+                 "sds_test": ("seadronessee", "test", 120)}
+SDS_TO_TYPE = {"boat": "small_boat", "jetski": "small_boat"}  # aerial UAV view; SeaDronesSee has no finer vessel type
 
 
 def load_set(name: str) -> list[dict]:
@@ -58,6 +64,22 @@ def load_set(name: str) -> list[dict]:
             for a in rng.sample(by[lab], min(per, len(by[lab]))):
                 items.append({"img": str(DATA / "datasets/seaships7000/images" / split / (a["image_id"].split("/")[-1] + ".jpg")),
                               "box": a["box"], "gt": st.SEASHIPS_TO_TYPE[lab], "native": lab, "group": a["image_id"]})
+    elif name in CLEAN_V3_SETS:
+        ds, ev, per = CLEAN_V3_SETS[name]
+        cat = DATA / "clean_v3/catalog"
+        rows = {r["image_id"]: r for r in map(json.loads, open(cat / f"images/{ds}.jsonl")) if r["eval_split"] == ev}
+        by = defaultdict(list)
+        for line in open(cat / f"annotations/{ds}.jsonl"):
+            a = json.loads(line)
+            t = json.loads(a["attrs"]).get("ship_type") if ds == "ir_maritime_vessels" else SDS_TO_TYPE.get(a["label"])
+            if a["image_id"] in rows and t and min(a["box"][2:]) >= 20:
+                by[a["label"]].append((a, t))
+        rng = random.Random(0)
+        for lab in sorted(by):
+            for a, t in rng.sample(by[lab], min(per, len(by[lab]))):
+                r = rows[a["image_id"]]
+                items.append({"img": str(DATA / r["gcs_uri"].split("/", 3)[3]), "box": a["box"], "gt": t, "native": lab,
+                              "group": a["image_id"]})
     elif name.startswith("gf_"):
         for (clip, tid), t in GF_TRACKS[name].items():
             rows = [r.split(",") for r in open(DATA / "eval" / clip / "gt/gt.txt") if r.strip()]
@@ -86,6 +108,8 @@ def crops_for(items, square=False):
 
 
 def make_embedder(m):
+    if m == "dinov2-b14":
+        return st.DinoEmbedder(arch="vit_base_patch14_dinov2.lvd142m", threads=4)
     if m.startswith("dinov2"):
         return st.DinoEmbedder(threads=4)
     from edgeml.embed.clip_embedder import ClipEmbedder
@@ -116,6 +140,8 @@ def main():
     ap.add_argument("--out", default=str(DATA / "shipcls"))
     ap.add_argument("--square", action="store_true", help="letterbox crops to square before embedding (not used for Gemini)")
     ap.add_argument("--unknown-floor", type=float, default=0.0)
+    ap.add_argument("--probes", nargs="+", default=["probe=seaships_train"],
+                    help="linear probes as tag=train1+train2 (e.g. probe-all=seaships_train+ir_train+sds_train)")
     ap.add_argument("--project", default="qwiklabs-gcp-02-34a870014566")
     a = ap.parse_args()
     out = Path(a.out)
@@ -161,14 +187,17 @@ def main():
         clfs = []
         if not m.startswith("dinov2"):
             clfs.append(("zeroshot", st.ShipTypeClassifier(emb, unknown_floor=a.unknown_floor, name=m)))
-        if "seaships_train" in sets:
-            clfs.append(("probe", st.ProbeClassifier(emb).fit(
-                E["seaships_train"], [i["gt"] for i in sets["seaships_train"]])))
-        else:
-            print(f"{m} probe skipped: seaships_train is not in this run", flush=True)
+        for spec in a.probes:
+            tag, _, train = spec.partition("=")
+            train = train.split("+")
+            if all(t in sets for t in train):
+                clfs.append((tag, st.ProbeClassifier(emb).fit(
+                    np.concatenate([E[t] for t in train]), [i["gt"] for t in train for i in sets[t]])))
+            else:
+                print(f"{m} {tag} skipped: {train} not all in this run", flush=True)
         for kind, c in clfs:
             for s in sets:
-                if s == "seaships_train":
+                if s.endswith("_train"):
                     continue
                 preds = c.classify_embeddings(E[s]) if len(E[s]) else []
                 json.dump({"model": f"{m}-{kind}", "set": s, "idx": list(range(len(preds))), "preds": preds,

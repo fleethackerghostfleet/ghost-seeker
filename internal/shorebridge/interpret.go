@@ -1,6 +1,10 @@
 package shorebridge
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+)
 
 var suppressVerbs = []string{"ignore", "suppress", "deprioritize", "deprioritise", "mute", "skip", "drop", "hide", "stop showing", "don't show", "do not show", "not interested in"}
 var boostVerbs = []string{"prioritize", "prioritise", "boost", "focus on", "look for", "find", "watch for", "flag", "escalate", "show me", "interested in", "want"}
@@ -55,7 +59,11 @@ func labels(rest string) []string {
 			last = strings.TrimSuffix(last, "s")
 		}
 		words[len(words)-1] = last
-		out = append(out, strings.Join(words, " "))
+		label := strings.Join(words, " ")
+		if alias, ok := catalog.CanonicalAlias(part); ok {
+			label = alias
+		}
+		out = append(out, label)
 	}
 	return out
 }

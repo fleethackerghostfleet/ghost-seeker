@@ -7,7 +7,26 @@ import (
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
+
+func TestIDsRemainUniqueAcrossReset(t *testing.T) {
+	g := NewGenerator()
+	s := store.New(10)
+	seen := map[string]bool{}
+	for i := 0; i < 20; i++ {
+		item, _ := g.Tick(nil, time.Now(), "maritime", nil)
+		for _, capture := range []*command.Item{item, g.Repeat(item, "maritime", nil)} {
+			if seen[capture.ID] {
+				t.Fatalf("duplicate ID: %s", capture.ID)
+			}
+			seen[capture.ID] = true
+			s.Add(capture, 0)
+		}
+		s.Reset()
+	}
+}
 
 func TestSourceBandsReachFeed(t *testing.T) {
 	for _, source := range catalog.Sources {

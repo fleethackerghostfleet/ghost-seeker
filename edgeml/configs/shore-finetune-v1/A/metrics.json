@@ -1,0 +1,158 @@
+{
+  "tau": 0.3326205015182495,
+  "strata": {
+    "all": {
+      "vessels": 17633,
+      "detected": 14752,
+      "recall": 0.8366131684908977,
+      "recall_cp95_lower": 0.8319641527496443,
+      "precision": 0.9000610128126907,
+      "false_positives": 1638,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 7,
+      "AP50": 0.8742154682472217
+    },
+    "day": {
+      "vessels": 14098,
+      "detected": 11871,
+      "recall": 0.8420343311107958,
+      "recall_cp95_lower": 0.836894369597647,
+      "precision": 0.8814880819781689,
+      "false_positives": 1596,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.8725531250757331
+    },
+    "low_light": {
+      "vessels": 3535,
+      "detected": 2881,
+      "recall": 0.814992927864215,
+      "recall_cp95_lower": 0.8039173585388293,
+      "precision": 0.9856312008210742,
+      "false_positives": 42,
+      "empty_frames": 0,
+      "fp_per_empty_frame": null,
+      "sources": 1,
+      "AP50": 0.8727180107362497
+    },
+    "tiny": {
+      "vessels": 17,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.0
+    },
+    "small": {
+      "vessels": 1989,
+      "detected": 1245,
+      "recall": 0.6259426847662142,
+      "recall_cp95_lower": 0.6077157043837265,
+      "precision": 0.9375,
+      "false_positives": 83,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 5,
+      "AP50": 0.5410887500200651
+    },
+    "medium": {
+      "vessels": 7943,
+      "detected": 5828,
+      "recall": 0.7337278106508875,
+      "recall_cp95_lower": 0.7254445371952802,
+      "precision": 0.8130580357142857,
+      "false_positives": 1340,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 7,
+      "AP50": 0.7914780647983171
+    },
+    "large": {
+      "vessels": 7684,
+      "detected": 7679,
+      "recall": 0.9993492972410203,
+      "recall_cp95_lower": 0.9986323185995807,
+      "precision": 0.9727641246516342,
+      "false_positives": 215,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 7,
+      "AP50": 0.9895048430676722
+    },
+    "day_tiny": {
+      "vessels": 17,
+      "detected": 0,
+      "recall": 0.0,
+      "recall_cp95_lower": 0.0,
+      "precision": null,
+      "false_positives": 0,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 1,
+      "AP50": 0.0
+    },
+    "day_small": {
+      "vessels": 1626,
+      "detected": 1239,
+      "recall": 0.7619926199261993,
+      "recall_cp95_lower": 0.7439700277327829,
+      "precision": 0.9372163388804842,
+      "false_positives": 83,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 4,
+      "AP50": 0.6352449200919512
+    },
+    "day_medium": {
+      "vessels": 6791,
+      "detected": 4971,
+      "recall": 0.7319982329553821,
+      "recall_cp95_lower": 0.7230112354376891,
+      "precision": 0.7916865742952699,
+      "false_positives": 1308,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.7769009209404439
+    },
+    "day_large": {
+      "vessels": 5664,
+      "detected": 5661,
+      "recall": 0.9994703389830508,
+      "recall_cp95_lower": 0.9986316378282792,
+      "precision": 0.9650528469144221,
+      "false_positives": 205,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.9898796588931851
+    },
+    "day_medium_large": {
+      "vessels": 12455,
+      "detected": 10632,
+      "recall": 0.853633079084705,
+      "recall_cp95_lower": 0.8483221513904362,
+      "precision": 0.875421984355702,
+      "false_positives": 1513,
+      "empty_frames": 17,
+      "fp_per_empty_frame": 0.0,
+      "sources": 6,
+      "AP50": 0.8990596095897795
+    }
+  },
+  "AP50": 0.8742154682472217,
+  "R4": {
+    "windows": 0,
+    "detected_windows": 0,
+    "eligible_tracks": 0,
+    "recall": null,
+    "window_seconds": 2,
+    "sliding": true
+  }
+}

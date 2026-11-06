@@ -61,16 +61,13 @@ func TestGuardrailsEverything(t *testing.T) {
 	if got := (&Compiler{}).CompileRules("prioritize everything and ignore birds"); !got.Blocked {
 		t.Fatal("positive everything clause should be blocked despite a later negative clause")
 	}
-	classes := make([]string, 0, 12)
+	classes := make([]string, 0, len(catalog.Classes))
 	for class := range catalog.Classes {
 		classes = append(classes, class)
-		if len(classes) == 12 {
-			break
-		}
 	}
 	warnings, blocked := guardrails("", []Rule{{Type: "boost", Classes: classes}}, nil, nil)
 	if !blocked || len(warnings) != 1 {
-		t.Fatalf("12-class guardrail = %v, %t", warnings, blocked)
+		t.Fatalf("all-class guardrail = %v, %t", warnings, blocked)
 	}
 }
 

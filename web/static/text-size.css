@@ -1,0 +1,87 @@
+html{font-size:calc(16px * var(--text-scale,1.12));-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button,a,select,input,textarea{max-width:100%}
+input,select,textarea{font:inherit}
+button,.btn,.seg,nav,.dirbar,.setfoot{flex-wrap:wrap}
+button,.btn{white-space:normal;overflow-wrap:normal;word-break:normal;min-width:min-content}
+.policy-badge,.banner{white-space:normal;overflow-wrap:anywhere}
+.human-btn{white-space:nowrap;flex-wrap:nowrap;flex-shrink:0}
+.seg{overflow:visible;max-width:100%}
+.seg button{min-width:0;overflow-wrap:normal;flex-shrink:0}
+.setsec .seg button{flex:1 0 auto}
+.banner{height:auto;line-height:1.45}
+header{height:auto;min-height:3.25rem;flex-wrap:wrap;overflow:visible}
+header nav{min-height:2.75rem;height:auto}
+header nav a{flex:none}
+header .view-tabs{height:auto;align-self:stretch;max-width:100%}
+header .view-tabs nav{flex:1 1 0;min-width:0;flex-wrap:nowrap;order:0}
+.logo,.hstats,.user,.kpis{max-width:100%}
+.hstats,.kpis{flex-wrap:wrap}
+.dirbar{min-width:0}
+.dirbar .pill,.dirbar .readback,.strip .rb,.cl,.auth-identity strong,.auth-identity small{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.cl{height:auto}
+.grid:is(.l,.xl){--caption-height:3.5rem}
+.grid:is(.l,.xl) .card{width:min(100%,max(12rem,calc((100cqh - var(--caption-height))*1.6)))}
+body.live .grid:is(.l,.xl){--caption-height:6rem}
+.hide-cl .grid:is(.l,.xl){--caption-height:2px}
+body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
+.dnav button{width:auto;height:auto;min-width:2rem;min-height:2rem}
+.drawer,.rvside,.brief-controls,.brief,.panel{overflow-wrap:anywhere}
+.setdlg{max-width:calc(100vw - 24px);margin-block:var(--banner-space,4rem);max-height:calc(100dvh - 2 * var(--banner-space,4rem));overflow:auto}
+.setdlg::backdrop{background:transparent}
+.toast{bottom:var(--banner-space,4rem)}
+.setparts{grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))}
+.setfoot{gap:8px}
+.thumb{display:grid;width:100%;min-width:0;aspect-ratio:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto auto auto 1fr;gap:2px;min-height:9rem}
+.thumb::before{content:"";grid-area:1/1/-1/2;padding-top:62.5%;pointer-events:none}
+.thumb>:not(img):not(.bx){grid-column:1}
+.grid:is(.l,.xl) .thumb{aspect-ratio:auto;container-type:inline-size}
+.thumb-image{grid-area:1/1/-1/2;align-self:start;position:relative;min-width:0}
+.grid .thumb-image>img{position:static;width:100%;height:auto;object-fit:contain}
+.grid .thumb .bx{position:absolute;inset:0;width:100%;height:100%;transform:none}
+.thumb>:is(.tier,.cdrtag,.hsenttag,.newtag,.night-badge,.band-badge,.suptag,.formtag,.ov){position:relative;inset:auto;z-index:1;margin:0 5px;width:fit-content;max-width:calc(100% - 10px)}
+.thumb>.tier{grid-row:1;margin-top:6px;justify-self:start}
+.thumb>:is(.cdrtag,.hsenttag){grid-row:2;justify-self:start}
+.thumb>.newtag{grid-row:3;justify-self:end}
+.thumb>.band-badge{grid-row:3;justify-self:start}
+.card:is(.sending,.uploaded) .thumb>.band-badge{right:auto}
+.thumb>.night-badge{grid-row:4;justify-self:end}
+.thumb>.suptag{grid-row:5;white-space:normal;overflow-wrap:anywhere}
+.thumb>.formtag{grid-row:6;justify-self:end}
+.thumb>.ov{grid-row:7;align-self:end;flex-wrap:wrap;width:100%;max-width:100%;margin:0}
+.card:is(.sending,.uploaded) :is(.band-badge,.newtag){right:auto}
+.card:is(.sending,.uploaded) .thumb>.tier{max-width:calc(100% - 42px)}
+.thumb>.ov>*{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.strip>*{flex:none}
+.tier,.cdrtag,.night-badge,.tg{max-width:calc(100% - 10px);white-space:normal;overflow-wrap:anywhere}
+#pgFeed:has(#feedHead.filters-open){overflow-y:auto}
+#pgFeed:has(#feedHead.filters-open) .feed{min-height:12rem;flex-shrink:0}
+.box em{white-space:normal;overflow-wrap:anywhere;z-index:1;line-height:1.1}
+.rvframe .box em{padding:0 3px}
+.det-counts td.n{white-space:nowrap;overflow-wrap:normal;word-break:normal}
+.detection-labels{position:absolute;inset:4px;z-index:3;display:flex;flex-wrap:wrap;align-content:start;gap:4px;overflow:auto;background:var(--panel)}
+.detection-labels em{font:700 .75rem var(--sans);padding:1px 4px;max-width:100%;overflow-wrap:anywhere}
+.rvkeys .kb{min-width:min-content;overflow-wrap:normal;word-break:normal}
+.rvmain{flex:none;min-height:24rem;height:max(24rem,calc(100dvh - 24rem))}
+.rvimg{min-height:16rem}
+#pgRv,#pgBrief{flex:1 0 auto}
+.brief-workspace{flex:1 0 24rem;min-height:24rem}
+#pgRp .panel{overflow-wrap:normal;word-break:normal}
+#directives q{overflow-wrap:anywhere}
+#pgRp button{overflow-wrap:normal;word-break:normal}
+#pgRp .wrow{grid-template-columns:minmax(min-content,8.125rem) minmax(1rem,1fr) max-content}
+#pgRp .wrow .v{white-space:nowrap;min-width:max-content}
+#pgRp .policy-audit :is(th,td){overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:normal;word-break:normal}
+@media(max-width:900px){
+ .rvmain{height:auto;min-height:0;grid-template-rows:auto auto;overflow:visible}
+ .rvimg{container-type:inline-size;min-height:0;aspect-ratio:16/10}
+ .rvframe{width:100%;height:auto;aspect-ratio:16/10}
+}
+@media(max-width:1023px){
+ header nav{flex:0 0 100%;order:-1;overflow-x:auto;flex-wrap:nowrap;margin-left:0}
+ body:has(#pgFeed.on) header{height:auto;min-height:2rem;flex-wrap:wrap}
+ body:has(#pgFeed.on) header nav{height:auto;min-height:2rem;flex:1 1 0}
+ body:has(#pgFeed.on #feedHead.filters-open) header nav{height:auto}
+ body:not(:has(#pgFeed.on)) header nav{height:auto;flex:1 1 0;order:0}
+ #pgFeed #densSeg{flex-wrap:wrap}
+ .toolbar select{min-width:0}
+}

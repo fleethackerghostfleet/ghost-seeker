@@ -55,6 +55,7 @@ type Proposal struct {
 	Accepted bool               `json:"accepted"`
 }
 type Result struct {
+	DetectorNegatives, MissedDetections         int
 	LiveExcluded                                int
 	LiveRecords                                 []reviews.Record
 	Raw, Effective, Usable, Excluded, Conflicts int
@@ -145,10 +146,18 @@ func clone(m map[string]float64) map[string]float64 {
 	return v
 }
 
+func reviewExampleID(v reviews.Record) string {
+	if v.ImageID != "" {
+		return v.ImageID
+	}
+	return v.ItemID
+}
+
 func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 	groups := map[string][]reviews.Record{}
 	r.Reviewers = map[string]int{}
 	latestRecords := map[string]reviews.Record{}
+	latestNegatives := map[string]reviews.Record{}
 	for _, v := range rs {
 		r.Reviewers[v.Reviewer]++
 		if v.Live != nil || strings.HasPrefix(v.ModelKey, "live:") {
@@ -157,17 +166,27 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 			continue
 		}
 		key := ModelKey(v)
-		if key == "" || v.ItemID == "" {
+		if !v.DetectorNegative && (key == "" || v.ItemID == "") {
 			if v.Reason == "wrong_detection" || v.HumanTier == 0 {
 				r.Excluded++
 				continue
 			}
 			return nil, fmt.Errorf("record %s: invalid item or unknown mission model", v.ID)
 		}
-		pair := key + "\x00" + v.ItemID + "\x00" + v.Reviewer
-		old, ok := latestRecords[pair]
+		pair := key + "\x00" + reviewExampleID(v) + "\x00" + v.Reviewer
+		latest := latestRecords
+		if v.DetectorNegative {
+			latest = latestNegatives
+		}
+		old, ok := latest[pair]
 		if !ok || v.ReviewedAt.After(old.ReviewedAt) || (v.ReviewedAt.Equal(old.ReviewedAt) && v.ID > old.ID) {
-			latestRecords[pair] = v
+			latest[pair] = v
+		}
+	}
+	for _, v := range latestNegatives {
+		r.DetectorNegatives++
+		if v.HumanTier >= 1 && v.HumanTier <= 3 {
+			r.MissedDetections++
 		}
 	}
 	for _, v := range latestRecords {
@@ -183,7 +202,8 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 			return nil, fmt.Errorf("record %s: invalid item, tier or detections", v.ID)
 		}
 		r.Usable++
-		groups[key+"\x00"+v.ItemID] = append(groups[key+"\x00"+v.ItemID], v)
+		group := key + "\x00" + reviewExampleID(v)
+		groups[group] = append(groups[group], v)
 	}
 	out := map[string][]Example{}
 	keys := []string{}
@@ -237,7 +257,7 @@ func prepare(rs []reviews.Record, r *Result) (map[string][]Example, error) {
 				}
 			}
 		}
-		out[key] = append(out[key], Example{ID: v.ItemID, Dets: v.Detections, Human: tiers[len(tiers)/2], Credit: credit, Night: night})
+		out[key] = append(out[key], Example{ID: reviewExampleID(v), Dets: v.Detections, Human: tiers[len(tiers)/2], Credit: credit, Night: night})
 	}
 	return out, nil
 }
@@ -354,6 +374,7 @@ func (r Result) Markdown() string {
 	var b strings.Builder
 	fmt.Fprint(&b, "# Human review retuning proposal\n\n")
 	fmt.Fprintf(&b, "Records: %d unique log events; %d effective reviews; %d usable labels; %d excluded (dismissed/wrong detection). Conflicting items: %d (per mission).\n\n", r.Raw, r.Effective, r.Usable, r.Excluded, r.Conflicts)
+	fmt.Fprintf(&b, "Detector negatives reviewed: %d\n\nMissed detections (detector negatives marked P1–P3): %d — excluded from weight fitting\n\n", r.DetectorNegatives, r.MissedDetections)
 	fmt.Fprintf(&b, "Live reviews excluded from weight fitting: %d.\n\n", r.LiveExcluded)
 	r.writeLiveOutcomes(&b)
 	fmt.Fprintln(&b, "Per-reviewer effective records:")
@@ -365,7 +386,7 @@ func (r Result) Markdown() string {
 	for _, n := range names {
 		fmt.Fprintf(&b, "- %s: %d\n", strings.ReplaceAll(n, "\n", " "), r.Reviewers[n])
 	}
-	fmt.Fprint(&b, "\nNo directives. Latest label per reviewer/item/mission, upper median for even label counts. Item-id FNV-1a hash: 80/20 train/holdout. Named reason classes receive training credit; otherwise the highest-scoring class does. Only train labels influence bounded coordinate search. Lifts unchanged.\n\n")
+	fmt.Fprint(&b, "\nNo directives. Latest label per reviewer/image (falling back to item)/mission, upper median for even label counts. Image-id FNV-1a hash: 80/20 train/holdout. Named reason classes receive training credit; otherwise the highest-scoring class does. Only train labels influence bounded coordinate search. Lifts unchanged.\n\n")
 	for _, m := range r.Models {
 		fmt.Fprintf(&b, "## %s\n\nTrain items: %d; holdout items: %d.\n\n", m.Key, m.Train, m.Holdout)
 		if m.TooLittle {

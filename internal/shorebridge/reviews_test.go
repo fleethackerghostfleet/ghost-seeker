@@ -3,6 +3,7 @@ package shorebridge
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,7 +50,7 @@ func TestDurableLiveReviews(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	var first string
-	for _, action := range []string{"accept", "tier", "dismiss", "cdr"} {
+	for n, action := range []string{"accept", "tier", "dismiss", "cdr"} {
 		w := request("POST", "/api/items/i/review", `{"reviewer":" A ","action":"`+action+`","tier":3}`)
 		if w.Code != 200 {
 			t.Fatalf("%s: %d %s", action, w.Code, w.Body)
@@ -62,6 +63,18 @@ func TestDurableLiveReviews(t *testing.T) {
 			t.Fatal(err)
 		}
 		r := response.Record
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if len(lines) != n+1 {
+			t.Fatalf("review %s: got %d durable records, want %d", action, len(lines), n+1)
+		}
+		var durable reviews.Record
+		if err := json.Unmarshal([]byte(lines[n]), &durable); err != nil || durable.ID != r.ID {
+			t.Fatalf("durable review differs from response: %+v, %v", durable, err)
+		}
 		if first == "" {
 			first = r.ID
 		}

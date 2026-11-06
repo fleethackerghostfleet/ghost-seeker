@@ -1,0 +1,9 @@
+{
+  "n_1080p": 2423,
+  "p50_ms": 72.44645900004798,
+  "p95_ms": 73.60252070002389,
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "torch": "2.9.1+cu129",
+  "valid_coco_sha256": "695c77a453d9ced442dab8401d42b958f2a87cff2f9e5ccb38b6a160f7c51b2f",
+  "scope": "synchronized decode-excluded preprocessing+inference+NMS; five warmup frames excluded"
+}
