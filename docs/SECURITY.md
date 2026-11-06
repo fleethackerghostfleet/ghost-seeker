@@ -229,6 +229,38 @@ docker compose -f deploy/compose/docker-compose.yml --profile piv up --build
 `-shore http://shore:8080` without inserting a second link shaper. The profile does not change
 shore/edge authentication or make their plain HTTP links suitable for untrusted networks.
 
+## 1b. Shore and edge listener TLS (opt-in)
+
+`cmd/shore` and `cmd/edge` retain HTTP by default. Supply both server files to
+enable HTTPS with TLS **1.3 minimum**; an unpaired flag/env setting, unreadable
+file or invalid key pair is a startup error, before opening data stores.
+
+| Binary | Flag | Environment | Purpose |
+|---|---|---|---|
+| shore, edge | `-tls-cert` | `GS_TLS_CERT` | PEM server certificate/chain |
+| shore, edge | `-tls-key` | `GS_TLS_KEY` | PEM private key; required with certificate |
+| edge | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for HTTPS sync to shore |
+| ghost-seeker (live mode) | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for shore **and edge** RPCs and shore blob/REST/SSE proxies |
+
+Clients use system roots when no CA file is supplied; a supplied bundle adds
+trust roots rather than replacing the system roots. Missing/empty/invalid CA
+bundles fail startup. HTTPS connections use TLS 1.3+, verify the peer chain and
+the URL hostname, and offer no verification bypass. A shared operator bundle
+can contain multiple private roots if shore and edge use different issuers.
+Certificates must cover the actual URL host/IP, including a TCP shaper's host
+when used. Private CAs must also be trusted by browsers accessing node consoles.
+
+This is server authentication, not client-certificate authentication for sync.
+Unit JWT and operator bearer checks remain required independently; the
+operator app's PIV client-authentication mode is unchanged. Protect private keys,
+provision certificate renewal and restart nodes to load replacements. Inference,
+MJPEG cameras and optional language-model services have separate clients; the
+shore CA option does not configure those connections.
+
+See [deployment notes](../deploy/README.md) for commands and required deployment
+overrides. Existing Compose/Zarf URLs, probes and listener defaults are unchanged;
+they still use HTTP until explicitly adapted for TLS.
+
 ## 2. CSRF / cross-origin
 
 * **Host header / DNS rebinding**: shore and edge reject requests with an unknown `Host` using
@@ -293,8 +325,9 @@ Delete `data/operator.token` to rotate. The Docker compose topology is the produ
 
 ## 6. Residual risk / not in scope here
 
-* No TLS inside the repo: terminate TLS in front of every listener; the operator token and
-  session cookie are bearer secrets.
+* TLS is opt-in: enable shore/edge listener TLS (§1b) or terminate TLS at an approved
+  proxy. The operator app supports PIV/mTLS (§1a), but token mode defaults to HTTP
+  and needs a TLS boundary. Operator tokens and session cookies are bearer secrets.
 * The unit JWT authenticates the edge to shore; it does not authenticate plaintext
   shore responses to the edge. Use the TLS boundary above for transport protection.
   Ed25519 policy payload signing is implemented in `internal/policy` and remains

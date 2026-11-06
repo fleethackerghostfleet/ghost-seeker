@@ -32,6 +32,8 @@ import (
 func main() {
 	data := flag.String("data", env("DATA_DIR", "data/shore"), "data directory")
 	listen := flag.String("listen", env("LISTEN", ":8080"), "listen address")
+	tlsCert := flag.String("tls-cert", env("GS_TLS_CERT", ""), "optional HTTPS server certificate (PEM; requires -tls-key)")
+	tlsKey := flag.String("tls-key", env("GS_TLS_KEY", ""), "optional HTTPS server private key (PEM; requires -tls-cert)")
 	inferURL := flag.String("infer", env("INFER_URL", defaultInferURL), inferUsage)
 	uiDir := flag.String("ui", env("UI_DIR", "ui"), "static UI directory")
 	edgeID := flag.String("edge", env("EDGE_ID", ""), "edge id to address downlink to ('' = all)")
@@ -49,6 +51,8 @@ func main() {
 	corsOrigins := flag.String("cors-origins", env("GS_CORS_ORIGINS", ""), "comma-separated browser origins allowed to call the API cross-origin (default: same-origin only)")
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
 	flag.Parse()
+	tlsConfig, err := httpx.ServerTLS(*tlsCert, *tlsKey)
+	fatal(err)
 	if *eventRetain < 1 {
 		fatal(fmt.Errorf("-api-event-retain must be positive"))
 	}
@@ -126,8 +130,8 @@ func main() {
 		defer c()
 		_ = srv.Shutdown(sctx)
 	}()
-	log.Info("shore", "listen", *listen)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	log.Info("shore", "listen", *listen, "tls", tlsConfig != nil)
+	if err := httpx.ListenAndServe(srv, tlsConfig); err != nil && err != http.ErrServerClosed {
 		fatal(err)
 	}
 }
