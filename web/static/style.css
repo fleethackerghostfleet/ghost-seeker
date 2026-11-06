@@ -195,6 +195,10 @@ body.drawer-open .drawer{transform:none}
 .sc b{font-size:1.1875rem;font-variant-numeric:tabular-nums}
 .dsec{margin-bottom:14px}
 .dsec h4{margin:0 0 6px;font-size:0.65625rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.capture-grid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 12px;margin:0;font-size:0.75rem;font-variant-numeric:tabular-nums}
+.capture-grid dt{color:var(--muted)}.capture-grid dd{margin:0;color:var(--text);overflow-wrap:anywhere}
+.capture-synthetic{display:inline-block;margin-left:4px;padding:0 4px;border:1px solid var(--line);border-radius:4px;background:var(--panel2);color:var(--muted);font-size:0.625rem}
+.capture-note{margin:0 0 6px;color:var(--muted);font-size:0.75rem}
 table{width:100%;border-collapse:collapse;font-size:0.75rem}
 td,th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{color:var(--muted);font-weight:600;font-size:0.65625rem;text-transform:uppercase;letter-spacing:.06em}

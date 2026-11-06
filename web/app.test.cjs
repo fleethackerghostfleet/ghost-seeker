@@ -9,6 +9,52 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+function captureFixture(){return {lat:36.123456,lon:-76.654321,headingDeg:90,altM:0,fovDeg:45,widthPx:1920,heightPx:1080,contentHash:'abcdef0123456789abcdef',subtype:'tanker',subtypeConf:.91,unknownness:.25,trackId:'track-one',trackFrames:8,synthetic:[]}}
+test('capture panel formats metadata, optional zero altitude, and full hash tooltip',()=>{
+ const c=setup();c.capture=captureFixture();
+ const html=vm.runInContext('captureHTML({capture})',c);
+ for(const text of ['Capture','36.12346','-76.65432','90.0°','0.0 m','45.0°','1920','1080','abcdef012345','tanker','91%','25%','track-one','8','frames'])assert.ok(html.includes(text),text);
+ assert.match(html,/title="abcdef0123456789abcdef"/);
+ assert.doesNotMatch(html,/capture-synthetic|capture-note/);
+ delete c.capture.altM;delete c.capture.fovDeg;
+ assert.doesNotMatch(vm.runInContext('captureHTML({capture})',c),/Altitude|Field of view/);
+ assert.equal(vm.runInContext('captureHTML({})',c),'');
+ assert.equal(vm.runInContext('captureHTML({capture:null})',c),'');
+});
+test('capture panel tags individual synthetic fields or summarizes all shown fields',()=>{
+ const c=setup();c.capture=captureFixture();
+ c.capture.synthetic=['lat','widthPx','trackFrames'];
+ let html=vm.runInContext('captureHTML({capture})',c);
+ assert.equal((html.match(/class="capture-synthetic"/g)||[]).length,3);
+ assert.match(html,/36\.12346<\/span><small class="capture-synthetic"/);
+ assert.match(html,/1920<\/span><small class="capture-synthetic"/);
+ assert.match(html,/8<\/span><small class="capture-synthetic"/);
+ assert.match(html,/title="This value is simulated, not measured by a sensor\."/);
+ delete c.capture.altM;delete c.capture.fovDeg;
+ c.capture.synthetic=Object.keys(c.capture).filter(k=>k!=='synthetic');
+ html=vm.runInContext('captureHTML({capture})',c);
+ assert.match(html,/All capture values shown are synthetic/);
+ assert.doesNotMatch(html,/class="capture-synthetic"/);
+});
+test('capture panel escapes hostile strings including hash tooltip and numeric fallbacks',()=>{
+ const c=setup(),payload='"><img src=x onerror=alert(1)>&\'';
+ c.capture=Object.fromEntries(Object.keys(captureFixture()).map(key=>[key,key==='synthetic'?[]:payload]));
+ const html=vm.runInContext('captureHTML({capture})',c);
+ assert.doesNotMatch(html,/<img|onerror=alert\(1\)>/);
+ assert.ok(html.includes('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;&amp;&#39;'));
+ assert.ok(html.includes('title="&quot;&gt;&lt;img src=x onerror=alert(1)&gt;&amp;&#39;"'));
+});
+test('capture metadata survives browser snapshot, SSE and direct update normalization',()=>{
+ const c=setup();c.capture=captureFixture();
+ vm.runInContext(`
+  applySnapshot(snapshot([{...raw('initial'),capture}]));openStream();
+  streamHandlers.item({data:JSON.stringify({item:{...raw('sse'),capture},stats:{}})});
+  applyItemUpdate({...raw('direct'),capture});
+ `,c);
+ for(const id of ['initial','sse','direct']){
+  assert.equal(vm.runInContext(`findItem('${id}').capture.trackId`,c),'track-one');
+ }
+});
 test('clear priority preview preserves detector-negative P4 pinning',()=>{
  const context=vm.createContext({});
  vm.runInContext(`
@@ -1389,6 +1435,7 @@ test('dataset detail rendering tolerates omitted upload controls and wires navig
   return buttons.get(id);
  };
  context.datasetItem=item;
+ item.capture=captureFixture();
  vm.runInContext(`
   DATASET_MODE=true;items=[datasetItem];state.sel=datasetItem.id;state.model='maritime';state.directives=[];
   MODELS={maritime:{name:'Maritime'}};CLS={vessel:{lab:'Vessel',g:'vessel'}};ATTR_LAB={};
@@ -1398,6 +1445,10 @@ test('dataset detail rendering tolerates omitted upload controls and wires navig
  `,context);
  assert.doesNotThrow(()=>vm.runInContext('renderDetailContent()',context));
  assert.match(drawer.innerHTML,/1 of 1/);
+ assert.match(drawer.innerHTML,/<h4>Capture<\/h4>/);
+ delete item.capture;
+ vm.runInContext('renderDetailContent()',context);
+ assert.doesNotMatch(drawer.innerHTML,/<h4>Capture<\/h4>/);
  for(const id of ['dPrev','dNext','dClose'])assert.equal(typeof buttons.get(id)?.onclick,'function',`${id} handler`);
  assert.equal(typeof buttons.get('aSim')?.onclick,'function');
  assert.equal(typeof buttons.get('aDis')?.onclick,'function');
