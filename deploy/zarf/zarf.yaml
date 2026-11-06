@@ -55,8 +55,6 @@ variables:
     description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop). Production images have no replay; the edge ingests the live input stream.
     default: /var/lib/ghost-seeker/frames
     prompt: false
-    default: ""
-    prompt: false
 
 components:
   - name: namespace
