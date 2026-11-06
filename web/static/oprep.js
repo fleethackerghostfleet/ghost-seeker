@@ -2,13 +2,16 @@ const oprep=(()=>{
  let trigger,created;
  const dialog=document.getElementById('oprepDialog'),form=document.getElementById('oprepForm'),preview=document.getElementById('oprepPreview'),status=document.getElementById('oprepStatus');
  const fields=()=>Object.fromEntries(new FormData(form));
- function update(){preview.textContent=OprepModel.message(fields(),created)}
+ function update(){
+  for(const control of form.elements)if(control.name){const missing=!control.value.trim();control.classList.toggle('oprep-missing',missing);control.setAttribute('aria-invalid',String(missing))}
+  preview.textContent=OprepModel.message(fields(),created);
+ }
  function open(item,classes,sources,button,metadata={},metadataUnavailable=false){
   trigger=button;created=new Date();
   const values=OprepModel.defaults(item,classes,sources,created,metadata);
   for(const [key,value] of Object.entries(values))form.elements.namedItem(key).value=value;
   const c={...item.capture,...metadata.capture},m={...item.capture,...metadata.model};
-  const provenance={incidentTime:!!c.time,position:Number.isFinite(c.lat)&&Number.isFinite(c.lon),sensorHeading:Number.isFinite(c.headingDeg),species:/whale|mammal|dolphin|orca/i.test(m.subtype||''),evidence:!!(item.capture||metadata.capture)};
+  const provenance={incidentTime:!!c.time,position:Number.isFinite(c.lat)&&Number.isFinite(c.lon),sensorHeading:Number.isFinite(c.headingDeg),species:!!values.species&&values.species===m.subtype,evidence:!!(item.capture||metadata.capture)};
   form.querySelectorAll('.oprep-provenance').forEach(tag=>tag.remove());
   for(const [key,present] of Object.entries(provenance))if(present){const tag=document.createElement('small');tag.className='oprep-provenance';tag.textContent='from metadata — verify before release';form.elements.namedItem(key).closest('label').append(tag)}
   status.textContent=metadataUnavailable?'Metadata request unavailable; using embedded image capture fields where present.':'';update();dialog.showModal();
