@@ -622,5 +622,85 @@ class TLSManifestTests(unittest.TestCase):
                 checker.render_manifests(self.package, {})
 
 
+class ModelTests(unittest.TestCase):
+    def setUp(self):
+        self.package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
+        self.documents = validator.render_manifests(self.package, {})[validator.ROOT / "manifests/edge-inference.yaml"]
+        self.pod = self.documents[0]["spec"]["template"]["spec"]
+
+    def validate(self):
+        validator.check_models(self.package, self.documents)
+
+    def test_valid_models(self):
+        self.validate()
+
+    def test_missing_init_and_unlisted_image(self):
+        self.pod["initContainers"] = []
+        with self.assertRaisesRegex(ValueError, "listed edgeml-models"):
+            self.validate()
+        self.setUp()
+        self.package["components"][-1]["images"] = []
+        with self.assertRaisesRegex(ValueError, "listed edgeml-models"):
+            self.validate()
+
+    def test_checksum_verification_required(self):
+        self.pod["initContainers"][0]["args"] = ["cp -R /models-src/. /models/"]
+        with self.assertRaisesRegex(ValueError, "verify MODEL_SHA256"):
+            self.validate()
+
+    def test_readonly_mount_required(self):
+        self.pod["containers"][0]["volumeMounts"][0]["readOnly"] = False
+        with self.assertRaisesRegex(ValueError, "mount /models readOnly"):
+            self.validate()
+
+    def test_mock_and_external_detector_rejected(self):
+        for args in (["--mock"], ["--detector", "/tmp/model.onnx"]):
+            self.pod["containers"][0]["args"] = args
+            with self.assertRaisesRegex(ValueError, "real --detector"):
+                self.validate()
+
+    def test_missing_patterns(self):
+        for name in ("MODEL_SHA256", "MODEL_DETECTOR", "MODEL_EMBED"):
+            self.setUp()
+            next(v for v in self.package["variables"] if v["name"] == name).pop("pattern")
+            with self.assertRaisesRegex(ValueError, "must have a pattern"):
+                self.validate()
+
+    def test_variable_values(self):
+        for name, values in {"MODEL_SHA256": ["", "a" * 64],
+                             "MODEL_DETECTOR": ["yolo11n-640/model.onnx", "custom/detector.onnx"]}.items():
+            for value in values:
+                validator.package_variables(self.package, {name: value})
+        for name, values in {"MODEL_SHA256": ["bad", "g" * 64],
+                             "MODEL_DETECTOR": ["", "/model.onnx", "../model.onnx", "a/../b", "a..b"]}.items():
+            for value in values:
+                with self.assertRaisesRegex(ValueError, "Zarf variable pattern"):
+                    validator.package_variables(self.package, {name: value})
+
+    def test_wrong_default_hash_rejected(self):
+        next(v for v in self.package["variables"] if v["name"] == "MODEL_SHA256")["default"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "match committed"):
+            self.validate()
+
+    def test_catalog_runtime_mount_required(self):
+        mounts = self.pod["containers"][0]["volumeMounts"]
+        next(m for m in mounts if m["name"] == "catalog")["readOnly"] = False
+        with self.assertRaisesRegex(ValueError, "catalog readOnly"):
+            self.validate()
+
+    def test_catalog_copy_required(self):
+        self.pod["initContainers"][0]["args"][0] = self.pod["initContainers"][0]["args"][0].replace(
+            "cp /models/catalog/*.json /catalog/", "true")
+        with self.assertRaisesRegex(ValueError, "catalog emptyDir"):
+            self.validate()
+
+    def test_catalog_pins_match_source(self):
+        original = validator.hashlib.sha256
+        with mock.patch.object(validator.hashlib, "sha256", side_effect=lambda data: original(data + b"changed")
+                               if data.startswith(b"{") else original(data)):
+            with self.assertRaisesRegex(ValueError, "catalog checksum must match"):
+                self.validate()
+
+
 if __name__ == "__main__":
     unittest.main()

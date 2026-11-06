@@ -20,6 +20,54 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: models
+          image: ghost-seeker/edgeml-models:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-ec"]
+          args:
+            - |
+              test -n "$MODEL_SHA256"
+              echo "$MODEL_SHA256  /models-src/SHA256SUMS" | sha256sum -c
+              cd /models-src
+              sha256sum -c SHA256SUMS
+              awk -v detector="$MODEL_DETECTOR" 'substr($0, 67) == detector { found=1 } END { exit !found }' SHA256SUMS
+              if [ "$MODEL_EMBED" != none ]; then
+                for file in meta.json model.onnx text_cache.json unknown_calib.npz; do
+                  awk -v file="$MODEL_EMBED/$file" 'substr($0, 67) == file { found=1 } END { exit !found }' SHA256SUMS
+                done
+              fi
+              cp -R /models-src/. /models/
+              cd /models
+              sha256sum -c SHA256SUMS
+              cp /models/catalog/*.json /catalog/
+              cd /catalog
+              sed -n 's@  catalog/@  @p' /models/SHA256SUMS | sha256sum -c
+          env:
+            - name: MODEL_SHA256
+              value: "###ZARF_VAR_MODEL_SHA256###"
+            - name: MODEL_DETECTOR
+              value: "###ZARF_VAR_MODEL_DETECTOR###"
+            - name: MODEL_EMBED
+              value: "###ZARF_VAR_MODEL_EMBED###"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: catalog
+              mountPath: /catalog
       containers:
         - name: edgeml-sidecar
           image: ghost-seeker/edgeml-sidecar:0.1.0
@@ -28,7 +76,9 @@ spec:
             - "--listen"
             - "0.0.0.0:9090"
             - "--detector"
-            - "/models/yolo11n-640/model.onnx"
+            - "/models/###ZARF_VAR_MODEL_DETECTOR###"
+            - "--embed"
+            - '{{ if eq "###ZARF_VAR_MODEL_EMBED###" "none" }}none{{ else }}/models/###ZARF_VAR_MODEL_EMBED###{{ end }}'
           ports:
             - name: http
               containerPort: 9090
@@ -54,13 +104,17 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
-            # Replace this emptyDir with a PVC or approved read-only model mount for real inference.
             - name: models
               mountPath: /models
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: catalog
+              mountPath: /opt/venv/lib/internal/catalog
+              readOnly: true
       volumes:
+        - name: catalog
+          emptyDir: {}
         - name: models
           emptyDir: {}
         - name: tmp

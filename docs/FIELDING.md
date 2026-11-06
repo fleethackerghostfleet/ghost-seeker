@@ -512,22 +512,78 @@ storage-class behavior, and cross-cluster routing have not been verified here.
 
 ## edgeml and offline model files
 
-The sidecar image defaults to mock mode (for Go tests and the demo) and listens
-on `0.0.0.0:9090` in the container. The Zarf `edge-inference` component runs
-the real detector (`--detector /models/yolo11n-640/model.onnx`, no `--mock`;
-`make prod-gate` fails if `--mock` appears in deploy/zarf), so it needs the
-model mounted at `/models` before it becomes ready. The standard image installs edgeml and CPU `onnxruntime`; mount
-approved model files read-only at `/models` and override the command to use
-`--detector /models/<detector>.onnx` and optionally
-`--embed /models/<embedding-directory>`. Model acquisition and licensing are
-outside the runtime; keep Hugging Face offline and telemetry disabled.
+The optional Zarf `edge-inference` component packages detector files in
+`ghost-seeker/edgeml-models:0.1.0`. The prod-uds default set is stock
+COCO-pretrained Ultralytics YOLO11n (`yolo11n.pt` exported to ONNX, not
+team-trained) plus Apple MobileCLIP-S1. Checksums, never weights, are committed
+in `deploy/models/SHA256SUMS`. The release archive `models-D.tar.gz` from
+`demo-data-v1` is independently pinned in `deploy/models/RELEASE_SHA256SUMS`.
 
-Tracking is optional because `boxmot` brings in PyTorch and substantially
-increases build time and image size. To include it, build with
-`--build-arg WITH_TRACKING=1`; this installs `boxmot` and CPU PyTorch from the
-PyTorch CPU wheel index. The default image does not include tracking.
-Real-model inference and tracking in the packaged container remain
-**unverified**; the source-based experiments are documented separately in
+**Licensing remains UNRESOLVED before fleet release:** YOLO11n AGPL-3.0 versus
+Ultralytics Enterprise licence, and [Apple ML Research model terms](https://github.com/apple-aiml-research/ml-mobileclip#license)
+for MobileCLIP-S1. Model provenance must also be cleared. The image includes
+`THIRD_PARTY_NOTICES.md` and OCI licence/status labels; packaging is not approval
+to field these models.
+
+By default these commands fetch and verify the pinned release archive into
+`dist/models` (network required on first build), verify the selected files, and
+build both models into the image:
+
+```sh
+make model-image
+make images
+make zarf-package
+# Use a separately approved model set instead:
+make model-image MODELS=/approved/models MODEL_SUMS=/approved/SHA256SUMS
+make zarf-package MODELS=/approved/models MODEL_SUMS=/approved/SHA256SUMS
+```
+
+The builder copies only listed files, rejects unsafe paths, verifies all hashes,
+and prints `MODEL_SHA256`, the SHA256 of the exact `SHA256SUMS` bytes. Its Zarf
+default pins the committed manifest; a regression check prevents drift. Explicit
+`MODEL_SUMS=` skips models for `make images`, but `model-image` and `zarf-package`
+reject it. Custom sums use standard `sha256sum` paths relative to `MODELS`.
+Pass the same `MODELS=` and `MODEL_SUMS=` to `make zarf-package` for a custom
+set: packaging rebuilds the model image. Custom sums must also include
+`catalog/colregs_lights.json` and `catalog/colregs_night_config.json` with the
+repo catalog's current hashes; these files always come from `internal/catalog`,
+not the custom model directory. Input binary checksum markers are normalized
+to text form; pin the printed `MODEL_SHA256` for the resulting image manifest.
+The model image is carried inside the Zarf package:
+runtime never fetches weights, including in an air gap.
+The image also carries pinned `colregs_lights.json` and `colregs_night_config.json`
+from `internal/catalog`, mounted read-only at the sidecar's expected catalog path
+because its night-light processing loads these files for real Analyze requests.
+
+To swap models, choose a new model image version tag in the Makefile and
+`deploy/zarf/zarf.yaml` (and the matching manifest image), rebuild and transport
+the package, then select the detector and checksum at deployment:
+
+```sh
+zarf package deploy /media/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
+  --set MODEL_DETECTOR=approved-detector/model.onnx \
+  --set MODEL_EMBED=approved-embedding \
+  --set MODEL_SHA256=<printed-manifest-sha256>
+```
+
+The non-root `models` initContainer first verifies the manifest against the
+operator pin, verifies every listed file, checks that the selected detector is
+listed along with the embedding directory's model, metadata, text cache and
+calibration files, copies to the pod's model volume, and verifies the copy. An unset or
+wrong pin prevents pod readiness. The sidecar mounts that volume read-only and
+starts real detector and embedding engines without `--mock`. `MODEL_EMBED=none`
+renders `--embed none`, which the sidecar supports to disable embedding (not
+`/models/none`); default is `mobileclip-s1`. Detector initialization
+precedes the HTTP server; missing or invalid models exit rather than falling
+back to mock. Keep Hugging Face offline and telemetry disabled.
+
+The packaged sidecar built by `make images` includes tracking by default
+(`EDGEML_TRACKING=1` passes `--build-arg WITH_TRACKING=1`). Real Analyze requests
+require boxmot; this installs it and CPU PyTorch from the PyTorch CPU wheel
+index, increasing build time and image size. `EDGEML_TRACKING=0` is available
+for mock-only builds, not the packaged real-inference workload. Direct Docker
+builds retain the Dockerfile's lightweight default, and demo Compose explicitly
+enables tracking as before. Source-based experiments are documented separately in
 [the edgeml reports](../edgeml/reports/E.md).
 
 ## Verification and troubleshooting
