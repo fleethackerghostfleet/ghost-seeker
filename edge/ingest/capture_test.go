@@ -144,6 +144,40 @@ func TestRetagConfirmedSubtypeConfidence(t *testing.T) {
 	}
 }
 
+func TestRetagRecoversMissingSubtypeConfidence(t *testing.T) {
+	ctx := context.Background()
+	g, st, clk := newIngester(t, DedupSightings, nil)
+	row, err := g.newItem(ctx, capture(clk, 1), "capture-hash", &pb.AnalyzeResponse{}, sighting("s1", pb.Sighting_EVENT_OPEN, true, "boat"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := g.retag(ctx, row.Item.Id, &pb.Sighting{Subtype: "tanker"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := updated.Item.Features.Tags["subtype_conf"]; has || strings.Contains(updated.Item.Features.Tags["synthetic"], "subtype_conf") {
+		t.Fatalf("unmatched confidence not cleared: %v", updated.Item.Features.Tags)
+	}
+	updated, err = g.retag(ctx, row.Item.Id, &pb.Sighting{Subtype: "tanker", KeyDetection: &pb.Detection{Label: "tanker", Confidence: .95}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tags := updated.Item.Features.Tags; tags["subtype_conf"] != "0.950" || strings.Contains(tags["synthetic"], "subtype_conf") {
+		t.Fatalf("confidence not recovered: %v", tags)
+	}
+	data, err := st.ReadFormAll(row.Item.Id, pb.FormKind_FORM_KIND_FACT)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f fact.Fact
+	if err := json.Unmarshal(data, &f); err != nil {
+		t.Fatal(err)
+	}
+	if f.Tags["subtype_conf"] != "0.950" {
+		t.Fatalf("FACT confidence not recovered: %v", f.Tags)
+	}
+}
+
 func TestRetagReplacesRealSubtypeConfidence(t *testing.T) {
 	for _, label := range []string{"boat", "tanker", "", "vessel"} {
 		t.Run(label, func(t *testing.T) {

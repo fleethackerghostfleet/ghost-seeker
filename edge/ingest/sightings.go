@@ -255,7 +255,8 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 		changed := it.Features.Tags["subtype"] != s.Subtype
 		it.Features.Tags["subtype"] = s.Subtype
 		synthetic := strings.Split(it.Features.Tags["synthetic"], ",")
-		if changed || slices.Contains(synthetic, "subtype_conf") {
+		_, hasConfidence := it.Features.Tags["subtype_conf"]
+		if changed || !hasConfidence || slices.Contains(synthetic, "subtype_conf") {
 			delete(it.Features.Tags, "subtype_conf")
 			synthetic = slices.DeleteFunc(synthetic, func(key string) bool { return key == "subtype" || key == "subtype_conf" || key == "" })
 			for _, detection := range append([]*pb.Detection{s.KeyDetection}, it.Features.Detections...) {
