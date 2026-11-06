@@ -37,15 +37,15 @@ func ForPrioritizer(name string) (*Engine, error) {
 
 // Tomer scores image items by Tomer's whole-frame priority instead of
 // Default()'s base/unknown/confidence terms; operator interest, the dark-contact
-// boost, freshness and shore pull boosts (platform features) still apply with
+// and new-contact boosts, freshness and shore pull boosts (platform features) still apply with
 // their Default() weights. The tomer weight puts his [0,1] score on the same
 // scale as Default()'s image priorities so policy thresholds
 // (min_priority_for_images) keep working.
 func Tomer() *Engine {
 	d := Default()
 	return &Engine{
-		Scorers: []Scorer{TomerScore{}, Interest{}, DarkContact{}, PersonInWater{}},
-		Weights: map[string]float64{"tomer": 3, "interest": d.Weights["interest"], "dark": d.Weights["dark"], "mob": d.Weights["mob"]},
+		Scorers: []Scorer{TomerScore{}, Interest{}, DarkContact{}, PersonInWater{}, NewContact{}},
+		Weights: map[string]float64{"tomer": 3, "interest": d.Weights["interest"], "dark": d.Weights["dark"], "mob": d.Weights["mob"], "new_contact": d.Weights["new_contact"]},
 	}
 }
 

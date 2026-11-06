@@ -21,6 +21,7 @@ from typing import Optional
 import numpy as np
 
 from edgeml.nightlights import BurstController, frame_report
+from edgeml.tracking.newcontact import NewContactDetector
 
 FORM_KINDS = {"fact": "FORM_KIND_FACT", "thumb": "FORM_KIND_THUMB", "crop": "FORM_KIND_CROP", "full": "FORM_KIND_FULL"}
 EVENTS = {"open": "EVENT_OPEN", "update": "EVENT_UPDATE", "close": "EVENT_CLOSE", "duplicate": "EVENT_DUPLICATE"}
@@ -79,6 +80,7 @@ class _Source:
     tracker: object
     agg: object
     burst: BurstController = field(default_factory=BurstController.from_config)
+    new_contact: NewContactDetector = field(default_factory=NewContactDetector)
     frame_idx: int = 0
     t0_ms: Optional[int] = None
     size: Optional[tuple[int, int]] = None
@@ -111,11 +113,13 @@ class EdgemlEngine:
                  engine: str = "auto", tracker: str = "bytetrack", asso: str = "centroid", max_lost_s: float = 6.0,
                  score_thr: float = 0.35, det_low_thr: float = 0.05, agg: Optional[dict] = None, trk: Optional[dict] = None,
                  text_tower: str = "cache", anomaly_fallback: Optional[dict] = None, live_tiling: Optional[dict] = None,
-                 marine_mammal: Optional[dict] = None, thermal_fallback: Optional[dict] | bool = True):
+                 marine_mammal: Optional[dict] = None, thermal_fallback: Optional[dict] | bool = True, new_contact: Optional[dict] = None):
         from edgeml.runtime.detectors import load_detector
         from edgeml.tracking import AggregatorParams
 
         self.threads, self.fps, self.tracker_variant, self.asso = threads, fps, tracker, asso
+        self.new_contact_config = dict(new_contact or {})
+        NewContactDetector(**self.new_contact_config)
         self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
         self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
         self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
@@ -184,7 +188,8 @@ class EdgemlEngine:
                 tracker = MarineTracker(tracker)
                 agg = make_aggregator(_make_zeroshot_aggregator_class(), name, self.agg_params, embedder=self.embedder, classifier=self.classifier, coarse=self.COARSE,
                                       thermal_floor=getattr(self, "thermal_unknownness_floor", .9))
-                src = self.sources[name] = _Source(tracker=tracker, agg=agg)
+                src = self.sources[name] = _Source(tracker=tracker, agg=agg,
+                                                  new_contact=NewContactDetector(**getattr(self, "new_contact_config", {})))
             return src
 
     def _frame_time(self, src: _Source, captured_ms: Optional[int]) -> float:
@@ -217,7 +222,8 @@ class EdgemlEngine:
             tracks = src.tracker.update(dets, image_bgr, fi, t_s)
             events = src.agg.update(tracks, image_bgr, fi, t_s)
             base_ms = (captured_ms - int(t_s * 1000)) if captured_ms else int(time.time() * 1000) - int(t_s * 1000)
-            sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"])) for ev in events]
+            sightings = [self._sighting(ev, fi, W, H, base_ms, src.agg.states.get(ev["sighting_id"]),
+                                       new_contact=src.new_contact.is_new(ev, src.agg.states)) for ev in events]
             reported = {ev["sighting_id"] for ev in events}
             for tr in tracks:
                 sid = src.agg.track_to_sid.get(tr.track_id)
@@ -256,7 +262,7 @@ class EdgemlEngine:
         resp["detections"].extend(open_dets)
         return resp
 
-    def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int, st=None) -> dict:
+    def _sighting(self, ev: dict, fi: int, W: int, H: int, base_ms: int, st=None, *, new_contact=False) -> dict:
         label = ev.get("label") or ""
         is_key = int(ev.get("best_frame_idx", -1)) == fi and ev["event"] != "close"
         # The edge crops the frame it holds (this one), so report the object's box in *this* frame unless this frame
@@ -272,6 +278,8 @@ class EdgemlEngine:
                "nFrames": int(ev.get("n_frames", 0))}
         if st is not None and st.emb is not None and ev["event"] in ("open", "update"):
             out["embedding"] = [round(float(v), 5) for v in np.asarray(st.emb).ravel()]
+        if new_contact and ev["event"] == "open":
+            out["newContact"] = True
         return out
 
     def _duplicate(self, st, fi: int, W: int, H: int, base_ms: int, track_box=None) -> dict:
@@ -460,6 +468,7 @@ class MockEngine:
             {"kind": "FORM_KIND_FACT", "bytes": "180", "jpegQuality": 0}, {"kind": "FORM_KIND_CROP", "bytes": "6000", "jpegQuality": 75},
             {"kind": "FORM_KIND_THUMB", "bytes": "4000", "jpegQuality": 55}, {"kind": "FORM_KIND_FULL", "bytes": str(int(image_bgr.nbytes // 20) or 1), "jpegQuality": 80}]
         resp["sightings"] = [{"id": sid, "event": event, "keyDetection": det, "isKeyFrame": key, "subtype": sc.subtype,
+                              **({"newContact": True} if event == "EVENT_OPEN" else {}),
                               "value": 0.8 if key else 0.0, "forms": forms, "firstSeenUnixMs": str(now - pos * 200),
                               "lastSeenUnixMs": str(now), "nFrames": pos + 1, "unknownness": 0.0,
                               **({"embedding": self._vec(sc.subtype)} if key else {})}]

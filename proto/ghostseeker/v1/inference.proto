@@ -91,6 +91,7 @@ message Sighting {
   int32 n_frames = 10;
   repeated float embedding = 11; // key-crop embedding of this object (same space as AnalyzeResponse.embedding)
   float unknownness = 12; // zero-shot unknownness of this object's key crop
+  bool new_contact = 13; // true on OPEN when the object was not present in recent frames of this source
 }
 
 // FormHint sizes a form without shipping its bytes.

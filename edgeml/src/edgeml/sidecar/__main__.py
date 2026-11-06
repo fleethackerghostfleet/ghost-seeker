@@ -54,6 +54,7 @@ def main(argv=None) -> None:
     ap.add_argument('--mm', default='{}', help='MarineMammalConfig JSON overrides')
     ap.add_argument("--thermal-fallback", nargs="?", const="{}", default=None, metavar="JSON",
                     help='thermal proposer overrides (enabled by default); JSON null or false disables')
+    ap.add_argument("--new-contact", default=None, metavar="JSON", help="NewContactDetector overrides")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -81,6 +82,7 @@ def main(argv=None) -> None:
                               text_tower=a.text_tower,
                               live_tiling=json.loads(a.live_tiling),
                               marine_mammal={'enabled': a.marine_mammal == 'on', **json.loads(a.mm)},
+                              **({"new_contact": json.loads(a.new_contact)} if a.new_contact is not None else {}),
                               anomaly_fallback=json.loads(a.anomaly_fallback) if a.anomaly_fallback is not None else None,
                               **({"thermal_fallback": json.loads(a.thermal_fallback)} if a.thermal_fallback is not None else {}))
     prioritizer = None

@@ -10,6 +10,11 @@ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
 function captureFixture(){return {lat:36.123456,lon:-76.654321,headingDeg:90,altM:0,fovDeg:45,widthPx:1920,heightPx:1080,contentHash:'abcdef0123456789abcdef',subtype:'tanker',subtypeConf:.91,unknownness:.25,trackId:'track-one',trackFrames:8,synthetic:[]}}
+test('metadata renders extensible new_contact score reason',()=>{
+ const c=setup();
+ const html=vm.runInContext('metadataHTML({scoring:{topReasons:["new_contact"]}})',c);
+ assert.match(html,/new_contact/);
+});
 test('capture panel formats metadata, optional zero altitude, and full hash tooltip',()=>{
  const c=setup();c.capture=captureFixture();
  const html=vm.runInContext('captureHTML({capture})',c);
