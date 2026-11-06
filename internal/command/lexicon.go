@@ -131,6 +131,7 @@ func wordSet(words string) map[string]bool {
 type compiledConcept struct {
 	re      *regexp.Regexp
 	concept concept
+	phrase  string
 }
 
 var (
@@ -162,32 +163,18 @@ func phrasePattern(phrases []string) *regexp.Regexp {
 func compileConcepts(edge bool) []compiledConcept {
 	entries := make([]compiledConcept, 0, len(conceptLexicon))
 	for _, entry := range conceptLexicon {
-		phrases := make([]string, 0, len(entry.phrases))
 		for _, phrase := range entry.phrases {
 			// Live shore mode matches edge subtypes (sailboat, speedboat, ...)
 			// through catalog.Aliases, so keep those phrases for it.
 			if alias, ok := catalog.Aliases[phrase]; edge && ok && catalog.EdgeSubtypes[alias] {
 				continue
 			}
-			phrases = append(phrases, phrase)
-		}
-		if len(phrases) > 0 {
-			entries = append(entries, compiledConcept{re: phrasePattern(phrases), concept: entry})
+			entries = append(entries, compiledConcept{re: phrasePattern([]string{phrase}), concept: entry, phrase: phrase})
 		}
 	}
-	// Longest phrases first across concepts ("drone boat" before "drone").
-	sort.SliceStable(entries, func(i, j int) bool { return longest(entries[i].concept.phrases) > longest(entries[j].concept.phrases) })
+	// Longest phrases first across concepts ("lng carrier" before "carrier").
+	sort.SliceStable(entries, func(i, j int) bool { return len(entries[i].phrase) > len(entries[j].phrase) })
 	return entries
-}
-
-func longest(phrases []string) int {
-	n := 0
-	for _, phrase := range phrases {
-		if len(phrase) > n {
-			n = len(phrase)
-		}
-	}
-	return n
 }
 
 // coreVocab lists the words the base parser's regexes already know.
