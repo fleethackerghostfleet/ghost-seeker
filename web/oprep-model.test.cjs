@@ -75,3 +75,7 @@ test('embedded item.capture fallback supports zeros and does not invent metadata
  const absent=M.defaults(item,classes,[],now);assert.equal(absent.sensorHeading,'UNKNOWN');assert.doesNotMatch(absent.evidence,/SYNTHETIC|sighting track|content hash/);
  assert.equal(M.defaults({...item,capture:{subtype:'Cargo ship'}},classes).species,'UNIDENTIFIED WHALE');
 });
+test('generic mammal or dolphin detections are not called whales',()=>{
+ assert.equal(M.defaults({...item,dets:[{cls:'mm',conf:.7}]},classes,[],now).species,'UNIDENTIFIED MARINE MAMMAL');
+ assert.equal(M.defaults({...item,dets:[{cls:'dolphin',conf:.8}]},{dolphin:{lab:'Dolphin'}},[],now).species,'UNIDENTIFIED MARINE MAMMAL');
+});
