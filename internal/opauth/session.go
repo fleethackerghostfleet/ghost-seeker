@@ -306,7 +306,7 @@ func (s *Sessions) page(w http.ResponseWriter, msg string, next string) {
 		`button{margin-top:14px;width:100%;padding:9px;border:0;border-radius:6px;background:#1e88e5;color:#fff;font-weight:600;cursor:pointer}.err{color:#ff7b72}header{display:flex;align-items:center;gap:16px;margin-bottom:8px}` + httpx.DocsLinkCSS + `</style></head><body>` +
 		`<form method="post" action="/login"><header>` + brandLogo + httpx.DocsLinkHTML + `</header>`)
 	if s.demoAcceptAnyToken {
-		b.WriteString(`<p>DEMO MODE: any non-empty token grants operator access.</p>`)
+		b.WriteString(`<p>Demo mode - CAC feature can be enabled</p>`)
 	} else {
 		b.WriteString(`<p>Enter the operator token (GS_OPERATOR_TOKEN) to open the shore console.</p>`)
 	}

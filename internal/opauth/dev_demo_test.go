@@ -120,7 +120,7 @@ func TestDemoAcceptAnyToken(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			}))
 			page := do(h, http.MethodGet, "/login", "10.0.0.9:5", nil)
-			if strings.Contains(page.Body.String(), "any non-empty token") != tc.demo {
+			if strings.Contains(page.Body.String(), "<p>Demo mode - CAC feature can be enabled</p>") != tc.demo {
 				t.Fatal("login hint does not match demo mode")
 			}
 			w := do(h, http.MethodPost, "/login", "10.0.0.9:5", map[string]string{
