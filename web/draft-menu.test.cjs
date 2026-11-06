@@ -2,6 +2,21 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const setup=require('./oprep-harness.cjs');
 const M=require('./static/oprep-model.js');
+test('unverified addressee placeholders stay amber and invalid while remaining in the preview',()=>{
+ const h=setup();
+ h.run(`oprep.open({id:'image-1'},{},[],document.getElementById('rvOprep'))`);
+ for(const name of ['to','info']){
+  const control=h.form.elements.namedItem(name),placeholder=control.value;
+  assert.equal(control['aria-invalid'],'true');assert.equal(control.classList['oprep-missing'],true);
+  assert(h.nodes.oprepPreview.textContent.includes(placeholder));
+  control.value='VERIFIED OPERATOR ADDRESSEE';h.form.input();
+  assert.equal(control['aria-invalid'],'false');assert.equal(control.classList['oprep-missing'],false);
+  for(const value of [placeholder,'  [recipient verify ]  ','']){
+   control.value=value;h.form.input();
+   assert.equal(control['aria-invalid'],'true');assert.equal(control.classList['oprep-missing'],true);
+  }
+ }
+});
 test('Draft menu lists whale OPREP first; every option opens a metadata-prefilled shared dialog',()=>{
  const h=setup(),options=h.nodes.rvDraftMenu.children;
  assert.equal(options.length,5);assert.equal(options[0].textContent,'OPREP-3 NAVY BLUE (whale strike)');
