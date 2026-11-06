@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -18,6 +20,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
@@ -39,6 +42,7 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/api"
 	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
 	ssync "github.com/fleethackerghostfleet/ghost-seeker/shore/sync"
+	"google.golang.org/protobuf/proto"
 )
 
 const operator = "synthetic-contract-test-operator"
@@ -290,6 +294,9 @@ func TestProdContractLiveIO(t *testing.T) {
 	if again := s.push(t, 1, false); again != id {
 		t.Fatal("exact duplicate not folded")
 	}
+	if err := s.st.SetPolicy(s.ctx, &pb.Policy{Version: 1}); err != nil {
+		t.Fatal(err)
+	}
 	res, reader, cancel = s.stream(t, cursor)
 	defer cancel()
 	defer res.Body.Close()
@@ -418,6 +425,275 @@ func TestProdContractTierChangesNotifyExistingItems(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitTier(second, "P4")
+}
+
+func TestProdContractStreamRetention(t *testing.T) {
+	s := newRig(t)
+	id := s.push(t, 22, false)
+	s.waitImage(t, id)
+	if err := s.st.SetPolicy(s.ctx, &pb.Policy{Version: 1}); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := s.st.EventCursor(s.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.st.PruneEvents(s.ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ query, last string }{
+		{"?since=0", ""}, {"", "0"}, {"", ""},
+		{"?since=" + strconv.FormatInt(latest, 10), "0"},
+	} {
+		req, err := http.NewRequest("GET", s.shore.URL+"/api/v1/stream"+tc.query, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+operator)
+		if tc.last != "" {
+			req.Header.Set("Last-Event-ID", tc.last)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(res.Body)
+		res.Body.Close()
+		if err != nil || res.StatusCode != http.StatusGone || !bytes.Contains(body, []byte("GET /api/v1/items")) {
+			t.Fatal("stale cursor did not require resync", res.StatusCode, string(body), err)
+		}
+		s.contract.response(t, "/api/v1/stream", "get", res.StatusCode, res.Header.Get("Content-Type"), body)
+	}
+	stream, reader, cancel := s.stream(t, strconv.FormatInt(latest-2, 10))
+	cursor, event := readEvent(t, s.contract, reader)
+	n, _ := strconv.ParseInt(cursor, 10, 64)
+	if n < latest-1 || event["item"].(map[string]any)["id"] != id {
+		t.Fatal("retained boundary failed", cursor, event)
+	}
+	cancel()
+	stream.Body.Close()
+	r, body := s.request(t, "GET", s.shore.URL+"/api/v1/items?since=0", operator, "", nil)
+	if r.StatusCode != 200 || !bytes.Contains(body, []byte(id)) {
+		t.Fatal("event pruning removed list history", r.StatusCode)
+	}
+	s.contract.response(t, "/api/v1/items", "get", r.StatusCode, r.Header.Get("Content-Type"), body)
+	if tail, _ := s.st.EventCursor(s.ctx); tail != latest {
+		t.Fatal("pruning renumbered tail")
+	}
+}
+
+func TestProdContractConnectedStreamOvertakenByRetention(t *testing.T) {
+	s := newRig(t)
+	if err := s.st.UpsertManifest(s.ctx, "contract-edge", &pb.ManifestEntry{ItemId: "lagging"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	start, _ := s.st.EventCursor(s.ctx)
+	s.api.PollInterval = 250 * time.Millisecond
+	s.api.Heartbeat = time.Hour
+	stream, _, cancel := s.stream(t, strconv.FormatInt(start, 10))
+	defer cancel()
+	for i := range 5 {
+		if err := s.st.SetPolicy(s.ctx, &pb.Policy{Version: int64(i + 1)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.st.PruneEvents(s.ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(stream.Body)
+	if err != nil || bytes.Contains(body, []byte("id: ")) {
+		t.Fatal("lagging stream silently skipped retained history", string(body), err)
+	}
+	res, data := s.request(t, "GET", s.shore.URL+"/api/v1/stream?since="+strconv.FormatInt(start, 10), operator, "", nil)
+	if res.StatusCode != 410 {
+		t.Fatal("lagging reconnect did not require resync", res.StatusCode)
+	}
+	s.contract.response(t, "/api/v1/stream", "get", res.StatusCode, res.Header.Get("Content-Type"), data)
+}
+
+func TestProdContractStreamCoalescesConsecutivePageUpdates(t *testing.T) {
+	s := newRig(t)
+	for _, id := range []string{"first", "second"} {
+		if err := s.st.UpsertManifest(s.ctx, "contract-edge", &pb.ManifestEntry{ItemId: id, Type: pb.ItemType_ITEM_TYPE_IMAGE}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	start, _ := s.st.EventCursor(s.ctx)
+	for i := range 70 {
+		if err := s.st.SetFeatures(s.ctx, "first", &pb.Features{Tags: map[string]string{"update": strconv.Itoa(i)}}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stream, reader, cancel := s.stream(t, strconv.FormatInt(start, 10))
+	for _, offset := range []int64{32, 64, 70} {
+		cursor, event := readEvent(t, s.contract, reader)
+		if cursor != strconv.FormatInt(start+offset, 10) || event["item"].(map[string]any)["id"] != "first" {
+			t.Fatal("consecutive page updates not coalesced at last cursor", cursor, event)
+		}
+	}
+	cancel()
+	stream.Body.Close()
+	resumed, resumeReader, resumeCancel := s.stream(t, strconv.FormatInt(start+32, 10))
+	defer resumeCancel()
+	defer resumed.Body.Close()
+	if cursor, _ := readEvent(t, s.contract, resumeReader); cursor != strconv.FormatInt(start+64, 10) {
+		t.Fatal("coalesced cursor did not resume exclusively", cursor)
+	}
+	start, _ = s.st.EventCursor(s.ctx)
+	for i, id := range []string{"first", "second", "first"} {
+		if err := s.st.SetFeatures(s.ctx, id, &pb.Features{Tags: map[string]string{"update": "alternating-" + strconv.Itoa(i)}}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	other, otherReader, otherCancel := s.stream(t, strconv.FormatInt(start, 10))
+	defer otherCancel()
+	defer other.Body.Close()
+	for _, id := range []string{"first", "second", "first"} {
+		_, event := readEvent(t, s.contract, otherReader)
+		if event["item"].(map[string]any)["id"] != id {
+			t.Fatal("nonconsecutive update incorrectly removed", event)
+		}
+	}
+}
+
+func TestProdContractStreamCoalescesCreationWithLatestState(t *testing.T) {
+	s := newRig(t)
+	if err := s.st.UpsertManifest(s.ctx, "contract-edge", &pb.ManifestEntry{ItemId: "coalesced-new", Type: pb.ItemType_ITEM_TYPE_IMAGE}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	for _, revision := range []string{"first", "latest"} {
+		if err := s.st.SetFeatures(s.ctx, "coalesced-new", &pb.Features{Tags: map[string]string{"revision": revision}}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tail, err := s.st.EventCursor(s.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, reader, cancel := s.stream(t, "0")
+	cursor, event := readEvent(t, s.contract, reader)
+	item := event["item"].(map[string]any)
+	if event["event"] != "created" || cursor != strconv.FormatInt(tail, 10) || item["tags"].(map[string]any)["revision"] != "latest" {
+		t.Fatal("coalesced creation lost its kind, latest state, or final cursor", cursor, event)
+	}
+	cancel()
+	stream.Body.Close()
+	resumed, resumeReader, resumeCancel := s.stream(t, cursor)
+	defer resumeCancel()
+	defer resumed.Body.Close()
+	if err := s.st.SetFeatures(s.ctx, "coalesced-new", &pb.Features{Tags: map[string]string{"revision": "after-resume"}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	next, update := readEvent(t, s.contract, resumeReader)
+	if update["event"] != "updated" || next != strconv.FormatInt(tail+1, 10) {
+		t.Fatal("resume replayed a creation instead of the subsequent update", next, update)
+	}
+}
+
+func TestProdContractStreamPolicyScale(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	dir := t.TempDir()
+	const count = 2000
+	seedStreamSnapshot(t, ctx, dir, count)
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	a := api.New(st)
+	a.Heartbeat = time.Hour
+	server := httptest.NewServer(opauth.RequireBearer(operator, a.Handler()))
+	defer server.Close()
+	cursor, _ := st.EventCursor(ctx)
+	budget := 10 * time.Second
+	// Pure-Go SQLite pays substantial race instrumentation overhead; keep the
+	// production budget tight while still checking every item under -race.
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "-race" && setting.Value == "true" {
+				budget *= 10
+			}
+		}
+	}
+	requestCtx, stop := context.WithTimeout(ctx, budget+5*time.Second)
+	defer stop()
+	req, err := http.NewRequestWithContext(requestCtx, "GET", server.URL+"/api/v1/stream?since="+strconv.FormatInt(cursor, 10), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+operator)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatal("scale stream rejected", res.StatusCode)
+	}
+	start := time.Now()
+	if err := st.SetPolicy(ctx, &pb.Policy{Id: "scale-policy", Version: 1, IssuedAtUnixMs: time.Now().UnixMilli()}); err != nil {
+		t.Fatal(err)
+	}
+	reader, c := bufio.NewReader(res.Body), loadContract(t)
+	seen := map[string]bool{}
+	for i := range count {
+		id, event := readEvent(t, c, reader)
+		itemID := event["item"].(map[string]any)["id"].(string)
+		if seen[itemID] || id != strconv.FormatInt(cursor+int64(i)+1, 10) {
+			t.Fatal("policy page missing/repeated item or cursor", id, itemID)
+		}
+		seen[itemID] = true
+	}
+	elapsed := time.Since(start)
+	t.Logf("streamed policy update for %d items in %s", len(seen), elapsed)
+	if elapsed > budget {
+		t.Fatal("2000-item policy stream exceeded budget", elapsed, budget)
+	}
+}
+
+func seedStreamSnapshot(t *testing.T, ctx context.Context, dir string, count int) {
+	t.Helper()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(dir, "shore.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Seed a pre-journal snapshot, not the unrelated per-arrival tier updates.
+	// Store.Open restores the trigger and backfills all receipts before streaming.
+	if _, err := db.ExecContext(ctx, `DROP TRIGGER api_manifest_insert`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at,priority) VALUES(?,'scale-edge',?,?,?,?,?,?)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stmt.Close()
+	for i := range count {
+		m := &pb.ManifestEntry{ItemId: fmt.Sprintf("scale-%04d", i), Type: pb.ItemType_ITEM_TYPE_IMAGE, Source: "scale-camera", CapturedAtUnixMs: time.Now().UnixMilli(), Priority: float64(i%100) / 100}
+		raw, err := proto.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stmt.ExecContext(ctx, m.ItemId, int32(m.Type), m.CapturedAtUnixMs, m.Source, raw, m.CapturedAtUnixMs, m.Priority); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestProdContractSpoolPaginationAuthAndUpdates(t *testing.T) {
