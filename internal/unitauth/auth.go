@@ -89,7 +89,7 @@ func (i *Interceptor) authenticate(h http.Header) (string, error) {
 	}
 	c := &claims{}
 	_, err := jwt.ParseWithClaims(parts[1], c, func(*jwt.Token) (any, error) { return i.key, nil },
-		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
+		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil || strings.TrimSpace(c.Subject) == "" || c.Role != "unit" {
 		return "", connect.NewError(connect.CodeUnauthenticated, errors.New("invalid unit token"))
 	}

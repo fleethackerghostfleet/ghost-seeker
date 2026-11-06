@@ -1,8 +1,8 @@
 # Ghost Seeker fielding
 
 This is a **demo package, not an accredited operational system**. Unit
-SyncService authentication is on by default; edge storage caps are opt-in. There is no TLS
-or deployment-specific security review. Use only in an isolated, approved
+SyncService authentication is on by default; edge storage caps and shore/edge
+listener TLS are opt-in. There is no deployment-specific security review. Use only in an isolated, approved
 environment. The operator application is in-memory; shore and edge data are
 SQLite databases.
 
@@ -120,6 +120,7 @@ variables.
 | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset | Signing-key file; takes precedence over literal key |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
 | `-edge` | `EDGE_ID` | empty | Edge ID to address downlink to; empty means all |
+| `-api-event-retain` | — | `100000` | Positive count of newest stream journal entries to keep; swept at startup and every second |
 
 ### `ghost-seeker` operator app
 
@@ -157,8 +158,10 @@ database. Edge storage caps are opt-in; see [Edge storage caps](#edge-storage-ca
 | Toxiproxy admin API | 8474 | Compose demo only |
 
 SyncService unit JWT authentication is on by default. The opaque operator bearer
-token gates every ConsoleService RPC and `/blob/` request. Neither service
-provides TLS. Do not expose them to an untrusted network.
+token gates every ConsoleService RPC and `/blob/` request. Both nodes support
+opt-in TLS 1.3; the Compose/Zarf defaults above remain HTTP. See
+[listener TLS deployment notes](../deploy/README.md) before exposing them outside
+an isolated network.
 
 ## Compose demonstration
 
@@ -218,8 +221,14 @@ When staging an edge-only cluster:
 ```sh
 zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
   --confirm --components=edge \
-  --set-variables=SHORE_URL=http://shore.example.internal:8080
+  --set-variables=SHORE_URL=http://shore.example.internal:8080 \
+  --set-variables=SHORE_EGRESS_CIDR=203.0.113.10/32 \
+  --set-variables=SHORE_EGRESS_PORT=8080
 ```
+
+`SHORE_EGRESS_CIDR`/`SHORE_EGRESS_PORT` must cover the address and port that
+`SHORE_URL` resolves to; the default-deny egress policy otherwise blocks the
+sync link.
 
 The packaged images are production builds (`-tags prod`, see
 [Production profile](#production-profile-and-prod-gate)): the edge has no
@@ -235,6 +244,64 @@ zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
 
 Edge can point across clusters to a separately routed sidecar if the network
 permits it.
+
+### Zarf network isolation
+
+All manifests use the dedicated `ghost-seeker` namespace; ship and shore are
+split by deploying component subsets into separate clusters, not by different
+hardcoded namespaces. The required namespace component installs default-deny
+ingress and egress for **all** pods there. Each workload component installs its own
+allow policies, so an edge-only install still receives default-deny plus edge allows.
+Existing workload definitions, Service types and ports are unchanged.
+
+| From | To / TCP port | Evidence / condition |
+|---|---|---|
+| Same-namespace `app: operator` | `app: shore` / 8080 | `OPERATOR_SHORE_URL`; bridge console RPCs and blob/API proxy (HTTP or configured TLS) |
+| Same-namespace `app: operator` | `app: edge` / 8081 | `edge.yaml` Service; bridge edge console RPCs when configured (packaged operator has `-edge=`) |
+| Same-namespace `app: edge` | `app: shore` / 8080 | `edge.yaml` `SHORE_URL`; `cmd/edge` sync link |
+| Same-namespace `app: edge` | `app: edgeml-sidecar` / 9090 | `INFER_URL`; `edge-inference.yaml` Service; `edge/inference` client |
+| Same-namespace `app: shore` | `app: edgeml-sidecar` / 9090 | Optional `SHORE_INFER_URL` for shore text-embedding search |
+| `OPERATOR_INGRESS_CIDR` | `app: operator` / 8090 | External browsers or ingress gateway to the operator UI |
+| `SHORE_INGRESS_CIDR` | `app: shore` / 8080 | Routed ship sync, remote operators, external `/api/v1` clients |
+| `EDGE_INGRESS_CIDR` | `app: edge` / 8081 | Remote operator/ship console and authenticated live sensor push API |
+| `INFERENCE_INGRESS_CIDR` | `app: edgeml-sidecar` / 9090 | Edge or shore clients routed from another site/namespace |
+
+The four CIDR variables default to the documentation-only host `192.0.2.0/32`.
+Set each needed variable to an approved source network or gateway `/32` (IPv6
+CIDRs are also valid), not a destination Service IP. Do not use `0.0.0.0/0` or
+`::/0`. Unused external paths can retain the documentation-only default.
+For example, on the **receiving shore cluster**, add
+`--set-variables=SHORE_INGRESS_CIDR=203.0.113.10/32` to the deployment command,
+replacing that example with the ship gateway's actual source address. Set
+`OPERATOR_INGRESS_CIDR` separately for browser/gateway access. On the ship, set
+`EDGE_INGRESS_CIDR` if a remote operator or sensor pushes to edge; on a remote
+inference site, set `INFERENCE_INGRESS_CIDR`. Override `SHORE_URL`/`INFER_URL`
+and public Host allowlists independently; source CIDRs do not provide routing.
+For multiple disjoint approved networks, add narrow site-specific ingress
+policies rather than widening to the entire address space.
+
+Pod-selector peers are restricted to the policy's namespace. For another
+namespace/cluster, use the routed CIDR path (or reviewed site-specific policies).
+Determine the source IP **as seen by the destination pod/CNI**: gateway SNAT,
+node NAT and whether an ingress controller preserves client IPs affect matching.
+Verify enforcement on the actual CNI and topology; these policies have only
+been statically validated here. Kubelet probes/node traffic and administrative
+port-forwarding are not an isolation test; test allowed and denied pod/routed
+connections. A CNI without NetworkPolicy enforcement does not protect the pods.
+Existing additional NetworkPolicies may widen permissions because allows are additive.
+
+The Services remain ClusterIP; provision approved external routing/ingress
+separately. Policies allow a **port**, not a path: shore 8080 also serves sync,
+console and blobs, not just `/api/v1`. Keep application authentication and a TLS
+boundary; use a gateway for HTTP path restrictions. Egress permits only the five
+internal service flows above, kube-system/kube-dns on UDP/TCP 53, and configured
+destination CIDR/port pairs. External egress defaults fail closed, independently
+of ingress source CIDRs and application URLs. Inventory remote shore/inference,
+optional camera, operator LLM/research/OCSP and any approved model mirror endpoints
+before deployment. See [deployment egress variables](../deploy/README.md#external-egress-variables)
+for the complete variable table, TLS/proxy ports and DNS/NAT caveats.
+
+### Live edge input
 
 The edge captures from the authenticated push API and the optional live
 sources below (`-watch-dir` spool, `-mjpeg-url`). The packaged edge mounts the
@@ -256,8 +323,9 @@ upload are unchanged. Run edge and shore with explicit operator credentials
 (`GS_OPERATOR_TOKEN_FILE`, `-dev-token-file none`) and provision the unit JWT
 and shore signing key as described above. The push API accepts the configured
 operator bearer token **or** that edge's configured unit JWT. Shore's output
-API requires its operator credential, not the unit JWT. Use TLS at an approved
-reverse proxy and private links; the built-in HTTP listeners do not provide TLS.
+API requires its operator credential, not the unit JWT. Enable built-in listener
+TLS or use an approved TLS reverse proxy and private links; see
+[listener TLS deployment notes](../deploy/README.md).
 
 ### Push JPEG / PNG
 
@@ -312,8 +380,10 @@ in mind, and configure edge disk retention caps separately.
 Drop uniquely named `.jpg`, `.jpeg` or `.png` regular files in the spool root;
 optional metadata goes in `<image>.json` (for example `frame.jpg.json`). Publish
 the sidecar first, then atomically rename a completed image into the root.
-Size and modification time of **both** files must stay unchanged over a poll
-interval; a paused writer can still appear stable, so atomic publication is
+Size and modification time of **both** files must stay unchanged between poll
+ticks; one stamp pass covers the whole batch and the next tick admits all stable
+files without a per-file sleep. A paused writer can still appear stable, so
+atomic publication is
 recommended. Symlinks and subdirectories are ignored. Files move to `processed/`
 only after the edge ingester succeeds (including duplicate folds), or `failed/`
 on invalid input/ingest failure, together with the sidecar. Queue saturation
@@ -396,14 +466,28 @@ curl -N --header @/run/secrets/operator.header \
   carries the **latest** item state, not an immutable historical snapshot.
   Save the last fully processed event ID and reconnect with `Last-Event-ID`
   (or `?since=`). Resume is exclusive and survives shore restarts, provided its
-  SQLite store is retained. No cursor means replay from the beginning; use the
+  SQLite store is retained and the cursor is within event retention. No cursor
+  means replay from the beginning; use the
   `stream_cursor` from `/health` to start at the current tail. Cursors ahead of
-  the journal are rejected. Receipt/event journals grow with retained shore
-  history; back them up with the database.
+  the journal are rejected. Shore retains the newest `-api-event-retain` events
+  (default `100000`, must be positive), pruning at startup and once per second.
+  Bursts can temporarily exceed that count between sweeps. A stream cursor
+  older than the oldest retained sequence minus one returns **410 Gone** with
+  a JSON error directing the client to `GET /api/v1/items`. An omitted/zero
+  cursor also gets 410 if the beginning was pruned. To resync, capture the
+  `/health` `stream_cursor` first, page `/items`, then resume streaming from that
+  saved cursor so updates during pagination are replayed. If pagination itself
+  outlasts retention, repeat the resync. Item/list receipt history is not pruned.
+  Back up the journals with the SQLite database.
 - SSE heartbeat comments arrive every 15 s. At most 64 streams are admitted
   (`429` above that); each client fetches at most 32 journal records at once.
+  Ranks are computed once per page; consecutive records for one item within
+  that page produce one latest-state event with the last record's cursor.
+  If that run includes a creation, the event kind remains `created`.
   Slow/broken writers time out after 10 s rather than accumulating a queue;
-  reconnect using the saved event cursor. Reverse proxies must disable
+  reconnect using the saved event cursor. A connected reader overtaken by
+  retention is disconnected; reconnecting with its expired cursor returns 410.
+  Reverse proxies must disable
   response buffering and allow streaming connections.
 - `/health` returns `status`, manifested item count and `stream_cursor`.
 
@@ -475,7 +559,8 @@ key must be non-default and at least 32 bytes. Missing, invalid, or expired
 tokens return `Unauthenticated`; an `ExchangeRequest.edge_id` that differs
 from `sub` returns `PermissionDenied`. Unit authentication protects
 SyncService. The opaque operator bearer token gates ConsoleService and
-`/blob/` requests. Neither service has TLS.
+`/blob/` requests. Server TLS is available on both nodes but must be explicitly
+enabled; authentication alone does not encrypt the link.
 
 `*_FILE` credentials take precedence over literal environment values. A
 nonempty file path is read at startup and a missing file is an error. Shore

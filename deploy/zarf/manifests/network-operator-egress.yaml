@@ -1,0 +1,68 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: operator-egress
+  namespace: ghost-seeker
+spec:
+  podSelector:
+    matchLabels:
+      app: operator
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: shore
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - podSelector:
+            matchLabels:
+              app: edge
+      ports:
+        - protocol: TCP
+          port: 8081
+    - to:
+        - ipBlock:
+            cidr: "###ZARF_VAR_SHORE_EGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: ###ZARF_VAR_SHORE_EGRESS_PORT###
+    - to:
+        - ipBlock:
+            cidr: "###ZARF_VAR_EDGE_EGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: ###ZARF_VAR_EDGE_EGRESS_PORT###
+    - to:
+        - ipBlock:
+            cidr: "###ZARF_VAR_LLM_EGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: ###ZARF_VAR_LLM_EGRESS_PORT###
+    - to:
+        - ipBlock:
+            cidr: "###ZARF_VAR_RESEARCH_EGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: ###ZARF_VAR_RESEARCH_EGRESS_PORT###
+    - to:
+        - ipBlock:
+            cidr: "###ZARF_VAR_OCSP_EGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: ###ZARF_VAR_OCSP_EGRESS_PORT###

@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inference-ingress
+  namespace: ghost-seeker
+spec:
+  podSelector:
+    matchLabels:
+      app: edgeml-sidecar
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: edge
+        - podSelector:
+            matchLabels:
+              app: shore
+        - ipBlock:
+            cidr: "###ZARF_VAR_INFERENCE_INGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: 9090
