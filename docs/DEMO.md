@@ -1,5 +1,15 @@
 # Ghost Fleet demo runbook
 
+## Watch-floor whale-strike draft
+
+Open an image's detail panel and choose **Draft OPREP-3 NAVY BLUE (whale strike)**.
+The local-only dialog prefills capture time, source position (when available),
+and the highest-confidence marine mammal detection. Edit the reporting fields,
+review the live preview, then copy or download the draft as plain text.
+Nothing is submitted or released, and machine detection does not confirm a strike.
+Confirm category, addressees and timelines against OPNAVINST 3100.6K and current
+fleet marine mammal strike guidance before release. Available to all console roles.
+
 The committed headless run demonstrates **5 of 6 labeled objects imaged at shore
 at 9.6 kbps**, vs 0 of 6 naive and 1 of 6 with image-level dedup; the sightings
 row reaches all 6 from 64 kbps up. It uses ground-truth object identities to
