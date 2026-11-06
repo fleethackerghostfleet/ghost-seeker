@@ -2,6 +2,8 @@ package ingest
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -96,6 +98,48 @@ func TestCaptureClassificationProvenance(t *testing.T) {
 		}
 		if real && (a.Features.Tags["subtype"] != "tanker" || a.Features.Tags["subtype_conf"] != "0.910") {
 			t.Fatalf("real classification lost: %v", a.Features.Tags)
+		}
+	}
+}
+
+func TestRetagConfirmedSubtypeConfidence(t *testing.T) {
+	for _, label := range []string{"boat", "tanker"} {
+		ctx := context.Background()
+		g, st, clk := newIngester(t, DedupSightings, nil)
+		opened := sighting("s1", pb.Sighting_EVENT_OPEN, true, "tentative")
+		row, err := g.newItem(ctx, capture(clk, 1), "capture-hash", &pb.AnalyzeResponse{}, opened)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row.Item.Features.Tags["subtype_conf"] != "0.70" {
+			t.Fatal("missing synthetic placeholder")
+		}
+		row.Item.Features.Tags["synthetic"] += ",subtype"
+		if err := st.UpdateItem(ctx, row.Item); err != nil {
+			t.Fatal(err)
+		}
+		updated, err := g.retag(ctx, row.Item.Id, &pb.Sighting{Subtype: label, Event: pb.Sighting_EVENT_UPDATE})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tags := updated.Item.Features.Tags
+		if label == "boat" {
+			if tags["subtype_conf"] != "0.900" || strings.Contains(tags["synthetic"], "subtype") {
+				t.Fatalf("real confirmation confidence not applied: %v", tags)
+			}
+		} else if tags["subtype_conf"] != "0.70" || !strings.Contains(tags["synthetic"], "subtype_conf") {
+			t.Fatalf("unmatched confidence changed: %v", tags)
+		}
+		data, err := st.ReadFormAll(row.Item.Id, pb.FormKind_FORM_KIND_FACT)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var f fact.Fact
+		if err := json.Unmarshal(data, &f); err != nil {
+			t.Fatal(err)
+		}
+		if f.Tags["subtype_conf"] != tags["subtype_conf"] || f.Tags["synthetic"] != tags["synthetic"] {
+			t.Fatal("FACT provenance not updated")
 		}
 	}
 }

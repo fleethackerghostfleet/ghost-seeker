@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -252,6 +254,22 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 	it.Features.Tags["event"] = eventTag(s.Event)
 	if s.Subtype != "" {
 		it.Features.Tags["subtype"] = s.Subtype
+		synthetic := strings.Split(it.Features.Tags["synthetic"], ",")
+		if slices.Contains(synthetic, "subtype_conf") {
+			detections := append([]*pb.Detection{s.KeyDetection}, it.Features.Detections...)
+			for _, detection := range detections {
+				if detection != nil && detection.Label == s.Subtype {
+					it.Features.Tags["subtype_conf"] = strconv.FormatFloat(float64(detection.Confidence), 'f', 3, 32)
+					synthetic = slices.DeleteFunc(synthetic, func(key string) bool { return key == "subtype" || key == "subtype_conf" })
+					if len(synthetic) == 0 {
+						delete(it.Features.Tags, "synthetic")
+					} else {
+						it.Features.Tags["synthetic"] = strings.Join(synthetic, ",")
+					}
+					break
+				}
+			}
+		}
 	}
 	nf, err := g.replaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal())
 	if err != nil {
