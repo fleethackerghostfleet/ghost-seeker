@@ -30,7 +30,7 @@ func TestUnsupportedRawPolicyPreservesActiveRules(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity || !proto.Equal(before, shore.stored()) {
 		t.Fatalf("unsupported request changed policy: status=%d before=%v after=%v body=%s", rec.Code, before, shore.stored(), rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Not supported:") || !strings.Contains(rec.Body.String(), "unicorns") {
+	if !strings.Contains(rec.Body.String(), command.NoMatchReadback) {
 		t.Fatalf("missing unsupported explanation: %s", rec.Body.String())
 	}
 }
@@ -55,7 +55,7 @@ func TestScopedRuleKeepsUnsupportedReadback(t *testing.T) {
 			}
 			readback = result.Readback
 		}
-		if !strings.Contains(readback, `Not supported: "unicorns"`) || !strings.Contains(readback, "this sensor can detect:") {
+		if !strings.Contains(readback, command.NoMatchReadback) || strings.Contains(readback, "unicorns") {
 			t.Errorf("%s lost unsupported readback: status=%d %s", endpoint, rec.Code, rec.Body.String())
 		}
 	}

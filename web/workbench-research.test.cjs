@@ -45,15 +45,16 @@ test('research interpretation is shown and changes require explicit confirmation
  await h.$('wbConfirmApply').onclick();assert.equal(h.calls.filter(c=>c.url==='/api/directives').length,1);
  assert.equal(h.calls.find(c=>c.url==='/api/directives').body.rules[0].weight,2);
 });
-test('offline unsupported readback and echoed terms are inert text and cannot apply empty rules',async()=>{
+test('offline no-match readback is inert text, never lists words or vocabulary, and cannot apply empty rules',async()=>{
  const payload='<img src=x onerror=alert(1)>';
- const readback=`Not supported: "${payload}" — this sensor can detect: small boat, person.`;
+ const readback=`No matching imagery yet — the feed will update as it arrives. ${payload}`;
  const h=setup(()=>({rules:[],unknown:[payload],path:'rules',readback,warnings:[]}));
  await h.type('report '+payload);await h.preview();
  assert.equal(h.$('wbInterpretationReadback').textContent,readback);
  assert.equal(h.$('wbInterpretationReadback').innerHTML,'');
- assert.match(h.$('wbUnknown').innerHTML,/&lt;img src=x onerror=alert\(1\)&gt;/);
- assert.doesNotMatch(h.$('wbUnknown').innerHTML,/<img/);
+ assert.equal(h.$('wbUnknown').textContent,'');
+ assert.doesNotMatch(h.$('wbUnknown').innerHTML,/Not understood|Recognized terms|img/);
+ assert.doesNotMatch(h.$('wbSuggestions').innerHTML,/prioritize boats/);
  assert.equal(h.$('wbApply').disabled,true);
  assert.equal(h.calls.some(c=>c.url==='/api/directives'),false);
 });

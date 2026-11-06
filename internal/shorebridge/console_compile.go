@@ -345,9 +345,6 @@ func (c *Console) compile(w http.ResponseWriter, r *http.Request) {
 	}
 	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin, false)
 	warnings := cd.Warnings
-	if len(cd.Rules) == 0 && !cd.Blocked && cd.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-		warnings = mergeWarnings(warnings, []string{"Nothing recognized — the shore interpreter maps object names after ignore/suppress or prioritize/boost."})
-	}
 	unknown := unknownWords(body.Text, cd.Suppress, cd.Boost)
 	if cd.Compiled != nil && cd.Compiled.Unknown != nil {
 		unknown = cd.Compiled.Unknown

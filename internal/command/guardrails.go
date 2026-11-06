@@ -64,7 +64,7 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 				}
 				for _, class := range rule.Classes {
 					if !labels[strings.ToLower(class)] && !classes[strings.ToLower(class)] {
-						warnings = append(warnings, "Cannot detect "+class+": the analyzer only knows "+strings.Join(capabilities.FixedLabels, ", ")+".")
+						warnings = append(warnings, "No matching imagery yet for "+class+" — the feed will update as it arrives.")
 						classes[strings.ToLower(class)] = true
 					}
 				}

@@ -165,7 +165,7 @@ func TestSetPolicyUnknownConceptRejected(t *testing.T) {
 	b.Compiler = &command.Compiler{EdgeSubtypes: true}
 	rec := httptest.NewRecorder()
 	b.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy", strings.NewReader(`{"text":"prioritize unicorns"}`)))
-	if rec.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(rec.Body.String(), `Not supported: "unicorns"`) {
+	if rec.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(rec.Body.String(), command.NoMatchReadback) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	if len(got.GetInterest().GetBoostLabels())+len(got.GetInterest().GetSuppressLabels()) != 0 {

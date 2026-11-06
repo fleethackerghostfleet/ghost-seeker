@@ -164,7 +164,7 @@ func emconReadback(readback, mode string, durationMin int) string {
 	if strings.Contains(readback, phrase) {
 		return readback
 	}
-	readback = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(readback), "No rules recognized."))
+	readback = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(readback), command.NoMatchReadback))
 	if readback == "" {
 		return phrase
 	}

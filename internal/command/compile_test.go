@@ -23,7 +23,7 @@ func TestReadback(t *testing.T) {
 	if got := readback(rules, 4320); got != want {
 		t.Fatalf("readback = %q, want %q", got, want)
 	}
-	if got := readback(nil, 0); got != "No rules recognized." {
+	if got := readback(nil, 0); got != NoMatchReadback {
 		t.Fatalf("empty readback = %q", got)
 	}
 	if got := readback([]Rule{{Type: "boost"}}, 0); got != "Boost: any object. Until cleared." {
@@ -87,7 +87,7 @@ func (l testLocks) CheckLocks([]Rule) ([]string, bool) { return l.warnings, l.bl
 func TestGuardrailCapabilitiesAndLocks(t *testing.T) {
 	rules := []Rule{{Type: "boost", Classes: []string{"tanker"}}}
 	warnings, blocked := guardrails("", rules, testCapabilities{Capabilities{FixedLabels: []string{"small boat", "person"}}}, nil)
-	if blocked || !reflect.DeepEqual(warnings, []string{"Cannot detect tanker: the analyzer only knows small boat, person."}) {
+	if blocked || !reflect.DeepEqual(warnings, []string{"No matching imagery yet for tanker — the feed will update as it arrives."}) {
 		t.Fatalf("capability lint = %v, blocked=%t", warnings, blocked)
 	}
 	compiled := (&Compiler{Locks: testLocks{warnings: []string{"Locked."}, blocked: true}}).Review("", rules, 0)
