@@ -1,0 +1,31 @@
+# Documentation-only addresses: replace with narrow, approved site networks.
+options:
+  architecture: amd64
+shared:
+  DOMAIN: uds.dev
+variables:
+  ghost-seeker:
+    DOMAIN: uds.dev
+    OPERATOR_GATEWAY_HOST: ghost-seeker
+    SHORE_GATEWAY_HOST: shore
+    SHORE_PUBLIC_HOSTS: shore,shore.ghost-seeker.svc,localhost
+    SHORE_EGRESS_CIDR: 192.0.2.1/32
+    SHORE_EGRESS_PORT: "8080"
+    EDGE_EGRESS_CIDR: 192.0.2.1/32
+    EDGE_EGRESS_PORT: "8081"
+    INFERENCE_EGRESS_CIDR: 192.0.2.1/32
+    INFERENCE_EGRESS_PORT: "9090"
+    CAMERA_EGRESS_CIDR: 192.0.2.1/32
+    CAMERA_EGRESS_PORT: "80"
+    LLM_EGRESS_CIDR: 192.0.2.1/32
+    LLM_EGRESS_PORT: "8080"
+    RESEARCH_EGRESS_CIDR: 192.0.2.1/32
+    RESEARCH_EGRESS_PORT: "8097"
+    OCSP_EGRESS_CIDR: 192.0.2.1/32
+    OCSP_EGRESS_PORT: "80"
+    MODEL_EGRESS_CIDR: 192.0.2.1/32
+    MODEL_EGRESS_PORT: "443"
+    SHORE_INGRESS_CIDR: 198.51.100.1/32
+    EDGE_INGRESS_CIDR: 198.51.100.1/32
+    OPERATOR_INGRESS_CIDR: 198.51.100.1/32
+    INFERENCE_INGRESS_CIDR: 198.51.100.1/32

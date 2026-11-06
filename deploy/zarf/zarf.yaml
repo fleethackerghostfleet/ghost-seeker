@@ -22,6 +22,15 @@ variables:
     default: mobileclip-s1
     pattern: '^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*)*$'
     prompt: false
+  - name: DOMAIN
+    default: uds.dev
+    description: Must match UDS Core DOMAIN.
+  - name: OPERATOR_GATEWAY_HOST
+    default: ghost-seeker
+    description: Operator tenant gateway subdomain.
+  - name: SHORE_GATEWAY_HOST
+    default: shore
+    description: Shore tenant gateway subdomain.
   - name: SHORE_EGRESS_CIDR
     description: Approved destination CIDR for edge/operator to routed shore sync, console and API. Documentation-only default; set a narrow site CIDR (never 0.0.0.0/0 or ::/0).
     default: 192.0.2.0/32
@@ -181,6 +190,23 @@ components:
           - manifests/namespace.yaml
           - manifests/network-default-deny.yaml
           - manifests/network-default-deny-egress.yaml
+  - name: uds-package
+    required: false
+    default: false
+    description: UDS Core sidecar mesh and tenant gateway integration.
+    actions:
+      onDeploy:
+        before:
+          - cmd: |
+              if [ -n "${ZARF_VAR_SHORE_TLS_SECRET:-}" ] || [ -n "${ZARF_VAR_EDGE_TLS_SECRET:-}" ]; then
+                echo "UDS requires plain HTTP behind STRICT mTLS sidecars; leave SHORE_TLS_SECRET and EDGE_TLS_SECRET empty." >&2
+                exit 1
+              fi
+    manifests:
+      - name: uds-package
+        namespace: ghost-seeker
+        files:
+          - manifests/uds-package.yaml
   - name: shore
     default: true
     required: false

@@ -23,7 +23,7 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 "$PYTHON" "$SCRIPT_DIR/check_manifests.py" --output-dir "$tmp/manifests"
 
 if command -v kubeconform >/dev/null 2>&1; then
-  if kubeconform -strict -summary "$tmp"/manifests/*/*.yaml >"$tmp/kubeconform.log" 2>&1; then
+  if kubeconform -strict -skip Package -summary "$tmp"/manifests/*/*.yaml >"$tmp/kubeconform.log" 2>&1; then
     cat "$tmp/kubeconform.log"
   else
     if grep -Eiq 'Invalid:[[:space:]]*[1-9][0-9]*([,[:space:]]|$)' "$tmp/kubeconform.log" ||
