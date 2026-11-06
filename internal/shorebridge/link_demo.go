@@ -34,7 +34,7 @@ func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
-		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
+		http.Error(w, `body must be {"bps": N>=0} or {"auto": true}`, httpx.RequestBodyStatus(err))
 		return
 	}
 	if !in.Auto && (in.Bps == nil || *in.Bps < 0) {

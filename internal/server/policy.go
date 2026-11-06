@@ -17,6 +17,7 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -532,7 +533,7 @@ func (s *Server) validatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := decodeProtoPolicy(r.Body)
 	if err != nil {
-		writeRequestBodyError(w, err)
+		writeError(w, httpx.RequestBodyStatus(err), err.Error())
 		return
 	}
 	interest, emcon, conflicts := policy.Merge(p.Layers, s.policy.nodeID, time.Now())
@@ -555,7 +556,7 @@ func (s *Server) applyAdminPolicy(w http.ResponseWriter, r *http.Request) {
 	p, err := decodeProtoPolicy(r.Body)
 	if err != nil {
 		s.policy.guard.Reject(r.Context(), nil, "admin", err.Error(), time.Now())
-		writeRequestBodyError(w, err)
+		writeError(w, httpx.RequestBodyStatus(err), err.Error())
 		return
 	}
 	p.IssuedBy = opauth.Actor(r.Context(), p.IssuedBy)

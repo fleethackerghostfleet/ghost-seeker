@@ -1,11 +1,30 @@
 package server
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
+
+func TestAdminPolicyMalformedFieldPreservesProtoJSONDetail(t *testing.T) {
+	app := New(store.New(4), WithAdmin(true), WithAdminToken("test-token"))
+	for _, route := range []struct{ method, path string }{{"POST", "/api/policy/validate"}, {"PUT", "/api/policy"}} {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			w := rawPolicyRequest(app, route.method, route.path, `{"not_a_policy_field":true}`)
+			var body struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if w.Code != 400 || !strings.Contains(body.Error, `unknown field "not_a_policy_field"`) {
+				t.Fatalf("status=%d, want 400 with protojson field detail: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
 
 func TestAdminPolicyRejectsOversizeRatherThanAcceptingTruncatedPrefix(t *testing.T) {
 	app := New(store.New(4), WithAdmin(true), WithAdminToken("test-token"))

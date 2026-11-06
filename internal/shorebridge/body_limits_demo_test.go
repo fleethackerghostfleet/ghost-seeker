@@ -19,4 +19,11 @@ func TestDemoLinkBodyLimits(t *testing.T) {
 			t.Fatalf("status=%d: %s", w.Code, w.Body.String())
 		}
 	}
+	for _, body := range []string{``, `{`, `{} {}`, `{}`} {
+		w := httptest.NewRecorder()
+		b.Handler().ServeHTTP(w, httptest.NewRequest("POST", "/api/shore/link", strings.NewReader(body)))
+		if w.Code != 400 || w.Body.String() != "body must be {\"bps\": N>=0} or {\"auto\": true}\n" {
+			t.Fatalf("input=%q status=%d: %s", body, w.Code, w.Body.String())
+		}
+	}
 }
