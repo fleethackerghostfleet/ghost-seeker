@@ -26,6 +26,8 @@ type Compiler struct {
 	Research     *ResearchClient
 	Capabilities CapabilityProvider
 	Locks        LockChecker
+	// EdgeSubtypes accepts edge sidecar subtypes (catalog.EdgeSubtypes) that only live shore mode can match.
+	EdgeSubtypes bool
 }
 
 type Compiled struct {
@@ -127,7 +129,7 @@ func validateDraft(draft llmDraft) ([]Rule, error) {
 		classSeen := make(map[string]bool)
 		for _, label := range rule.Classes {
 			label = strings.ToLower(strings.TrimSpace(label))
-			class, ok := canonicalClass(label)
+			class, ok := canonicalClass(label, false)
 			if !ok {
 				return nil, fmt.Errorf("unknown class %q", label)
 			}
@@ -177,7 +179,7 @@ func validateDraft(draft llmDraft) ([]Rule, error) {
 	return rules, nil
 }
 
-func canonicalClass(label string) (string, bool) {
+func canonicalClass(label string, edgeSubtypes bool) (string, bool) {
 	label = strings.ToLower(strings.TrimSpace(label))
 	if _, ok := catalog.Classes[label]; ok {
 		return label, true
@@ -190,6 +192,12 @@ func canonicalClass(label string) (string, bool) {
 	}
 	if len(matches) == 1 {
 		return matches[0], true
+	}
+	if edgeSubtypes && catalog.EdgeSubtypes[label] {
+		return label, true
+	}
+	if alias, ok := catalog.CanonicalAlias(label); ok && alias != label {
+		return canonicalClass(alias, edgeSubtypes)
 	}
 	return "", false
 }

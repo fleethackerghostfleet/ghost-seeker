@@ -11,12 +11,21 @@ for(const target of ['demo','demo-compare']){
   assert.match(plan,/compare\.sh/);
  });
 }
-for(const target of ['demo-clips','demo-edge']){
- test(`${target} generates ocean frames`,()=>{
+for(const target of ['demo-clips','demo-edge','compose-demo']){
+ test(`${target} does not generate ocean frames by default`,()=>{
   const plan=execFileSync('make',['-n',target],{cwd:root,encoding:'utf8'});
-  assert.match(plan,/ocean\.py/);
+  assert.doesNotMatch(plan,/ocean\.py/);
  });
 }
-test('compose-demo prepares ocean frames before checking mounted clips',()=>{
- assert.match(fs.readFileSync(path.join(root,'Makefile'),'utf8'),/^compose-demo: demo-ocean/m);
+test('demo-clips explicitly opts into ocean frames',()=>{
+ const plan=execFileSync('make',['-n','demo-clips','INCLUDE_OCEAN_SCENES=1'],{cwd:root,encoding:'utf8'});
+ assert.match(plan,/ocean\.py/);
+});
+test('base compose is secure and presenter conveniences require the local override',()=>{
+ const base=fs.readFileSync(path.join(root,'deploy/compose/demo.compose.yml'),'utf8');
+ const local=fs.readFileSync(path.join(root,'deploy/compose/demo.local.compose.yml'),'utf8');
+ for(const flag of ['-dev-trust-peers','-demo-accept-any-token','-demo-link-control']){
+  assert.ok(!base.includes(flag));assert.ok(local.includes(flag));
+ }
+ assert.ok(base.includes('${GS_DEMO_SCENARIO:-scenario.json}'));
 });

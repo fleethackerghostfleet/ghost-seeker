@@ -80,10 +80,10 @@ func (s *Sessions) auditEvent(r *http.Request, p Principal, event, kind, reason 
 func certPage(w http.ResponseWriter, status int, message, next string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.WriteHeader(status)
-	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title><style>body{font:15px system-ui,sans-serif;background:#0b1118;color:#d6e2ee;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}main{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{font-size:18px}p{color:#8aa0b6}a{color:#64b5f6}header{display:flex;align-items:center;gap:16px}</style><style>%s</style></head><body><main><header><h1>Ghost Seeker</h1>%s</header><p>%s</p>`, httpx.DocsLinkCSS, httpx.DocsLinkHTML, html.EscapeString(message))
+	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Ghost Seeker — operator sign-in</title>%s<style>body{font:15px system-ui,sans-serif;background:#0b1118;color:#d6e2ee;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}main{background:#121c27;border:1px solid #243445;border-radius:8px;padding:28px 32px;width:360px}h1{margin:0}h1 img{display:block}p{color:#8aa0b6}a{color:#64b5f6}header{display:flex;align-items:center;gap:16px}</style><style>%s</style></head><body><main><header>%s%s</header><p>%s</p>`, brandHead, httpx.DocsLinkCSS, brandLogo, httpx.DocsLinkHTML, html.EscapeString(message))
 	if next != "" {
 		_, _ = fmt.Fprintf(w, `<a href="%s">Continue</a>`, html.EscapeString(safeNext(next)))
 	}
@@ -110,7 +110,7 @@ func (s *Sessions) clearCertSession(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Sessions) wrapCerts(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
+		if r.URL.Path == "/healthz" || publicBrandAsset(r) {
 			next.ServeHTTP(w, r)
 			return
 		}

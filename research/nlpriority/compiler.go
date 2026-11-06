@@ -144,7 +144,7 @@ func (c *Compiler) Compile(ctx context.Context, text string, current []Rule) (Dr
 		}
 		r[0].Weight = math.Max(1, math.Min(4, r[0].Weight+delta))
 		path := "rules"
-		if len(resolutions) > 0 {
+		if graniteResolved(resolutions) {
 			path += "+granite-concepts"
 		}
 		draft := makeDraft(r, path, "")
@@ -186,7 +186,7 @@ func (c *Compiler) Compile(ctx context.Context, text string, current []Rule) (Dr
 	if err != nil {
 		return Draft{}, err
 	}
-	if len(resolutions) > 0 {
+	if graniteResolved(resolutions) {
 		path += "+granite-concepts"
 	}
 	next, err := applyOperations(current, ops)
@@ -443,4 +443,13 @@ Current active rules: ` + string(state)
 		}
 	}
 	return result.Operations, nil
+}
+
+func graniteResolved(resolutions []ConceptResolution) bool {
+	for _, r := range resolutions {
+		if r.Reason != knownSynonym {
+			return true
+		}
+	}
+	return false
 }

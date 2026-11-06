@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ghost Seeker · Edge-to-Command Imagery Prioritization</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/briefing.css">
@@ -17,8 +18,8 @@
 <div class="banner" id="classificationBanner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
 <header>
   <div class="logo">
-    <svg width="30" height="30" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#4fc3d9" stroke-width="2"/><circle cx="16" cy="16" r="8" stroke="#4fc3d9" stroke-opacity=".5" stroke-width="1.5"/><path d="M16 16 L27 9" stroke="#4fc3d9" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="12.5" r="2" fill="#ff4d5e"/></svg>
-    <div><b>GHOST SEEKER</b><small>Edge-to-Command Imagery Prioritization</small></div>
+    <img class="wordmark" src="/brand/logo.png" width="85" height="46" alt="Ghost Seeker">
+    <div><small>Edge-to-Command Imagery Prioritization</small></div>
   </div>
   <div class="view-tabs" data-view-tabs>
     <button type="button" class="view-tabs-arrow" data-scroll="left" aria-label="Scroll views left" aria-controls="viewTabs" title="Scroll views left" hidden><span aria-hidden="true">‹</span></button>
@@ -133,10 +134,10 @@
   <p class="rvinstructions"><b>Change this image's priority:</b> press 1–4 to set it to P1–P4 and save your review. Space / Enter agrees with the model's suggested priority.</p>
   <div class="rvnext" id="rvNext" role="status" aria-live="polite"></div>
   <div class="rvkeys" id="rvKeys">
-    <button class="kb k1" data-a="1"><span class="kb-act">Set P1 Critical &amp; next</span><kbd>1</kbd></button>
-    <button class="kb k2" data-a="2"><span class="kb-act">Set P2 High &amp; next</span><kbd>2</kbd></button>
-    <button class="kb k3" data-a="3"><span class="kb-act">Set P3 Routine &amp; next</span><kbd>3</kbd></button>
-    <button class="kb k4" data-a="4"><span class="kb-act">Set P4 Low &amp; next</span><kbd>4</kbd></button>
+    <button class="kb k1" data-a="1"><span class="model-badge">MODEL</span><span class="kb-act">Set P1 Critical &amp; next</span><kbd>1</kbd></button>
+    <button class="kb k2" data-a="2"><span class="model-badge">MODEL</span><span class="kb-act">Set P2 High &amp; next</span><kbd>2</kbd></button>
+    <button class="kb k3" data-a="3"><span class="model-badge">MODEL</span><span class="kb-act">Set P3 Routine &amp; next</span><kbd>3</kbd></button>
+    <button class="kb k4" data-a="4"><span class="model-badge">MODEL</span><span class="kb-act">Set P4 Low &amp; next</span><kbd>4</kbd></button>
     <div class="kgap"></div>
     <button class="kb acc" data-a="accept"><span class="kb-act" id="accLbl">Agree &amp; next</span><kbd>Space</kbd></button>
     <button class="kb" title="Hide this image from the feed and mark it reviewed at P4 Low. The image remains stored." data-a="dismiss"><span class="kb-act">Not relevant: hide &amp; next</span><kbd>X</kbd></button>
