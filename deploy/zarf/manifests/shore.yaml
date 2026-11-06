@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: shore-config
-  namespace: ghost-seeker
+  namespace: "###ZARF_VAR_NAMESPACE###"
 data:
   DATA_DIR: /data
   LISTEN: :8080
@@ -16,7 +16,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: shore
-  namespace: ghost-seeker
+  namespace: "###ZARF_VAR_NAMESPACE###"
 spec:
   serviceName: shore
   replicas: 1
@@ -26,6 +26,7 @@ spec:
   template:
     metadata:
       annotations:
+        ghost-seeker.io/public-hosts: "###ZARF_VAR_SHORE_PUBLIC_HOSTS###,###ZARF_VAR_SHORE_GATEWAY_HOST###.###ZARF_VAR_DOMAIN###"
         ghost-seeker.io/listener-tls-secret: "###ZARF_VAR_SHORE_TLS_SECRET###"
       labels:
         app: shore
@@ -39,7 +40,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: shore
-          image: ghost-seeker/shore:0.1.0
+          image: ghost-seeker/shore:prod-b6e0f0fa18d1-20261106160717-221ead34
           imagePullPolicy: IfNotPresent
 {{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
           args:
@@ -56,13 +57,13 @@ spec:
             - name: GS_SIGNING_KEY
               valueFrom:
                 secretKeyRef:
-                  name: shore-auth
-                  key: signing-key
+                  name: "###ZARF_VAR_SHORE_AUTH_SECRET###"
+                  key: "###ZARF_VAR_SHORE_SIGNING_KEY_KEY###"
             - name: GS_OPERATOR_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: shore-auth
-                  key: operator-token
+                  name: "###ZARF_VAR_SHORE_AUTH_SECRET###"
+                  key: "###ZARF_VAR_SHORE_OPERATOR_TOKEN_KEY###"
           readinessProbe:
             httpGet:
               path: /healthz
@@ -82,6 +83,7 @@ spec:
               cpu: 100m
               memory: 128Mi
             limits:
+              cpu: "1"
               memory: 512Mi
           securityContext:
             runAsNonRoot: true
@@ -118,6 +120,9 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+{{ if ne "###ZARF_VAR_SHORE_STORAGE_CLASS###" "" }}
+        storageClassName: "###ZARF_VAR_SHORE_STORAGE_CLASS###"
+{{ end }}
         resources:
           requests:
             storage: "###ZARF_VAR_SHORE_STORAGE###"
@@ -126,7 +131,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: shore
-  namespace: ghost-seeker
+  namespace: "###ZARF_VAR_NAMESPACE###"
 spec:
   type: ClusterIP
   selector:

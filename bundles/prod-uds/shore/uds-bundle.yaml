@@ -1,0 +1,9 @@
+kind: UDSBundle
+metadata:
+  name: ghost-seeker-shore
+  version: 0.1.0
+  architecture: amd64
+packages:
+  - name: ghost-seeker-shore
+    path: ../../../dist
+    ref: 0.1.0

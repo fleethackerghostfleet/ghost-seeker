@@ -7,6 +7,10 @@ metadata:
   description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: EDGE_GATEWAY_HOST
+    default: edge
+    description: Edge gateway subdomain for the Host allowlist.
+    prompt: false
   - name: MODEL_SHA256
     description: SHA256 of the approved model image SHA256SUMS file; required for inference readiness.
     default: 41f9db8eaaa64a34803f1a145468d80a66910ad63572ddf24b9c9c95d6fb4875
@@ -192,6 +196,89 @@ variables:
     default: /var/lib/ghost-seeker/frames
     prompt: false
 
+  - name: NAMESPACE
+    default: "ghost-seeker"
+    description: "Legacy combined package namespace is fixed; use split UDS packages for configurable namespaces."
+    prompt: false
+    pattern: '^ghost-seeker$'
+  - name: SHORE_AUTH_SECRET
+    default: "shore-auth"
+    description: "Existing Secret containing shore authentication material."
+    prompt: false
+    pattern: '^[a-z0-9]([-a-z0-9]{0,251}[a-z0-9])?$'
+  - name: SHORE_SIGNING_KEY_KEY
+    default: "signing-key"
+    description: "Key in SHORE_AUTH_SECRET for signing-key."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: SHORE_OPERATOR_TOKEN_KEY
+    default: "operator-token"
+    description: "Key in SHORE_AUTH_SECRET for operator-token."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: SHORE_STORAGE_CLASS
+    default: ""
+    description: "shore data PVC StorageClass; empty uses the cluster default."
+    prompt: false
+  - name: EDGE_AUTH_SECRET
+    default: "edge-auth"
+    description: "Existing Secret containing edge authentication material."
+    prompt: false
+    pattern: '^[a-z0-9]([-a-z0-9]{0,251}[a-z0-9])?$'
+  - name: EDGE_UNIT_TOKEN_KEY
+    default: "unit-token"
+    description: "Key in EDGE_AUTH_SECRET for unit-token."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: EDGE_OPERATOR_TOKEN_KEY
+    default: "operator-token"
+    description: "Key in EDGE_AUTH_SECRET for operator-token."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: EDGE_STORAGE_CLASS
+    default: ""
+    description: "edge data PVC StorageClass; empty uses the cluster default."
+    prompt: false
+  - name: OPERATOR_AUTH_SECRET
+    default: "operator-auth"
+    description: "Existing Secret containing operator authentication material."
+    prompt: false
+    pattern: '^[a-z0-9]([-a-z0-9]{0,251}[a-z0-9])?$'
+  - name: OPERATOR_OPERATOR_TOKEN_KEY
+    default: "operator-token"
+    description: "Key in OPERATOR_AUTH_SECRET for operator-token."
+    prompt: false
+    pattern: '^[a-zA-Z0-9._-]+$'
+  - name: OPERATOR_STORAGE_CLASS
+    default: ""
+    description: "operator data PVC StorageClass; empty uses the cluster default."
+    prompt: false
+  - name: OPERATOR_STORAGE
+    default: "1Gi"
+    description: "Operator review log PVC size."
+    prompt: false
+    pattern: '^[1-9][0-9]*(Mi|Gi|Ti)$'
+  - name: INFERENCE_CPU_REQUEST
+    default: "500m"
+    description: "Inference cpu request; tune for approved hardware."
+    prompt: false
+    pattern: '^[1-9][0-9]*(m)?$'
+  - name: INFERENCE_MEMORY_REQUEST
+    default: "1Gi"
+    description: "Inference memory request; tune for approved hardware."
+    prompt: false
+    pattern: '^[1-9][0-9]*(Mi|Gi|Ti)$'
+  - name: INFERENCE_CPU_LIMIT
+    default: "4"
+    description: "Inference cpu limit; tune for approved hardware."
+    prompt: false
+    pattern: '^[1-9][0-9]*(m)?$'
+  - name: INFERENCE_MEMORY_LIMIT
+    default: "4Gi"
+    description: "Inference memory limit; tune for approved hardware."
+    prompt: false
+    pattern: '^[1-9][0-9]*(Mi|Gi|Ti)$'
+
 components:
   - name: namespace
     required: true
@@ -229,7 +316,7 @@ components:
     required: false
     description: Shore sync receiver and console with persistent SQLite storage.
     images:
-      - ghost-seeker/shore:0.1.0
+      - ghost-seeker/shore:prod-b6e0f0fa18d1-20261106160717-221ead34
     manifests:
       - name: shore
         namespace: ghost-seeker
@@ -243,7 +330,7 @@ components:
     required: false
     description: Live operator UI backed by the shore service.
     images:
-      - ghost-seeker/operator:0.1.0
+      - ghost-seeker/operator:prod-b6e0f0fa18d1-20261106160717-221ead34
     manifests:
       - name: operator
         namespace: ghost-seeker
@@ -257,7 +344,7 @@ components:
     required: false
     description: Edge capture and prioritized sync service with persistent SQLite storage.
     images:
-      - ghost-seeker/edge:0.1.0
+      - ghost-seeker/edge:prod-b6e0f0fa18d1-20261106160717-221ead34
     manifests:
       - name: edge
         namespace: ghost-seeker
@@ -271,8 +358,8 @@ components:
     required: false
     description: Optional CPU edgeml sidecar in this cluster (the INFER_URL default); deploy it or point INFER_URL at another sidecar.
     images:
-      - ghost-seeker/edgeml-sidecar:0.1.0
-      - ghost-seeker/edgeml-models:0.1.0
+      - ghost-seeker/edgeml-sidecar:prod-b6e0f0fa18d1-20261106160717-221ead34
+      - ghost-seeker/edgeml-models:prod-b6e0f0fa18d1-20261106160717-221ead34
     manifests:
       - name: edge-inference
         template: true

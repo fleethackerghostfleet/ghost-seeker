@@ -1,0 +1,17 @@
+# LOCAL DEVELOPMENT ONLY. Never use generated credentials for a fleet deployment.
+tasks:
+  - name: dev
+    description: Deploy local slim UDS Core and Ghost Seeker with fresh development auth.
+    actions:
+      - cmd: |
+          if k3d cluster list -o json | python3 -c 'import json,sys; sys.exit(not any(c["name"] == "uds" for c in json.load(sys.stdin)))'; then
+            k3d kubeconfig merge uds --kubeconfig-switch-context
+            uds zarf tools kubectl --context k3d-uds get namespace pepr-system istio-system
+          else
+            uds deploy ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.16.0 --confirm
+          fi
+      - cmd: python3 deploy/zarf/dev_auth.py
+        mute: true
+      - cmd: uds zarf package deploy dist/zarf-package-ghost-seeker-amd64-0.1.0.tar.zst --confirm --components uds-package,edge-inference --set FRAMES_SOURCE=pvc
+      - description: Restart workloads so they read the fresh credentials
+        cmd: uds zarf tools kubectl rollout restart deployment,statefulset -n ghost-seeker

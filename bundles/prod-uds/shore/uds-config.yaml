@@ -1,0 +1,18 @@
+# Deploy to an EXISTING UDS Core 1.16 cluster. Replace documentation-only site values.
+options:
+  architecture: amd64
+variables:
+  ghost-seeker-shore:
+    NAMESPACE: ghost-seeker-shore
+    DOMAIN: uds.dev
+    SHORE_GATEWAY_HOST: shore
+    OPERATOR_GATEWAY_HOST: ghost-seeker
+    SHORE_AUTH_SECRET: shore-auth
+    SHORE_SIGNING_KEY_KEY: signing-key
+    SHORE_OPERATOR_TOKEN_KEY: operator-token
+    OPERATOR_AUTH_SECRET: operator-auth
+    OPERATOR_OPERATOR_TOKEN_KEY: operator-token
+    SHORE_STORAGE_CLASS: ""
+    SHORE_STORAGE: 5Gi
+    OPERATOR_STORAGE_CLASS: ""
+    OPERATOR_STORAGE: 1Gi

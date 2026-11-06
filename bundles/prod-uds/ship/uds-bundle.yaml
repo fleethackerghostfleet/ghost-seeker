@@ -1,0 +1,9 @@
+kind: UDSBundle
+metadata:
+  name: ghost-seeker-ship
+  version: 0.1.0
+  architecture: amd64
+packages:
+  - name: ghost-seeker-ship
+    path: ../../../dist
+    ref: 0.1.0

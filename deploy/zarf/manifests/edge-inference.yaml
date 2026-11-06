@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: edgeml-sidecar
-  namespace: ghost-seeker
+  namespace: "###ZARF_VAR_NAMESPACE###"
 spec:
   replicas: 1
   selector:
@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: models
-          image: ghost-seeker/edgeml-models:0.1.0
+          image: ghost-seeker/edgeml-models:prod-b6e0f0fa18d1-20261106160717-221ead34
           imagePullPolicy: IfNotPresent
           command: ["sh", "-ec"]
           args:
@@ -52,6 +52,7 @@ spec:
               cpu: 10m
               memory: 16Mi
             limits:
+              cpu: 500m
               memory: 64Mi
           securityContext:
             runAsNonRoot: true
@@ -65,7 +66,7 @@ spec:
               mountPath: /models
       containers:
         - name: edgeml-sidecar
-          image: ghost-seeker/edgeml-sidecar:0.1.0
+          image: ghost-seeker/edgeml-sidecar:prod-b6e0f0fa18d1-20261106160717-221ead34
           imagePullPolicy: IfNotPresent
           args:
             - "--listen"
@@ -87,10 +88,11 @@ spec:
               port: http
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: "###ZARF_VAR_INFERENCE_CPU_REQUEST###"
+              memory: "###ZARF_VAR_INFERENCE_MEMORY_REQUEST###"
             limits:
-              memory: 2Gi
+              cpu: "###ZARF_VAR_INFERENCE_CPU_LIMIT###"
+              memory: "###ZARF_VAR_INFERENCE_MEMORY_LIMIT###"
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
@@ -114,7 +116,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: edgeml-sidecar
-  namespace: ghost-seeker
+  namespace: "###ZARF_VAR_NAMESPACE###"
 spec:
   type: ClusterIP
   selector:

@@ -1,0 +1,80 @@
+apiVersion: "uds.dev/v1alpha1"
+kind: "Package"
+metadata:
+  name: "ghost-seeker-shore"
+  namespace: "###ZARF_VAR_NAMESPACE###"
+spec:
+  network:
+    serviceMesh:
+      mode: "sidecar"
+    expose:
+      -
+        service: "operator"
+        selector:
+          app: "operator"
+        port: 8090
+        gateway: "tenant"
+        host: "###ZARF_VAR_OPERATOR_GATEWAY_HOST###"
+      -
+        service: "shore"
+        selector:
+          app: "shore"
+        port: 8080
+        gateway: "tenant"
+        host: "###ZARF_VAR_SHORE_GATEWAY_HOST###"
+        match:
+          -
+            name: "versioned-api"
+            uri:
+              prefix: "/api/v1/"
+          -
+            name: "ship-sync"
+            uri:
+              prefix: "/ghostseeker.v1.SyncService/"
+    allow:
+      -
+        description: "operator to shore"
+        direction: "Egress"
+        selector:
+          app: "operator"
+        remoteSelector:
+          app: "shore"
+        remoteNamespace: "###ZARF_VAR_NAMESPACE###"
+        port: 8080
+      -
+        description: "shore from operator"
+        direction: "Ingress"
+        selector:
+          app: "shore"
+        remoteSelector:
+          app: "operator"
+        remoteNamespace: "###ZARF_VAR_NAMESPACE###"
+        port: 8080
+      -
+        description: "operator routed llm"
+        direction: "Egress"
+        selector:
+          app: "operator"
+        remoteCidr: "###ZARF_VAR_LLM_EGRESS_CIDR###"
+        port: ###ZARF_VAR_LLM_EGRESS_PORT###
+      -
+        description: "operator routed research"
+        direction: "Egress"
+        selector:
+          app: "operator"
+        remoteCidr: "###ZARF_VAR_RESEARCH_EGRESS_CIDR###"
+        port: ###ZARF_VAR_RESEARCH_EGRESS_PORT###
+      -
+        description: "operator routed ocsp"
+        direction: "Egress"
+        selector:
+          app: "operator"
+        remoteCidr: "###ZARF_VAR_OCSP_EGRESS_CIDR###"
+        port: ###ZARF_VAR_OCSP_EGRESS_PORT###
+      -
+        description: "shore routed inference"
+        direction: "Egress"
+        selector:
+          app: "shore"
+        remoteCidr: "###ZARF_VAR_INFERENCE_EGRESS_CIDR###"
+        port: ###ZARF_VAR_INFERENCE_EGRESS_PORT###
