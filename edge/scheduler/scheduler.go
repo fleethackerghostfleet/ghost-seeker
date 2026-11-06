@@ -548,7 +548,8 @@ func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.Emcon
 		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) || skipForm(r, f) {
 			continue
 		}
-		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 {
+		// In BURST, a pull only unlocks rungs up to the form shore requested.
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && (r.PullBoost == 0 || f.Kind > r.PullForm) {
 			return nil
 		}
 		return f

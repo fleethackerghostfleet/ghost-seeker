@@ -10,11 +10,21 @@ import (
 
 // Imagery returns the embedded imagery tree (empty in prod builds).
 func Imagery() fs.FS {
+	if !hasDemoImagery {
+		return emptyFS{}
+	}
 	content, err := fs.Sub(files, "static/imagery")
 	if err != nil {
 		panic(err)
 	}
 	return content
+}
+
+// emptyFS reports every path as missing, so callers fall back to disk.
+type emptyFS struct{}
+
+func (emptyFS) Open(name string) (fs.File, error) {
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 }
 
 func Handler() http.Handler {
