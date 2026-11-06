@@ -1830,9 +1830,56 @@ test('metadata-only chip follows simulation and live state with a quiet explanat
  assert.match(source,/const data=LIVE\?LIVE.edge:stats/);
 });
 
+test('upload byte progress reuses metadata rather than refetching on every update',async()=>{
+ const c=setup();
+ vm.runInContext(`applySnapshot(snapshot([{...raw('progress'),upload:{bytes:1000,sent:0,metadataSent:0,bps:4000,active:false}}]));body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};requests=0;request=async()=>{requests++;return {capture:{source:'cached sensor'}}}`,c);
+ await vm.runInContext("loadMetadata(findItem('progress'),panel)",c);
+ for(let n=1;n<=5;n++){
+  vm.runInContext(`applyItemUpdate({...findItem('progress'),upload:{...findItem('progress').upload,sent:${n*10},metadataSent:${n},bps:${4000+n},active:true}})`,c);
+  await vm.runInContext("loadMetadata(findItem('progress'),panel)",c);
+ }
+ assert.equal(vm.runInContext('requests',c),1,'progress-only updates must not refetch metadata');
+ assert.match(c.body.innerHTML,/cached sensor/);
+});
+
+test('meaningful metadata refresh preserves cached content through progress and failed requests',async()=>{
+ const c=setup();
+ vm.runInContext(`applySnapshot(snapshot([raw('refresh')]));body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};request=async()=>({capture:{source:'cached sensor'}})`,c);
+ await vm.runInContext("loadMetadata(findItem('refresh'),panel)",c);
+ vm.runInContext(`applyItemUpdate({...findItem('refresh'),tier:1});request=()=>new Promise((resolve,reject)=>{finishMetadata=resolve;failMetadata=reject});pendingMetadata=loadMetadata(findItem('refresh'),panel)`,c);
+ assert.match(c.body.innerHTML,/cached sensor/);
+ assert.doesNotMatch(c.body.innerHTML,/Loading/);
+ assert.match(vm.runInContext("metadataPanelHTML(findItem('refresh'))",c),/cached sensor/);
+ vm.runInContext(`applyItemUpdate({...findItem('refresh'),upload:{sent:10,bps:4000}});finishMetadata({capture:{source:'fresh sensor'}})`,c);
+ await vm.runInContext('pendingMetadata',c);
+ assert.match(c.body.innerHTML,/fresh sensor/);
+ vm.runInContext(`applyItemUpdate({...findItem('refresh'),reviewed:true});pendingMetadata=loadMetadata(findItem('refresh'),panel);failMetadata(new Error('Offline'))`,c);
+ await vm.runInContext('pendingMetadata',c);
+ assert.match(c.body.innerHTML,/fresh sensor/);
+ assert.match(c.body.innerHTML,/Offline/);
+ vm.runInContext(`request=async()=>({capture:{source:'recovered sensor'}})`,c);
+ await vm.runInContext("loadMetadata(findItem('refresh'),panel)",c);
+ assert.match(c.body.innerHTML,/recovered sensor/);
+});
+
+test('live snapshot byte progress preserves metadata but labels, rank and receipt refresh it',async()=>{
+ const c=setup();
+ vm.runInContext(`row={...raw('live-meta'),live:{override:'old',forms:{fact:{state:'partial',bytes:1000,received:10},thumb:{state:'partial',bytes:2000,received:10}}}};applySnapshot(snapshot([row]));body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};requests=0;request=async()=>{requests++;return {capture:{source:'live sensor'}}}`,c);
+ await vm.runInContext("loadMetadata(findItem('live-meta'),panel)",c);
+ vm.runInContext(`row={...row,live:{...row.live,forms:{fact:{state:'partial',bytes:1000,received:20},thumb:{state:'partial',bytes:2000,received:100}}}};applySnapshot(snapshot([row]))`,c);
+ await vm.runInContext("loadMetadata(findItem('live-meta'),panel)",c);
+ assert.equal(vm.runInContext('requests',c),1);
+ for(const update of ["row.live.override='new'","row.tier=1","row.live.forms.fact.state='received'","row.live.forms.thumb.state='received'"]){
+  vm.runInContext(`row=JSON.parse(JSON.stringify(row));${update};applySnapshot(snapshot([row]))`,c);
+  assert.equal(vm.runInContext("metadataCache.get('live-meta').stale",c),true);
+  await vm.runInContext("loadMetadata(findItem('live-meta'),panel)",c);
+ }
+ assert.equal(vm.runInContext('requests',c),5);
+});
+
 test('batched item updates and demo resets invalidate cached metadata',()=>{
  const c=setup();
- vm.runInContext(`applySnapshot(snapshot([raw('updated')]));metadataCache.set('updated',{data:{}});applyItemUpdate({...raw('updated'),edge:.9});invalidated=!metadataCache.has('updated');metadataCache.set('updated',{data:{}});clearDemoItems()`,c);
+ vm.runInContext(`applySnapshot(snapshot([raw('updated')]));metadataCache.set('updated',{data:{}});applyItemUpdate({...raw('updated'),edge:.9});invalidated=metadataCache.get('updated').stale;metadataCache.set('updated',{data:{}});clearDemoItems()`,c);
  assert.equal(vm.runInContext('invalidated',c),true);
  assert.equal(vm.runInContext('metadataCache.size',c),0);
 });

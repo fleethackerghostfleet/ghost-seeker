@@ -208,8 +208,8 @@ function renderAll(){
 }
 function mergeItem(raw,fresh=true){
  const item=normalizeItem(raw);if(evictedIDs.has(item.id))return;
- metadataCache.delete(item.id);
  const previous=findItem(item.id);
+ invalidateMetadata(item,previous);
  if(previous){
   const el=previous.el;
   for(const key of Object.keys(previous))if(!Object.hasOwn(item,key))delete previous[key];
@@ -221,13 +221,12 @@ function mergeItem(raw,fresh=true){
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
- metadataCache.clear();
  const reset=data.reset===true||(snapshotEpoch!==null&&data.epoch!==undefined&&data.epoch!==snapshotEpoch);
  if(data.epoch!==undefined)snapshotEpoch=data.epoch;
  if(reset)clearDemoItems();
  data.items=data.items.map(normalizeItem);
  const selection=state.sel;
- for(const item of data.items)dirtyItems.add(item.id);
+ for(const item of data.items){dirtyItems.add(item.id);invalidateMetadata(item,findItem(item.id))}
  const elements=new Map(items.map(item=>[item.id,item.el]));
  if(state.paused&&!reset){
   const snapshot=new Map(data.items.map(item=>[item.id,item]));
@@ -241,6 +240,7 @@ function applySnapshot(data){
   pendingItems=[];evictedIDs.clear();heldSnapshotIDs=null;
  }
  const retained=new Set(items.map(item=>item.id));for(const id of imageCache.keys())if(!retained.has(id))imageCache.delete(id);
+ for(const id of metadataCache.keys())if(!retained.has(id))metadataCache.delete(id);
  state.model=data.state.model;state.directives=data.state.directives;
  applyLive(data.live);
  renderPolicySummary(data.policy);
@@ -762,15 +762,25 @@ function metadataHTML(record){
  const transfer=(label,value)=>{if(!value)return'';const done=value.done||value.state==='received',bytes=value.bytes||0,sent=value.sent??value.received??0;return row(label,[done?'on shore':value.state||'queued',bytes?fmtBytes(bytes):'',done&&value.doneAt?String(value.doneAt).replace(/^.*T/,'').replace(/\.\d+Z$/,'Z'):!done&&bytes?`${Math.round(100*sent/bytes)}%`:''].filter(Boolean).join(' · '))};
  return group('Capture',capture)+group('Model classification',model)+group('Scoring',scoring)+group('Operator',operator)+group('Transfer',transfer('Metadata',t.metadata)+transfer('Image',t.image));
 }
+function metadataVersion(it){
+ const {el,fresh,upload,live,...record}=it;
+ const {sent,metadataSent,bps,active,...transfer}=upload||{};
+ const forms=Object.fromEntries(Object.entries(live?.forms||{}).map(([key,{received,...form}])=>[key,form]));
+ return JSON.stringify({...record,upload:transfer,live:live?{...live,forms}:undefined});
+}
+function invalidateMetadata(it,previous){
+ const cached=metadataCache.get(it.id);
+ if(cached&&(!previous||metadataVersion(it)!==metadataVersion(previous)))metadataCache.set(it.id,{data:cached.data,stale:true});
+}
 async function loadMetadata(it,panel){
  if(!panel||!panel.open)return;
  const cached=metadataCache.get(it.id);
- if(cached?.data){const body=panel.querySelector('.metadata-content');if(body)body.innerHTML=metadataHTML(cached.data);return}
+ if(cached?.data){const body=panel.querySelector('.metadata-content');if(body)body.innerHTML=metadataHTML(cached.data);if(!cached.stale)return}
  if(cached?.loading)return;
- const entry={loading:true};metadataCache.set(it.id,entry);
- const body=panel.querySelector('.metadata-content');if(body)body.innerHTML='<p class="hint">Loading metadata…</p>';
+ const entry={data:cached?.data,loading:true};metadataCache.set(it.id,entry);
+ const body=panel.querySelector('.metadata-content');if(body&&!entry.data)body.innerHTML='<p class="hint">Loading metadata…</p>';
  const currentPanel=()=>state.sel===it.id?$('metadataPanel'):panel.isConnected?panel:null;
- try{const data=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);if(metadataCache.get(it.id)!==entry)return;metadataCache.set(it.id,{data});const current=currentPanel();if(current?.isConnected&&current.open){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=metadataHTML(data)}}catch(error){if(metadataCache.get(it.id)!==entry)return;metadataCache.delete(it.id);const current=currentPanel();if(current?.isConnected){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=`<p class="hint">${esc(error.message)}</p>`}}
+ try{const data=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);if(metadataCache.get(it.id)!==entry)return;metadataCache.set(it.id,{data});const current=currentPanel();if(current?.isConnected&&current.open){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=metadataHTML(data)}}catch(error){if(metadataCache.get(it.id)!==entry)return;if(entry.data)metadataCache.set(it.id,{data:entry.data,stale:true});else metadataCache.delete(it.id);const current=currentPanel();if(current?.isConnected){const target=current.querySelector('.metadata-content');if(target)target.innerHTML=`${entry.data?metadataHTML(entry.data):''}<p class="hint">${esc(error.message)}</p>`}}
 }
 function metadataPanelHTML(it){
  const cached=metadataCache.get(it.id),size=cached?.data?.transfer?.metadata?.bytes||it.upload?.metadataBytes||it.live?.forms?.fact?.bytes||1024;
