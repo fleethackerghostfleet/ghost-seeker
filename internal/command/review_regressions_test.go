@@ -101,3 +101,21 @@ func TestLLMLiveSailboatSpecificity(t *testing.T) {
 		t.Fatalf("simulation model path changed: %+v", got)
 	}
 }
+
+func TestLLMMixedMammalDirective(t *testing.T) {
+	for _, edge := range []bool{false, true} {
+		calls := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls++
+			writeLLMContent(w, `{"rules":[{"type":"boost","classes":["marine mammal"]},{"type":"suppress","classes":["fishing vessel"]}]}`)
+		}))
+		compiler := &Compiler{LLM: NewLLMClient(server.URL, "test-model", time.Second), EdgeSubtypes: edge}
+		got := compiler.Compile(context.Background(), "prioritize whales; ignore fishin boats")
+		server.Close()
+		if calls != 1 || got.Path != "llm" || len(got.Rules) != 2 ||
+			got.Rules[0].Type != "boost" || !reflect.DeepEqual(got.Rules[0].Classes, []string{"marine mammal"}) ||
+			got.Rules[1].Type != "suppress" || !reflect.DeepEqual(got.Rules[1].Classes, []string{"fishing vessel"}) {
+			t.Fatalf("edge=%v calls=%d: %+v", edge, calls, got)
+		}
+	}
+}

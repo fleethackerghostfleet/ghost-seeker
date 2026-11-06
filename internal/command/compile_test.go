@@ -2,6 +2,7 @@ package command
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
@@ -42,7 +43,7 @@ func TestReviewDuration(t *testing.T) {
 }
 
 func TestGuardrailsEverything(t *testing.T) {
-	for _, text := range []string{"prioritize everything"} {
+	for _, text := range []string{"prioritize everything", "prioritize ships, aircraft, people, debris, birds and buoys"} {
 		if got := (&Compiler{}).CompileRules(text); !got.Blocked {
 			t.Errorf("%q should be blocked", text)
 		}
@@ -53,6 +54,7 @@ func TestGuardrailsEverything(t *testing.T) {
 		"ignore everything except drones",
 		"ignore everything except warships",
 		"ships and aircraft",
+		"prioritize ships, aircraft, people, debris, birds and whales",
 	} {
 		if got := (&Compiler{}).CompileRules(text); got.Blocked {
 			t.Errorf("%q should not be blocked: %v", text, got.Warnings)
@@ -73,6 +75,53 @@ func TestGuardrailsEverything(t *testing.T) {
 
 type testCapabilities struct {
 	value Capabilities
+}
+
+func TestGuardrailPreWhaleBoundary(t *testing.T) {
+	classes := make([]string, 0)
+	for class := range catalog.Classes {
+		if class != "marine mammal" {
+			classes = append(classes, class)
+		}
+	}
+	sort.Strings(classes)
+	if len(classes) != 17 {
+		t.Fatalf("pre-#247 catalog had 17 classes; got %d", len(classes))
+	}
+	for n := 0; n <= len(classes); n++ {
+		for _, subtype := range []string{"", "sailboat"} {
+			labels := append([]string{}, classes[:n]...)
+			if subtype != "" {
+				labels = append(labels, subtype)
+			}
+			want := len(labels)*5 >= 17*4
+			for _, whale := range []bool{false, true} {
+				withWhale := append([]string{}, labels...)
+				if whale {
+					withWhale = append(withWhale, "marine mammal")
+				}
+				_, blocked := guardrails("", []Rule{{Type: "boost", Classes: withWhale}}, nil, nil)
+				if blocked != want {
+					t.Errorf("core=%d subtype=%q whale=%v blocked=%v; want %v", n, subtype, whale, blocked, want)
+				}
+			}
+		}
+	}
+	compiler := &Compiler{EdgeSubtypes: true}
+	for _, tc := range []struct {
+		text    string
+		blocked bool
+	}{
+		{"prioritize ships, aircraft, people, debris and birds", false},
+		{"prioritize ships, aircraft, people, debris, birds and buoys", true},
+		{"prioritize ships, aircraft, people, debris, birds and sailboats", true},
+	} {
+		for _, suffix := range []string{"", "; prioritize whales"} {
+			if got := compiler.CompileRules(tc.text + suffix); got.Blocked != tc.blocked {
+				t.Errorf("%q: blocked=%v; want %v", tc.text+suffix, got.Blocked, tc.blocked)
+			}
+		}
+	}
 }
 
 func (c testCapabilities) Capabilities() Capabilities { return c.value }

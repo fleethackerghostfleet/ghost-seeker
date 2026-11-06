@@ -2166,5 +2166,101 @@
   ]
  },
  {"file":"imagery/empty-ocean/sec_0001.jpg","src":"BY-12","dets":[],"background":true},
- {"file":"imagery/empty-ocean/sec_0010.jpg","src":"BY-12","dets":[],"background":true}
+ {"file":"imagery/empty-ocean/sec_0010.jpg","src":"BY-12","dets":[],"background":true},
+ {
+  "file": "imagery/by-12-09.jpg",
+  "src": "BY-12",
+  "dets": [
+   {
+    "cls": "marine mammal",
+    "b": {
+     "x": 205.4,
+     "y": 136.5,
+     "w": 92.2,
+     "h": 60.3
+    }
+   }
+  ]
+ },
+ {
+  "file": "imagery/by-12-10.jpg",
+  "src": "BY-12",
+  "dets": [
+   {
+    "cls": "marine mammal",
+    "b": {
+     "x": 208.0,
+     "y": 132.0,
+     "w": 60.0,
+     "h": 46.0
+    }
+   },
+   {
+    "cls": "fishing vessel",
+    "b": {
+     "x": 317.0,
+     "y": 129.0,
+     "w": 56.0,
+     "h": 41.0
+    }
+   }
+  ]
+ },
+ {
+  "file": "imagery/uav-3-09.jpg",
+  "src": "UAV-3",
+  "dets": [
+   {
+    "cls": "warship",
+    "b": {
+     "x": 300.5,
+     "y": 64.2,
+     "w": 38.4,
+     "h": 169.5
+    }
+   },
+   {
+    "cls": "marine mammal",
+    "b": {
+     "x": 199.7,
+     "y": 144.3,
+     "w": 23.0,
+     "h": 62.7
+    }
+   }
+  ]
+ },
+ {
+  "file": "imagery/uav-3-10.jpg",
+  "src": "UAV-3",
+  "dets": [
+   {
+    "cls": "marine mammal",
+    "b": {
+     "x": 173.8,
+     "y": 152.7,
+     "w": 38.9,
+     "h": 47.7
+    }
+   },
+   {
+    "cls": "marine mammal",
+    "b": {
+     "x": 214.1,
+     "y": 128.1,
+     "w": 31.7,
+     "h": 39.3
+    }
+   },
+   {
+    "cls": "marine mammal",
+    "b": {
+     "x": 225.1,
+     "y": 163.2,
+     "w": 46.1,
+     "h": 49.5
+    }
+   }
+  ]
+ }
 ]

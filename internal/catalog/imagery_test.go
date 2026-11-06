@@ -11,6 +11,35 @@ import (
 	"testing"
 )
 
+// libraryOnlyClasses appear in library frames but are never synthesized from Pools.
+var libraryOnlyClasses = map[string]bool{"marine mammal": true}
+
+func TestLibraryHasMarineMammalFrames(t *testing.T) {
+	for _, sourceID := range []string{"UAV-3", "BY-12"} {
+		found := false
+		for _, image := range Library[sourceID] {
+			for _, detection := range image.Dets {
+				if detection.Cls == "marine mammal" {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Errorf("source %q has no library image with a marine mammal detection", sourceID)
+		}
+	}
+	for _, images := range Library {
+		for _, image := range images {
+			if image.Background || image.File == "" {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join("..", "..", "web", "static", filepath.FromSlash(image.File))); err != nil {
+				t.Errorf("imagery.json file %q: %v", image.File, err)
+			}
+		}
+	}
+}
+
 func TestLibraryImages(t *testing.T) {
 	sources := make(map[string]Source, len(Sources))
 	for _, source := range Sources {
@@ -40,7 +69,7 @@ func TestLibraryImages(t *testing.T) {
 				if _, ok := Classes[detection.Cls]; !ok {
 					t.Errorf("image %q has unknown class %q", image.File, detection.Cls)
 				}
-				if _, ok := Pools[source.Scene][detection.Cls]; !ok {
+				if _, ok := Pools[source.Scene][detection.Cls]; !ok && !libraryOnlyClasses[detection.Cls] {
 					t.Errorf("image %q class %q is not in the %q source pool", image.File, detection.Cls, source.Scene)
 				}
 				box := detection.B
