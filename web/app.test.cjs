@@ -1687,7 +1687,9 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  assert.match(el.innerHTML,/<b>0.00 MB\/s<\/b>.*Link down — sending paused/);
  assert.equal(el.classList.on.has('down'),true);
  vm.runInContext('stats.linkBps=160000;stats.linkFixed=true;renderSimLink()',ctx);
- assert.match(el.innerHTML,/Fixed test rate/);assert.doesNotMatch(el.innerHTML,/every 5 s/);
+ assert.doesNotMatch(el.innerHTML,/Fixed test rate|every 5 s/);
+ vm.runInContext('stats.linkBps=0;renderSimLink()',ctx);
+ assert.doesNotMatch(el.innerHTML,/Fixed test rate/);
  const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
  assert.match(html,/id="simStrip">\s*<div class="st link" id="stLink"/);
  assert.doesNotMatch(html,/type="range"|linkPresets/);
