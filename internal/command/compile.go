@@ -48,6 +48,16 @@ func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
 	}
 	durationMin, rest := extractDuration(text)
 	warnings := make([]string, 0)
+	if c != nil && c.EdgeSubtypes {
+		rules, unknown := parseDirectiveDetailed(rest, true)
+		for _, rule := range rules {
+			for _, class := range rule.Classes {
+				if catalog.EdgeSubtypes[class] {
+					return c.finish(text, rules, unknown, durationMin, "rules", warnings)
+				}
+			}
+		}
+	}
 	if c != nil && c.LLM != nil {
 		draft, err := c.LLM.Draft(ctx, text)
 		if err == nil {
