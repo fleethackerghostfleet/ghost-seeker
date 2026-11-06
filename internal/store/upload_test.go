@@ -248,7 +248,7 @@ func TestMetadataOnlyStillSendsOverridesWithoutMarkingImage(t *testing.T) {
 	held, _ := s.GetItem("held")
 	next, _ := s.GetItem("next")
 	normal, _ := s.GetItem("normal")
-	if !held.Upload.MetaDone || held.Upload.Sent != 0 || held.Upload.Done || held.Upload.Received || held.Sent {
+	if !held.Upload.MetaDone || held.Upload.Sent != 0 || held.Upload.Done || held.Upload.Received || held.Upload.Active || held.Sent {
 		t.Fatalf("metadata delivery changed image/send state: item=%+v", held)
 	}
 	if next.Upload.Sent == 0 || next.Upload.Done {

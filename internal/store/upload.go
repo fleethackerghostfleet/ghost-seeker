@@ -194,7 +194,8 @@ func (s *Store) AdvanceUploads(elapsed time.Duration) (changed []command.Item) {
 		}
 		s.stats.Bytes += int(n)
 		budget -= n
-		u.Active = n > 0
+		// Active describes image bytes on the wire. Metadata delivery must not
+		// make the UI render the image as uploading.
 		changed = append(changed, cloneItem(s.items[i]))
 	}
 	for _, item := range s.items {

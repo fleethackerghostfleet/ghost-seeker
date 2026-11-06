@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/lowband"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
 	"google.golang.org/protobuf/proto"
 
@@ -60,6 +61,9 @@ type Config struct {
 	PullBoost           float64
 	RequireSignedPolicy bool
 	PolicyKeys          policy.Keyring
+	LowbandHold         time.Duration
+	LowbandLowBPS       int64
+	LowbandHighBPS      int64
 }
 
 func DefaultConfig(edgeID string) Config {
@@ -75,6 +79,9 @@ type Stats struct {
 	BytesPayload, BytesManifest int64
 	ChunksSent, ManifestSent    int64
 	LastExchange                time.Time
+	MetaOnly                    bool
+	MetaOnlySince               time.Time
+	MetaOnlyReason              string
 }
 
 type Scheduler struct {
@@ -91,6 +98,7 @@ type Scheduler struct {
 	policyExpiry   time.Time
 	nextRuleExpiry time.Time
 	stats          Stats
+	lowband        *lowband.Tracker
 	// OnDownlink is called for every applied downlink message (for UIs/tests).
 	OnDownlink func(*pb.Downlink)
 }
@@ -99,7 +107,17 @@ func New(cfg Config, st *store.Store, lk link.Link, eng *scoring.Engine, clk clo
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &Scheduler{cfg: cfg, st: st, lk: lk, eng: eng, clk: clk, log: log}
+	tracker := lowband.New()
+	if cfg.LowbandLowBPS > 0 {
+		tracker.LowThreshold = cfg.LowbandLowBPS
+	}
+	if cfg.LowbandHighBPS > 0 {
+		tracker.HighThreshold = cfg.LowbandHighBPS
+	}
+	if cfg.LowbandHold > 0 {
+		tracker.Hold = cfg.LowbandHold
+	}
+	s := &Scheduler{cfg: cfg, st: st, lk: lk, eng: eng, clk: clk, log: log, lowband: tracker}
 	var err error
 	s.guard, err = policy.NewStore(context.Background(), st, policy.Options{Keys: cfg.PolicyKeys, RequireSigned: cfg.RequireSignedPolicy})
 	if err != nil {
@@ -467,6 +485,14 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 		}
 		return last
 	}
+	if r.PullBoost > 0 && r.PullForm != pb.FormKind_FORM_KIND_UNSPECIFIED {
+		for i := range r.Forms {
+			f := &r.Forms[i]
+			if f.Kind == r.PullForm && f.Ready && !f.Complete && !PullOnly(r, f) {
+				return f
+			}
+		}
+	}
 	for i := range r.Forms {
 		f := &r.Forms[i]
 		if !f.Ready || f.Complete || PullOnly(r, f) {
@@ -475,7 +501,7 @@ func (s *Scheduler) nextForm(r *store.Row, emcon pb.EmconMode) *store.FormState 
 		if skipForm(r, f) {
 			continue
 		}
-		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 {
 			return nil
 		}
 		return f
@@ -514,7 +540,7 @@ func (s *Scheduler) nextFormAfter(r *store.Row, kind pb.FormKind, emcon pb.Emcon
 		if f.Kind <= kind || !f.Ready || f.Complete || PullOnly(r, f) || skipForm(r, f) {
 			continue
 		}
-		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT {
+		if emcon == pb.EmconMode_EMCON_MODE_BURST && f.Kind != pb.FormKind_FORM_KIND_FACT && r.PullBoost == 0 {
 			return nil
 		}
 		return f
@@ -565,10 +591,15 @@ func (s *Scheduler) PreviewPlan(rows []*store.Row, bps float64, now time.Time) *
 }
 
 func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, preview bool) *Plan {
+	s.observeMetaOnly(bps, now)
 	s.mu.Lock()
 	policy := s.policy
+	autoMeta := s.stats.MetaOnly
 	s.mu.Unlock()
 	emcon := policy.GetEmcon()
+	if autoMeta && emcon != pb.EmconMode_EMCON_MODE_SILENT {
+		emcon = pb.EmconMode_EMCON_MODE_BURST
+	}
 	plan := &Plan{}
 	if emcon == pb.EmconMode_EMCON_MODE_SILENT && !preview {
 		return plan
@@ -627,6 +658,24 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 		}
 		cands = append(cands, s.mkCand(r, f, minImg))
 	}
+	// Strict FACT-first: no non-FACT form is sent while an eligible FACT is
+	// pending. Existing operator pulls retain their preemption exception.
+	hasFact := false
+	for _, c := range cands {
+		if c.form.Kind == pb.FormKind_FORM_KIND_FACT {
+			hasFact = true
+			break
+		}
+	}
+	if hasFact {
+		filtered := cands[:0]
+		for _, c := range cands {
+			if c.form.Kind == pb.FormKind_FORM_KIND_FACT || c.row.PullBoost > 0 {
+				filtered = append(filtered, c)
+			}
+		}
+		cands = filtered
+	}
 	sortCands(cands)
 	for _, c := range cands {
 		label, _ := scoring.TopLabel(c.row.Item, 0)
@@ -648,7 +697,25 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 	if maxChunk > s.cfg.MaxChunk {
 		maxChunk = s.cfg.MaxChunk
 	}
-	for len(cands) > 0 && left >= s.cfg.MinChunk && len(plan.Chunks) < 256 {
+	var deferred []*cand
+	for (len(cands) > 0 || len(deferred) > 0) && left >= s.cfg.MinChunk && len(plan.Chunks) < 256 {
+		if len(deferred) > 0 {
+			factPending := false
+			for _, pending := range cands {
+				if pending.form.Kind == pb.FormKind_FORM_KIND_FACT {
+					factPending = true
+					break
+				}
+			}
+			if !factPending {
+				cands = append(cands, deferred...)
+				deferred = nil
+				sortCands(cands)
+			}
+		}
+		if len(cands) == 0 {
+			break
+		}
 		c := cands[0]
 		cands = cands[1:]
 		var sent int64
@@ -662,13 +729,50 @@ func (s *Scheduler) buildPlan(rows []*store.Row, bps float64, now time.Time, pre
 		}
 		if sent >= c.remaining && s.cfg.Strategy == Prioritized {
 			if nf := s.nextFormAfter(c.row, c.form.Kind, emcon); nf != nil {
-				nc := s.mkCand(c.row, nf, minImg)
-				cands = append(cands, nc)
-				sortCands(cands)
+				factPending := false
+				for _, pending := range cands {
+					if pending.form.Kind == pb.FormKind_FORM_KIND_FACT {
+						factPending = true
+						break
+					}
+				}
+				if !factPending {
+					nc := s.mkCand(c.row, nf, minImg)
+					cands = append(cands, nc)
+					sortCands(cands)
+				} else {
+					deferred = append(deferred, s.mkCand(c.row, nf, minImg))
+				}
 			}
 		}
 	}
 	return plan
+}
+
+func (s *Scheduler) observeMetaOnly(bps float64, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lowband == nil {
+		s.lowband = lowband.New()
+	}
+	mode := s.lowband.Observe(int64(math.Max(0, bps)), now)
+	if s.policy != nil && s.policy.GetEmcon() == pb.EmconMode_EMCON_MODE_BURST {
+		mode = true
+		s.stats.MetaOnlyReason = "emcon"
+	} else if mode {
+		s.stats.MetaOnlyReason = "link"
+	} else {
+		s.stats.MetaOnlyReason = ""
+	}
+	s.stats.MetaOnly = mode
+	if mode {
+		s.stats.MetaOnlySince = s.lowband.Since()
+		if s.stats.MetaOnlySince.IsZero() {
+			s.stats.MetaOnlySince = now
+		}
+	} else {
+		s.stats.MetaOnlySince = time.Time{}
+	}
 }
 
 func containsManifest(m []*pb.ManifestEntry, id string) bool {

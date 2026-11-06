@@ -29,6 +29,7 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	edgefact "github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
@@ -72,7 +73,8 @@ type Bridge struct {
 	mu         sync.Mutex
 	snap       []byte
 	subs       map[chan []byte]struct{}
-	records    map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
+	records    map[string]contactReport  // RECORD item id -> its contact report (immutable, fetched once)
+	facts      map[string]*edgefact.Fact // immutable FACT payloads, fetched once
 	operator   string
 	edgeNodeID string
 
@@ -89,6 +91,7 @@ func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 		client:   &http.Client{Timeout: 10 * time.Second},
 		subs:     map[chan []byte]struct{}{},
 		records:  map[string]contactReport{},
+		facts:    map[string]*edgefact.Fact{},
 		poke:     make(chan struct{}, 1),
 		operator: DefaultOperator,
 	}
@@ -181,22 +184,25 @@ type Object struct {
 }
 
 type NodeStatus struct {
-	OK          bool    `json:"ok"`
-	ItemsTotal  int64   `json:"itemsTotal"`
-	Deduped     int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
-	Prioritizer string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
-	Evicted     int64   `json:"itemsEvicted"`
-	ItemsUnique int64   `json:"itemsComplete"`
-	Unknown     int64   `json:"itemsUnknown"`
-	Bytes       int64   `json:"bytes"`
-	Queued      int64   `json:"queuedItems"`
-	QueuedBytes int64   `json:"queuedBytes"`
-	LinkUp      bool    `json:"linkUp"`
-	Failures    int64   `json:"consecutiveFailures"`
-	EstimateBps float64 `json:"estimateBps"`
-	PolicyID    string  `json:"policyId"`
-	LastSeenMs  int64   `json:"lastSeenMs"`
-	Error       string  `json:"error,omitempty"`
+	OK             bool    `json:"ok"`
+	ItemsTotal     int64   `json:"itemsTotal"`
+	Deduped        int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
+	Prioritizer    string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
+	Evicted        int64   `json:"itemsEvicted"`
+	ItemsUnique    int64   `json:"itemsComplete"`
+	Unknown        int64   `json:"itemsUnknown"`
+	Bytes          int64   `json:"bytes"`
+	Queued         int64   `json:"queuedItems"`
+	QueuedBytes    int64   `json:"queuedBytes"`
+	LinkUp         bool    `json:"linkUp"`
+	Failures       int64   `json:"consecutiveFailures"`
+	EstimateBps    float64 `json:"estimateBps"`
+	PolicyID       string  `json:"policyId"`
+	LastSeenMs     int64   `json:"lastSeenMs"`
+	MetaOnly       bool    `json:"metaOnly"`
+	MetaOnlySince  int64   `json:"metaOnlySince,omitempty"`
+	MetaOnlyReason string  `json:"metaOnlyReason,omitempty"`
+	Error          string  `json:"error,omitempty"`
 }
 
 type Snapshot struct {
@@ -554,6 +560,54 @@ func (b *Bridge) fetchRecord(ctx context.Context, id string) contactReport {
 	return rep
 }
 
+func (b *Bridge) fetchFact(ctx context.Context, id string) *edgefact.Fact {
+	b.mu.Lock()
+	if f, ok := b.facts[id]; ok {
+		b.mu.Unlock()
+		return f
+	}
+	b.mu.Unlock()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.shore+"/blob/"+id+"/fact", nil)
+	if err != nil {
+		return nil
+	}
+	b.authorize(req)
+	res, err := b.client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return nil
+	}
+	var f edgefact.Fact
+	if json.Unmarshal(raw, &f) != nil || f.ID == "" {
+		var env struct {
+			Fact json.RawMessage `json:"fact"`
+			Data json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal(raw, &env) != nil {
+			return nil
+		}
+		for _, part := range [][]byte{env.Fact, env.Data} {
+			if len(part) > 0 && json.Unmarshal(part, &f) == nil && f.ID != "" {
+				break
+			}
+		}
+	}
+	if f.ID == "" {
+		return nil
+	}
+	b.mu.Lock()
+	b.facts[id] = &f
+	b.mu.Unlock()
+	return &f
+}
+
 func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 	n := NodeStatus{
 		OK:          true,
@@ -571,6 +625,7 @@ func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 		EstimateBps: st.GetLink().GetEstimateBps(),
 		PolicyID:    st.GetPolicyId(),
 		LastSeenMs:  st.GetLink().GetLastSuccessUnixMs(),
+		MetaOnly:    st.GetMetaOnly(), MetaOnlySince: st.GetMetaOnlySinceUnixMs(), MetaOnlyReason: st.GetMetaOnlyReason(),
 	}
 	if n.EstimateBps == 0 {
 		n.EstimateBps = float64(st.GetHeartbeat().GetLinkEstimateBps())

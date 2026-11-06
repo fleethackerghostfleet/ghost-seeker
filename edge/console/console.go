@@ -217,6 +217,11 @@ func (s *Service) GetStatus(ctx context.Context, _ *connect.Request[pb.GetStatus
 	if resp.Prioritizer == "" {
 		resp.Prioritizer = scoring.PrioritizerEdgeml
 	}
+	resp.MetaOnly = st.MetaOnly
+	if !st.MetaOnlySince.IsZero() {
+		resp.MetaOnlySinceUnixMs = st.MetaOnlySince.UnixMilli()
+	}
+	resp.MetaOnlyReason = st.MetaOnlyReason
 	var queued, qb int64
 	for _, r := range rows {
 		if r.ManifestAcked {

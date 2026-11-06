@@ -28,8 +28,18 @@ type Fact struct {
 	Override   string            `json:"override,omitempty"`
 	OverrideBy string            `json:"override_by,omitempty"`
 	Tags       map[string]string `json:"tags,omitempty"`
+	Priority   float64           `json:"p,omitempty"`
+	Tier       int               `json:"q,omitempty"`
 	// Embedding is omitted from FACT to keep it under 1 KB; shore can pull it
 	// later as part of a richer form if needed.
+}
+
+// WithScore adds edge-known ranking to the compact FACT without requiring
+// callers to duplicate the item/feature projection.
+func WithScore(it *pb.Item, score float64, tier int) *Fact {
+	f := FromItem(it)
+	f.Priority, f.Tier = score, tier
+	return f
 }
 
 // Generated reports whether items of this type carry a synthesized FACT

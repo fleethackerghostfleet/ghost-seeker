@@ -51,6 +51,9 @@ func main() {
 	period := flag.Duration("period", 5*time.Second, "capture period for replay")
 	tick := flag.Duration("tick", 3*time.Second, "scheduler tick")
 	initBps := flag.Float64("init-bps", 64000, "initial link estimate (bits/s)")
+	lowbandHold := flag.Duration("lowband-hold", 2*time.Minute, "sustained low/high link duration before metadata-only mode changes")
+	lowbandLow := flag.Int64("lowband-low-bps", 8000, "enter metadata-only mode below this link rate")
+	lowbandHigh := flag.Int64("lowband-high-bps", 16000, "exit metadata-only mode above this link rate")
 	icfg := ingest.DefaultConfig()
 	flag.IntVar(&icfg.ThumbWidth, "thumb-width", icfg.ThumbWidth, "THUMB max width in px (0 = unbounded)")
 	flag.IntVar(&icfg.ThumbHeight, "thumb-height", icfg.ThumbHeight, "THUMB max height in px (0 = unbounded)")
@@ -94,6 +97,8 @@ func main() {
 	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9), token)
 	cfg := scheduler.DefaultConfig(*id)
 	cfg.Tick = *tick
+	cfg.LowbandHold = *lowbandHold
+	cfg.LowbandLowBPS, cfg.LowbandHighBPS = *lowbandLow, *lowbandHigh
 	cfg.RequireSignedPolicy = *requireSignedPolicy
 	if *policyKeysPath != "" {
 		cfg.PolicyKeys, err = policy.LoadKeyring(*policyKeysPath)

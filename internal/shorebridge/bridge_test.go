@@ -59,6 +59,33 @@ func TestAutomaticLinkStatus(t *testing.T) {
 	}
 }
 
+func TestLiveMetadataEndpointUsesFormStates(t *testing.T) {
+	c := NewConsole(New("", "", nil))
+	c.base["live-1"] = &command.Item{ID: "live-1", TS: time.Unix(100, 0), Live: &command.LiveMeta{
+		ItemID: "live-1", ImageForm: "thumb", Forms: map[string]command.LiveForm{
+			"fact":  {State: "received", Bytes: 120, Received: 120},
+			"thumb": {State: "pending", Bytes: 2000},
+		}}}
+	rec := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/items/live-1/metadata", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"capture", "model", "scoring", "operator", "transfer"} {
+		if _, ok := got[key]; !ok {
+			t.Fatalf("missing metadata group %q: %v", key, got)
+		}
+	}
+	transfer := got["transfer"].(map[string]any)
+	if transfer["metadata"].(map[string]any)["state"] != "received" || transfer["image"].(map[string]any)["state"] != "pending" {
+		t.Fatalf("wrong live transfer state: %v", transfer)
+	}
+}
+
 func TestNodeStatusEvictions(t *testing.T) {
 	if n := nodeStatus(&pb.GetStatusResponse{ItemsEvicted: 7}); n.Evicted != 7 {
 		t.Fatalf("evictions not forwarded: %+v", n)

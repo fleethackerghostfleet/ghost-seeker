@@ -208,6 +208,97 @@ func TestSuppressStillSendsFact(t *testing.T) {
 	}
 }
 
+func TestFactFirstBlocksOtherItems(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	first := addImage(t, s, st, clk, "cargo", .9, 0, 30000)
+	second := addImage(t, s, st, clk, "tanker", .9, 0, 30000)
+	if err := st.MarkManifestAcked(context.Background(), []string{first.Item.Id, second.Item.Id}); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := st.All(context.Background())
+	for _, r := range rows {
+		if r.Item.Id == first.Item.Id {
+			r.Form(pb.FormKind_FORM_KIND_FACT).Complete = true
+		}
+	}
+	plan := s.BuildPlan(rows, 64000, clk.Now())
+	for _, c := range plan.Chunks {
+		if c.ItemId != second.Item.Id && c.Form != pb.FormKind_FORM_KIND_FACT {
+			t.Fatalf("non-FACT sent with pending FACT: %+v", plan.Chunks)
+		}
+	}
+}
+
+func TestLowbandMetadataOnlyAllowsFactAndPull(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	s.cfg.LowbandHold = time.Minute
+	s.lowband.Hold = time.Minute
+	row := addImage(t, s, st, clk, "cargo", .9, 0, 30000)
+	if err := st.MarkManifestAcked(context.Background(), []string{row.Item.Id}); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := st.All(context.Background())
+	_ = s.BuildPlan(rows, 1000, clk.Now())
+	clk.Advance(time.Minute)
+	rows, _ = st.All(context.Background())
+	plan := s.BuildPlan(rows, 1000, clk.Now())
+	for _, c := range plan.Chunks {
+		if c.Form != pb.FormKind_FORM_KIND_FACT {
+			t.Fatalf("metadata-only sent image form %v", c.Form)
+		}
+	}
+	if !s.Stats().MetaOnly || s.Stats().MetaOnlyReason != "link" {
+		t.Fatalf("metadata-only state: %+v", s.Stats())
+	}
+	if err := s.Pull(context.Background(), &pb.Pull{ItemId: row.Item.Id, Form: pb.FormKind_FORM_KIND_FULL, PriorityBoost: 1, RequestedBy: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	if f := row.Form(pb.FormKind_FORM_KIND_FACT); f != nil {
+		if err := st.SetAcked(context.Background(), row.Item.Id, f.Kind, f.Bytes, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, _ = st.All(context.Background())
+	plan = s.BuildPlan(rows, 1000, clk.Now().Add(time.Second))
+	found := false
+	for _, c := range plan.Chunks {
+		found = found || c.Form == pb.FormKind_FORM_KIND_FULL
+	}
+	if !found {
+		t.Fatal("operator pull blocked in metadata-only mode")
+	}
+}
+
+func TestLowbandExitsAfterHighHold(t *testing.T) {
+	s, st, _, clk := setup(t, Prioritized)
+	s.cfg.LowbandHold = time.Minute
+	s.lowband.Hold = time.Minute
+	row := addImage(t, s, st, clk, "cargo", .9, 0, 1000)
+	_ = s.BuildPlan(mustRows(t, st), 1000, clk.Now())
+	clk.Advance(time.Minute)
+	_ = s.BuildPlan(mustRows(t, st), 1000, clk.Now())
+	if !s.Stats().MetaOnly {
+		t.Fatal("lowband mode did not enter")
+	}
+	clk.Advance(time.Minute)
+	_ = s.BuildPlan(mustRows(t, st), 20000, clk.Now())
+	clk.Advance(time.Minute)
+	_ = s.BuildPlan(mustRows(t, st), 20000, clk.Now())
+	if s.Stats().MetaOnly {
+		t.Fatal("lowband mode did not exit")
+	}
+	_ = row
+}
+
+func mustRows(t *testing.T, st *store.Store) []*store.Row {
+	t.Helper()
+	rows, err := st.All(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rows
+}
+
 func TestResumeAfterFailure(t *testing.T) {
 	s, st, sh, clk := setup(t, Prioritized)
 	ctx := context.Background()
