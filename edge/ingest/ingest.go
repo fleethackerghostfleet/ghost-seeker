@@ -33,7 +33,6 @@ import (
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/clock"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/imglimit"
 )
 
@@ -324,7 +323,7 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 	default:
 		payloads[pb.FormKind_FORM_KIND_FULL] = c.Data
 	}
-	payloads[pb.FormKind_FORM_KIND_FACT] = fact.FromItem(it).Marshal()
+	payloads[pb.FormKind_FORM_KIND_FACT] = g.sch.BuildFact(it, 0).Marshal()
 	if c.Type == pb.ItemType_ITEM_TYPE_RECORD || c.Type == pb.ItemType_ITEM_TYPE_DIGEST {
 		// For records the payload is small and is the fact.
 		payloads[pb.FormKind_FORM_KIND_FACT] = c.Data

@@ -219,6 +219,14 @@ func (s *Scheduler) ScoreItem(ctx context.Context, row *store.Row) error {
 	return s.st.UpdateScores(ctx, map[string]*pb.Score{row.Item.Id: sc})
 }
 
+func (s *Scheduler) BuildFact(it *pb.Item, pullBoost float64) *fact.Fact {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	score := s.eng.Score(it, &scoring.Context{Policy: s.policy, Now: s.clk.Now()}, pullBoost)
+	_, tier := scoring.TierPin(it, s.policy)
+	return fact.WithScore(it, score.Priority, int(tier))
+}
+
 // ApplyPolicy installs a new policy and rescores the whole backlog. Returns
 // how many items are now suppressed / boosted, for operator preview.
 func (s *Scheduler) ApplyPolicy(ctx context.Context, p *pb.Policy) (suppressed, boosted int64, err error) {
@@ -385,7 +393,7 @@ func (s *Scheduler) applyOverride(ctx context.Context, o *pb.LabelOverride) erro
 		if f.Kind != pb.FormKind_FORM_KIND_FACT || !fact.Generated(row.Item.Type) {
 			continue
 		}
-		nf, err := s.st.ReplaceForm(ctx, row.Item.Id, f.Kind, fact.FromItem(row.Item).Marshal())
+		nf, err := s.st.ReplaceForm(ctx, row.Item.Id, f.Kind, s.BuildFact(row.Item, row.PullBoost).Marshal())
 		if err != nil {
 			return err
 		}

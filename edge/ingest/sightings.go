@@ -18,7 +18,6 @@ import (
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/store"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 )
 
 // DedupMode selects how captures turn into items.
@@ -220,7 +219,7 @@ func (g *Ingester) replaceKeyFrame(ctx context.Context, row *store.Row, c *Captu
 		}
 		payloads[pb.FormKind_FORM_KIND_CROP] = cr
 	}
-	payloads[pb.FormKind_FORM_KIND_FACT] = fact.FromItem(it).Marshal()
+	payloads[pb.FormKind_FORM_KIND_FACT] = g.sch.BuildFact(it, row.PullBoost).Marshal()
 	for k, data := range payloads {
 		nf, err := g.replaceForm(ctx, it.Id, k, data)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -271,7 +270,7 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 			}
 		}
 	}
-	nf, err := g.replaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, fact.FromItem(it).Marshal())
+	nf, err := g.replaceForm(ctx, it.Id, pb.FormKind_FORM_KIND_FACT, g.sch.BuildFact(it, row.PullBoost).Marshal())
 	if err != nil {
 		return nil, err
 	}
