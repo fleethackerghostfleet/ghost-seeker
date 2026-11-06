@@ -18,6 +18,8 @@ packages:
       certificateIdentityRegexp: https://github\.com/defenseunicorns/uds-core/\.github/workflows/publish\.yaml@refs/tags/v\d+\.\d+\.\d+
       certificateOIDCIssuer: https://token.actions.githubusercontent.com
   - name: ghost-seeker
+    # Zarf variable overrides live in uds-config.yaml: FRAMES_SOURCE must be pvc.
+    # The uds-package guard rejects hostPath even if that configuration is omitted.
     path: ../../dist
     ref: 0.1.0
     optionalComponents:

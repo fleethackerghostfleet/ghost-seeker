@@ -387,15 +387,10 @@ def check_models(package: dict, documents: list[dict]) -> None:
     require(any(m.get("name") == "models" and m.get("mountPath") == "/models"
                 and m.get("readOnly") is True for m in sidecar.get("volumeMounts", [])),
             "sidecar must mount /models readOnly")
-    require(any(m.get("name") == "catalog" and m.get("mountPath") == "/opt/venv/lib/internal/catalog"
-                and m.get("readOnly") is True for m in sidecar.get("volumeMounts", [])),
-            "sidecar must mount catalog readOnly at its runtime path")
-    require(any(m.get("name") == "catalog" and m.get("mountPath") == "/catalog"
-                for m in init.get("volumeMounts", []))
-            and any(v.get("name") == "catalog" and "emptyDir" in v for v in pod.get("volumes", []))
-            and 'cp /models/catalog/*.json /catalog/' in script
-            and "sed -n 's@  catalog/@  @p' /models/SHA256SUMS | sha256sum -c" in script,
-            "models initContainer must copy and verify the catalog emptyDir")
+    require(not any(v.get("name") == "catalog" for v in pod.get("volumes", []))
+            and not any(m.get("name") == "catalog" for c in (sidecar, init)
+                        for m in c.get("volumeMounts", [])),
+            "sidecar must use the catalog packaged in its image without a catalog volume")
 
 
 def check_uds_package(documents: list[dict], package: dict, rendered: list[dict]) -> None:
@@ -477,6 +472,37 @@ def check_uds_package(documents: list[dict], package: dict, rendered: list[dict]
     guard = "\n".join(a.get("cmd", "") for a in actions)
     require(all(s in guard for s in ("ZARF_VAR_SHORE_TLS_SECRET", "ZARF_VAR_EDGE_TLS_SECRET",
                                     "exit 1", "STRICT mTLS")), "uds-package TLS guard missing")
+    require('"${ZARF_VAR_FRAMES_SOURCE:-}" != pvc' in guard,
+            "uds-package must require FRAMES_SOURCE=pvc")
+
+
+def check_frames(documents: list[dict], variables: dict[str, str]) -> None:
+    source = variables["FRAMES_SOURCE"]
+    require(source in {"hostPath", "pvc"}, "invalid FRAMES_SOURCE")
+    edge = next(d for d in documents if d["kind"] == "StatefulSet" and d["metadata"]["name"] == "edge")
+    pod, containers = workload_containers(edge)
+    mount = next(m for m in containers[0]["volumeMounts"] if m["name"] == "frames")
+    require(mount.get("readOnly") is True and mount["mountPath"] == "/frames",
+            "frames must remain read-only at /frames")
+    if source == "pvc":
+        def has_hostpath(value):
+            if isinstance(value, dict):
+                return "hostPath" in value or any(has_hostpath(v) for v in value.values())
+            return isinstance(value, list) and any(has_hostpath(v) for v in value)
+        require(not has_hostpath(documents), "PVC rendering must not contain any hostPath")
+        claim = next((v for v in edge["spec"]["volumeClaimTemplates"] if v["metadata"]["name"] == "frames"), {})
+        spec = claim.get("spec", {})
+        require(spec.get("accessModes") == ["ReadWriteOnce"]
+                and spec.get("resources", {}).get("requests", {}).get("storage") == variables["FRAMES_STORAGE"],
+                "frames PVC must use the configured size and ReadWriteOnce")
+        require(spec.get("storageClassName", "") == variables["FRAMES_STORAGE_CLASS"],
+                "frames PVC must use the configured storage class")
+        require(bool(variables["FRAMES_STORAGE_CLASS"]) or "storageClassName" not in spec,
+                "empty frames storage class must use cluster default")
+    else:
+        volume = next(v for v in pod["volumes"] if v["name"] == "frames")
+        require(volume.get("hostPath") == {"path": variables["FRAMES_HOSTPATH"], "type": "DirectoryOrCreate"},
+                "non-UDS frames must use FRAMES_HOSTPATH")
 
 
 def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
@@ -509,6 +535,7 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
     all_manifest_paths = sorted((ROOT / "manifests").glob("*.yaml"))
     require(bool(all_manifest_paths), "no manifests/*.yaml files found")
     parsed = render_manifests(package, overrides)
+    check_frames([doc for docs in parsed.values() for doc in docs], variables)
     check_models(package, [doc for docs in parsed.values() for doc in docs])
     require(set(parsed) == set(all_manifest_paths), "every manifest must be packaged")
     check_tls_wiring([document for docs in parsed.values() for document in docs], variables)
@@ -619,6 +646,13 @@ if __name__ == "__main__":
                 for path, documents in parsed.items():
                     (profile / path.name).write_text(yaml.safe_dump_all(documents, sort_keys=False))
         print("validated all 8 plaintext/listener TLS/CA combinations with Zarf's native renderer")
+        parsed = check({"FRAMES_SOURCE": "pvc"})
+        if args.output_dir:
+            profile = args.output_dir / "uds-pvc"
+            profile.mkdir(parents=True, exist_ok=True)
+            for path, documents in parsed.items():
+                (profile / path.name).write_text(yaml.safe_dump_all(documents, sort_keys=False))
+        print("validated UDS PVC rendering without hostPath")
     except (KeyError, TypeError, ValueError) as exc:
         print(f"manifest validation failed: {exc}", file=sys.stderr)
         raise SystemExit(1)

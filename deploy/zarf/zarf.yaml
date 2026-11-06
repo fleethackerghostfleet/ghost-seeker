@@ -174,6 +174,19 @@ variables:
     description: Edge SQLite persistent volume size.
     default: 10Gi
     prompt: false
+  - name: FRAMES_SOURCE
+    description: Frames volume source; UDS requires pvc.
+    default: hostPath
+    pattern: '^(hostPath|pvc)$'
+    prompt: false
+  - name: FRAMES_STORAGE
+    description: Frames PVC capacity.
+    default: 10Gi
+    prompt: false
+  - name: FRAMES_STORAGE_CLASS
+    description: Frames PVC storage class; empty uses the cluster default.
+    default: ""
+    prompt: false
   - name: FRAMES_HOSTPATH
     description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop). Production images have no replay; the edge ingests the live input stream.
     default: /var/lib/ghost-seeker/frames
@@ -198,6 +211,10 @@ components:
       onDeploy:
         before:
           - cmd: |
+              if [ "${ZARF_VAR_FRAMES_SOURCE:-}" != pvc ]; then
+                echo "UDS requires FRAMES_SOURCE=pvc; hostPath volumes are not allowed." >&2
+                exit 1
+              fi
               if [ -n "${ZARF_VAR_SHORE_TLS_SECRET:-}" ] || [ -n "${ZARF_VAR_EDGE_TLS_SECRET:-}" ]; then
                 echo "UDS requires plain HTTP behind STRICT mTLS sidecars; leave SHORE_TLS_SECRET and EDGE_TLS_SECRET empty." >&2
                 exit 1

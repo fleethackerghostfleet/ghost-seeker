@@ -142,11 +142,25 @@ spec:
 {{ end }}
         - name: tmp
           emptyDir: {}
+{{ if eq "###ZARF_VAR_FRAMES_SOURCE###" "hostPath" }}
         - name: frames
           hostPath:
             path: "###ZARF_VAR_FRAMES_HOSTPATH###"
             type: DirectoryOrCreate
+{{ end }}
   volumeClaimTemplates:
+{{ if eq "###ZARF_VAR_FRAMES_SOURCE###" "pvc" }}
+    - metadata:
+        name: frames
+      spec:
+        accessModes: ["ReadWriteOnce"]
+{{ if ne "###ZARF_VAR_FRAMES_STORAGE_CLASS###" "" }}
+        storageClassName: "###ZARF_VAR_FRAMES_STORAGE_CLASS###"
+{{ end }}
+        resources:
+          requests:
+            storage: "###ZARF_VAR_FRAMES_STORAGE###"
+{{ end }}
     - metadata:
         name: data
       spec:

@@ -305,8 +305,10 @@ for the complete variable table, TLS/proxy ports and DNS/NAT caveats.
 
 The edge captures from the authenticated push API and the optional live
 sources below (`-watch-dir` spool, `-mjpeg-url`). The packaged edge mounts the
-node directory `FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`)
-read-only at `/frames`; a spool requires a separate **writable** mount and
+node directory `FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`) when
+`FRAMES_SOURCE=hostPath` (the non-UDS default). UDS requires `FRAMES_SOURCE=pvc`
+and creates the `frames-edge-0` ReadWriteOnce PVC. Both mount read-only at
+`/frames`; a spool requires a separate **writable** mount and
 `-watch-dir`. Production images have no scenario/frame replay (`-scenario`,
 `-frames`, `-period`, `SCENARIO` and `FRAMES_DIR` exist only in demo builds,
 [Production profile](#production-profile-and-prod-gate)). The Zarf package
@@ -551,9 +553,10 @@ not the custom model directory. Input binary checksum markers are normalized
 to text form; pin the printed `MODEL_SHA256` for the resulting image manifest.
 The model image is carried inside the Zarf package:
 runtime never fetches weights, including in an air gap.
-The image also carries pinned `colregs_lights.json` and `colregs_night_config.json`
-from `internal/catalog`, mounted read-only at the sidecar's expected catalog path
-because its night-light processing loads these files for real Analyze requests.
+The model image retains the pinned catalog files for checksum/build compatibility,
+but no catalog volume is copied or mounted. Night-light processing reads
+`colregs_lights.json` and `colregs_night_config.json` beside its installed Python
+module, packaged into the sidecar image itself.
 
 To swap models, choose a new model image version tag in the Makefile and
 `deploy/zarf/zarf.yaml` (and the matching manifest image), rebuild and transport
@@ -648,10 +651,14 @@ PY_IMAGE=mirror.gcr.io/library/python:3.11-slim uds run images
 The production bundle includes signed Zarf init v0.89.0, Core, and the local
 Ghost Seeker package from dist, selecting uds-package and edge-inference.
 For an existing Core cluster deploy just the local Zarf package with
-`--components uds-package,edge-inference`. Do not install a second Core.
+`--components uds-package,edge-inference --set FRAMES_SOURCE=pvc`.
+Do not install a second Core.
 The dev task generates fresh shore-auth, operator-auth and edge-auth secrets
 without displaying or writing credentials to disk. It replaces existing dev
 credentials; it is not a production credential rotation workflow.
+It reuses the local `uds` k3d cluster if present, selecting its kubeconfig and
+checking for `pepr-system` and `istio-system`, instead of rerunning the slim-dev bootstrap (which
+destroys and recreates the cluster). Existing Core must match the pinned version.
 
 | Variable | Default / purpose |
 | --- | --- |
@@ -660,6 +667,10 @@ credentials; it is not a production credential rotation workflow.
 | SHORE_GATEWAY_HOST | shore; exposes https://shore.DOMAIN |
 | SHORE_PUBLIC_HOSTS | Existing internal host allowlist, extended automatically with SHORE_GATEWAY_HOST.DOMAIN |
 | SHORE_TLS_SECRET, EDGE_TLS_SECRET | Must be empty when uds-package is selected |
+| FRAMES_SOURCE | hostPath outside UDS; bundle configuration and dev task select pvc; UDS guard rejects other values |
+| FRAMES_HOSTPATH | /var/lib/ghost-seeker/frames; used only with hostPath |
+| FRAMES_STORAGE | 10Gi; frames PVC requested capacity |
+| FRAMES_STORAGE_CLASS | Empty; omit storageClassName to use cluster default |
 | SHORE/EDGE/OPERATOR/INFERENCE_INGRESS_CIDR | Narrow approved source networks; documentation-only defaults |
 | SHORE/EDGE/INFERENCE/CAMERA/LLM/RESEARCH/OCSP/MODEL_EGRESS_CIDR | Narrow approved destination networks; documentation-only defaults |
 | Corresponding *_EGRESS_PORT | TCP endpoint port: 8080/8081/9090/80/8080/8097/80/443 respectively |
@@ -676,8 +687,22 @@ remains in force; there is no Keycloak/Package SSO integration.
 
 Do not enable in-pod listener TLS: gateway-to-sidecar HTTP routing and HTTP
 probe rewriting depend on plaintext app listeners. The optional uds-package
-component fails deployment if either listener TLS Secret variable is set.
+component fails deployment if either listener TLS Secret variable is set, or
+FRAMES_SOURCE is not pvc. PVC rendering contains no hostPath volumes.
 Keep the existing HTTP probes: Istio rewrites them to sidecar port 15020.
+
+The frames PVC is an input surface, not a replay source or an automatic ingest
+worker. A site-managed live sensor adapter can mount `frames-edge-0` writable
+in the same namespace, with filesystem permissions readable by UID/GID 65532.
+With ReadWriteOnce, schedule that writer on the edge pod's node (or use a
+storage driver whose supported access semantics meet the site's needs).
+Provision storage and approve the writer's security and network policies at
+the site; this package installs no writer. An empty PVC is valid. Merely
+writing files under `/frames` does not enable ingestion: use the authenticated
+live push API or configure a separate writable watch-dir spool as described
+above. Never enable demo replay to consume these files in production.
+Changing an existing StatefulSet's volumeClaimTemplates requires replacing
+the StatefulSet; preserve its data PVC and plan a maintenance window.
 
 Existing default-deny and allow NetworkPolicies remain unchanged. Kubernetes
 policies are additive: Package rules mirror every non-DNS app flow, while UDS

@@ -5,6 +5,7 @@ shared:
   DOMAIN: uds.dev
 variables:
   ghost-seeker:
+    FRAMES_SOURCE: pvc
     DOMAIN: uds.dev
     OPERATOR_GATEWAY_HOST: ghost-seeker
     SHORE_GATEWAY_HOST: shore
