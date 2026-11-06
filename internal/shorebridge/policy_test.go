@@ -157,7 +157,7 @@ func TestSetPolicyInterpretFallbackOmitsCompiled(t *testing.T) {
 	}
 }
 
-func TestSetPolicyUnknownConceptKeepsCompiledReadback(t *testing.T) {
+func TestSetPolicyUnknownConceptRejected(t *testing.T) {
 	var got pb.Policy
 	shore := fakeShore(t, &got)
 	defer shore.Close()
@@ -165,14 +165,7 @@ func TestSetPolicyUnknownConceptKeepsCompiledReadback(t *testing.T) {
 	b.Compiler = &command.Compiler{EdgeSubtypes: true}
 	rec := httptest.NewRecorder()
 	b.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy", strings.NewReader(`{"text":"prioritize unicorns"}`)))
-	var response struct {
-		Compiled *command.Compiled
-		Readback string
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
-	}
-	if rec.Code != http.StatusOK || response.Compiled == nil || !strings.HasPrefix(response.Readback, `Not supported: "unicorns"`) {
+	if rec.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(rec.Body.String(), `Not supported: "unicorns"`) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 	if len(got.GetInterest().GetBoostLabels())+len(got.GetInterest().GetSuppressLabels()) != 0 {

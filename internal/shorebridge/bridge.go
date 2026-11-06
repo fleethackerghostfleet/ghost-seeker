@@ -1145,6 +1145,10 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if compiled != nil && len(compiled.Unknown) > 0 && len(pol.Interest.SuppressLabels)+len(pol.Interest.BoostLabels) == 0 && mode == "" {
+		http.Error(w, compiled.Readback, http.StatusUnprocessableEntity)
+		return
+	}
 	if durationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(durationMin) * time.Minute).UnixMilli()
 	}

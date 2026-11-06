@@ -1,0 +1,35 @@
+package shorebridge
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"google.golang.org/protobuf/proto"
+)
+
+func TestUnsupportedRawPolicyPreservesActiveRules(t *testing.T) {
+	shore := newStatefulShore(t, &pb.Policy{Interest: &pb.Interest{}})
+	b := New(shore.server.URL, "", nil)
+	b.Compiler = &command.Compiler{EdgeSubtypes: true}
+	handler := b.Handler()
+	post := func(text string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/policy", strings.NewReader(`{"text":"`+text+`"}`)))
+		return rec
+	}
+	if rec := post("ignore birds"); rec.Code != http.StatusOK {
+		t.Fatal(rec.Body.String())
+	}
+	before := proto.Clone(shore.stored())
+	rec := post("ignore coast guard and unicorns")
+	if rec.Code != http.StatusUnprocessableEntity || !proto.Equal(before, shore.stored()) {
+		t.Fatalf("unsupported request changed policy: status=%d before=%v after=%v body=%s", rec.Code, before, shore.stored(), rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Not supported:") || !strings.Contains(rec.Body.String(), "unicorns") {
+		t.Fatalf("missing unsupported explanation: %s", rec.Body.String())
+	}
+}
