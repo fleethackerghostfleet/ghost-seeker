@@ -13,6 +13,12 @@ func WithDemoReset() Option {
 	return func(options *serverOptions) { options.demoReset = true }
 }
 
+func demoDraftFeatures(features map[string]any) map[string]any {
+	features["demoDraftSend"] = true
+	features["demoReviewFirst"] = true
+	return features
+}
+
 func (s *Server) registerDemoRoutes() {
 	if s.demoReset {
 		s.mux.HandleFunc("POST /api/demo/reset", s.resetDemo)

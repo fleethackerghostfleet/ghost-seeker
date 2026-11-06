@@ -15,12 +15,13 @@
   };
   return coordinate(lat,2,'N','S')+' '+coordinate(lon,3,'E','W');
  }
- function defaults(item={},classes={},sources=[],now=new Date(),metadata={}){
+ function defaults(item={},classes={},sources=[],now=new Date(),metadata={},type='whale'){
   const source=(typeof item.src==='object'?item.src:null)||(Array.isArray(sources)?sources.find(s=>s.id===item.src):sources[item.src])||{id:item.src};
   const mammal=(item.dets||[]).filter(d=>/whale|mammal|dolphin|orca|seal/i.test(String(d.cls)+' '+(classes[d.cls]?.lab||classes[d.cls]?.label||''))).sort((a,b)=>b.conf-a.conf)[0];
   const embedded=item.capture||{},c={...embedded,...metadata.capture},m={...embedded,...metadata.model};
   const capture=c.time??item.ts,time=capture!==undefined&&capture!==null&&capture!==''&&Number.isFinite(new Date(capture).getTime())?new Date(capture).toISOString():'';
-  const detection=mammal?`${classes[mammal.cls]?.lab||classes[mammal.cls]?.label||mammal.cls} ${Number.isFinite(mammal.conf)?Math.round(mammal.conf*100)+'%':''}`:'no marine mammal detection in selected image';
+  const describe=d=>`${classes[d.cls]?.lab||classes[d.cls]?.label||d.cls} ${Number.isFinite(d.conf)?Math.round(d.conf*100)+'%':''}`;
+  const detection=type==='whale'?(mammal?describe(mammal):'no marine mammal detection in selected image'):(item.dets||[]).map(describe).join(', ')||'no detections in selected image';
   const subtype=/whale|mammal|dolphin|orca|seal/i.test(m.subtype||'')?m.subtype:null;
   const evidence=[`ghost-seeker image ${item.id??''}, source ${c.source||source.id||''} (${c.sensor?.name||source.name||''}; hardware ${c.sensor?.hardware||source.hw||''}), frame ${c.frame??item.frame??''}, record ${c.record??item.dbId??''}, capture time ${time}, ${detection}`];
   if(c.contentHash)evidence.push('content hash '+String(c.contentHash).slice(0,24));
@@ -31,10 +32,34 @@
   const generic=/^(marine mammal|mammal)$/i.test(label);
   const corresponds=subtype&&label&&subtype.toLowerCase().includes(label.toLowerCase());
   const species=mammal?(corresponds?subtype:generic?'':label):subtype||'';
-  return {originator:'',to:'ISIC / OPERATIONAL COMMANDER',info:'CNO WASHINGTON DC',serial:'001',incidentTime:time,position:Number.isFinite(c.lat)&&Number.isFinite(c.lon)?latLong(c.lat,c.lon):source.loc||'',sensorHeading:Number.isFinite(c.headingDeg)?c.headingDeg+' DEG TRUE':'',course:'',speed:'',species,size:'',condition:'',damage:'',injuries:'',actions:'',media:'',assessment:'',evidence:evidence.join('; ')};
+  return {originator:'',to:'[ADDRESSEE — VERIFY]',info:'[INFO ADDRESSEE — VERIFY]',serial:'001',incidentTime:time,position:Number.isFinite(c.lat)&&Number.isFinite(c.lon)?latLong(c.lat,c.lon):source.loc||'',sensorHeading:Number.isFinite(c.headingDeg)?c.headingDeg+' DEG TRUE':'',course:'',speed:'',species,size:'',condition:'',damage:'',injuries:'',actions:'',media:'',assessment:'',evidence:evidence.join('; ')};
  }
- function message(fields={},now=new Date()){
+ const templates=[
+  {id:'whale',label:'OPREP-3 NAVY BLUE (whale strike)'},
+  {id:'spotrep',label:'Contact report / SPOTREP',msgid:'SPOTREP',section:'CONTACT DETAILS'},
+  {id:'incident',label:'OPREP-3 NAVY BLUE (general incident)',msgid:'OPREP-3',flagword:'NAVY BLUE',section:'INCIDENT DETAILS'},
+  {id:'sitrep',label:'SITREP',msgid:'SITREP',section:'SITUATION'},
+  {id:'sighting',label:'Marine mammal sighting report',msgid:'MARINE MAMMAL SIGHTING',section:'SIGHTING DETAILS'}
+ ];
+ function message(fields={},now=new Date(),type='whale'){
+  const template=templates.find(t=>t.id===type);
+  if(!template)throw new Error('Unknown report type');
   const f=new Proxy(fields,{get:(target,key)=>clean(target[key])}),incident=dtg(fields.incidentTime);
+  if(type!=='whale')return [
+   'UNCLASSIFIED//FOR TRAINING AND DEMONSTRATION ONLY',
+   'DRAFT ONLY - VERIFY FORMAT AGAINST CURRENT GUIDANCE - NOT RELEASED',
+   dtg(now),`FM ${f.originator}`,`TO ${f.to}`,`INFO ${f.info}`,
+   `MSGID/${template.msgid}/${f.originator}/${f.serial}//`,
+   ...(template.flagword?[`FLAGWORD/${template.flagword}//`]:[]),
+   `SUBJ/${clean(template.label)}//`,
+   `TIMELOC/${incident}/${f.position}//`,
+   `GENTEXT/NAVIGATION/COURSE ${f.course}; SPEED ${f.speed}; SENSOR HEADING AT CAPTURE ${f.sensorHeading} (NOT SHIP COURSE)//`,
+   `GENTEXT/ANIMAL OBSERVATIONS/SPECIES ${f.species}; ESTIMATED SIZE ${f.size}//`,
+   `GENTEXT/${template.section}/${f.evidence}//`,
+   `GENTEXT/STATUS/${f.condition}; DAMAGE ${f.damage}; INJURIES ${f.injuries}//`,
+   `GENTEXT/ACTIONS/${f.actions}//`,`GENTEXT/PUBLIC AFFAIRS/${f.media}//`,`GENTEXT/ASSESSMENT/${f.assessment}//`,
+   'SENSOR OBSERVATIONS ONLY. OPERATOR MUST VERIFY; NO INCIDENT OR STRIKE IS CONFIRMED.', 'BT'
+  ].join('\n');
   return [
    'UNCLASSIFIED//FOR TRAINING AND DEMONSTRATION ONLY',
    'DRAFT - NOT RELEASED - VERIFY FORMAT, ADDRESSEES AND TIMELINES AGAINST OPNAVINST 3100.6K BEFORE TRANSMISSION',
@@ -50,7 +75,7 @@
    `GENTEXT/REMARKS/SENSOR EVIDENCE: ${f.evidence}. SENSOR HEADING AT CAPTURE: ${f.sensorHeading} (NOT SHIP COURSE). MACHINE DETECTION IS NOT CONFIRMATION OF STRIKE.//`,'BT'
   ].join('\n');
  }
- const api={defaults,dtg,message,latLong};
+ const api={defaults,dtg,message,latLong,templates};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  else root.OprepModel=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

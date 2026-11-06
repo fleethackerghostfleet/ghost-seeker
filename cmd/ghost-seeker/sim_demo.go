@@ -220,6 +220,7 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 		}
 	}
 	seedWhale(data, generator)
+	seedReviewWhale(data, generator, time.Now(), "maritime", nil)
 }
 
 func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count int, negativesRate float64) {
@@ -315,6 +316,7 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	last := time.Now()
 	whales := newWhaleCadence(data)
+	reviewEpoch := data.Epoch()
 	for {
 		time.Sleep(captureDelay(rng, captureEvery))
 		now := time.Now()
@@ -326,6 +328,12 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 		}
 		_, _, _, state := data.Snapshot()
 		directives := data.Directives()
+		seed, next, seeded := seedReviewAfterReset(data, generator, reviewEpoch, now, state.Model, directives)
+		reviewEpoch = next
+		if seeded {
+			stats, _ := data.Stats()
+			app.PublishItem(seed, stats)
+		}
 		item, extra := whales.tick(data, generator, time.Now(), state.Model, directives)
 		stored, evicted := addCapture(data, generator, rng, item, extra, state.Model, directives)
 		for _, id := range evicted {

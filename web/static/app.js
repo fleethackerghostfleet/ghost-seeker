@@ -1,5 +1,6 @@
 let SOURCES=[],SRC={},CLS={},MODELS={},ATTR_LAB={},EXAMPLES=[];
 let DATASET_MODE=false;
+let DEMO_REVIEW_FIRST=false;
 let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[],policy:null};
 let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null,policyAuditTimer=null,policyRawTouched=false,policyRawLoaded=false;
 let indexedItems=null,itemByID=new Map(),indexedPending=null,pendingByID=new Map();
@@ -266,7 +267,7 @@ function clearDemoItems(){
 // them all false, and a missing block is treated the same way.
 function gsFeatures(config){
  const f=config&&typeof config.features==='object'&&config.features||{};
- return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true};
+ return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true,demoDraftSend:f.demoDraftSend===true};
 }
 function applyFeatures(features){
  document.body.classList.toggle('no-sim',!features.simulation);
@@ -367,6 +368,8 @@ async function init(){
  const config=await request('/api/config');
  const features=gsFeatures(config);
  applyFeatures(features);
+ oprep.configure(features);
+ DEMO_REVIEW_FIRST=config.features?.demoReviewFirst===true;
  setupDemoReset(features.demoReset);
  setupTeamSync(!!config.reviewSync);
  DATASET_MODE=features.dataset;
@@ -1017,7 +1020,7 @@ async function answerTeamProposal(answer){
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
  finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
-function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
+function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(DEMO_REVIEW_FIRST?Number(!!b.reviewFirst)-Number(!!a.reviewFirst):0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
@@ -1095,13 +1098,13 @@ function renderNext(it){
  box.innerHTML=(rv.last?`<span class="rvnext-done">${esc(rv.last)}</span>`:'')+`<span class="rvnext-step"><b>Next:</b> ${step}</span>`;
 }
 function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)return;box.classList.remove('flash');void box.offsetWidth;box.classList.add('flash')}
-async function openItemOprep(it,button,isCurrent){
+async function openItemOprep(it,button,isCurrent,type='whale'){
  button.disabled=true;
  let metadata=metadataCache.get(it.id)?.data,unavailable=false;
  try{if(!metadata||metadataCache.get(it.id)?.stale){metadata=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);metadataCache.set(it.id,{data:metadata})}}
  catch{unavailable=true}
  finally{button.disabled=false}
- if(isCurrent())oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable);
+ if(isCurrent())oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable,type);
 }
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
@@ -1111,7 +1114,8 @@ function renderReviewContent(){
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
  const report=$('rvOprep');report.disabled=!it||unavailable;
- report.onclick=()=>{if(it&&!report.disabled) return openItemOprep(it,report,()=>state.page==='rv'&&rv.cur?.id===it.id&&!!findItem(it.id))};
+ if(report.disabled)oprep.closeMenu();
+ report.onclick=()=>{if(it&&!report.disabled){if(oprep.menuOpen())oprep.closeMenu();else return oprep.showMenu(type=>openItemOprep(it,report,()=>state.page==='rv'&&rv.cur?.id===it.id&&!!findItem(it.id),type))}};
  rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||rv.busy||(!it&&b.dataset.a!=='undo')||(unavailable&&!['skip','undo'].includes(b.dataset.a))});
  if(!it){rv.shown=null;rv.displayed=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>${rv.busy?'Saving review…':'All caught up'}</b><div>${rv.busy?'The next image will appear when the save completes.':'New images will appear here as sensors report.'}</div></div><div class="rvflash" id="rvFlash"></div>`;return}

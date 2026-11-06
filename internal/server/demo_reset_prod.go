@@ -8,3 +8,5 @@ import "net/http"
 func (s *Server) registerDemoRoutes() {}
 
 func (s *Server) handleDemoRoute(http.ResponseWriter, *http.Request) bool { return false }
+
+func demoDraftFeatures(features map[string]any) map[string]any { return features }
