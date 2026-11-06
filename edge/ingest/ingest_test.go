@@ -76,10 +76,12 @@ type scripted struct {
 	burst      *pb.NightBurst
 	calls      int
 	frames     []inference.Frame
+	labels     [][]string
 }
 
-func (f *scripted) Analyze(_ context.Context, fr inference.Frame, _ []string, _ map[string]string) (*pb.AnalyzeResponse, error) {
+func (f *scripted) Analyze(_ context.Context, fr inference.Frame, labels []string, _ map[string]string) (*pb.AnalyzeResponse, error) {
 	f.calls++
+	f.labels = append(f.labels, labels)
 	f.frames = append(f.frames, fr)
 	resp := &pb.AnalyzeResponse{ModelId: "scripted", Embedding: []float32{1, 0}, Unknownness: 0.2,
 		Sightings: f.script[f.calls], Burst: f.burst}

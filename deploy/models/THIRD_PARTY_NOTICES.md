@@ -1,14 +1,19 @@
 # Packaged model notices
 
-Default model files originate from the `demo-data-v1` release of
-https://github.com/fleethackerghostfleet/ghost-seeker (models-D.tar.gz).
-Checksums pin the archive and selected exports; weights are not source files.
+Default image models originate from the separately pinned `demo-data-v1`
+release (`models-D.tar.gz`) of fleethackerghostfleet/ghost-seeker.
 
-* **Ultralytics YOLO11n**: stock COCO-pretrained `yolo11n.pt` exported to ONNX,
-  not team-trained. AGPL-3.0 versus an Ultralytics Enterprise licence remains
-  **UNRESOLVED**. https://www.ultralytics.com/license
-* **Apple MobileCLIP-S1**: Apple ML Research model terms remain **UNRESOLVED**.
+* **Ultralytics YOLO11n**: stock COCO-pretrained ONNX export. AGPL-3.0 versus
+  Enterprise licensing remains **UNRESOLVED**. https://www.ultralytics.com/license
+* **Apple MobileCLIP-S1**: Apple ML Research terms remain **UNRESOLVED**.
   https://github.com/apple-aiml-research/ml-mobileclip#license
+* **Optional offline text tower**: `text_model.onnx` in the new `models-text-v1`
+  release is derived from the same MobileCLIP-S1 `datacompdr` weights, exported
+  with open_clip 2.32.0 / torch 2.6.0 / ONNX opset 17. It retains the same Apple
+  research terms; licensing remains **UNRESOLVED**. `tokenizer.json` is the CLIP
+  tokenizer from `openai/clip-vit-base-patch32`. Export validation and hashes are
+  included in that release's `text_provenance.json`; pinned runtime hashes are
+  in `TEXT_SHA256SUMS`. `demo-data-v1` is unchanged.
 
-Both licensing and model provenance must be cleared before fleet release.
-Packaging these models is not legal approval to field them.
+Packaging is not legal approval to field these models. No licensing decision
+is made here.

@@ -1,0 +1,144 @@
+{
+  "manifest_sha256": "f20aa4ccc956615157d1aa20fa4ac417c5bff1e1942884bfcb8c39c27bcfbd05",
+  "frames": 508,
+  "threshold": {
+    "similarity": 0.275,
+    "margin": 0.05
+  },
+  "dev": {
+    "buoy": {
+      "tp": 29,
+      "fp": 3,
+      "fn": 31,
+      "tn": 91,
+      "precision": 0.90625,
+      "recall": 0.48333333333333334,
+      "negative_fpr": 0.031914893617021274
+    },
+    "jetski": {
+      "tp": 14,
+      "fp": 3,
+      "fn": 36,
+      "tn": 101,
+      "precision": 0.8235294117647058,
+      "recall": 0.28,
+      "negative_fpr": 0.028846153846153848
+    },
+    "life saving appliances": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 50,
+      "tn": 104,
+      "precision": 0.0,
+      "recall": 0.0,
+      "negative_fpr": 0.0
+    }
+  },
+  "test": {
+    "buoy": {
+      "tp": 70,
+      "fp": 15,
+      "fn": 114,
+      "tn": 155,
+      "precision": 0.8235294117647058,
+      "recall": 0.3804347826086957,
+      "negative_fpr": 0.08823529411764706
+    },
+    "jetski": {
+      "tp": 44,
+      "fp": 3,
+      "fn": 66,
+      "tn": 241,
+      "precision": 0.9361702127659575,
+      "recall": 0.4,
+      "negative_fpr": 0.012295081967213115
+    },
+    "life saving appliances": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 100,
+      "tn": 254,
+      "precision": 0.0,
+      "recall": 0.0,
+      "negative_fpr": 0.0
+    }
+  },
+  "hardware": {
+    "platform": "Linux-6.8.0-1060-aws-x86_64-with-glibc2.35",
+    "cpu_count": 8,
+    "cpu_model": "Intel Xeon, 8 vCPUs, CPU-only"
+  },
+  "queries": {
+    "buoy": "buoy",
+    "jetski": "jetski",
+    "life saving appliances": "life_saving_appliances"
+  },
+  "detector": {
+    "name": "yolo11n-fp32-640-ort+live-tiles2-mob",
+    "tiling": {
+      "enabled": true,
+      "min_pixels": 921600,
+      "tile": 640,
+      "overlap": 0.2,
+      "max_tiles": 2,
+      "budget_ms": 3500.0,
+      "cost_margin": 1.2,
+      "merge_iou": 0.5
+    },
+    "mob": "horizon-context candidate"
+  },
+  "mean_regions": 11.181102362204724,
+  "latency": {
+    "frames_per_condition": 24,
+    "threads": 4,
+    "scope": "EdgemlEngine.analyze including detector, tracker, aggregator, optional crop/grid matcher; excludes JPEG/RPC",
+    "image_ids": [
+      "seadronessee/train/9653",
+      "seadronessee/train/7098",
+      "seadronessee/train/14968",
+      "seadronessee/train/15091",
+      "seadronessee/train/9730",
+      "seadronessee/train/11492",
+      "seadronessee/train/3695",
+      "seadronessee/train/13825",
+      "seadronessee/train/15140",
+      "seadronessee/train/13810",
+      "seadronessee/train/14914",
+      "seadronessee/train/9546"
+    ],
+    "conditions": {
+      "0": {
+        "cold_first_ms": 2739.3207200002507,
+        "mean_ms": 649.8223247083009,
+        "median_ms": 680.3049564998673,
+        "p95_ms": 981.6223089501134,
+        "text_cache_entries": 0
+      },
+      "1": {
+        "cold_first_ms": 2013.9931859998796,
+        "mean_ms": 1772.6441535833526,
+        "median_ms": 1897.6075614998535,
+        "p95_ms": 2160.768970300046,
+        "text_cache_entries": 9
+      },
+      "5": {
+        "cold_first_ms": 2834.410041999945,
+        "mean_ms": 2006.6123289166928,
+        "median_ms": 1979.7737560002133,
+        "p95_ms": 2478.9030413502815,
+        "text_cache_entries": 17
+      }
+    }
+  },
+  "dataset": "gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/clean/v3/coverage-20261105/catalog/",
+  "splits": {
+    "dev": {
+      "frames": 154,
+      "source_videos": 29
+    },
+    "test": {
+      "frames": 354,
+      "source_videos": 55
+    }
+  }
+}

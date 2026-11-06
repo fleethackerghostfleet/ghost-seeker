@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -58,6 +59,49 @@ func TestMockEmbeddingsAndHints(t *testing.T) {
 	c, _ := m.Analyze(ctx, Frame{Image: []byte("other")}, nil, nil)
 	if !reflect.DeepEqual(a.Embedding, b.Embedding) || reflect.DeepEqual(a.Embedding, c.Embedding) {
 		t.Fatal("image-seeded noise is not deterministic/distinct")
+	}
+}
+
+func TestRemoteOpenVocabularyImageOnlyFallback(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		labels []string
+		code   connect.Code
+		calls  int
+	}{
+		{"missing-text", []string{"boat", "open-vocab:life raft"}, connect.CodeFailedPrecondition, 2},
+		{"ordinary-precondition", []string{"boat"}, connect.CodeFailedPrecondition, 1},
+		{"unavailable", []string{"boat", "open-vocab:life raft"}, connect.CodeUnavailable, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			svc := testService{analyze: func(req *pb.AnalyzeRequest) (*pb.AnalyzeResponse, error) {
+				calls++
+				if string(req.Image) != "image" || req.Source != "mast" || req.CapturedAtUnixMs != 1234 || !req.WantEmbedding {
+					t.Errorf("frame context lost: %v", req)
+				}
+				if calls == 1 {
+					if !slices.Equal(req.KnownLabels, tt.labels) {
+						t.Errorf("labels %v", req.KnownLabels)
+					}
+					return nil, connect.NewError(tt.code, errors.New("text assets unavailable"))
+				}
+				if !slices.Equal(req.KnownLabels, []string{"boat"}) {
+					t.Errorf("fallback labels %v", req.KnownLabels)
+				}
+				return &pb.AnalyzeResponse{ModelId: "image-only"}, nil
+			}}
+			_, handler := ghostseekerv1connect.NewInferenceServiceHandler(svc)
+			server := httptest.NewServer(handler)
+			defer server.Close()
+			got, err := NewRemote(server.URL).Analyze(context.Background(), Frame{Image: []byte("image"), Source: "mast", CapturedAt: time.UnixMilli(1234)}, tt.labels, nil)
+			if calls != tt.calls || tt.calls == 2 && (err != nil || got.GetModelId() != "image-only") || tt.calls == 1 && connect.CodeOf(err) != tt.code {
+				t.Fatalf("calls=%d response=%v err=%v", calls, got, err)
+			}
+			if tt.calls == 2 && !slices.Contains(tt.labels, "open-vocab:life raft") {
+				t.Fatal("caller labels mutated")
+			}
+		})
 	}
 }
 

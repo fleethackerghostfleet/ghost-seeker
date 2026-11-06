@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "edgeml"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = ["numpy", "opencv-python-headless", "pyyaml", "scipy"]
+dependencies = ["numpy", "opencv-python-headless", "pyyaml", "scipy", "tokenizers>=0.21,<0.22"]
 
 [project.optional-dependencies]
 eval = ["pycocotools", "faster-coco-eval", "trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git", "matplotlib"]
