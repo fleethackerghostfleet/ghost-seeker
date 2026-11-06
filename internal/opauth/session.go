@@ -222,6 +222,10 @@ func (s *Sessions) issue(w http.ResponseWriter, r *http.Request, principal ...pi
 	id := base64.RawURLEncoding.EncodeToString(b)
 	now := s.now()
 	s.mu.Lock()
+	if previous, err := r.Cookie(CookieName); err == nil {
+		delete(s.sessions, previous.Value)
+		delete(s.bindings, previous.Value)
+	}
 	for k, exp := range s.sessions {
 		if now.After(exp) {
 			delete(s.sessions, k)
