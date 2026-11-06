@@ -304,12 +304,19 @@ downloading; do not substitute an earlier release. Naming follows
 - `SHA256SUMS`, `release.json`, `images.lock.json`, `THIRD_PARTY_NOTICES.md`,
   and SBOM JSON files listed in `SHA256SUMS` (plus provenance/signatures if published).
 
-Use a fresh release directory; download and verify **all** files listed by the
-release checksum manifest before deploying. Abort on any missing/mismatched
-entry. SHA256SUMS detects corruption, not an untrusted publisher: obtain the
-manifest through the approved authenticated channel and verify published
-signatures/provenance according to site policy. Do not use `--insecure` or skip
-signature validation.
+Use a fresh release directory; download and verify all four named deployment
+artifacts before deploying. The rc2 SHA256SUMS also lists metadata and nested
+`sbom/ship/...` / `sbom/shore/...` paths, but the SBOM release assets have
+flattened names such as `sbom-ship-docker.io_ghost-seeker_edge_prod-....json`.
+The example below verifies the bundles/packages without requiring those other
+files. `--ignore-missing` is not permission to omit a deployment artifact:
+require all four files and confirm each reports **OK**. Abort on any mismatch.
+Verify additional metadata/SBOMs separately against their corresponding named
+manifest entries if required by site policy; ignored entries are not verified.
+SHA256SUMS detects corruption, not an untrusted publisher: obtain the manifest
+through the approved authenticated channel and verify published signatures/
+provenance according to site policy. Do not use `--insecure` or skip signature
+validation.
 
 ```bash
 export RELEASE_URL='https://github.com/fleethackerghostfleet/ghost-seeker/releases/download/uds-v0.1.0-rc2' VERSION='0.1.0-rc2' ARCH=amd64
@@ -321,8 +328,14 @@ for role in shore ship; do
   curl -fSL "$RELEASE_URL/zarf-package-ghost-seeker-$role-$ARCH-$VERSION.tar.zst" \
     -o "zarf-package-ghost-seeker-$role-$ARCH-$VERSION.tar.zst"
 done
-# Fetch any additional files listed by this release's SHA256SUMS, then:
-sha256sum --check SHA256SUMS
+# Fail closed if a required download is absent or empty.
+for role in shore ship; do
+  for kind in uds-bundle zarf-package; do
+    test -s "$kind-ghost-seeker-$role-$ARCH-$VERSION.tar.zst" || exit 1
+  done
+done
+sha256sum --check --ignore-missing SHA256SUMS
+# Confirm all four exact artifacts listed above report OK, not just one.
 ```
 
 Each bundle contains its Zarf package/images; the standalone packages are for
@@ -604,6 +617,29 @@ UDS_CONFIG="$PWD/local-core.yaml" uds deploy \
   ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.16.0 --confirm
 export SHORE_CONTEXT=k3d-uds-runbook SHIP_CONTEXT=k3d-uds-runbook
 ```
+
+For separate ship and shore clusters on one host, use two Core config files
+and deploy Core once per config. Give each a distinct `CLUSTER_NAME`,
+`K3D_API_PORT`, `K3D_HTTP_PORT` and `K3D_HTTPS_PORT`; set the application contexts
+to their respective clusters instead of the single-context assignment above.
+The two-cluster rc2 laboratory run used:
+
+| Role | `CLUSTER_NAME` | API | HTTP | HTTPS | Context |
+| --- | --- | --- | --- | --- | --- |
+| Shore | `uds-shore` | 6551 | 9080 | 9443 | `k3d-uds-shore` |
+| Ship | `uds-ship` | 6552 | 10080 | 10443 | `k3d-uds-ship` |
+
+Optionally set `uds-k3d-dev.K3D_NETWORK` to join a pre-created Docker bridge
+when fixed laboratory addressing is needed. That run pinned shore to
+172.18.0.0/16 and ship to 172.19.0.0/16; these are test topology choices, not
+fleet defaults. Verify all names, ports and subnets are unused first.
+
+For laboratory offline checks, DOCKER-USER forwarding rules alone did **not**
+stop Docker-proxied external DNS. The observed test additionally used tagged
+host INPUT restrictions and ship-container network-namespace OUTPUT drops for
+Docker's embedded resolver. Verify external DNS as well as direct HTTPS is
+blocked, preserve the required routed shore path, and remove the owned test
+rules afterward. Forwarding-only blocking is not proof of an air gap.
 
 From a clean source checkout, production build/package commands are:
 
