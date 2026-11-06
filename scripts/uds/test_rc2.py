@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 from pathlib import Path
 import tempfile
 import unittest
@@ -40,6 +41,56 @@ class ReleaseRecorderTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'exit 2'):
                 rc2.run('failed', ['example'])
             self.assertIn('[exit 2]', (Path(directory)/'command-transcript.log').read_text())
+
+
+class ReleaseIntegrityTest(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.assets = self.root/'assets'
+        self.logs = self.root/'logs'
+        self.assets.mkdir()
+        self.logs.mkdir()
+        self.names = [f'{kind}-ghost-seeker-{role}-amd64-0.1.0-rc2.tar.zst'
+                      for kind in ('uds-bundle', 'zarf-package') for role in ('ship', 'shore')]
+        entries = []
+        for name in self.names:
+            data = name.encode()
+            (self.assets/name).write_bytes(data)
+            entries.append(hashlib.sha256(data).hexdigest()+'  '+name)
+        self.manifest = '\n'.join(entries)+'\n'
+        (self.assets/'SHA256SUMS').write_text(self.manifest)
+        for key, value in [('ASSETS', self.assets), ('LOGS', self.logs)]:
+            context = patch.object(rc2, key, value)
+            context.start()
+            self.addCleanup(context.stop)
+
+    def test_current_bytes_verified_without_historical_log(self):
+        rc2.verify_release_assets()
+        self.assertEqual((self.logs/'SHA256-verification.txt').read_text().count(': OK'), 4)
+
+    def test_stale_success_log_does_not_authorize_corrupt_assets(self):
+        (self.logs/'SHA256-verification.txt').write_text('old: OK\n'*4)
+        (self.assets/self.names[0]).write_bytes(b'corrupt')
+        with patch.object(rc2, 'run') as run, self.assertRaisesRegex(ValueError, 'SHA256 mismatch'):
+            rc2.bootstrap()
+        run.assert_not_called()
+
+    def test_missing_asset_fails_before_commands(self):
+        (self.assets/self.names[0]).unlink()
+        with patch.object(rc2, 'run') as run, self.assertRaises(FileNotFoundError):
+            rc2.bootstrap()
+        run.assert_not_called()
+
+    def test_missing_duplicate_or_invalid_manifest_entry_fails(self):
+        for manifest in ['', self.manifest+self.manifest.splitlines()[0]+'\n',
+                         self.manifest.replace(self.manifest.split()[0], 'invalid', 1)]:
+            with self.subTest(manifest=manifest):
+                (self.assets/'SHA256SUMS').write_text(manifest)
+                with patch.object(rc2, 'run') as run, self.assertRaises(ValueError):
+                    rc2.bootstrap()
+                run.assert_not_called()
 
 
 if __name__ == '__main__':

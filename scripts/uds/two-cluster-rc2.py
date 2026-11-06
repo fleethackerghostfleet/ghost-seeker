@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Release-only rc2 runbook driver. Never builds or packages application images."""
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -50,9 +51,28 @@ def kube(role, *args):
     return ['kubectl', '--context', 'k3d-uds-'+role, *args]
 
 
+def verify_release_assets():
+    entries = (ASSETS/'SHA256SUMS').read_text().splitlines()
+    verified = []
+    for kind in ('uds-bundle', 'zarf-package'):
+        for role in ('ship', 'shore'):
+            name = f'{kind}-ghost-seeker-{role}-amd64-0.1.0-rc2.tar.zst'
+            matches = [parts[0] for line in entries if len(parts := line.split()) == 2 and
+                       parts[1].lstrip('*') == name]
+            if len(matches) != 1 or not re.fullmatch(r'[0-9a-fA-F]{64}', matches[0]):
+                raise ValueError('Missing, duplicate or invalid SHA256SUMS entry: '+name)
+            digest = hashlib.sha256()
+            with (ASSETS/name).open('rb') as asset:
+                for chunk in iter(lambda: asset.read(1024*1024), b''):
+                    digest.update(chunk)
+            if digest.hexdigest() != matches[0].lower():
+                raise ValueError('SHA256 mismatch: '+name)
+            verified.append(name+': OK\n')
+    (LOGS/'SHA256-verification.txt').write_text(''.join(verified))
+
+
 def bootstrap():
-    verification = (LOGS/'SHA256-verification.txt').read_text()
-    assert verification.count(': OK') == 4, 'verify all rc2 release artifacts before cluster deletion'
+    verify_release_assets()
     for command in [['k3d', 'version'], ['uds', 'version'], ['zarf', 'version'], ['kubectl', 'version', '--client'], ['curl', '--version']]:
         run('version-'+command[0], command)
     run('airgap-off-before-delete', [ROOT/'scripts/uds/two-cluster-airgap.sh', 'off'])
