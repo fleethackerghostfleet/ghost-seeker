@@ -13,8 +13,9 @@ step() { printf '\n== prod-gate: %s\n' "$*"; }
 fail() { printf 'prod-gate: FAIL: %s\n' "$*" >&2; failures=$((failures + 1)); }
 
 step "build all commands with -tags prod"
-CGO_ENABLED=0 "$GO" build -tags prod -trimpath -o "$out/" ./cmd/...
-ls "$out"
+mkdir -p "$out/bin"
+CGO_ENABLED=0 "$GO" build -tags prod -trimpath -o "$out/bin/" ./cmd/...
+ls "$out/bin"
 
 step "go vet -tags prod ./..."
 "$GO" vet -tags prod ./...
@@ -32,8 +33,9 @@ echo "$ran TestProdContract* tests passed"
 step "prod binaries: no demo symbols"
 # Symbols that only demo wiring links in (go tool nm needs unstripped binaries).
 symbols='internal/server\.WithDemoReset|\(\*Server\)\.resetDemo|edge/inference\.NewMock|edge/inference\.\(\*Mock\)|internal/sensor\.NewGenerator|internal/sensor\.\(\*Generator\)|internal/dataset\.NewReplay|edge/ingest\.NewReplay|scenario\.Default|\(\*Sessions\)\.DemoAcceptAnyToken|\(\*Sessions\)\.TrustPeers|opauth\.loadOrCreate$|\(\*Bridge\)\.setLink|\(\*Bridge\)\.WithLinkOverride|main\.(runSimulation|runDatasetSimulation|fillBacklog|fillDatasetBacklog|runWatchOfficer|newSimulationUplink|simulationLinkRate)$'
-for bin in "$out"/*; do
-  if hits=$("$GO" tool nm "$bin" | awk '{print $NF}' | grep -E "$symbols"); then
+for bin in "$out"/bin/*; do
+  if ! syms=$("$GO" tool nm "$bin"); then fail "go tool nm failed on $(basename "$bin")"; continue; fi
+  if hits=$(echo "$syms" | awk '{print $NF}' | grep -E "$symbols"); then
     fail "$(basename "$bin") links demo symbols: $(echo "$hits" | sort -u | tr '\n' ' ')"
   fi
 done
@@ -41,7 +43,7 @@ done
 step "prod binaries: no demo routes or embedded demo assets"
 # Route patterns, not paths: the embedded console JS may name a gated route.
 strings_re='POST /api/demo/reset|POST /api/shore/link|empty-ocean\.zip|imagery/library/|demo-accept-any-token|demo-link-control|sim-link-bps|dev-trust-peers|dev-token-file|DefaultDevFile'
-for bin in "$out"/*; do
+for bin in "$out"/bin/*; do
   if hits=$(grep -aoE "$strings_re" "$bin" | sort -u); then
     fail "$(basename "$bin") contains demo strings: $(echo "$hits" | tr '\n' ' ')"
   fi
@@ -54,7 +56,7 @@ declare -A deployed=(
   [edge]='scenario|frames|period'
   [shore]=''
 )
-for bin in "$out"/*; do
+for bin in "$out"/bin/*; do
   name=$(basename "$bin")
   flags=$("$bin" -h 2>&1 | sed -nE 's/^  -([A-Za-z0-9-]+).*/\1/p' || true)
   [ -n "$flags" ] || { [ -z "${deployed[$name]+x}" ] && continue; fail "$name -h printed no flags"; continue; }
@@ -68,7 +70,7 @@ for bin in "$out"/*; do
 done
 
 step "ghost-seeker (prod) refuses to start without live mode"
-if msg=$("$out/ghost-seeker" -addr 127.0.0.1:0 2>&1); then
+if msg=$("$out/bin/ghost-seeker" -addr 127.0.0.1:0 2>&1); then
   fail "ghost-seeker started without -shore"
 elif ! grep -q -- '-shore' <<<"$msg"; then
   fail "ghost-seeker exit message does not explain -shore: $msg"
