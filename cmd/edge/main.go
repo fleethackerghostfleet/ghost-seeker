@@ -19,8 +19,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/ingest"
@@ -175,7 +173,7 @@ func main() {
 	mux.Handle("GET /ship/frames/{seq}", opauth.RequireBearer(operator, svc.ShipFramesHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	httpx.StaticUI(mux, *uiDir, "edge "+*id)
-	srv := httpx.Server(*listen, h2c.NewHandler(httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux), &http2.Server{}))
+	srv := newHTTPServer(*listen, httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux))
 	go func() {
 		<-ctx.Done()
 		sctx, c := context.WithTimeout(context.Background(), 3*time.Second)
@@ -186,6 +184,15 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fatal(err)
 	}
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	srv := httpx.Server(addr, handler)
+	srv.Protocols = new(http.Protocols)
+	srv.Protocols.SetHTTP1(true)
+	srv.Protocols.SetHTTP2(true)
+	srv.Protocols.SetUnencryptedHTTP2(true)
+	return srv
 }
 
 func env(k, def string) string {
