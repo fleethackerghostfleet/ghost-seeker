@@ -32,7 +32,7 @@ function frame({width=200,height=140,left=100,top=50,borderLeft=2,borderTop=3,la
  return value;
 }
 function setup({frames=[],banners=[],fonts=true}={}){
- const queue=[],observed=new Set(),unobserved=[],windowEvents={},properties={};
+ const queue=[],observed=new Set(),observeCalls=new Map(),unobserved=[],windowEvents={},properties={};
  let resize,mutate,fontReady,mutationOptions;
  const body={style:{setProperty(name,value){properties[name]=value}}};
  const document={body,querySelectorAll:selector=>selector==='body>.banner'?banners:frames,createElement:node};
@@ -41,10 +41,10 @@ function setup({frames=[],banners=[],fonts=true}={}){
  vm.runInNewContext(source,{
   document,window,requestAnimationFrame(fn){queue.push(fn)},
   getComputedStyle:el=>({fontSize:el.font+'px',backgroundColor:el.backgroundColor,color:el.color}),
-  ResizeObserver:class{constructor(fn){resize=fn}observe(el){observed.add(el)}unobserve(el){observed.delete(el);unobserved.push(el)}},
+  ResizeObserver:class{constructor(fn){resize=fn}observe(el){observed.add(el);observeCalls.set(el,(observeCalls.get(el)||0)+1)}unobserve(el){observed.delete(el);unobserved.push(el)}},
   MutationObserver:class{constructor(fn){mutate=fn}observe(target,options){assert.equal(target,body);mutationOptions=options}},
  },{filename:'text-layout.js'});
- return {frames,banners,queue,observed,unobserved,properties,windowEvents,window,
+ return {frames,banners,queue,observed,observeCalls,unobserved,properties,windowEvents,window,
   resize:()=>resize(),mutate:()=>mutate(),fontReady:()=>fontReady(),
   mutationOptions:()=>JSON.parse(JSON.stringify(mutationOptions)),
   flush(){assert.equal(queue.length,1);queue.shift()()},
@@ -78,13 +78,21 @@ test('removed frames are unobserved and newly inserted frames join layout exactl
  const first=frame(),second=frame();
  const s=setup({frames:[first]});
  s.flush();assert.ok(s.observed.has(first));
+ assert.equal(s.observeCalls.get(first),1);
  s.frames.push(second);s.mutate();s.flush();
  assert.equal(s.observed.size,2);
+ assert.equal(s.observeCalls.get(first),1);assert.equal(s.observeCalls.get(second),1);
  s.frames.shift();s.mutate();s.flush();
  assert.deepEqual(s.unobserved,[first]);
  assert.equal(s.observed.has(first),false);assert.equal(s.observed.has(second),true);
  s.resize();s.flush();assert.deepEqual(s.unobserved,[first]);
+ assert.equal(s.observeCalls.get(first),1);assert.equal(s.observeCalls.get(second),1);
  s.frames.length=0;s.mutate();s.flush();assert.equal(s.observed.size,0);
+ assert.deepEqual(s.unobserved,[first,second]);
+ s.frames.push(first);s.mutate();s.flush();
+ assert.equal(s.observeCalls.get(first),2);assert.equal(s.observeCalls.get(second),1);
+ s.resize();s.flush();
+ assert.equal(s.observeCalls.get(first),2);assert.equal(s.observeCalls.get(second),1);
 });
 
 test('zero-size frames defer label work until visible and positions respect frame and box borders',()=>{
