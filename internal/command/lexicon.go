@@ -99,6 +99,7 @@ var sourceAliases = []struct {
 var negativeRewrites = regexp.MustCompile(`\b(?:disregard|stop (?:showing|sending|flagging|reporting)|(?:don'?t|do not) (?:show|send|flag|report|need|want)(?: to see)?|no more|get rid of|tune out|screen out|weed out|mute|remove|forget(?: about)?|dismiss|nobody cares about|no one cares about|who cares about|(?:less|not) (?:interested in|worried about|concerned (?:about|with))|i'?m not worried about)\b`)
 var postNegativeRewrites = regexp.MustCompile(`\b(?:can wait|(?:is|are) not a (?:concern|priority|threat)|not a (?:concern|priority|threat)|(?:is|are) (?:just )?(?:noise|clutter|a nuisance)|just noise|(?:is|are) low priority|low priority|(?:don'?t|doesn'?t|do not|does not) matter|not important|unimportant|irrelevant|not needed|driving me crazy|annoying|cluttering(?: up)?(?: the feed)?)\b`)
 var elseClausePattern = regexp.MustCompile(`(?:^|[,;.]|\bbut\b|\band\b)\s*(?:(?:everything|anything|everyone|all|whatever)\s+else|the rest|all (?:the )?others?|other (?:stuff|things|contacts|traffic))\b[^,;.]*`)
+var elsePositivePattern = regexp.MustCompile(`\b(` + positiveActions + `)\b`)
 var pronounNegativePattern = regexp.MustCompile(`\b(?:them|those|these|it|that|they)\b`)
 
 var windowRewrites = []struct {
@@ -310,7 +311,7 @@ func normalizeDirective(text string, edgeSubtypes bool) normalized {
 			clauseStart = max(clauseStart, m[1])
 		}
 		negated := negativeRewrites.FindAllStringIndex(prefix, -1)
-		for _, m := range positivePattern.FindAllStringIndex(prefix, -1) {
+		for _, m := range elsePositivePattern.FindAllStringIndex(prefix, -1) {
 			// "show" in "don't show" is part of the negation.
 			if !slices.ContainsFunc(negated, func(n []int) bool { return n[0] <= m[0] && m[1] <= n[1] }) {
 				clauseStart = max(clauseStart, m[1])
