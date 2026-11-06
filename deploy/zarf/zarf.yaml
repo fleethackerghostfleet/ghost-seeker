@@ -7,6 +7,10 @@ metadata:
   description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: EDGE_GATEWAY_HOST
+    default: edge
+    description: Edge gateway subdomain for the Host allowlist.
+    prompt: false
   - name: MODEL_SHA256
     description: SHA256 of the approved model image SHA256SUMS file; required for inference readiness.
     default: 41f9db8eaaa64a34803f1a145468d80a66910ad63572ddf24b9c9c95d6fb4875
