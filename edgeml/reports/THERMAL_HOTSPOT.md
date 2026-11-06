@@ -145,10 +145,9 @@ unknownness and higher-than-floor zero-shot unknownness on duplicate reports.
 ## Step B: frozen real-IR evaluation — before cover-threshold fix
 
 **Historical results below: every “Live reported” row in this Step B section
-means “before cover-threshold fix”.** Original results and crops are retained as
-`THERMAL_HOTSPOT_assets/results_before_cover_threshold_fix.json` and
-`crops_before_cover_threshold_fix.json`. The B2 section below supersedes actual
+means “before cover-threshold fix”.** The B2 section below supersedes actual
 live behavior; original cold-source engine latency here is historical only.
+Only final fixed-run exports are retained in the assets directory.
 
 **Evaluation only; no thresholds or production code changed.** Primary held-out
 test: **1,081 images / 4,307 GT boxes / 39 recording groups**. Secondary dev:
@@ -403,8 +402,8 @@ YOLO at the cutoff blocking fallback, configurable cutoffs, composition, and
 unchanged standalone scores.
 
 Re-ran `eval_thermal.py` with the same cache, splits, crops and seed, using
-`--skip-engine-latency`. Current assets are `results.json` and `crops.json`;
-old assets are retained under the explicit `before_cover_threshold_fix` names.
+`--skip-engine-latency`. Final assets are `results.json` and `crops.json`;
+obsolete pre-fix exports have been removed.
 Actual live now includes the rebased default live tiler; **native fixed** also
 isolates just the cover/report wiring change without tiling. Thus the actual-live
 improvement must not all be attributed to the threshold bug fix. Tiled ONNX
@@ -473,8 +472,8 @@ OMP_NUM_THREADS=4 .venv/bin/python edgeml/tools/eval_thermal.py \
   --cache ~/data/thermal_eval_yolo_cache.json
 ```
 
-Current `results.json` / `crops.json` assets are this refresh; the separately
-named **before cover-threshold fix** assets and historical rows remain intact.
+Current `results.json` / `crops.json` assets are this final thermal-on refresh;
+obsolete pre-fix exports are not shipped.
 YOLO native/tile outputs are reused from the validated model/config/image cache;
 engine latency runs its own fresh inference. The live detector reconstruction
 is still valid with #271: prompt results are appended after the base detections,
