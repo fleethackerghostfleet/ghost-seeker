@@ -247,6 +247,7 @@ shore/edge authentication or make their plain HTTP links suitable for untrusted 
 
 ## 3. Content types and CSP
 
+* `httpx.Secure` sends `Strict-Transport-Security: max-age=31536000` only on direct TLS requests, never on plain HTTP.
 * Blobs are served by `httpx.ServeBlob`: the Content-Type is **sniffed from the bytes**
   (`image/jpeg|png|webp|gif|bmp|avif`), FACT records must parse as JSON, text must be UTF-8;
   anything else is `application/octet-stream` with `Content-Disposition: attachment`. Every blob
@@ -346,11 +347,10 @@ echelon changes themselves and are candidates for the next batch):
 * **Low ×1 (new, from PR #73)** — removing the per-operator echelon check does not fail closed; a
   deployment still setting `GS_REQUIRE_OPERATOR_AUTH=true` starts silently without it. Fix: exit
   with an error when that variable is set.
-* **Low ×8 (carried over)** — SSE stream has no subscriber cap / stalled-client eviction; EMCON
+* **Low ×7 (carried over)** — SSE stream has no subscriber cap / stalled-client eviction; EMCON
   SILENT still sends a heartbeat every tick; an attribute-only suppress directive can defeat a
   command-locked priority rule; 1-byte chunks make the shore re-read and re-hash a 256 MiB blob per
-  chunk; full-res request handler reads an unbounded body (the live-console handler in
-  `internal/shorebridge/console.go` already limits its body to 64 KiB); login `next=` check
+  chunk; login `next=` check
   bypassed by a tab/newline; JPEG fill bytes skip the sidecar's 50-megapixel cap; chunk uploads
   have no item-count / disk cap.
 

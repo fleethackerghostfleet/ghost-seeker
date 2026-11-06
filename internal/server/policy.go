@@ -487,8 +487,9 @@ func (s *Server) setPolicyEMCON(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Mode string `json:"mode"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	mode, ok := parseEMCON(body.Mode)

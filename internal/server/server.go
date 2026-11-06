@@ -387,8 +387,9 @@ func (s *Server) compileDirective(w http.ResponseWriter, r *http.Request) {
 		Rules       *[]command.Rule `json:"rules"`
 		DurationMin int             `json:"durationMin"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	if utf8.RuneCountInString(body.Text) > 500 {
@@ -560,8 +561,9 @@ func (s *Server) fullRes(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		By string `json:"by"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSON(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		writeRequestBodyError(w, err)
 		return
 	}
 	item, cdr, err := s.store.RequestFullRes(r.PathValue("id"), opauth.Actor(r.Context(), body.By))
@@ -624,6 +626,9 @@ func decodeJSON(reader io.Reader, dst any) error {
 	}
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return fmt.Errorf("unexpected trailing JSON: %w", err)
+		}
 		return fmt.Errorf("unexpected trailing JSON")
 	}
 	return nil

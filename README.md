@@ -16,6 +16,15 @@ See [Human review](docs/HUMAN_REVIEW.md) for durable review capture, exports, an
 package/image suite. See [local verification](docs/VERIFY.md) for setup, commit-linked
 reports, and merge-policy limitations. No GitHub plan upgrade is needed.
 
+## Branches
+
+- `dev`: default branch; all new work lands here through pull requests.
+- `main`: the second demo.
+- `demo`: locked saved working version. Never touch it.
+- `prod`: the final version deployed to the fleet.
+
+Never push directly to `dev`, `main`, `demo` or `prod`; open a pull request.
+
 Key behaviours (all covered by `go test ./...` and the simulator):
 
 - **Unknown-first.** Items the model can't classify score highest by default.

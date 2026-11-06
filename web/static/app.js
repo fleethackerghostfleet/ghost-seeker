@@ -7,6 +7,7 @@ const dirtyItems=new Set();
 let feedFrame=null,feedTimer=null,feedScheduled=false,feedNeedsRender=false;
 const FEED_PAGE_SIZE=120;
 let feedLimit=FEED_PAGE_SIZE,feedOrdered=[],renderedFeedIDs=[],renderedFeedReasons=new Map();
+let feedFocusID=null;
 /* LIVE is the shore block of the snapshot when the console runs on a shore node (-shore); null on the simulation. */
 let LIVE=null;
 let snapshotEpoch=null,resetRevision=0;
@@ -22,9 +23,9 @@ const FORM_HELP={fact:'FACT: a small summary of the object and capture time (abo
 function formChipsHTML(it){
  const f=it.live?.forms;if(!f)return'';
  return FORMS.map(k=>{const st=f[k]||{state:'none'};const title=st.state==='received'?`${FORM_NAME[k]}: received (${fmtBytes(st.bytes)})`:st.state==='partial'?`${FORM_NAME[k]}: ${fmtBytes(st.received)} of ${fmtBytes(st.bytes)} — streaming over the link`:st.state==='pending'?`${FORM_NAME[k]}: waiting on the ship (${fmtBytes(st.bytes)})`:st.state==='offered'?`${FORM_NAME[k]}: available on the ship — request it to send it`:`${FORM_NAME[k]}: not available`;
-  return`<span class="fchip ${st.state}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
+  return`<span class="fchip ${esc(st.state)}${it.live.imageForm===k?' shown':''}" title="${esc(FORM_HELP[k]+' · '+title)}">${FORM_NAME[k]}${st.state==='partial'?` ${Math.round(100*st.received/Math.max(1,st.bytes))}%`:''}</span>`}).join('');
 }
-function uploadState(it){
+function uploadState(it,describe=true){
  let u=it.upload,form='';
  if(it.live){
   const forms=it.live.forms||{};
@@ -42,8 +43,8 @@ function uploadState(it){
  const paused=!it.live&&!done&&!held&&sent>0&&u?.bps===0;
  const sending=!done&&!held&&!paused&&!background&&!!u?.active;
  const queued=!done&&!held&&!background&&!sending;
- const transfer=`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`;
- const label=(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:'');
+ const transfer=describe?`${paused?'Link outage, paused · ':''}${fmtBytes(sent)} of ${fmtBytes(bytes)}${u?.bps?` at ${fmtRate(u.bps)}`:''}`:'';
+ const label=describe?(done?'✓ Uploaded':held?'Held by operator':next?`Upload next (operator) · ${transfer}`:background?'Empty water · kept on ship':paused?transfer:queued?`Queued for shore: ${transfer}`:`Uploading to shore: ${transfer}`)+(form?` · ${form}`:''):'';
  return{bytes,sent,done,queued,label,form,held,next,paused,background,sending};
 }
 function uploadHTML(it){
@@ -51,7 +52,7 @@ function uploadHTML(it){
  return`<div class="upload-info${u.done?' uploaded':u.held?' upload-held':u.next?' upload-next':''}" title="${esc(u.label)}"><progress class="upload-bar" max="${Math.max(1,u.bytes)}" value="${u.sent}" aria-label="${esc(u.label)}"></progress><span class="upload-label">${esc(u.done?u.label:u.held?'Held by operator':u.next?`Upload next (operator)${u.paused?' · Link outage, paused':''}`:u.background?'Empty water · kept on ship':u.paused?'Link outage, paused':(`${u.queued?'Queued for shore':'Uploading to shore'}${!u.queued||u.sent>0?` · ${Math.round(100*u.sent/Math.max(1,u.bytes))}%`:''}`)+(u.form?` · ${u.form}`:''))}</span></div>`;
 }
 function sendMark(it){
- const u=uploadState(it);
+ const u=uploadState(it,false);
  return u.done?{cls:'sendmark done',text:'✓',title:'Sent to shore'}:u.sending?{cls:'sendmark sending',text:'↑',title:'Sending to shore now'}:{cls:'sendmark',text:'',title:''};
 }
 function applySendMark(el,it){
@@ -74,7 +75,7 @@ function liveSuppressReason(it){const l=it.live;if(!l?.suppressed)return'';retur
 function ruleLabel(r){
  const cl=r.classes.length?(r.classes.length>3?`${r.classes.slice(0,2).map(k=>clsOf(k).lab).join(' / ')} +${r.classes.length-2}`:r.classes.map(k=>clsOf(k).lab).join(' / ')):'Any object';
  const at=r.attrs.length?' · '+r.attrs.map(a=>ATTR_LAB[a]).join(' or '):'';
- return(r.type==='boost'?'▲ ':'▼ ')+cl+at+(r.tier?` → P${r.tier} ${TNAME[r.tier]}`:'');
+ return esc((r.type==='boost'?'▲ ':'▼ ')+cl+at+(r.tier?` → P${r.tier} ${TNAME[r.tier]}`:''));
 }
 
 /* ---------------- UI ---------------- */
@@ -101,7 +102,7 @@ function bandControls(it){
  const band=bandFor(it);
  return `<div class="band-controls" role="group" title="Spectral band: choose visible light or infrared (heat) imagery" aria-label="Spectral band">${bands.map(b=>`<button type="button" data-band="${esc(b)}" data-band-item="${esc(it.id)}" aria-pressed="${b===band}" title="${b==='IR'?'Simulated long-wave infrared (LWIR): warm objects appear white':b==='EO'?'Electro-optical (EO): visible-light camera':esc(b)}">${esc(b)}</button>`).join('')}<span>B: change image band</span></div><span class="band-label">${esc(band)}${band==='IR'?' · white-hot · simulated LWIR':''}</span>`;
 }
-function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${imageFor(it)}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
+function largeImage(it){return `<img class="${bandsFor(it).length>1&&bandFor(it)==='IR'?'spectrum-ir':''}" src="${esc(imageFor(it))}" alt="${esc(it.src.name)}${bandsFor(it).length>1?' · '+esc(bandFor(it)):''}">${boxesHTML(it,true)}${bandControls(it)}`}
 function preserveBandFocus(render){
  const button=document.activeElement?.closest?.('.band-controls button');
  const surface=button?.closest('#rvMain, #drawer, #zoom');
@@ -207,7 +208,7 @@ function mergeItem(raw,fresh=true){
  }else{item.fresh=fresh;items.push(item);itemByID.set(item.id,item)}
  dirtyItems.add(item.id);
  if(rv.cur?.id===item.id)rv.cur=findItem(item.id);
- if(fresh){['st1','st2','st3','st4','st5'].forEach((id,index)=>setTimeout(()=>flash(id),index*140));setTimeout(()=>{const current=findItem(item.id);if(current){current.fresh=false;dirtyItems.add(current.id);scheduleFeedFlush()}},6000)}
+ if(fresh){['st1','st2','st3','st4','st5'].forEach((id,index)=>setTimeout(()=>flash(id),index*140));setTimeout(()=>{const current=findItem(item.id);if(current){current.fresh=false;dirtyItems.add(current.id);scheduleFeedFlush(true)}},6000)}
 }
 function flash(id){const element=$(id);if(!element)return;element.classList.add('flash');setTimeout(()=>element.classList.remove('flash'),350)}
 function applySnapshot(data){
@@ -260,6 +261,7 @@ function setupDemoReset(enabled){
 }
 function applyLive(live){
  LIVE=live||null;const cl=document.body?.classList;if(cl?.toggle)cl.toggle('live',!!LIVE);
+ renderLive();
  if(!LIVE)return;
  mergeLiveConfig(LIVE);
  const banner=document.querySelector?.('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE';
@@ -288,10 +290,12 @@ async function patchItem(id,changes){
  cdr=result.cdr;applyItemUpdate(result.item);return findItem(id);
 }
 function renderLive(){
- const live=$('live');live.classList.toggle('off',!!state.offline);live.classList.toggle('paused',!state.offline&&state.paused);
- live.querySelector('span').textContent=state.offline?'RECONNECTING':state.paused?'FEED PAUSED':'FEED ACTIVE';
+ const shoreUnavailable=!!LIVE?.shore?.error;
+ const warning=$('shoreWarning');if(warning)warning.hidden=!shoreUnavailable;
+ const live=$('live');live.classList.toggle('off',!!state.offline||shoreUnavailable);live.classList.toggle('paused',!state.offline&&!shoreUnavailable&&state.paused);
+ live.querySelector('span').textContent=shoreUnavailable?'SHORE UNREACHABLE':state.offline?'RECONNECTING':state.paused?'FEED PAUSED':'FEED ACTIVE';
  const action=state.paused?'resume feed':'pause feed';
- live.title=state.offline?`Reconnecting — click to ${action}`:state.paused?'Feed paused — click to resume feed':'Feed active — click to pause feed';
+ live.title=shoreUnavailable?`Shore unreachable — showing last-known data; click to ${action}`:state.offline?`Reconnecting — click to ${action}`:state.paused?'Feed paused — click to resume feed':'Feed active — click to pause feed';
  live.setAttribute('aria-label',live.title);live.setAttribute('aria-pressed',String(!!state.paused));
  $('pauseBtn').textContent=state.paused?'Resume feed':'Pause feed';$('wbHeld').hidden=!state.paused;
 }
@@ -340,8 +344,8 @@ async function init(){
  if(DATASET_MODE){$('classificationBanner').textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY · REAL IMAGERY · clean v2 dev';$('simStrip').hidden=true;$('datasetStrip').hidden=false;$('sourceLabel').textContent='Source';}
  if(config.live&&!MODELS[state.model])state.model=Object.keys(MODELS)[0]||state.model;
  $('srcSel').innerHTML=SOURCES.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
- $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
- $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${e}</span>`).join('');
+ $('modelSel').innerHTML=Object.entries(MODELS).map(([k,m])=>`<option value="${esc(k)}">${esc(m.name)}</option>`).join('');
+ $('examples').innerHTML=EXAMPLES.map(e=>`<span class="ex">${esc(e)}</span>`).join('');
  $('examples').onclick=e=>{if(e.target.classList.contains('ex')){$('nlIn').value=e.target.textContent;workbench.textChanged()}};
  $('srcSel').onchange=e=>{gsSettings.setFeed({sensor:e.target.value});syncFeedFilters()};
  $('showDuplicates').onchange=e=>{const on=e.target.checked,n=repeatCount();gsSettings.setFeed({showDuplicates:on});syncFeedFilters();toast(n?on?`Showing ${n} repeat image${n===1?'':'s'}, each placed right after its original (kept at P4 Low)`:`Hid ${n} repeat image${n===1?'':'s'}. Originals stay in the feed.`:'No repeat images to hide right now')};
@@ -364,12 +368,14 @@ async function init(){
  $('polRaw').oninput=()=>{policyRawTouched=true};
  $('polRawValidate').onclick=()=>rawPolicyAction('validate');$('polRawApply').onclick=()=>rawPolicyAction('apply');$('polRawReload').onclick=()=>{policyRawTouched=false;loadRawPolicy(true)};
  $('grid').onclick=e=>{const c=e.target.closest('.card');if(c)openDetail(c.dataset.id)};
+ setupFeedKeyboard();
  $('grid').oncontextmenu=openCardMenu;$('cmSendNow').onclick=()=>sendNow($('cardMenu').dataset.id);$('cmOpen').onclick=()=>{const id=$('cardMenu').dataset.id;closeCardMenu();openDetail(id)};
  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#cardMenu'))closeCardMenu()},true);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('cardMenu').hidden){e.stopImmediatePropagation();closeCardMenu()}},true);window.addEventListener('blur',closeCardMenu);window.addEventListener('hashchange',closeCardMenu);$('feed').addEventListener('scroll',closeCardMenu);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-band-item]');if(!b)return;e.stopPropagation();selectBand(findItem(b.dataset.bandItem),b.dataset.band)},true);
  document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||$('settings').open)return;if(gsPolicy.isPolicyHotkeyTarget(e.target))return;if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;const tg=e.target.tagName;if(tg==='TEXTAREA'||tg==='INPUT'||tg==='SELECT'||e.ctrlKey||e.metaKey||e.altKey)return;
   const k=e.key.toLowerCase();
-  if((k==='enter'||k===' ')&&e.target.closest?.('header, .band-controls'))return;
+  if(e.defaultPrevented||e.target.isContentEditable)return;
+  if((k==='enter'||k===' ')&&(tg==='BUTTON'||e.target.closest?.('button, a[href], summary, header, .band-controls')))return;
   if(state.page==='rv'&&k==='w'){e.preventDefault();openReviewNote();return}
   if(state.page==='rv'&&rv.ask){e.preventDefault();if(!e.repeat)reviewAskKey(k);return}
   if(k==='n'){toggleNight();return}
@@ -421,7 +427,7 @@ function feedTier(it){return it.tier}
 function reviewMatch(it,review){return isScene(it)?review==='all':review==='sent'?humanSent(it):review==='reviewed'?humanReviewed(it):review==='unreviewed'?!humanReviewed(it):!it.dismissed}
 function visible(){
  const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:false,review:'all'};
- let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&!(f.hideUploaded&&uploadState(i).done));
+ let l=items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&!(f.hideUploaded&&uploadState(i,false).done));
  feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
@@ -431,12 +437,13 @@ function visible(){
  return{l,counts};
 }
 function hideableRepeat(it){return !isScene(it)&&it.filtered==='duplicate'&&!humanReviewed(it)&&!humanSent(it)}
-function uploadedCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&uploadState(i).done).length}
-function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)&&!(f.hideUploaded&&uploadState(i).done)).length}
+function uploadedCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{showDuplicates:true,review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&(f.showDuplicates||!hideableRepeat(i))&&uploadState(i,false).done).length}
+function repeatCount(){const f=typeof gsSettings!=='undefined'?gsSettings.get().feed:{review:'all'};return items.filter(i=>(state.src==='ALL'||i.src.id===state.src)&&(state.tier==='all'||String(feedTier(i))===state.tier)&&reviewMatch(i,f.review)&&hideableRepeat(i)&&!(f.hideUploaded&&uploadState(i,false).done)).length}
 /* Display-only: show each repeat right after its original so the duplicate filter is visible at the top of the feed. */
 function pairRepeats(l){
- const ids=new Set(l.map(i=>i.id)),after=new Map();
- for(const i of l)if(hideableRepeat(i)&&i.dupOf&&ids.has(i.dupOf)){const o=l.find(x=>x.id===i.dupOf);if(o&&!hideableRepeat(o)){if(!after.has(o.id))after.set(o.id,[]);after.get(o.id).push(i)}}
+ const originals=new Map(),after=new Map();
+ for(const i of l)if(!originals.has(i.id))originals.set(i.id,i);
+ for(const i of l)if(hideableRepeat(i)&&i.dupOf){const o=originals.get(i.dupOf);if(o&&!hideableRepeat(o)){if(!after.has(o.id))after.set(o.id,[]);after.get(o.id).push(i)}}
  if(!after.size)return l;
  const moved=new Set([...after.values()].flat().map(i=>i.id)),out=[];
  for(const i of l){if(moved.has(i.id))continue;out.push(i);if(after.has(i.id))out.push(...after.get(i.id))}
@@ -449,11 +456,12 @@ const SOURCE_MIX_WINDOW=8;
 function mixSources(l,group){
  const srcOf=i=>i.src?.id??i.src;
  if(new Set(l.map(srcOf)).size<2)return l;
- const rest=l.slice(),out=[],last=new Map();
- while(rest.length){
-  const g=group(rest[0]);let pick=0,best=Infinity;
-  for(let j=0;j<rest.length&&j<SOURCE_MIX_WINDOW&&group(rest[j])===g;j++){const seen=last.has(srcOf(rest[j]))?last.get(srcOf(rest[j])):-1;if(seen<best){best=seen;pick=j}}
-  const it=rest.splice(pick,1)[0];last.set(srcOf(it),out.length);out.push(it);
+ const window=[],out=[],last=new Map();let next=0;
+ while(next<l.length||window.length){
+  while(next<l.length&&window.length<SOURCE_MIX_WINDOW){const it=l[next++];window.push({it,src:srcOf(it),group:group(it)})}
+  const g=window[0].group;let pick=0,best=Infinity;
+  for(let j=0;j<window.length&&window[j].group===g;j++){const seen=last.has(window[j].src)?last.get(window[j].src):-1;if(seen<best){best=seen;pick=j}}
+  const {it,src}=window.splice(pick,1)[0];last.set(src,out.length);out.push(it);
  }
  return out;
 }
@@ -466,6 +474,7 @@ function boxesHTML(it,labels){
   return`<div class="box ${c}${d.cls==='unknown'?' unknown':''}${b.x+b.w/2>W*.6?' r':''}${b.y<H*.08?' t':''}" style="left:${b.x/W*100}%;top:${b.y/H*100}%;width:${b.w/W*100}%;height:${b.h/H*100}%">${labels?`<em>${esc(clsOf(d.cls).lab)} ${Math.round(d.conf*100)}%</em>`:''}</div>`}).join('');
 }
 function isScene(it){return it?.live?.event==='scene'}
+function isEmptyWater(it){return isScene(it)||!!(it&&!it.live&&it.background)}
 function topLine(it){
 	if(isScene(it))return 'Empty water · no contacts';
  const r=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);if(!r.length)return it.background?'No contacts · empty water':'—';
@@ -479,7 +488,7 @@ function detectorNegativeHTML(it){const label=detectorNegativeLabel(it);return l
 function reviewAcceptLabel(it){return it.detectorNegative?'Nothing here & next':`Agree (P${it.centralTier} ${TNAME[it.centralTier]}) & next`}
 function reviewKeyAction(key){return RVKEYS[key]}
 function cardHTML(it,mini){
- return`${detectorNegativeHTML(it)}<div class="thumb"><div class="thumb-image"><img src="${imageFor(it)}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div></div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
+ return`${detectorNegativeHTML(it)}<div class="thumb"><div class="thumb-image"><img src="${esc(imageFor(it))}" alt=""><div class="bx">${mini?boxesHTML(it,false):''}</div></div><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><span class="cdrtag">✓ Auto-sent to Commander</span><span class="hsenttag">➤ Sent by operator</span><span class="newtag">NEW</span><div class="ov"><span class="sid">${esc(it.src.id)}</span><span class="t mono">${zulu(it.ts).slice(0,5)}Z</span><span class="delta"></span><span class="rvk" style="margin-left:auto">✓</span><b class="cs" style="margin-left:4px">${mini?it.central.toFixed(2):''}</b></div><span class="formtag"></span><span class="suptag">DEPRIORITIZED</span></div><div class="cl"></div><div class="fchips"></div>`;
 }
 function sendNowBlocked(it){const u=uploadState(it);return it.live||LIVE?'Not available on the live shore connection':typeof gsAuth!=='undefined'&&gsAuth.viewer()?'Viewer role is read-only':u.done?'Already uploaded to shore':u.next?'Already at the top of the send queue':''}
 function openCardMenu(e){
@@ -501,9 +510,26 @@ async function sendNow(id){
  try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:'next'});cdr=result.cdr;applyItemUpdate(result.item);toast(`Sending now: ${it.src.id} image moved to the top of the send queue`)}
  catch(error){toast(error.message)}
 }
-function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
+function setupFeedKeyboard(){
+ const grid=$('grid');
+ grid.onfocusin=e=>{const card=e.target.closest('.card');if(!card)return;const previous=findItem(feedFocusID)?.el;if(previous&&previous!==card)previous.tabIndex=-1;feedFocusID=card.dataset.id;card.tabIndex=0};
+ grid.onkeydown=e=>{
+  const card=e.target.closest('.card');if(!card||e.target!==card||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==='enter'||k===' '){e.preventDefault();e.stopPropagation();if(!e.repeat)openDetail(card.dataset.id);return}
+  if(!['arrowleft','arrowup','arrowright','arrowdown'].includes(k))return;
+  e.preventDefault();e.stopPropagation();
+  if(state.sel){step(k==='arrowleft'||k==='arrowup'?-1:1);findItem(state.sel)?.el?.focus();return}
+  const index=feedOrdered.findIndex(it=>it.id===card.dataset.id),direction=k==='arrowleft'||k==='arrowup'?-1:1;
+  const next=feedOrdered[Math.max(0,Math.min(feedOrdered.length-1,index+direction))];if(!next)return;
+  if(revealFeedItem(next.id))renderFeed(true);
+  next.el?.focus();
+ };
+}
+function makeCard(it){const el=document.createElement('div');el.dataset.id=it.id;el.tabIndex=-1;el.setAttribute('role','button');el.innerHTML=cardHTML(it);el.querySelector('.thumb').insertAdjacentHTML('beforeend','<span class="sendmark"></span>');el.querySelector('.thumb').insertAdjacentHTML('afterend',`<div class="upload-slot">${uploadHTML(it)}</div>`);applySendMark(el,it);if(bandsFor(it).length>1)el.querySelector('.thumb').insertAdjacentHTML('beforeend',`<span class="band-badge">${bandsFor(it).map(esc).join('/')}</span>`);it.el=el;return el}
 function updateCard(it){
  const el=it.el;if(!el)return;const tier=feedTier(it),reason=feedReasons.get(it.id);el.className=`card p${tier}${reason?' sup':''}${it.fresh?' fresh':''}${it.sent&&it.autoSent?' sent':''}${humanSent(it)?' hsent':''}${humanReviewed(it)?' rev':''}${it.manual?' man':''}${state.sel===it.id?' sel':''}`;
+ el.setAttribute('aria-label',`P${tier} ${TNAME[tier]} image from ${it.src.name||it.src.id}. Open image details`);
  const reviewMark=el.querySelector('.rvk');reviewMark.title=humanReviewed(it)?'Human reviewed':'Not reviewed';reviewMark.setAttribute('aria-label',reviewMark.title);
  const status=el.querySelector('.suptag');status.textContent=reason||'';status.title=reason?`${reason} — shown at P4 Low`:'';
  el.querySelector('.night-badge')?.remove();if(!DATASET_MODE)el.querySelector('.thumb').insertAdjacentHTML('beforeend',gsLights.badge(it));
@@ -539,6 +565,8 @@ function setupFeedWindow(){
 function renderFeed(noAnim,refreshCards=false){
  const{l,counts}=visible();feedOrdered=l;renderTierSeg(counts);const dc=$('dupCount');if(dc)dc.textContent=String(repeatCount());const uc=$('uploadedCount');if(uc)uc.textContent=String(uploadedCount());$('empty').style.display=l.length?'none':'block';
  const windowed=l.slice(0,feedLimit),ids=windowed.map(it=>it.id),grid=$('grid');
+ const focusedCard=document.activeElement?.closest?.('#grid .card');
+ if(!ids.includes(feedFocusID))feedFocusID=ids[0]||null;
  const changed=ids.length!==renderedFeedIDs.length||ids.some((id,i)=>id!==renderedFeedIDs[i]);
  const animate=changed&&!noAnim&&state.page==='feed'&&windowed.length<=60&&dirtyItems.size<=12;
  const first=new Map();
@@ -550,8 +578,10 @@ function renderFeed(noAnim,refreshCards=false){
  windowed.forEach((it,idx)=>{
   const fresh=!it.el,el=it.el||makeCard(it),reason=feedReasons.get(it.id);
   if(fresh||refreshCards||dirtyItems.has(it.id)||renderedFeedReasons.get(it.id)!==reason)updateCard(it);
+  const tabIndex=it.id===feedFocusID?0:-1;if(el.tabIndex!==tabIndex)el.tabIndex=tabIndex;
   if(changed&&grid.children[idx]!==el)grid.insertBefore(el,grid.children[idx]||null);
  });
+ if(focusedCard&&document.activeElement!==findItem(feedFocusID)?.el)findItem(feedFocusID)?.el?.focus({preventScroll:true});
  if(animate){
   const positions=windowed.map(it=>({it,rect:it.el.getBoundingClientRect()})),vh=$('feed').getBoundingClientRect().bottom+200;
   for(const {it,rect:r} of positions){
@@ -576,8 +606,8 @@ function renderStats(){
  for(const it of items){
   if(it.tier===1)allP1++;
   if(state.src!=='ALL'&&it.src.id!==state.src)continue;
-  total++;if(it.tier===1)p1++;if(!isScene(it)&&!it.reviewed&&!it.dismissed)unrev++;if(humanSent(it))humanSentCount++;
-  if(!it.dismissed){const u=uploadState(it);if(u.done)done++;if(u.queued)queued++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
+  total++;if(it.tier===1)p1++;if(!isEmptyWater(it)&&!it.reviewed&&!it.dismissed)unrev++;if(humanSent(it))humanSentCount++;
+  if(!it.dismissed){const u=uploadState(it,false);if(u.done)done++;if(u.queued)queued++;if(u.held)held++;if(u.background)kept++;if(u.sending)sending++}
  }
  const summary=$('uploadSummary');if(summary)summary.textContent=`Shore uploads: ${sending} uploading · ${queued} queued · ${held} held · ${done} uploaded${kept?` · ${kept} kept on ship`:''}`;
  $('hsImgs').textContent=total;$('rvSentN').textContent=humanSentCount;$('hsP1').textContent=p1;$('hsCdr').textContent=cdr;
@@ -608,7 +638,7 @@ function renderDetails(){
  el.innerHTML=`<section class="panel"><h3>Pipeline counts</h3>${counts}</section>
  <section class="panel"><h3>Photos filtered automatically</h3><p class="hint">Current feed only. Cumulative counts include frames without retained images and images no longer in this feed. Up to 60 photos shown per category. Select a photo to open it.</p>
  <div class="seg" id="detKind">${DETAIL_KINDS.map(([k,l])=>`<button data-k="${k}" class="${state.detKind===k?'on':''}">${l} (${groups[k].length})</button>`).join('')}</div>
- <div class="det-grid">${list.map(it=>{const orig=it.dupOf&&findItem(it.dupOf);return`<button class="det-item" data-id="${esc(it.id)}">${orig?`<span class="det-pair"><img src="${imageFor(orig)}" alt=""><small>Original · P${orig.tier} ${TNAME[orig.tier]}</small></span>`:''}<span class="det-pair"><img src="${imageFor(it)}" alt=""><small>${esc(filteredReason(it))} · P4 Low</small></span><span class="det-meta">${esc(it.src.id)} · ${zulu(it.ts).slice(0,5)}Z</span></button>`}).join('')||'<p class="hint">None right now.</p>'}</div></section>`;
+ <div class="det-grid">${list.map(it=>{const orig=it.dupOf&&findItem(it.dupOf);return`<button class="det-item" data-id="${esc(it.id)}">${orig?`<span class="det-pair"><img src="${esc(imageFor(orig))}" alt=""><small>Original · P${orig.tier} ${TNAME[orig.tier]}</small></span>`:''}<span class="det-pair"><img src="${esc(imageFor(it))}" alt=""><small>${esc(filteredReason(it))} · P4 Low</small></span><span class="det-meta">${esc(it.src.id)} · ${zulu(it.ts).slice(0,5)}Z</span></button>`}).join('')||'<p class="hint">None right now.</p>'}</div></section>`;
  el.onclick=e=>{const k=e.target.closest('[data-k]');if(k){state.detKind=k.dataset.k;renderDetails();return}const b=e.target.closest('.det-item');if(b){const id=b.dataset.id;location.hash='#feed';setTimeout(()=>openDetail(id),60)}};
 }
 
@@ -653,7 +683,7 @@ function renderCameras(){
 function liveLadderHTML(it){
  const l=it.live;if(!l)return'';const p=l.pull||{};
  const rows=FORMS.map(k=>{const f=l.forms[k]||{state:'none'};const st=f.state==='received'?`received · ${fmtBytes(f.bytes)}`:f.state==='partial'?`${fmtBytes(f.received)} of ${fmtBytes(f.bytes)} streaming`:f.state==='pending'?`waiting on the ship · ${fmtBytes(f.bytes)}`:f.state==='offered'?`on the ship, not sent · ${fmtBytes(f.bytes)}`:'not available';
-  return`<tr class="${f.state}${l.imageForm===k?' shown':''}"><td>${FORM_NAME[k]}${l.imageForm===k?' <small>· shown</small>':''}</td><td>${esc(st)}</td></tr>`}).join('');
+  return`<tr class="${esc(f.state)}${l.imageForm===k?' shown':''}"><td>${FORM_NAME[k]}${l.imageForm===k?' <small>· shown</small>':''}</td><td>${esc(st)}</td></tr>`}).join('');
  return`<div class="dsec live-ladder"><h4>Image versions · shore record ${esc(l.itemID||l.itemId||'')}</h4>
   <div class="hint" style="margin-bottom:6px">Image shown: <b>${l.imageForm?FORM_NAME[l.imageForm]:'none — summary only'}</b>${l.sightingId?` · Tracked object <span class="mono">${esc(l.sightingId)}</span>`:' · object not yet tracked'}${l.framesKnown?` · ${l.frames} frames seen on the ship, ${l.reports} report${l.reports===1?'':'s'} sent`:` · ${l.reports} report${l.reports===1?'':'s'} so far`}${l.event?` · ${esc(l.event)}`:''}</div>
   <table class="ladder">${rows}</table>
@@ -690,7 +720,7 @@ function step(dir){const l=feedOrdered;const i=l.findIndex(x=>x.id===state.sel);
 function buildWhy(it,rows){
  const why=[...liveWhy(it),...gsLights.why(it)];const top=rows[0];
  rows.filter(([d])=>d.cls==='unknown').forEach(([d])=>why.push({c:d.attrs.transient?'dn':'al',t:d.attrs.transient?'Single-frame flicker, treated as noise':'Unclassified contact persisted across frames — not noise; prioritized as potentially important'+(d.attrs.approaching?' · approaching, urgent':d.attrs.dark?' · no AIS / transponder correlation, urgent':'')}));
- if(top)why.push({c:top[1].s>.6?'al':'',t:`Main object: <b>${esc(clsOf(top[0].cls).lab)}</b> (confidence ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${MODELS[state.model].name}`});
+ if(top)why.push({c:top[1].s>.6?'al':'',t:`Main object: <b>${esc(clsOf(top[0].cls).lab)}</b> (confidence ${top[0].conf.toFixed(2)}) contributes ${top[1].s.toFixed(2)} under ${esc(MODELS[state.model].name)}`});
  rows.forEach(([d])=>{if(d.attrs.dark&&!['other','clutter'].includes(clsOf(d.cls).g))why.push({c:'al',t:`${esc(clsOf(d.cls).lab)} has no AIS / transponder correlation`});if(d.attrs.approaching)why.push({c:'al',t:`${esc(clsOf(d.cls).lab)} track is inbound toward the sensor`});if(d.attrs.new)why.push({c:'',t:`Change detection: ${esc(clsOf(d.cls).lab)} not present in previous pass`})});
  const seen=new Set();rows.forEach(([d,sd])=>sd.notes.forEach(r=>{const k=ruleLabel(r);if(seen.has(k))return;seen.add(k);const dir=state.directives.find(x=>x.id===r.directiveId);why.push({c:r.type==='boost'?'up':'dn',t:`${r.type==='boost'?'Boosted':'Suppressed'} by directive “${dir?esc(dir.text):''}” (${k.slice(2)})`})}));
  if(rows.some(([,sd])=>sd.focus))why.push({c:'dn',t:'Objects outside your active directives receive lower scores (focus mode)'});
@@ -702,13 +732,13 @@ function processingHTML(it){
  if(DATASET_MODE)return `${detectorNegativeHTML(it)}<div class="dsec"><h4>Processing</h4><ul class="tl">
   <li class="edge"><i></i><div>Clean v2 dev image<br><small>Real detector output · score ${it.edge.toFixed(2)} ${it.detectorNegative?'<':'≥'} 0.20</small></div></li>
   <li><i></i><div>Loaded for Operator Review<br><small>${esc(it.dataset_id)} · ${esc(it.image_id)}</small></div></li>
-  <li><i></i><div>Priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div></li>
+  <li><i></i><div>Priority scoring<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div></li>
  </ul></div>`;
  return `<div class="dsec"><h4>Processing chain</h4><ul class="tl">
-  <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
-  <li><i></i><div>Sent to shore<br><small>${it.src.link} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
+  <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${esc(it.src.hw)} · ${esc(it.src.em)} · score ${it.edge.toFixed(2)} ≥ 0.20 → keep</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
+  <li><i></i><div>Sent to shore<br><small>${esc(it.src.link)} · ${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div><span class="ms">${fmtMs(it.lat.up)}</span></li>
   <li><i></i><div>Stored in imagery database<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
-  <li><i></i><div>Shore priority scoring<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
+  <li><i></i><div>Shore priority scoring<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
  </ul></div>`;
 }
 function renderDetail(){preserveBandFocus(renderDetailContent)}
@@ -729,15 +759,15 @@ function renderDetailContent(){
  <div class="dbody">
   <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">P${t} ${TNAME[t]}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
   <div class="scores"><div class="sc" title="${DATASET_MODE?'Detector triage score from real detections':it.live?'Ship score: importance relative to the highest score on shore':'Edge score: the ship’s initial estimate of importance'}"><span>${DATASET_MODE?'Detector score':'Ship score'}</span><b>${it.edge.toFixed(2)}</b></div><div class="sc" title="${DATASET_MODE?'Command-model score after active directives':it.live?'Shore score: relative importance after applying your directive':'Command score: importance after shore scoring and directives'}"><span>${DATASET_MODE?'Model score':'Shore score'}</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span title="How much active directives changed the base score">Change from directives</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
-  <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>ATTR_LAB[a]).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
+  <div class="dsec"><h4>Detections</h4><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>esc(ATTR_LAB[a])).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>
   ${gsLights.section(it,CLS)}
   <div class="dsec" id="briefDetections"></div>
   <div class="dsec"><h4>Why this priority</h4><ul class="why">${why.slice(0,7).map(w=>`<li class="${w.c}">${w.t}</li>`).join('')}</ul></div>
   ${it.live?liveLadderHTML(it):DATASET_MODE?processingHTML(it):`<div class="dsec"><h4>Processing chain</h4><ul class="tl">
-   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${it.src.hw} · ${it.src.em} · ${it.background?'empty water retained locally for demo · no automatic upload':`score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}`}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
+   <li class="edge"><i></i><div>Captured &amp; filtered on the ship<br><small>${esc(it.src.hw)} · ${esc(it.src.em)} · ${it.background?'empty water retained locally for demo · no automatic upload':`score ${it.edge.toFixed(2)} ${it.filtered==='duplicate'?'· repeat of an earlier image → kept on ship at P4 Low':it.filtered?'< 0.20 → kept on ship at P4 Low':'≥ 0.20 → keep'}`}</small></div><span class="ms">${fmtMs(it.lat.edge)}</span></li>
    <li><i></i><div>Shore transfer: ${esc(uploadState(it).label)}<br><small>${it.fullRes?`original, full size, no compression · operator override by ${esc(it.fullResBy||'')}`:`${it.kb} KB JPEG + metadata`}</small></div></li>
    <li><i></i><div>Stored on ship<br><small>record ${it.dbId} · frame ${it.frame}</small></div><span class="ms">12 ms</span></li>
-   <li><i></i><div>Priority scoring (simulated)<br><small>${MODELS[state.model].name}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
+   <li><i></i><div>Priority scoring (simulated)<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
   </ul></div>`}
   ${DATASET_MODE?'':uploadControlsHTML(it)}
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
@@ -852,7 +882,7 @@ async function answerTeamProposal(answer){
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
  finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
-function rvQueue(){const l=items.filter(i=>!isScene(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
+function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
@@ -933,7 +963,7 @@ function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)retur
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
- if(isScene(rv.cur)){rv.cur=null;rv.shown=null;rv.displayed=null}
+ if(isEmptyWater(rv.cur)){rv.cur=null;rv.shown=null;rv.displayed=null}
  const current=rv.cur?findItem(rv.cur.id):rv.busy?null:rvQueue()[0];
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
@@ -961,9 +991,9 @@ function rvAct(a){
  if(!reviewerName){toast('Set your reviewer name first');return}
  if(rv.busy)return;rvPress(a);
  if(a==='undo'){const p=rv.undo[rv.undo.length-1];if(!p){toast('Nothing to undo');return}const navigation=rv.navigation;rv.busy=true;undoReview(p).then(it=>{if(revision!==resetRevision)return;rv.undo.pop();rv.done--;if(p.agreed)rv.agree--;if(typeof gsLearn!=='undefined')gsLearn.forget(p.id);rv.ask=null;rv.askBusy=false;renderAsk();if(rv.navigation===navigation)rv.cur=it||p.item;rv.shown=null;rv.busy=false;setLast(rv.navigation===navigation?'↶ Undone: you are back on that image.':'↶ Undone: previous review was restored.');renderReview();rvFlash('↶ Undone','#c3d1dd')}).catch(error=>{if(revision!==resetRevision)return;rv.busy=false;renderReview();toast(error.message)});return}
- if(!rv.cur||isScene(rv.cur))return;
+ if(!rv.cur||isEmptyWater(rv.cur))return;
  if(a==='skip'){rv.skipped[rv.cur.id]=Date.now();rv.cur=null;rv.shown=null;setLast('Skipped: that image moved to the end of the list.');renderReview();return}
- const it=rv.displayed;if(!it||isScene(it)||it.id!==rv.cur.id)return;
+ const it=rv.displayed;if(!it||isEmptyWater(it)||it.id!==rv.cur.id)return;
  if(!findItem(it.id)){renderReview();toast('This image is no longer available. Skip to continue.');return}
  const sug=it.centralTier,p={id:it.id,item:it,manual:it.manual,reviewed:it.reviewed,dismissed:it.dismissed,sent:it.sent,agreed:false};
  let msg,col,receipt;
@@ -981,7 +1011,7 @@ let reviewerName='';try{reviewerName=(localStorage.getItem('gsReviewer')||'').tr
 let reviewDataReady=false,lastReview=null,reviewDataRevision=0;
 function renderReviewData(s){$('reviewData').textContent=`${s.count} reviews · ${Math.round(s.agreement*100)}% agreement · `+Object.entries(s.reviewers).map(([n,v])=>`${n}: ${v.count}`).join(', ')}
 function refreshReviewData(){const revision=++reviewDataRevision;return request('/api/reviews/summary').then(s=>{if(revision===reviewDataRevision)renderReviewData(s)}).catch(error=>{if(revision===reviewDataRevision)$('reviewData').textContent=error.message})}
-function setupReviewData(){if(reviewDataReady)return;reviewDataReady=true;$('reviewerName').value=reviewerName;$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';$('reviewerSave').onclick=()=>{reviewerName=$('reviewerName').value.trim().slice(0,80);try{localStorage.setItem('gsReviewer',reviewerName)}catch{}$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';renderReview()};$('reviewNoteOpen').onclick=openReviewNote;$('reviewNote').onkeydown=async e=>{e.stopPropagation();if(e.key==='Escape'){$('reviewNoteBox').hidden=true;return}if(e.key!=='Enter')return;e.preventDefault();try{await saveReviewReason(lastReview.id,lastReview.reason||'',$('reviewNote').value);lastReview.note=$('reviewNote').value;$('reviewNoteBox').hidden=true;toast('Note saved')}catch(error){toast(error.message)}};refreshReviewData()}
+function setupReviewData(){if(reviewDataReady)return;reviewDataReady=true;$('reviewerName').value=reviewerName;$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';$('reviewerSave').onclick=()=>{reviewerName=$('reviewerName').value.trim().slice(0,80);try{localStorage.setItem('gsReviewer',reviewerName)}catch{}$('reviewerStatus').textContent=reviewerName?`Reviewing as ${reviewerName}`:'Set a name to enable review keys';renderReview()};$('reviewerName').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();$('reviewerSave').click()}};$('reviewNoteOpen').onclick=openReviewNote;$('reviewNote').onkeydown=async e=>{e.stopPropagation();if(e.key==='Escape'){$('reviewNoteBox').hidden=true;return}if(e.key!=='Enter')return;e.preventDefault();try{await saveReviewReason(lastReview.id,lastReview.reason||'',$('reviewNote').value);lastReview.note=$('reviewNote').value;$('reviewNoteBox').hidden=true;toast('Note saved')}catch(error){toast(error.message)}};refreshReviewData()}
 function openReviewNote(){if(!lastReview){toast('Review an image first');return}$('reviewNoteBox').hidden=false;$('reviewNote').value=lastReview.note||'';$('reviewNote').focus()}
 async function submitReview(id,action,changes,p){const r=await request(`/api/items/${encodeURIComponent(id)}/review`,'POST',{reviewer:reviewerName,action:'1234'.includes(action)?'tier':action,tier:changes.manual});p.record=r.record.id;lastReview=r.record;cdr=r.cdr;applyItemUpdate(r.item);refreshReviewData();return findItem(id)}
 async function undoReview(p){const r=await request(`/api/reviews/${encodeURIComponent(p.record)}/undo`,'POST',{reviewer:reviewerName});if(r.item){cdr=r.cdr;applyItemUpdate(r.item)}if(lastReview?.id===p.record)lastReview=null;refreshReviewData();return findItem(p.id)}

@@ -43,6 +43,7 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 .thumb>:is(.cdrtag,.hsenttag){grid-row:2;justify-self:start}
 .thumb>.newtag{grid-row:3;justify-self:end}
 .thumb>.band-badge{grid-row:3;justify-self:start}
+.card:is(.sending,.uploaded) .thumb>.band-badge{right:auto}
 .thumb>.night-badge{grid-row:4;justify-self:end}
 .thumb>.suptag{grid-row:5;white-space:normal;overflow-wrap:anywhere}
 .thumb>.formtag{grid-row:6;justify-self:end}

@@ -26,6 +26,24 @@ function setup(){
  return {elements,context};
 }
 
+test('commander learned directives and image URLs are escaped',()=>{
+ const {elements,context}=setup();
+ context.payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>';
+ vm.runInContext(`
+  renderLearned([{text:'Operator feedback: '+payload}]);
+ `,context);
+ const learned=elements.get('learned').innerHTML;
+ assert.match(learned,/&quot;&gt;&lt;img/);
+ assert.doesNotMatch(learned,/<img|<svg/);
+ context.imageFor=()=>context.payload;
+ context.row={id:'image',src:{name:'Camera'},ts:new Date(),tier:2,central:.5,edge:.4,dets:[],det:[],upload:{done:true}};
+ vm.runInContext('items=new Map([[row.id,row]]);view.sel=row.id;renderQueue();renderStage()',context);
+ for(const id of ['qlist','stage']){
+  assert.match(elements.get(id).innerHTML,/src="&quot;&gt;&lt;img/);
+  assert.doesNotMatch(elements.get(id).innerHTML,/<img src=x|<svg/);
+ }
+});
+
 test('queue updates preserve scrolling; keyboard following scrolls only the queue pane',()=>{
  const {context}=setup(),queue=context.$('qlist');
  queue.scrollTop=120;queue.clientTop=2;queue.clientHeight=100;
@@ -212,4 +230,19 @@ test('full-size transfer preserves previous receipts and decisions across snapsh
  context.unreceived={...context.rows[0],id:'unreceived',upload:{done:false,received:false}};
  vm.runInContext('upsert(unreceived);renderKpis()',context);
  assert.equal(elements.get('kReceived').textContent,3);
+});
+
+test('manual operator escalation is explained instead of claiming a high model score',()=>{
+ const {elements,context}=setup();
+ context.row={id:'manual',src:{id:'camera',name:'Camera'},ts:new Date(),tier:1,manual:1,central:0,edge:0,dets:[],det:[],sent:true,sentAt:new Date(),upload:{done:true}};
+ vm.runInContext('datasetMode=true;renderBrief(row)',context);
+ const html=elements.get('brief').innerHTML;
+ assert.match(html,/Operator set priority P1/);
+ assert.doesNotMatch(html,/High command-model score/);
+ context.row={...context.row,id:'model',manual:0,central:.9,edge:.9};
+ vm.runInContext('renderBrief(row)',context);
+ assert.match(elements.get('brief').innerHTML,/High command-model score/);
+ context.row={...context.row,id:'auto',manual:1,autoSent:true};
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ assert.doesNotMatch(elements.get('brief').innerHTML,/set priority P1/);
 });

@@ -47,6 +47,7 @@ function flags(it){
   if(d.attrs.loitering)f.push(['',`${l}: loitering`]);
   if(d.attrs.new)f.push(['',`${l}: not present in previous pass`])});
  if(it.edge<it.central-.15)f.push(['up',datasetMode?`Priority model raised detector score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`:`Shore model raised the ship score ${it.edge.toFixed(2)} → ${it.central.toFixed(2)}`]);
+ if(it.manual&&!it.autoSent)f.push(['up',`${datasetMode?'Operator':'Watch officer'} set priority P${it.manual} ${TN[it.manual]}`]);
  return[...new Map(f.map(x=>[x[1],x])).values()];
 }
 function boxes(it){
@@ -75,7 +76,7 @@ function renderQueue(follow=false){
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
-  <div class="th"><img src="${imageFor(it)}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
+  <div class="th"><img src="${esc(imageFor(it))}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
   <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
  queue.scrollTop=tabChanged?0:scroll;
@@ -93,7 +94,7 @@ function renderStage(){
  if(!it){
   $('stage').innerHTML=`<div class="idle"><b>${view.tab==='received'?'Waiting for ship data':view.tab==='pending'?'Board is clear':'No decisions yet'}</b><span>${view.tab==='received'?'Ship backlog is not a shore receipt.':view.tab==='pending'?'Nothing is awaiting the commander’s decision.':''}</span></div>`;$('brief').innerHTML='';return;
  }
- $('stage').innerHTML=`<div class="frame"><img src="${imageFor(it)}" alt=""><div class="bx">${boxes(it)}</div></div>
+ $('stage').innerHTML=`<div class="frame"><img src="${esc(imageFor(it))}" alt=""><div class="bx">${boxes(it)}</div></div>
  <div class="facts"><div><span>Source</span><b>${esc(it.src.name)}</b></div><div><span>Location</span><b>${esc(it.src.loc||'—')}</b></div>
  <div><span>Captured</span><b class="mono">${zulu(it.ts)} · ${ago(it.ts)} ago</b></div><div><span>Record</span><b class="mono">#${it.dbId} · FRM ${it.frame}</b></div></div>
  <div class="shore-receipt"><b>${esc(receipt(it))}</b><span>${esc(reportStatus(it))}</span>${it.live?`<ul>${['fact','thumb','crop','full'].map(k=>`<li>${{fact:'Summary',thumb:'Preview',crop:'Object close-up',full:'Full image'}[k]}: ${esc(it.live.forms?.[k]?.state||'not offered')}</li>`).join('')}</ul>`:''}</div>
