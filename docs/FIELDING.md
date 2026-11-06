@@ -250,8 +250,11 @@ storage-class behavior, and cross-cluster routing have not been verified here.
 
 ## edgeml and offline model files
 
-The sidecar defaults to mock mode and listens on `0.0.0.0:9090` in the
-container. The standard image installs edgeml and CPU `onnxruntime`; mount
+The sidecar image defaults to mock mode (for Go tests and the demo) and listens
+on `0.0.0.0:9090` in the container. The Zarf `edge-inference` component runs
+the real detector (`--detector /models/yolo11n-640/model.onnx`, no `--mock`;
+`make prod-gate` fails if `--mock` appears in deploy/zarf), so it needs the
+model mounted at `/models` before it becomes ready. The standard image installs edgeml and CPU `onnxruntime`; mount
 approved model files read-only at `/models` and override the command to use
 `--detector /models/<detector>.onnx` and optionally
 `--embed /models/<embedding-directory>`. Model acquisition and licensing are

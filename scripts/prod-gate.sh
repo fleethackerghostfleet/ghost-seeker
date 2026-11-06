@@ -84,7 +84,7 @@ step "web: demo controls unreachable when features are false"
 step "deploy defaults build the prod profile"
 grep -qE '^ARG GO_TAGS=prod$' deploy/Dockerfile || fail "deploy/Dockerfile must default to ARG GO_TAGS=prod"
 grep -q -- '-tags "${GO_TAGS}"' deploy/Dockerfile || fail "deploy/Dockerfile go build must use -tags \"\${GO_TAGS}\""
-if grep -nE 'SCENARIO|FRAMES_DIR|ZARF_VAR_INFER_URL###.*mock|default: mock' deploy/zarf/zarf.yaml deploy/zarf/manifests/*.yaml; then
+if grep -nE 'SCENARIO|FRAMES_DIR|ZARF_VAR_INFER_URL###.*mock|default: mock|--mock' deploy/zarf/zarf.yaml deploy/zarf/manifests/*.yaml; then
   fail "deploy/zarf must not configure replay or the mock analyzer"
 fi
 
