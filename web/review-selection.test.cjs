@@ -31,6 +31,39 @@ function setup(){
  `,context);
  return {context,run:code=>vm.runInContext(code,context),finish(ms){const entries=[...timers].filter(([,t])=>t.ms===ms);for(const [id,t]of entries){timers.delete(id);t.fn()}}};
 }
+test('review OPREP opens current image with shared metadata loading and trigger',async()=>{
+ const h=setup();
+ h.run(`start();calls=[];requests=[];oprep={open:(...args)=>calls.push(args)};request=async url=>{requests.push(url);return {capture:{lat:32,lon:-117}}}`);
+ await h.context.$('rvOprep').onclick();
+ assert.equal(h.run('requests[0]'),'/api/items/active/metadata');
+ assert.equal(h.run('calls[0][0].id'),'active');
+ assert.equal(h.run('calls[0][3]'),h.context.$('rvOprep'));
+ assert.equal(h.run('calls[0][4].capture.lat'),32);
+ assert.equal(h.run('calls[0][5]'),false);
+ await h.context.$('rvOprep').onclick();
+ assert.equal(h.run('requests.length'),1);
+ assert.equal(h.context.$('rvOprep').disabled,false);
+});
+test('review OPREP keeps metadata-unavailable fallback and avoids stale selection',async()=>{
+ const h=setup();
+ h.run(`start();calls=[];oprep={open:(...args)=>calls.push(args)};request=async()=>{throw Error('offline')}`);
+ await h.context.$('rvOprep').onclick();
+ assert.equal(h.run('calls[0][0].id'),'active');
+ assert.equal(h.run('calls[0][5]'),true);
+ h.run('calls=[];request=()=>new Promise(resolve=>complete=resolve)');
+ const opening=h.context.$('rvOprep').onclick();
+ h.run('rvAct("skip");complete({capture:{lat:1,lon:2}})');
+ await opening;
+ assert.equal(h.run('calls.length'),0);
+});
+test('review OPREP is disabled for empty or unavailable review images',()=>{
+ const h=setup();h.run('start();items=[];renderReview()');
+ assert.equal(h.context.$('rvOprep').disabled,true);
+ h.run('rv.cur=null;renderReview()');
+ assert.equal(h.context.$('rvOprep').disabled,true);
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ assert.match(html,/<button class="btn" id="rvOprep" type="button" disabled>Draft OPREP-3 NAVY BLUE \(whale strike\)<\/button>/);
+});
 function active(h,id='active'){
  assert.equal(h.run('rv.cur?.id'),id);
  assert.match(h.context.$('rvMain').innerHTML,new RegExp(`data-review-id="${id}"`));
