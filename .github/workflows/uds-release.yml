@@ -187,6 +187,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' 2>"$RUNNER_TEMP/release-view.err"); then
+            if [[ "$draft" != true ]]; then
+              echo "Release $RELEASE_TAG is already published; refusing to overwrite OCI artifacts" >&2
+              exit 1
+            fi
+            echo "Reusing draft release $RELEASE_TAG"
+            exit 0
+          elif ! grep -qx 'release not found' "$RUNNER_TEMP/release-view.err"; then
+            cat "$RUNNER_TEMP/release-view.err" >&2
+            exit 1
+          fi
           flags=()
           if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_SHA" --draft \
@@ -224,7 +235,7 @@ jobs:
           cd "dist/release/$VERSION"
           mapfile -d '' assets < <(find . -maxdepth 1 -type f -size -2000000001c -print0)
           test "${#assets[@]}" -gt 0
-          gh release upload "$RELEASE_TAG" "${assets[@]}"
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           gh release edit "$RELEASE_TAG" --draft=false
       - name: Log out of GHCR
         if: always()
