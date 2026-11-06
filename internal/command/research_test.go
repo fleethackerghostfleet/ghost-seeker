@@ -114,3 +114,17 @@ func TestResearchCompilerEndpointConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestResearchCompilerAcceptsEdgeSubtypes(t *testing.T) {
+	for concept, want := range map[string]string{"sailboat": "sailboat", "marine mammal": "marine mammal", "coast guard": "coast guard", "passenger ship": "passenger ship", "container ship": "cargo ship", "speedboat": "small boat"} {
+		service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"rules":[{"concept":"` + concept + `","action":"boost","weight":2}]}`))
+		}))
+		client, _ := NewResearchClient(service.URL)
+		result := (&Compiler{Research: client}).Compile(context.Background(), "watch for "+concept)
+		service.Close()
+		if result.Blocked || len(result.Rules) != 1 || !reflect.DeepEqual(result.Rules[0].Classes, []string{want}) {
+			t.Fatalf("%s: %+v", concept, result)
+		}
+	}
+}

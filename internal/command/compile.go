@@ -191,6 +191,9 @@ func canonicalClass(label string) (string, bool) {
 	if len(matches) == 1 {
 		return matches[0], true
 	}
+	if catalog.EdgeSubtypes[label] {
+		return label, true
+	}
 	return "", false
 }
 
