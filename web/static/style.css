@@ -9,6 +9,8 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .upload-bar::-webkit-progress-value{background:var(--accent)}
 .upload-bar::-moz-progress-bar{background:var(--accent)}
 .upload-label{display:block;padding:4px 8px 0;color:var(--muted);font-size:0.6875rem;font-weight:600}
+.metadata-only .upload-label{color:var(--muted);font-weight:600}
+.meta-only-chip{display:inline-block;margin-left:10px;padding-left:8px;border-left:2px solid var(--p3);color:var(--muted);font-size:0.6875rem;font-weight:600;letter-spacing:.02em;white-space:nowrap}
 .uploaded .upload-label{color:var(--good);font-weight:800}
 .uploaded .upload-bar::-webkit-progress-value{background:var(--good)}
 .uploaded .upload-bar::-moz-progress-bar{background:var(--good)}
@@ -195,6 +197,13 @@ body.drawer-open .drawer{transform:none}
 .sc b{font-size:1.1875rem;font-variant-numeric:tabular-nums}
 .dsec{margin-bottom:14px}
 .dsec h4{margin:0 0 6px;font-size:0.65625rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.metadata-panel{margin-top:14px;color:var(--muted)}
+.metadata-panel>summary{list-style:none;cursor:pointer;margin:0 0 8px;padding:0;border:0;background:none;box-shadow:none;font-size:0.65625rem;letter-spacing:.12em;text-transform:uppercase;font-weight:700;outline:none}
+.metadata-panel>summary::-webkit-details-marker{display:none}.metadata-panel>summary:focus-visible{outline:1px solid var(--line);outline-offset:3px}
+.metadata-caret{display:inline-block;width:14px;color:var(--muted)}
+.metadata-group{border-top:1px solid var(--line);padding:5px 0 3px}.metadata-group h5{margin:0 0 3px;font-size:0.5625rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.metadata-group:first-child{border-top:0}.metadata-group table{width:100%;border-collapse:collapse;font:0.6875rem/1.25 "IBM Plex Mono",ui-monospace,monospace}.metadata-group th,.metadata-group td{padding:0;border:0;text-align:left;vertical-align:top;font-size:0.6875rem;letter-spacing:0;text-transform:none}.metadata-group th{width:26%;color:var(--muted);font-weight:500}.metadata-group td{color:var(--text);word-break:break-word}.synthetic-marker{margin-left:5px;color:var(--muted);font:0.5625rem system-ui;letter-spacing:0;text-transform:none}
+.metadata-copy{display:block;margin:9px 0 0 auto}
 table{width:100%;border-collapse:collapse;font-size:0.75rem}
 td,th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{color:var(--muted);font-weight:600;font-size:0.65625rem;text-transform:uppercase;letter-spacing:.06em}

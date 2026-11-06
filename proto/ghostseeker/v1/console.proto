@@ -126,7 +126,10 @@ message GetStatusResponse {
   string policy_id = 10;
   int64 items_deduped = 11; // edge: captures folded into an existing item (hash or sighting duplicates)
   int64 items_evicted = 12; // edge: delivered items evicted by the storage cap
-  string prioritizer = 13;  // active prioritization backend: "edgeml" | "tomer"
+	string prioritizer = 13;  // active prioritization backend: "edgeml" | "tomer"
+	bool meta_only = 14;
+	int64 meta_only_since_unix_ms = 15;
+	string meta_only_reason = 16; // "link" | "emcon"
 }
 
 message LinkState {

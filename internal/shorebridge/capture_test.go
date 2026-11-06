@@ -29,6 +29,12 @@ func TestLiveCapture(t *testing.T) {
 				t.Fatalf("real %s flagged synthetic", key)
 			}
 		}
+		record := command.BuildMetadata(*item)
+		capture := record["capture"].(map[string]any)
+		model := record["model"].(map[string]any)
+		if capture["lat"] != got.Lat || capture["contentHash"] != "real-hash" || model["trackId"] != "track-real" || model["trackFrames"] != 8 || !reflect.DeepEqual(capture["synthetic"], got.Synthetic) {
+			t.Fatalf("metadata did not reuse live capture: %v", record)
+		}
 	}
 }
 

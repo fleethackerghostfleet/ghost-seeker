@@ -961,22 +961,25 @@ func (*GetStatusRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetStatusResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	NodeId          string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Role            string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`           // "edge" | "shore"
-	Heartbeat       *Heartbeat             `protobuf:"bytes,3,opt,name=heartbeat,proto3" json:"heartbeat,omitempty"` // last heartbeat (shore) or current (edge)
-	Link            *LinkState             `protobuf:"bytes,4,opt,name=link,proto3" json:"link,omitempty"`
-	ItemsTotal      int64                  `protobuf:"varint,5,opt,name=items_total,json=itemsTotal,proto3" json:"items_total,omitempty"`
-	ItemsComplete   int64                  `protobuf:"varint,6,opt,name=items_complete,json=itemsComplete,proto3" json:"items_complete,omitempty"` // shore: fully received; edge: fully acked
-	ItemsManifested int64                  `protobuf:"varint,7,opt,name=items_manifested,json=itemsManifested,proto3" json:"items_manifested,omitempty"`
-	ItemsUnknown    int64                  `protobuf:"varint,8,opt,name=items_unknown,json=itemsUnknown,proto3" json:"items_unknown,omitempty"`
-	BytesSent       int64                  `protobuf:"varint,9,opt,name=bytes_sent,json=bytesSent,proto3" json:"bytes_sent,omitempty"`
-	PolicyId        string                 `protobuf:"bytes,10,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
-	ItemsDeduped    int64                  `protobuf:"varint,11,opt,name=items_deduped,json=itemsDeduped,proto3" json:"items_deduped,omitempty"` // edge: captures folded into an existing item (hash or sighting duplicates)
-	ItemsEvicted    int64                  `protobuf:"varint,12,opt,name=items_evicted,json=itemsEvicted,proto3" json:"items_evicted,omitempty"` // edge: delivered items evicted by the storage cap
-	Prioritizer     string                 `protobuf:"bytes,13,opt,name=prioritizer,proto3" json:"prioritizer,omitempty"`                        // active prioritization backend: "edgeml" | "tomer"
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	NodeId              string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Role                string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`           // "edge" | "shore"
+	Heartbeat           *Heartbeat             `protobuf:"bytes,3,opt,name=heartbeat,proto3" json:"heartbeat,omitempty"` // last heartbeat (shore) or current (edge)
+	Link                *LinkState             `protobuf:"bytes,4,opt,name=link,proto3" json:"link,omitempty"`
+	ItemsTotal          int64                  `protobuf:"varint,5,opt,name=items_total,json=itemsTotal,proto3" json:"items_total,omitempty"`
+	ItemsComplete       int64                  `protobuf:"varint,6,opt,name=items_complete,json=itemsComplete,proto3" json:"items_complete,omitempty"` // shore: fully received; edge: fully acked
+	ItemsManifested     int64                  `protobuf:"varint,7,opt,name=items_manifested,json=itemsManifested,proto3" json:"items_manifested,omitempty"`
+	ItemsUnknown        int64                  `protobuf:"varint,8,opt,name=items_unknown,json=itemsUnknown,proto3" json:"items_unknown,omitempty"`
+	BytesSent           int64                  `protobuf:"varint,9,opt,name=bytes_sent,json=bytesSent,proto3" json:"bytes_sent,omitempty"`
+	PolicyId            string                 `protobuf:"bytes,10,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
+	ItemsDeduped        int64                  `protobuf:"varint,11,opt,name=items_deduped,json=itemsDeduped,proto3" json:"items_deduped,omitempty"` // edge: captures folded into an existing item (hash or sighting duplicates)
+	ItemsEvicted        int64                  `protobuf:"varint,12,opt,name=items_evicted,json=itemsEvicted,proto3" json:"items_evicted,omitempty"` // edge: delivered items evicted by the storage cap
+	Prioritizer         string                 `protobuf:"bytes,13,opt,name=prioritizer,proto3" json:"prioritizer,omitempty"`                        // active prioritization backend: "edgeml" | "tomer"
+	MetaOnly            bool                   `protobuf:"varint,14,opt,name=meta_only,json=metaOnly,proto3" json:"meta_only,omitempty"`
+	MetaOnlySinceUnixMs int64                  `protobuf:"varint,15,opt,name=meta_only_since_unix_ms,json=metaOnlySinceUnixMs,proto3" json:"meta_only_since_unix_ms,omitempty"`
+	MetaOnlyReason      string                 `protobuf:"bytes,16,opt,name=meta_only_reason,json=metaOnlyReason,proto3" json:"meta_only_reason,omitempty"` // "link" | "emcon"
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *GetStatusResponse) Reset() {
@@ -1096,6 +1099,27 @@ func (x *GetStatusResponse) GetItemsEvicted() int64 {
 func (x *GetStatusResponse) GetPrioritizer() string {
 	if x != nil {
 		return x.Prioritizer
+	}
+	return ""
+}
+
+func (x *GetStatusResponse) GetMetaOnly() bool {
+	if x != nil {
+		return x.MetaOnly
+	}
+	return false
+}
+
+func (x *GetStatusResponse) GetMetaOnlySinceUnixMs() int64 {
+	if x != nil {
+		return x.MetaOnlySinceUnixMs
+	}
+	return 0
+}
+
+func (x *GetStatusResponse) GetMetaOnlyReason() string {
+	if x != nil {
+		return x.MetaOnlyReason
 	}
 	return ""
 }
@@ -1230,7 +1254,7 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	"\x12RequestPullRequest\x12(\n" +
 	"\x04pull\x18\x01 \x01(\v2\x14.ghostseeker.v1.PullR\x04pull\"\x15\n" +
 	"\x13RequestPullResponse\"\x12\n" +
-	"\x10GetStatusRequest\"\xe8\x03\n" +
+	"\x10GetStatusRequest\"\xe5\x04\n" +
 	"\x11GetStatusResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x127\n" +
@@ -1247,7 +1271,10 @@ const file_ghostseeker_v1_console_proto_rawDesc = "" +
 	" \x01(\tR\bpolicyId\x12#\n" +
 	"\ritems_deduped\x18\v \x01(\x03R\fitemsDeduped\x12#\n" +
 	"\ritems_evicted\x18\f \x01(\x03R\fitemsEvicted\x12 \n" +
-	"\vprioritizer\x18\r \x01(\tR\vprioritizer\"\xa2\x01\n" +
+	"\vprioritizer\x18\r \x01(\tR\vprioritizer\x12\x1b\n" +
+	"\tmeta_only\x18\x0e \x01(\bR\bmetaOnly\x124\n" +
+	"\x17meta_only_since_unix_ms\x18\x0f \x01(\x03R\x13metaOnlySinceUnixMs\x12(\n" +
+	"\x10meta_only_reason\x18\x10 \x01(\tR\x0emetaOnlyReason\"\xa2\x01\n" +
 	"\tLinkState\x12\x0e\n" +
 	"\x02up\x18\x01 \x01(\bR\x02up\x12!\n" +
 	"\festimate_bps\x18\x02 \x01(\x01R\vestimateBps\x12/\n" +

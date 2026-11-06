@@ -24,6 +24,62 @@ type failingSaveBackend struct {
 	policy.Backend
 }
 
+func TestPolicyBurstAdminRestoreAndExpiry(t *testing.T) {
+	backend := policy.NewMemBackend()
+	data := store.New(10)
+	app := New(data, WithAdmin(true), WithAdminToken("test-token"), WithPolicyBackend(backend))
+	raw := `{"layers":[{"echelon":"ECHELON_COMMAND","issuedBy":"CTF-99","emcon":{"mode":"EMCON_MODE_BURST"}}]}`
+	response := rawPolicyRequest(app, http.MethodPut, "/api/policy", raw)
+	if response.Code != http.StatusOK {
+		t.Fatalf("admin status=%d: %s", response.Code, response.Body.String())
+	}
+	if stats, _ := data.Stats(); !stats.MetaOnly || stats.MetaOnlyReason != "emcon" {
+		t.Fatalf("admin BURST did not reach store: %+v", stats)
+	}
+	restored := store.New(10)
+	rt := newPolicyRuntime(serverOptions{backend: backend}, restored)
+	if stats, _ := restored.Stats(); !stats.MetaOnly || stats.MetaOnlyReason != "emcon" {
+		t.Fatalf("restored BURST did not reach store: %+v", stats)
+	}
+	rt.expire(time.Now().Add(13 * time.Hour))
+	if stats, _ := restored.Stats(); stats.MetaOnly {
+		t.Fatalf("expired BURST remains active: %+v", stats)
+	}
+}
+
+func TestTimedBurstExpiresBeforePolicy(t *testing.T) {
+	data := store.New(10)
+	rt := newPolicyRuntime(serverOptions{}, data)
+	changed := make(chan struct{}, 1)
+	rt.onChange = func() { changed <- struct{}{} }
+	now := time.Now()
+	rt.higherLayers = []*pb.PolicyLayer{{Echelon: pb.Echelon_ECHELON_COMMAND, IssuedBy: "CTF", Emcon: &pb.EmconSetting{Mode: pb.EmconMode_EMCON_MODE_BURST, ExpiresAtUnixMs: now.Add(100 * time.Millisecond).UnixMilli()}}}
+	if _, err := rt.apply("test", "CTF", "timed burst", now); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		rt.timerMu.Lock()
+		defer rt.timerMu.Unlock()
+		if rt.expiryTimer != nil {
+			rt.expiryTimer.Stop()
+		}
+	})
+	if stats, _ := data.Stats(); !stats.MetaOnly {
+		t.Fatal("BURST did not enter metadata-only")
+	}
+	select {
+	case <-changed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed BURST did not expire before policy deadline")
+	}
+	if stats, _ := data.Stats(); stats.MetaOnly {
+		t.Fatalf("expired BURST still active: %+v", stats)
+	}
+	if p, expired := rt.guard.Active(time.Now()); p == nil || expired {
+		t.Fatal("timed EMCON expired the whole policy")
+	}
+}
+
 func (failingSaveBackend) SavePolicyState(context.Context, *pb.Policy, int64) error {
 	return errors.New("save failed")
 }
