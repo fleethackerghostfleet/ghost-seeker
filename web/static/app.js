@@ -772,10 +772,18 @@ function refreshMetadataEMCON(mode){
  const it=findItem(state.sel);if(it)loadMetadata(it,$('metadataPanel'));
 }
 function metadataVersion(it){
- const {el,fresh,upload,live,...record}=it;
- const {sent,metadataSent,bps,active,...transfer}=upload||{};
- const forms=Object.fromEntries(Object.entries(live?.forms||{}).map(([key,{received,...form}])=>[key,form]));
- return JSON.stringify({...record,upload:transfer,live:live?{...live,forms}:undefined});
+ const version={};
+ for(const key of ['src','ts','frame','dbId','capture','dets','det','edge','central','tier','manual','reviewed','humanReviewed','decision','filtered','dupOf'])version[key]=it[key];
+ if(it.live){
+  const {itemId,subtype,label,override,unknownness,imageForm}=it.live;
+  const forms=Object.fromEntries(Object.entries(it.live.forms||{}).map(([key,{state,bytes}])=>[key,{state,bytes}]));
+  version.live={itemId,subtype,label,override,unknownness,imageForm,forms};
+ }else{
+  version.kb=it.kb;
+  const {metadataBytes,metadataDone,metadataDoneAt,bytes,done}=it.upload||{};
+  version.upload={metadataBytes,metadataDone,metadataDoneAt,bytes,done};
+ }
+ return JSON.stringify(version);
 }
 function invalidateMetadata(it,previous){
  const cached=metadataCache.get(it.id);

@@ -1885,6 +1885,26 @@ test('meaningful metadata refresh preserves cached content through progress and 
  assert.match(c.body.innerHTML,/recovered sensor/);
 });
 
+test('live FULL progress size and pull descriptions reuse metadata while receipt and labels refresh it',async()=>{
+ for(const event of ['snapshot','update']){
+  const c=setup();
+  vm.runInContext(`row={...raw('full-progress'),kb:4,live:{itemId:'full-item',label:'vessel',override:'old',imageForm:'thumb',pull:{enabled:false,label:'Full image 1%',reason:'1000 of 100000'},forms:{fact:{state:'received',bytes:1000,received:1000},thumb:{state:'received',bytes:2000,received:2000},full:{state:'partial',bytes:100000,received:1000}}}};applySnapshot(snapshot([row]));body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};requests=0;request=async()=>{requests++;return {capture:{source:'full sensor'}}}`,c);
+  await vm.runInContext("loadMetadata(findItem('full-progress'),panel)",c);
+  const update=event==='snapshot'?'applySnapshot(snapshot([row]))':'applyItemUpdate(row)';
+  for(const progress of ["row.kb=5;row.live.forms.full.received=2000","row.live.pull={enabled:false,label:'Full image 3%',reason:'3000 of 100000'};row.live.forms.full.received=3000"]){
+   vm.runInContext(`row=JSON.parse(JSON.stringify(row));${progress};${update}`,c);
+   await vm.runInContext("loadMetadata(findItem('full-progress'),panel)",c);
+  }
+  assert.equal(vm.runInContext('requests',c),1,`${event} FULL byte progress must reuse metadata`);
+  for(const meaningful of ["row.live.override='new'","row.tier=1","row.live.forms.full.state='received'","row.capture={contentHash:'new-hash'}"]){
+   vm.runInContext(`row=JSON.parse(JSON.stringify(row));${meaningful};${update}`,c);
+   assert.equal(vm.runInContext("metadataCache.get('full-progress').stale",c),true);
+   await vm.runInContext("loadMetadata(findItem('full-progress'),panel)",c);
+  }
+  assert.equal(vm.runInContext('requests',c),5);
+ }
+});
+
 test('live snapshot byte progress preserves metadata but labels, rank and receipt refresh it',async()=>{
  const c=setup();
  vm.runInContext(`row={...raw('live-meta'),live:{override:'old',forms:{fact:{state:'partial',bytes:1000,received:10},thumb:{state:'partial',bytes:2000,received:10}}}};applySnapshot(snapshot([row]));body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};requests=0;request=async()=>{requests++;return {capture:{source:'live sensor'}}}`,c);
