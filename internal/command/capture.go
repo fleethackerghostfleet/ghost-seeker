@@ -7,11 +7,14 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/web"
 )
 
 type CaptureMeta struct {
@@ -44,15 +47,20 @@ func imageMetadata(name string) imageMeta {
 	}
 	m := imageMeta{}
 	if name != "" && filepath.IsLocal(name) {
-		_, file, _, _ := runtime.Caller(0)
-		paths := []string{filepath.Join("web/static/imagery", name), filepath.Join(filepath.Dir(file), "../../web/static/imagery", name)}
-		for _, path := range paths {
-			if data, err := os.ReadFile(path); err == nil {
-				m.hash = fmt.Sprintf("%x", sha256.Sum256(data))
-				if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
-					m.w, m.h = cfg.Width, cfg.Height
+		data, err := fs.ReadFile(web.Imagery(), name)
+		if err != nil {
+			_, file, _, _ := runtime.Caller(0)
+			paths := []string{filepath.Join("web/static/imagery", name), filepath.Join(filepath.Dir(file), "../../web/static/imagery", name)}
+			for _, path := range paths {
+				if data, err = os.ReadFile(path); err == nil {
+					break
 				}
-				break
+			}
+		}
+		if err == nil {
+			m.hash = fmt.Sprintf("%x", sha256.Sum256(data))
+			if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
+				m.w, m.h = cfg.Width, cfg.Height
 			}
 		}
 	}
