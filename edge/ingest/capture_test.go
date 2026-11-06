@@ -127,8 +127,8 @@ func TestRetagConfirmedSubtypeConfidence(t *testing.T) {
 			if tags["subtype_conf"] != "0.900" || strings.Contains(tags["synthetic"], "subtype") {
 				t.Fatalf("real confirmation confidence not applied: %v", tags)
 			}
-		} else if tags["subtype_conf"] != "0.70" || !strings.Contains(tags["synthetic"], "subtype_conf") {
-			t.Fatalf("unmatched confidence changed: %v", tags)
+		} else if tags["subtype_conf"] != "" || strings.Contains(tags["synthetic"], "subtype") {
+			t.Fatalf("unmatched confidence not cleared: %v", tags)
 		}
 		data, err := st.ReadFormAll(row.Item.Id, pb.FormKind_FORM_KIND_FACT)
 		if err != nil {
@@ -141,5 +141,47 @@ func TestRetagConfirmedSubtypeConfidence(t *testing.T) {
 		if f.Tags["subtype_conf"] != tags["subtype_conf"] || f.Tags["synthetic"] != tags["synthetic"] {
 			t.Fatal("FACT provenance not updated")
 		}
+	}
+}
+
+func TestRetagReplacesRealSubtypeConfidence(t *testing.T) {
+	for _, label := range []string{"boat", "tanker", "", "vessel"} {
+		t.Run(label, func(t *testing.T) {
+			ctx := context.Background()
+			g, st, clk := newIngester(t, DedupSightings, nil)
+			row, err := g.newItem(ctx, capture(clk, 1), "capture-hash", &pb.AnalyzeResponse{}, sighting("s1", pb.Sighting_EVENT_OPEN, true, "vessel"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			row.Item.Features.Tags["subtype_conf"] = "0.420"
+			delete(row.Item.Features.Tags, "synthetic")
+			if err := st.UpdateItem(ctx, row.Item); err != nil {
+				t.Fatal(err)
+			}
+			updated, err := g.retag(ctx, row.Item.Id, &pb.Sighting{Subtype: label, KeyDetection: &pb.Detection{Label: "boat", Confidence: .95}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "0.420"
+			if label == "boat" {
+				want = "0.950"
+			} else if label == "tanker" {
+				want = ""
+			}
+			if got := updated.Item.Features.Tags["subtype_conf"]; got != want {
+				t.Fatalf("confidence = %q, want %q", got, want)
+			}
+			data, err := st.ReadFormAll(row.Item.Id, pb.FormKind_FORM_KIND_FACT)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var f fact.Fact
+			if err := json.Unmarshal(data, &f); err != nil {
+				t.Fatal(err)
+			}
+			if f.Tags["subtype_conf"] != want {
+				t.Fatalf("FACT confidence = %q, want %q", f.Tags["subtype_conf"], want)
+			}
+		})
 	}
 }
