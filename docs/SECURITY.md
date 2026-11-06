@@ -1,5 +1,15 @@
 # Security model and controls
 
+## ATO preparation documents
+
+The [ATO preparation index](ato/README.md) distinguishes repository evidence
+from unfilled authorization templates. It links the [SSP](ato/SSP.md),
+[boundary/data flows](ato/BOUNDARY_AND_DATA_FLOW.md), [PPSM](ato/PPSM.md),
+[control matrix](ato/CONTROL_MATRIX.md), [POA&M](ato/POAM.md),
+[third-party/model inventory](ato/THIRD_PARTY_AND_MODEL_INVENTORY.md) and
+[AI/human-review governance](ato/AI_HUMAN_IN_THE_LOOP.md). These drafts do not
+claim an ATO, a selected impact level, verified platform inheritance or FIPS validation.
+
 Ghost Seeker has three network surfaces: the **shore node** (`cmd/shore`: SyncService for
 edges, ConsoleService + `/blob/` for operators), the **edge node** (`cmd/edge`: ship-side
 ConsoleService + `/blob/`) and the **operator web app** (`cmd/ghost-seeker`, which fronts the
