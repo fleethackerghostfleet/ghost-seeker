@@ -281,10 +281,12 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	if err == nil && complete == 1 && (c.ContentHash == "" || c.ContentHash == hash) {
 		return c.TotalBytes, true, nil
 	}
+	replacing := false
 	if err == nil && c.ContentHash != hash && c.ContentHash != "" && (complete == 1 || hash != "") {
 		// The edge regenerated this form (FACT after a label override, FULL
 		// after an original pull), possibly mid-transfer: start over with
 		// the new content.
+		replacing = complete == 1
 		received, complete = 0, 0
 		rangesJSON = "[]"
 		if err := s.removeBlob(partial); err != nil {
@@ -295,7 +297,13 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		received = 0
 		rangesJSON = "[]"
 	}
-	growth := max(int64(0), c.Offset+n-s.blobSizes[partial])
+	// A regenerated form replaces the completed file on rename, so its bytes
+	// are already reserved for this form.
+	reserved := s.blobSizes[partial]
+	if replacing {
+		reserved += s.blobSizes[path]
+	}
+	growth := max(int64(0), c.Offset+n-reserved)
 	if growth > 0 && s.blobBytes > s.blobQuota-growth {
 		return 0, false, fmt.Errorf("shore blob byte limit reached")
 	}

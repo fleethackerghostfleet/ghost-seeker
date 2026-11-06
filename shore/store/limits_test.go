@@ -130,3 +130,28 @@ func TestShoreManifestMetadataBounded(t *testing.T) {
 		t.Fatal("unbounded form kinds accepted")
 	}
 }
+
+func TestShoreBlobQuotaAllowsFormReplacement(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	st.blobQuota = 4
+	ctx, now := context.Background(), time.Now()
+	chunk := &pb.Chunk{ItemId: "item", Form: pb.FormKind_FORM_KIND_FULL, TotalBytes: 4, Data: []byte("abcd"), ContentHash: hashOf([]byte("abcd"))}
+	if _, done, err := st.WriteChunk(ctx, "edge", chunk, now); err != nil || !done {
+		t.Fatalf("first form: %v", err)
+	}
+	chunk.Data, chunk.ContentHash = []byte("wxyz"), hashOf([]byte("wxyz"))
+	if _, done, err := st.WriteChunk(ctx, "edge", chunk, now); err != nil || !done {
+		t.Fatalf("replacement rejected at full quota: %v", err)
+	}
+	if st.blobBytes != 4 {
+		t.Fatalf("wrong disk accounting: %d", st.blobBytes)
+	}
+	other := &pb.Chunk{ItemId: "other", Form: pb.FormKind_FORM_KIND_FULL, TotalBytes: 1, Data: []byte("x")}
+	if _, _, err := st.WriteChunk(ctx, "edge", other, now); err == nil {
+		t.Fatal("quota bypassed after replacement")
+	}
+}
