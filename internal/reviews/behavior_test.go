@@ -1,6 +1,7 @@
 package reviews
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -8,7 +9,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
@@ -79,7 +79,7 @@ func (rejectingReviewWriter) Write([]byte) (int, error) { return 0, io.ErrClosed
 
 func TestReviewLogRejectsCorruptionAndPropagatesFailures(t *testing.T) {
 	dir := t.TempDir()
-	for name, data := range map[string][]byte{"malformed": []byte("{broken}\n"), "oversized": []byte(`{"note":"` + strings.Repeat("x", 4<<20) + "\"}\n")} {
+	for name, data := range map[string][]byte{"malformed": []byte("{broken}\n")} {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, data, 0600); err != nil {
 			t.Fatal(err)
@@ -130,7 +130,7 @@ func TestReadEffectiveMalformedInputAndEmptyInputs(t *testing.T) {
 	if rs, n, err := ReadEffective(nil); err != nil || len(rs) != 0 || n != 0 {
 		t.Fatalf("empty inputs=%v %d %v", rs, n, err)
 	}
-	for name, data := range map[string][]byte{"json": []byte("{\"id\":\"valid\"}\n{broken}\n"), "missing-id": []byte("{}\n"), "too-long": bytes.Repeat([]byte(" "), (4<<20)+1)} {
+	for name, data := range map[string][]byte{"json": []byte("{\"id\":\"valid\"}\n{broken}\n"), "missing-id": []byte("{}\n")} {
 		path := filepath.Join(t.TempDir(), name)
 		if err := os.WriteFile(path, data, 0600); err != nil {
 			t.Fatal(err)
@@ -157,6 +157,52 @@ func TestReadEffectiveMalformedInputAndEmptyInputs(t *testing.T) {
 		rs, n, err := ReadEffective(order)
 		if err != nil || n != 1 || len(rs) != 1 || rs[0].Reason != "b" {
 			t.Fatalf("tie merge=%v %d %v", rs, n, err)
+		}
+	}
+}
+
+func TestReviewLogSizeBoundaries(t *testing.T) {
+	const limit = 4 << 20
+	for _, size := range []int{limit - 1, limit + 1} {
+		prefix, suffix := []byte(`{"id":"size-boundary","note":"`), []byte("\"}\n")
+		data := append(prefix, bytes.Repeat([]byte("x"), size-len(prefix)-len(suffix))...)
+		data = append(data, suffix...)
+		var record Record
+		if err := json.Unmarshal(data, &record); err != nil || record.ID != "size-boundary" || len(data) != size {
+			t.Fatalf("invalid boundary fixture: size=%d id=%q err=%v", len(data), record.ID, err)
+		}
+		path := filepath.Join(t.TempDir(), "reviews.jsonl")
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		l, err := Open(path)
+		if size > limit {
+			if err == nil {
+				l.Close()
+				t.Fatal("Open accepted an oversized valid record")
+			}
+			if err.Error() != "review log line too large" {
+				t.Fatalf("Open rejected oversized input for the wrong reason: %v", err)
+			}
+		} else {
+			if err != nil {
+				t.Fatalf("Open rejected a just-under-limit record: %v", err)
+			}
+			rs := l.Effective()
+			if err := l.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if len(rs) != 1 || rs[0].ID != record.ID || rs[0].Note != record.Note {
+				t.Fatal("Open did not preserve the just-under-limit record")
+			}
+		}
+		rs, n, err := ReadEffective([]string{path})
+		if size > limit {
+			if !errors.Is(err, bufio.ErrTooLong) || rs != nil || n != 0 {
+				t.Fatalf("ReadEffective size error: records=%d n=%d err=%v", len(rs), n, err)
+			}
+		} else if err != nil || n != 1 || len(rs) != 1 || rs[0].ID != record.ID || rs[0].Note != record.Note {
+			t.Fatalf("ReadEffective just-under-limit record: records=%d n=%d err=%v", len(rs), n, err)
 		}
 	}
 }
