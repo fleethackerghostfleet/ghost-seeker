@@ -47,7 +47,7 @@ func TestCompileUnknownConceptKeepsExplicitReadback(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 			t.Fatal(err)
 		}
-		if rec.Code != http.StatusOK || len(got.Rules) != 0 || !strings.HasPrefix(got.Readback, `Not supported: "unicorns"`) {
+		if rec.Code != http.StatusOK || len(got.Rules) != 0 || got.Readback != command.NoMatchReadback {
 			t.Fatalf("%s: %d %s", endpoint, rec.Code, rec.Body.String())
 		}
 	}

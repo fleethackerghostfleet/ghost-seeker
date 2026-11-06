@@ -137,7 +137,15 @@ func ObservationClasses(text string) []string {
 }
 
 func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
-	text = strings.ToLower(text)
+	rules, unknown, _ := parseOpen(text, edgeSubtypes)
+	return rules, unknown
+}
+
+// parseOpen parses free-form text: normalizeDirective first rewrites everyday
+// phrasing into the parser vocabulary and reports nearest-class mappings.
+func parseOpen(text string, edgeSubtypes bool) ([]Rule, []string, []ResearchResolution) {
+	normal := normalizeDirective(text, edgeSubtypes)
+	text = normal.text
 	text = regexp.MustCompile(`fixed[- ]wing`).ReplaceAllString(text, "military aircraft or civil aircraft")
 	text = andActionPattern.ReplaceAllString(text, "; $1")
 	clauses := splitPattern.Split(text, -1)
@@ -216,15 +224,30 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 		}
 		unused := grammarPattern.ReplaceAllString(negativePattern.ReplaceAllString(clause, " "), " ")
 		for _, word := range wordPattern.FindAllString(unused, -1) {
+			if fillerWords[word] || len(word) < 2 {
+				continue
+			}
 			if !unknownSeen[word] {
 				unknown = append(unknown, word)
 				unknownSeen[word] = true
 			}
 		}
 		if len(classes) == 0 && len(attrs) == 0 && len(sources) == 0 && within == 0 {
+			// "the birds are everywhere, get rid of them": the pronoun points
+			// back at the previous clause.
+			if negative && len(rules) > 0 && pronounNegativePattern.MatchString(clause) {
+				rules[len(rules)-1].Type, rules[len(rules)-1].Only = "suppress", false
+			}
 			continue
 		}
 		rules = append(rules, Rule{Type: map[bool]string{true: "suppress", false: "boost"}[negative], Classes: classes, Attrs: attrs, Only: only && !negative, Sources: sources, WithinMin: within})
 	}
-	return rules, unknown
+	if normal.onlyOthers {
+		for i := range rules {
+			if rules[i].Type == "boost" && len(rules[i].Classes) > 0 {
+				rules[i].Only = true
+			}
+		}
+	}
+	return rules, unknown, normal.resolutions
 }

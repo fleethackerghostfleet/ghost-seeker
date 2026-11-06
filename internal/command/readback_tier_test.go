@@ -15,7 +15,7 @@ func TestTargetTierReadback(t *testing.T) {
 			}
 		}
 	}
-	if got := readback(nil, 0); got != "No rules recognized." {
+	if got := readback(nil, 0); got != NoMatchReadback {
 		t.Fatal(got)
 	}
 	if got := readback([]Rule{{Type: "suppress", Classes: []string{"tanker"}, Tier: 5}}, 0); strings.Contains(got, "→") {

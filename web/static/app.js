@@ -1,5 +1,6 @@
 let SOURCES=[],SRC={},CLS={},MODELS={},ATTR_LAB={},EXAMPLES=[];
 let DATASET_MODE=false;
+let DEMO_REVIEW_FIRST=false;
 let state={src:'ALL',model:'maritime',sort:'pri',tier:'all',paused:false,sel:null,directives:[],policy:null};
 let items=[],stats={cap:0,keep:0,drop:0,bytes:0,db:0},cdr=0,weightData={},pendingItems=[],evictedIDs=new Set(),heldSnapshotIDs=null,policyAuditTimer=null,policyRawTouched=false,policyRawLoaded=false;
 let indexedItems=null,itemByID=new Map(),indexedPending=null,pendingByID=new Map();
@@ -266,7 +267,7 @@ function clearDemoItems(){
 // them all false, and a missing block is treated the same way.
 function gsFeatures(config){
  const f=config&&typeof config.features==='object'&&config.features||{};
- return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true};
+ return {profile:String(f.profile||''),simulation:f.simulation===true,demoReset:f.demoReset===true,dataset:f.dataset===true,demoLinkControl:f.demoLinkControl===true,demoDraftSend:f.demoDraftSend===true};
 }
 function applyFeatures(features){
  document.body.classList.toggle('no-sim',!features.simulation);
@@ -367,6 +368,8 @@ async function init(){
  const config=await request('/api/config');
  const features=gsFeatures(config);
  applyFeatures(features);
+ oprep.configure(features);
+ DEMO_REVIEW_FIRST=config.features?.demoReviewFirst===true;
  setupDemoReset(features.demoReset);
  setupTeamSync(!!config.reviewSync);
  DATASET_MODE=features.dataset;
@@ -464,7 +467,7 @@ function visible(){
  feedReasons=new Map();l.forEach(i=>{const reason=filteredReason(i);if(reason)feedReasons.set(i.id,reason)});
  const counts={all:l.length,1:0,2:0,3:0,4:0};l.forEach(i=>counts[feedTier(i)]++);
  if(state.tier!=='all')l=l.filter(i=>String(feedTier(i))===state.tier);
- l.sort(f.review==='sent'?(a,b)=>sendTime(b)-sendTime(a)||b.ts-a.ts:state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
+ l.sort(f.review==='sent'?(a,b)=>sendTime(b)-sendTime(a)||b.ts-a.ts:state.sort==='pri'?(a,b)=>feedTier(a)-feedTier(b)||Number(!!b.feedFirst)-Number(!!a.feedFirst)||Number(feedReasons.has(a.id))-Number(feedReasons.has(b.id))||b.central-a.central||b.ts-a.ts:(a,b)=>b.ts-a.ts);
  if(state.src==='ALL'&&f.review!=='sent')l=mixSources(l,state.sort==='pri'?i=>feedTier(i)+(feedReasons.has(i.id)?'f':''):i=>Math.floor(i.ts/60000));
  if(f.showDuplicates&&f.review!=='sent')l=pairRepeats(l);
  return{l,counts};
@@ -705,7 +708,7 @@ function linkPanelHTML(bps,note,measuring){
 }
 function renderSimLink(){
  const el=$('stLink');if(!el)return;const bps=Number(stats.linkBps)||0;
- el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,stats.linkFixed?'Fixed test rate':'');
+ el.classList.toggle('down',bps<=0);el.innerHTML=linkPanelHTML(bps,'');
 }
 function metaOnlyChip(data,bps){if(!data?.metaOnly)return'';const reason=data.metaOnlyReason==='emcon'?'EMCON burst':`link ${Math.round((bps||data.linkBps||0)/1000)} kbps`;return`<span class="meta-only-chip" title="Link below 8 kbps for 2 min — only metadata is sent; images resume after 2 min above 16 kbps">Metadata only · ${reason}</span>`}
 function renderMetadataMode(){
@@ -755,7 +758,7 @@ function openZoom(){document.activeElement?.blur();state.zoom=true;renderZoom()}
 function closeZoom(){state.zoom=false;const z=$('zoom');z.hidden=true;z.innerHTML=''}
 function renderZoom(){preserveBandFocus(renderZoomContent)}
 function renderZoomContent(){const it=findItem(state.sel);if(!it){closeZoom();return}const z=$('zoom');z.hidden=false;
- z.innerHTML=`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`;z.onclick=closeZoom}
+ renderImageHTML(z,`<div class="zbar"><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span><b>${esc(it.src.name)}</b><span class="mono">${zulu(it.ts)}</span><span>Stored image #${it.dbId}</span><span class="zk">← → step · 1–4 set priority · Esc / click to close</span></div><div class="zframe">${largeImage(it)}</div>`);z.onclick=closeZoom}
 function closeDetail(){closeZoom();selectFeedItem(null);document.body.classList.remove('drawer-open')}
 function step(dir){const l=feedOrdered;const i=l.findIndex(x=>x.id===state.sel);const n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n)openDetail(n.id)}
 function metadataHTML(record){
@@ -824,8 +827,8 @@ function metadataPanelHTML(it){
 }
 function bindMetadataPanel(it){
  const panel=$('metadataPanel');if(!panel)return;
- panel.addEventListener?.('toggle',()=>{if(!panel.isConnected)return;metadataExpanded=panel.open;const caret=panel.querySelector('.metadata-caret');if(caret)caret.textContent=panel.open?'▾':'▸';if(panel.open)loadMetadata(it,panel)});
- $('metadataCopy')?.addEventListener?.('click',async e=>{e.stopPropagation();const data=metadataCache.get(it.id)?.data;if(!data)return;try{await navigator.clipboard.writeText(JSON.stringify(data,null,2));toast('Metadata JSON copied')}catch{toast('Could not copy metadata JSON')}});
+ panel.ontoggle=()=>{if(!panel.isConnected)return;metadataExpanded=panel.open;const caret=panel.querySelector('.metadata-caret');if(caret)caret.textContent=panel.open?'▾':'▸';if(panel.open)loadMetadata(it,panel)};
+ const copy=$('metadataCopy');if(copy)copy.onclick=async e=>{e.stopPropagation();const data=metadataCache.get(it.id)?.data;if(!data)return;try{await navigator.clipboard.writeText(JSON.stringify(data,null,2));toast('Metadata JSON copied')}catch{toast('Could not copy metadata JSON')}};
  if(panel.open)loadMetadata(it,panel);
 }
 function buildWhy(it,rows){
@@ -877,14 +880,14 @@ function renderDetailContent(){
  const it=findItem(state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';closeDetail();return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn" aria-label="Close image details">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
+	 renderImageHTML(D,`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn" aria-label="Close image details">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`);
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;bindMetadataPanel(it);return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
  const why=buildWhy(it,rows);
  const dl=it.central-it.base;
  const l=feedOrdered,idx=l.findIndex(x=>x.id===it.id);
- D.innerHTML=`<div class="dhead"><div><h2><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span></h2><small>${esc(it.src.name)} · <span class="mono" title="UTC time (Zulu)">${zulu(it.ts)}</span> · Stored image #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
+ renderImageHTML(D,`<div class="dhead"><div><h2><span class="tier t${it.tier}" title="${it.tier===1?'Notify Commander':'Image priority'}">P${it.tier} ${TNAME[it.tier]}</span></h2><small>${esc(it.src.name)} · <span class="mono" title="UTC time (Zulu)">${zulu(it.ts)}</span> · Stored image #${it.dbId}${idx>=0?` · ${idx+1} of ${l.length}`:''}</small></div>
   <div class="dnav"><button id="dPrev" title="Previous (←)" aria-label="Previous image">‹</button><button id="dNext" title="Next (→)" aria-label="Next image">›</button><button id="dClose" title="Close (Esc)" aria-label="Close image details">×</button></div></div>
  <div class="dimg" id="dImg" title="Enlarge (F)">${largeImage(it)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
@@ -906,7 +909,7 @@ function renderDetailContent(){
   <div class="actions"><button class="btn cdr ${it.sent?'done':''}${it.sent&&!it.autoSent?' human':''}" id="aCdr">${it.sent?it.autoSent?'✓ Auto-sent to Commander':'➤ Sent to Commander by operator':'Send to Commander'}</button><button class="btn ${it.fullRes?'done':''}" id="aFull" title="Operator override: send the original image at full size, no compression">${it.fullRes?'✓ Full size requested':'Send full size'}</button><button class="btn" id="aSim">Prioritize similar</button><button class="btn" id="aDis" title="Hide this image from the feed and mark it reviewed. The image remains stored.">Not relevant</button></div>
   ${metadataPanelHTML(it)}
   <div class="kbd"><kbd>←</kbd> <kbd>→</kbd> step through feed · <kbd>Esc</kbd> close</div>
- </div>`;
+ </div>`);
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
  bindMetadataPanel(it);briefing.renderDetections(it);
  $('oprepOpen').onclick=event=>openItemOprep(it,event.currentTarget,()=>state.sel===it.id);
@@ -1017,7 +1020,7 @@ async function answerTeamProposal(answer){
  }catch(error){if(error.status!==404)toast('Team sync: '+error.message);refreshTeamProposals()}
  finally{const deferred=teamSync.accepting.get(ask.team);teamSync.accepting.delete(ask.team);if(!won&&deferred)receiveTeamProposal(deferred,true);if(rv.ask===ask)rv.askBusy=false;renderAsk()}
 }
-function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
+function rvQueue(){const l=items.filter(i=>!isEmptyWater(i)&&(state.src==='ALL'||i.src.id===state.src)&&!i.reviewed&&!i.dismissed);l.sort((a,b)=>(rv.skipped[a.id]||0)-(rv.skipped[b.id]||0)||(DEMO_REVIEW_FIRST?Number(!!b.reviewFirst)-Number(!!a.reviewFirst):0)||(rv.order==='pri'?a.tier-b.tier||b.central-a.central:b.ts-a.ts));return l}
 function rvProgress(){const left=rvQueue().length;$('rvDone').textContent=rv.done;$('rvLeft').textContent=left;$('rvBarI').style.width=(rv.done/Math.max(1,rv.done+left)*100)+'%';$('rvSrc').textContent='· '+(state.src==='ALL'?'all sources':SRC[state.src].name)+(rv.done?` · agreed with model on ${Math.round(rv.agree/rv.done*100)}%`:'');if(!rv.cur&&left&&!rv.busy)renderReview()}
 function renderAsk(){
  const box=$('rvAsk');if(!box)return;
@@ -1095,13 +1098,13 @@ function renderNext(it){
  box.innerHTML=(rv.last?`<span class="rvnext-done">${esc(rv.last)}</span>`:'')+`<span class="rvnext-step"><b>Next:</b> ${step}</span>`;
 }
 function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)return;box.classList.remove('flash');void box.offsetWidth;box.classList.add('flash')}
-async function openItemOprep(it,button,isCurrent){
+async function openItemOprep(it,button,isCurrent,type='whale'){
  button.disabled=true;
  let metadata=metadataCache.get(it.id)?.data,unavailable=false;
  try{if(!metadata||metadataCache.get(it.id)?.stale){metadata=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);metadataCache.set(it.id,{data:metadata})}}
  catch{unavailable=true}
  finally{button.disabled=false}
- if(isCurrent())oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable);
+ if(isCurrent())oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable,type);
 }
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
@@ -1111,7 +1114,8 @@ function renderReviewContent(){
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
  const report=$('rvOprep');report.disabled=!it||unavailable;
- report.onclick=()=>{if(it&&!report.disabled) return openItemOprep(it,report,()=>state.page==='rv'&&rv.cur?.id===it.id&&!!findItem(it.id))};
+ if(report.disabled)oprep.closeMenu();
+ report.onclick=()=>{if(it&&!report.disabled){if(oprep.menuOpen())oprep.closeMenu();else return oprep.showMenu(type=>openItemOprep(it,report,()=>state.page==='rv'&&rv.cur?.id===it.id&&!!findItem(it.id),type))}};
  rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||rv.busy||(!it&&b.dataset.a!=='undo')||(unavailable&&!['skip','undo'].includes(b.dataset.a))});
  if(!it){rv.shown=null;rv.displayed=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>${rv.busy?'Saving review…':'All caught up'}</b><div>${rv.busy?'The next image will appear when the save completes.':'New images will appear here as sensors report.'}</div></div><div class="rvflash" id="rvFlash"></div>`;return}

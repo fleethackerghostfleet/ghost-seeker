@@ -44,7 +44,11 @@ func main() {
 	llmURL := flag.String("llm-url", os.Getenv("GS_LLM_URL"), "OpenAI-compatible local LLM base URL")
 	researchCompilerURL := flag.String("research-compiler-url", os.Getenv("GS_RESEARCH_COMPILER_URL"), "opt-in local research language compiler origin (e.g. http://localhost:8097)")
 	llmModel := flag.String("llm-model", os.Getenv("GS_LLM_MODEL"), "local LLM model name")
-	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "local LLM request timeout")
+	llmTimeout := flag.Duration("llm-timeout", llmTimeoutDefault, "LLM request timeout (Vertex default 4s)")
+	llmProvider := flag.String("llm-provider", os.Getenv("GS_LLM_PROVIDER"), "directive LLM: empty/openai (uses -llm-url) or vertex (Gemini on Vertex AI)")
+	vertexProject := flag.String("vertex-project", envOr("GS_VERTEX_PROJECT", os.Getenv("GOOGLE_CLOUD_PROJECT")), "vertex: GCP project ID")
+	vertexLocation := flag.String("vertex-location", envOr("GS_VERTEX_LOCATION", "global"), "vertex: location")
+	vertexTokenCmd := flag.String("vertex-token-cmd", os.Getenv("GS_VERTEX_TOKEN_CMD"), "vertex: command printing an OAuth access token (default: metadata server, then gcloud auth print-access-token)")
 	opToken := flag.String("operator-token", os.Getenv("GS_OPERATOR_TOKEN"), "operator bearer token shared with shore/edge; the browser exchanges it for a session cookie at /login (prefer env or file)")
 	opTokenFile := flag.String("operator-token-file", os.Getenv("GS_OPERATOR_TOKEN_FILE"), "operator token file")
 	authMode := flag.String("auth-mode", envOr("GS_AUTH_MODE", "token"), "web authentication: token or piv")
@@ -89,11 +93,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	compiler := &command.Compiler{LLM: command.NewLLMClient(*llmURL, *llmModel, *llmTimeout), Research: researchCompiler}
+	llmClient := command.NewLLMClient(*llmURL, *llmModel, *llmTimeout)
+	if strings.EqualFold(*llmProvider, "vertex") {
+		timeout := *llmTimeout
+		if os.Getenv("GS_LLM_TIMEOUT") == "" && !flagSet("llm-timeout") {
+			timeout = 4 * time.Second
+		}
+		llmClient = command.NewVertexClient(*vertexProject, *vertexLocation, *llmModel, timeout, *vertexTokenCmd)
+		if llmClient == nil {
+			log.Printf("NL compiler: -llm-provider vertex needs -vertex-project or GS_VERTEX_PROJECT; using rules parser")
+		}
+	}
+	compiler := &command.Compiler{LLM: llmClient, Research: researchCompiler}
 	if researchCompiler != nil {
 		log.Printf("NL compiler: research interpreter at %s (existing demo classes; failures block Apply)", *researchCompilerURL)
+	} else if llmClient != nil && llmClient.Provider == "vertex" {
+		log.Printf("NL compiler: Gemini %s on Vertex AI (project %s, %s timeout, rules parser fallback)", llmClient.Model, *vertexProject, llmClient.Timeout)
 	} else if *llmURL == "" {
-		log.Printf("NL compiler: rules parser (set GS_LLM_URL to enable LLM)")
+		log.Printf("NL compiler: open-language rules parser (set GS_LLM_PROVIDER=vertex or GS_LLM_URL to enable LLM)")
 	} else {
 		log.Printf("NL compiler: local LLM at %s", *llmURL)
 	}
@@ -253,4 +270,10 @@ func liveLinkShaper(target string, rate int64) *shaper.Shaper {
 		return shaper.New(target, rate)
 	}
 	return shaper.NewNormal(target)
+}
+
+func flagSet(name string) bool {
+	set := false
+	flag.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
 }

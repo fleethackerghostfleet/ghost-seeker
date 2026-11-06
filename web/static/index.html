@@ -95,7 +95,7 @@
   <div id="wbHeld" class="wb-held" hidden>Feed paused — previewing the images on screen; new arrivals are queued. <button id="wbResume" class="btn sm">Resume feed</button></div>
   <div class="wb-layout">
    <aside>
-    <section class="panel"><h3>01 / Your directive</h3><label class="hint" for="nlIn">Describe what to prioritize or ignore</label><textarea id="nlIn" maxlength="500" placeholder="Prioritize boats; ignore birds"></textarea><div id="wbUnknown" class="hint"></div><div id="wbInterpretation" aria-live="polite" hidden><p class="hint" id="wbCompiler"></p><p id="wbInterpretationReadback" class="wb-readback"></p><ul id="wbInterpretationWarnings" class="wb-warnings" hidden></ul></div><p class="hint">Your words become rules below. You can edit those rules; typing again replaces your edits.</p><div class="examples" id="examples"></div><div class="wb-row"><h3>Your rules (draft)</h3><div class="spacer"></div><button id="wbAdd">+ Add rule</button></div><div id="wbChips"></div></section>
+    <section class="panel"><h3>01 / Your directive</h3><label class="hint" for="nlIn">Tell the system what matters, in your own words</label><textarea id="nlIn" maxlength="500" placeholder="e.g. Show me small boats approaching the pier at speed, and ignore birds"></textarea><div id="wbUnknown" class="hint"></div><div id="wbInterpretation" aria-live="polite" hidden><p class="hint" id="wbCompiler"></p><p id="wbInterpretationReadback" class="wb-readback"></p><ul id="wbInterpretationWarnings" class="wb-warnings" hidden></ul></div><p class="hint">Your words become rules below. You can edit those rules; typing again replaces your edits.</p><div class="examples" id="examples"></div><div class="wb-row"><h3>Your rules (draft)</h3><div class="spacer"></div><button id="wbAdd">+ Add rule</button></div><div id="wbChips"></div></section>
     <section class="panel"><h3>02 / Make it specific</h3><p class="hint">Suggestions show how a rule could change priorities, before any image-specific exceptions you have selected.</p><div id="wbSuggestions"></div></section>
     <section class="panel"><div class="wb-row"><h3>Draft history</h3><div class="spacer"></div><button id="wbUndo" title="Ctrl+Z outside text fields">↶ Undo</button><button id="wbRedo" title="Ctrl+Shift+Z outside text fields">↷ Redo</button></div><p class="hint">Compare a version's recorded results with now, or restore its draft.</p><div id="wbHistory"></div></section>
    </aside>
@@ -135,7 +135,7 @@
   </div>
   <div class="rvmain" id="rvMain"></div>
   <div class="rvask" id="rvAsk" hidden></div>
-  <button class="btn" id="rvOprep" type="button" disabled>Draft OPREP-3 NAVY BLUE (whale strike)</button>
+  <div class="draft-menu-wrap"><button class="btn" id="rvOprep" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="rvDraftMenu" disabled>Draft ▾</button><div id="rvDraftMenu" role="menu" aria-label="Draft report type" hidden></div></div>
   <p class="rvinstructions"><b>Change this image's priority:</b> press 1–4 to set it to P1–P4 and save your review. Space / Enter agrees with the model's suggested priority.</p>
   <div class="rvnext" id="rvNext" role="status" aria-live="polite"></div>
   <div class="rvkeys" id="rvKeys">
@@ -183,7 +183,8 @@
 <dialog id="oprepDialog" aria-labelledby="oprepTitle" aria-describedby="oprepHint">
  <h2 id="oprepTitle">Draft OPREP-3 NAVY BLUE — whale strike</h2>
  <p id="oprepHint">Draft only. Confirm the reporting category, addressees and timelines against OPNAVINST 3100.6K and current fleet marine mammal strike guidance before release. Amber fields are empty and need input.</p>
- <div class="oprep-actions"><button class="btn" id="oprepCopy" type="button">Copy to clipboard</button><button class="btn" id="oprepDownload" type="button">Download .txt</button><button class="btn" id="oprepClose" type="button">Close</button></div>
+ <div class="oprep-actions"><button class="btn" id="oprepCopy" type="button">Copy to clipboard</button><button class="btn" id="oprepDownload" type="button">Download .txt</button><button class="btn" id="oprepSend" type="button" hidden>Send with image (demo)</button><button class="btn" id="oprepClose" type="button">Close</button></div>
+ <div id="oprepSendConfirmation" role="status" hidden><p id="oprepSendText"></p><img id="oprepSendImage" alt="Selected image queued in demo only"></div>
  <p id="oprepStatus" role="status"></p>
  <div class="oprep-layout"><form id="oprepForm">
    <label for="oprep-originator">Originator ship<input id="oprep-originator" name="originator" autofocus></label>

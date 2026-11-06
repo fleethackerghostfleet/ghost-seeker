@@ -43,7 +43,7 @@ func TestDatasetTickTransfersAndPublishes(t *testing.T) {
 	for _, negative := range []bool{false, true} {
 		t.Run(fmt.Sprint(negative), func(t *testing.T) {
 			data := store.New(20)
-			uplink := newSimulationUplink(data, 8000, func() float64 { t.Fatal("fixed rate sampled"); return 0 })
+			uplink := newSimulationUplink(data, 8000, func() float64 { return 0 })
 			data.Add(&command.Item{ID: "pending", KB: 2}, 0)
 			app := server.New(data)
 			httpServer := httptest.NewServer(app)

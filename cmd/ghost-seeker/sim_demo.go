@@ -61,7 +61,7 @@ func registerDemoFlags() *demoFlags {
 	d.captureEvery = flag.Duration("capture-every", 700*time.Millisecond, "simulation: mean edge capture interval (>0), uniformly jittered from 2/3 to 4/3; independent of upload bandwidth")
 	d.autoCDR = flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
 	d.demoLinkControl = flag.Bool("demo-link-control", false, "live mode: allow POST /api/shore/link to pin the shaper rate ({\"bps\":N} or {\"auto\":true}) so a presenter can build a backlog")
-	d.simLinkBps = flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
+	d.simLinkBps = flag.Int64("sim-link-bps", -1, "simulation: nominal upload rate in bits/s with up to 15% variation (-1 = automatic ship bandwidth, 0 = outage)")
 	d.lowbandHold = flag.Duration("lowband-hold", 2*time.Minute, "simulation: sustained low/high link duration before metadata-only mode changes")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	d.admin = flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -219,6 +219,8 @@ func fillBacklog(data *store.Store, generator *sensor.Generator, count int) {
 			kept++
 		}
 	}
+	seedWhale(data, generator)
+	seedReviewWhale(data, generator, time.Now(), "maritime", nil)
 }
 
 func fillDatasetBacklog(data *store.Store, replay *reviewdataset.Replay, count int, negativesRate float64) {
@@ -313,6 +315,8 @@ func captureDelay(rng *rand.Rand, mean time.Duration) time.Duration {
 func runSimulation(data *store.Store, generator *sensor.Generator, app *server.Server, uplink *simulationUplink, captureEvery time.Duration) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	last := time.Now()
+	whales := newWhaleCadence(data)
+	reviewEpoch := data.Epoch()
 	for {
 		time.Sleep(captureDelay(rng, captureEvery))
 		now := time.Now()
@@ -324,7 +328,13 @@ func runSimulation(data *store.Store, generator *sensor.Generator, app *server.S
 		}
 		_, _, _, state := data.Snapshot()
 		directives := data.Directives()
-		item, extra := generator.Tick(nil, time.Now(), state.Model, directives)
+		seed, next, seeded := seedReviewAfterReset(data, generator, reviewEpoch, now, state.Model, directives)
+		reviewEpoch = next
+		if seeded {
+			stats, _ := data.Stats()
+			app.PublishItem(seed, stats)
+		}
+		item, extra := whales.tick(data, generator, time.Now(), state.Model, directives)
 		stored, evicted := addCapture(data, generator, rng, item, extra, state.Model, directives)
 		for _, id := range evicted {
 			app.PublishEvict(id)

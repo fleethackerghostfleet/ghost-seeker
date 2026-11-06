@@ -76,7 +76,7 @@ test('scene drawer preserves capture summary and expandable metadata after the b
  assert.match(css,/\.metadata-panel\{/);
 });
 test('clear priority preview preserves detector-negative P4 pinning',()=>{
- const context=vm.createContext({});
+ const context=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},});
  vm.runInContext(`
   const items=[{id:'negative',detectorNegative:true},{id:'positive'}];
   const findItem=id=>items.find(it=>it.id===id);
@@ -202,6 +202,16 @@ test('scene sources interleave inside P4 without moving contact tiers',()=>{
  assert.equal(ids[0],'critical');
  assert.ok(ids.findIndex(id=>id.startsWith('ocean-'))<=8);
  assert.equal(ids.length,17);
+});
+test('priority feed puts a feedFirst item first within its tier only',()=>{
+ const c=setup();
+ vm.runInContext(`
+  items=[normalizeItem({...raw('p1-high',1),central:.99}),normalizeItem({...raw('whale',1),central:.85,feedFirst:true}),normalizeItem({...raw('p1-mid',1),central:.9}),normalizeItem({...raw('p2-pinned',2),central:.7,feedFirst:true})];
+  state.src='ALL';state.tier='all';state.sort='pri';
+ `,c);
+ const ids=JSON.parse(vm.runInContext('JSON.stringify(visible().l.map(i=>i.id))',c));
+ assert.equal(ids[0],'whale');
+ assert.equal(ids.at(-1),'p2-pinned');
 });
 test('learning acceptance sends the advertised tier for the whole class',async()=>{
  const context=setup();
@@ -428,7 +438,7 @@ test('reviewer sessions keep team sync disabled',()=>{
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
  const nodes={};
- const context=vm.createContext({Event,window:{dispatchEvent(){}},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{documentElement:{style:{setProperty(){}}},body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:id=>nodes[id]??={querySelectorAll:()=>[],dataset:{}}}});
+ const context=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},Event,window:{dispatchEvent(){}},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{documentElement:{style:{setProperty(){}}},body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:id=>nodes[id]??={querySelectorAll:()=>[],dataset:{}}}});
  vm.runInContext(settingsSource,context);
  return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved),reset:()=>nodes.setReset.onclick()};
 }
@@ -887,7 +897,7 @@ test('text layout keeps enlarged image labels in frame without collisions and ha
  const source=fs.readFileSync(path.join(__dirname,'static/text-layout.js'),'utf8');
  const labels=Array.from({length:2},()=>({style:{},offsetWidth:100,offsetHeight:20,parentElement:{getBoundingClientRect:()=>({left:190,top:3})}}));
  const frame={clientWidth:200,clientHeight:150,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:200,height:150}),querySelector:()=>null,querySelectorAll:selector=>selector==='.box em'?labels:[]};
- const context=vm.createContext({getComputedStyle:()=>({fontSize:'16px'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
+ const context=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},getComputedStyle:()=>({fontSize:'16px'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:selector=>selector==='body>.banner'?[]:[frame]}});
  vm.runInContext(source,context);
  assert.equal(labels[0].style.maxWidth,'192px');
  assert.equal(labels[0].style.left,'-94px');
@@ -908,7 +918,7 @@ test('dense labels repack around controls and use a readable scroll legend rathe
  const controls={getBoundingClientRect:()=>({left:4,top:4,width:230,height:36})};
  let legend=null;
  const frame={clientWidth:334,clientHeight:206,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:0,top:0,width:334,height:206}),querySelector:()=>legend,querySelectorAll:s=>s==='.box em'?labels:[controls],append:el=>legend=el};
- const context=vm.createContext({getComputedStyle:()=>({fontSize:'18px',color:'black',backgroundColor:'orange'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:s=>s==='body>.banner'?[]:[frame],createElement:()=>({style:{},dataset:{},setAttribute(){},replaceChildren(...children){this.children=children},remove(){legend=null}})}});
+ const context=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},getComputedStyle:()=>({fontSize:'18px',color:'black',backgroundColor:'orange'}),window:{addEventListener(){}},ResizeObserver:class{observe(){}},MutationObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),document:{body:{style:{setProperty(){}}},querySelectorAll:s=>s==='body>.banner'?[]:[frame],createElement:()=>({style:{},dataset:{},setAttribute(){},replaceChildren(...children){this.children=children},remove(){legend=null}})}});
  vm.runInContext(source,context);
  assert.equal(legend,null);
  const rects=[{x:4,y:4,w:230,h:36}];
@@ -1408,7 +1418,7 @@ test('detail selection rejects removed images and never leaves an empty drawer o
 
 function setup(){
  const elements=new Map();
- const context=vm.createContext({
+ const context=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},
   gsLights:require('./static/lights.js'),
   setTimeout:()=>{},clearTimeout:()=>{},imageCache:new Map(),
   document:{body:{classList:{remove(){}}},querySelector:()=>null},
@@ -1580,7 +1590,7 @@ test('reset control is capability gated, viewer hidden, and uses confirmation he
 });
 
 test('Commander reset clears selection, undo, busy state and rejects delayed writes',async()=>{
- const elements=new Map(),context=vm.createContext({imageCache:new Map(),setTimeout:()=>{},clearTimeout:()=>{},document:{querySelector:()=>null},$:id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id)}});
+ const elements=new Map(),context=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},imageCache:new Map(),setTimeout:()=>{},clearTimeout:()=>{},document:{querySelector:()=>null},$:id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id)}});
  const cdrSource=fs.readFileSync(path.join(__dirname,'static/cdr.js'),'utf8');
  vm.runInContext(cdrSource.replace(/init\(\)\.catch\([^\n]+\);\s*$/,''),context);
  vm.runInContext(`render=()=>{};renderLearned=()=>{};function snap(epoch,reset=false){return {epoch,reset,state:{model:'maritime',directives:[]},items:[]}};applySnapshot(snap(0));items.set('old',{id:'old'});view.sel='old';view.undo=['old'];view.busy=true;imageCache.set('old','image');fetch=()=>new Promise(resolve=>{finish=resolve})`,context);
@@ -1662,7 +1672,7 @@ test('shipLine formats classified ships and omits absent details',()=>{
 });
 test('bandwidth reads in MB/s and the simulation shows one connection value',()=>{
  const src=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
- const c=vm.createContext({});
+ const c=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},});
  vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),c);
  assert.equal(vm.runInContext('fmtRate(4000000)',c),'0.50 MB/s');
  assert.equal(vm.runInContext('fmtRate(16000000)',c),'2.00 MB/s');
@@ -1674,7 +1684,7 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  assert.equal(vm.runInContext('fmtRate(80000)',c),'0.01 MB/s');
  assert.equal(vm.runInContext('fmtRate(-1)',c),'0.00 MB/s');
  const el={innerHTML:'',classList:{on:new Set(),toggle(k,v){v?this.on.add(k):this.on.delete(k)}}};
- const ctx=vm.createContext({$:id=>id==='stLink'?el:null,esc:s=>String(s),stats:{linkBps:4000000}});
+ const ctx=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},$:id=>id==='stLink'?el:null,esc:s=>String(s),stats:{linkBps:4000000}});
  vm.runInContext(src.slice(src.indexOf('const fmtRate='),src.indexOf('const ago=')),ctx);
  vm.runInContext(src.slice(src.indexOf('function linkPanelHTML('),src.indexOf('const pulling=new Set();')),ctx);
  vm.runInContext('renderSimLink()',ctx);
@@ -1687,7 +1697,9 @@ test('bandwidth reads in MB/s and the simulation shows one connection value',()=
  assert.match(el.innerHTML,/<b>0.00 MB\/s<\/b>.*Link down — sending paused/);
  assert.equal(el.classList.on.has('down'),true);
  vm.runInContext('stats.linkBps=160000;stats.linkFixed=true;renderSimLink()',ctx);
- assert.match(el.innerHTML,/Fixed test rate/);assert.doesNotMatch(el.innerHTML,/every 5 s/);
+ assert.doesNotMatch(el.innerHTML,/Fixed test rate|every 5 s/);
+ vm.runInContext('stats.linkBps=0;renderSimLink()',ctx);
+ assert.doesNotMatch(el.innerHTML,/Fixed test rate/);
  const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
  assert.match(html,/id="simStrip">\s*<div class="st link" id="stLink"/);
  assert.doesNotMatch(html,/type="range"|linkPresets/);
@@ -1838,7 +1850,7 @@ test('metadata panel is initially collapsed, lazily loads, caches and renders sy
  assert.match(vm.runInContext('metadataPanelHTML(item)',c),/▸.*Metadata · 1\.0 KB/);
  vm.runInContext('bindMetadataPanel(item)',c);
  assert.equal(vm.runInContext('calls.length',c),0);
- vm.runInContext('panel.open=true;toggleMetadata()',c);
+ vm.runInContext('panel.open=true;panel.ontoggle()',c);
  await new Promise(resolve=>setImmediate(resolve));
  assert.equal(vm.runInContext('calls[0][0]',c),'/api/items/a%2Fb/metadata');
  assert.match(vm.runInContext('metadataBody.innerHTML',c),/Capture.*Synthetic value.*sim/s);

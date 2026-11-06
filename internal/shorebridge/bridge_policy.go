@@ -62,22 +62,10 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			if c.DurationMin == 0 && durationMin > 0 {
 				c.DurationMin = durationMin
 			}
-			kept := make([]command.Rule, 0, len(c.Rules))
-			for _, rule := range c.Rules {
-				if len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0 {
-					kept = append(kept, rule)
-				} else {
-					droppedScopedRules = true
-				}
-			}
+			var kept []command.Rule
+			kept, droppedScopedRules = flatRules(c.Rules)
 			if droppedScopedRules {
-				priorWarnings := c.Warnings
-				path := c.Path
-				c = b.Compiler.Review(ruleText, kept, c.DurationMin, c.Unknown...)
-				c.Path = path
-				c.Warnings = mergeWarnings(priorWarnings, c.Warnings, []string{
-					"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.",
-				})
+				c = reviewFlat(b.Compiler, ruleText, c, kept)
 				if c.Blocked {
 					http.Error(w, blockedMessage(c), http.StatusUnprocessableEntity)
 					return
@@ -164,7 +152,7 @@ func emconReadback(readback, mode string, durationMin int) string {
 	if strings.Contains(readback, phrase) {
 		return readback
 	}
-	readback = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(readback), "No rules recognized."))
+	readback = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(readback), command.NoMatchReadback))
 	if readback == "" {
 		return phrase
 	}

@@ -176,10 +176,10 @@ func (s *Server) config(w http.ResponseWriter, _ *http.Request) {
 		"attrLabels": catalog.AttrLabels, "examples": catalog.Examples,
 		"reviewSync": true, "datasetMode": s.datasetMode,
 		"demoReset": s.demoReset,
-		"features": map[string]any{
+		"features": demoDraftFeatures(map[string]any{
 			"profile": buildprofile.Name, "simulation": true, "demoReset": s.demoReset,
 			"dataset": s.datasetMode, "demoLinkControl": false,
-		},
+		}),
 	})
 }
 
@@ -252,9 +252,14 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
+	compiler := s.directiveCompiler()
+	var precompiled command.Compiled
+	if body.Rules == nil {
+		// The LLM may take seconds; never hold the policy lock while it runs.
+		precompiled = compiler.Compile(r.Context(), body.Text)
+	}
 	s.policy.mu.Lock()
 	defer s.policy.mu.Unlock()
-	compiler := s.directiveCompiler()
 	var compiled command.Compiled
 	var rules []command.Rule
 	durationMin := body.DurationMin
@@ -263,7 +268,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		compiled = compiler.Review(body.Text, rules, durationMin)
 		durationMin = compiled.DurationMin
 	} else {
-		compiled = compiler.Compile(r.Context(), body.Text)
+		compiled = precompiled
 		rules = compiled.Rules
 		if durationMin == 0 {
 			durationMin = compiled.DurationMin
@@ -303,7 +308,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(rules) == 0 {
-		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects or behaviors — try ships, aircraft, drones, people, AIS, approaching…")
+		writeError(w, http.StatusUnprocessableEntity, command.NoMatchReadback)
 		return
 	}
 	if durationMin < 0 || durationMin > 10080 {

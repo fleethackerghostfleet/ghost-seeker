@@ -8,11 +8,11 @@ const appSource=fs.readFileSync(path.join(__dirname,'static/app.js'),'utf8');
 const rule=(cls='fishing vessel')=>({type:'boost',classes:[cls],attrs:[],sources:[],withinMin:0,weight:2});
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function setup(interpret){
- const nodes=new Map(),timers=new Map(),calls=[];let timerID=0;
+ const nodes=new Map(),timers=new Map(),calls=[],renders=[],listeners=[];let timerID=0;
  const node=()=>({value:'',innerHTML:'',textContent:'',children:[],checked:false,disabled:false,hidden:false,open:false,dataset:{},classList:{toggle(){},contains(){return false}},querySelector(){return null},querySelectorAll(){return[]},addEventListener(){},focus(){},setSelectionRange(){},replaceChildren(){this.children=[]},append(item){this.children.push(item)},showModal(){this.open=true},close(){this.open=false}});
  const $=id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)};
  const items=[{id:'fish-1',src:{id:'EO-P7'},ts:Date.now(),tier:3,central:.4,dets:[{cls:'fishing vessel',attrs:{},conf:.9}],frame:1}];
- const ctx=vm.createContext({$,items,JSON,Date,console,CLS:{'fishing vessel':{lab:'Fishing vessel'},'cargo ship':{lab:'Cargo ship'}},ATTR_LAB:{moving:'Moving',dark:'Dark',approaching:'Approaching'},SOURCES:[{id:'EO-P7'}],TNAME:['','Urgent','High','Medium','Low'],state:{page:'rp'},gsPolicy:{isPolicyHotkeyTarget:()=>false},tcol:()=>'',esc:String,ruleLabel:r=>r.classes.join(', '),imageFor:()=>'/image',findItem:id=>items.find(i=>i.id===id),toast(){},CSS:{escape:String},setTimeout:cb=>{timers.set(++timerID,cb);return timerID},clearTimeout:id=>timers.delete(id),document:{activeElement:{closest:()=>null},querySelector:()=>$('wbConfirm').open?{}:null,addEventListener(){},createElement:node}});
+ const ctx=vm.createContext({renderImageHTML:(root,html)=>{root.innerHTML=html},$,items,JSON,Date,console,CLS:{'fishing vessel':{lab:'Fishing vessel'},'cargo ship':{lab:'Cargo ship'}},ATTR_LAB:{moving:'Moving',dark:'Dark',approaching:'Approaching'},SOURCES:[{id:'EO-P7'}],TNAME:['','Urgent','High','Medium','Low'],state:{page:'rp'},gsPolicy:{isPolicyHotkeyTarget:()=>false},tcol:()=>'',esc:String,ruleLabel:r=>r.classes.join(', '),imageFor:()=>'/image',findItem:id=>items.find(i=>i.id===id),toast(){},CSS:{escape:String},setTimeout:cb=>{timers.set(++timerID,cb);return timerID},clearTimeout:id=>timers.delete(id),document:{activeElement:{closest:()=>null},querySelector:()=>$('wbConfirm').open?{}:null,addEventListener(){},createElement:node}});
  ctx.request=async(url,method,body)=>{
   calls.push({url,method,body});
   if(url==='/api/directives/compile'||(url==='/api/directives/preview'&&Object.hasOwn(body,'text')))return interpret(body,url);
@@ -22,8 +22,29 @@ function setup(interpret){
  ctx.isScene=i=>i?.live?.event==='scene';
  vm.runInContext(appSource.match(/^const esc=.*$/m)[0]+'\n'+appSource.match(/^const clsOf=.*$/m)[0]+'\n'+appSource.match(/function ruleLabel\(r\)\{[\s\S]*?\n\}/)[0],ctx);
  vm.runInContext(source+'\nworkbench.init();',ctx);
- return{$,calls,ctx,timers,async type(text){$('nlIn').value=text;$('nlIn').oninput();},async preview(){const [id,cb]=timers.entries().next().value;timers.delete(id);cb();await tick()}};
+ ctx.renderImageHTML=(root,html)=>{renders.push(root);root.innerHTML=html};
+ ctx.document.addEventListener=(...args)=>listeners.push(args);
+ return{$,calls,ctx,timers,renders,listeners,async type(text){$('nlIn').value=text;$('nlIn').oninput();},async preview(){const [id,cb]=timers.entries().next().value;timers.delete(id);cb();await tick()}};
 }
+test('eight accepts keep a single live-preview timer and constant render work without reinstalling listeners',async()=>{
+ const h=setup(()=>({rules:[rule()],path:'rules',readback:'Prioritize fishing vessel',warnings:[]}));
+ const counts=[];
+ for(let i=0;i<8;i++){
+  vm.runInContext('workbench.init()',h.ctx);
+  const before=h.renders.length;
+  await h.$('wbAdd').onclick();
+  await h.$('wbApply').onclick();
+  assert.equal(h.$('wbConfirm').open,true);
+  await h.$('wbConfirmApply').onclick();
+  counts.push(h.renders.length-before);
+  for(let j=0;j<20;j++)vm.runInContext('workbench.live()',h.ctx);
+  assert.equal(h.timers.size,1,'only one pending live preview after each accept');
+ }
+ assert.equal(h.calls.filter(c=>c.url==='/api/directives').length,8);
+ assert.ok(counts[0]>0);
+ assert.ok(counts.every(n=>n===counts[0]),'render work must not grow with accepts');
+ assert.equal(h.listeners.length,0,'repeated init must not add keydown listeners');
+});
 test('draft chips escape rule labels, attributes and rule types',async()=>{
  const payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>';
  const h=setup(()=>({rules:[{...rule(payload),attrs:['moving'],type:payload}],readback:payload,warnings:[]}));
@@ -45,15 +66,16 @@ test('research interpretation is shown and changes require explicit confirmation
  await h.$('wbConfirmApply').onclick();assert.equal(h.calls.filter(c=>c.url==='/api/directives').length,1);
  assert.equal(h.calls.find(c=>c.url==='/api/directives').body.rules[0].weight,2);
 });
-test('offline unsupported readback and echoed terms are inert text and cannot apply empty rules',async()=>{
+test('offline no-match readback is inert text, never lists words or vocabulary, and cannot apply empty rules',async()=>{
  const payload='<img src=x onerror=alert(1)>';
- const readback=`Not supported: "${payload}" — this sensor can detect: small boat, person.`;
+ const readback=`No matching imagery yet — the feed will update as it arrives. ${payload}`;
  const h=setup(()=>({rules:[],unknown:[payload],path:'rules',readback,warnings:[]}));
  await h.type('report '+payload);await h.preview();
  assert.equal(h.$('wbInterpretationReadback').textContent,readback);
  assert.equal(h.$('wbInterpretationReadback').innerHTML,'');
- assert.match(h.$('wbUnknown').innerHTML,/&lt;img src=x onerror=alert\(1\)&gt;/);
- assert.doesNotMatch(h.$('wbUnknown').innerHTML,/<img/);
+ assert.equal(h.$('wbUnknown').textContent,'');
+ assert.doesNotMatch(h.$('wbUnknown').innerHTML,/Not understood|Recognized terms|img/);
+ assert.doesNotMatch(h.$('wbSuggestions').innerHTML,/prioritize boats/);
  assert.equal(h.$('wbApply').disabled,true);
  assert.equal(h.calls.some(c=>c.url==='/api/directives'),false);
 });

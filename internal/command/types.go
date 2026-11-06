@@ -86,7 +86,8 @@ const (
 )
 
 type Item struct {
-	Capture *CaptureMeta `json:"capture,omitempty"`
+	ReviewFirst bool         `json:"reviewFirst,omitempty"`
+	Capture     *CaptureMeta `json:"capture,omitempty"`
 
 	Background       bool       `json:"background,omitempty"`
 	DetectorNegative bool       `json:"detectorNegative,omitempty"`
@@ -115,6 +116,7 @@ type Item struct {
 	BaseTier         int        `json:"baseTier"`
 	Tier             int        `json:"tier"`
 	Manual           int        `json:"manual"`
+	FeedFirst        bool       `json:"feedFirst,omitempty"`
 	Reviewed         bool       `json:"reviewed"`
 	Dismissed        bool       `json:"dismissed"`
 	Sent             bool       `json:"sent"`
@@ -209,7 +211,7 @@ type Stats struct {
 	DB                int `json:"db"`
 	// LinkBPS is the simulated ship-to-shore rate in bits/s (0 = outage).
 	LinkBPS int64 `json:"linkBps"`
-	// LinkFixed is true when -sim-link-bps pins the rate (no resampling).
+	// LinkFixed is true when -sim-link-bps overrides automatic ship bandwidth.
 	LinkFixed      bool       `json:"linkFixed,omitempty"`
 	MetaOnly       bool       `json:"metaOnly,omitempty"`
 	MetaOnlySince  *time.Time `json:"metaOnlySince,omitempty"`

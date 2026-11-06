@@ -15,9 +15,10 @@ import (
 const rulesEvalFloor = 39
 
 type evalCase struct {
-	ID     string         `json:"id"`
-	Text   string         `json:"text"`
-	Expect map[string]any `json:"expect"`
+	ID       string         `json:"id"`
+	Text     string         `json:"text"`
+	Requires string         `json:"requires,omitempty"`
+	Expect   map[string]any `json:"expect"`
 }
 
 type evalResult struct {
@@ -57,7 +58,12 @@ func TestEvalLLMPath(t *testing.T) {
 
 func loadEvalCases(t *testing.T) []evalCase {
 	t.Helper()
-	data, err := os.ReadFile("testdata/eval_set.json")
+	return loadEvalFile(t, "testdata/eval_set.json")
+}
+
+func loadEvalFile(t *testing.T, path string) []evalCase {
+	t.Helper()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +99,8 @@ func runEval(t *testing.T, compiler *Compiler, cases []evalCase, logFields bool)
 			checks["withinMin"] = got.within == expectInt(test.Expect, "withinMin")
 			checks["durationMin"] = got.duration == expectInt(test.Expect, "durationMin")
 			checks["only"] = got.only == expectBool(test.Expect, "only")
-			for key, ok := range checks {
-				if key != "blocked" && !ok {
+			for _, ok := range checks {
+				if !ok {
 					caseOK = false
 				}
 			}

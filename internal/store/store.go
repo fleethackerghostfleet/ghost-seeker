@@ -481,7 +481,7 @@ func (s *Store) AutoEscalate() (command.Item, int, bool) {
 	defer s.mu.Unlock()
 	best := -1
 	for i, item := range s.items {
-		if item.Reviewed || item.Dismissed || item.Sent || item.Decision != "" || item.Tier > 2 {
+		if item.ReviewFirst || item.Reviewed || item.Dismissed || item.Sent || item.Decision != "" || item.Tier > 2 {
 			continue
 		}
 		if best < 0 || item.Central > s.items[best].Central {

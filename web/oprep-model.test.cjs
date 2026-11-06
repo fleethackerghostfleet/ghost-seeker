@@ -4,6 +4,16 @@ const fs=require('node:fs');
 const path=require('node:path');
 const M=require('./static/oprep-model.js');
 const now=new Date('2026-11-06T13:14:00Z');
+test('every non-whale draft exports all edited form fields',()=>{
+ const fields=Object.fromEntries(Object.keys(M.defaults()).map(key=>[key,'edited-'+key]));
+ fields.incidentTime='2026-11-06T12:34:00Z';
+ for(const template of M.templates.filter(t=>t.id!=='whale')){
+  const message=M.message(fields,now,template.id);
+  for(const [key,value] of Object.entries(fields))assert(message.includes(key==='incidentTime'?M.dtg(value):value.toUpperCase()),`${template.id} omitted ${key}`);
+  assert.match(message,/COURSE EDITED-COURSE; SPEED EDITED-SPEED/);
+  assert.match(message,/SPECIES EDITED-SPECIES; ESTIMATED SIZE EDITED-SIZE/);
+ }
+});
 const classes={fish:{lab:'Fish'},mm:{lab:'Marine mammal'},orca:{lab:'Orca'}};
 const item={id:'image-1',ts:now.getTime(),src:{id:'EO1',name:'Bow camera',loc:'10N 20W'},dets:[{cls:'fish',conf:.99},{cls:'mm',conf:.7},{cls:'orca',conf:.91}]};
 test('UTC DTG has zero padding, month and year and rejects invalid dates',()=>{
@@ -83,7 +93,7 @@ test('generic mammal or dolphin detections are not called whales',()=>{
 test('unknown defaults are empty and preview keeps blank slots without UNK',()=>{
  const f=M.defaults({},{});
  for(const key of ['originator','incidentTime','position','sensorHeading','course','speed','species','size','condition','damage','injuries','actions','media','assessment'])assert.equal(f[key],'',key);
- assert.equal(f.info,'CNO WASHINGTON DC');assert.equal(f.serial,'001');
+ assert.equal(f.info,'[INFO ADDRESSEE — VERIFY]');assert.equal(f.serial,'001');
  const message=M.message(f,now);assert.doesNotMatch(message,/\bUNK(?:NOWN)?\b/);
  assert.match(message,/FM \n/);assert(message.includes('TIMELOC////'));assert(message.includes('GENTEXT/ACTIONS TAKEN///'));
  assert.match(M.message({...f,course:'090'},now),/COURSE 090/);
@@ -97,8 +107,9 @@ test('highest-confidence mammal takes precedence over unrelated first-detection 
 });
 test('missing input highlight and accessible state update when filled and cleared',()=>{
  const vm=require('node:vm'),events={},control={name:'course',value:'',classList:{toggle(name,value){this[name]=value}},setAttribute(name,value){this[name]=value}};
- const form={elements:[control],addEventListener(name,fn){events[name]=fn}},nodes={oprepForm:form,oprepDialog:{addEventListener(){}},oprepPreview:{},oprepStatus:{},oprepClose:{},oprepCopy:{},oprepDownload:{}};
- const context=vm.createContext({document:{getElementById:id=>nodes[id]},OprepModel:M,FormData:class{*[Symbol.iterator](){yield ['course',control.value]}}});
+ const form={elements:[control],addEventListener(name,fn){events[name]=fn}},nodes={oprepForm:form,oprepDialog:{addEventListener(){}},oprepPreview:{},oprepStatus:{},oprepClose:{},oprepCopy:{},oprepDownload:{},oprepSend:{},rvDraftMenu:{append(){}},rvOprep:{addEventListener(){}}};
+ nodes.oprepHint={textContent:'Draft only'};
+ const context=vm.createContext({document:{getElementById:id=>nodes[id],createElement:()=>({setAttribute(){}}),addEventListener(){}},OprepModel:M,FormData:class{*[Symbol.iterator](){yield ['course',control.value]}}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'static/oprep.js'),'utf8'),context);
  events.input();assert.equal(control['aria-invalid'],'true');assert.equal(control.classList['oprep-missing'],true);
  control.value='090';events.input();assert.equal(control['aria-invalid'],'false');assert.equal(control.classList['oprep-missing'],false);

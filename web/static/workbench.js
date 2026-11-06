@@ -1,7 +1,7 @@
 const workbench=(()=>{
  const copy=x=>JSON.parse(JSON.stringify(x));
  const empty=()=>({text:'',rules:[],pins:{}});
- let draft=empty(),unknown=[],after=[],candidates=[],proposal=null,comparison=null,pendingDuration=0,parsedSnapshot=JSON.stringify(draft.rules),closeFocus='apply';
+ let draft=empty(),after=[],candidates=[],proposal=null,comparison=null,pendingDuration=0,parsedSnapshot=JSON.stringify(draft.rules),closeFocus='apply';
  let interpretation=null,interpretationPending=false,pendingParse=null,previewReady=false,confirmedDraft=null,compiling=null;
  let versions=[],cursor=-1,serial=0,selected=null,textTimer=null,weightTimer=null,liveTimer=null,lastPreview=0,sequence=0,busy=false,initialized=false,renderDeferred=false;
  const sorted=rows=>[...rows].sort((a,b)=>a.tier-b.tier||b.central-a.central||a.id.localeCompare(b.id));
@@ -10,7 +10,7 @@ const workbench=(()=>{
  const changes=(before,next)=>{const map=new Map(before.map(i=>[i.id,i.tier]));return next.filter(i=>map.has(i.id)&&map.get(i.id)!==i.tier).length};
  const normalize=r=>({...r,classes:r.classes||[],attrs:r.attrs||[],sources:r.sources||[],withinMin:r.withinMin||0,weight:r.weight||1});
  const rows=()=>sorted(after.map(result=>{const item=findItem(result.id),pin=draft.pins[result.id];return item&&!isScene(item)?{...item,...result,tier:pin===0?(item.detectorNegative?4:result.central>=.8?1:result.central>=.6?2:result.central>=.35?3:4):pin??result.tier}:null}).filter(Boolean));
- const compilerLabel=path=>(path==='research'||path?.startsWith('research/'))?'IBM Granite · research language compiler':({llm:'On-board language assistant',rules:'Built-in language rules',edited:'Your edited rules'}[path]||'');
+ const compilerLabel=path=>(path==='research'||path?.startsWith('research/'))?'IBM Granite · research language compiler':({llm:'On-board language assistant',rules:'On-board language understanding',edited:'Your edited rules'}[path]||'');
  const draftKey=()=>JSON.stringify(draft);
  function updateApply(){
   $('wbApply').disabled=busy||!!compiling||interpretationPending||!previewReady||!!interpretation?.blocked||(!draft.rules.length&&!Object.keys(draft.pins).length);
@@ -63,7 +63,7 @@ const workbench=(()=>{
     const text=$('nlIn').value;
     const parsed=await request('/api/directives/preview','POST',{text});
     if(token!==sequence)return;
-    draft.text=text;draft.rules=parsed.rules.map(normalize);parsedSnapshot=JSON.stringify(draft.rules);unknown=parsed.unknown||[];interpretation={path:parsed.path||'rules',readback:parsed.readback||draft.rules.map(ruleText).join('; '),warnings:parsed.warnings||[],blocked:!!parsed.blocked};proposal=null;renderChips();
+    draft.text=text;draft.rules=parsed.rules.map(normalize);parsedSnapshot=JSON.stringify(draft.rules);interpretation={path:parsed.path||'rules',readback:parsed.readback||draft.rules.map(ruleText).join('; '),warnings:parsed.warnings||[],blocked:!!parsed.blocked};proposal=null;renderChips();
    }
    buildCandidates();
    const submitted=candidates.map(c=>({key:c.key,rules:c.rules}));
@@ -89,7 +89,7 @@ const workbench=(()=>{
  function activate(){if($('nlIn').value!==draft.text)textChanged();else live()}
  function opts(entries,values){return entries.map(([v,l])=>`<option value="${esc(String(v))}" ${values.includes(String(v))?'selected':''}>${esc(l)}</option>`).join('')}
  function renderChips(){
-  $('wbUnknown').innerHTML=interpretation?.blocked?'Clarification needed — request has not been applied.':unknown.length?'Not understood: '+unknown.map(w=>`<mark>${esc(w)}</mark>`).join(' ')+'<br>Try an object type, condition, sensor name or “last 30 min”.':'✓ Recognized terms only';
+  $('wbUnknown').textContent=interpretation?.blocked?'Clarification needed — request has not been applied.':'';
   $('wbChips').innerHTML=draft.rules.map((r,i)=>`<div class="wb-chip ${esc(r.type)}" data-rule="${i}"><div class="wb-row"><strong>${ruleLabel(r)}</strong>${r.edited?'<span class="edited">edited</span>':''}</div><div class="wb-row"><button data-field="flip">${r.type==='boost'?'▲ Boost':'▼ Suppress'} ⇄</button><button data-field="remove" aria-label="Remove rule ${i+1}">× Remove</button></div><label>Object types · Ctrl+click to select several<select data-field="classes" multiple size="3">${opts(Object.entries(CLS).map(([k,v])=>[k,v.lab]),r.classes)}</select></label><label>Conditions (any match)<select data-field="attrs" multiple size="2">${opts(Object.entries(ATTR_LAB),r.attrs)}</select></label><label>Sensors · leave blank to use all<select data-field="sources" multiple size="2">${opts(SOURCES.filter(s=>s.id!=='ALL').map(s=>[s.id,s.id]),r.sources)}</select></label><label>Time window<select data-field="withinMin">${opts([['0','Any time'],['15','Last 15 min'],['30','Last 30 min'],['60','Last hour'],...(![0,15,30,60].includes(r.withinMin)?[[String(r.withinMin),'Last '+r.withinMin+' min']]:[])],[String(r.withinMin)])}</select></label><label title="Weight: how strongly this rule changes the score">Rule strength <output>${r.weight.toFixed(1)}×</output><div class="wb-row"><button data-field="minus" aria-label="Decrease weight">−</button><input data-field="weight" aria-label="Rule weight" type="range" min=".2" max="3" step=".2" value="${r.weight}"><button data-field="plus" aria-label="Increase weight">+</button></div></label></div>`).join('')||'<p class="hint">No draft rules. The preview matches the current feed.</p>';
  }
  async function chipEdit(target){
@@ -101,7 +101,7 @@ const workbench=(()=>{
   markEdited();renderChips();await preview({label:'Rule edited'});
  }
  function renderSuggestions(){
-  $('wbSuggestions').innerHTML=candidates.filter(c=>c.key!=='correction').map(c=>`<button class="wb-suggestion" data-suggest="${esc(c.key)}">${esc(c.label)}<small>${esc(c.effect||'Scoring…')}</small></button>`).join('')||'<p class="hint">Try “prioritize boats” for guided specificity suggestions.</p>';
+  $('wbSuggestions').innerHTML=candidates.filter(c=>c.key!=='correction').map(c=>`<button class="wb-suggestion" data-suggest="${esc(c.key)}">${esc(c.label)}<small>${esc(c.effect||'Scoring…')}</small></button>`).join('')||'<p class="hint">Suggestions to refine your directive appear here as it takes effect.</p>';
  }
  function renderResults({background=false}={}){
   const active=document.activeElement,tile=active.closest('.wb-tile'),control=active.closest('select,input,button,textarea');
@@ -114,9 +114,9 @@ const workbench=(()=>{
   const top=current.slice(0,16),display=$('wbDiff').checked?current.filter(i=>bm.get(i.id)?.tier!==i.tier):[...top];
   if(focused&&!display.some(i=>i.id===focused)){const retained=current.find(i=>i.id===focused);if(retained)display.push(retained)}
   $('wbResultLabel').textContent=$('wbDiff').checked?`After · ${display.length} images with changed priority`:'After · Top 16 images';
-  $('wbGrid').innerHTML=display.map(it=>{const old=bm.get(it.id)||{tier:it.tier,rank:live.length},rank=current.indexOf(it)+1,diff=old.rank-rank,badge=old.rank>16&&rank<=16?'NEW in top':diff>0?'↑'+diff:diff<0?'↓'+Math.abs(diff):'— same rank';return `<article class="wb-tile ${selected===it.id?'selected':''}" tabindex="0" data-id="${esc(it.id)}" aria-label="Rank ${rank}, frame ${it.frame}, P${it.tier} ${TNAME[it.tier]}"><div class="wb-photo"><img src="${esc(imageFor(it))}" alt="Synthetic ${esc(it.dets.map(d=>CLS[d.cls].lab).join(', '))}"><span class="wb-badge">#${rank} · ${badge}</span></div><div class="wb-tile-body"><div class="wb-tile-title"><span>${esc(it.src.id)} · ${Math.max(0,Math.round((Date.now()-it.ts)/60000))}m</span><b style="color:${tcol(it.tier)}">P${old.tier} ${TNAME[old.tier]} → P${it.tier} ${TNAME[it.tier]}</b></div><div class="wb-actions"><button data-correct="higher" title="Should be higher (↑)">↑ Higher</button><button data-correct="lower" title="Should be lower (↓)">↓ Lower</button><button data-correct="irrelevant" title="Propose a rule to lower the priority of similar images. Review and apply it to change the feed (X).">Not relevant</button></div><select class="wb-pin" aria-label="Set priority for image ${it.frame}"><option value="">${draft.pins[it.id]!==undefined?'Remove pending pin':'Set image priority…'}</option>${[1,2,3,4].map(t=>`<option value="${t}" ${draft.pins[it.id]===t?'selected':''}>Set P${t} ${TNAME[t]} exception</option>`).join('')}<option value="0" ${draft.pins[it.id]===0?'selected':''}>Clear current operator-set priority</option></select></div></article>`}).join('')||'<div class="wb-empty">No priority changes or no stored images. Refine a rule or turn off the priority-change filter.</div>';
+  renderImageHTML($('wbGrid'),display.map(it=>{const old=bm.get(it.id)||{tier:it.tier,rank:live.length},rank=current.indexOf(it)+1,diff=old.rank-rank,badge=old.rank>16&&rank<=16?'NEW in top':diff>0?'↑'+diff:diff<0?'↓'+Math.abs(diff):'— same rank';return `<article class="wb-tile ${selected===it.id?'selected':''}" tabindex="0" data-id="${esc(it.id)}" aria-label="Rank ${rank}, frame ${it.frame}, P${it.tier} ${TNAME[it.tier]}"><div class="wb-photo"><img src="${esc(imageFor(it))}" alt="Synthetic ${esc(it.dets.map(d=>CLS[d.cls].lab).join(', '))}"><span class="wb-badge">#${rank} · ${badge}</span></div><div class="wb-tile-body"><div class="wb-tile-title"><span>${esc(it.src.id)} · ${Math.max(0,Math.round((Date.now()-it.ts)/60000))}m</span><b style="color:${tcol(it.tier)}">P${old.tier} ${TNAME[old.tier]} → P${it.tier} ${TNAME[it.tier]}</b></div><div class="wb-actions"><button data-correct="higher" title="Should be higher (↑)">↑ Higher</button><button data-correct="lower" title="Should be lower (↓)">↓ Lower</button><button data-correct="irrelevant" title="Propose a rule to lower the priority of similar images. Review and apply it to change the feed (X).">Not relevant</button></div><select class="wb-pin" aria-label="Set priority for image ${it.frame}"><option value="">${draft.pins[it.id]!==undefined?'Remove pending pin':'Set image priority…'}</option>${[1,2,3,4].map(t=>`<option value="${t}" ${draft.pins[it.id]===t?'selected':''}>Set P${t} ${TNAME[t]} exception</option>`).join('')}<option value="0" ${draft.pins[it.id]===0?'selected':''}>Clear current operator-set priority</option></select></div></article>`}).join('')||'<div class="wb-empty">No priority changes or no stored images. Refine a rule or turn off the priority-change filter.</div>');
   const dropped=before.slice(0,16).filter(it=>!top.some(x=>x.id===it.id));$('wbDropLabel').textContent='No longer in the top 16 images · '+dropped.length;
-  $('wbDropped').innerHTML=dropped.map(it=>`<button data-why="${esc(it.id)}"><img src="${esc(imageFor(it))}" alt="Dropped synthetic frame ${it.frame}">Frame ${it.frame}</button>`).join('')||'<p class="hint">No images dropped out.</p>';
+  renderImageHTML($('wbDropped'),dropped.map(it=>`<button data-why="${esc(it.id)}"><img src="${esc(imageFor(it))}" alt="Dropped synthetic frame ${it.frame}">Frame ${it.frame}</button>`).join('')||'<p class="hint">No images dropped out.</p>');
   if(selected)why(selected);
   if(focused){const restored=$('wbGrid').querySelector(`[data-id="${CSS.escape(focused)}"]`);(controlIndex>=0?restored?.querySelectorAll('select,input,button,textarea')[controlIndex]:restored)?.focus({preventScroll:true})}
  }
@@ -141,16 +141,17 @@ const workbench=(()=>{
   $('wbHistory').innerHTML=versions.map((v,i)=>`<div class="wb-version ${i===cursor?'active':''}"><strong>v${v.n} · ${esc(v.label)}</strong><p class="hint">${esc(v.delta)}</p><div class="wb-row"><button data-compare="${i}">Compare vs now</button><button data-revert="${i}">Revert</button></div></div>`).reverse().join('');
   $('wbUndo').disabled=cursor<=0;$('wbRedo').disabled=cursor>=versions.length-1;
  }
- async function travel(change){await flush();const index=cursor+change;if(index<0||index>=versions.length)return;cursor=index;draft=copy(versions[index].draft);$('nlIn').value=draft.text;unknown=[];proposal=null;interpretation=copy(versions[index].interpretation);parsedSnapshot=JSON.stringify(draft.rules);renderChips();await preview()}
- async function reset(label='Reset draft'){++sequence;clearTimeout(textTimer);textTimer=null;pendingParse=null;compiling=null;interpretationPending=false;interpretation=null;confirmedDraft=null;draft=empty();parsedSnapshot=JSON.stringify(draft.rules);$('nlIn').value='';unknown=[];proposal=null;comparison=null;renderChips();await preview({label})}
+ async function travel(change){await flush();const index=cursor+change;if(index<0||index>=versions.length)return;cursor=index;draft=copy(versions[index].draft);$('nlIn').value=draft.text;proposal=null;interpretation=copy(versions[index].interpretation);parsedSnapshot=JSON.stringify(draft.rules);renderChips();await preview()}
+ async function reset(label='Reset draft'){++sequence;clearTimeout(textTimer);textTimer=null;pendingParse=null;compiling=null;interpretationPending=false;interpretation=null;confirmedDraft=null;draft=empty();parsedSnapshot=JSON.stringify(draft.rules);$('nlIn').value='';proposal=null;comparison=null;renderChips();await preview({label})}
  function init(){
+  if(initialized)return;
   initialized=true;renderChips();renderInterpretation();
   $('nlIn').oninput=textChanged;
   $('wbAdd').onclick=async()=>{await flush();draft.rules.push(normalize({type:'boost',classes:['small boat'],edited:true}));proposal=null;markEdited();renderChips();await preview({label:'Manual rule added'})};
   $('wbChips').onclick=e=>{const b=e.target.closest('button');if(b)chipEdit(b)};
   $('wbChips').onchange=e=>chipEdit(e.target);
   $('wbChips').oninput=e=>{if(e.target.dataset.field==='weight'){const root=e.target.closest('.wb-chip'),r=draft.rules[+root.dataset.rule];r.weight=+e.target.value;r.edited=true;markEdited();root.querySelector('output').textContent=r.weight.toFixed(1)+'×';clearTimeout(weightTimer);weightTimer=setTimeout(()=>preview(),120)}};
-  $('wbSuggestions').onclick=async e=>{const b=e.target.closest('[data-suggest]');if(!b)return;const c=candidates.find(c=>c.key===b.dataset.suggest);if(!c)return;draft.rules=copy(c.rules);rewrite();proposal=null;unknown=[];markEdited();renderChips();await preview({label:'Suggestion: '+c.label})};
+  $('wbSuggestions').onclick=async e=>{const b=e.target.closest('[data-suggest]');if(!b)return;const c=candidates.find(c=>c.key===b.dataset.suggest);if(!c)return;draft.rules=copy(c.rules);rewrite();proposal=null;markEdited();renderChips();await preview({label:'Suggestion: '+c.label})};
   $('wbGrid').onmouseover=e=>{const t=e.target.closest('.wb-tile');if(t&&selected!==t.dataset.id)why(t.dataset.id)};
   $('wbGrid').onfocusin=e=>{const t=e.target.closest('.wb-tile');if(t)why(t.dataset.id)};
   $('wbGrid').onfocusout=()=>setTimeout(()=>{if(renderDeferred)renderResults({background:true})},0);
@@ -158,7 +159,7 @@ const workbench=(()=>{
   $('wbGrid').onchange=e=>{if(!e.target.classList.contains('wb-pin'))return;const id=e.target.closest('.wb-tile').dataset.id,item=findItem(id);if(!item||isScene(item))return;if(e.target.value==='')delete draft.pins[id];else draft.pins[id]=+e.target.value;selected=id;compiling=null;confirmedDraft=null;renderResults();updateApply();save('Tier exception updated')};
   $('wbDropped').onclick=e=>{const b=e.target.closest('[data-why]');if(b)why(b.dataset.why)};
   $('wbDiff').onchange=renderResults;$('wbBaseline').onclick=()=>{comparison=null;renderResults()};
-  $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;unknown=[];interpretation=copy(versions[+e.target.dataset.revert].interpretation);parsedSnapshot=JSON.stringify(draft.rules);renderChips();await preview({label:'Version restored'})}};
+  $('wbHistory').onclick=async e=>{if(e.target.dataset.compare!==undefined){comparison=versions[+e.target.dataset.compare];renderResults()}if(e.target.dataset.revert!==undefined){await flush();draft=copy(versions[+e.target.dataset.revert].draft);$('nlIn').value=draft.text;proposal=null;interpretation=copy(versions[+e.target.dataset.revert].interpretation);parsedSnapshot=JSON.stringify(draft.rules);renderChips();await preview({label:'Version restored'})}};
   $('wbUndo').onclick=()=>travel(-1);$('wbRedo').onclick=()=>travel(1);$('wbReset').onclick=()=>reset();
   document.addEventListener('keydown',e=>{
    if(typeof gsAuth!=='undefined'&&gsAuth.viewer())return;

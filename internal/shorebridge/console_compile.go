@@ -84,6 +84,8 @@ type compiledDirective struct {
 	Path            string
 }
 
+const broadenedWarning = "Shore mode boosts the whole class: the edge scorer cannot test approaching, loitering, new, dark or moving."
+
 const scopeWarning = "Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer."
 
 // flatRules keeps the rules the edge scorer can honour (plain class labels)
@@ -91,13 +93,41 @@ const scopeWarning = "Not applied in shore mode: source, attribute and time scop
 func flatRules(rules []command.Rule) (kept []command.Rule, dropped bool) {
 	kept = make([]command.Rule, 0, len(rules))
 	for _, rule := range rules {
-		if len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0 {
+		switch {
+		case len(rule.Sources) == 0 && len(rule.Attrs) == 0 && rule.WithinMin == 0:
 			kept = append(kept, rule)
-		} else {
+		case rule.Type == "boost" && len(rule.Classes) > 0 && len(rule.Sources) == 0 && rule.WithinMin == 0:
+			// "fast attack craft heading toward the fleet": the edge scorer
+			// cannot test attributes, so boost the whole class instead of
+			// silently applying nothing. Suppressions are never broadened.
+			rule.Attrs = nil
+			kept = append(kept, rule)
+			dropped = true
+		default:
 			dropped = true
 		}
 	}
 	return kept, dropped
+}
+
+// reviewFlat re-reads comp after flatRules dropped scopes, keeping the
+// compiler's path, warnings and nearest-class mappings.
+func reviewFlat(compiler *command.Compiler, text string, comp command.Compiled, kept []command.Rule) command.Compiled {
+	prior, path, resolutions := comp.Warnings, comp.Path, comp.Resolutions
+	notes := []string{scopeWarning}
+	for _, rule := range comp.Rules {
+		if rule.Type == "boost" && len(rule.Classes) > 0 && len(rule.Attrs) > 0 && len(rule.Sources) == 0 && rule.WithinMin == 0 {
+			notes = append(notes, broadenedWarning)
+			break
+		}
+	}
+	comp = compiler.Review(text, kept, comp.DurationMin, comp.Unknown...)
+	comp.Path, comp.Resolutions = path, resolutions
+	comp.Warnings = mergeWarnings(prior, comp.Warnings, notes)
+	if mapped := command.ResolutionReadback(resolutions); mapped != "" && len(kept) > 0 {
+		comp.Readback = strings.TrimSpace(comp.Readback + " " + mapped)
+	}
+	return comp
 }
 
 func (c *Console) compileDirective(ctx context.Context, text string, rules *[]command.Rule, durationMin int, rulesOnly bool) compiledDirective {
@@ -127,10 +157,7 @@ func (c *Console) compileDirective(ctx context.Context, text string, rules *[]co
 		if !comp.Blocked {
 			kept, dropped := flatRules(comp.Rules)
 			if dropped {
-				prior, path := comp.Warnings, comp.Path
-				comp = c.b.Compiler.Review(ruleText, kept, comp.DurationMin, comp.Unknown...)
-				comp.Path = path
-				comp.Warnings = mergeWarnings(prior, comp.Warnings, []string{scopeWarning})
+				comp = reviewFlat(c.b.Compiler, ruleText, comp, kept)
 			}
 		}
 		out.Suppress, out.Boost, out.Rules = rulesFromBody("", &comp.Rules)
@@ -345,9 +372,6 @@ func (c *Console) compile(w http.ResponseWriter, r *http.Request) {
 	}
 	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin, false)
 	warnings := cd.Warnings
-	if len(cd.Rules) == 0 && !cd.Blocked && cd.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-		warnings = mergeWarnings(warnings, []string{"Nothing recognized — the shore interpreter maps object names after ignore/suppress or prioritize/boost."})
-	}
 	unknown := unknownWords(body.Text, cd.Suppress, cd.Boost)
 	if cd.Compiled != nil && cd.Compiled.Unknown != nil {
 		unknown = cd.Compiled.Unknown
