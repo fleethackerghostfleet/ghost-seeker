@@ -65,10 +65,7 @@ func EnsureCapture(it *Item) {
 	if it.Capture != nil {
 		return
 	}
-	key := it.SourceID + ":" + it.Img
-	if it.Img == "" {
-		key += fmt.Sprintf(":%d", it.Seed)
-	}
+	key := fmt.Sprintf("%s:%s:%d", it.SourceID, it.Img, it.Seed)
 	h := sha256.Sum256([]byte(key))
 	drift := math.Sin(float64(it.Frame)*.01) * .0002
 	c := &CaptureMeta{Lat: 36.95 + drift, Lon: -76.33 + drift, HeadingDeg: float64(h[0]) * 360 / 256, AltM: 18, WidthPx: 1920, HeightPx: 1080, ContentHash: fmt.Sprintf("%x", h), Subtype: "unclassified contact", SubtypeConf: .65 + float64(h[1])*.001, Unknownness: .15 + float64(h[2])*.001, TrackID: fmt.Sprintf("track-%x", h[:8]), TrackFrames: 1, FOVDeg: 45,

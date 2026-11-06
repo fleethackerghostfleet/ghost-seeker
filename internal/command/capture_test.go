@@ -67,3 +67,17 @@ func TestCaptureRealImage(t *testing.T) {
 		}
 	}
 }
+
+func TestCaptureSeedSeparatesTracks(t *testing.T) {
+	a := Item{Img: "eo-p7-01.jpg", SourceID: "EO-P7", Seed: 1}
+	b := a
+	b.Seed = 2
+	EnsureCapture(&a)
+	EnsureCapture(&b)
+	if a.Capture.TrackID == b.Capture.TrackID || a.Capture.HeadingDeg == b.Capture.HeadingDeg {
+		t.Fatal("different captures share track or heading")
+	}
+	if a.Capture.ContentHash != b.Capture.ContentHash {
+		t.Fatal("real content hash changed with capture seed")
+	}
+}
