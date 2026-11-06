@@ -4,7 +4,7 @@ const M=require('./static/oprep-model.js');
 module.exports=function(){
  const nodes={},events={};let context;
  function node(id=''){
-  const n={id,hidden:false,children:[],value:'',isConnected:true,classList:{toggle(){}},setAttribute(k,v){this[k]=v},append(child){this.children.push(child)},contains(target){return this===target||this.children.includes(target)},focus(){context.document.activeElement=this},addEventListener(k,fn){this[k]=fn},click(){return this.onclick?.()},closest(){return {append(){}}},querySelectorAll(){return []},showModal(){this.open=true},close(){this.open=false}};
+  const n={id,hidden:false,children:[],value:'',isConnected:true,classList:{toggle(k,v){this[k]=v}},setAttribute(k,v){this[k]=v},append(child){this.children.push(child)},contains(target){return this===target||this.children.includes(target)},focus(){context.document.activeElement=this},addEventListener(k,fn){this[k]=fn},click(){return this.onclick?.()},closest(){return {append(){}}},querySelectorAll(){return []},showModal(){this.open=true},close(){this.open=false}};
   return n;
  }
  const document={getElementById:id=>nodes[id]||(nodes[id]=node(id)),createElement:()=>node(),addEventListener:(k,fn)=>events[k]=fn};
