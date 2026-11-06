@@ -92,7 +92,14 @@ func (c *LLMClient) vertexRequest(ctx context.Context, text string) (llmDraft, e
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return llmDraft{}, fmt.Errorf("vertex HTTP %d", resp.StatusCode)
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		var apiErr struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		_ = json.Unmarshal(detail, &apiErr)
+		return llmDraft{}, fmt.Errorf("vertex HTTP %d: %s", resp.StatusCode, shortReason(apiErr.Error.Message, 160))
 	}
 	var envelope struct {
 		Candidates []struct {
@@ -124,7 +131,7 @@ func vertexSchema() map[string]any {
 	schema := vertexSubset(llmSchema()).(map[string]any)
 	properties := schema["properties"].(map[string]any)
 	properties["mappings"] = map[string]any{
-		"type": "array", "maxItems": 8,
+		"type": "array",
 		"items": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -151,7 +158,7 @@ func vertexSubset(value any) any {
 		}
 		out := make(map[string]any, len(typed))
 		for key, item := range typed {
-			if key == "additionalProperties" || key == "minimum" || key == "maximum" {
+			if key == "additionalProperties" || key == "minimum" || key == "maximum" || key == "maxItems" {
 				continue
 			}
 			out[key] = vertexSubset(item)

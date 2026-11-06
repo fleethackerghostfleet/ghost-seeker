@@ -10,7 +10,7 @@ import (
 
 // openNLEvalFloor is the minimum number of open-language corpus cases the
 // offline (no LLM) compiler must get exactly right.
-const openNLEvalFloor = 0
+const openNLEvalFloor = 72
 
 func loadOpenNLCases(t *testing.T) []evalCase {
 	t.Helper()
