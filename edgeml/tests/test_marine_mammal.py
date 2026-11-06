@@ -240,8 +240,9 @@ def test_engine_live_frame_and_sighting(monkeypatch, tmp_path):
     assert response['sightings'][0]['subtype'] == 'dolphin'
     assert response['detections'][-1]['label'] == 'bird'
     assert response['detections'][-1]['confidence'] == .91
-    engine.detector.base.base.detect = lambda image: []
-    engine.detector.cfg.scan_stride = 2
+    marine = engine.detector.base
+    marine.base.base.detect = lambda image: []
+    marine.cfg.scan_stride = 2
     for frame in range(1, 4):
         for source in ('camera-a', 'camera-b'):
             response = engine.analyze(source, IMAGE, frame * 1000, [], False)

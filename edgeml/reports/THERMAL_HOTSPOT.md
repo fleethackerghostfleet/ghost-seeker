@@ -515,3 +515,47 @@ improvement is attributed to #271 from these changing VM timings.
 Evaluator log: `~/data/thermal-eval-rebased.log`. New-contact birth signaling,
 its precision/recall trade-off and microsecond cost are in
 [NEW_CONTACT.md](NEW_CONTACT.md).
+
+### Final integration checkpoint: #274, origin/dev 5083be1
+
+Rebased again after the marine-mammal merge. Thermal fusion now wraps the
+final base stack **after** optional marine verification. The dispatcher
+forwards the source frame index through the thermal wrapper when marine is
+enabled, preserving per-source scan cadence. The marine verifier, tracker
+and aggregator logic is otherwise unchanged; the active-marine integration
+test still checks alternating scan frames for two sources. Its internal
+detector access was updated for the additional outer thermal wrapper.
+
+With default `MarineMammalConfig.enabled=False`, `wrap_detector` returns its
+input unchanged. `MarineTracker` delegates tracking; its extra provenance
+handling and `MarineAggregator`'s overrides delegate unchanged for non-marine
+labels. Default YOLO/thermal cannot emit `marine mammal`. Thus there is no
+changed default detection/association decision to re-evaluate: the full IR
+quality/crop/recovery metrics and MOT birth tables above remain the #271
+measurements, **not new full replays at 5083be1**. Their source fingerprints
+are intentionally retained. No thresholds changed.
+
+As requested for this default-off integration, reran only a **quick fresh
+real-engine latency sanity check**: first 32 sorted IR test images and first
+16 previously benchmarked RGB paths, 4 threads, same paired still-frame
+protocol. This small subset is not a replacement for the full benchmark.
+[post274_latency.json](THERMAL_HOTSPOT_assets/post274_latency.json) stores it.
+
+| Post-#274 sanity, mean / p50 / p95 ms | Result |
+|---|---|
+| IR thermal off, n=32 | 138.675 / 134.687 / 161.045 |
+| IR thermal on, n=32 | 141.343 / 139.344 / 161.663 |
+| IR paired on − off | 2.668 / 3.160 / 14.771 |
+| RGB thermal off, n=16 | 173.713 / 171.707 / 193.876 |
+| RGB thermal on, n=16 | 175.661 / 166.490 / 218.276 |
+| RGB paired on − off | 1.948 / 2.253 / 25.739 |
+| RGB wrapper thermal stage | 2.456 / 2.204 / 3.309 |
+| RGB gate in engine loop | 2.235 / 2.167 / 2.574 |
+
+Post-#274 checks: **696 passed in 8.56s** (Python); `make test` passed;
+Node **388 pass / 0 fail**; `make prod-gate`: **PASS**. Full gate output is
+`~/data/prod-gate-final.log`. Full `make verify` was attempted before #274:
+14/15 stages passed, image stage hit a PyPI download timeout; its failed
+sidecar build passed on retry. That report is evidence for the earlier
+commit, not a full verification of this later rebase. It was not rerun in
+full at this final checkpoint. Log: `~/data/thermal-post274-sanity.log`.

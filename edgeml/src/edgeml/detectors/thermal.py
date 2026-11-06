@@ -96,8 +96,8 @@ class ThermalFusionDetector(AnomalyFusionDetector):
         self.mode = mode
         self.score_floor = score_floor
 
-    def detect(self, image_bgr):
-        dets = self.base.detect(image_bgr)
+    def detect(self, image_bgr, **kwargs):
+        dets = self.base.detect(image_bgr, **kwargs)
         start = time.perf_counter()
         props = []
         if is_thermal(image_bgr) and (self.mode == "uncovered" or not any(d.score >= self.cover_thr for d in dets)):

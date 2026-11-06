@@ -79,6 +79,19 @@ def test_invalid(kwargs):
         ThermalHotspotProposer(**kwargs)
 
 
+def test_thermal_wrapper_preserves_marine_frame_index():
+    from edgeml.detectors.marine_mammal import MarineMammalFusionDetector
+    from edgeml.sidecar.marine_mammal import detect_frame
+
+    base = object.__new__(MarineMammalFusionDetector)
+    base.name, base.detect = "marine-test", Mock(return_value=[])
+    fusion = ThermalFusionDetector(base, ThermalHotspotProposer())
+    image = sea()
+    image[..., 0] = 0
+    detect_frame(fusion, image, 7)
+    base.detect.assert_called_once_with(image, frame_index=7)
+
+
 @pytest.mark.parametrize("zs,floor", [(None, .9), (.1, .9), (.98, .95)])
 @pytest.mark.parametrize("with_prompt", [False, True])
 def test_engine_unknown_first(monkeypatch, zs, floor, with_prompt):

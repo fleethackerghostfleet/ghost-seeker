@@ -246,3 +246,37 @@ Sources: [A.md §1/§2/§7](A.md) and downloaded MOT `index.jsonl` / `seqinfo.in
   (CC BY-NC-SA on HF). MOT metadata says academic/research use; video
   redistribution is subject to the authors' terms. This is internal offline
   evaluation, not a grant to ship videos or train commercial weights.
+
+## Final integration checkpoint (#274)
+
+Latest base is **origin/dev 5083be1**. Marine verification remains default
+off; thermal fallback wraps its final base output when enabled. Marine
+tracking/aggregation hooks are retained, forwarding non-marine observations
+to the same existing algorithms; the thermal label/unknownness and new-contact
+state stay intact. A dispatch bridge preserves per-source marine scan indices
+through the new outer thermal wrapper, including two interleaved sources.
+
+**No full MOT or IR quality replay was repeated for this default-off rebase.**
+The tables and JSON fingerprints remain the full #271 live-path measurements
+described above, with no thresholds selected or changed afterward. Source
+inspection and integration tests establish unchanged default decision paths;
+this is not a claim that a new full replay was measured at 5083be1. Per the
+final integration brief, reran a quick 32-IR / 16-RGB real-engine latency
+sanity check instead: mean thermal off/on **138.675 / 141.343 ms IR**,
+**173.713 / 175.661 ms RGB**; RGB gate **2.235 ms mean**. Details and limitations
+are in the companion report's final checkpoint section and JSON asset.
+
+Final post-#274 checks: `pytest edgeml/tests -q` **696 passed in 8.56s**;
+`make test` passed; Node **388 pass / 0 fail**; `make prod-gate`: **PASS**.
+Full production gate output: `~/data/prod-gate-final.log`.
+
+`make verify VERIFY_PYTHON=.venv/bin/python` was attempted on clean pre-#274
+commit `366cc8a68ad8ff2db27aaa1edc341d9553930cb5`: 14/15 stages passed,
+including race, vulnerabilities, package and protobuf regeneration. Image
+building failed on `files.pythonhosted.org` timeout, not Docker Hub 429;
+the exact failed sidecar build passed on retry. Original report:
+`dist/verify/366cc8a68ad8-mjfewrdc/report.json`; retry log:
+`~/data/newcontact-sidecar-image-retry.log`. This is **not** a passing full
+verifier report for the final rebased commit; the final four requested
+checks above were rerun after integration. No image/base/build config changes
+or mirror substitutions were needed.
