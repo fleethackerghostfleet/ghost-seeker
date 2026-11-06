@@ -457,7 +457,7 @@ Toxiproxy, `deploy/compose/degrade.sh 9k6|64k|256k|2m`). See `docs/DEMO.md` for 
 Without `-shore` or `-dataset`, the Imagery Feed's automatic simulation link
 uses the shared normal distribution from `shaper.NewNormal`, resampled every
 five seconds with outages. Historical backfill starts uploaded.
-`-sim-link-bps N` fixes the rate in bits/second (`0` means outage); for example,
+`-sim-link-bps N` sets a nominal rate in bits/second that wanders within ±15% every 5 s (`0` means outage); for example,
 `-sim-link-bps 2000000` can build a visible upload queue. Capture is independent of pending uploads in both synthetic and dataset simulation.
 `-capture-every` sets the positive mean interval (default 700ms, uniformly jittered
 from 2/3 to 4/3); `-capture-every 1.8s` restores the old 1.2–2.4s range.
