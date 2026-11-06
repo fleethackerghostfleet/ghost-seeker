@@ -143,6 +143,23 @@ class TLSManifestTests(unittest.TestCase):
         for name in ("edge", "operator"):
             self.assertFalse(any(arg.startswith("-shore-ca") for arg in self.container(documents, name)["args"]))
 
+    def test_apostrophe_upstream_urls_render_without_yaml_corruption(self):
+        url = "https://shore.example/team's/sync"
+        for tls in (False, True):
+            with self.subTest(tls=tls):
+                overrides = {"SHORE_URL": url, "OPERATOR_SHORE_URL": url}
+                if tls:
+                    overrides.update({"SHORE_TLS_SECRET": "shore-tls", "SHORE_CA_SECRET": "shore-ca"})
+                parsed = checker.render_manifests(self.package, overrides)
+                documents = [doc for docs in parsed.values() for doc in docs]
+                checker.check_tls_wiring(documents, checker.package_variables(self.package, overrides))
+                config = next(doc for doc in documents if doc["metadata"]["name"] == "edge-config")
+                self.assertEqual(config["data"]["SHORE_URL"], url)
+                self.assertIn(f"-shore={url}", self.container(documents, "operator")["args"])
+                for name in ("edge", "operator"):
+                    annotations = self.workload(documents, name)["spec"]["template"]["metadata"]["annotations"]
+                    self.assertEqual(annotations["ghost-seeker.io/shore-url"], url)
+
     def test_rejects_invalid_or_drifted_upstream_urls(self):
         for value in ("not-a-url", "ftp://shore.example", "http://shore.ghost-seeker.svc:8080"):
             with self.subTest(value=value):

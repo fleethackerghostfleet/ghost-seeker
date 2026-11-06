@@ -30,7 +30,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - "-addr=:8090"
-            - '-shore={{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_OPERATOR_SHORE_URL###" "http://shore:8080") }}https://shore:8080{{ else }}###ZARF_VAR_OPERATOR_SHORE_URL###{{ end }}'
+            - "-shore={{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_OPERATOR_SHORE_URL###" "http://shore:8080") }}https://shore:8080{{ else }}###ZARF_VAR_OPERATOR_SHORE_URL###{{ end }}"
             - "-edge="
             - "-link-listen="
 {{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
