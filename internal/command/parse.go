@@ -91,9 +91,18 @@ func StripObservationContext(text string) string {
 	text = strings.Join(strings.Fields(strings.ToLower(text)), " ")
 	if subject, context, ok := strings.Cut(text, " near "); ok {
 		context = strings.TrimPrefix(context, "the ")
-		_, known := canonicalClass(context, true)
-		for _, pattern := range genericPatterns {
-			known = known || (context != "" && pattern.re.FindString(context) == context)
+		words := strings.Fields(context)
+		contextWords := 0
+		for n := len(words); n > 0; n-- {
+			prefix := strings.Join(words[:n], " ")
+			_, known := canonicalClass(prefix, true)
+			for _, pattern := range genericPatterns {
+				known = known || pattern.re.FindString(prefix) == prefix
+			}
+			if known {
+				contextWords = n
+				break
+			}
 		}
 		recognized := false
 		for _, pattern := range append(append([]classPattern{}, synonymPatterns...), edgeConceptPatterns...) {
@@ -102,8 +111,8 @@ func StripObservationContext(text string) string {
 		for _, pattern := range genericPatterns {
 			recognized = recognized || pattern.re.MatchString(subject)
 		}
-		if known && recognized {
-			return subject
+		if contextWords > 0 && recognized {
+			return strings.TrimSpace(subject + " " + strings.Join(words[contextWords:], " "))
 		}
 	}
 	return strings.TrimSuffix(strings.TrimSuffix(text, " spotted"), " sighted")
