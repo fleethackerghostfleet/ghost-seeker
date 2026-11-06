@@ -29,9 +29,9 @@ var ErrNotFound = errors.New("not found")
 var ErrNotOwner = errors.New("item belongs to another edge")
 
 type Store struct {
-	chunkMu sync.Mutex
 	db      *sql.DB
 	blobDir string
+	blobMu  sync.Mutex
 }
 
 const schema = `
@@ -105,6 +105,10 @@ func Open(dataDir string) (*Store, error) {
 			return nil, fmt.Errorf("migrate forms ranges: %w", err)
 		}
 	}
+	if _, err := db.Exec(apiSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("API schema: %w", err)
+	}
 	return &Store{db: db, blobDir: filepath.Join(dataDir, "blobs")}, nil
 }
 
@@ -163,7 +167,9 @@ func (s *Store) UpsertManifest(ctx context.Context, edgeID string, me *pb.Manife
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx, `INSERT INTO items(id,edge_id,type,captured_at,source,manifest,manifest_at,priority,unknownness,top_label)
 		VALUES(?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(id) DO UPDATE SET edge_id=excluded.edge_id, manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label
+		ON CONFLICT(id) DO UPDATE SET edge_id=excluded.edge_id, manifest=excluded.manifest, priority=excluded.priority, unknownness=excluded.unknownness, top_label=excluded.top_label,
+		type=excluded.type, captured_at=excluded.captured_at, source=excluded.source,
+		manifest_at=CASE WHEN items.manifest_at=0 THEN excluded.manifest_at ELSE items.manifest_at END
 		WHERE items.edge_id=excluded.edge_id OR items.edge_id=''`,
 		me.ItemId, edgeID, int(me.Type), me.CapturedAtUnixMs, me.Source, raw, at.UnixMilli(), me.Priority, me.Unknownness, me.TopLabel)
 	if err != nil {
@@ -196,8 +202,8 @@ const MaxChunkBytes = 4 << 20
 // duplicates are safe. If the range cap is exceeded, only the contiguous prefix
 // is retained; discarded ranges must be retransmitted before being acknowledged.
 func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at time.Time) (int64, bool, error) {
-	s.chunkMu.Lock()
-	defer s.chunkMu.Unlock()
+	s.blobMu.Lock()
+	defer s.blobMu.Unlock()
 	if !ids.Valid(c.ItemId) {
 		return 0, false, fmt.Errorf("invalid item id %q", c.ItemId)
 	}
@@ -231,6 +237,7 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		return 0, false, err
 	}
 	path := filepath.Join(s.blobDir, c.ItemId, fmt.Sprintf("%d", c.Form))
+	partial := path + ".partial"
 	var received int64
 	var complete int
 	var hash string
@@ -245,12 +252,16 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		// the new content.
 		received, complete = 0, 0
 		rangesJSON = "[]"
-		_ = os.Remove(path)
+		_ = os.Remove(partial)
+	}
+	if _, statErr := os.Stat(partial); errors.Is(statErr, os.ErrNotExist) {
+		received = 0
+		rangesJSON = "[]"
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return 0, false, err
 	}
-	f, err2 := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err2 := os.OpenFile(partial, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err2 != nil {
 		return 0, false, err2
 	}
@@ -258,7 +269,9 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 		f.Close()
 		return 0, false, err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return 0, false, err
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		// Payload before manifest (FIFO baseline, or lost manifest): the
 		// ownership check above already created the item stub.
@@ -271,14 +284,14 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	received, rangesJSON = mergeReceived(received, rangesJSON, c.Offset, c.Offset+n)
 	done := received >= c.TotalBytes && c.TotalBytes > 0
 	if done && c.ContentHash != "" {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(partial)
 		if err != nil {
 			return 0, false, err
 		}
 		sum := sha256.Sum256(data)
 		if hex.EncodeToString(sum[:]) != c.ContentHash {
 			// Corrupt: restart this form.
-			if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=0, complete=0, received_ranges='[]' WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)); err != nil {
+			if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=0, complete=0, complete_at=0, received_ranges='[]' WHERE item_id=? AND kind=?`, c.ItemId, int(c.Form)); err != nil {
 				return 0, false, err
 			}
 			return 0, false, fmt.Errorf("hash mismatch for %s/%v", c.ItemId, c.Form)
@@ -286,11 +299,14 @@ func (s *Store) WriteChunk(ctx context.Context, edgeID string, c *pb.Chunk, at t
 	}
 	cpl := 0
 	if done {
+		if err := os.Rename(partial, path); err != nil {
+			return 0, false, err
+		}
 		cpl = 1
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE forms SET received=?, received_ranges=?, complete=?, hash=?, mime=?, total=?,
 		first_at=CASE WHEN first_at=0 THEN ? ELSE first_at END,
-		complete_at=CASE WHEN ?=1 AND complete_at=0 THEN ? ELSE complete_at END
+		complete_at=CASE WHEN ?=1 THEN ? ELSE 0 END
 		WHERE item_id=? AND kind=?`,
 		received, rangesJSON, cpl, c.ContentHash, c.Mime, c.TotalBytes, at.UnixMilli(), cpl, at.UnixMilli(), c.ItemId, int(c.Form)); err != nil {
 		return 0, false, err
@@ -380,6 +396,14 @@ func (s *Store) Owner(ctx context.Context, itemID string) (string, error) {
 
 func (s *Store) ReadForm(itemID string, kind pb.FormKind) ([]byte, error) {
 	return os.ReadFile(filepath.Join(s.blobDir, itemID, fmt.Sprintf("%d", kind)))
+}
+
+// OpenForm streams a blob without allocating its full payload in an API reader.
+func (s *Store) OpenForm(itemID string, kind pb.FormKind) (*os.File, error) {
+	if !ids.Valid(itemID) {
+		return nil, ErrNotFound
+	}
+	return os.Open(filepath.Join(s.blobDir, itemID, fmt.Sprintf("%d", kind)))
 }
 
 // Heartbeat records the latest edge heartbeat.

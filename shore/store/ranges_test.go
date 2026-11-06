@@ -5,6 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,6 +16,48 @@ import (
 )
 
 const rangeItem = "01M6MSQ0RSB2E2N3ARPS6QMJHT"
+
+func TestChunkRangesPublishReplacementAtomically(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	old, fresh := []byte("abcdefghijkl"), []byte("ABCDEFGHIJKL")
+	writeRange(t, st, old, 0, 12, 12, true)
+	reader, err := st.OpenForm(rangeItem, pb.FormKind_FORM_KIND_FULL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	writeRange(t, st, fresh, 8, 12, 0, false)
+	writeRange(t, st, fresh, 0, 4, 4, false)
+	if got, err := st.ReadForm(rangeItem, pb.FormKind_FORM_KIND_FULL); err != nil || !bytes.Equal(got, old) {
+		t.Fatalf("partial replacement published: %q %v", got, err)
+	}
+	writeRange(t, st, fresh, 4, 8, 12, true)
+	if got, err := st.ReadForm(rangeItem, pb.FormKind_FORM_KIND_FULL); err != nil || !bytes.Equal(got, fresh) {
+		t.Fatalf("completed replacement not published: %q %v", got, err)
+	}
+	if got, err := io.ReadAll(reader); err != nil || !bytes.Equal(got, old) {
+		t.Fatalf("old reader changed: %q %v", got, err)
+	}
+}
+
+func TestChunkRangesMissingPartialResetsSparseRanges(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	data := []byte("abcdefghijkl")
+	writeRange(t, st, data, 4, 12, 0, false)
+	if err := os.Remove(filepath.Join(st.blobDir, rangeItem, fmt.Sprintf("%d.partial", pb.FormKind_FORM_KIND_FULL))); err != nil {
+		t.Fatal(err)
+	}
+	writeRange(t, st, data, 0, 4, 4, false)
+	writeRange(t, st, data, 4, 12, 12, true)
+}
 
 func writeRange(t *testing.T, st *Store, data []byte, start, end, want int64, done bool) {
 	t.Helper()
