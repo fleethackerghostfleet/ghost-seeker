@@ -1830,6 +1830,29 @@ test('metadata-only chip follows simulation and live state with a quiet explanat
  assert.match(source,/const data=LIVE\?LIVE.edge:stats/);
 });
 
+test('EMCON-only snapshots and live events refresh open metadata and invalidate closed caches',async()=>{
+ for(const event of ['snapshot','live']){
+  const c=setup();
+  vm.runInContext(`applySnapshot(snapshot([raw('emcon'),raw('closed')]));renderPolicySummary({emcon:{mode:'NORMAL'}});state.sel='emcon';body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};originalDollar=$;$=id=>id==='metadataPanel'?panel:originalDollar(id);requests=0;serverMode='NORMAL';request=async()=>{requests++;return {capture:{sensor:{emcon:serverMode}}}}`,c);
+  await vm.runInContext("loadMetadata(findItem('emcon'),panel)",c);
+  vm.runInContext(`metadataCache.set('closed',{data:{capture:{sensor:{emcon:'NORMAL'}}}});serverMode='BURST'`,c);
+  const update=event==='snapshot'?"data=snapshot(items);data.policy={emcon:{mode:serverMode}};applySnapshot(data)":"applyLive({policy:{emcon:{mode:serverMode}}})";
+  vm.runInContext(update,c);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(vm.runInContext('requests',c),2,`${event} must refetch an open panel on EMCON change`);
+  assert.match(c.body.innerHTML,/BURST/);
+  assert.equal(vm.runInContext("metadataCache.get('closed').stale",c),true);
+  vm.runInContext(update,c);
+  assert.equal(vm.runInContext('requests',c),2,'unchanged EMCON must reuse the cache');
+  vm.runInContext("panel.open=false;serverMode='SILENT'",c);
+  vm.runInContext(update,c);
+  assert.equal(vm.runInContext('requests',c),2,'closed panels must remain lazy');
+  vm.runInContext('panel.open=true',c);
+  await vm.runInContext("loadMetadata(findItem('emcon'),panel)",c);
+  assert.match(c.body.innerHTML,/SILENT/);
+ }
+});
+
 test('upload byte progress reuses metadata rather than refetching on every update',async()=>{
  const c=setup();
  vm.runInContext(`applySnapshot(snapshot([{...raw('progress'),upload:{bytes:1000,sent:0,metadataSent:0,bps:4000,active:false}}]));body={innerHTML:''};panel={open:true,isConnected:true,querySelector:()=>body};requests=0;request=async()=>{requests++;return {capture:{source:'cached sensor'}}}`,c);

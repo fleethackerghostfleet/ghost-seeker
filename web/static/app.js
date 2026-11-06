@@ -14,6 +14,7 @@ let snapshotEpoch=null,resetRevision=0;
 let feedReasons=new Map();
 const metadataCache=new Map();
 let metadataExpanded=false;
+let metadataEMCON='NORMAL';
 const clsOf=k=>CLS[k]||{lab:String(k||'unknown'),g:'other'};
 const fmtBytes=n=>n<1024?`${n|0} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(2)} MB`;
 const fmtRate=bps=>bps>0&&bps<8e4?'<0.01 MB/s':`${(Math.max(0,bps)/8e6).toFixed(2)} MB/s`;
@@ -135,6 +136,7 @@ function renderPolicyPanels(summary){
 }
 function renderPolicySummary(summary){
  state.policy=summary||null;renderPolicyControls(summary||{});renderPolicyPanels(summary||{});
+ refreshMetadataEMCON(summary?.emcon?.mode);
 }
 async function loadRawPolicy(force){
  if(policyRawTouched&&!force)return;
@@ -273,6 +275,7 @@ function applyLive(live){
  LIVE=live||null;const cl=document.body?.classList;if(cl?.toggle)cl.toggle('live',!!LIVE);
  renderLive();
  if(!LIVE)return;
+ refreshMetadataEMCON(LIVE.policy?.emcon?.mode);
  mergeLiveConfig(LIVE);
  const banner=document.querySelector?.('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — LIVE SHORE PICTURE';
 }
@@ -761,6 +764,12 @@ function metadataHTML(record){
  const operator=row('Label override',o.labelOverride?name(o.labelOverride):'None')+row('Manual tier',o.manualTier?`P${o.manualTier} · ${TNAME[o.manualTier]||''}`:'None (model priority)')+row('Reviewed',o.humanReviewed?'Human reviewed':o.reviewed?'Reviewed':'Not reviewed')+row('Commander decision',o.decision?name(o.decision):'Pending');
  const transfer=(label,value)=>{if(!value)return'';const done=value.done||value.state==='received',bytes=value.bytes||0,sent=value.sent??value.received??0;return row(label,[done?'on shore':value.state||'queued',bytes?fmtBytes(bytes):'',done&&value.doneAt?String(value.doneAt).replace(/^.*T/,'').replace(/\.\d+Z$/,'Z'):!done&&bytes?`${Math.round(100*sent/bytes)}%`:''].filter(Boolean).join(' · '))};
  return group('Capture',capture)+group('Model classification',model)+group('Scoring',scoring)+group('Operator',operator)+group('Transfer',transfer('Metadata',t.metadata)+transfer('Image',t.image));
+}
+function refreshMetadataEMCON(mode){
+ if(!mode||mode===metadataEMCON)return;
+ metadataEMCON=mode;
+ for(const [id,cached] of metadataCache)metadataCache.set(id,{data:cached.data,stale:true});
+ const it=findItem(state.sel);if(it)loadMetadata(it,$('metadataPanel'));
 }
 function metadataVersion(it){
  const {el,fresh,upload,live,...record}=it;
