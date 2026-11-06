@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 
 
-RULE_PATH = Path(__file__).resolve().parents[4] / "internal/catalog/colregs_lights.json"
-CONFIG_PATH = Path(__file__).resolve().parents[4] / "internal/catalog/colregs_night_config.json"
+RULE_PATH = Path(__file__).with_name("colregs_lights.json")
+CONFIG_PATH = Path(__file__).with_name("colregs_night_config.json")
 _OPTICAL = {"EO", "RGB", "OPTICAL"}
 logger = logging.getLogger(__name__)
 
