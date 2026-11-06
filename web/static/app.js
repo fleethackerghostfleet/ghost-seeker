@@ -888,7 +888,14 @@ function renderDetailContent(){
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
  bindMetadataPanel(it);briefing.renderDetections(it);
- $('oprepOpen').onclick=event=>oprep.open(it,CLS,SOURCES,event.currentTarget);
+ $('oprepOpen').onclick=async event=>{
+  const button=event.currentTarget;button.disabled=true;
+  let metadata=metadataCache.get(it.id)?.data,unavailable=false;
+  try{if(!metadata||metadataCache.get(it.id)?.stale){metadata=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);metadataCache.set(it.id,{data:metadata})}}
+  catch{unavailable=true}
+  finally{button.disabled=false}
+  if(state.sel===it.id)oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable);
+ };
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
  for(const [id,override] of [['aUploadNext','next'],['aUploadHold','hold']]){const b=$(id);if(b)b.onclick=async()=>{if(it.live||LIVE||uploadState(it).done)return;try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:it.upload?.override===override?'':override});cdr=result.cdr;applyItemUpdate(result.item)}catch(error){toast(error.message)}}}

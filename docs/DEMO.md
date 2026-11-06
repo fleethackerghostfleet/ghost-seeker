@@ -5,7 +5,13 @@
 Open an image's detail panel and choose **Draft OPREP-3 NAVY BLUE (whale strike)**.
 The local-only dialog prefills capture time, source position (when available),
 and the highest-confidence marine mammal detection. Edit the reporting fields,
-review the live preview, then copy or download the draft as plain text.
+including metadata-prefilled latitude/longitude, capture time, mammal subtype,
+and sensor heading (not ship course). Metadata-derived fields are tagged and
+remain editable. Sensor evidence includes hardware, frame/record, truncated
+content hash and sighting track when present; synthetic capture metadata is
+explicitly marked in the draft. If metadata cannot be fetched, embedded image
+capture fields are used before falling back to unknown placeholders.
+Review the live preview, then copy or download the draft as plain text.
 Nothing is submitted or released, and machine detection does not confirm a strike.
 Confirm category, addressees and timelines against OPNAVINST 3100.6K and current
 fleet marine mammal strike guidance before release. Available to all console roles.
