@@ -47,24 +47,34 @@ Key behaviours (all covered by `go test ./...` and the simulator):
 ## Layout
 
 ```
-proto/ghostseeker/v1/   contracts: Item/Form, Policy (interest, thresholds, EMCON),
-                        SyncService (edge↔shore), ConsoleService (UI), InferenceService
-gen/                    generated Go (buf + connect-go); committed, regenerate with `make gen`
-edge/                   store (SQLite + blobs), scoring (pluggable scorers), scheduler,
-                        link (Connect transport + simulator with link traces), ingest, inference, console
-shore/                  store, sync receiver, console
-internal/               fact format, virtual clock, scenario loader, http helpers
-cmd/edge cmd/shore      the two services
-cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JSON metrics
+.github/                manual verification workflow
 algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
-inference/              inference contract notes + model-free Python stub
+cmd/                    edge/shore services, operator app, simulator, benchmarks, R&D tools,
+                        policy/unit credential tools and synthetic PIV test PKI generator
+datasets/               dataset registry, ingestion scripts and review metadata
+deploy/                 container builds, Compose demo/Toxiproxy topology, Zarf package and Kubernetes manifests
+docs/                   fielding, security, verification, API contract and report documentation
+edge/                   SQLite/blob store, scoring, scheduler, link transport, replay/live ingest, inference, console
 edgeml/                 Python detection/tracking/sighting pipeline, real-model sidecar, evaluation reports
-deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
 frames/                 demo imagery (Git LFS zips)
-cmd/ghost-seeker web/   operator web app (Go, in-memory simulation, SSE feed); see "Operator web app" below
-ui/                     API notes for wiring the web app to the edge/shore consoles
+gen/                    generated Go (buf + connect-go); committed, regenerate with `make gen`
+inference/              inference contract notes + model-free Python stub
+internal/               command compiler, catalog, auth, operator server/shore bridge, scenario and shared helpers
+proto/                  ghostseeker/v1 protobuf contracts for items/forms, policies, sync, console and inference
+research/               image-priority experiments, NL compiler service/adapter and evaluations
+rnd/                    R&D testset/grading documentation and versioned metadata (images stored separately)
 scenarios/              replay scenarios (datasets + operator events)
+scripts/                live-frame upload helper
+shore/                  store, sync receiver, console and durable REST/SSE API
+tools/                  verification runner/tests and image-generation utilities
+ui/                     edge/shore console UI and API notes
+ui-mockup/              standalone reprioritization HTML mockup
+web/                    embedded operator app assets and Node tests (simulation and live-shore modes)
 ```
+
+Local runs may also create ignored top-level `bin/` (built binaries), `data/`
+(runtime state) and `dist/` (build/package artifacts). These are not source
+directories in a fresh checkout; `.git/` is local Git metadata.
 
 ## Quick start
 
@@ -453,9 +463,9 @@ never its own eviction victim.
   JSON-schema constraints, regex fallback, deterministic readback and
   guardrails before apply.
 - Unit authentication is on by default, and operator authentication gates
-  ConsoleService and blobs. Policy signing remains opt-in. No service provides
-  TLS; see [Security](docs/SECURITY.md) for deployment requirements and residuals.
-- Capture input is frame/scenario replay; no live camera ingestion is implemented.
+  ConsoleService and blobs. Policy signing remains opt-in. Shore and edge serve
+  HTTP; the operator app supports HTTPS/mutual TLS in optional PIV
+  mode. See [Security](docs/SECURITY.md) for deployment requirements and residuals.
 - Shore chunk reassembly assumes in-order delivery within an item/form.
 - Sailboat footage is in `frames/Sailboat_on_the_horizon_frames.zip` (unlabelled;
   the boat is not visible in every frame). `scenarios/sailboats_example.json`

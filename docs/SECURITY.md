@@ -4,8 +4,9 @@ Ghost Seeker has three network surfaces: the **shore node** (`cmd/shore`: SyncSe
 edges, ConsoleService + `/blob/` for operators), the **edge node** (`cmd/edge`: ship-side
 ConsoleService + `/blob/`) and the **operator web app** (`cmd/ghost-seeker`, which fronts the
 shore/edge consoles for a browser). This page lists the controls, how to run them locally with
-zero extra steps, and what production must set explicitly. `docs/reports/` holds the STIG /
-pentest report; the Deep scan counts are at the bottom.
+zero extra steps, and what production must set explicitly. The STIG / pentest report is in
+[`security/STIG_PENTEST_REPORT.md`](security/STIG_PENTEST_REPORT.md); the Deep scan counts
+are at the bottom.
 
 ## 1. Operator authentication (shore console, edge console, web bridge, blobs)
 
@@ -288,13 +289,44 @@ curl -s -H "Authorization: Bearer $TOKEN" -H content-type:application/json -d '{
 curl -s -o /dev/null -w '%{http_code}\n' -d '{}' localhost:8080/ghostseeker.v1.ConsoleService/GetStatus   # 401
 ```
 
-Delete `data/operator.token` to rotate. The Docker compose topology is the production posture
-(explicit `GS_OPERATOR_TOKEN`, `GS_DEV_TOKEN_FILE=none`).
+Delete `data/operator.token` to rotate. `deploy/compose/docker-compose.yml` requires explicit
+operator/unit credentials and sets `GS_DEV_TOKEN_FILE=none`. The separate laptop demo
+(`deploy/compose/demo.compose.yml`) generates shared demo credentials instead.
+
+### Deployment manifests (static inventory, not a runtime security assessment)
+
+`deploy/zarf/zarf.yaml` is a package definition, not a TODO stub. It references
+`deploy/zarf/manifests/` for a namespace, shore/edge StatefulSets with PVCs and
+ConfigMaps, an operator Deployment, an optional edgeml sidecar Deployment, and
+ClusterIP Services. The pod specs set non-root numeric UIDs and `RuntimeDefault`
+seccomp; containers use read-only root filesystems, drop all capabilities and
+disable privilege escalation. They include health probes, resource requests and
+memory limits. Shore defaults to required unit authentication; shore, edge and
+operator reference externally supplied credential Secrets and disable dev tokens.
+
+These controls do not make the package field-hardened: no NetworkPolicy, Ingress
+or TLS configuration is included, and ClusterIP alone is not network isolation.
+Policy-signing keys / required-signature settings are not configured. The edge
+mounts a node `hostPath` read-only for frames; storage provisioning, permissions
+and credential lifecycle remain deployment responsibilities. The optional sidecar
+binds `0.0.0.0:9090` in mock mode with an empty read-only model volume; it has no
+authentication setting in the manifest. Real inference needs approved model
+mounts and command overrides.
+
+`deploy/compose/docker-compose.yml` provides shore, edge and Toxiproxy with
+persistent data volumes and required credentials, plus an optional PIV/HTTPS
+operator profile. It publishes shore/edge HTTP ports and the Toxiproxy admin
+port; it does not set the Kubernetes container-hardening controls above.
+`deploy/compose/demo*.yml` supplies separate laptop/demo variants. Restrict exposed
+ports and provision transport protection, keys and models for the target network.
+Kubernetes runtime/cluster security review and real-model inference in the packaged
+deployment remain unverified; see [Fielding](FIELDING.md).
 
 ## 6. Residual risk / not in scope here
 
-* No TLS inside the repo: terminate TLS in front of every listener; the operator token and
-  session cookie are bearer secrets.
+* Shore and edge serve HTTP; terminate TLS in front of those listeners. The operator app
+  supports in-process HTTPS/mutual TLS in PIV mode (§1a), but token mode defaults to HTTP
+  and needs a TLS boundary too. The operator token and session cookie are bearer secrets.
 * The unit JWT authenticates the edge to shore; it does not authenticate plaintext
   shore responses to the edge. Use the TLS boundary above for transport protection.
   Ed25519 policy payload signing is implemented in `internal/policy` and remains
