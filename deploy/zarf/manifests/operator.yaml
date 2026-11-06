@@ -1,3 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: operator-data
+  namespace: ghost-seeker
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,6 +44,7 @@ spec:
             - "-shore={{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_OPERATOR_SHORE_URL###" "http://shore:8080") }}https://shore:8080{{ else }}###ZARF_VAR_OPERATOR_SHORE_URL###{{ end }}"
             - "-edge="
             - "-link-listen="
+            - "-review-log=/data/reviews.jsonl"
 {{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
             - "-shore-ca=/run/shore-ca/ca.crt"
 {{ end }}
@@ -68,6 +80,8 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: data
+              mountPath: /data
 {{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
             - name: shore-ca
               mountPath: /run/shore-ca
@@ -76,6 +90,9 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: operator-data
 {{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
         - name: shore-ca
           secret:

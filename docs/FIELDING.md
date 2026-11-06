@@ -611,6 +611,8 @@ inference in this deployment package and a field installation remain unverified.
 Use a Kubernetes cluster supported by UDS Core, Docker, Make, Python 3 with
 PyYAML, and the build tools in [VERIFY.md](VERIFY.md). This packages only the
 production profile; no demo auth, replay or synthetic input is enabled.
+The local dev task also requires k3d 5.7.1 or later on PATH (the pinned
+uds-k3d bundle invokes the host k3d binary).
 
 | Tool/package | Pinned version |
 | --- | --- |

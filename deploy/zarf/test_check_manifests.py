@@ -6,6 +6,7 @@ import ipaddress
 import itertools
 import json
 import subprocess
+from urllib.parse import urlsplit
 import unittest
 from unittest import mock
 from unittest.mock import patch
@@ -49,6 +50,14 @@ class DevAuthTests(unittest.TestCase):
 
 
 class UDSPackageTests(unittest.TestCase):
+    def test_example_config_preserves_sync_host(self):
+        config = yaml.safe_load((validator.ROOT.parents[1] / "bundles/prod-uds/uds-config.yaml").read_text())
+        overrides = config.get("variables", {}).get("ghost-seeker", {})
+        package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
+        values = validator.package_variables(package, overrides)
+        self.assertIn(urlsplit(values["SHORE_URL"]).hostname,
+                      values["SHORE_PUBLIC_HOSTS"].split(","))
+
     def setUp(self):
         self.package = yaml.safe_load((validator.ROOT / "zarf.yaml").read_text())
         self.documents = [doc for path in (validator.ROOT / "manifests").glob("*.yaml")
@@ -498,7 +507,8 @@ class TLSManifestTests(unittest.TestCase):
                 self.assertNotIn("args", container)
             else:
                 self.assertEqual(container["args"], ["-addr=:8090", "-shore=http://shore:8080",
-                                                      "-edge=", "-link-listen="])
+                                                      "-edge=", "-link-listen=",
+                                                      "-review-log=/data/reviews.jsonl"])
             for probe in ("readinessProbe", "livenessProbe"):
                 self.assertNotIn("scheme", container[probe]["httpGet"])
             pod = self.workload(documents, name)["spec"]["template"]["spec"]
