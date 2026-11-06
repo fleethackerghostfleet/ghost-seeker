@@ -26,6 +26,7 @@ func TestOCSPResponderAuthorization(t *testing.T) {
 		{"future", false, Revoked},
 		{"foreign issuer", false, Revoked},
 		{"bad signature", false, Revoked},
+		{"bad direct signature", false, Revoked},
 		{"client-auth only", true, ""},
 	} {
 		t.Run(tc.name+map[bool]string{true: " valid CRL", false: " revoked CRL"}[tc.validCRL], func(t *testing.T) {
@@ -49,15 +50,15 @@ func TestOCSPResponderAuthorization(t *testing.T) {
 				parent = pivtest.New(t, nil, pivtest.Options{CN: "Foreign CA", CA: true})
 			}
 			responder := pivtest.New(t, parent, o)
-			if tc.name == "direct issuer" || tc.name == "embedded issuer" {
+			if tc.name == "direct issuer" || tc.name == "embedded issuer" || tc.name == "bad direct signature" {
 				responder = f.inter
 			}
 			template := ocsp.Response{Certificate: responder.Cert, Status: ocsp.Good, SerialNumber: f.leaf.Cert.SerialNumber, ThisUpdate: f.now.Add(-time.Minute), NextUpdate: f.now.Add(time.Hour)}
-			if tc.name == "direct issuer" {
+			if tc.name == "direct issuer" || tc.name == "bad direct signature" {
 				template.Certificate = nil
 			}
 			key := responder.Key
-			if tc.name == "bad signature" {
+			if tc.name == "bad signature" || tc.name == "bad direct signature" {
 				key = f.leaf.Key
 			}
 			response, err := ocsp.CreateResponse(f.inter.Cert, responder.Cert, template, key)
