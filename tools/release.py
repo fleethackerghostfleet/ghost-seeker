@@ -95,7 +95,7 @@ def release(version, arch, allow_dirty):
         info = json.loads(subprocess.check_output(["docker", "image", "inspect", ref]))[0]
         if info["Architecture"] != arch:
             raise ValueError(f"{ref}: wrong architecture")
-        image_info[name] = {"ref": ref, "config_digest": info["Id"], "repo_digests": info["RepoDigests"]}
+        image_info[name] = {"ref": ref, "image_id": info["Id"], "repo_digests": info["RepoDigests"]}
     for role in ("ship", "shore"):
         run("zarf", "package", "create", f"deploy/zarf/{role}", "--confirm", "--architecture", arch, "--output", str(output), cwd=work)
         package = output / f"zarf-package-ghost-seeker-{role}-{arch}-{version}.tar.zst"
