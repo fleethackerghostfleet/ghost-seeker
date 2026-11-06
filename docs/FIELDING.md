@@ -535,6 +535,7 @@ make images
 make zarf-package
 # Use a separately approved model set instead:
 make model-image MODELS=/approved/models MODEL_SUMS=/approved/SHA256SUMS
+make zarf-package MODELS=/approved/models MODEL_SUMS=/approved/SHA256SUMS
 ```
 
 The builder copies only listed files, rejects unsafe paths, verifies all hashes,
@@ -542,6 +543,12 @@ and prints `MODEL_SHA256`, the SHA256 of the exact `SHA256SUMS` bytes. Its Zarf
 default pins the committed manifest; a regression check prevents drift. Explicit
 `MODEL_SUMS=` skips models for `make images`, but `model-image` and `zarf-package`
 reject it. Custom sums use standard `sha256sum` paths relative to `MODELS`.
+Pass the same `MODELS=` and `MODEL_SUMS=` to `make zarf-package` for a custom
+set: packaging rebuilds the model image. Custom sums must also include
+`catalog/colregs_lights.json` and `catalog/colregs_night_config.json` with the
+repo catalog's current hashes; these files always come from `internal/catalog`,
+not the custom model directory. Input binary checksum markers are normalized
+to text form; pin the printed `MODEL_SHA256` for the resulting image manifest.
 The model image is carried inside the Zarf package:
 runtime never fetches weights, including in an air gap.
 The image also carries pinned `colregs_lights.json` and `colregs_night_config.json`
