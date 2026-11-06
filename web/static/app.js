@@ -909,14 +909,7 @@ function renderDetailContent(){
  </div>`;
  D.querySelectorAll('.tierbtns [data-t]').forEach(b=>b.onclick=()=>setManual(it.id,+b.dataset.t));$('dReset').onclick=async()=>{try{await patchItem(it.id,{manual:0,reviewed:false})}catch(error){toast(error.message)}};$('dPrev').onclick=()=>step(-1);$('dNext').onclick=()=>step(1);$('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;if(state.zoom)renderZoom();
  bindMetadataPanel(it);briefing.renderDetections(it);
- $('oprepOpen').onclick=async event=>{
-  const button=event.currentTarget;button.disabled=true;
-  let metadata=metadataCache.get(it.id)?.data,unavailable=false;
-  try{if(!metadata||metadataCache.get(it.id)?.stale){metadata=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);metadataCache.set(it.id,{data:metadata})}}
-  catch{unavailable=true}
-  finally{button.disabled=false}
-  if(state.sel===it.id)oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable);
- };
+ $('oprepOpen').onclick=event=>openItemOprep(it,event.currentTarget,()=>state.sel===it.id);
  $('aCdr').onclick=async()=>{if(it.sent)return;try{await patchItem(it.id,{sent:true});toast('Image and detections pushed to Commander queue')}catch(error){toast(error.message)}};
  $('aFull').onclick=()=>requestFullRes(it);
  for(const [id,override] of [['aUploadNext','next'],['aUploadHold','hold']]){const b=$(id);if(b)b.onclick=async()=>{if(it.live||LIVE||uploadState(it).done)return;try{const result=await request(`/api/items/${encodeURIComponent(it.id)}/upload-override`,'POST',{override:it.upload?.override===override?'':override});cdr=result.cdr;applyItemUpdate(result.item)}catch(error){toast(error.message)}}}
@@ -1102,6 +1095,14 @@ function renderNext(it){
  box.innerHTML=(rv.last?`<span class="rvnext-done">${esc(rv.last)}</span>`:'')+`<span class="rvnext-step"><b>Next:</b> ${step}</span>`;
 }
 function setLast(msg){rv.last=msg;const box=$('rvNext');if(!box?.classList)return;box.classList.remove('flash');void box.offsetWidth;box.classList.add('flash')}
+async function openItemOprep(it,button,isCurrent){
+ button.disabled=true;
+ let metadata=metadataCache.get(it.id)?.data,unavailable=false;
+ try{if(!metadata||metadataCache.get(it.id)?.stale){metadata=await request(`/api/items/${encodeURIComponent(it.id)}/metadata`);metadataCache.set(it.id,{data:metadata})}}
+ catch{unavailable=true}
+ finally{button.disabled=false}
+ if(isCurrent())oprep.open(findItem(it.id)||it,CLS,SOURCES,button,metadata,unavailable);
+}
 function renderReview(){preserveBandFocus(renderReviewContent)}
 function renderReviewContent(){
  setupReviewData();
@@ -1109,6 +1110,8 @@ function renderReviewContent(){
  const current=rv.cur?findItem(rv.cur.id):rv.busy?null:rvQueue()[0];
  if(current)rv.cur=current;
  const it=rv.cur,unavailable=!!it&&!current;
+ const report=$('rvOprep');report.disabled=!it||unavailable;
+ report.onclick=()=>{if(it&&!report.disabled) return openItemOprep(it,report,()=>state.page==='rv'&&rv.cur?.id===it.id&&!!findItem(it.id))};
  rvProgress();renderAsk();
  [...$('rvKeys').children].forEach(b=>{if(b.dataset.a)b.disabled=!reviewerName||rv.busy||(!it&&b.dataset.a!=='undo')||(unavailable&&!['skip','undo'].includes(b.dataset.a))});
  if(!it){rv.shown=null;rv.displayed=null;$('rvMain').innerHTML=`<div class="rvdone"><div class="ck">✓</div><b>${rv.busy?'Saving review…':'All caught up'}</b><div>${rv.busy?'The next image will appear when the save completes.':'New images will appear here as sensors report.'}</div></div><div class="rvflash" id="rvFlash"></div>`;return}
