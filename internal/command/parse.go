@@ -2,6 +2,7 @@ package command
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -135,15 +136,22 @@ func parseDirectiveVocabulary(text string, edgeSubtypes, openVocabulary bool) ([
 			clause = windowPattern.ReplaceAllString(clause, " ")
 		}
 		classes := make([]string, 0)
+		attrs := make([]string, 0)
 		seen := make(map[string]bool)
 		patterns := synonymPatterns
 		if edgeSubtypes {
 			patterns = append(append([]classPattern{}, edgeConceptPatterns...), patterns...)
 		}
-		for _, pattern := range patterns {
-			if openVocabulary && pattern.class == "debris" {
-				pattern.re = regexp.MustCompile(`\b(debris|wreckage|floating objects?|flotsam)\b`)
+		if openVocabulary {
+			patterns = append([]classPattern{}, patterns...)
+			for i, pattern := range patterns {
+				if pattern.class == "debris" {
+					patterns[i].re = regexp.MustCompile(`\b(debris|wreckage|floating objects?|flotsam)\b`)
+				}
 			}
+			classes, attrs, clause = qualifiedConcepts(clause, patterns)
+		}
+		for _, pattern := range patterns {
 			if pattern.re.MatchString(clause) {
 				if !seen[pattern.class] {
 					classes = append(classes, pattern.class)
@@ -163,10 +171,11 @@ func parseDirectiveVocabulary(text string, edgeSubtypes, openVocabulary bool) ([
 				clause = pattern.re.ReplaceAllString(clause, " ")
 			}
 		}
-		attrs := make([]string, 0)
 		for _, pattern := range attributePatterns {
 			if pattern.re.MatchString(clause) {
-				attrs = append(attrs, pattern.name)
+				if !slices.Contains(attrs, pattern.name) {
+					attrs = append(attrs, pattern.name)
+				}
 				clause = pattern.re.ReplaceAllString(clause, " ")
 			}
 		}

@@ -43,3 +43,31 @@ func TestOpenVocabularyDirectives(t *testing.T) {
 		t.Fatalf("fixed sensor accepted query: %+v", closed)
 	}
 }
+
+func TestQualifiedKnownNounsRemainWholeOpenConcepts(t *testing.T) {
+	c := &Compiler{Capabilities: testCapabilities{Capabilities{OpenVocabulary: true}}, EdgeSubtypes: true}
+	for _, tt := range []struct{ text, phrase, base, attr string }{
+		{"prioritize red sailboats", "red sailboats", "sailboat", ""},
+		{"ignore orange buoys", "orange buoys", "buoy", ""},
+		{"look for damaged tankers and life rafts", "damaged tankers", "tanker", ""},
+		{"prioritize approaching red sailboats", "red sailboats", "sailboat", "approaching"},
+	} {
+		t.Run(tt.text, func(t *testing.T) {
+			compiled := c.Compile(context.Background(), tt.text)
+			if compiled.Blocked || len(compiled.Unknown) != 0 || len(compiled.Rules) != 1 {
+				t.Fatalf("compiled: %+v", compiled)
+			}
+			r := compiled.Rules[0]
+			if !slices.Contains(r.Classes, tt.phrase) || slices.Contains(r.Classes, tt.base) || slices.Contains(r.Classes, "red") || slices.Contains(r.Classes, "orange") {
+				t.Fatalf("noun lost or broadened: %+v", r)
+			}
+			if tt.attr != "" && !slices.Contains(r.Attrs, tt.attr) {
+				t.Fatalf("attribute lost: %+v", r)
+			}
+		})
+	}
+	plain := c.CompileRules("prioritize approaching sailboats")
+	if !slices.Equal(plain.Rules[0].Classes, []string{"sailboat"}) || !slices.Equal(plain.Rules[0].Attrs, []string{"approaching"}) {
+		t.Fatalf("known noun/attribute behavior regressed: %+v", plain)
+	}
+}
