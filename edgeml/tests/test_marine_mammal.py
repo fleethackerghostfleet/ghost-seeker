@@ -159,6 +159,12 @@ def test_joint_live_calibration():
     assert result['v3_neg']['fp_per_1000'] == 0
     assert result['subtype:dolphin']['recall'] == 1
     assert module.measure([], module.predictions([], .9, .9))['f1'] == 0
+    row = dict(label=1, source='public:pos', subtype='dolphin', best_crop_p=0, best_scan_p=.99,
+               scores=[dict(kind='scan', p=.99, subtype='whale'), dict(kind='scan', p=.95, subtype='dolphin')])
+    result = module.summarize([row], .9, .9)['subtype:dolphin']
+    assert result['recall'] == 1 and result['correct_subtype_tp'] == 0
+    row['scores'].append(dict(kind='crop', p=.96, subtype='dolphin'))
+    assert module.summarize([row], .9, .9)['subtype:dolphin']['correct_subtype_tp'] == 1
     with pytest.raises(ValueError):
         module.calibrate([])
 

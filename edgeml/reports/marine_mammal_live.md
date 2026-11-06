@@ -149,10 +149,23 @@ one frame prediction. FP/1000 denominators are negative frames, not all frames.
 
 | supplied subtype | dev mammal TP / n (recall) | dev correctly named TP / n | test mammal TP / n (recall) | test correctly named TP / n |
 |---|---:|---:|---:|---:|
-| whale | 57/68 (0.838) | 40/68 (0.588) | 57/67 (0.851) | 37/67 (0.552) |
+| whale | 57/68 (0.838) | 35/68 (0.515) | 57/67 (0.851) | 35/67 (0.522) |
 | blow | 9/9 (1.000) | 6/9 (0.667) | 8/8 (1.000) | 6/8 (0.750) |
 | fluke | 30/32 (0.938) | 23/32 (0.719) | 26/26 (1.000) | 21/26 (0.808) |
-| dolphin | 20/27 (0.741) | 20/27 (0.741) | 17/21 (0.810) | 15/21 (0.714) |
+| dolphin | 20/27 (0.741) | 19/27 (0.704) | 17/21 (0.810) | 12/21 (0.571) |
+
+PR #274 review correction: correct-subtype recall counts only the highest-p
+passing scan, matching the detector's single emitted scan detection, plus any
+passing crop detections. Earlier values incorrectly counted lower-ranked scan
+regions that were never emitted. These corrected tables were recomputed from
+cached scores into `~/data/whale_eval/review274_metrics.json`, without inference,
+relabeling or threshold changes. Frame-level detection P/R/F1 is unchanged.
+Scan cadence now uses the source-local engine frame index under its existing
+source lock; tentative mammal sightings retain the wire subtype `tentative`
+until confirmation, after which species/subtype is reported normally.
+Review-fix checks: `640 passed, 3 skipped in 7.45s`; `make test` exited 0
+(`ok github.com/fleethackerghostfleet/ghost-seeker/web (cached)`). Logs:
+`~/data/whale_eval/review274_{pytest,make_test}.txt`.
 
 ### Per-source counts
 

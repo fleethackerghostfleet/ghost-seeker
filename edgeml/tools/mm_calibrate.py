@@ -27,6 +27,13 @@ def measure(rows, predicted):
 
 
 def summarize(rows, crop_thr, scan_thr):
+    def emitted_scores(row):
+        scores = row.get('scores', [])
+        crops = [s for s in scores if s['kind'] == 'crop' and s['p'] >= crop_thr]
+        scan = max((s for s in scores if s['kind'] == 'scan' and s['p'] >= scan_thr),
+                   key=lambda s: s['p'], default=None)
+        return crops + ([scan] if scan is not None else [])
+
     groups = {'all': rows,
               'public': [r for r in rows if r['source'].startswith('public:')],
               'v3': [r for r in rows if r['source'].startswith('v3_')],
@@ -39,8 +46,7 @@ def summarize(rows, crop_thr, scan_thr):
     for subtype in ('whale', 'blow', 'fluke', 'dolphin'):
         name = 'subtype:' + subtype
         group = groups[name]
-        correct = sum(any(s['subtype'] == subtype and s['p'] >= (crop_thr if s['kind'] == 'crop' else scan_thr)
-                          for s in row.get('scores', [])) for row in group)
+        correct = sum(any(s['subtype'] == subtype for s in emitted_scores(row)) for row in group)
         result[name].update(correct_subtype_tp=correct, correct_subtype_recall=correct / max(1, len(group)))
     return result
 
