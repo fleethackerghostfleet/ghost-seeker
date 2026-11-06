@@ -504,22 +504,29 @@ kubectl --context "$SHORE_CONTEXT" get pv
 ```
 
 StatefulSet `data-edge-0`, `frames-edge-0`, `data-shore-0` normally survive
-StatefulSet removal by Kubernetes retention defaults. **`operator-data` is an
-explicit chart-managed PVC and can be deleted with its release.** Do not
-assume package removal preserves every PVC. A `Delete` PV reclaim policy can
-destroy the storage when its PVC disappears; arrange approved snapshots/Retain
-policy and a tested restore before uninstalling. Back up Secrets separately.
+**StatefulSet-only** removal by Kubernetes retention defaults. This does not
+make package removal safe: **the packages also own a Namespace manifest;
+removing its Helm release can delete the namespace and every remaining PVC
+and Secret in it.** `operator-data` is additionally an explicit chart-managed
+PVC and can be deleted with its release. Treat every claim as at risk. A
+`Delete` PV reclaim policy can destroy the storage when its PVC disappears;
+arrange approved snapshots/Retain policy and a tested restore before
+uninstalling. Back up Secrets separately. If retention in place is required,
+establish and test an administrator-approved Helm resource-retention procedure
+for the Namespace and chart-managed PVC **before** package removal; merely
+leaving StatefulSet claim retention at its default is insufficient.
 
 ```bash
+# DESTRUCTIVE: execute only after the backup/retention procedure above.
 kubectl config use-context "$SHIP_CONTEXT"
 uds zarf package remove ghost-seeker-ship --confirm
 kubectl config use-context "$SHORE_CONTEXT"
 uds zarf package remove ghost-seeker-shore --confirm
 ```
 
-Re-inventory retained volumes and test recovery. Removing Package CRs removes
-their generated routing/policies. Do not delete namespaces, PVCs, PVs or
-Secrets as routine cleanup. Namespace deletion removes retained PVCs too.
+Re-inventory any retained volumes and test recovery. Removing Package CRs
+removes their generated routing/policies. Do not additionally delete namespaces,
+PVCs, PVs or Secrets as routine cleanup. Namespace deletion removes retained PVCs too.
 Data destruction requires separate explicit authorization and retention-policy
 approval; remove only the named resources after backup/retention acceptance.
 Never uninstall Core as part of removing Ghost Seeker.
