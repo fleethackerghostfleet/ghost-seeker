@@ -505,6 +505,7 @@ func (s *Server) setPolicyEMCON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.policy.operatorEMCON = &pb.EmconSetting{Mode: mode, SetBy: opauth.Actor(r.Context(), "TAO"), Echelon: pb.Echelon_ECHELON_SHIP}
+	s.store.SetEMCON(mode == pb.EmconMode_EMCON_MODE_BURST)
 	accepted, err := s.policy.apply("ui", opauth.Actor(r.Context(), "TAO"), "EMCON "+emconModeName(mode), time.Now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

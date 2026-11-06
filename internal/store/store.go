@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/lowband"
 )
 
 const MaxActiveDirectives = 20
@@ -42,6 +43,9 @@ type Store struct {
 	model           string
 	directives      []command.Directive
 	linkBPS         int64
+	clock           time.Time
+	lowband         *lowband.Tracker
+	emconBurst      bool
 	uploadRemainder int64
 	uploadOrder     uint64
 }
@@ -50,7 +54,7 @@ func New(retain int) *Store {
 	if retain < 1 {
 		retain = 1
 	}
-	return &Store{retain: retain, model: "maritime", linkBPS: 256_000, stats: command.Stats{LinkBPS: 256_000}}
+	return &Store{retain: retain, model: "maritime", linkBPS: 256_000, clock: time.Now(), lowband: lowband.New(), stats: command.Stats{LinkBPS: 256_000}}
 }
 
 func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
@@ -70,7 +74,18 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 	s.stats.DB++
 	item.DBID = s.stats.DB + 180000
 	command.Rescore(item, s.model, s.directives)
-	item.Upload = command.Upload{Bytes: int64(item.KB)*1024 + 512, BPS: s.linkBPS}
+	// Generated captures have a source identity and carry the manifest record;
+	// source-less Items are retained as lightweight fixtures for callers that
+	// construct upload state directly.
+	metaBytes := int64(0)
+	if item.SourceID != "" {
+		metaBytes = 1024
+	}
+	imageBytes := int64(item.KB) * 1024
+	if item.SourceID == "" {
+		imageBytes += 512
+	}
+	item.Upload = command.Upload{MetaBytes: metaBytes, Bytes: imageBytes, BPS: s.linkBPS}
 	s.items = append(s.items, cloneItem(*item))
 	evicted := ""
 	if len(s.items) > s.retain {
@@ -149,6 +164,15 @@ func (s *Store) SetModel(id string) {
 	defer s.mu.Unlock()
 	s.model = id
 	s.rescoreLocked()
+}
+
+// SetLowbandHold shortens hysteresis for demonstrations without changing its thresholds.
+func (s *Store) SetLowbandHold(hold time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if hold > 0 {
+		s.lowband.Hold = hold
+	}
 }
 
 func (s *Store) AddDirective(text string, rules []command.Rule) (command.Directive, error) {

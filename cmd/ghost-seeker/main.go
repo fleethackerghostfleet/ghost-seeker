@@ -49,6 +49,7 @@ func main() {
 	linkListen := flag.String("link-listen", ":18080", "live mode: automatic 0–2 MB/s ship-to-shore link; point the edge's -shore at it (empty = externally shaped link)")
 	demoLinkControl := flag.Bool("demo-link-control", false, "live mode: allow POST /api/shore/link to pin the shaper rate ({\"bps\":N} or {\"auto\":true}) so a presenter can build a backlog")
 	simLinkBps := flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
+	lowbandHold := flag.Duration("lowband-hold", 2*time.Minute, "simulation: sustained low/high link duration before metadata-only mode changes")
 	poll := flag.Duration("poll", time.Second, "live mode: shore poll interval")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	admin := flag.Bool("admin", adminDefault, "enable super-admin policy controls")
@@ -135,6 +136,7 @@ func main() {
 	}
 
 	data := store.New(*retain)
+	data.SetLowbandHold(*lowbandHold)
 	uplink := newSimulationUplink(data, *simLinkBps, rand.NormFloat64)
 	generator := sensor.NewGenerator()
 	fillBacklog(data, generator, *backfill)
