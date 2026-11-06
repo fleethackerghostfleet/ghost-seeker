@@ -678,7 +678,7 @@ build.
 strings and `-h` output) for demo symbols, routes and flags, runs
 `web/prod-features.test.cjs`, checks the Docker/Zarf defaults, and checks that
 the `/api/v1` output API is documented in `docs/api/openapi.yaml`. The
-`prod-gate` GitHub workflow runs it on pull requests to `prod` and `dev`.
+`prod-gate` GitHub workflow runs it on pull requests to `prod`, `prod-uds` and `dev`.
 
 **Repository admin action required:** in GitHub branch protection for `prod`,
 mark the `prod-gate` status check as required (and require pull requests).
