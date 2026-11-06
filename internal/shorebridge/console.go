@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/buildprofile"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
@@ -857,6 +858,10 @@ func (c *Console) config(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, map[string]any{
 		"sources": c.sourceList(), "classes": c.allClasses(), "models": liveModels,
 		"attrLabels": catalog.AttrLabels, "examples": liveExamples, "live": true,
+		"features": map[string]any{
+			"profile": buildprofile.Name, "simulation": false, "demoReset": false,
+			"dataset": false, "demoLinkControl": c.b != nil && c.b.linkOverride,
+		},
 	})
 }
 
