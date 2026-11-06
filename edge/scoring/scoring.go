@@ -55,9 +55,9 @@ const (
 // operator interest, and detection confidence.
 func Default() *Engine {
 	return &Engine{
-		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}},
+		Scorers: []Scorer{BaseValue{}, Unknown{}, Interest{}, Confidence{}, DarkContact{}, PersonInWater{}},
 		Weights: map[string]float64{"base": 1, "unknown": 3, "interest": 1, "confidence": 0.5,
-			"dark": catalog.NightConfig.DarkContact.PriorityWeight},
+			"dark": catalog.NightConfig.DarkContact.PriorityWeight, "mob": 4},
 	}
 }
 

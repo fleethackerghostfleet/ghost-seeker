@@ -16,7 +16,7 @@ func TestCanonicalAliasWholePhraseNormalization(t *testing.T) {
 		{"go-fast", "speedboat"},
 		{"coast guard cutters", "coast guard"},
 		{"navigation buoys", "buoy"},
-		{"PERSON IN THE WATER", "person"},
+		{"PERSON IN THE WATER", "person in water"},
 	} {
 		t.Run(tc.phrase, func(t *testing.T) {
 			got, ok := CanonicalAlias(tc.phrase)

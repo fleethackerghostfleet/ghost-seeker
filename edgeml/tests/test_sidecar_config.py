@@ -75,7 +75,7 @@ def test_real_engine_configuration_parses_overrides(monkeypatch, launch, anomaly
               "--prioritizer", "both", *anomaly])
     engine.assert_called_once_with("env.onnx", "none", threads=2, fps=8.0, engine="ort", tracker="ocsort", asso="iou",
                                    max_lost_s=3.0, score_thr=0.4, det_low_thr=0.02, agg={"min_hits": 3},
-                                   trk={"tentative_thresh": None}, text_tower="torch", anomaly_fallback=expected)
+                                   trk={"tentative_thresh": None}, text_tower="torch", anomaly_fallback=expected, live_tiling={})
     pin.assert_called_once_with(2)
     assert serve.call_args.args[0] is engine.return_value
     assert serve.call_args.kwargs["prioritizer"] is prioritizer.return_value

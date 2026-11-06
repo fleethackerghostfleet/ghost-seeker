@@ -24,7 +24,9 @@ func guardrails(text string, rules []Rule, caps CapabilityProvider, locks LockCh
 			classSet[class] = true
 		}
 	}
-	if len(classSet)*5 >= len(catalog.Classes)*4 {
+	// A live-only refinement of "person" must not dilute the broad-boost guard.
+	classCount := len(catalog.Classes) - 1
+	if len(classSet)*5 >= classCount*4 {
 		blocked = true
 	}
 	for _, clause := range splitPattern.Split(strings.ToLower(text), -1) {

@@ -1,0 +1,253 @@
+{
+  "config": {
+    "enabled": true,
+    "min_pixels": 921600,
+    "tile": 640,
+    "overlap": 0.2,
+    "max_tiles": 2,
+    "budget_ms": 3500.0,
+    "cost_margin": 1.2,
+    "merge_iou": 0.5
+  },
+  "model_sha256": "cf094973e1f946b2e86883120ddc455a0e33bb07f89096ac1d8bac14ac9833b6",
+  "threads": 4,
+  "frames": 217,
+  "videos": [
+    "m210/DJI_0003_d3/DJI_0003_d3.mov",
+    "m210/DJI_0011_d3/DJI_0011_d3.mov",
+    "m210/NorthSea_Sat_Z30_DJI003/NorthSea_Sat_Z30_DJI003.MP4",
+    "mavic/DJI_0032/DJI_0032.MP4",
+    "mavic/DJI_0041/DJI_0041.MP4",
+    "mavic/DJI_0062/DJI_0062.MP4",
+    "mavic/NorthSea_Fri_DJI_0114/NorthSea_Fri_DJI_0114.MP4",
+    "mavic/NorthSea_Fri_DJI_0115/NorthSea_Fri_DJI_0115.MP4",
+    "mavic/NorthSea_Sat_DJI_0122/NorthSea_Sat_DJI_0122.MP4",
+    "mavic/NorthSea_Thu_DJI_0107/NorthSea_Thu_DJI_0107.MP4"
+  ],
+  "thresholds": {
+    "0.35": {
+      "native": {
+        "all": {
+          "tp": 173,
+          "fp": 95,
+          "gt": 1279,
+          "precision": 0.6455223880597015,
+          "recall": 0.1352619233776388
+        },
+        "vessel_all": {
+          "tp": 142,
+          "fp": 40,
+          "gt": 424,
+          "precision": 0.7802197802197802,
+          "recall": 0.33490566037735847
+        },
+        "small": {
+          "tp": 5,
+          "fp": 0,
+          "gt": 478,
+          "precision": 1.0,
+          "recall": 0.010460251046025104
+        },
+        "vessel_small": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 23,
+          "precision": null,
+          "recall": 0.0
+        },
+        "lt32": {
+          "tp": 3,
+          "fp": 0,
+          "gt": 380,
+          "precision": 1.0,
+          "recall": 0.007894736842105263
+        },
+        "vessel_lt32": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 6,
+          "precision": null,
+          "recall": 0.0
+        },
+        "mob": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 855,
+          "precision": null,
+          "recall": 0.0
+        }
+      },
+      "tiled": {
+        "all": {
+          "tp": 222,
+          "fp": 146,
+          "gt": 1279,
+          "precision": 0.6032608695652174,
+          "recall": 0.17357310398749023
+        },
+        "vessel_all": {
+          "tp": 162,
+          "fp": 70,
+          "gt": 424,
+          "precision": 0.6982758620689655,
+          "recall": 0.38207547169811323
+        },
+        "small": {
+          "tp": 25,
+          "fp": 23,
+          "gt": 478,
+          "precision": 0.5208333333333334,
+          "recall": 0.05230125523012552
+        },
+        "vessel_small": {
+          "tp": 3,
+          "fp": 12,
+          "gt": 23,
+          "precision": 0.2,
+          "recall": 0.13043478260869565
+        },
+        "lt32": {
+          "tp": 18,
+          "fp": 14,
+          "gt": 380,
+          "precision": 0.5625,
+          "recall": 0.04736842105263158
+        },
+        "vessel_lt32": {
+          "tp": 0,
+          "fp": 5,
+          "gt": 6,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "mob": {
+          "tp": 5,
+          "fp": 18,
+          "gt": 855,
+          "precision": 0.21739130434782608,
+          "recall": 0.005847953216374269
+        }
+      }
+    },
+    "0.8618552088737488": {
+      "native": {
+        "all": {
+          "tp": 4,
+          "fp": 0,
+          "gt": 1279,
+          "precision": 1.0,
+          "recall": 0.003127443315089914
+        },
+        "vessel_all": {
+          "tp": 3,
+          "fp": 0,
+          "gt": 424,
+          "precision": 1.0,
+          "recall": 0.007075471698113208
+        },
+        "small": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 478,
+          "precision": null,
+          "recall": 0.0
+        },
+        "vessel_small": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 23,
+          "precision": null,
+          "recall": 0.0
+        },
+        "lt32": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 380,
+          "precision": null,
+          "recall": 0.0
+        },
+        "vessel_lt32": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 6,
+          "precision": null,
+          "recall": 0.0
+        },
+        "mob": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 855,
+          "precision": null,
+          "recall": 0.0
+        }
+      },
+      "tiled": {
+        "all": {
+          "tp": 16,
+          "fp": 1,
+          "gt": 1279,
+          "precision": 0.9411764705882353,
+          "recall": 0.012509773260359656
+        },
+        "vessel_all": {
+          "tp": 15,
+          "fp": 1,
+          "gt": 424,
+          "precision": 0.9375,
+          "recall": 0.03537735849056604
+        },
+        "small": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 478,
+          "precision": null,
+          "recall": 0.0
+        },
+        "vessel_small": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 23,
+          "precision": null,
+          "recall": 0.0
+        },
+        "lt32": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 380,
+          "precision": null,
+          "recall": 0.0
+        },
+        "vessel_lt32": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 6,
+          "precision": null,
+          "recall": 0.0
+        },
+        "mob": {
+          "tp": 0,
+          "fp": 0,
+          "gt": 855,
+          "precision": null,
+          "recall": 0.0
+        }
+      }
+    }
+  },
+  "latency_ms": {
+    "native": {
+      "p50": 81.19076100001621,
+      "p95": 166.038080200019
+    },
+    "tiled": {
+      "p50": 227.63956799997231,
+      "p95": 464.52511960001164
+    }
+  },
+  "tile_histogram": {
+    "0": 0,
+    "1": 0,
+    "2": 217
+  },
+  "budget_overruns": 0
+}

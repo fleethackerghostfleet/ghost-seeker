@@ -16,7 +16,7 @@ import (
 )
 
 // Core labels are detector categories, not a synonym dictionary.
-var coreDetectorLabels = []string{"boat", "ship", "person", "bird", "airplane", "helicopter", "drone", "debris", "unknown"}
+var coreDetectorLabels = []string{"boat", "ship", "person", "person in water", "bird", "airplane", "helicopter", "drone", "debris", "unknown"}
 
 type ConceptResolution struct {
 	Input     string `json:"input"`
