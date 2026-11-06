@@ -308,12 +308,13 @@ func (g *Ingester) newItem(ctx context.Context, c *Capture, hash string, resp *p
 		ts = g.clk.Now()
 	}
 	it := &pb.Item{Id: ulid.MustNew(ulid.Timestamp(ts), g.ent).String(), Type: c.Type, CapturedAtUnixMs: ts.UnixMilli(),
-		Source: c.Source, Geo: c.Geo, ContentHash: hash, Features: &pb.Features{Tags: c.Tags}}
+		Source: c.Source, Geo: c.Geo, ContentHash: hash, Features: &pb.Features{Tags: maps.Clone(c.Tags)}}
 	payloads := map[pb.FormKind][]byte{}
 	var original []byte // kept when FULL is re-encoded, for an operator's original pull
 	switch c.Type {
 	case pb.ItemType_ITEM_TYPE_IMAGE:
 		g.applyFeatures(it, resp, s)
+		enrichCapture(it, c.Data)
 		forms, orig := g.imageForms(c.Data, resp, s)
 		maps.Copy(payloads, forms)
 		original = orig

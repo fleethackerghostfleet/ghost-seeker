@@ -381,6 +381,7 @@ func (c *Console) buildItem(o *Object, s objectScore) *command.Item {
 		}
 	}
 	item.Live = live
+	populateCapture(item, o)
 	if o.Scene {
 		item.Background = true
 		live.Event, live.Priority = "scene", "P4"

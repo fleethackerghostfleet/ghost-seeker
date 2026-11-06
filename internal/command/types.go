@@ -86,6 +86,8 @@ const (
 )
 
 type Item struct {
+	Capture *CaptureMeta `json:"capture,omitempty"`
+
 	Background  bool       `json:"background,omitempty"`
 	Upload      Upload     `json:"upload"`
 	Night       *bool      `json:"night,omitempty"`

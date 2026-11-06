@@ -72,6 +72,7 @@ func (s *Store) Add(item *command.Item, extra int) (command.Item, string) {
 		s.stats.Keep++
 	}
 	s.stats.DB++
+	command.EnsureCapture(item)
 	item.DBID = s.stats.DB + 180000
 	command.Rescore(item, s.model, s.directives)
 	// Generated captures have a source identity and carry the manifest record;
@@ -488,6 +489,11 @@ func (s *Store) RescoreTimeScoped(now time.Time) bool {
 }
 
 func cloneItem(item command.Item) command.Item {
+	if item.Capture != nil {
+		capture := *item.Capture
+		capture.Synthetic = append([]string(nil), capture.Synthetic...)
+		item.Capture = &capture
+	}
 	item.Dets = append([]command.Detection{}, item.Dets...)
 	item.Det = append([]command.DetectionScore{}, item.Det...)
 	for i := range item.Det {

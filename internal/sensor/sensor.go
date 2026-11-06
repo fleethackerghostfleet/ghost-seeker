@@ -142,12 +142,18 @@ func (g *Generator) Tick(forceSource *catalog.Source, ts time.Time, model string
 		item.Dets = []command.Detection{}
 	}
 	command.Rescore(item, model, directives)
+	command.EnsureCapture(item)
 	return item, extra
 }
 
 // Repeat returns a near-duplicate view of item from the same capture burst.
 func (g *Generator) Repeat(item *command.Item, model string, directives []command.Directive) *command.Item {
+	command.EnsureCapture(item)
 	repeat := *item
+	capture := *item.Capture
+	capture.Synthetic = append([]string(nil), item.Capture.Synthetic...)
+	capture.TrackFrames++
+	repeat.Capture = &capture
 	repeat.ID = fmt.Sprintf("img_%x_%x", time.Now().UnixNano(), g.ids.Add(1))
 	repeat.Frame++
 	repeat.TS = item.TS.Add(250 * time.Millisecond)
