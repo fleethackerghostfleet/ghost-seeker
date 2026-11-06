@@ -88,6 +88,27 @@ func (c *Compiler) fromDraft(text string, draft llmDraft, durationMin int, warni
 		durationMin = *draft.DurationMin
 	}
 	resolutions := make([]ResearchResolution, 0, len(draft.Mappings))
+	if len(draft.Mappings) == 0 {
+		// The model did not explain its mappings; disclose the parser's
+		// nearest-class guesses that the model's rules agree with.
+		_, rest := extractDuration(text)
+		_, _, parsed := parseOpen(rest, c != nil && c.EdgeSubtypes)
+		used := make(map[string]bool)
+		for _, rule := range rules {
+			for _, class := range rule.Classes {
+				used[class] = true
+			}
+		}
+		for _, resolution := range parsed {
+			agrees := resolution.Reason == "nearest class"
+			for _, class := range strings.Split(resolution.Canonical, ", ") {
+				agrees = agrees && used[class]
+			}
+			if agrees {
+				resolutions = append(resolutions, resolution)
+			}
+		}
+	}
 	for _, mapping := range draft.Mappings {
 		classes := make([]string, 0, len(mapping.Classes))
 		for _, label := range mapping.Classes {

@@ -99,8 +99,8 @@ func runEval(t *testing.T, compiler *Compiler, cases []evalCase, logFields bool)
 			checks["withinMin"] = got.within == expectInt(test.Expect, "withinMin")
 			checks["durationMin"] = got.duration == expectInt(test.Expect, "durationMin")
 			checks["only"] = got.only == expectBool(test.Expect, "only")
-			for key, ok := range checks {
-				if key != "blocked" && !ok {
+			for _, ok := range checks {
+				if !ok {
 					caseOK = false
 				}
 			}
