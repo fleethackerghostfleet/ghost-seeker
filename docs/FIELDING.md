@@ -385,7 +385,9 @@ curl -N --header @/run/secrets/operator.header \
   operator UI's memory are not fabricated or persisted by this API.
 - `/items/{id}/image?form=thumb|crop|full` defaults to thumb. A missing,
   incomplete, or non-image form returns `404`; it never falls back to an
-  unrequested form. Uploads can arrive after the manifest.
+  unrequested form. Uploads can arrive after the manifest. Form replacements
+  are staged and atomically published only after completion/hash validation;
+  already-open readers keep a whole committed version, never partial bytes.
 - `/stream` sends `event: item`, decimal `id:` and JSON
   `{cursor,event,item}` for new/updated manifests, features, completed forms,
   policy and persisted decisions. Order is shore arrival/journal order (edge

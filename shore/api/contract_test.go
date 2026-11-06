@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -330,6 +332,47 @@ func TestProdContractPushErrors(t *testing.T) {
 		}
 		s.contract.response(t, "/api/v1/ingest/frames", "post", r.StatusCode, r.Header.Get("Content-Type"), body)
 	}
+}
+
+func TestProdContractReplacementImageAvailability(t *testing.T) {
+	s := newRig(t)
+	id := s.push(t, 18, false)
+	s.waitImage(t, id)
+	cursor, err := s.st.EventCursor(s.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, reader, cancel := s.stream(t, strconv.FormatInt(cursor, 10))
+	defer cancel()
+	defer stream.Body.Close()
+	data := jpegFrame(t, 19)
+	hash := sha256.Sum256(data)
+	chunk := &pb.Chunk{ItemId: id, Form: pb.FormKind_FORM_KIND_FULL, TotalBytes: int64(len(data)), ContentHash: hex.EncodeToString(hash[:]), Mime: "image/jpeg", Data: data[:len(data)/2]}
+	if _, done, err := s.st.WriteChunk(s.ctx, "contract-edge", chunk, time.Now()); err != nil || done {
+		t.Fatal("partial replacement", done, err)
+	}
+	r, body := s.request(t, "GET", s.shore.URL+"/api/v1/items/"+id+"/image?form=full", operator, "", nil)
+	if r.StatusCode != 404 {
+		t.Fatal("incomplete replacement served", r.StatusCode)
+	}
+	s.contract.response(t, "/api/v1/items/{id}/image", "get", r.StatusCode, r.Header.Get("Content-Type"), body)
+	_, event := readEvent(t, s.contract, reader)
+	for _, f := range event["item"].(map[string]any)["forms"].([]any) {
+		form := f.(map[string]any)
+		if form["name"] == "full" && form["available"] != false {
+			t.Fatal("reset availability not streamed")
+		}
+	}
+	chunk.Offset = int64(len(data) / 2)
+	chunk.Data = data[len(data)/2:]
+	if _, done, err := s.st.WriteChunk(s.ctx, "contract-edge", chunk, time.Now()); err != nil || !done {
+		t.Fatal("completed replacement", done, err)
+	}
+	r, body = s.request(t, "GET", s.shore.URL+"/api/v1/items/"+id+"/image?form=full", operator, "", nil)
+	if r.StatusCode != 200 || !bytes.Equal(body, data) {
+		t.Fatal("replacement image missing/corrupt", r.StatusCode)
+	}
+	s.contract.response(t, "/api/v1/items/{id}/image", "get", r.StatusCode, r.Header.Get("Content-Type"), body)
 }
 
 func TestProdContractSpoolPaginationAuthAndUpdates(t *testing.T) {

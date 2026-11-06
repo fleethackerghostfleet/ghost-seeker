@@ -32,8 +32,9 @@ CREATE TRIGGER IF NOT EXISTS api_features AFTER UPDATE OF features,label_overrid
  WHEN NEW.manifest_at>0 AND (OLD.features IS NOT NEW.features OR OLD.label_override IS NOT NEW.label_override OR OLD.override_by IS NOT NEW.override_by) BEGIN
  INSERT INTO api_events(item_id,kind) VALUES(NEW.id,'updated');
 END;
-CREATE TRIGGER IF NOT EXISTS api_form AFTER UPDATE ON forms
- WHEN (NEW.complete!=OLD.complete OR NEW.complete_at!=OLD.complete_at)
+DROP TRIGGER IF EXISTS api_form;
+CREATE TRIGGER api_form AFTER UPDATE ON forms
+ WHEN (NEW.complete!=OLD.complete OR NEW.complete_at!=OLD.complete_at OR NEW.hash IS NOT OLD.hash)
  AND EXISTS(SELECT 1 FROM api_receipts WHERE item_id=NEW.item_id) BEGIN
  INSERT INTO api_events(item_id,kind) VALUES(NEW.item_id,'updated');
 END;
