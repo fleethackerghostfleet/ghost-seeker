@@ -10,6 +10,11 @@ spec.loader.exec_module(module)
 
 
 class PrepareTests(unittest.TestCase):
+    def catalog_sums(self):
+        catalog = Path(__file__).resolve().parents[2] / "internal/catalog"
+        return "".join(hashlib.sha256((catalog / name).read_bytes()).hexdigest() + f"  catalog/{name}\n"
+                       for name in ("colregs_lights.json", "colregs_night_config.json"))
+
     def test_allowlisted_files_only(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -18,9 +23,19 @@ class PrepareTests(unittest.TestCase):
             (models / "model.onnx").write_bytes(b"model")
             (models / "unlisted").write_bytes(b"unused")
             manifest = root / "sums"
-            manifest.write_text(hashlib.sha256(b"model").hexdigest() + "  model.onnx\n")
+            manifest.write_text(hashlib.sha256(b"model").hexdigest() + "  model.onnx\n" + self.catalog_sums())
             module.prepare(models, manifest, root / "out")
-            self.assertEqual({p.name for p in (root / "out").iterdir()}, {"model.onnx", "SHA256SUMS"})
+            self.assertEqual({p.name for p in (root / "out").iterdir()}, {"model.onnx", "SHA256SUMS", "catalog"})
+
+    def test_missing_catalog_entries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "model.onnx").write_bytes(b"model")
+            for catalog in ("", self.catalog_sums().splitlines(keepends=True)[0]):
+                manifest = root / "sums"
+                manifest.write_text(hashlib.sha256(b"model").hexdigest() + "  model.onnx\n" + catalog)
+                with self.assertRaisesRegex(ValueError, "missing required catalog entries.*colregs_night_config.json"):
+                    module.prepare(root, manifest, root / "out")
 
     def test_empty_unsafe_missing_and_bad_checksum(self):
         with tempfile.TemporaryDirectory() as directory:

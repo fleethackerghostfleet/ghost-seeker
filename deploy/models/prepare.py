@@ -28,6 +28,11 @@ def prepare(models, sums, output):
         paths.append((path, source))
     if not paths:
         raise ValueError("MODEL_SUMS must list at least one model file")
+    required_catalog = {Path("catalog/colregs_lights.json"), Path("catalog/colregs_night_config.json")}
+    missing_catalog = required_catalog - {path for path, source in paths}
+    if missing_catalog:
+        raise ValueError("MODEL_SUMS missing required catalog entries: " + ", ".join(
+            str(path) for path in sorted(missing_catalog)))
     out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
     if any(out.iterdir()):
