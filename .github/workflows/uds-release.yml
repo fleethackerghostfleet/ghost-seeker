@@ -1,0 +1,241 @@
+name: UDS release
+
+on:
+  push:
+    tags: ["uds-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing uds-vX.Y.Z tag on prod-uds
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uds-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate tag and prod-uds ancestry
+        id: tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^uds-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || {
+            echo "Expected uds-vX.Y.Z with an optional prerelease suffix" >&2; exit 1;
+          }
+          git fetch origin '+refs/heads/prod-uds:refs/remotes/origin/prod-uds'
+          sha=$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")
+          git merge-base --is-ancestor "$sha" origin/prod-uds
+          if [[ "$EVENT_NAME" == push ]]; then
+            test "$sha" = "$(git rev-parse "${EVENT_SHA}^{commit}")"
+          fi
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "version=${RELEASE_TAG#uds-v}"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: TestProdContract (prod build, must run)
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -tags prod -count=1 -v -run '^TestProdContract' ./... | tee contract.log
+          grep -q -- '--- PASS: TestProdContract' contract.log
+      - name: make prod-gate
+        run: make prod-gate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Zarf v0.89.0
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://github.com/zarf-dev/zarf/releases/download/v0.89.0/zarf_v0.89.0_Linux_amd64 -o "$HOME/.local/bin/zarf"
+          echo "0d08597326701d642e42656df109a85bce55a5eb37ef912b830b0e31fa0a6110  $HOME/.local/bin/zarf" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/zarf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check Zarf manifests (Python)
+        run: |
+          python3 -m pip install PyYAML==6.0.2
+          python3 -m unittest discover -s deploy/zarf -p 'test_check_manifests.py'
+          python3 deploy/zarf/check_manifests.py
+
+  build:
+    needs: [validate, gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+      ARCH: amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned release tools
+        run: |
+          set -euo pipefail
+          python3 -m pip install PyYAML==6.0.2
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://github.com/zarf-dev/zarf/releases/download/v0.89.0/zarf_v0.89.0_Linux_amd64 -o "$HOME/.local/bin/zarf"
+          curl -fsSL https://github.com/defenseunicorns/uds-cli/releases/download/v0.41.0/uds-cli_v0.41.0_Linux_amd64 -o "$HOME/.local/bin/uds"
+          echo "0d08597326701d642e42656df109a85bce55a5eb37ef912b830b0e31fa0a6110  $HOME/.local/bin/zarf" | sha256sum -c -
+          echo "31cd710a3f1154f81767a5268f2c887d9e33fe10b81e45ee4183c810dd5ad308  $HOME/.local/bin/uds" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/"{zarf,uds}
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Free hosted-runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h .
+      - name: Build production release
+        run: make release VERSION="$VERSION" ARCH="$ARCH"
+      - name: Verify release checksums and source stamp
+        run: |
+          cd "dist/release/$VERSION"
+          sha256sum -c SHA256SUMS
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path("release.json").read_text())
+          assert data["git_sha"] == os.environ["RELEASE_SHA"]
+          assert data["version"] == os.environ["VERSION"]
+          assert data["arch"] == "amd64" and data["dirty"] is False
+          PY
+        env:
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uds-release-${{ needs.validate.outputs.version }}
+          path: dist/release/${{ needs.validate.outputs.version }}/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+      GH_REPO: ${{ github.repository }}
+      OCI_REPOSITORY: oci://ghcr.io/fleethackerghostfleet/ghost-seeker
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: uds-release-${{ needs.validate.outputs.version }}
+          path: dist/release/${{ needs.validate.outputs.version }}/
+      - name: Install checksum-verified publishing tools
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://github.com/zarf-dev/zarf/releases/download/v0.89.0/zarf_v0.89.0_Linux_amd64 -o "$HOME/.local/bin/zarf"
+          curl -fsSL https://github.com/defenseunicorns/uds-cli/releases/download/v0.41.0/uds-cli_v0.41.0_Linux_amd64 -o "$HOME/.local/bin/uds"
+          echo "0d08597326701d642e42656df109a85bce55a5eb37ef912b830b0e31fa0a6110  $HOME/.local/bin/zarf" | sha256sum -c -
+          echo "31cd710a3f1154f81767a5268f2c887d9e33fe10b81e45ee4183c810dd5ad308  $HOME/.local/bin/uds" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/"{zarf,uds}
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify transferred artifacts
+        run: |
+          cd "dist/release/$VERSION"
+          sha256sum -c SHA256SUMS
+      - name: Reserve GitHub Release before publishing OCI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' 2>"$RUNNER_TEMP/release-view.err"); then
+            if [[ "$draft" != true ]]; then
+              echo "Release $RELEASE_TAG is already published; refusing to overwrite OCI artifacts" >&2
+              exit 1
+            fi
+            gh release delete "$RELEASE_TAG" --yes
+          elif ! grep -qx 'release not found' "$RUNNER_TEMP/release-view.err"; then
+            cat "$RUNNER_TEMP/release-view.err" >&2
+            exit 1
+          fi
+          flags=()
+          if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_SHA" --draft \
+            --title "UDS $VERSION" "${flags[@]}" \
+            --notes "Production amd64 SHIP/SHORE release from $RELEASE_SHA. Model licensing remains UNRESOLVED; see THIRD_PARTY_NOTICES.md. Extract sbom.tar.gz before running sha256sum -c SHA256SUMS. For oversized artifacts, concatenate the .partNNNN files in lexical order to restore the original before checking SHA256SUMS. OCI bundles: $OCI_REPOSITORY/ghost-seeker-{ship,shore}:$VERSION; Zarf packages use tag $VERSION-zarf."
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
+      - name: Publish both packages and bundles to OCI
+        run: |
+          set -euo pipefail
+          for role in ship shore; do
+            # Packages and bundles share names; keep their OCI tags distinct.
+            zarf package publish "dist/release/$VERSION/zarf-package-ghost-seeker-$role-amd64-$VERSION.tar.zst" "$OCI_REPOSITORY" --tag "$VERSION-zarf" --confirm
+            uds publish "dist/release/$VERSION/uds-bundle-ghost-seeker-$role-amd64-$VERSION.tar.zst" "$OCI_REPOSITORY"
+          done
+      - name: Prepare SBOM archive and size-limited release assets
+        run: |
+          set -euo pipefail
+          cd "dist/release/$VERSION"
+          tar -czf sbom.tar.gz sbom
+          sha256sum sbom.tar.gz >> SHA256SUMS
+          if (( $(stat -c %s sbom.tar.gz) > 2000000000 )); then
+            split -b 1G -d -a 4 sbom.tar.gz sbom.tar.gz.part
+            sha256sum sbom.tar.gz.part* >> SHA256SUMS
+          fi
+          sha256sum -c SHA256SUMS
+      - name: Upload assets and publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "dist/release/$VERSION"
+          mapfile -d '' assets < <(find . -maxdepth 1 -type f -size -2000000001c -print0)
+          test "${#assets[@]}" -gt 0
+          gh release upload "$RELEASE_TAG" "${assets[@]}"
+          gh release edit "$RELEASE_TAG" --draft=false
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io
