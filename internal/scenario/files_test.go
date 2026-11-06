@@ -53,10 +53,21 @@ func TestRepositoryScenarioFramePaths(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
-						archive.Close()
+						defer archive.Close()
+						for _, entry := range archive.File {
+							if isFrameName(entry.Name) {
+								return
+							}
+						}
+						t.Fatalf("set %d archive has no .jpg/.jpeg/.png frames", i)
 					}
 				})
 			}
 		})
 	}
+}
+
+func isFrameName(n string) bool {
+	l := strings.ToLower(n)
+	return strings.HasSuffix(l, ".jpg") || strings.HasSuffix(l, ".jpeg") || strings.HasSuffix(l, ".png")
 }
