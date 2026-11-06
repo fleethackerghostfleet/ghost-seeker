@@ -1,0 +1,135 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/shore/store"
+)
+
+// stream reads at most 32 journal entries per client at a time. There is no
+// unbounded publish queue: slow readers time out and resume from durable SQLite.
+func (a *API) stream(w http.ResponseWriter, r *http.Request) {
+	value := r.Header.Get("Last-Event-ID")
+	if value == "" {
+		value = r.URL.Query().Get("since")
+	}
+	cursor, err := parseCursor(value)
+	if err != nil {
+		fail(w, 400, err.Error())
+		return
+	}
+	events, err := a.Store.Events(r.Context(), cursor, 32)
+	if errors.Is(err, store.ErrCursorExpired) {
+		fail(w, http.StatusGone, err.Error())
+		return
+	}
+	if errors.Is(err, store.ErrCursorAhead) {
+		fail(w, 400, err.Error())
+		return
+	}
+	if err != nil {
+		fail(w, 503, "store unavailable")
+		return
+	}
+	select {
+	case a.clients <- struct{}{}:
+		defer func() { <-a.clients }()
+	default:
+		w.Header().Set("Retry-After", "1")
+		fail(w, 429, "too many stream clients")
+		return
+	}
+	ctrl := http.NewResponseController(w)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("X-Accel-Buffering", "no")
+	flush := func(data string) bool {
+		_ = ctrl.SetWriteDeadline(time.Now().Add(a.WriteTimeout))
+		if _, err := fmt.Fprint(w, data); err != nil {
+			return false
+		}
+		return ctrl.Flush() == nil
+	}
+	if !flush("retry: 1000\n: connected\n\n") {
+		return
+	}
+	defer func() { _ = ctrl.SetWriteDeadline(time.Time{}) }()
+	poll := time.NewTicker(a.PollInterval)
+	defer poll.Stop()
+	heartbeat := time.NewTicker(a.Heartbeat)
+	defer heartbeat.Stop()
+	for {
+		pageFull := len(events) == 32
+		updates := coalesceEvents(events)
+		ids := make([]string, len(updates))
+		for i, event := range updates {
+			ids[i] = event.ID
+		}
+		receipts, err := a.Store.ReceiptsByIDs(r.Context(), ids)
+		if err != nil {
+			return
+		}
+		for _, event := range updates {
+			receipt, ok := receipts[event.ID]
+			if !ok {
+				return
+			}
+			item, err := a.item(r.Context(), receipt)
+			if err != nil {
+				return
+			}
+			id := strconv.FormatInt(event.Sequence, 10)
+			data, err := json.Marshal(map[string]any{"cursor": id, "event": event.Kind, "item": item})
+			if err != nil {
+				return
+			}
+			if !flush("id: " + id + "\nevent: item\ndata: " + string(data) + "\n\n") {
+				return
+			}
+			cursor = event.Sequence
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-heartbeat.C:
+			if !flush(": heartbeat\n\n") {
+				return
+			}
+		default:
+		}
+		if !pageFull {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-poll.C:
+			case <-heartbeat.C:
+				if !flush(": heartbeat\n\n") {
+					return
+				}
+			}
+		}
+		events, err = a.Store.Events(r.Context(), cursor, 32)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func coalesceEvents(events []store.Event) []store.Event {
+	updates := events[:0]
+	for _, event := range events {
+		if len(updates) > 0 && updates[len(updates)-1].ID == event.ID {
+			if updates[len(updates)-1].Kind == "created" {
+				event.Kind = "created"
+			}
+			updates[len(updates)-1] = event
+		} else {
+			updates = append(updates, event)
+		}
+	}
+	return updates
+}
