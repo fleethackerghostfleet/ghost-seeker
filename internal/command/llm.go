@@ -79,7 +79,8 @@ func (c *LLMClient) Prefetch(text string) {
 	}
 	key := cacheKey(text)
 	c.mu.Lock()
-	_, cached := c.cache[key]
+	entry, cached := c.cache[key]
+	cached = cached && time.Now().Before(entry.expires)
 	_, running := c.inflight[key]
 	c.mu.Unlock()
 	if cached || running {
