@@ -26,9 +26,12 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - "-addr=:8090"
-            - "-shore=http://shore:8080"
+            - '-shore={{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_OPERATOR_SHORE_URL###" "http://shore:8080") }}https://shore:8080{{ else }}###ZARF_VAR_OPERATOR_SHORE_URL###{{ end }}'
             - "-edge="
             - "-link-listen="
+{{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
+            - "-shore-ca=/run/shore-ca/ca.crt"
+{{ end }}
           env:
             - name: GS_DEV_TOKEN_FILE
               value: none
@@ -61,9 +64,23 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+{{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
+            - name: shore-ca
+              mountPath: /run/shore-ca
+              readOnly: true
+{{ end }}
             - name: tmp
               mountPath: /tmp
       volumes:
+{{ if ne "###ZARF_VAR_SHORE_CA_SECRET###" "" }}
+        - name: shore-ca
+          secret:
+            secretName: "###ZARF_VAR_SHORE_CA_SECRET###"
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
+{{ end }}
         - name: tmp
           emptyDir: {}
 ---

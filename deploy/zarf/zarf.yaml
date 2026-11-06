@@ -7,8 +7,27 @@ metadata:
   description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: SHORE_TLS_SECRET
+    description: Optional existing kubernetes.io/tls Secret for shore; empty keeps HTTP. Setting this also upgrades the default local shore URLs to HTTPS.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: EDGE_TLS_SECRET
+    description: Optional existing kubernetes.io/tls Secret for edge; empty keeps HTTP.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: SHORE_CA_SECRET
+    description: Optional existing Secret with ca.crt PEM roots for edge and operator shore/edge clients; empty uses system roots.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: OPERATOR_SHORE_URL
+    description: Operator upstream shore URL; its default switches to HTTPS with SHORE_TLS_SECRET. Custom URLs must explicitly use https for TLS endpoints.
+    default: http://shore:8080
+    prompt: false
   - name: SHORE_URL
-    description: Edge-to-shore URL; set to a reachable shore address for shipboard edge deployments.
+    description: Edge-to-shore URL; its default switches to HTTPS with SHORE_TLS_SECRET. Custom URLs must explicitly use https for TLS endpoints.
     default: http://shore.ghost-seeker.svc.cluster.local:8080
     prompt: false
   - name: SHORE_PUBLIC_HOSTS
@@ -74,6 +93,7 @@ components:
     manifests:
       - name: shore
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/shore.yaml
   - name: operator
@@ -85,6 +105,7 @@ components:
     manifests:
       - name: operator
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/operator.yaml
   - name: edge
@@ -96,6 +117,7 @@ components:
     manifests:
       - name: edge
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/edge.yaml
   - name: edge-inference

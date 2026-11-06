@@ -39,6 +39,11 @@ spec:
         - name: shore
           image: ghost-seeker/shore:0.1.0
           imagePullPolicy: IfNotPresent
+{{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
+          args:
+            - "-tls-cert=/run/listener-tls/tls.crt"
+            - "-tls-key=/run/listener-tls/tls.key"
+{{ end }}
           ports:
             - name: http
               containerPort: 8080
@@ -60,10 +65,16 @@ spec:
             httpGet:
               path: /healthz
               port: http
+{{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
+              scheme: HTTPS
+{{ end }}
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
+{{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
+              scheme: HTTPS
+{{ end }}
           resources:
             requests:
               cpu: 100m
@@ -77,11 +88,27 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+{{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
+            - name: listener-tls
+              mountPath: /run/listener-tls
+              readOnly: true
+{{ end }}
             - name: data
               mountPath: /data
             - name: tmp
               mountPath: /tmp
       volumes:
+{{ if ne "###ZARF_VAR_SHORE_TLS_SECRET###" "" }}
+        - name: listener-tls
+          secret:
+            secretName: "###ZARF_VAR_SHORE_TLS_SECRET###"
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+{{ end }}
         - name: tmp
           emptyDir: {}
   volumeClaimTemplates:
