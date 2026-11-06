@@ -56,6 +56,47 @@ class TLSManifestTests(unittest.TestCase):
         edge_config = next(doc for doc in documents if doc["metadata"]["name"] == "edge-config")
         self.assertEqual(edge_config["data"]["SHORE_URL"], "http://shore.ghost-seeker.svc.cluster.local:8080")
 
+    def test_rollout_annotations_change_for_each_tls_and_ca_switch(self):
+        plaintext, _ = self.profile((False, False, False))
+        for modes, affected in (((True, False, False), {"shore", "edge", "operator"}),
+                                ((False, True, False), {"edge"}),
+                                ((False, False, True), {"edge", "operator"}),
+                                ((True, True, True), {"shore", "edge", "operator"})):
+            documents, _ = self.profile(modes)
+            for name in ("shore", "edge", "operator"):
+                with self.subTest(modes=modes, workload=name):
+                    before = self.workload(plaintext, name)["spec"]["template"]["metadata"]["annotations"]
+                    after = self.workload(documents, name)["spec"]["template"]["metadata"]["annotations"]
+                    self.assertEqual(before != after, name in affected)
+
+    def test_url_only_changes_roll_the_consuming_workload(self):
+        plaintext, _ = self.profile((False, False, False))
+        for variable, name in (("SHORE_URL", "edge"), ("OPERATOR_SHORE_URL", "operator")):
+            with self.subTest(variable=variable):
+                overrides = {variable: "https://shore.example:9443"}
+                parsed = checker.render_manifests(self.package, overrides)
+                documents = [doc for docs in parsed.values() for doc in docs]
+                checker.check_tls_wiring(documents, checker.package_variables(self.package, overrides))
+                before = self.workload(plaintext, name)["spec"]["template"]["metadata"]["annotations"]
+                after = self.workload(documents, name)["spec"]["template"]["metadata"]["annotations"]
+                self.assertNotEqual(before, after)
+                self.assertEqual(after["ghost-seeker.io/shore-url"], overrides[variable])
+
+    def test_rejects_missing_or_stale_rollout_annotations(self):
+        for name, key in (("shore", "listener-tls-secret"), ("edge", "listener-tls-secret"),
+                          ("edge", "shore-tls-secret"), ("operator", "shore-ca-secret"),
+                          ("edge", "shore-url"), ("operator", "shore-url")):
+            for stale in (False, True):
+                with self.subTest(workload=name, key=key, stale=stale):
+                    documents, variables = self.profile()
+                    annotations = self.workload(documents, name)["spec"]["template"]["metadata"]["annotations"]
+                    if stale:
+                        annotations[f"ghost-seeker.io/{key}"] = "old-value"
+                    else:
+                        del annotations[f"ghost-seeker.io/{key}"]
+                    with self.assertRaisesRegex(ValueError, "rollout annotation"):
+                        checker.check_tls_wiring(documents, variables)
+
     def test_tls_mounts_cert_key_and_ca_read_only(self):
         documents, variables = self.profile()
         for name in ("shore", "edge"):

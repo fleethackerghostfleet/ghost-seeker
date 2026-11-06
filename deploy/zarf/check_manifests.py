@@ -120,6 +120,12 @@ def check_tls_wiring(documents: list[dict], variables: dict[str, str]) -> None:
         container = next(item for item in containers if item["name"] == name)
         listener_secret = variables[f"{name.upper()}_TLS_SECRET"] if name != "operator" else ""
         ca_secret = variables["SHORE_CA_SECRET"] if name != "shore" else ""
+        annotations = workloads[name]["spec"]["template"]["metadata"].get("annotations", {})
+        rollout = {"listener-tls-secret": listener_secret} if name != "operator" else {}
+        if name != "shore":
+            rollout.update({"shore-tls-secret": variables["SHORE_TLS_SECRET"], "shore-ca-secret": ca_secret})
+        require(all(annotations.get(f"ghost-seeker.io/{key}") == value for key, value in rollout.items()),
+                f"{name}: rollout annotations must track TLS/CA Secret variables")
         expected = []
         if listener_secret:
             expected.extend(["-tls-cert=/run/listener-tls/tls.crt", "-tls-key=/run/listener-tls/tls.key"])
@@ -150,14 +156,17 @@ def check_tls_wiring(documents: list[dict], variables: dict[str, str]) -> None:
     operator = next(item for item in operator_containers if item["name"] == "operator")
     operator_urls = [arg.removeprefix("-shore=") for arg in operator["args"] if arg.startswith("-shore=")]
     require(len(operator_urls) == 1, "operator must have one shore URL")
-    for variable, actual, default in (
-        ("SHORE_URL", edge_config["data"]["SHORE_URL"], "http://shore.ghost-seeker.svc.cluster.local:8080"),
-        ("OPERATOR_SHORE_URL", operator_urls[0], "http://shore:8080"),
+    for name, variable, actual, default in (
+        ("edge", "SHORE_URL", edge_config["data"]["SHORE_URL"], "http://shore.ghost-seeker.svc.cluster.local:8080"),
+        ("operator", "OPERATOR_SHORE_URL", operator_urls[0], "http://shore:8080"),
     ):
         expected = variables[variable]
         if variables["SHORE_TLS_SECRET"] and expected == default:
             expected = expected.replace("http://", "https://", 1)
         require(actual == expected, f"{variable}: rendered shore URL must match the selected TLS mode")
+        annotations = workloads[name]["spec"]["template"]["metadata"].get("annotations", {})
+        require(annotations.get("ghost-seeker.io/shore-url") == actual,
+                f"{name}: rollout annotation must track the effective shore URL")
         parsed = urlsplit(actual)
         require(parsed.scheme in {"http", "https"} and bool(parsed.hostname), f"{variable}: invalid HTTP(S) URL")
         local_hosts = {"shore", "shore.ghost-seeker", "shore.ghost-seeker.svc",

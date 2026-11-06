@@ -29,6 +29,11 @@ spec:
       app: edge
   template:
     metadata:
+      annotations:
+        ghost-seeker.io/listener-tls-secret: "###ZARF_VAR_EDGE_TLS_SECRET###"
+        ghost-seeker.io/shore-tls-secret: "###ZARF_VAR_SHORE_TLS_SECRET###"
+        ghost-seeker.io/shore-ca-secret: "###ZARF_VAR_SHORE_CA_SECRET###"
+        ghost-seeker.io/shore-url: "{{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_SHORE_URL###" "http://shore.ghost-seeker.svc.cluster.local:8080") }}https://shore.ghost-seeker.svc.cluster.local:8080{{ else }}###ZARF_VAR_SHORE_URL###{{ end }}"
       labels:
         app: edge
     spec:

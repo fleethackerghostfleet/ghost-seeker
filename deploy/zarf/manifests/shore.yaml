@@ -25,6 +25,8 @@ spec:
       app: shore
   template:
     metadata:
+      annotations:
+        ghost-seeker.io/listener-tls-secret: "###ZARF_VAR_SHORE_TLS_SECRET###"
       labels:
         app: shore
     spec:
