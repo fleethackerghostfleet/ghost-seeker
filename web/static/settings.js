@@ -9,10 +9,16 @@ window.gsSettings=(()=>{
  const TEXT_SIZES=[['compact','Compact'],['default','Default'],['large','Large'],['extra-large','Extra large']];
  const TEXT_SCALES={compact:1,default:1.12,large:1.25,'extra-large':1.4};
  const REVIEWS=['all','reviewed','sent','unreviewed'];
- const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',textSize:'default',feed:cleanFeed()});
- function cleanFeed(value){return {showDuplicates:value?.showDuplicates!==false,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all'}}
+ const defaults=()=>({bar:'top',theme:'cic',prev:'cic',hide:[],widths:{},density:'m',feed:cleanFeed(),textSize:'default'});
+ function cleanFeed(value){return {showDuplicates:value?.showDuplicates===true,review:REVIEWS.includes(value?.review)?value.review:'all',sensor:typeof value?.sensor==='string'&&/^[A-Za-z0-9_.:/-]{1,128}$/.test(value.sensor)?value.sensor:'ALL',tier:['1','2','3','4'].includes(value?.tier)?value.tier:'all',dupDefault:'off',hideUploaded:value?.hideUploaded===true}}
  // "Sent by a person" is a temporary view; a reload must not leave the main feed stuck on it.
- function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';return feed}
+ function startFeed(value){const feed=cleanFeed(value);if(feed.review==='sent')feed.review='all';
+  if(value?.review==='yes')feed.review='reviewed';
+  if(value?.review==='no')feed.review='unreviewed';
+  if(typeof value?.showFiltered==='boolean'&&value.showDuplicates===undefined)feed.showDuplicates=value.showFiltered;
+  // Reset legacy auto-saved defaults once; marked settings preserve later user choices.
+  if(value?.dupDefault!=='off'&&typeof value?.showFiltered!=='boolean')feed.showDuplicates=false;
+  return feed}
  const WIDTHS={controls:[240,480],drawer:[340,780],review:[260,600],priorities:[260,540],briefing:[240,480],commanderQueue:[240,480],commanderBrief:[280,540]};
  function cleanWidths(value){
   const result={};
@@ -25,7 +31,7 @@ window.gsSettings=(()=>{
  function load(){
   try{
    const v=JSON.parse(localStorage.getItem(KEY))||{};const d=defaults();
-   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:startFeed(v.feed),textSize:TEXT_SIZES.some(t=>t[0]===v.textSize)?v.textSize:d.textSize};
+   return {bar:BARS.some(b=>b[0]===v.bar)?v.bar:d.bar,theme:THEMES.some(t=>t[0]===v.theme)?v.theme:d.theme,prev:v.prev==='day'||(v.prev===undefined&&v.theme==='day')?'day':'cic',hide:Array.isArray(v.hide)?v.hide.filter(h=>PARTS.some(p=>p[0]===h)):[],widths:cleanWidths(v.widths),density:DENSITIES.includes(v.density)?v.density:v.density==='xl'?'l':d.density,feed:startFeed(v.feed),textSize:TEXT_SIZES.some(t=>t[0]===v.textSize)?v.textSize:d.textSize};
   }catch{return defaults()}
  }
  function save(){try{localStorage.setItem(KEY,JSON.stringify(s))}catch{}}
@@ -49,7 +55,7 @@ window.gsSettings=(()=>{
   dlg.querySelectorAll('.seg[data-k] button').forEach(x=>x.classList.toggle('on',s[x.parentElement.dataset.k]===x.dataset.v));
   dlg.querySelectorAll('input[data-p]').forEach(x=>x.checked=!s.hide.includes(x.dataset.p));
  }
- function set(k,v){if(k==='theme'&&v!=='red')s.prev=v;s[k]=v;save();apply()}
+ function set(k,v){if(k==='theme'&&v!=='red')s.prev=v;s[k]=v;save();apply();window.dispatchEvent(new Event('gs:display-settings'))}
  function toggleRed(){set('theme',s.theme==='red'?s.prev:'red')}
  function build(){
   const dlg=document.getElementById('settings');

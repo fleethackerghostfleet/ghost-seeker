@@ -4,21 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ghost Seeker · Edge-to-Command Imagery Prioritization</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/briefing.css">
 <link rel="stylesheet" href="/lights.css">
 <link rel="stylesheet" href="/auth.css">
 <link rel="stylesheet" href="/text-size.css">
+<link rel="stylesheet" href="/themes.css">
 </head>
 <body>
-<div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
+<div class="banner" id="classificationBanner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY — SYNTHETIC DATA</div>
 <header>
   <div class="logo">
-    <svg width="30" height="30" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" stroke="#4fc3d9" stroke-width="2"/><circle cx="16" cy="16" r="8" stroke="#4fc3d9" stroke-opacity=".5" stroke-width="1.5"/><path d="M16 16 L27 9" stroke="#4fc3d9" stroke-width="2" stroke-linecap="round"/><circle cx="22" cy="12.5" r="2" fill="#ff4d5e"/></svg>
-    <div><b>GHOST SEEKER</b><small>Edge-to-Command Imagery Prioritization</small></div>
+    <img class="wordmark" src="/brand/logo.png" width="85" height="46" alt="Ghost Seeker">
+    <div><small>Edge-to-Command Imagery Prioritization</small></div>
   </div>
-  <nav><a href="#feed" id="navFeed" class="on">Imagery Feed</a><a href="#review" id="navRv">Operator Review <span class="bdg" id="rvCount"></span></a><a href="#reprioritize" id="navRp">Collection Priorities <span class="bdg" id="dirCount"></span></a><a href="/cdr.html" target="_blank" rel="noopener">Commander View ↗</a></nav>
+  <div class="view-tabs" data-view-tabs>
+    <button type="button" class="view-tabs-arrow" data-scroll="left" aria-label="Scroll views left" aria-controls="viewTabs" title="Scroll views left" hidden><span aria-hidden="true">‹</span></button>
+    <nav id="viewTabs" aria-label="Application views"><a href="#feed" id="navFeed" class="on">Imagery Feed</a><a href="#review" id="navRv">Operator Review <span class="bdg" id="rvCount"></span></a><a href="#reprioritize" id="navRp">Collection Priorities <span class="bdg" id="dirCount"></span></a><a id="navCdr" href="/cdr.html" target="_blank" rel="noopener">Commander View ↗</a></nav>
+    <button type="button" class="view-tabs-arrow" data-scroll="right" aria-label="Scroll views right" aria-controls="viewTabs" title="Scroll views right" hidden><span aria-hidden="true">›</span></button>
+  </div>
   <button type="button" class="live" id="live"><i></i><span>FEED ACTIVE</span></button>
   <div id="emconControl"></div>
   <button class="btn sm setbtn" id="setBtn" title="Display settings" aria-label="Display settings">⚙ Settings</button>
@@ -34,13 +41,15 @@
   <form id="authLogout" class="auth-logout" method="post" action="/logout" hidden><button type="submit">Sign out</button></form>
   <a class="docs-link" href="https://ghostfleet-docs.vercel.app" target="_blank" rel="noopener noreferrer" aria-label="Open documentation (new tab)" title="Open documentation (new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg></a>
 </header>
+<div id="shoreWarning" role="status" hidden>Shore unreachable — showing last-known data. Updates will resume automatically when shore returns.</div>
 
 <section class="page on" id="pgFeed">
  <div class="fhead" id="feedHead">
   <div class="toolbar" id="feedControls">
-    <span class="lbl">Sensor</span>
+    <span class="lbl" id="sourceLabel">Sensor</span>
     <select id="srcSel"></select>
-    <label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0</span></label>
+    <label class="feed-check"><input type="checkbox" id="showDuplicates"> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0</span></label>
+    <label class="feed-check" title="Hide images that have finished uploading to shore. Queued, uploading, held and kept-on-ship images stay visible."><input type="checkbox" id="hideUploaded"> Hide uploaded <span class="c" id="uploadedCount" title="Feed images fully uploaded to shore">0</span></label>
     <label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter"><option value="all">All images</option><option value="sent">Sent by a person</option><option value="reviewed">Reviewed by a person</option><option value="unreviewed">Not reviewed yet</option></select></label><span class="feed-note" id="sentOrder" hidden>Only images sent by a person · newest first <button type="button" class="btn sm" id="sentShowAll">Show all images</button></span>
     <div class="seg" id="tierSeg"></div>
     <div class="seg" id="sortSeg"><button title="Priority order: highest priority first" data-s="pri" class="on">Priority</button><button title="Date-time group: most recently captured first" data-s="new">Newest</button></div>
@@ -48,6 +57,7 @@
     <button type="button" class="btn sm" id="feedFilters" aria-expanded="false" aria-controls="feedControls">Filters</button>
     <button type="button" class="btn sm primary" id="clearFeedFilters" hidden>Clear filters</button>
     <button class="btn sm" id="pauseBtn">Pause feed</button>
+    <button class="btn sm" id="resetDemoBtn" hidden>Reset demo</button>
     <a class="btn sm primary" href="#review">▶ Begin review <kbd style="font:inherit;opacity:.7">(R)</kbd></a>
     <button class="btn sm" id="briefCreate" title="Open an image and use Add detection to select ships for the briefing" disabled>Create briefing (0)</button>
     <a class="btn sm" href="#briefing">Open briefing</a>
@@ -64,11 +74,12 @@
     <div class="st" id="st5" title="The scoring model ranks images using the base model and active directives">Scoring model: <b id="cModel"></b> · <b id="cP1">0</b> P1 Critical</div>
     <a class="btn sm details-link" href="#details">Details: counts &amp; filtered photos ›</a>
   </div>
+  <div class="strip" id="datasetStrip" hidden><b>REAL IMAGERY · clean v2 dev</b><span class="ar">›</span><span>Selected development images · locked test and quarantine sets excluded</span></div>
   <div class="strip live-strip" id="liveStrip" hidden></div>
   <div class="cameras" id="cameras" hidden></div>
  </div>
  <div class="fbody">
-  <div class="feed" id="feed"><div class="grid m" id="grid"></div><div class="empty" id="empty" style="display:none">No images match this filter yet…</div></div>
+  <div class="feed" id="feed"><div class="grid m" id="grid"></div><button class="btn feed-more" id="feedMore" hidden>Load more images</button><div class="empty" id="empty" style="display:none">No images match this filter yet…</div></div>
   <aside class="drawer" id="drawer"></aside>
   </div>
   <div class="zoom" id="zoom" hidden></div>
@@ -120,6 +131,7 @@
   </div>
   <div class="rvmain" id="rvMain"></div>
   <div class="rvask" id="rvAsk" hidden></div>
+  <p class="rvinstructions"><b>Change this image's priority:</b> press 1–4 to set it to P1–P4 and save your review. Space / Enter agrees with the model's suggested priority.</p>
   <div class="rvnext" id="rvNext" role="status" aria-live="polite"></div>
   <div class="rvkeys" id="rvKeys">
     <button class="kb k1" data-a="1"><span class="model-badge">MODEL</span><span class="kb-act">Set P1 Critical &amp; next</span><kbd>1</kbd></button>
@@ -158,10 +170,12 @@
 <div class="cardmenu" id="cardMenu" role="menu" hidden><button role="menuitem" class="cm-send" id="cmSendNow"><span>➤ Send now</span><small id="cmSendNowSub">Moves this image to the top of the send queue</small></button><button role="menuitem" id="cmOpen"><span>Open image details</span></button></div>
 <div class="toast" id="toast"></div>
 <div class="banner">UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY</div>
+<dialog id="resetDemoDialog" aria-labelledby="resetDemoTitle"><h3 id="resetDemoTitle">Reset demo?</h3><p>This clears all images, the ship-to-shore upload queue, the Commander list and decisions, and session counters.</p><p>Collection priorities, model, link settings and the review log are kept. New captures keep arriving.</p><div class="wb-row"><button class="btn" id="resetDemoCancel" autofocus>Cancel</button><button class="btn danger" id="resetDemoConfirm">Reset demo</button></div></dialog>
 <dialog id="settings" class="setdlg"></dialog>
 <script src="/settings.js" defer></script>
 <script src="/text-layout.js" defer></script>
 <script src="/resize.js" defer></script>
+<script src="/view-tabs.js" defer></script>
 <script src="/render.js" defer></script>
 <script src="/workbench.js" defer></script>
 <script src="/pptxgen.bundle.js" defer></script>

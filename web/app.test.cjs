@@ -9,6 +9,61 @@ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
 const workbenchSource=fs.readFileSync(path.join(__dirname,'static/workbench.js'),'utf8');
 const policySource=fs.readFileSync(path.join(__dirname,'static/policy.js'),'utf8');
+test('clear priority preview preserves detector-negative P4 pinning',()=>{
+ const context=vm.createContext({});
+ vm.runInContext(`
+  const items=[{id:'negative',detectorNegative:true},{id:'positive'}];
+  const findItem=id=>items.find(it=>it.id===id);
+  const isScene=item=>item.live?.event==='scene';
+  const draft={pins:{negative:0,positive:0}};
+  const after=items.map(it=>({id:it.id,central:.9,tier:2}));
+  const sorted=rows=>rows;
+ `,context);
+ const rows=workbenchSource.split('\n').find(line=>line.includes('const rows=()=>'));
+ vm.runInContext(rows,context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),4);
+ assert.equal(vm.runInContext("rows()[1].tier",context),1);
+ vm.runInContext("draft.pins.negative=2",context);
+ assert.equal(vm.runInContext("rows()[0].tier",context),2);
+});
+test('null detection arrays are normalized on snapshots, SSE and direct updates, including paused queues',()=>{
+ const context=setup();
+ vm.runInContext(`
+  function negative(id){return {...raw(id,4),detectorNegative:true,dets:null,det:null,centralTier:4,edge:0}}
+  applySnapshot(snapshot([negative('initial')]));
+  openStream();
+  streamHandlers.item({data:JSON.stringify({item:negative('item'),stats:{}})});
+  streamHandlers.update({data:JSON.stringify({item:negative('update'),cdr:0})});
+  applyItemUpdate(negative('direct'));
+  state.paused=true;
+  streamHandlers.item({data:JSON.stringify({item:negative('held-item'),stats:{}})});
+  applyItemUpdate(negative('held-update'));
+  applySnapshot(snapshot([...items,negative('held-snapshot')]));
+  for(const it of [...items,...pendingItems.map(e=>e.item)]){
+   if(!Array.isArray(it.dets)||!Array.isArray(it.det))throw Error('null detection arrays: '+it.id);
+   boxesHTML(it,true);topLine(it);
+  }
+  toggleHold();
+  reviewDataReady=true;reviewerName='devin-verify';DATASET_MODE=true;
+  imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';
+  $('rvKeys').children=[];$('rvKeys').querySelectorAll=()=>[];$('rvBarI').style={};
+  rv.cur=findItem('initial');rv.shown=null;
+  renderReviewContent();
+ `,context);
+ assert.match(context.$('rvMain').innerHTML,/Detector found nothing — check for missed objects/);
+ assert.equal(context.$('accLbl').textContent,'Nothing here & next');
+});
+test('detector negatives have clear labels and retain review keys',()=>{
+ const context=setup();
+ assert.equal(context.detectorNegativeLabel({detectorNegative:true}),'Detector found nothing — check for missed objects');
+ assert.equal(context.detectorNegativeLabel({}),'');
+ assert.equal(context.reviewAcceptLabel({detectorNegative:true,centralTier:4}),'Nothing here & next');
+ assert.match(context.reviewAcceptLabel({centralTier:2}),/P2/);
+ for(const key of ['1','2','3','4'])assert.equal(context.reviewKeyAction(key),key);
+ for(const key of [' ','enter'])assert.equal(context.reviewKeyAction(key),'accept');
+ assert.match(context.detectorNegativeHTML({detectorNegative:true}),/class="detector-negative"/);
+ assert.equal(context.detectorNegativeHTML({}),'');
+});
 test('live ocean scenes are P4 feed imagery, not contact review or actions',async()=>{
  const c=setup();
  vm.runInContext(`
@@ -165,6 +220,28 @@ test('review suggestions alone use the overlay and retain busy buttons',()=>{
  assert.equal(box.innerHTML,'');
  assert.ok(!classes.has('rvask-suggestion'));
 });
+test('repeated reviewer overrides do not prompt to add a learning rule',async()=>{
+ const context=setup();
+ vm.runInContext(`
+  gsAuth={reviewer:()=>true};reviewerName='Alice';state.page='rv';
+  CLS={vessel:{lab:'Vessel'}};
+  overrideCount=0;suggestionChecks=0;
+  gsLearn={
+   record:()=>{overrideCount++;return{}},
+   suggestion:()=>{suggestionChecks++;return overrideCount>=5?{cls:'vessel',dir:'lower',n:5,of:5}:null}
+  };
+  submitReview=()=>Promise.resolve({});
+  rvPress=()=>{};rvFlash=()=>{};
+  items=Array.from({length:5},(_,i)=>({id:'override-'+i,src:{id:i%2?'EO-P7':'IR-S1'},centralTier:3,manual:0,reviewed:false,dismissed:false,sent:false,dets:[{cls:'vessel'}],det:[{s:.9}]}));
+  renderAsk();
+ `,context);
+ for(let i=0;i<5;i++)vm.runInContext(`rv.cur=items[${i}];rv.displayed={...items[${i}]};rv.busy=false;rvAct('1')`,context);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('overrideCount',context),5);
+ assert.equal(vm.runInContext('suggestionChecks',context),0);
+ assert.equal(vm.runInContext('rv.ask',context),null);
+ assert.equal(context.$('rvAsk').hidden,true);
+});
 test('team proposals render escaped discussion, live own votes, busy buttons and isolated keys',()=>{
  const context=setup();
  vm.runInContext(`teamSync.available=true;teamSync.on=true;reviewerName='Bob';
@@ -275,12 +352,44 @@ test('enabling team sync promotes an open local suggestion only with a reviewer 
   }
  }
 });
+test('reviewer sessions keep team sync disabled',()=>{
+ const context=setup();
+ vm.runInContext(`gsAuth={reviewer:()=>true};reviewerName='Alice';setupTeamSync(true);$('reviewSync').checked=true;$('reviewSync').onchange()`,context);
+ assert.equal(vm.runInContext('teamSync.available',context),false);
+ assert.equal(vm.runInContext('teamSync.on',context),false);
+ assert.equal(context.$('reviewSyncLabel').hidden,true);
+});
 const settingsSource=fs.readFileSync(path.join(__dirname,'static/settings.js'),'utf8');
 function settingsContext(saved){
- const context=vm.createContext({window:{},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{documentElement:{style:{setProperty(){}}},body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:()=>({querySelectorAll:()=>[],dataset:{}})}});
+ const nodes={};
+ const context=vm.createContext({Event,window:{dispatchEvent(){}},localStorage:{getItem:()=>saved,setItem:(k,v)=>{saved=v}},document:{documentElement:{style:{setProperty(){}}},body:{style:{setProperty(){},removeProperty(){}},classList:{[Symbol.iterator]:function*(){},add(){},remove(){},toggle(){}}},getElementById:id=>nodes[id]??={querySelectorAll:()=>[],dataset:{}}}});
  vm.runInContext(settingsSource,context);
- return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved)};
+ return {settings:context.window.gsSettings,saved:()=>JSON.parse(saved),reset:()=>nodes.setReset.onclick()};
 }
+test('scalable header tabs keep intrinsic sizing and mobile arrows across views',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'static/text-size.css'),'utf8');
+ assert.match(css,/header \.view-tabs\s*\{[^}]*height:auto;[^}]*align-self:stretch;[^}]*max-width:100%/);
+ assert.match(css,/header \.view-tabs nav\s*\{[^}]*flex:1 1 0;[^}]*min-width:0;[^}]*flex-wrap:nowrap;[^}]*order:0/);
+ for(const selector of ['body:has(#pgFeed.on) header nav','body:not(:has(#pgFeed.on)) header nav']){
+  const rule=css.slice(css.indexOf(selector)).split('}')[0];
+  assert.match(rule,/flex:1 1 0/);
+  if(selector.startsWith('body:not'))assert.match(rule,/order:0/);
+ }
+});
+test('legacy density and feed preferences migrate to the two-size demo schema',()=>{
+ for(const [old,size] of [['s','m'],['m','m'],['l','l'],['xl','l']]){
+  assert.equal(settingsContext(JSON.stringify({density:old})).settings.get().density,size);
+ }
+ for(const [old,review] of [['yes','reviewed'],['no','unreviewed']]){
+  for(const showFiltered of [true,false]){
+   const {settings,saved}=settingsContext(JSON.stringify({feed:{review:old,showFiltered}}));
+   assert.equal(settings.get().feed.review,review);
+   assert.equal(settings.get().feed.showDuplicates,showFiltered);
+   settings.resize('controls',300);
+   assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,showFiltered);
+  }
+ }
+});
 test('sidebar widths default empty, load valid settings, and clamp persisted values',()=>{
  for(const saved of [null,'broken','{}','{"widths":{"drawer":"bad","review":null}}']){
   assert.equal(JSON.stringify(settingsContext(saved).settings.get().widths),'{}');
@@ -297,21 +406,21 @@ test('sidebar resize persists, rejects invalid sizes, supports reset and defensi
  settings.get().widths.controls=450;assert.equal(settings.get().widths.controls,322);
  settings.resize('controls',null);assert.equal(JSON.stringify(saved().widths),'{}');
 });
-test('feed filters default to showing duplicates, persist, validate, and return defensive copies',()=>{
+test('feed filters default to hiding duplicates, persist, validate, and return defensive copies',()=>{
  for(const value of [null,'broken','{}','{"feed":null}','{"feed":{"showDuplicates":"no","review":"invalid"}}']){
-  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":true,"review":"all","sensor":"ALL","tier":"all"}');
+  assert.equal(JSON.stringify(settingsContext(value).settings.get().feed),'{"showDuplicates":false,"review":"all","sensor":"ALL","tier":"all","dupDefault":"off","hideUploaded":false}');
  }
  const {settings,saved}=settingsContext('{"bar":"right","feed":{"showDuplicates":false,"review":"reviewed"}}');
  settings.get().feed.review='unreviewed';assert.equal(settings.get().feed.review,'reviewed');
  settings.setFeed({review:'sent'});
- assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:false,review:'sent',sensor:'ALL',tier:'all',dupDefault:'off',hideUploaded:false});
  assert.equal(saved().bar,'right');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'all','a reload must not keep the main feed on sent-only');
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,false);
  settings.setFeed({review:'unreviewed'});
  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,'unreviewed');
  settings.setFeed({showDuplicates:true,review:'bad'});
- assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ assert.deepEqual(saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all',dupDefault:'off',hideUploaded:false});
 });
 test('sensor and priority filters persist, validate, and clear with all feed filters',()=>{
  const stored=settingsContext('{}');
@@ -323,7 +432,7 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  assert.equal(sentReload.sensor,'EO-P7');
  assert.equal(sentReload.tier,'2');
  assert.equal(sentReload.showDuplicates,false);
- assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false});
+ assert.deepEqual(reloaded.saved().feed,{sensor:'EO-P7',tier:'2',review:'reviewed',showDuplicates:false,dupDefault:'off',hideUploaded:false});
  const context=setup();context.gsSettings=reloaded.settings;
  vm.runInContext("SRC={ALL:{id:'ALL'},'EO-P7':{id:'EO-P7'}};closeDetail=()=>{};syncFeedFilters()",context);
  assert.equal(vm.runInContext('state.src',context),'EO-P7');
@@ -335,7 +444,7 @@ test('sensor and priority filters persist, validate, and clear with all feed fil
  assert.equal(vm.runInContext('state.src',context),'ALL');
  assert.equal(vm.runInContext('state.tier',context),'all');
  assert.equal(context.$('clearFeedFilters').hidden,true);
- assert.deepEqual(reloaded.saved().feed,{showDuplicates:true,review:'all',sensor:'ALL',tier:'all'});
+ assert.deepEqual(reloaded.saved().feed,{showDuplicates:false,review:'all',sensor:'ALL',tier:'all',dupDefault:'off',hideUploaded:false});
  reloaded.settings.setFeed({sensor:'missing',tier:'1'});
  vm.runInContext('syncFeedFilters()',context);
  assert.equal(vm.runInContext('state.src',context),'ALL');
@@ -357,6 +466,48 @@ test('sensor persistence accepts exactly the ValidName character set and length'
   assert.equal(settingsContext(JSON.stringify(stored.saved())).settings.get().feed.sensor,'ALL');
  }
 });
+test('hide uploaded filter persists, validates, defaults off and clears with all feed filters',()=>{
+ for(const value of [null,'{}','{"feed":{"hideUploaded":"yes"}}','{"feed":{"hideUploaded":1}}'])assert.equal(settingsContext(value).settings.get().feed.hideUploaded,false);
+ const stored=settingsContext('{}');stored.settings.setFeed({hideUploaded:true});
+ assert.equal(stored.saved().feed.hideUploaded,true);
+ const reloaded=settingsContext(JSON.stringify(stored.saved()));
+ assert.equal(reloaded.settings.get().feed.hideUploaded,true);
+ const context=setup();context.gsSettings=reloaded.settings;
+ vm.runInContext("SRC={ALL:{id:'ALL'}};closeDetail=()=>{};syncFeedFilters()",context);
+ assert.equal(context.$('hideUploaded').checked,true);
+ assert.equal(context.$('clearFeedFilters').hidden,false);
+ vm.runInContext('resetFeedFilters()',context);
+ assert.equal(reloaded.saved().feed.hideUploaded,false);
+ assert.equal(context.$('hideUploaded').checked,false);
+ assert.equal(context.$('clearFeedFilters').hidden,true);
+ assert.match(html,/<label class="feed-check"[^>]*><input type="checkbox" id="hideUploaded"> Hide uploaded <span class="c" id="uploadedCount"[^>]*>0<\/span><\/label>/);
+});
+test('hide uploaded keeps queued, uploading, held and kept-on-ship images and drops completed ones on the next render',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('queued',{upload:{bytes:100,sent:0}}),frame('partial',{upload:{bytes:100,sent:40}}),
+  frame('held',{upload:{bytes:100,sent:0,override:'hold'}}),frame('next',{upload:{bytes:100,sent:10,override:'next'}}),
+  frame('done',{upload:{bytes:100,sent:100,done:true}}),frame('cdr',{sent:true,upload:{bytes:100,sent:100,done:true}}),
+  frame('scene',{tier:4,live:{itemId:'scene',event:'scene',imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},full:{state:'pending',bytes:1000,received:0}}}}),
+  frame('liveDone',{live:{itemId:'liveDone',event:'open',imageForm:'crop',forms:{crop:{state:'received',bytes:50}}}}),
+  frame('livePartial',{live:{itemId:'livePartial',event:'open',imageForm:'thumb',forms:{thumb:{state:'received',bytes:10},crop:{state:'partial',bytes:50,received:20}}}})]`,context);
+ const sorted=()=>vm.runInContext('ids()',context).split(',').sort().join(',');
+ assert.equal(sorted(),'cdr,done,held,liveDone,livePartial,next,partial,queued,scene','default off shows uploaded images');
+ assert.equal(vm.runInContext('uploadedCount()',context),3);
+ vm.runInContext('filters.hideUploaded=true',context);
+ assert.equal(sorted(),'held,livePartial,next,partial,queued,scene');
+ assert.equal(vm.runInContext('uploadedCount()',context),3);
+ vm.runInContext("items.find(i=>i.id==='partial').upload={bytes:100,sent:100,done:true}",context);
+ assert.equal(sorted(),'held,livePartial,next,queued,scene','an image that finishes uploading leaves the feed');
+ vm.runInContext("state.tier='4'",context);
+ assert.equal(vm.runInContext('uploadedCount()',context),0);
+});
+test('repeat badge skips uploaded repeats while uploaded images are hidden',()=>{
+ const context=feedContext();
+ vm.runInContext(`items=[frame('repeatDone',{tier:4,filtered:'duplicate',upload:{bytes:100,sent:100,done:true}}),frame('repeatQueued',{tier:4,filtered:'duplicate',upload:{bytes:100,sent:0}})]`,context);
+ assert.equal(vm.runInContext('repeatCount()',context),2);
+ vm.runInContext('filters.hideUploaded=true',context);
+ assert.equal(vm.runInContext('repeatCount()',context),1);
+});
 function feedContext(){
  const context=setup();
  vm.runInContext(`
@@ -366,6 +517,103 @@ function feedContext(){
  `,context);
  return context;
 }
+test('human review filter has native options with clear labels and themed popup colors',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'static/index.html'),'utf8');
+ assert.match(html,/<label class="feed-review" for="reviewFilter">Human review <select id="reviewFilter">/);
+ const select=html.match(/<select id="reviewFilter">(.*?)<\/select>/)[1];
+ assert.deepEqual([...select.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map(m=>[m[1],m[2]]),[
+  ['all','All images'],['sent','Sent by a person'],['reviewed','Reviewed by a person'],['unreviewed','Not reviewed yet'],
+ ]);
+ const css=fs.readFileSync(path.join(__dirname,'static/style.css'),'utf8');
+ assert.match(css,/\.feed-review option\{background:var\(--panel2\);color:var\(--text\)\}/);
+});
+test('feed review select changes filter results and persists every value including all',()=>{
+ const context=feedContext(),{settings,saved}=settingsContext('{}');
+ context.gsSettings=settings;
+ context.addEventListener=()=>{};
+ vm.runInContext(`
+  closeDetail=()=>{};resetFeedWindow=()=>{};
+  items=[frame('yes',{reviewed:true,sent:true}),frame('no')];
+ `,context);
+ const start=source.indexOf(" $('srcSel').onchange=");
+ const end=source.indexOf(" $('modelSel').onchange",start);
+ vm.runInContext(source.slice(start,end),context);
+ assert.equal(context.$('reviewFilter').value,'all');
+ assert.equal(vm.runInContext('ids()',context),'yes,no');
+ for(const [value,ids] of [['sent','yes'],['reviewed','yes'],['unreviewed','no'],['all','yes,no']]){
+  context.$('reviewFilter').onchange({target:{value}});
+  assert.equal(vm.runInContext('ids()',context),ids);
+  assert.equal(context.$('reviewFilter').value,value);
+  assert.equal(saved().feed.review,value);
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.review,value==='sent'?'all':value);
+ }
+ vm.runInContext('items=[]',context);
+ context.$('reviewFilter').onchange({target:{value:'reviewed'}});
+ assert.equal(vm.runInContext('ids()',context),'');
+});
+test('global shortcuts leave native select keyboard events untouched',()=>{
+ const context=feedContext();
+ context.document.addEventListener=(type,handler)=>{context.keyHandler=handler};
+ const start=source.indexOf(" document.addEventListener('keydown',e=>");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ vm.runInContext(source.slice(start,end),context);
+ for(const key of ['ArrowDown','ArrowUp','Home','End','Enter',' ','r','n','Escape']){
+  let prevented=false;
+  context.keyHandler({key,target:{tagName:'SELECT'},preventDefault(){prevented=true}});
+  assert.equal(prevented,false,key);
+ }
+});
+test('duplicate display defaults off, preserves explicit choices, and resets off',()=>{
+ assert.doesNotMatch(html.match(/<input[^>]*id="showDuplicates"[^>]*>/)[0],/\bchecked\b/);
+ for(const value of [null,'broken','{}','{"feed":null}',...['null','0','1','"true"','"false"','[]','{}'].map(v=>`{"feed":{"showDuplicates":${v}}}`)]){
+  assert.equal(settingsContext(value).settings.get().feed.showDuplicates,false);
+ }
+ for(const choice of [true,false]){
+  const {settings,saved,reset}=settingsContext(JSON.stringify({bar:'right',feed:{showDuplicates:choice,dupDefault:'off'}}));
+  assert.equal(settings.get().feed.showDuplicates,choice);
+  settings.resize('controls',300);
+  assert.equal(saved().bar,'right');
+  assert.equal(settingsContext(JSON.stringify(saved())).settings.get().feed.showDuplicates,choice);
+  reset();
+  assert.equal(settings.get().feed.showDuplicates,false);
+  assert.equal(saved().feed.showDuplicates,false);
+  assert.equal(saved().feed.dupDefault,'off');
+ }
+});
+test('legacy duplicate defaults reset once without changing other display preferences',()=>{
+ const prefs={density:'l',theme:'day',prev:'day',bar:'right',hide:['clock','ov'],widths:{controls:300,drawer:400}};
+ for(const choice of [true,false]){
+  const {settings,saved}=settingsContext(JSON.stringify({...prefs,feed:{showDuplicates:choice,review:'reviewed'}}));
+  assert.equal(settings.get().feed.showDuplicates,false);
+  for(const [key,value] of Object.entries(prefs))assert.equal(JSON.stringify(settings.get()[key]),JSON.stringify(value),key);
+  assert.equal(settings.get().feed.review,'reviewed');
+  settings.density('l');
+  assert.equal(saved().feed.dupDefault,'off');
+  assert.equal(saved().feed.showDuplicates,false);
+  settings.setFeed({showDuplicates:true});
+  const reloaded=settingsContext(JSON.stringify(saved())).settings;
+  assert.equal(reloaded.get().feed.showDuplicates,true);
+  for(const [key,value] of Object.entries(prefs))assert.equal(JSON.stringify(reloaded.get()[key]),JSON.stringify(value),key);
+ }
+});
+test('duplicate checkbox enables repeats while unique unsent images stay visible when off',()=>{
+ const context=feedContext(),{settings,saved}=settingsContext('{}');
+ context.gsSettings=settings;context.addEventListener=()=>{};
+ vm.runInContext(`closeDetail=()=>{};toast=()=>{};
+  items=[frame('original',{tier:1}),frame('repeat',{tier:4,filtered:'duplicate',dupOf:'original'}),
+   frame('queued',{upload:{bytes:100,sent:0}}),frame('uploading',{upload:{bytes:100,sent:40}}),
+   frame('held',{upload:{bytes:100,sent:0,override:'hold'}})];`,context);
+ const start=source.indexOf(" $('showDuplicates').onchange=");
+ vm.runInContext(source.slice(start,source.indexOf(" $('modelSel').onchange",start)),context);
+ assert.equal(context.$('showDuplicates').checked,false);
+ assert.equal(vm.runInContext('ids()',context),'original,queued,uploading,held');
+ context.$('showDuplicates').onchange({target:{checked:true}});
+ assert.equal(context.$('showDuplicates').checked,true);
+ assert.equal(saved().feed.showDuplicates,true);
+ assert.equal(vm.runInContext('ids()',context),'original,repeat,queued,uploading,held');
+ context.$('showDuplicates').onchange({target:{checked:false}});
+ assert.equal(vm.runInContext('ids()',context),'original,queued,uploading,held');
+});
 test('feed shows every pipeline image by default with low-value, repeat and directive-lowered images at P4',()=>{
  const context=feedContext();
  vm.runInContext(`
@@ -493,7 +741,7 @@ test('cards mark human sends purple and automatic sends green',()=>{
 test('main strip moves low-level counts to the Details screen',()=>{
  assert.match(css,/#simStrip :is\(#st2,#st4\),#simStrip :is\(#st2,#st4\)\+\.ar,#liveStrip \.lowlevel,#liveStrip \.lowlevel\+\.ar\{display:none\}/);
  assert.match(html,/href="#details">Details: counts &amp; filtered photos ›<\/a>/);
- assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates" checked> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0<\/span><\/label>/);
+ assert.match(html,/<label class="feed-check"><input type="checkbox" id="showDuplicates"> Show duplicates <span class="c" id="dupCount" title="Repeat images in the feed">0<\/span><\/label>/);
  assert.match(html,/<div class="seg" id="densSeg"><button data-d="m" class="on">Small<\/button><button data-d="l">Large<\/button><\/div>/);
 });
 test('Details screen lists automatically filtered photos by kind with their originals',()=>{
@@ -528,6 +776,18 @@ test('shore rank uses all shore records by ship score regardless of review, sens
   filters.review='reviewed';state.sort='new';state.tier='2';state.src='IR-U1';
  `,context);
  assert.match(vm.runInContext("liveWhy(items[1])[0].t",context),/Rank 2 of 3 on shore by ship score \(20\.00\)/);
+});
+test('feed filters toggle synchronizes expansion and accessibility state',()=>{
+ const context=setup();
+ vm.runInContext(`
+  let expanded=false;
+  $('feedHead').classList.toggle=name=>{if(name!=='filters-open')throw Error(name);return expanded=!expanded};
+  $('feedFilters').setAttribute=(name,value)=>{if(name!=='aria-expanded')throw Error(name);filterExpanded=value};
+  toggleFeedFilters();
+ `,context);
+ assert.equal(vm.runInContext('filterExpanded',context),'true');
+ vm.runInContext('toggleFeedFilters()',context);
+ assert.equal(vm.runInContext('filterExpanded',context),'false');
 });
 test('feed density offers only Small and Large, persists them and maps the old XL to Large',()=>{
  for(const saved of [null,'broken','{}','{"density":"invalid"}','{"density":null}','{"density":"s"}']){
@@ -774,6 +1034,28 @@ test('global keyboard shortcuts ignore input while a dialog is open',()=>{
  vm.runInContext(`document.querySelector=()=>null;handlers.keydown({key:'n',target:{tagName:'BODY',closest:selector=>selector.includes('#policyAdmin')?{}:null}})`,context);
  assert.equal(vm.runInContext('nightToggles',context),0);
 });
+test('reviewers cannot use feed priority shortcuts but retain review hotkeys',()=>{
+ const context=setup();
+ vm.runInContext(`
+  handlers={};actions=[];
+  document.querySelector=()=>null;
+  document.addEventListener=(type,handler)=>{if(type==='keydown')handlers[type]=handler};
+  gsPolicy.isPolicyHotkeyTarget=()=>false;
+  gsAuth={viewer:()=>false,reviewer:()=>true};
+  setManual=(id,tier)=>actions.push('feed:'+tier);rvAct=action=>actions.push('review:'+action);
+  state.page='feed';state.sel='item';location={hash:''};
+ `,context);
+ const start=source.indexOf(" document.addEventListener('keydown'");
+ const end=source.indexOf(" $('rvKeys').onclick",start);
+ assert.ok(start>=0&&end>start);
+ vm.runInContext(source.slice(start,end),context);
+ vm.runInContext(`handlers.keydown({key:'1',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false});
+  handlers.keydown({key:'r',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false})`,context);
+ assert.equal(vm.runInContext('actions.length',context),0);
+ assert.equal(vm.runInContext('location.hash',context),'#review');
+ vm.runInContext(`state.page='rv';handlers.keydown({key:'1',target:{tagName:'BODY',closest:()=>null},preventDefault(){},repeat:false})`,context);
+ assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(actions)',context)),['review:1']);
+});
 test('a blocked lock warning disables workbench confirmation',()=>{
  const context=setup();
  vm.runInContext(`
@@ -819,7 +1101,7 @@ test('band controls keep native Enter and Space activation without accepting rev
    assert.equal(vm.runInContext('prevented',context),false);
   }
   vm.runInContext("rv.ask=null;insideBands=false;actions=[];press(key);insideBands=true",context);
-  assert.equal(vm.runInContext("actions.join(',')",context),'accept');
+  assert.equal(vm.runInContext("actions.join(',')",context),'');
  }
  vm.runInContext("actions=[];press('B');press('1');press('2');press('3');press('4');press('Escape')",context);
  assert.equal(vm.runInContext("actions.join(',')",context),'band:IR,1,2,3,4');
@@ -871,7 +1153,7 @@ test('consecutive Space and Enter and live renders retain band focus without rev
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
  vm.runInContext("press('B')",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='EO'&&document.activeElement.dataset.band==='IR'",context),true);
- vm.runInContext("originalButton=document.activeElement;applyItemUpdate({...rv.cur,src:'EO-P7',central:.95})",context);
+ vm.runInContext("originalButton=document.activeElement;applyItemUpdate({...rv.cur,src:'EO-P7',central:.95});flushFeed()",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&document.activeElement.dataset.band==='IR'&&document.activeElement!==originalButton",context),true);
  vm.runInContext("press('Enter')",context);
  assert.equal(vm.runInContext("!rv.cur.reviewed&&bandFor(rv.cur)==='IR'&&!!document.activeElement.closest('.band-controls button')",context),true);
@@ -881,15 +1163,17 @@ test('live card updates preserve canonical priority labels',()=>{
  vm.runInContext(source.slice(source.indexOf('function updateCard('),source.indexOf('function renderFeed(')),context);
  vm.runInContext(`
   badge={};other={setAttribute(){}};
-  card={querySelector:selector=>selector==='.tier'?badge:selector==='.thumb-meta'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
+  card={setAttribute(name,value){this[name]=value},querySelector:selector=>selector==='.tier'?badge:selector==='.thumb-meta'?{insertAdjacentHTML(){}}:selector==='.night-badge'?null:other};
   gsLights={badge:()=>''};boxesHTML=()=>'';topLine=()=>'';
-  testItem={id:'test',el:card,tier:1,central:.9,base:.8};updateCard(testItem);
+  testItem={id:'test',src:{id:'EO-P7',name:'Mast camera'},el:card,tier:1,central:.9,base:.8};updateCard(testItem);
  `,context);
  assert.equal(vm.runInContext('badge.textContent',context),'P1 Critical');
  assert.equal(vm.runInContext('badge.title',context),'Notify Commander');
+ assert.equal(vm.runInContext("card['aria-label']",context),'P1 Critical image from Mast camera. Open image details');
  vm.runInContext('testItem.tier=4;updateCard(testItem)',context);
  assert.equal(vm.runInContext('badge.textContent',context),'P4 Low');
  assert.equal(vm.runInContext('badge.title',context),'Image priority');
+ assert.equal(vm.runInContext("card['aria-label']",context),'P4 Low image from Mast camera. Open image details');
 });
 test('feed state uses clear active, paused and reconnecting labels',()=>{
  const context=setup();
@@ -902,6 +1186,22 @@ test('feed state uses clear active, paused and reconnecting labels',()=>{
  vm.runInContext('state.offline=true;renderLive()',context);
  assert.equal(vm.runInContext('indicator.textContent',context),'RECONNECTING');
  assert.equal(vm.runInContext("$('live').title",context),'Reconnecting — click to resume feed');
+});
+test('shore outage is visible without diagnostics and recovers without affecting simulation',()=>{
+ const context=setup();
+ vm.runInContext("indicator={};statusClasses=new Set();$('live').classList={toggle:(key,on)=>on?statusClasses.add(key):statusClasses.delete(key)};$('live').querySelector=()=>indicator;applyLive({shore:{ok:false,error:'upstream shore error'}})",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'SHORE UNREACHABLE');
+ assert.equal(vm.runInContext("statusClasses.has('off')",context),true);
+ assert.equal(context.$('shoreWarning').hidden,false);
+ assert.match(context.$('live').title,/showing last-known data/);
+ assert.match(html,/id="shoreWarning" role="status" hidden>Shore unreachable — showing last-known data/);
+ vm.runInContext("applyLive({shore:{ok:true}})",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED ACTIVE');
+ assert.equal(vm.runInContext("statusClasses.has('off')",context),false);
+ assert.equal(context.$('shoreWarning').hidden,true);
+ vm.runInContext("applyLive(null)",context);
+ assert.equal(vm.runInContext('indicator.textContent',context),'FEED ACTIVE');
+ assert.equal(context.$('shoreWarning').hidden,true);
 });
 test('shore upload rendering covers queued, partial, completed and invalid payloads',()=>{
  const context=setup();
@@ -969,6 +1269,47 @@ test('live active and pending forms take precedence over a received preview',()=
  assert.equal(vm.runInContext('uploadState(liveItem).done',context),true);
  assert.match(vm.runInContext('uploadHTML(liveItem)',context),/✓ Uploaded/);
 });
+test('directive rules and priority explanations escape stored labels and attributes',()=>{
+ const c=setup();
+ c.payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>&';
+ vm.runInContext(`
+  CLS={vessel:{lab:payload}};ATTR_LAB={moving:payload};MODELS={maritime:{name:payload}};
+  rule={type:'boost',classes:['vessel'],attrs:['moving']};
+  state.directives=[{id:'d1',text:payload,rules:[rule]}];
+  $('directives').querySelectorAll=()=>[];
+  renderDirectives();
+  why=buildWhy({edge:.5,central:.5},[[{cls:'vessel',conf:.9,attrs:{}},{s:.5,notes:[{...rule,directiveId:'d1'}]}]]);
+ `,c);
+ for(const html of [c.$('directives').innerHTML,vm.runInContext('why.map(w=>w.t).join("")',c)]){
+  assert.match(html,/&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(html,/<img|<svg/);
+  assert.doesNotMatch(html,/&amp;lt;/);
+ }
+ assert.equal(vm.runInContext("ruleLabel({type:'boost',classes:[],attrs:[]})",c),'▲ Any object');
+ vm.runInContext('state.directives=[];renderDirectives()',c);
+ assert.match(c.$('directives').innerHTML,/No directives/);
+});
+
+test('image URLs and processing metadata are escaped at HTML sinks',()=>{
+ const c=setup();
+ c.payload='"><img src=x onerror=alert(1)>';
+ vm.runInContext(`
+  MODELS={maritime:{name:payload}};
+  imageFor=()=>payload;
+  zulu=()=> '12:00:00Z';
+  item={src:{id:'camera',hw:payload,em:payload,link:payload},dets:[],lat:{edge:1,up:2,cen:3},edge:.5,central:.5,tier:2,ts:new Date()};
+  imageHTML=cardHTML(item,false);
+  timeline=processingHTML(item);
+  chips=formChipsHTML({live:{forms:{fact:{state:payload}}}});
+  ladder=liveLadderHTML({live:{forms:{fact:{state:payload}},pull:{}}});
+ `,c);
+ for(const name of ['imageHTML','timeline','chips','ladder']){
+  const html=vm.runInContext(name,c);
+  assert.match(html,/&quot;&gt;&lt;img/);
+  assert.doesNotMatch(html,/<img src=x/);
+ }
+});
+
 test('feed images and detection planes share an intrinsic-size wrapper',()=>{
  const c=setup();
  vm.runInContext("imageFor=()=>'/frame.jpg';zulu=()=> '12:00:00Z';it={src:{id:'EO'},tier:3,central:.5,ts:new Date(),dets:[],det:[]}",c);
@@ -1001,7 +1342,7 @@ function setup(){
   gsLights:require('./static/lights.js'),
   setTimeout:()=>{},clearTimeout:()=>{},imageCache:new Map(),
   document:{body:{classList:{remove(){}}},querySelector:()=>null},
-  $:id=>{if(!elements.has(id))elements.set(id,{classList:{toggle(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
+  $:id=>{if(!elements.has(id))elements.set(id,{style:{},classList:{toggle(){},add(){},remove(){}},querySelector:()=>({}),setAttribute(){}});return elements.get(id)},
  });
  context.window=context;
  vm.runInContext(policySource,context);
@@ -1016,6 +1357,51 @@ function setup(){
  `,context);
  return context;
 }
+
+test('processing timeline formats latencies outside the detail renderer',()=>{
+ const context=setup();
+ vm.runInContext(`
+  MODELS={maritime:{name:'Maritime'}};
+  const html=processingHTML({
+   src:{hw:'EO-P7',em:'EO'},edge:.4,kb:12,fullRes:false,
+   lat:{edge:100,up:1500,cen:2000}
+  });
+ `,context);
+ const html=vm.runInContext('html',context);
+ assert.match(html,/>100 ms</);
+ assert.match(html,/>1\.5 s</);
+ assert.match(html,/>2\.0 s</);
+});
+
+test('dataset detail rendering tolerates omitted upload controls and wires navigation',()=>{
+ const context=setup(),buttons=new Map();
+ const drawer={innerHTML:'',querySelectorAll:()=>[],scrollTop:0};
+ const item={
+  id:'dataset-item',src:{id:'real-source',name:'Real source'},ts:'2026-11-04T12:00:00Z',
+  tier:2,centralTier:2,central:.7,base:.6,edge:.5,dbId:17,manual:0,
+  dets:[{cls:'vessel',conf:.8,attrs:{},b:{x:10,y:10,w:40,h:30}}],
+  det:[{s:.7,notes:[]}],directives:[],sent:false,fullRes:false,live:null,
+ };
+ context.$=id=>{
+  if(id==='drawer')return drawer;
+  if(['aUploadNext','aUploadHold','aPull'].includes(id))return null;
+  if(!buttons.has(id))buttons.set(id,{});
+  return buttons.get(id);
+ };
+ context.datasetItem=item;
+ vm.runInContext(`
+  DATASET_MODE=true;items=[datasetItem];state.sel=datasetItem.id;state.model='maritime';state.directives=[];
+  MODELS={maritime:{name:'Maritime'}};CLS={vessel:{lab:'Vessel',g:'vessel'}};ATTR_LAB={};
+  zulu=()=> '12:00';
+  feedOrdered=[datasetItem];visible=()=>{throw Error('detail must use cached feed order')};buildWhy=()=>[];largeImage=()=>'<img>';processingHTML=()=>'<div></div>';
+  briefing={renderDetections(){}};
+ `,context);
+ assert.doesNotThrow(()=>vm.runInContext('renderDetailContent()',context));
+ assert.match(drawer.innerHTML,/1 of 1/);
+ for(const id of ['dPrev','dNext','dClose'])assert.equal(typeof buttons.get(id)?.onclick,'function',`${id} handler`);
+ assert.equal(typeof buttons.get('aSim')?.onclick,'function');
+ assert.equal(typeof buttons.get('aDis')?.onclick,'function');
+});
 
 test('unknown contact labels, distinct boxes and persistence explanations',()=>{
  const context=setup();
@@ -1061,6 +1447,74 @@ test('empty paused snapshot preserves visible items and queue',()=>{
  const context=setup();
  vm.runInContext("state.paused=true;items=[normalizeItem(raw('visible'))];pendingItems=[{item:raw('queued')}];applySnapshot(snapshot([]))",context);
  assert.equal(vm.runInContext("items.length===1&&pendingItems.length===1",context),true);
+});
+
+for(const paused of [false,true])test(`reset snapshot clears all item state while ${paused?'paused':'live'}`,()=>{
+ const context=setup();
+ vm.runInContext(`
+  applySnapshot({...snapshot([]),epoch:0});state.paused=${paused};
+  items=[normalizeItem(raw('old'))];pendingItems=[{item:raw('queued')}];
+  evictedIDs.add('gone');heldSnapshotIDs=new Set(['old','queued']);imageCache.set('old','image');selectedBands.set('old','EO');
+  state.sel='old';rv.cur=items[0];rv.displayed=items[0];rv.undo=[{id:'old'}];rv.busy=true;lastReview={id:'review'};
+  applySnapshot({...snapshot([]),epoch:1,reset:true});
+ `,context);
+ assert.equal(vm.runInContext(`state.paused===${paused}&&items.length===0&&pendingItems.length===0&&evictedIDs.size===0&&heldSnapshotIDs===null&&imageCache.size===0&&selectedBands.size===0&&state.sel===null&&rv.cur===null&&rv.displayed===null&&rv.undo.length===0&&!rv.busy&&lastReview===null`,context),true);
+ vm.runInContext(`openStream();streamHandlers.item({data:JSON.stringify({item:raw('new'),stats:{}})})`,context);
+ assert.equal(vm.runInContext(paused?"items.length===0&&pendingItems[0].item.id==='new'":"items.length===1&&findItem('new').id==='new'",context),true);
+});
+
+test('epoch change on reconnect clears paused state but same epoch preserves hold',()=>{
+ const context=setup();
+ vm.runInContext(`applySnapshot({...snapshot([raw('old')]),epoch:3});state.paused=true;pendingItems=[{item:raw('queued')}];applySnapshot({...snapshot([]),epoch:3})`,context);
+ assert.equal(vm.runInContext("items.length===1&&pendingItems.length===1",context),true);
+ vm.runInContext(`applySnapshot({...snapshot([raw('reconnected')]),epoch:4})`,context);
+ assert.equal(vm.runInContext("state.paused&&items.length===1&&items[0].id==='reconnected'&&pendingItems.length===0&&heldSnapshotIDs===null&&rv.cur===null",context),true);
+});
+
+test('item write responses cannot resurrect images across reset or insert unknown images',async()=>{
+ for(const path of ['/api/items/old','/api/items/old/review','/api/reviews/r/undo','/api/reviews/r/reason','/api/items/old/upload-override','/api/items/old/full-res','/api/items/old/decision']){
+  const context=setup();
+  vm.runInContext(`applySnapshot({...snapshot([raw('old')]),epoch:0});fetch=()=>new Promise(resolve=>{finish=resolve})`,context);
+  const pending=vm.runInContext(`request(${JSON.stringify(path)},'POST',{})`,context);
+  const rejected=assert.rejects(pending,/no longer available/);
+  vm.runInContext(`applySnapshot({...snapshot([]),epoch:1,reset:true});finish({ok:true,status:200,json:async()=>({item:raw('old'),cdr:1})})`,context);
+  await rejected;
+  assert.equal(vm.runInContext('items.length===0&&pendingItems.length===0',context),true);
+ }
+ const context=setup();
+ vm.runInContext(`fetch=async()=>({ok:true,status:200,json:async()=>({item:raw('unknown')})})`,context);
+ await assert.rejects(vm.runInContext("patchItem('unknown',{manual:1})",context),/no longer available/);
+ assert.equal(vm.runInContext('items.length===0',context),true);
+});
+
+test('reset control is capability gated, viewer hidden, and uses confirmation helper',async()=>{
+ const context=setup();
+ vm.runInContext(`setupDemoReset(false)`,context);
+ assert.equal(context.$('resetDemoBtn').hidden,true);
+ vm.runInContext(`setupDemoReset(true)`,context);
+ assert.equal(context.$('resetDemoBtn').hidden,false);
+ vm.runInContext(`gsAuth={viewer:()=>true};setupDemoReset(true)`,context);
+ assert.equal(context.$('resetDemoBtn').hidden,true);
+ vm.runInContext(`gsAuth={viewer:()=>false};setupDemoReset(true);calls=[];request=async(...args)=>calls.push(args);toast=()=>{};$('resetDemoDialog').close=()=>{};`,context);
+ await context.$('resetDemoConfirm').onclick();
+ assert.equal(vm.runInContext('JSON.stringify(calls)',context),JSON.stringify([['/api/demo/reset','POST',{confirm:'reset'}]]));
+ assert.match(html,/id="resetDemoBtn" hidden/);
+ assert.match(html,/id="resetDemoCancel" autofocus/);
+ assert.match(source,/document.querySelector\('dialog\[open\]'\).*return/);
+});
+
+test('Commander reset clears selection, undo, busy state and rejects delayed writes',async()=>{
+ const elements=new Map(),context=vm.createContext({imageCache:new Map(),setTimeout:()=>{},clearTimeout:()=>{},document:{querySelector:()=>null},$:id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id)}});
+ const cdrSource=fs.readFileSync(path.join(__dirname,'static/cdr.js'),'utf8');
+ vm.runInContext(cdrSource.replace(/init\(\)\.catch\([^\n]+\);\s*$/,''),context);
+ vm.runInContext(`render=()=>{};renderLearned=()=>{};function snap(epoch,reset=false){return {epoch,reset,state:{model:'maritime',directives:[]},items:[]}};applySnapshot(snap(0));items.set('old',{id:'old'});view.sel='old';view.undo=['old'];view.busy=true;imageCache.set('old','image');fetch=()=>new Promise(resolve=>{finish=resolve})`,context);
+ const pending=vm.runInContext("api('/api/items/old/decision','POST',{decision:'close'})",context);
+ const rejected=assert.rejects(pending,/no longer available/);
+ vm.runInContext(`applySnapshot(snap(1,true));finish({ok:true,json:async()=>({item:{id:'old'}})})`,context);
+ await rejected;
+ assert.equal(vm.runInContext('items.size===0&&view.sel===null&&view.undo.length===0&&!view.busy&&imageCache.size===0',context),true);
+ vm.runInContext(`items.set('old',{});view.undo=['old'];applySnapshot(snap(2))`,context);
+ assert.equal(vm.runInContext('items.size===0&&view.undo.length===0',context),true);
 });
 
 test('toggle hold pauses and resume drains pending items',()=>{
@@ -1227,7 +1681,7 @@ test('Send now moves a feed image to the top of the send queue',async()=>{
  vm.runInContext(`calls=[];messages=[];toast=m=>messages.push(m);
   items=[{id:'img',src:{id:'EO-P7'},upload:{bytes:100,sent:0}}];
   request=async(url,method,body)=>{calls.push([url,method,body]);return{cdr:2,item:{...items[0],upload:{...items[0].upload,override:'next'}}}};
-  applyItemUpdate=item=>{items[0]=item};`,context);
+  applyItemUpdate=item=>Object.assign(findItem(item.id),item);`,context);
  await vm.runInContext("sendNow('img')",context);
  assert.equal(vm.runInContext('JSON.stringify(calls)',context),JSON.stringify([['/api/items/img/upload-override','POST',{override:'next'}]]));
  assert.match(vm.runInContext('messages[0]',context),/top of the send queue/);
@@ -1249,6 +1703,19 @@ test('empty water has an obvious kept-on-ship label and explicit upload override
  assert.match(vm.runInContext('uploadHTML(ocean)',context),/Upload next \(operator\)/);
  assert.doesNotMatch(vm.runInContext('uploadHTML(ocean)',context),/kept on ship/);
  assert.equal(vm.runInContext('uploadState(ocean).queued',context),true);
+});
+
+test('simulation empty water stays out of Operator Review and its unreviewed count',()=>{
+ const context=setup();
+ vm.runInContext(`
+  const upload={bytes:1000,sent:0,done:false};
+  items=[normalizeItem({...raw('ocean',4),src:'BY-12',background:true,dets:null,det:null,upload:{...upload}}),normalizeItem({...raw('ship',4),upload:{...upload}})];
+  state.src='ALL';rv.cur=items[0];fullRenderStats();
+ `,context);
+ assert.equal(vm.runInContext('rvQueue().map(i=>i.id).join()',context),'ship');
+ assert.equal(vm.runInContext('isEmptyWater(items[0])',context),true);
+ assert.equal(vm.runInContext('isEmptyWater(items[1])',context),false);
+ assert.equal(context.$('rvCount').textContent,1);
 });
 
 test('upload summary counts retained empty water separately from queued and active transfers',()=>{
@@ -1280,4 +1747,11 @@ test('empty water processing chain explains local retention without claiming sho
  assert.match(html,/Shore transfer: Empty water · kept on ship/);
  assert.match(html,/Priority scoring \(simulated\)/);
  assert.doesNotMatch(html,/0\.02 ≥ 0\.20|Sent to shore:/);
+});
+
+test('legacy Day settings without prev return to Day after red-light toggles',()=>{
+ const {settings}=settingsContext(JSON.stringify({bar:'left',theme:'day',density:'xl',feed:{showDuplicates:true,review:'sent'}}));
+ settings.toggleRed();assert.equal(settings.get().theme,'red');
+ settings.toggleRed();assert.equal(settings.get().theme,'day');
+ assert.equal(settingsContext(JSON.stringify({theme:'red'})).settings.get().prev,'cic');
 });

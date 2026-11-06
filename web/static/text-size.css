@@ -4,6 +4,7 @@ input,select,textarea{font:inherit}
 button,.btn,.seg,nav,.dirbar,.setfoot{flex-wrap:wrap}
 button,.btn{white-space:normal;overflow-wrap:normal;word-break:normal;min-width:min-content}
 .policy-badge,.banner{white-space:normal;overflow-wrap:anywhere}
+.human-btn{white-space:nowrap;flex-wrap:nowrap;flex-shrink:0}
 .seg{overflow:visible;max-width:100%}
 .seg button{min-width:0;overflow-wrap:normal;flex-shrink:0}
 .setsec .seg button{flex:1 0 auto}
@@ -11,6 +12,8 @@ button,.btn{white-space:normal;overflow-wrap:normal;word-break:normal;min-width:
 header{height:auto;min-height:3.25rem;flex-wrap:wrap;overflow:visible}
 header nav{min-height:2.75rem;height:auto}
 header nav a{flex:none}
+header .view-tabs{height:auto;align-self:stretch;max-width:100%}
+header .view-tabs nav{flex:1 1 0;min-width:0;flex-wrap:nowrap;order:0}
 .logo,.hstats,.user,.kpis{max-width:100%}
 .hstats,.kpis{flex-wrap:wrap}
 .dirbar{min-width:0}
@@ -77,9 +80,9 @@ body.live.hide-cl .grid:is(.l,.xl){--caption-height:3rem}
 @media(max-width:1023px){
  header nav{flex:0 0 100%;order:-1;overflow-x:auto;flex-wrap:nowrap;margin-left:0}
  body:has(#pgFeed.on) header{height:auto;min-height:2rem;flex-wrap:wrap}
- body:has(#pgFeed.on) header nav{height:auto;min-height:2rem;flex:1 1 100%}
+ body:has(#pgFeed.on) header nav{height:auto;min-height:2rem;flex:1 1 0}
  body:has(#pgFeed.on #feedHead.filters-open) header nav{height:auto}
- body:not(:has(#pgFeed.on)) header nav{height:auto}
+ body:not(:has(#pgFeed.on)) header nav{height:auto;flex:1 1 0;order:0}
  #pgFeed #densSeg{flex-wrap:wrap}
  .toolbar select{min-width:0}
 }

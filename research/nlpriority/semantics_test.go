@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
 )
 
 // The mapping is a model response fixture, never a production synonym table.
@@ -269,5 +271,31 @@ func TestModelReportedQualifierPreservation(t *testing.T) {
 				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestKnownSynonymsResolveWithoutGranite(t *testing.T) {
+	d, err := (&Compiler{}).Compile(context.Background(), "prioritize whales and ferries", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, r := range d.Rules {
+		got = append(got, r.Concept)
+	}
+	if strings.Join(got, ",") != "marine mammal,passenger ship" || strings.Contains(d.Path, "granite") {
+		t.Fatalf("rules %+v", d.Rules)
+	}
+	if _, err := (&Compiler{}).Compile(context.Background(), "prioritize red whales", nil); err == nil {
+		t.Fatal("qualified phrase resolved without Granite")
+	}
+}
+
+func TestAliasesTargetFixedConcepts(t *testing.T) {
+	fixed := fixedConcepts()
+	for alias, canonical := range catalog.Aliases {
+		if !fixed[canonical] {
+			t.Errorf("alias %q -> %q is not a fixed concept", alias, canonical)
+		}
 	}
 }

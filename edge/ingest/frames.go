@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -105,10 +106,15 @@ func isImage(n string) bool {
 type Replay struct {
 	clk    clock.Clock
 	period time.Duration
-	queue  []*Capture
+	queue  []replayFrame
 	i      int
 	mu     sync.Mutex
 	bursts map[string]replayBurst
+}
+
+type replayFrame struct {
+	Capture
+	read func() ([]byte, error)
 }
 
 type replayBurst struct {
@@ -117,7 +123,7 @@ type replayBurst struct {
 }
 
 func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay, error) {
-	var lists [][]*Capture
+	var lists [][]replayFrame
 	for _, s := range sets {
 		var sceneEvery *time.Duration
 		if s.SceneEveryS != nil {
@@ -132,12 +138,8 @@ func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay
 		if err != nil {
 			return nil, err
 		}
-		var l []*Capture
+		var l []replayFrame
 		for _, f := range frs {
-			data, err := f.read()
-			if err != nil {
-				return nil, err
-			}
 			hints := map[string]string{"truth": s.Truth}
 			if s.Label != "" {
 				hints["label"] = s.Label
@@ -146,8 +148,8 @@ func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay
 			if s.Unknownness > 0 {
 				hints["unknownness"] = ftoa(s.Unknownness)
 			}
-			l = append(l, &Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Data: data, Source: s.Source, Hints: hints, SceneEvery: sceneEvery,
-				Tags: map[string]string{"frame": f.name}})
+			l = append(l, replayFrame{Capture: Capture{Type: pb.ItemType_ITEM_TYPE_IMAGE, Source: s.Source, Hints: hints, SceneEvery: sceneEvery,
+				Tags: map[string]string{"frame": f.name}}, read: f.read})
 		}
 		if len(l) > 0 {
 			lists = append(lists, l)
@@ -159,7 +161,7 @@ func NewReplay(clk clock.Clock, period time.Duration, sets ...FrameSet) (*Replay
 		total += len(l)
 	}
 	idx := make([]int, len(lists))
-	var q []*Capture
+	var q []replayFrame
 	for len(q) < total {
 		best, bestFrac := -1, -1.0
 		for k, l := range lists {
@@ -202,30 +204,46 @@ func (r *Replay) Burst(source string, fps float64, d time.Duration) {
 }
 
 func (r *Replay) Next(ctx context.Context) (*Capture, bool, error) {
-	if r.i >= len(r.queue) {
-		return nil, true, nil
-	}
-	if r.i > 0 {
-		now := r.clk.Now()
-		r.mu.Lock()
-		period := r.period
-		source := r.queue[r.i].Source
-		if burst, ok := r.bursts[source]; ok {
-			if now.Before(burst.until) && burst.period > 0 {
-				period = burst.period
-			} else {
-				delete(r.bursts, source)
-			}
-		}
-		r.mu.Unlock()
-		if err := r.clk.Sleep(ctx, period); err != nil {
+	for r.i < len(r.queue) {
+		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
+		if r.i > 0 {
+			now := r.clk.Now()
+			r.mu.Lock()
+			period := r.period
+			source := r.queue[r.i].Source
+			if burst, ok := r.bursts[source]; ok {
+				if now.Before(burst.until) && burst.period > 0 {
+					period = burst.period
+				} else {
+					delete(r.bursts, source)
+				}
+			}
+			r.mu.Unlock()
+			if err := r.clk.Sleep(ctx, period); err != nil {
+				return nil, false, err
+			}
+		}
+		f := r.queue[r.i]
+		c := f.Capture
+		if f.read != nil {
+			data, err := f.read()
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil, false, ctx.Err()
+				}
+				slog.Warn("skipping unreadable replay frame", "source", c.Source, "frame", c.Tags["frame"], "err", err)
+				r.i++
+				continue
+			}
+			c.Data = data
+		}
+		r.i++
+		c.CapturedAt = r.clk.Now()
+		return &c, false, nil
 	}
-	c := r.queue[r.i]
-	r.i++
-	c.CapturedAt = r.clk.Now()
-	return c, false, nil
+	return nil, true, nil
 }
 
 func ftoa(f float64) string {

@@ -27,3 +27,24 @@ func TestValidateAuthMode(t *testing.T) {
 		t.Fatal("invalid mode accepted")
 	}
 }
+
+func TestValidateReviewLinkAuthMode(t *testing.T) {
+	if err := validateReviewLinkAuthMode("token", "review-link.key", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReviewLinkAuthMode("token", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReviewLinkAuthMode("piv", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateReviewLinkAuthMode("piv", "review-link.key", ""); err == nil || !strings.Contains(err.Error(), "incompatible with -auth-mode piv") {
+		t.Fatalf("PIV + review link error = %v", err)
+	}
+	if err := validateReviewLinkAuthMode("token", "review-link.key", "http://shore:8080"); err == nil || !strings.Contains(err.Error(), "supported only in simulation/dataset mode, not with -shore") {
+		t.Fatalf("shore + review link error = %v", err)
+	}
+	if err := validateReviewLinkAuthMode("token", "", "http://shore:8080"); err != nil {
+		t.Fatalf("shore without review link = %v", err)
+	}
+}

@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "checks": {
+    "runs": 2304,
+    "transmissions": 35924,
+    "segments": 64656,
+    "received_packets": 34031,
+    "partial_transfers": 1607
+  },
+  "payloads_hashed": 1213,
+  "packet_sets_checked": 144,
+  "summary_rows_recounted": 4096,
+  "head_of_line_case_count": 35,
+  "scope": "Independent saved-event/byte/aggregate audit; no simulator import, no annotation geometry reimplementation.",
+  "auditor_sha256": "3edcb3e5ac48cbed1a74d18305f4e75d36a4031570f9f1d222f9d83e1164957f",
+  "simulator_sha256_verified": "81b1132cddd3a91f19052846c8458f07e14ab7af6246ed649b4482713f9905e9",
+  "results_run_sha256": "342428e69443dd83c93662f617d43fe3c942dc69e3e2a51f688ab28d21a742f1"
+}

@@ -36,6 +36,29 @@ func TestSecureHeaders(t *testing.T) {
 	}
 }
 
+func TestSecureHSTS(t *testing.T) {
+	handler := Secure(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for _, tc := range []struct {
+		url  string
+		want string
+	}{
+		{"http://operator.example/", ""},
+		{"https://operator.example/", "max-age=31536000"},
+	} {
+		t.Run(tc.url, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			r.Header.Set("X-Forwarded-Proto", "https")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if got := w.Header().Get("Strict-Transport-Security"); got != tc.want {
+				t.Fatalf("HSTS = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSecurePreservesExistingCSP(t *testing.T) {
 	response := httptest.NewRecorder()
 	response.Header().Set("Content-Security-Policy", "default-src 'none'")

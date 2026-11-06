@@ -20,7 +20,7 @@ func TestReviews(t *testing.T) {
 		t.Fatal(e)
 	}
 	d := store.New(10)
-	d.Add(&command.Item{ID: "i", Central: .75, CentralTier: 2, BaseTier: 3}, 0)
+	d.Add(&command.Item{ID: "i", Central: .75, CentralTier: 2, BaseTier: 3, DatasetID: "seaships7000", ImageID: "seaships7000/valid/1", SourceVideo: "SeaShips", SHA256: strings.Repeat("a", 64)}, 0)
 	stored, _ := d.GetItem("i")
 	s := New(d)
 	s.SetReviewLog(l)
@@ -57,11 +57,20 @@ func TestReviews(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 	assertSummary(1)
+	select {
+	case event := <-peer.events:
+		if event.name != "update" {
+			t.Fatalf("event=%s, want review update", event.name)
+		}
+	default:
+		t.Fatal("retained review update not published")
+	}
 	var v struct {
 		Record reviews.Record `json:"record"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &v)
-	if v.Record.ModelKey != "maritime" || v.Record.ModelScore != stored.Central || v.Record.ModelTier != stored.CentralTier || v.Record.Reviewer != "A" {
+	if v.Record.ModelKey != "maritime" || v.Record.ModelScore != stored.Central || v.Record.ModelTier != stored.CentralTier || v.Record.Reviewer != "A" ||
+		v.Record.DatasetID != stored.DatasetID || v.Record.ImageID != stored.ImageID || v.Record.SourceVideo != stored.SourceVideo || v.Record.SHA256 != stored.SHA256 {
 		t.Fatalf("%+v", v)
 	}
 	if w = post("/api/items/i/review", `{"reviewer":"A","action":"accept","model_score":0}`); w.Code != 400 {

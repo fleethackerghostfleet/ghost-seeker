@@ -26,6 +26,24 @@ function setup(){
  return {elements,context};
 }
 
+test('commander learned directives and image URLs are escaped',()=>{
+ const {elements,context}=setup();
+ context.payload='"><img src=x onerror=alert(1)><svg onload=alert(1)>';
+ vm.runInContext(`
+  renderLearned([{text:'Operator feedback: '+payload}]);
+ `,context);
+ const learned=elements.get('learned').innerHTML;
+ assert.match(learned,/&quot;&gt;&lt;img/);
+ assert.doesNotMatch(learned,/<img|<svg/);
+ context.imageFor=()=>context.payload;
+ context.row={id:'image',src:{name:'Camera'},ts:new Date(),tier:2,central:.5,edge:.4,dets:[],det:[],upload:{done:true}};
+ vm.runInContext('items=new Map([[row.id,row]]);view.sel=row.id;renderQueue();renderStage()',context);
+ for(const id of ['qlist','stage']){
+  assert.match(elements.get(id).innerHTML,/src="&quot;&gt;&lt;img/);
+  assert.doesNotMatch(elements.get(id).innerHTML,/<img src=x|<svg/);
+ }
+});
+
 test('queue updates preserve scrolling; keyboard following scrolls only the queue pane',()=>{
  const {context}=setup(),queue=context.$('qlist');
  queue.scrollTop=120;queue.clientTop=2;queue.clientHeight=100;
@@ -146,6 +164,29 @@ test('commander queue and note templates escape item ids',()=>{
  assert.ok(elements.get('brief').innerHTML.includes(expected));
  assert.doesNotMatch(elements.get('qlist').innerHTML,/<style/);
  assert.doesNotMatch(elements.get('brief').innerHTML,/<style/);
+ context.testItem={...context.testItem,id:'negative',detectorNegative:true,dets:null,det:null};
+ vm.runInContext('upsert(testItem);view.sel=testItem.id;renderQueue();renderStage()',context);
+ assert.match(elements.get('qlist').innerHTML,/No contacts/);
+ assert.ok(Array.isArray(context.testItem.dets));
+ assert.ok(Array.isArray(context.testItem.det));
+});
+
+test('commander processing chain keeps dataset provenance separate from shore receipt steps',()=>{
+ const {elements,context}=setup();
+ context.row={
+  id:'review-image',src:{id:'camera',name:'Camera'},ts:new Date(),tier:2,central:.7,edge:.5,
+  dets:[],det:[],dataset_id:'dev<set>',image_id:'frame<1>',sent:true,sentAt:new Date(),
+  decision:'track',decidedAt:new Date(),upload:{done:true},
+ };
+ vm.runInContext('datasetMode=true;renderBrief(row)',context);
+ const dataset=elements.get('brief').innerHTML;
+ for(const step of ['Dataset image','Detector output','Priority model','Operator review','Commander'])assert.ok(dataset.includes(`<b>${step}</b>`),step);
+ assert.match(dataset,/dev&lt;set&gt; · frame&lt;1&gt;/);
+ assert.doesNotMatch(dataset,/Sensor capture|Received on shore|Shore model/);
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ const shore=elements.get('brief').innerHTML;
+ for(const step of ['Sensor capture','Ship scoring','Received on shore','Shore model','Operator report','Commander'])assert.ok(shore.includes(`<b>${step}</b>`),step);
+ assert.doesNotMatch(shore,/Dataset image|Detector output|<b>Captured<\/b>|Kept on ship/);
 });
 
 test('shore view excludes ship backlog even after escalation and includes completed uploads',()=>{
@@ -240,4 +281,19 @@ test('full-size transfer preserves previous receipts and decisions across snapsh
  context.unreceived={...context.rows[0],id:'unreceived',upload:{done:false,received:false}};
  vm.runInContext('upsert(unreceived);renderKpis()',context);
  assert.equal(elements.get('kReceived').textContent,3);
+});
+
+test('manual operator escalation is explained instead of claiming a high model score',()=>{
+ const {elements,context}=setup();
+ context.row={id:'manual',src:{id:'camera',name:'Camera'},ts:new Date(),tier:1,manual:1,central:0,edge:0,dets:[],det:[],sent:true,sentAt:new Date(),upload:{done:true}};
+ vm.runInContext('datasetMode=true;renderBrief(row)',context);
+ const html=elements.get('brief').innerHTML;
+ assert.match(html,/Operator set priority P1/);
+ assert.doesNotMatch(html,/High command-model score/);
+ context.row={...context.row,id:'model',manual:0,central:.9,edge:.9};
+ vm.runInContext('renderBrief(row)',context);
+ assert.match(elements.get('brief').innerHTML,/High command-model score/);
+ context.row={...context.row,id:'auto',manual:1,autoSent:true};
+ vm.runInContext('datasetMode=false;renderBrief(row)',context);
+ assert.doesNotMatch(elements.get('brief').innerHTML,/set priority P1/);
 });

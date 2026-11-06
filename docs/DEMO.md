@@ -15,19 +15,20 @@ shore gets an image of 10/10 dev objects vs 2/10 naive.
 
 Prerequisites: **Docker Desktop** (Apple silicon or Intel; ~6 GB free for the images) and,
 while the repo is private, the **GitHub CLI** signed in once (`brew install gh && gh auth login`)
-so `make demo-clips demo-models` can pull the ~225 MB of clips + models from the
+so the fallback downloader and `make demo-models` can pull clips + models from the
 [`demo-data-v1` release](https://github.com/fleethackerghostfleet/ghost-seeker/releases/tag/demo-data-v1)
-(`deploy/demo-data.sh`; it falls back to the lab GCS bucket via gcloud). No Go needed.
-Generating the live ocean crops once also requires Python + Pillow (see below) and the
-existing LFS source: `git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'`.
+(`deploy/demo-data.sh`). No Go needed.
+Python 3 generates the live scenario; signed-in **gcloud** is the primary source
+and checksum-refreshes both eval clips and all selected bucket frame sets on every run.
+Only when gcloud is absent or unauthenticated do eval clips fall back to the release;
+that mode warns that bucket discovery/refresh is unavailable. Custom buckets require gcloud.
+The optional ocean watch comes from the same release (`demo-ocean.tar.gz`, 32 screened crops)
+and is laid out by `ocean.py` with the system `python3` (no Pillow, no LFS).
 
 ```sh
-python3 -m venv ~/edgeml-venv
-~/edgeml-venv/bin/pip install Pillow==12.3.0
-export PY=~/edgeml-venv/bin/python
-make demo-clips demo-models   # one-time: scenarios/ghostfleet_demo/frames + ~/models/D (GitHub release; gh auth)
+make demo-clips demo-models   # GCS camera refresh + model provisioning; repeat to refresh
 make compose-demo             # builds the four images (first time ~5-10 min), starts the stack
-open http://localhost:8090    # signed in automatically; the edge starts replaying once the sidecar is healthy (~30 s)
+open http://localhost:8090    # sign in with the generated operator token; replay starts when the sidecar is healthy
 make compose-demo-down        # stop + delete data and credentials -> next `make compose-demo` is a fresh replay
 ```
 
@@ -39,8 +40,24 @@ sidecar, `-dedup sightings`). A one-shot `init` container writes the operator to
 key and the edge's 24 h JWT into the `demo-secrets` volume, so there is nothing to configure; the
 three Go containers run as the distroless `nonroot` user and bind to `127.0.0.1` on the host only.
 `MODELS=/path/to/D make compose-demo` if the models live elsewhere; `make compose-demo-logs` tails
-all four. Shore/edge consoles are also on `127.0.0.1:8080` / `:8081` (bearer: `docker run --rm -v
-ghost-seeker-demo_demo-secrets:/s:ro alpine cat /s/operator.token`).
+all four. Shore/edge consoles are also on `127.0.0.1:8080` / `:8081`.
+
+Plain `make compose-demo` requires the real operator token at the UI login page;
+it does **not** enable trusted-peer auto-login or arbitrary-token login. Retrieve
+the generated token locally, then paste it into **Operator token** at
+`http://localhost:8090/login` and click **Sign in**:
+
+```sh
+docker run --rm --entrypoint cat \
+  -v ghost-seeker-demo_demo-secrets:/s:ro \
+  ghost-seeker/demo-init:0.1.0 /s/operator.token
+```
+
+This is a credential: do not paste it into logs, screenshots or chat. It is stored
+in the stack's named volume, not the native `data/operator.token` file.
+`make compose-demo-down` deletes that volume; retrieve the new token after the
+next fresh start. After login, the browser uses an HttpOnly, SameSite=Strict
+session cookie. No relaxed override is required to view or operate the feed.
 
 This is a laptop demo, not the fielding topology — `deploy/compose/docker-compose.yml` (Toxiproxy
 link, explicit `GS_OPERATOR_TOKEN` / `GS_SIGNING_KEY` / `GS_UNIT_TOKEN`, production posture) is unchanged.
@@ -53,38 +70,55 @@ for supported classes, native startup, and validation limits.
 
 ## 0. One-time setup
 
-### Demo-only login fallback
+### Optional relaxed local presentation override
 
-`make demo-ui` and `make compose-demo` explicitly enable `-demo-accept-any-token`.
-If automatic sign-in fails, enter **any non-empty token** on the login screen
-to get **operator** access. Empty or whitespace-only tokens are rejected.
-This deliberately insecure mode is off by default, emits a loud startup warning,
-and must never be used in production or on an untrusted network. It cannot be
-combined with `-auth-mode piv` (startup fails). For a manual demo launch, add
-`-demo-accept-any-token` to the `ghost-seeker` command; omit it for normal token
-validation. The real operator token is still required for shore/edge bearer
-authentication; only the UI's login form accepts arbitrary tokens.
+Use the secure token login above for the normal Compose stack. For a deliberately
+relaxed local presentation, explicitly add the override after preparing the data
+and models. Keep the same model directory and generated scenario as the normal
+stack:
+
+```sh
+GS_MODELS="$HOME/models/D" GS_DEMO_SCENARIO=scenario.generated.json \
+  docker compose -f deploy/compose/demo.compose.yml \
+  -f deploy/compose/demo.local.compose.yml up -d
+```
+
+This replaces the UI command only, reuses the same project/data/secrets, and
+keeps published ports bound to `127.0.0.1`. It enables `-dev-trust-peers` for
+local Docker browser auto-login, `-demo-link-control` for presenter link controls,
+and `-demo-accept-any-token` as an insecure login fallback. Only in this mode
+does any non-empty login token grant **operator** access. Empty tokens are rejected;
+PIV plus arbitrary-token login is rejected at startup. Never use this override
+in production or on an untrusted network. Real operator credentials are still
+required between the services; their bearer authentication is not relaxed.
+
+Run `make compose-demo` again to restore the base UI command. Previously issued
+browser sessions do not prove auto-login is enabled: use a fresh/private browser
+session when checking the secure login screen. The override is not used by
+`make demo-ui`; do not assume a native launch accepts arbitrary tokens.
 
 ```sh
 # toolchain: Go 1.26.10, Python >= 3.10, GitHub CLI signed in (gh auth login) for the demo data
 make build
 python -m venv ~/edgeml-venv && . ~/edgeml-venv/bin/activate
 pip install -e "edgeml[tracking]" onnxruntime --extra-index-url https://download.pytorch.org/whl/cpu   # boxmot pulls CPU torch, ~3 min
-pip install Pillow==12.3.0
-git lfs pull --include='frames/30_Days_at_Sea_Timelapse_frames.zip'
-make demo-clips        # three released ship clips + generated Open_ocean_watch/img1 (all gitignored)
+make demo-clips        # refresh eval clips + discovered GCS sets (all gitignored)
+# INCLUDE_OCEAN_SCENES=1 make demo-clips   # opt into curated ocean scene tiles
 make demo-models       # -> ~/models/D/{yolo11n-640,mobileclip-s1} (D's ONNX exports + H's unknown_calib.npz)
 ```
 
 Clips (5 fps, MOT layout, from `gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/eval/ghost_fleet_5fps/`):
 `Submarine_surfacing` (372 f, 2 GT objects), `Cruise_ship_Mediterranean_sunset_off_Italy`
 (153 f, 3), `Spotted_A_Submarine` (745 f, 1). Change `CLIPS=` in `download.sh` / the
-`sets` in `scenarios/ghostfleet_demo/live.json` to use others in the live demo.
+the generator filters to use others in the live demo.
 `scenario.json` remains the unchanged three-ship input to the headless comparison.
 
-`make demo-clips` prepares all live inputs via `demo-ship-clips` and `demo-ocean`.
-The live `demo-edge` and `compose-demo` targets also depend on `demo-ocean`.
-Only live setup requires the LFS ocean ZIP and Pillow; headless `make demo` fetches
+`make demo-clips` prepares the eval clips and GCS frame sets. Ocean is off by default;
+`INCLUDE_OCEAN_SCENES=1 make demo-clips` prepares it and folds its scene entries into
+the generated scenario. Neither launch target changes the manifest or prepares ocean implicitly.
+`demo-ocean` fetches the released crops (verified against `ocean-manifest.json`); only
+without them does it regenerate from the LFS ZIP, which needs `git lfs pull
+--include='frames/30_Days_at_Sea_Timelapse_frames.zip'` and Pillow 12.3.0. Headless `make demo` fetches
 the three ship clips via `demo-ship-clips`, and `demo-compare` uses those clips directly.
 `demo-ocean` runs `ocean.py`: 32 manually inspected, real-sidecar-screened
 688×516 side-region crops of the existing `30_Days_at_Sea_Timelapse_frames.zip`.
@@ -98,6 +132,37 @@ The 32 crops cycle through 420 MOT-style frames, names 000001–001258, proporti
 spread over the entire replay (one ocean input per ~3 ship inputs). The four-set live
 replay has 1690 inputs at 200 ms (~338 s before processing); ship clips and their
 relative interleaving are unchanged. The released three-clip archive is unchanged.
+
+`CLIPS` (space-separated) and `BUCKET` override the eval clips and their GCS prefix.
+Authenticated eval clips always checksum-sync, including existing cached clips.
+
+`make demo-clips` also discovers every `frames/*_frames/` prefix in that bucket
+and syncs the flat JPEG directories into `frames/bucket/`. Every run checks
+content checksums and updates changed/new files (and removes deleted local files
+within each synced set). No bucket data is modified. The resulting on-disk image
+sets are written to gitignored `scenario.generated.json`, preserving the other
+fields of `scenario.json`; optional scene entries retain their cadence from `live.json`.
+`make compose-demo` and `make demo-edge` select this generated scenario, falling
+back to committed `scenario.json` when it does not exist.
+Restart the edge after another sync to load newly added sets. For direct Compose,
+set `GS_DEMO_SCENARIO=scenario.generated.json`; without it `scenario.json` is used.
+The headless `make demo` comparison fetches only the eval clips (no bucket frame
+discovery/sync) and keeps the committed three-clip scenario and its GT data.
+
+The visual simulator and live shaper use the demo's automatic normal rate model.
+`-sim-link-bps=N` pins simulated uploads; legacy `-link-bps=N` still pins the live
+shaper and aliases the simulator override when `-sim-link-bps` is not set to a
+fixed rate. Zero represents an outage; `-1` selects the automatic model.
+
+Optional environment controls (apply when running `make demo-clips`):
+- `INCLUDE_BUCKET_FRAMES=0`: eval clips only.
+- `INCLUDE_OCEAN_SCENES=1`: opt into screened ocean scenes (use with `make demo-clips`).
+- `FRAME_SETS_INCLUDE='*sailboat*,*SMD*'` / `FRAME_SETS_EXCLUDE='*test*'`:
+  comma-separated, case-sensitive glob filters on full directory names (including
+  `_frames`). Excluded cached sets are not added to the generated scenario.
+- `FRAMES_BUCKET=gs://another-bucket`: override the bucket root for discovery.
+- `DEST`: override the local frames directory; keep it inside the mounted
+  `scenarios/ghostfleet_demo/` directory for Docker replay.
 
 ## 1. Headless comparison (`make demo`)
 
@@ -136,19 +201,28 @@ shore store regardless of mode.
 make demo-sidecar      # python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --threads 4 --fps 5
 make demo-shore        # bin/shore   -data data/shore -listen :8080 -signing-key-file data/unit.key
 make demo-ui           # bin/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080
-make demo-edge         # bin/edge    -data data/edge -listen :8081 -shore http://localhost:18080 -scenario scenarios/ghostfleet_demo/live.json -period 200ms -infer http://localhost:9090 -dedup sightings -unit-token-file data/edge.jwt
+make demo-edge         # replays scenario.generated.json, or scenario.json if nothing has been generated
 open http://localhost:8090
 ```
 
-**Auth (no extra steps):** the three Go processes share one operator token, and the edge↔shore
+**Native authentication:** the three Go processes share one operator token, and the edge↔shore
 link carries a unit JWT (`make demo-shore` writes a random HS256 key to `data/unit.key`;
 `make demo-edge` mints a 24 h edge token from it into `data/edge.jwt` on every start). With no
 `GS_OPERATOR_TOKEN` set, the first of them to start writes a random token to `data/operator.token`
-(0600) and the others read it; a browser on `localhost` is signed in automatically (HttpOnly,
-SameSite=Strict session cookie). `make demo-ui` binds the UI to `127.0.0.1` only (it runs with
-`-demo-accept-any-token`); for a browser on another machine, run the same `make demo-ui` command line
-(all live flags: `-shore`, `-edge`, `-link-listen`, `-dev-token-file`) but with `-addr :8090` and
-without `-demo-accept-any-token`, then enter the token at `/login` (`cat data/operator.token`). For `curl` against the shore/edge API use
+(0600) and the others read it. `make demo-ui` binds to `127.0.0.1` and does **not**
+enable arbitrary-token login or trusted peers. To sign in when prompted, run
+`make -s demo-token` (or read `data/operator.token`), paste that credential into
+the token field at `http://localhost:8090/login`, and click **Sign in**. Keep it
+private. Do not use the Docker volume token for this separate native stack.
+
+The existing native development-token mode can auto-authenticate a direct,
+non-forwarded loopback browser request. That exception is not guaranteed through
+a proxy or Docker bridge, and is disabled when an explicit `GS_OPERATOR_TOKEN`
+or `GS_OPERATOR_TOKEN_FILE` is configured; then use that configured credential.
+Do not depend on automatic sign-in for a presentation. Browser sessions use an
+HttpOnly, SameSite=Strict cookie after authentication.
+
+For `curl` against the native shore/edge API use
 `-H "Authorization: Bearer $(make -s demo-token)"`. Details: `docs/SECURITY.md`.
 
 Start the edge last (it starts replaying immediately) and give the sidecar ~10 s to load the

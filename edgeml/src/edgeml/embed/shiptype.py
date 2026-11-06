@@ -14,6 +14,7 @@ Never identifies specific real hulls, names or hull numbers: markings are report
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 
 import cv2
@@ -259,7 +260,14 @@ class GeminiShipClassifier:
             crop = cv2.resize(crop, None, fx=s, fy=s, interpolation=cv2.INTER_CUBIC)
         ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 92])
         part = self.types.Part.from_bytes(data=buf.tobytes(), mime_type="image/jpeg")
-        r = self.client.models.generate_content(model=self.model, contents=[part, GEMINI_PROMPT], config=self.config)
+        for attempt in range(6):  # shared lab quota: back off on 429 RESOURCE_EXHAUSTED instead of failing the run
+            try:
+                r = self.client.models.generate_content(model=self.model, contents=[part, GEMINI_PROMPT], config=self.config)
+                break
+            except Exception as e:  # noqa: BLE001
+                if "429" not in str(e) or attempt == 5:
+                    raise
+                time.sleep(5 * 2 ** attempt)
         j = json.loads(r.text)
         t = j.get("ship_type") if j.get("ship_type") in TYPES else UNKNOWN
         return record(t, min(1.0, max(0.0, float(j.get("confidence", 0.0)))),

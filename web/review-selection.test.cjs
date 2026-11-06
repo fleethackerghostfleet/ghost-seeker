@@ -69,7 +69,7 @@ test('the default simulated watch officer review update does not advance review'
 });
 test('upload progress refreshes the active record and feed without selecting a new photo',()=>{
  const h=setup();h.run('start();feedRenders=0;renderFeed=()=>feedRenders++');
- h.run("emit('update',{item:{...raw('active'),upload:{bytes:100,sent:70}},cdr:0})");
+ h.run("emit('update',{item:{...raw('active'),upload:{bytes:100,sent:70}},cdr:0});flushFeed()");
  active(h);assert.equal(h.run('rv.cur.upload.sent'),70);assert.equal(h.run('feedRenders'),1);
  h.run("emit('stats',{stats:{bytes:70}})");active(h);
  assert.equal(h.run('stats.bytes'),70);
@@ -84,7 +84,7 @@ test('full reconnect and time-rescore snapshots preserve selection while replaci
 for(const removal of ['eviction','snapshot','held reconnect']){
  test(`${removal} pauses on an unavailable active image until explicit skip`,()=>{
   const h=setup();h.run('start()');
-  if(removal==='eviction')h.run("emit('evict',{id:'active'})");
+  if(removal==='eviction')h.run("emit('evict',{id:'active'});flushFeed()");
   else if(removal==='snapshot')h.run("applySnapshot(snapshot([raw('next',3)]))");
   else h.run("state.paused=true;applySnapshot(snapshot([raw('next',3)]));toggleHold()");
   active(h);assert.match(h.context.$('rvMain').innerHTML,/no longer available/i);
@@ -111,10 +111,10 @@ for(const action of ['accept','1','2','3','4','dismiss','cdr']){
   active(h,'urgent');assert.equal(h.run('rv.done'),1);
  });
 }
-test('input after a synchronous rescore uses the newly displayed priority',async()=>{
+test('input racing a batched rescore uses the priority that was actually displayed',async()=>{
  const h=setup();h.run("start();submitted=[];submitReview=(id,action,changes)=>{submitted.push({id,changes});return Promise.resolve()};emit('update',{item:raw('active',1),cdr:0});rvAct('accept')");
  await new Promise(setImmediate);
- assert.equal(h.run('submitted[0].id'),'active');assert.equal(h.run('submitted[0].changes.manual'),1);
+ assert.equal(h.run('submitted[0].id'),'active');assert.equal(h.run('submitted[0].changes.manual'),2);
 });
 test('skip postpones one item, and undo returns to the original image even across updates',async()=>{
  const h=setup();h.run("start();rvAct('skip')");active(h,'next');
@@ -136,7 +136,7 @@ test('failed review stays on the active image without recording or advancing',as
 });
 test('an initially empty review queue can show its first arrival without a feed pause',()=>{
  const h=setup();h.run('applySnapshot(snapshot([]))');assert.equal(h.run('rv.cur'),null);
- h.run("emit('item',{item:raw('active'),stats:{}})");active(h);assert.equal(h.run('state.paused'),false);
+ h.run("emit('item',{item:raw('active'),stats:{}});flushFeed()");active(h);assert.equal(h.run('state.paused'),false);
 });
 test('explicit review order navigation selects once and is ignored while a save is pending',async()=>{
  const h=setup();

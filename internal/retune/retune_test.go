@@ -108,6 +108,34 @@ func TestPrepareFiltersAndMedians(t *testing.T) {
 		t.Fatal("unknown model accepted")
 	}
 }
+
+func TestPrepareGroupsRepeatedImageAcrossItemIDs(t *testing.T) {
+	rs := []reviews.Record{
+		{ID: "a", ItemID: "item-a", ImageID: "image-42", Reviewer: "A", ModelKey: "maritime", HumanTier: 2, Detections: []command.Detection{{Class: "debris", Conf: 1}}, ReviewedAt: time.Unix(1, 0)},
+		{ID: "b", ItemID: "item-b", ImageID: "image-42", Reviewer: "B", ModelKey: "maritime", HumanTier: 3, Detections: []command.Detection{{Class: "debris", Conf: 1}}, ReviewedAt: time.Unix(2, 0)},
+	}
+	var r Result
+	data, err := prepare(rs, &r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	examples := data["maritime"]
+	if len(examples) != 1 || examples[0].ID != "image-42" {
+		t.Fatalf("repeated image split into multiple examples: %+v", examples)
+	}
+	train, holdout := 0, 0
+	for _, example := range examples {
+		if Holdout(example.ID) {
+			holdout++
+		} else {
+			train++
+		}
+	}
+	if train+holdout != 1 || (train > 0 && holdout > 0) {
+		t.Fatalf("image appeared in both partitions: train=%d holdout=%d", train, holdout)
+	}
+}
+
 func TestEmptyAndErrors(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "log")
 	os.WriteFile(p, nil, 0600)
