@@ -303,7 +303,7 @@ func (s *Server) addDirective(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(rules) == 0 {
-		writeError(w, http.StatusUnprocessableEntity, "Could not map that to known objects or behaviors — try ships, aircraft, drones, people, AIS, approaching…")
+		writeError(w, http.StatusUnprocessableEntity, command.NoMatchReadback)
 		return
 	}
 	if durationMin < 0 || durationMin > 10080 {
