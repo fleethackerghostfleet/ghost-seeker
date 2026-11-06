@@ -174,9 +174,19 @@ func TestSafeOutputsNormalizesPathsAndSymlinks(t *testing.T) {
 	if err := os.Symlink(input, alias); err != nil {
 		t.Fatal(err)
 	}
-	for _, outputs := range [][]string{{alias}, {filepath.Join(dir, ".", "input")}, {alias, input}} {
+	sep := string(filepath.Separator)
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, outputs := range [][]string{{alias}, {dir + sep + "." + sep + "input"}, {dir + sep + "sub" + sep + ".." + sep + "input"}, {alias, input}} {
 		if err := safeOutputs([]string{input}, outputs...); err == nil {
 			t.Fatalf("accepted aliases %v", outputs)
+		}
+	}
+	missing := filepath.Join(dir, "missing-input")
+	for _, raw := range []string{dir + sep + "." + sep + "missing-input", dir + sep + "sub" + sep + ".." + sep + "missing-input"} {
+		if err := safeOutputs([]string{missing}, raw); err == nil {
+			t.Fatalf("accepted unnormalized alias of nonexistent input: %q", raw)
 		}
 	}
 	if err := safeOutputs(nil); err != nil {
