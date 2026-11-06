@@ -76,7 +76,8 @@ def ready(phase):
 
 
 def control_logs():
-    credentials = [(STATE/'auth'/name).read_text().strip() for name in ('signing-key', 'operator-token', 'unit-token')]
+    credentials = [(STATE/'auth'/name).read_text().strip() for name in
+                   ('signing-key', 'operator-token', 'unit-token', 'edge-operator-token') if (STATE/'auth'/name).exists()]
     for namespace in ('pepr-system', 'zarf'):
         data = json.loads(subprocess.check_output(KUBE+['get', 'pods', '-n', namespace, '-o', 'json']))
         for pod in data['items']:
@@ -113,14 +114,16 @@ def ingest(client, phase, index, wait=True):
 
 
 def main():
-    if os.environ.get('AIRGAP_REDEPLOY') != '1':
-        raise SystemExit('Set AIRGAP_REDEPLOY=1 to authorize removal/redeployment of the ship app namespace and its data')
+    restart_only = os.environ.get('AIRGAP_RESTART_ONLY') == '1'
+    if not restart_only and os.environ.get('AIRGAP_REDEPLOY') != '1':
+        raise SystemExit('Set AIRGAP_REDEPLOY=1 for app-package removal/redeployment, or AIRGAP_RESTART_ONLY=1')
     REPORT.mkdir(parents=True, exist_ok=True)
-    tag = (STATE/'current-tag').read_text().strip()
-    stage = STATE/'build'/tag
-    package = stage/'dist/zarf-package-ghost-seeker-ship-amd64-0.1.0.tar.zst'
-    bundle = stage/'dist/uds-bundle-ghost-seeker-ship-amd64-0.1.0.tar.zst'
-    assert package.is_file() and bundle.is_file()
+    if not restart_only:
+        tag = (STATE/'current-tag').read_text().strip()
+        stage = STATE/'build'/tag
+        package = stage/'dist/zarf-package-ghost-seeker-ship-amd64-0.1.0.tar.zst'
+        bundle = stage/'dist/uds-bundle-ghost-seeker-ship-amd64-0.1.0.tar.zst'
+        assert package.is_file() and bundle.is_file()
     client = capture.Capture()
     processes = []
     pid = subprocess.check_output(['docker', 'inspect', '-f', '{{.State.Pid}}', 'k3d-uds-ship-server-0'], text=True).strip()
@@ -151,6 +154,12 @@ def main():
             processes = forwards()
             ingest(client, 'restarted-offline', 23)
             close_forwards(processes)
+            if restart_only:
+                control_logs()
+                run('firewall-final-block-counters', [FIREWALL, 'status'])
+                capture.save('result.json', {'offline_restart': True, 'live_ingest_scored_and_synchronized': True,
+                                            'app_removal_redeployment': 'not requested; release-only restart check'})
+                return
             run('ship-context', ['kubectl', 'config', 'use-context', 'k3d-uds-ship'])
             run('remove-ship-app', ['zarf', 'package', 'remove', package, '--confirm', '--no-color'], timeout=420)
         workloads = json.loads(subprocess.check_output(KUBE+['get', 'statefulset,deployment', '-n', 'ghost-seeker-ship', '-o', 'json']))

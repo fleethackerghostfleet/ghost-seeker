@@ -1,0 +1,1 @@
+ON: ship forwarding restricted to its Docker subnet; host gateway restricted to TCP/443 and host-initiated replies

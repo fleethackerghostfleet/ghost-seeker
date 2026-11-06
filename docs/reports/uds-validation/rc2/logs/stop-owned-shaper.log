@@ -1,0 +1,1 @@
+$ STATE=/home/ubuntu/.local/share/uds-two-cluster /home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-link.sh stop

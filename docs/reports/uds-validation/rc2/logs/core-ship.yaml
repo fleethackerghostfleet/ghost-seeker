@@ -1,0 +1,7 @@
+variables:
+  uds-k3d-dev:
+    CLUSTER_NAME: uds-ship
+    K3D_API_PORT: "6552"
+    K3D_HTTP_PORT: "10080"
+    K3D_HTTPS_PORT: "10443"
+    K3D_NETWORK: k3d-uds-ship

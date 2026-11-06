@@ -1,0 +1,2 @@
+$ kubectl config use-context k3d-uds-shore
+Switched to context "k3d-uds-shore".

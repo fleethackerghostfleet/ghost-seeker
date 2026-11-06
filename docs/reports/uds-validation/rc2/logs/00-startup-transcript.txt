@@ -1,0 +1,19 @@
+$ git add scripts/uds docs/reports/uds-validation
+$ git commit -m "Add two-cluster UDS validation harness and local evidence"
+[devin/1793981091-uds-two-cluster 736bebf] Add two-cluster UDS validation harness and local evidence
+599 files changed, 15527 insertions(+)
+$ git fetch origin prod-uds
+f0121e4..71f42d9 prod-uds -> origin/prod-uds
+$ git rebase origin/prod-uds
+Successfully rebased and updated refs/heads/devin/1793981091-uds-two-cluster.
+$ git rev-parse HEAD
+aadb050711d996ab60acd243dbbcc00ca3c1431e
+
+$ gh release download uds-v0.1.0-rc2 --repo fleethackerghostfleet/ghost-seeker --dir /home/ubuntu/.local/share/uds-rc2 --pattern 'uds-bundle-ghost-seeker-*-amd64-0.1.0-rc2.tar.zst' --pattern 'zarf-package-ghost-seeker-*-amd64-0.1.0-rc2.tar.zst' --pattern SHA256SUMS
+exit 0
+
+# Parsed SHA256SUMS for the four exact downloaded artifact filenames only;
+# wrote SHA256SUMS.artifacts outside the repo with their unchanged published lines.
+$ sha256sum --check SHA256SUMS.artifacts
+# Working directory: /home/ubuntu/.local/share/uds-rc2
+# Output: SHA256-verification.txt (must succeed before deleting any cluster).

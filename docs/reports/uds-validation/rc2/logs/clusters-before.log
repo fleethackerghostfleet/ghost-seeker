@@ -1,0 +1,4 @@
+$ k3d cluster list
+NAME        SERVERS   AGENTS   LOADBALANCER
+uds-ship    1/1       0/0      true
+uds-shore   1/1       0/0      true

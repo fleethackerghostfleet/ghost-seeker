@@ -1,0 +1,26 @@
+NAMESPACE              NAME                                             READY   STATUS    RESTARTS   AGE     IP           NODE                     NOMINATED NODE   READINESS GATES
+authservice            authservice-7bd646879d-pbpqm                     1/1     Running   0          6m39s   10.42.0.29   k3d-uds-shore-server-0   <none>           <none>
+ghost-seeker-shore     operator-c98bfdc85-4dkr2                         2/2     Running   0          70s     10.42.0.33   k3d-uds-shore-server-0   <none>           <none>
+ghost-seeker-shore     shore-0                                          2/2     Running   0          78s     10.42.0.31   k3d-uds-shore-server-0   <none>           <none>
+istio-admin-gateway    admin-ingressgateway-855f674bf5-9tsxg            1/1     Running   0          7m41s   10.42.0.23   k3d-uds-shore-server-0   <none>           <none>
+istio-system           istio-cni-node-vwkq8                             1/1     Running   0          7m53s   10.42.0.21   k3d-uds-shore-server-0   <none>           <none>
+istio-system           istiod-6984f7bfb6-b9w84                          1/1     Running   0          7m58s   10.42.0.20   k3d-uds-shore-server-0   <none>           <none>
+istio-system           ztunnel-kcpmk                                    1/1     Running   0          7m51s   10.42.0.22   k3d-uds-shore-server-0   <none>           <none>
+istio-tenant-gateway   tenant-ingressgateway-84fb59b7bf-z4kqj           1/1     Running   0          7m36s   10.42.0.24   k3d-uds-shore-server-0   <none>           <none>
+keycloak               keycloak-0                                       1/1     Running   0          7m20s   10.42.0.28   k3d-uds-shore-server-0   <none>           <none>
+keycloak               keycloak-waypoint-59fbc5759f-nsfgg               1/1     Running   0          7m20s   10.42.0.25   k3d-uds-shore-server-0   <none>           <none>
+kube-system            coredns-5d8f878855-7n8cf                         1/1     Running   0          10m     10.42.0.10   k3d-uds-shore-server-0   <none>           <none>
+kube-system            ensure-machine-id-568ch                          1/1     Running   0          10m     10.42.0.6    k3d-uds-shore-server-0   <none>           <none>
+kube-system            local-path-provisioner-66fb896885-4bwgf          1/1     Running   0          10m     10.42.0.5    k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-controller-668d6cdc58-krcxm              1/1     Running   0          10m     10.42.0.3    k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-frr-k8s-qr94s                            5/5     Running   0          10m     172.18.0.2   k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-frr-k8s-statuscleaner-77f8b4bdd7-kh6p4   1/1     Running   0          10m     172.18.0.2   k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-speaker-v5k7j                            1/1     Running   0          10m     172.18.0.2   k3d-uds-shore-server-0   <none>           <none>
+kube-system            nginx-7m5fr                                      1/1     Running   0          10m     10.42.0.4    k3d-uds-shore-server-0   <none>           <none>
+pepr-system            pepr-uds-core-849965bd66-rvxws                   1/1     Running   0          8m30s   10.42.0.17   k3d-uds-shore-server-0   <none>           <none>
+pepr-system            pepr-uds-core-849965bd66-vrwlb                   1/1     Running   0          8m30s   10.42.0.19   k3d-uds-shore-server-0   <none>           <none>
+pepr-system            pepr-uds-core-watcher-7bccd5c94f-mqjj2           1/1     Running   0          8m30s   10.42.0.18   k3d-uds-shore-server-0   <none>           <none>
+uds-dev-stack          minio-6dddbdd7f7-qvkg4                           1/1     Running   0          10m     10.42.0.8    k3d-uds-shore-server-0   <none>           <none>
+zarf                   agent-hook-759bf6c588-f4fdw                      1/1     Running   0          9m30s   10.42.0.15   k3d-uds-shore-server-0   <none>           <none>
+zarf                   agent-hook-759bf6c588-t984p                      1/1     Running   0          9m30s   10.42.0.16   k3d-uds-shore-server-0   <none>           <none>
+zarf                   zarf-docker-registry-7f66dbc7b-tjkqk             1/1     Running   0          9m40s   10.42.0.14   k3d-uds-shore-server-0   <none>           <none>

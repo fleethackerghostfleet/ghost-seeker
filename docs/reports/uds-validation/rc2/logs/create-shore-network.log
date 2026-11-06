@@ -1,0 +1,2 @@
+$ docker network create --driver bridge --subnet 172.18.0.0/16 --gateway 172.18.0.1 k3d-uds-shore
+26325eb923fd223b8e26a1f50f8dce84c72567cbd8550f7560653b0692cc4e62

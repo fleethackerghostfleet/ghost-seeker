@@ -1,0 +1,1 @@
+{"nodeId":"shore","role":"shore","heartbeat":{"sentAtUnixMs":"1793986104187","queuedItems":"1","queuedBytes":"253823","policyId":"default","linkEstimateBps":10800522.411415713},"link":{"up":true,"estimateBps":10800522.411415713,"lastSuccessUnixMs":"1793986104295"},"itemsTotal":"1","itemsComplete":"1","itemsManifested":"1","bytesSent":"309721"}

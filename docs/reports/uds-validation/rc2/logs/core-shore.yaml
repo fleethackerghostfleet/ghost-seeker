@@ -1,0 +1,7 @@
+variables:
+  uds-k3d-dev:
+    CLUSTER_NAME: uds-shore
+    K3D_API_PORT: "6551"
+    K3D_HTTP_PORT: "9080"
+    K3D_HTTPS_PORT: "9443"
+    K3D_NETWORK: k3d-uds-shore

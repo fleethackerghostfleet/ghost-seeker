@@ -1,0 +1,64 @@
+$ UDS_CONFIG=/home/ubuntu/.local/share/uds-rc2/config/shore.yaml uds deploy /home/ubuntu/.local/share/uds-rc2/uds-bundle-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst --confirm --no-color --no-progress --no-log-file
+
+[30;46m NOTE [0m [96mUsing config file /home/ubuntu/.local/share/uds-rc2/config/shore.yaml[0m
+
+                                                                                
+  🎁 BUNDLE DEFINITION                                                          
+                                                                                
+                                                                                
+ Metadata:   information about this bundle
+
+name: ghost-seeker-shore
+version: 0.1.0-rc2
+architecture: amd64
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Build:   info about the machine, UDS version, and the user that created this bundle
+
+terminal: devin-box
+user: ubuntu
+architecture: amd64
+timestamp: Fri, 06 Nov 2026 17:00:12 +0000
+version: v0.41.0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Packages:   definition of packages this bundle deploys, including variable overrides
+
+name: ghost-seeker-shore
+path: /home/ubuntu/repos/ghost-seeker/dist/release/0.1.0-rc2/zarf-package-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst
+ref: 0.1.0-rc2@sha256:ed4b38023ab808e2f14e631f8a589c22a2809fc2cb91eae8a5ae2ca76eed8d62
+
+overrides:
+- DOMAIN: uds.dev
+- SHORE_GATEWAY_HOST: shore
+- OPERATOR_GATEWAY_HOST: ghost-seeker
+- NAMESPACE: ghost-seeker-shore
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  •  Loading bundled Zarf package: ghost-seeker-shore
+  •  Loaded bundled Zarf package: ghost-seeker-shore
+2026-11-06 17:26:15 INF starting deploy package=ghost-seeker-shore
+2026-11-06 17:26:15 INF waiting for cluster connection
+2026-11-06 17:26:15 INF deploying component name=namespace
+2026-11-06 17:26:15 INF processing Helm chart name=raw-ghost-seeker-shore-namespace-namespace source=Zarf-generated
+2026-11-06 17:26:15 INF performing Helm install chart=raw-ghost-seeker-shore-namespace-namespace
+2026-11-06 17:26:15 INF running health checks chart=raw-ghost-seeker-shore-namespace-namespace
+2026-11-06 17:26:16 INF deploying component name=uds-package
+[redacted credential-related output]
+[redacted credential-related output]
+[redacted credential-related output]
+2026-11-06 17:26:16 INF processing Helm chart name=raw-ghost-seeker-shore-uds-package-uds-package source=Zarf-generated
+2026-11-06 17:26:16 INF performing Helm install chart=raw-ghost-seeker-shore-uds-package-uds-package
+2026-11-06 17:26:17 INF running health checks chart=raw-ghost-seeker-shore-uds-package-uds-package
+2026-11-06 17:26:18 INF deploying component name=shore
+2026-11-06 17:26:18 INF pushing image name=docker.io/ghost-seeker/shore:prod-c74106e2509c-20261106165828-258bab3e count=1/1
+2026-11-06 17:26:20 INF done pushing images count=1 duration=2.2s
+2026-11-06 17:26:20 INF processing Helm chart name=raw-ghost-seeker-shore-shore-shore source=Zarf-generated
+2026-11-06 17:26:20 INF performing Helm install chart=raw-ghost-seeker-shore-shore-shore
+2026-11-06 17:26:26 INF running health checks chart=raw-ghost-seeker-shore-shore-shore
+2026-11-06 17:26:26 INF deploying component name=operator
+2026-11-06 17:26:26 INF pushing image name=docker.io/ghost-seeker/operator:prod-c74106e2509c-20261106165828-258bab3e count=1/1
+2026-11-06 17:26:28 INF done pushing images count=1 duration=2s
+2026-11-06 17:26:28 INF processing Helm chart name=raw-ghost-seeker-shore-operator-operator source=Zarf-generated
+2026-11-06 17:26:28 INF performing Helm install chart=raw-ghost-seeker-shore-operator-operator
+2026-11-06 17:26:37 INF running health checks chart=raw-ghost-seeker-shore-operator-operator

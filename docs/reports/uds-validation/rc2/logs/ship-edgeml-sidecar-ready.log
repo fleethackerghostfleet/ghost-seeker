@@ -1,0 +1,2 @@
+$ kubectl --context k3d-uds-ship -n ghost-seeker-ship rollout status deployment/edgeml-sidecar --timeout=600s
+deployment "edgeml-sidecar" successfully rolled out

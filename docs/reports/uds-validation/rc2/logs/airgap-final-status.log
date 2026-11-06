@@ -1,0 +1,4 @@
+$ /home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-airgap.sh status
+OFF
+k3d-uds-ship-serverlb Docker DNS: UNBLOCKED
+k3d-uds-ship-server-0 Docker DNS: UNBLOCKED

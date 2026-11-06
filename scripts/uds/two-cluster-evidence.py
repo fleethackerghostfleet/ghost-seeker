@@ -38,12 +38,15 @@ class Capture:
     def __init__(self):
         token = (STATE/'auth/operator-token').read_text().strip()
         self.config = 'header = "Authorization: Bearer '+token+'"\n'
+        edge_path = STATE/'auth/edge-operator-token'
+        edge_token = edge_path.read_text().strip() if edge_path.exists() else token
+        self.edge_config = 'header = "Authorization: Bearer '+edge_token+'"\n'
         self.samples = []
 
     def command(self, url, authenticated=True):
         return ['curl', '-sS', '--noproxy', '*', '--http2', '--max-time', '120',
                 '--resolve', 'shore.uds.dev:9443:127.0.0.1', '--config', '-', url], (
-                    self.config if authenticated else '')
+                    (self.edge_config if url.startswith(EDGE+'/') else self.config) if authenticated else '')
 
     def request(self, name, url, data=None, jpeg=None, authenticated=True, expected=200):
         command, config = self.command(url, authenticated)
@@ -153,6 +156,12 @@ def main():
         stream.stdin.write(config)
         stream.stdin.close()
         wait_for(lambda: ': connected' in (REPORT/'shore-stream.sse').read_text(), 15)
+        idle = float(os.environ.get('SSE_IDLE_SECONDS', '0'))
+        if idle:
+            time.sleep(idle)
+            if stream.poll() is not None:
+                raise RuntimeError('SSE closed before the requested idle verification window')
+            save('stream-idle-check.json', {'idle_seconds': idle, 'process_still_running': True})
         accepted = []
 
         def post(index, phase):

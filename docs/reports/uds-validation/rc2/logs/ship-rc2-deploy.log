@@ -1,0 +1,70 @@
+$ UDS_CONFIG=/home/ubuntu/.local/share/uds-rc2/config/ship.yaml uds deploy /home/ubuntu/.local/share/uds-rc2/uds-bundle-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst --confirm --no-color --no-progress --no-log-file
+
+[30;46m NOTE [0m [96mUsing config file /home/ubuntu/.local/share/uds-rc2/config/ship.yaml[0m
+
+                                                                                
+  🎁 BUNDLE DEFINITION                                                          
+                                                                                
+                                                                                
+ Metadata:   information about this bundle
+
+name: ghost-seeker-ship
+version: 0.1.0-rc2
+architecture: amd64
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Build:   info about the machine, UDS version, and the user that created this bundle
+
+terminal: devin-box
+user: ubuntu
+architecture: amd64
+timestamp: Fri, 06 Nov 2026 16:59:57 +0000
+version: v0.41.0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Packages:   definition of packages this bundle deploys, including variable overrides
+
+name: ghost-seeker-ship
+path: /home/ubuntu/repos/ghost-seeker/dist/release/0.1.0-rc2/zarf-package-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst
+ref: 0.1.0-rc2@sha256:0fa37299a2863163a69556adb594fe8ad67ed4f397dda9216cead3ddda25e0bb
+
+overrides:
+- EDGE_GATEWAY_HOST: edge
+- SHORE_EGRESS_PORT: "443"
+- EDGE_ID: ship-001
+- FRAMES_SOURCE: pvc
+- SHORE_TRANSPORT: external
+- SHORE_URL: https://shore.uds.dev:443
+- SHORE_EGRESS_CIDR: 172.19.0.1/32
+- NAMESPACE: ghost-seeker-ship
+- DOMAIN: uds.dev
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  •  Loading bundled Zarf package: ghost-seeker-ship
+  •  Loaded bundled Zarf package: ghost-seeker-ship
+2026-11-06 17:26:41 INF starting deploy package=ghost-seeker-ship
+2026-11-06 17:26:41 INF waiting for cluster connection
+2026-11-06 17:26:41 INF deploying component name=namespace
+2026-11-06 17:26:41 INF processing Helm chart name=raw-ghost-seeker-ship-namespace-namespace source=Zarf-generated
+2026-11-06 17:26:41 INF performing Helm install chart=raw-ghost-seeker-ship-namespace-namespace
+2026-11-06 17:26:41 INF running health checks chart=raw-ghost-seeker-ship-namespace-namespace
+2026-11-06 17:26:42 INF deploying component name=uds-package
+[redacted credential-related output]
+[redacted credential-related output]
+[redacted credential-related output]
+2026-11-06 17:26:42 INF processing Helm chart name=raw-ghost-seeker-ship-uds-package-uds-package source=Zarf-generated
+2026-11-06 17:26:42 INF performing Helm install chart=raw-ghost-seeker-ship-uds-package-uds-package
+2026-11-06 17:26:43 INF running health checks chart=raw-ghost-seeker-ship-uds-package-uds-package
+2026-11-06 17:26:44 INF deploying component name=edge
+2026-11-06 17:26:44 INF pushing image name=docker.io/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e count=1/1
+2026-11-06 17:26:45 INF done pushing images count=1 duration=1.9s
+2026-11-06 17:26:45 INF processing Helm chart name=raw-ghost-seeker-ship-edge-edge source=Zarf-generated
+2026-11-06 17:26:45 INF performing Helm install chart=raw-ghost-seeker-ship-edge-edge
+2026-11-06 17:26:52 INF running health checks chart=raw-ghost-seeker-ship-edge-edge
+2026-11-06 17:26:52 INF deploying component name=edge-inference
+2026-11-06 17:26:52 INF pushing image name=docker.io/ghost-seeker/edgeml-sidecar:prod-c74106e2509c-20261106165828-258bab3e count=1/2
+2026-11-06 17:26:54 INF pushing image name=docker.io/ghost-seeker/edgeml-models:prod-c74106e2509c-20261106165828-258bab3e count=2/2
+2026-11-06 17:26:55 INF done pushing images count=2 duration=3.6s
+2026-11-06 17:26:55 INF processing Helm chart name=raw-ghost-seeker-ship-edge-inference-edge-inference source=Zarf-generated
+2026-11-06 17:26:55 INF performing Helm install chart=raw-ghost-seeker-ship-edge-inference-edge-inference
+2026-11-06 17:27:13 INF running health checks chart=raw-ghost-seeker-ship-edge-inference-edge-inference

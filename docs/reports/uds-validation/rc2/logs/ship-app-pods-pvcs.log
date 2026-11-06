@@ -1,0 +1,8 @@
+$ kubectl --context k3d-uds-ship -n ghost-seeker-ship get pods,pvc
+NAME                                 READY   STATUS    RESTARTS   AGE
+pod/edge-0                           2/2     Running   0          28s
+pod/edgeml-sidecar-d54b57c99-v4gpp   2/2     Running   0          19s
+
+NAME                                  STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/data-edge-0     Bound    pvc-2084334f-7b3a-4858-ab39-da01acf53db9   10Gi       RWO            local-path     <unset>                 28s
+persistentvolumeclaim/frames-edge-0   Bound    pvc-41d8d478-7ecc-47ba-8f47-e34b01be4b04   10Gi       RWO            local-path     <unset>                 28s

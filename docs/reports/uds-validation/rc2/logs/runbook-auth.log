@@ -1,0 +1,6 @@
+$ bash /home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-rc2-auth.sh
+namespace/ghost-seeker-shore created
+namespace/ghost-seeker-ship created
+[redacted credential-related output]
+[redacted credential-related output]
+[redacted credential-related output]

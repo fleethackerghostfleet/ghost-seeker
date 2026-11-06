@@ -1,0 +1,10 @@
+$ docker exec k3d-uds-ship-server-0 nslookup ghcr.io
+Server:		172.19.0.1
+Address:	172.19.0.1:53
+
+Non-authoritative answer:
+
+Non-authoritative answer:
+Name:	ghcr.io
+Address: 140.82.116.34
+

@@ -1,6 +1,37 @@
 # Two-cluster UDS validation evidence
 
-## Latest completed local run: PR #270 / f0121e4
+## Current result: rc2 release artifacts, fresh clusters
+
+**STEP 5 passed:** [rc2 report](rc2/README.md) and
+[runbook findings / deviations](rc2/RUNBOOK_FINDINGS.md).
+Runbook: `origin/prod-uds` **71f42d9** (#272). Release: **uds-v0.1.0-rc2**.
+All four named amd64 bundles/packages passed published SHA256 checks before
+the old clusters were deleted. Fresh shore/ship Core clusters were created;
+**no local app images or packages were built in this phase**.
+
+- Both clusters finish **25/25 Running and Ready**.
+- Verified gateway TLS/HTTP2: unauthenticated **401**, authenticated **200**;
+  actual SyncService/Exchange access logs show **HTTP/2, grpc_status=OK**.
+- Seven live uploads: one initial P1 plus six outage frames. Shore count
+  **1 → 1 → 7**, edge queue **0 → 6 → 0**, failures **0 → 2 → 0**.
+  Recovery acknowledged **1,211,166 bytes**; backlog manifest arrivals were
+  **P1, P2, P3, P4, P4, P4**. The 15-second 64-kbps leg did not complete an
+  exchange; full drain occurred at 16 Mbps, not at sustained low rate.
+- With ship internet/DNS blocked, app pods restarted, packaged models loaded,
+  and another real JPEG scored (boat **0.77753**) and synchronized: **8/8**
+  complete. Blocking is **OFF**, Docker DNS unblocked, unrelated host filter
+  rules restored exactly; shaper remains at **16 Mbps**.
+- Visually checked [feed](rc2/img/shore-feed.png),
+  [P1 detail](rc2/img/shore-item-detail.png),
+  [link/sync status](rc2/img/shore-link-sync-status.png).
+
+rc2 is a laboratory validation, not fleet certification. Imagery licensing
+restrictions below still apply; do not redistribute screenshots without
+resolving upstream permissions. Earlier local-build runs below are
+**superseded/supporting evidence only**, not rc2 results. Historical statements
+such as “current” or “no commit” describe their original handoff, not STEP 5.
+
+## Superseded local run: PR #270 / f0121e4
 
 **Handoff boundary:** the local clean deployment and screenshots below had
 already completed before the instruction to stop local builds and await an rc2

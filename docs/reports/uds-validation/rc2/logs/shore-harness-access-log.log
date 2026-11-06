@@ -1,0 +1,3 @@
+$ kubectl --context k3d-uds-shore apply -f /home/ubuntu/repos/ghost-seeker/scripts/uds/gateway-access-log.yaml
+Warning: EnvoyFilter exposes internal implementation details that may change at any time. Prefer other APIs if possible, and exercise extreme caution, especially around upgrades.
+envoyfilter.networking.istio.io/uds-validation-sync-log created

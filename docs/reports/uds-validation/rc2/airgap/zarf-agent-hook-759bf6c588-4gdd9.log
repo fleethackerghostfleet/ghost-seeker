@@ -1,0 +1,20 @@
+Fail to init k9s logs location could not create any of the following paths: [/home/nonroot/.local/state]
+2026-11-06 17:23:11 DBG logger successfully initialized cfg.level=debug cfg.format=console cfg.destination=os.Stderr cfg.color=false
+2026-11-06 17:23:11 DBG User-configured features: features=
+2026-11-06 17:23:11 DBG using temporary directory tmpDir=
+2026-11-06 17:23:11 INF server running port=8443
+2026-11-06 17:24:05 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:24:05 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:24:05 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 17:24:42 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:24:42 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:24:42 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 17:24:53 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:24:53 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:24:53 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 17:25:28 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:25:28 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:25:28 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 17:29:45 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:29:45 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:29:45 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true

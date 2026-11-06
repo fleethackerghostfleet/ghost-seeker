@@ -1,0 +1,1 @@
+{"nodeId":"ship-001","role":"edge","heartbeat":{"sentAtUnixMs":"1793986220734","policyId":"default","linkEstimateBps":11749512.348542746},"link":{"up":true,"estimateBps":11749512.348542746,"lastSuccessUnixMs":"1793986220562"},"itemsTotal":"8","itemsComplete":"8","itemsManifested":"8","bytesSent":"156822","policyId":"default","prioritizer":"edgeml"}

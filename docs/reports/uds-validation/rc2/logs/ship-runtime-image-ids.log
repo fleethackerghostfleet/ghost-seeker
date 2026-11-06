@@ -1,0 +1,10 @@
+$ kubectl --context k3d-uds-ship -n ghost-seeker-ship get pods -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{range .status.initContainerStatuses[*]}{.name}{" "}{.image}{" "}{.imageID}{"\n"}{end}{range .status.containerStatuses[*]}{.name}{" "}{.image}{" "}{.imageID}{"\n"}{end}{end}'
+edge-0
+istio-init 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+istio-proxy 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+edge 127.0.0.1:31999/ghost-seeker/edge:prod-c74106e2509c-20261106165828-258bab3e 127.0.0.1:31999/ghost-seeker/edge@sha256:7b5c6e172b28d90c013ae491da78e19df4ceda79a8f81ebf7470525c17adbc6d
+edgeml-sidecar-d54b57c99-v4gpp
+istio-init 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+istio-proxy 127.0.0.1:31999/istio/proxyv2:1.31.2-distroless 127.0.0.1:31999/istio/proxyv2@sha256:f95ea93fdff006c1b80bc31f0bde2bd522b84fc3392b49e6ed8de12f48a67f12
+models 127.0.0.1:31999/ghost-seeker/edgeml-models:prod-c74106e2509c-20261106165828-258bab3e 127.0.0.1:31999/ghost-seeker/edgeml-models@sha256:40032fd272fd2b31ffd9de0e5dd1122ddadf7045ebb993bb270b9c459914da4b
+edgeml-sidecar 127.0.0.1:31999/ghost-seeker/edgeml-sidecar:prod-c74106e2509c-20261106165828-258bab3e 127.0.0.1:31999/ghost-seeker/edgeml-sidecar@sha256:79e2cc3b50788ac6f6392cb6d2f3cb92823b1b647b417b953aea59d403b0cb8a

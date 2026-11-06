@@ -1,0 +1,5 @@
+{
+  "offline_restart": true,
+  "live_ingest_scored_and_synchronized": true,
+  "app_removal_redeployment": "not requested; release-only restart check"
+}

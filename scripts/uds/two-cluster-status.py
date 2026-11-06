@@ -11,6 +11,8 @@ def main():
     directory = Path(os.environ.get('STATE', str(Path.home()/'.local/share/uds-two-cluster')))
     token = (directory/'auth/operator-token').read_text()
     for role, port in (('ship', 18081), ('shore', 18082)):
+        edge_path = directory/'auth/edge-operator-token'
+        role_token = edge_path.read_text() if role == 'ship' and edge_path.exists() else token
         context = os.environ.get(role.upper()+'_CONTEXT', 'k3d-uds-'+role)
         namespace = os.environ.get(role.upper()+'_NAMESPACE', 'ghost-seeker-'+role)
         resource, target = ('statefulset/edge', 8081) if role == 'ship' else ('statefulset/shore', 8080)
@@ -25,7 +27,7 @@ def main():
                 raise RuntimeError('port-forward failed for '+role)
             connection = http.client.HTTPConnection('127.0.0.1', port, timeout=15)
             connection.request('POST', '/ghostseeker.v1.ConsoleService/GetStatus', '{}',
-                               {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token})
+                               {'Content-Type': 'application/json', 'Authorization': 'Bearer '+role_token})
             response = connection.getresponse()
             body = json.loads(response.read())
             if response.status != 200:

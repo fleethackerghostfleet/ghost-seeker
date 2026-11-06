@@ -1,0 +1,104 @@
+$ kubectl --context k3d-uds-shore -n ghost-seeker-shore get packages.uds.dev ghost-seeker-shore -o yaml
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  annotations:
+    meta.helm.sh/release-name: zarf-d69f8e3441120ec0ad503ea93dc980443fa464cc
+    meta.helm.sh/release-namespace: default
+    uds-core.pepr.dev/uds-core-operator: succeeded
+  creationTimestamp: "2026-11-06T17:26:17Z"
+  finalizers:
+  - pepr.dev/finalizer
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    zarf.dev/package: ghost-seeker-shore
+  name: ghost-seeker-shore
+  namespace: ghost-seeker-shore
+  resourceVersion: "2756"
+  uid: 3c627ce3-f92b-4467-982f-ac3e4fa1afe1
+spec:
+  network:
+    allow:
+    - description: operator to shore
+      direction: Egress
+      port: 8080
+      remoteNamespace: ghost-seeker-shore
+      remoteSelector:
+        app: shore
+      selector:
+        app: operator
+    - description: shore from operator
+      direction: Ingress
+      port: 8080
+      remoteNamespace: ghost-seeker-shore
+      remoteSelector:
+        app: operator
+      selector:
+        app: shore
+    - description: operator routed llm
+      direction: Egress
+      port: 8080
+      remoteCidr: 192.0.2.0/32
+      selector:
+        app: operator
+    - description: operator routed research
+      direction: Egress
+      port: 8097
+      remoteCidr: 192.0.2.0/32
+      selector:
+        app: operator
+    - description: operator routed ocsp
+      direction: Egress
+      port: 80
+      remoteCidr: 192.0.2.0/32
+      selector:
+        app: operator
+    - description: shore routed inference
+      direction: Egress
+      port: 9090
+      remoteCidr: 192.0.2.0/32
+      selector:
+        app: shore
+    expose:
+    - gateway: tenant
+      host: ghost-seeker
+      port: 8090
+      selector:
+        app: operator
+      service: operator
+    - gateway: tenant
+      host: shore
+      match:
+      - name: versioned-api
+        uri:
+          prefix: /api/v1/
+      - name: ship-sync
+        uri:
+          prefix: /ghostseeker.v1.SyncService/
+      port: 8080
+      selector:
+        app: shore
+      service: shore
+    serviceMesh:
+      mode: sidecar
+status:
+  authorizationPolicyCount: 4
+  authserviceClients: []
+  conditions:
+  - lastTransitionTime: "2026-11-06T17:26:18.112Z"
+    message: The package is ready for use.
+    reason: ReconciliationComplete
+    status: "True"
+    type: Ready
+  endpoints:
+  - ghost-seeker.uds.dev
+  - shore.uds.dev
+  meshMode: sidecar
+  monitors: []
+  networkPolicyCount: 12
+  observedGeneration: 1
+  phase: Ready
+  probes: []
+  retryAttempt: 0
+  ssoClients: []

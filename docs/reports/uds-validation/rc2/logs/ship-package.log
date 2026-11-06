@@ -1,0 +1,78 @@
+$ kubectl --context k3d-uds-ship -n ghost-seeker-ship get packages.uds.dev ghost-seeker-ship -o yaml
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  annotations:
+    meta.helm.sh/release-name: zarf-8ba899f5330168029bd85833b3041612d2e27b3f
+    meta.helm.sh/release-namespace: default
+    uds-core.pepr.dev/uds-core-operator: succeeded
+  creationTimestamp: "2026-11-06T17:26:43Z"
+  finalizers:
+  - pepr.dev/finalizer
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    zarf.dev/package: ghost-seeker-ship
+  name: ghost-seeker-ship
+  namespace: ghost-seeker-ship
+  resourceVersion: "2393"
+  uid: d549b95b-f794-4cdf-870c-2f839bae6499
+spec:
+  network:
+    allow:
+    - description: edge to edgeml-sidecar
+      direction: Egress
+      port: 9090
+      remoteNamespace: ghost-seeker-ship
+      remoteSelector:
+        app: edgeml-sidecar
+      selector:
+        app: edge
+    - description: edgeml-sidecar from edge
+      direction: Ingress
+      port: 9090
+      remoteNamespace: ghost-seeker-ship
+      remoteSelector:
+        app: edge
+      selector:
+        app: edgeml-sidecar
+    - description: edge routed shore
+      direction: Egress
+      port: 443
+      remoteCidr: 172.19.0.1/32
+      selector:
+        app: edge
+    - description: edge routed camera
+      direction: Egress
+      port: 80
+      remoteCidr: 192.0.2.0/32
+      selector:
+        app: edge
+    expose:
+    - gateway: tenant
+      host: edge
+      port: 8081
+      selector:
+        app: edge
+      service: edge
+    serviceMesh:
+      mode: sidecar
+status:
+  authorizationPolicyCount: 3
+  authserviceClients: []
+  conditions:
+  - lastTransitionTime: "2026-11-06T17:26:43.709Z"
+    message: The package is ready for use.
+    reason: ReconciliationComplete
+    status: "True"
+    type: Ready
+  endpoints:
+  - edge.uds.dev
+  meshMode: sidecar
+  monitors: []
+  networkPolicyCount: 9
+  observedGeneration: 1
+  phase: Ready
+  probes: []
+  retryAttempt: 0
+  ssoClients: []

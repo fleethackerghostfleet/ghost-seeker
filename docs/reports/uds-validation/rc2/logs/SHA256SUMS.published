@@ -1,0 +1,12 @@
+2024bddc6e9389e45eaad5443c1b8dce2abcb90ebdb50b520900e065581ecc51  THIRD_PARTY_NOTICES.md
+8588b63e55dba58a2e6cf92b4df0291340d9d03f4bb9c90462c839b4c5493461  images.lock.json
+29a9075110c10635ca53a861d6aa0ad6188b64d723cd9f92a92dba3d52373007  release.json
+5ff61c1c8b82338febbf5adde8a132a17bf086f06f55cecdcc68d4feddb6aac0  sbom/ship/ghost-seeker-ship/docker.io_ghost-seeker_edge_prod-c74106e2509c-20261106165828-258bab3e.json
+5ec76a849b444ca24e06ac9676c5be505d82843a829742d8be5609ac9d766f68  sbom/ship/ghost-seeker-ship/docker.io_ghost-seeker_edgeml-models_prod-c74106e2509c-20261106165828-258bab3e.json
+8df0cabc47493298299698525215304f84c8f95286331370b81a82daa7f00754  sbom/ship/ghost-seeker-ship/docker.io_ghost-seeker_edgeml-sidecar_prod-c74106e2509c-20261106165828-258bab3e.json
+51292dc05dea8062f5106e82d3d3c0771b6e7cb654a4e23083ba517edb9c6d40  sbom/shore/ghost-seeker-shore/docker.io_ghost-seeker_operator_prod-c74106e2509c-20261106165828-258bab3e.json
+4e6757b14f4570f84307c378a49b2c680bfc8d180d51ccc92e44190c2c658408  sbom/shore/ghost-seeker-shore/docker.io_ghost-seeker_shore_prod-c74106e2509c-20261106165828-258bab3e.json
+63383870fc22503b2fd511e191f100fdd2daff679577920a28c38ba4e4e64492  uds-bundle-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst
+7e4d8406f2c67bd6cf62beefe9f16ee15cef7bb0951e7c814ac44b15ef3a2dd5  uds-bundle-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst
+2bd7db9f65bea9e51de1ea7cb4def6af45004bb18041b0faacca9ce0d433bd0c  zarf-package-ghost-seeker-ship-amd64-0.1.0-rc2.tar.zst
+618ff8eb0d3a68ce6137d6d18f93d719bd8c54f8b2d6b217c355ab008fde73ab  zarf-package-ghost-seeker-shore-amd64-0.1.0-rc2.tar.zst
