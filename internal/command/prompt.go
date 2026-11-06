@@ -20,7 +20,10 @@ Fields:
   - withinMin: look-back window in minutes, only for "last N minutes" / "past hour"; otherwise 0.
 - durationMin: how long the directive should stay active, in minutes, when stated ("for 6 hours" -> 360, "90 mins" -> 90, "rest of the watch" -> 240, "overnight" -> 720); null if not stated.
 Urgency words (flash, urgent, immediate, priority, asap, drop everything) and transmit-posture commands (go quiet, radio silence, emcon, resume normal) do not create rules by themselves. If nothing maps to a class, attr or source, return an empty rules list.
-Operators use typos and slang; interpret them. Do not invent classes, attrs or durations the operator did not ask for.`
+Operators use typos and slang; interpret them. Do not invent classes, attrs or durations the operator did not ask for.
+Nearest classes for things with no exact class: missile boat, fast attack craft, patrol boat, gunboat, Type 022 or landing craft -> "small boat" and "warship"; bogey or bandit -> the four aircraft classes with attr "dark"; loitering munition or kamikaze drone -> "drone" (no attr); unidentified or unknown contacts -> "unknown" (not attr "dark").
+When the operator names no object type ("what's new from the drone", "anything near shore in the last 20 minutes", "everything approaching"), leave classes empty and keep only the attrs, sources or withinMin they stated.
+Sensor phrases: drone/UAV feed -> UAV-3; harbor entrance, thermal or IR camera -> IR-HE; pier or mast camera -> EO-P7; buoy sensor or B-12 -> BY-12; sky cam or air station -> SKY-1; satellite or SAR pass -> SAR-7; "near shore", "in the harbor" or "over the harbor" -> EO-P7 and IR-HE. "Arriving", "entering" or "just appeared" is attr "new", not "approaching".`
 
 var promptExamples = []struct {
 	text   string
@@ -29,6 +32,8 @@ var promptExamples = []struct {
 	{"eyes out for red fishin boats approaching, urgent, ignore seagulls", `{"rules":[{"type":"boost","classes":["fishing vessel"],"attrs":["approaching"],"only":false,"sources":[],"withinMin":0},{"type":"suppress","classes":["bird"],"attrs":[],"only":false,"sources":[],"withinMin":0}],"durationMin":null}`},
 	{"any persicopes = flash, for 2 hrs", `{"rules":[{"type":"boost","classes":["submarine"],"attrs":[],"only":false,"sources":[],"withinMin":0}],"durationMin":120}`},
 	{"go quiet", `{"rules":[],"durationMin":null}`},
+	{"what's new from the drone in the last half hour?", `{"rules":[{"type":"boost","classes":[],"attrs":["new"],"only":false,"sources":["UAV-3"],"withinMin":30}],"durationMin":null}`},
+	{"anything that looks like a missile boat heading our way", `{"rules":[{"type":"boost","classes":["small boat","warship"],"attrs":["approaching"],"only":false,"sources":[],"withinMin":0}],"durationMin":null}`},
 }
 
 func llmSystemPrompt() string {
