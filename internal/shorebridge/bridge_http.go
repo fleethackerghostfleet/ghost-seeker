@@ -33,6 +33,7 @@ func (b *Bridge) Handler() http.Handler {
 	b.registerDemoRoutes(mux)
 	if u, err := url.Parse(b.shore); err == nil {
 		rp := httputil.NewSingleHostReverseProxy(u)
+		rp.Transport = b.client.Transport
 		director := rp.Director
 		// The browser's session cookie stays on this origin; the shore sees
 		// the operator bearer token instead.

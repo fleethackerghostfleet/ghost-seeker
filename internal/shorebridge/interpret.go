@@ -29,6 +29,16 @@ func Interpret(text string) (suppress, boost []string) {
 	return
 }
 
+func interpretKnown(text string) (suppress, boost []string) {
+	suppress, boost = Interpret(text)
+	for _, label := range append(append([]string{}, suppress...), boost...) {
+		if _, ok := catalog.Classes[label]; !ok && !catalog.EdgeSubtypes[label] {
+			return nil, nil
+		}
+	}
+	return suppress, boost
+}
+
 func leadVerb(clause string, verbs []string) (string, string, bool) {
 	for _, v := range verbs {
 		if strings.HasPrefix(clause, v+" ") {

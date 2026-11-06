@@ -1,5 +1,18 @@
 # Inference engine (interchangeable)
 
+**Status: reference/contract only — the running sidecar is [`edgeml/`](../edgeml/sidecar/README.md).**
+This directory retains protocol notes and a manually runnable, model-free Python
+example (`stub/server.py`), not the deployed inference engine. The authoritative
+wire contract is [`inference.proto`](../proto/ghostseeker/v1/inference.proto);
+the live Go client is [`edge/inference/`](../edge/inference/inference.go).
+The stub is also referenced by the historical
+[security assessment](../docs/security/STIG_PENTEST_REPORT.md).
+No checked-in test or CI job was found that starts or imports this stub, and
+there are no Python tests in this directory. `make demo-sidecar`, the demo
+Compose service, the packaged sidecar and CI's sidecar tests use edgeml instead.
+Keep the stub for manual HTTP/JSON contract exploration; it is runnable reference
+code, not real-model inference.
+
 The edge never imports a model. It calls `InferenceService` (see
 `proto/ghostseeker/v1/inference.proto`) over HTTP. The Go remote client and
 Python sidecars use Connect with protobuf-JSON. Anything that answers these

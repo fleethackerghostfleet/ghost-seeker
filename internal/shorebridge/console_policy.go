@@ -4,6 +4,7 @@ import (
 	"errors"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"log"
 	"net/http"
@@ -149,7 +150,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, httpx.RequestBodyStatus(err), "invalid request body")
 		return
 	}
 	body.Text = strings.TrimSpace(body.Text)
@@ -169,7 +170,7 @@ func (c *Console) addDirective(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "durationMin must be between 0 and 10080")
 		return
 	}
-	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin)
+	cd := c.compileDirective(r.Context(), body.Text, body.Rules, body.DurationMin, false)
 	if cd.Blocked {
 		msg := "directive is blocked"
 		if cd.Compiled != nil {

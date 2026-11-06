@@ -11,14 +11,14 @@ test('operator navigation and empty briefing explain the next step',()=>{
  assert.match(briefing,/selected.size\?'Create a briefing from the selected ship detections':'Open an image and use Add detection to select ships for the briefing'/);
  assert.match(briefing,/if\(CLS\[d.cls\]\?\.g!=='vessel'\)return/);
  assert.match(briefing,/button.textContent=`\$\{selected.has\(key\)\?'Remove':'Add'\} detection/);
- assert.match(html,/id="pgBrief" aria-label="Briefing workspace"/);
+ assert.match(html,/id="pgBrief"[^>]*aria-label="Briefing workspace"/);
  assert.match(html,/>Tactical Action Officer<br>/);
  assert.match(briefing,/No briefing snapshot yet/);
 });
 
 test('advanced collection settings are together and collapsed, with active directives outside',()=>{
  const html=read('index.html');
- const advanced=html.slice(html.indexOf('<details class="panel"><summary>Advanced settings</summary>'),html.indexOf('<dialog id="wbConfirm">'));
+ const advanced=html.slice(html.indexOf('<details class="panel"><summary>Advanced settings</summary>'),html.indexOf('<dialog id="wbConfirm"'));
  assert.ok(advanced.length>0);
  for(const label of ['Base prioritization model','Effective object weights','Super admin · raw policy (protojson)','Policy audit'])assert.ok(advanced.includes(label),label);
  assert.doesNotMatch(advanced,/<details[^>]*\bopen\b|<h3>Active directives<\/h3>/);

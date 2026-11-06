@@ -104,3 +104,9 @@ func (b *Bridge) WithOperator(id string) *Bridge {
 	}
 	return b
 }
+
+// WithTransport configures console RPCs and shore proxies before serving.
+func (b *Bridge) WithTransport(transport http.RoundTripper) *Bridge {
+	b.client.Transport = transport
+	return b
+}

@@ -133,9 +133,16 @@ func TestResearchCompilerAcceptsEdgeSubtypesOnlyInShoreMode(t *testing.T) {
 			t.Fatalf("%s: %+v", concept, result)
 		}
 	}
-	for _, concept := range []string{"sailboat", "whales", "red whale"} {
-		if result := compile(concept, false); !result.Blocked || len(result.Rules) != 0 {
+	if result := compile("sailboat", false); result.Blocked || !reflect.DeepEqual(result.Rules[0].Classes, []string{"small boat"}) {
+		t.Fatalf("sailboat did not use the available simulation class: %+v", result)
+	}
+	for _, concept := range []string{"whales", "red whale"} {
+		result := compile(concept, false)
+		if !result.Blocked || len(result.Rules) != 0 {
 			t.Fatalf("simulation mode accepted %s: %+v", concept, result)
+		}
+		if !strings.Contains(result.Readback, "Not supported:") || !strings.Contains(result.Readback, "this sensor can detect:") {
+			t.Fatalf("missing unsupported concept readback: %+v", result)
 		}
 	}
 	if result := compile("freighter", false); result.Blocked || !reflect.DeepEqual(result.Rules[0].Classes, []string{"cargo ship"}) {

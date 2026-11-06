@@ -20,7 +20,11 @@ from ship_classify_report import score  # noqa: E402
 
 
 def hybrid(probe, fb, tau):
-    return {"idx": probe["idx"], "preds": [p if p["conf"] >= tau else f for p, f in zip(probe["preds"], fb["preds"])]}
+    if probe["idx"] != fb["idx"]:
+        raise ValueError("probe and fallback indices must match")
+    if len(probe["idx"]) != len(probe["preds"]):
+        raise ValueError("probe must have one prediction per index")
+    return {"idx": probe["idx"], "preds": [p if p["conf"] >= tau else f for p, f in zip(probe["preds"], fb["preds"], strict=True)]}
 
 
 def main():
