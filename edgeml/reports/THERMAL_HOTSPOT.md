@@ -3,8 +3,8 @@
 ## Data boundary
 
 No `ir_maritime_vessels` images, annotations, or splits were used for threshold
-selection, synthetic generation, or tuning. Real IR was used **only** to evaluate
-the frozen grayscale modality gate. Its unknown license still prohibits shipping
+selection, synthetic generation, or tuning. Real IR is used **only** for evaluation
+of frozen defaults (gate inspection in Step A; held-out evaluation in Step B below). Its unknown license still prohibits shipping
 models trained on it. This proposer has no learned weights.
 
 Development inputs:
@@ -101,9 +101,9 @@ physics: desaturated RGB can pass; false-color thermal can fail.
 
 RGB MOT inputs are under `~/data/clean_v3/edgeml/eval/`; IR and SMD paths follow
 catalog GCS URIs relative to `~/data/clean_v3`. RGB rates were reported as-is,
-not used to adjust the gate after observing IR. No real IR proposer recall or
-tracking benchmark is claimed here. Unit tests use model-free detector/tracker
-fakes with the real sighting aggregator; real model/boxmot replay is not covered.
+not used to adjust the gate after observing IR. The Step A tests use model-free
+detector/tracker fakes with the real sighting aggregator. Step B below adds real
+ONNX inference and real BoxMOT engine latency, but does not claim IR tracking accuracy.
 
 ## Existing suite failures
 
@@ -126,3 +126,242 @@ FAILED edgeml/tests/test_sidecar_protocol.py::test_body_limits_reject_without_wa
 
 All new thermal tests pass within this run, including no-embedder, low zero-shot
 unknownness and higher-than-floor zero-shot unknownness on duplicate reports.
+
+## Step B: frozen real-IR evaluation
+
+**Evaluation only; no thresholds or production code changed.** Primary held-out
+test: **1,081 images / 4,307 GT boxes / 39 recording groups**. Secondary dev:
+**457 images / 893 boxes / 25 groups**, also evaluation-only, **not tuning**.
+The evaluator filters to `eval_split in {test,dev}` before opening any images;
+it never evaluates IR train. This does not retroactively change the Step A
+all-split gate inspection recorded above. There are no fully empty IR frames.
+
+### Matching and configurations
+
+Primary **center-hit**: proposal center inside GT, **or** GT center inside proposal
+(inclusive edges). Secondary **IoU >=0.3**; reference **IoU >=0.5**. Independently
+for each criterion, predictions are processed descending by score, each matches
+at most one unused eligible GT; greatest IoU wins, then GT index. Score ties retain
+prediction order. No class correctness is required for the class-agnostic contact
+match. All GT vessel boxes are included. P=TP/(TP+FP), R=TP/(TP+FN),
+F1=2TP/(2TP+FP+FN); empty denominators produce zero.
+
+* **Hotspot**: frozen `ThermalHotspotProposer()` on every frame, all scores.
+* **YOLO boat**: shipped `~/models/D/yolo11n-640/model.onnx`, CPU ONNX Runtime,
+  score >=0.35, COCO `boat` only. The sidecar does not remap COCO birds/people
+  to boats: `runtime/detectors.py` retains original labels. `boat` is the only
+  shipped COCO name in its `VESSEL_LABELS` set.
+* **YOLO maritime**: actual sidecar keep-set: boat, airplane, bird, person,
+  surfboard, kite; score >=0.35. Included to make the fusion comparison faithful.
+* **Fusion @.35**: requested `ThermalFusionDetector(YOLO, when_empty)` with that
+  maritime YOLO >=0.35 input, frozen cover threshold .25, all proposal scores.
+* **Live reported**: exact engine detector-stage configuration: YOLO candidates
+  >=0.05, fusion cover threshold .25, then report detections >=0.35. Consequently
+  a YOLO candidate in [.25,.35) can block fallback even when no YOLO box is
+  reported, and thermal scores in [.30,.35) are not reported. This existing
+  integration behavior is measured explicitly, not silently changed. This row
+  measures frame detections, not track/sighting accuracy or unknownness quality.
+
+YOLO is cached **once per image/crop at .05**, then reused by all configurations;
+postfiltering at .35 gives the higher-threshold baseline (score-ordered NMS).
+Cache identity includes model hash, image-catalog hash, thresholds, keep-set,
+threads and seed. Engine latency necessarily executes its own real inference,
+separately from the metric cache. No MobileCLIP or new learned model is used.
+
+### Overall results
+
+P/R/F1 below are **percent**; proposals/frame counts include unmatched predictions.
+Dev is a second evaluation-only result, never a selection/tuning set.
+
+| Split | Configuration | Center P/R/F1 | IoU .3 P/R/F1 | IoU .5 P/R/F1 | Proposals/frame |
+|---|---|---|---|---|---:|
+| test | Hotspot | 27.62 / 13.63 / 18.25 | 7.06 / 3.48 / 4.66 | 1.51 / 0.74 / 1.00 | 1.966 |
+| test | YOLO boat | 95.14 / 21.38 / 34.92 | 92.67 / 20.83 / 34.01 | 90.08 / 20.25 / 33.06 | 0.895 |
+| test | YOLO maritime | 93.06 / 22.10 / 35.72 | 89.74 / 21.31 / 34.45 | 86.90 / 20.64 / 33.36 | 0.946 |
+| test | Fusion @.35 | 64.25 / 24.45 / 35.42 | 57.11 / 21.73 / 31.48 | 54.42 / 20.71 / 30.00 | 1.516 |
+| test | Live reported | 81.62 / 22.89 / 35.76 | 76.74 / 21.52 / 33.62 | 73.68 / 20.66 / 32.28 | 1.117 |
+| dev (eval only) | Hotspot | 17.89 / 24.86 / 20.81 | 0.40 / 0.56 / 0.47 | 0.16 / 0.22 / 0.19 | 2.716 |
+| dev (eval only) | YOLO boat | 86.81 / 22.84 / 36.17 | 80.00 / 21.05 / 33.33 | 68.94 / 18.14 / 28.72 | 0.514 |
+| dev (eval only) | YOLO maritime | 85.66 / 23.40 / 36.76 | 77.87 / 21.28 / 33.42 | 66.80 / 18.25 / 28.67 | 0.534 |
+| dev (eval only) | Fusion @.35 | 36.78 / 35.83 / 36.30 | 22.07 / 21.50 / 21.78 | 18.85 / 18.37 / 18.60 | 1.904 |
+| dev (eval only) | Live reported | 56.75 / 30.12 / 39.36 | 40.08 / 21.28 / 27.80 | 34.39 / 18.25 / 23.85 | 1.037 |
+
+**Interpretation:** on test, fusion @.35 adds 101 center-hit GT matches, but only
+18 IoU .3 matches and 3 IoU .5 matches versus maritime YOLO. Hotspots often cover
+small bright/dark subregions rather than full annotated hulls. The real live
+detector configuration adds only 34 center hits. Center-hit gains must not be
+presented as accurate vessel boxes: frozen proposer precision/localization and
+small-contact recall remain weak. These are evaluation findings, not permission
+to retune the detector on this dataset.
+
+### Per-GT-size results
+
+Sizes are `sqrt(width*height)` in **original image pixels**: small <32, medium
+32–<96, large >=96. Test GT counts: **1,475 / 1,522 / 1,310**; dev:
+**27 / 176 / 690**. Matching is global before bucketing, never independently
+rematched within buckets. Matched TP and unmatched FN use **GT size**. Since FP
+has no GT, it uses **predicted box size**; the resulting bucket P/F1 are a
+size-attributed diagnostic, not COCO area-filtered AP. Bucket recall is strictly
+per-GT-size. Counts and P/R/F1 for **all three matching criteria** are in
+[`THERMAL_HOTSPOT_assets/results.json`](THERMAL_HOTSPOT_assets/results.json).
+
+Center-hit P/R/F1 (%):
+
+| Split | Configuration | Small | Medium | Large |
+|---|---|---|---|---|
+| test | Hotspot | 6.34 / 4.81 / 5.47 | 48.07 / 20.43 / 28.68 | 57.26 / 15.65 / 24.58 |
+| test | YOLO boat | 92.59 / 3.39 / 6.54 | 97.13 / 42.25 / 58.88 | 90.48 / 17.40 / 29.19 |
+| test | YOLO maritime | 88.14 / 3.53 / 6.78 | 94.79 / 43.04 / 59.20 | 89.74 / 18.70 / 30.95 |
+| test | Fusion @.35 | 17.70 / 5.22 / 8.06 | 80.81 / 44.81 / 57.65 | 81.67 / 22.44 / 35.21 |
+| test | Live reported | 45.71 / 4.34 / 7.93 | 87.71 / 43.63 / 58.27 | 82.96 / 19.69 / 31.83 |
+| dev (eval only) | Hotspot | 0.12 / 3.70 / 0.24 | 20.19 / 24.43 / 22.11 | 81.65 / 25.80 / 39.21 |
+| dev (eval only) | YOLO boat | 0 / 0 / 0 | 71.88 / 13.07 / 22.12 | 90.95 / 26.23 / 40.72 |
+| dev (eval only) | YOLO maritime | 0 / 0 / 0 | 71.88 / 13.07 / 22.12 | 90.29 / 26.96 / 41.52 |
+| dev (eval only) | Fusion @.35 | 0.24 / 3.70 / 0.45 | 36.67 / 31.25 / 33.74 | 86.56 / 38.26 / 53.07 |
+| dev (eval only) | Live reported | 0 / 0 / 0 | 41.75 / 24.43 / 30.82 | 85.61 / 32.75 / 47.38 |
+
+### YOLO-empty subset and recovery
+
+Here “YOLO empty” means no sidecar-maritime prediction >=0.35 (not truly empty
+sea). Both matching and denominators are restricted to these frames. All
+recovered matches below are additions over a zero-output YOLO baseline.
+
+| Split | YOLO-empty frames | GT in subset | Fusion @.35 recovered center / IoU .3 / IoU .5 | Live reported recovered center | Center recall: fusion / live |
+|---|---:|---:|---|---:|---|
+| test | 432 | 1,218 | 101 / 18 / 3 | 34 | 8.29% / 2.79% |
+| dev (eval only) | 275 | 378 | 111 / 2 / 1 | 60 | 29.37% / 15.87% |
+
+On test this is 39.96% of frames; dev 60.18%. Defining empty as **boat-only**
+instead gives 462 test frames / 1,362 GT and 278 dev frames / 381 GT. Fusion
+center hits in those subsets are 128 / 114, and live 61 / 63 respectively, but
+these totals also include non-boat YOLO matches and must **not** all be credited
+to thermal recovery. Full subset P/R/F1/counts, including IoU criteria and size
+buckets, are in the JSON asset.
+
+### Empty-sea controls
+
+Deterministic seed **73021**, test split only, one crop per source frame, first
+200 eligible frames in seeded order. Start strictly at/below the estimated
+horizon (no above-horizon margin): same gray-friendly estimator at width <=480;
+if it declines, use `tiled.estimate_horizon_y`. Candidate grid stride half crop
+size, including the last fitting edge. Shuffle candidates deterministically and
+take the first with **no intersection with any GT padded 10% of width/height
+on each side**. No detector outputs inform sampling. Crop size 320x240, reduced
+height to largest available sea region when necessary; minimum 64x48, no upscale.
+549 of 1,081 test frames have eligible grid crops; 200 used, **136 at 320x240**,
+64 reduced-height crops (all width 320), **12.58272 MP total**. 19 selected crops
+use the unconditional horizon fallback. Source IDs, coordinates, areas and
+per-crop counts: [`crops.json`](THERMAL_HOTSPOT_assets/crops.json).
+
+These are **GT-empty crops**, not independently audited empty sensor captures:
+horizon estimates, unlabeled objects and crop boundaries can bias FP rates.
+They must not replace naturally empty held-out recordings.
+
+| Empty input | Configuration | False contacts | FP/crop or frame | With >=1 FP | FP/MP |
+|---|---|---:|---:|---:|---:|
+| IR test crops (200) | Hotspot | 216 | 1.080 | 28.00% | 17.166 |
+| IR test crops (200) | Fusion @.35 | 201 | 1.005 | 28.00% | 15.974 |
+| IR test crops (200) | Live reported | 93 | 0.465 | 19.00% | 7.391 |
+| SMD grayscale dev (14), **already used in tuning** | Hotspot | 1 | 0.0714 | 7.14% | 0.0344 |
+| SMD grayscale dev (14), **already used in tuning** | Fusion @.35 | 1 | 0.0714 | 7.14% | 0.0344 |
+| SMD grayscale dev (14), **already used in tuning** | Live reported | 0 | 0 | 0% | 0 |
+
+SMD controls are full-resolution grayscale conversions, 29.0304 MP total.
+They are an in-tuning reference, **not new held-out evidence**.
+
+### Latency on this VM
+
+CPU **Intel(R) Xeon(R) Processor**, 8 logical CPUs visible; process affinity
+**0–3**, **4 threads** via `pin_threads`, CPU ONNX Runtime 1.23.2, OpenCV
+4.11.0, NumPy 2.2.6, BoxMOT 26.0.0 (CPU Torch 2.14.1). Five warmup calls;
+image disk decode excluded. No GPU. Single pass, no confidence intervals.
+
+RGB set: **62 FVessel dev images**, seven nonquarantined clips from current
+`configs/splits.yaml`, sorted local paths stride 20; **0/62 pass is_thermal**.
+Exact paths are in results JSON. Gate repeated 10 times/image below.
+
+| Operation | N | Mean ms | p50 ms | p95 ms |
+|---|---:|---:|---:|---:|
+| is_thermal on RGB | 620 | 2.190 | 2.193 | 2.336 |
+| Hotspot proposer, every IR test frame | 1,081 | 5.813 | 5.002 | 11.951 |
+| YOLO alone, IR test (.05 inference, reused at .35) | 1,081 | 70.871 | 65.091 | 119.106 |
+| Live fusion detector, IR test, reconstructed | 1,081 | 73.672 | 67.246 | 123.016 |
+| Engine analyze IR, thermal off | 1,081 | 120.362 | 118.341 | 164.762 |
+| Engine analyze IR, thermal on | 1,081 | 125.141 | 123.107 | 172.344 |
+| Engine analyze RGB, thermal off | 62 | 169.338 | 165.820 | 194.898 |
+| Engine analyze RGB, thermal on | 62 | 173.399 | 172.492 | 196.671 |
+
+Reconstructed fusion = cached original YOLO wall time + measured wrapper call
+using those detections; this avoids extra YOLO inference, but is not a contiguous
+wall-clock benchmark. Includes live .05 coverage behavior, not just .35 fusion.
+
+Engine calls use actual ONNX detector, actual ByteTrack/aggregator and normal
+report/nightlight processing; `embed="none"`, no anomaly fallback, no transport
+or disk decode. **Independent still-frame calls** clear source state before each
+call so numeric IR filenames are not misrepresented as verified temporal GT.
+Wall timing includes fresh tracker/source creation. Thus these are end-to-end
+**cold-source analyze** latencies, not steady-state video or MobileCLIP latency.
+Thermal-on/off order alternates per frame to reduce drift.
+
+Mean paired on-minus-off: IR **+4.780 ms**, RGB **+4.062 ms**; the latter has a
+noisy p95 **25.684 ms**, so the whole difference cannot be causally assigned to
+the gate. The instrumented RGB thermal wrapper itself is **2.473 / 2.426 /
+2.776 ms** mean/p50/p95, versus a separately timed gate in the same engine loop
+**2.411 / 2.366 / 2.765 ms**. Since 0/62 RGB frames pass the gate, the production
+short-circuit runs **no thermal proposer** on this set: incremental detector work
+is gate-only (plus wrapper bookkeeping), not the noisy full-engine timing delta.
+IR thermal-stage mean/p50/p95: **2.996 / 2.636 / 10.186 ms**.
+
+### Reproduction and assets
+
+```sh
+.venv/bin/python edgeml/tools/eval_thermal.py \
+  --data-root ~/data/clean_v3 \
+  --model ~/models/D/yolo11n-640/model.onnx --threads 4 --seed 73021 \
+  --crop-count 200 --cache ~/data/thermal_eval_yolo_cache.json \
+  --output ~/data/thermal_eval_frozen
+```
+
+The script exports `results.json`, `crops.json`, and per-frame `predictions.jsonl`;
+the first two are checked in here. Large predictions and model cache stay local
+under `~/data/`; execution log: `~/data/thermal-eval.log`. Model SHA256 and frozen
+constructor parameters are in the results asset. Boat-only aggregates were
+derived from the same cached per-frame detections after the initial run; all
+existing metrics reproduced **exactly**, with no inference or threshold changes.
+Matching tests cover symmetric center-hit vs IoU, greedy score ordering,
+one-to-one assignment, inclusive IoU cutoffs, size boundaries, empty inputs and
+invalid criteria.
+
+Latest-script replay with `--skip-engine-latency` reused the YOLO cache and
+reproduced all metrics, subset rows, crop records and RGB gate counts exactly.
+The replay comparison initially caught omitted additive boat-only rows in the
+saved maritime-empty subset; the generated results asset now includes them.
+Engine latency above remains from the original real-engine run, not recomputed.
+
+Step B full suite (`.venv/bin/python -m pytest edgeml/tests -q`):
+
+```text
+FAILED edgeml/tests/test_sidecar_protocol.py::test_rpc_http_override_and_unexpected_engine_exception
+FAILED edgeml/tests/test_sidecar_protocol.py::test_body_limits_reject_without_waiting_for_the_declared_body[-1]
+2 failed, 618 passed in 8.03s
+```
+
+Only the same two protocol failures previously reproduced on clean origin/dev;
+all five evaluator test cases pass in this run. Optional runtime dependencies
+installed for evaluation enable previously skipped tests. Full log:
+`~/data/thermal-step-b-pytest.log`. No visual/UI verification applies.
+
+### Licenses and permitted use
+
+* **IR:** HF `hanchong/real-infrared-maritime-vessel-dataset`, revision
+  **64a6646**; **no declared license**, clean-v3 `internal_dev_only` note:
+  `upstream card states no license; not for shipped models`. **Evaluation only,
+  never tuning or training**; no redistribution of IR images in these assets.
+* **SMD:** queried `ghost_fleet.datasets_clean_v3` for
+  `smd_vis_onboard_sample`: license **`unknown (academic research use)`**;
+  source revision `5975fe6481e8e5bd1a3776fdb6381eb1b0e20c60`, source URL
+  https://sites.google.com/site/dilipprasad/home/singapore-maritime-dataset.
+  Treat as academic/internal reference, not cleared for commercial deployment.
+  The 14 grayscale negatives were already used in Step A tuning.
+* **Synthetic:** generated in-repo by `tools/synth_thermal.py`, no external
+  image source; seed/data construction and actual tuning history recorded above.
