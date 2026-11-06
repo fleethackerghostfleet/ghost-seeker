@@ -283,7 +283,7 @@ func TestKnownSynonymsResolveWithoutGranite(t *testing.T) {
 	for _, r := range d.Rules {
 		got = append(got, r.Concept)
 	}
-	if strings.Join(got, ",") != "marine mammal,passenger ship" {
+	if strings.Join(got, ",") != "marine mammal,passenger ship" || strings.Contains(d.Path, "granite") {
 		t.Fatalf("rules %+v", d.Rules)
 	}
 	if _, err := (&Compiler{}).Compile(context.Background(), "prioritize red whales", nil); err == nil {

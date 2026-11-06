@@ -24,6 +24,8 @@ type ConceptResolution struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+const knownSynonym = "Known synonym."
+
 func fixedConcepts() map[string]bool {
 	out := map[string]bool{}
 	for _, x := range BaseVocabulary {
@@ -54,7 +56,7 @@ func (c *Compiler) resolveConcepts(ctx context.Context, current []Rule, ops []op
 		// Whole-phrase synonyms of a fixed category resolve without Granite; qualified phrases still go to Granite.
 		if alias, ok := catalog.CanonicalAlias(s); ok && fixed[alias] {
 			resolved[s] = alias
-			changes = append(changes, ConceptResolution{Input: s, Canonical: alias, Reason: "Known synonym."})
+			changes = append(changes, ConceptResolution{Input: s, Canonical: alias, Reason: knownSynonym})
 			return
 		}
 		unknown = append(unknown, s)
