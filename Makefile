@@ -168,7 +168,13 @@ images-load:
 	docker load -i dist/ghost-seeker-images.tar
 
 package-check:
+	python3 tools/release.py --check-versions
+	python3 -m unittest discover -s tools -p 'test_release.py'
 	sh deploy/zarf/check.sh
+
+.PHONY: release
+release:
+	python3 tools/release.py --version "$(VERSION)" --arch "$(or $(ARCH),amd64)"
 
 .PHONY: pin-images zarf-ship zarf-shore
 pin-images:
