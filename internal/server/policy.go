@@ -198,6 +198,15 @@ func (rt *policyRuntime) armExpiry(p *pb.Policy) {
 		return
 	}
 	expiry := policy.Expiry(p, policy.DefaultTTL)
+	now := time.Now()
+	for _, layer := range p.Layers {
+		if ms := layer.GetEmcon().GetExpiresAtUnixMs(); ms > now.UnixMilli() {
+			at := time.UnixMilli(ms)
+			if expiry.IsZero() || at.Before(expiry) {
+				expiry = at
+			}
+		}
+	}
 	if expiry.IsZero() {
 		return
 	}
@@ -216,9 +225,16 @@ func (rt *policyRuntime) expire(now time.Time) {
 		rt.mu.Unlock()
 		return
 	}
-	_, expired := rt.guard.Active(now)
+	active, expired := rt.guard.Active(now)
 	if !expired {
+		if active != nil {
+			rt.syncStore(active, now)
+			rt.armExpiry(active)
+		}
 		rt.mu.Unlock()
+		if active != nil && rt.onChange != nil {
+			rt.onChange()
+		}
 		return
 	}
 	_ = rt.guard.MarkExpired(context.Background(), now)
