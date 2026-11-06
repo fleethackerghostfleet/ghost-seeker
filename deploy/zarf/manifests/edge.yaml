@@ -7,7 +7,7 @@ data:
   EDGE_ID: "###ZARF_VAR_EDGE_ID###"
   DATA_DIR: /data
   LISTEN: :8081
-  GS_PUBLIC_HOSTS: "###ZARF_VAR_EDGE_PUBLIC_HOSTS###"
+  GS_PUBLIC_HOSTS: "###ZARF_VAR_EDGE_PUBLIC_HOSTS###,###ZARF_VAR_EDGE_GATEWAY_HOST###.###ZARF_VAR_DOMAIN###"
   SHORE_URL: "{{ if and (ne "###ZARF_VAR_SHORE_TLS_SECRET###" "") (eq "###ZARF_VAR_SHORE_URL###" "http://shore.ghost-seeker.svc.cluster.local:8080") }}https://shore.ghost-seeker.svc.cluster.local:8080{{ else }}###ZARF_VAR_SHORE_URL###{{ end }}"
   INFER_URL: "###ZARF_VAR_INFER_URL###"
   DEDUP: hash

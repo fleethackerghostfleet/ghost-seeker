@@ -602,6 +602,9 @@ def check_split(role: str, overrides: dict[str, str] | None = None) -> dict[Path
     if role == "ship":
         check_frames(documents, values)
         check_models(package, documents)
+        edge = next(d for d in documents if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "edge-config")
+        require(values["EDGE_GATEWAY_HOST"] + "." + values["DOMAIN"] in edge["data"]["GS_PUBLIC_HOSTS"].split(","),
+                "edge public hosts must include gateway")
     uds = next(d for d in documents if d["kind"] == "Package")
     require(uds["metadata"]["name"] == f"ghost-seeker-{role}", "split Package identity")
     require(uds["spec"]["network"].get("serviceMesh") == {"mode": "sidecar"}, "UDS requires sidecar mesh")

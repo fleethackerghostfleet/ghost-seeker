@@ -78,6 +78,10 @@ class SplitProductionTests(unittest.TestCase):
                 validator.check_split(role, override)
 
     def test_domain_and_gateway_hosts_propagate(self):
+        parsed = validator.check_split("ship", {"DOMAIN": "ship.fleet.example", "EDGE_GATEWAY_HOST": "capture",
+                                                "EDGE_PUBLIC_HOSTS": "site-alias"})
+        config = next(d for group in parsed.values() for d in group if d["kind"] == "ConfigMap")
+        self.assertEqual(config["data"]["GS_PUBLIC_HOSTS"].split(","), ["site-alias", "capture.ship.fleet.example"])
         parsed = validator.check_split("shore", {"DOMAIN": "fleet.example", "SHORE_GATEWAY_HOST": "receive",
                                                  "OPERATOR_GATEWAY_HOST": "review"})
         docs = [d for group in parsed.values() for d in group]
