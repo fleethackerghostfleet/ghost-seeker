@@ -1,0 +1,29 @@
+name: prod-gate
+
+# Production contract (AGENTS.md). Admins: mark the `prod-gate` check as
+# required on `prod` in branch protection (docs/FIELDING.md).
+on:
+  pull_request:
+    branches: [prod, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prod-gate:
+    name: prod-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: make prod-gate
+        env:
+          PROD_GATE_TARGET: ${{ github.base_ref }}
+        run: make prod-gate

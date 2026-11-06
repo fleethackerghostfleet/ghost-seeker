@@ -17,3 +17,5 @@ func DevTokenFileFlag(*flag.FlagSet) *string {
 func loadDevToken(string) (string, error) {
 	return "", errors.New("production build: operator token required (set -operator-token-file / GS_OPERATOR_TOKEN_FILE or GS_OPERATOR_TOKEN)")
 }
+
+const devTokenHint = ""

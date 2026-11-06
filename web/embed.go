@@ -15,7 +15,7 @@ func Handler() http.Handler {
 	}
 	fileServer := http.FileServer(http.FS(content))
 	var oceanServer http.Handler
-	ocean, archiveErr := files.ReadFile("static/imagery/empty-ocean.zip")
+	ocean, archiveErr := files.ReadFile(demoOceanArchive)
 	if !hasDemoImagery {
 		archiveErr = nil
 	} else if archiveErr != nil {

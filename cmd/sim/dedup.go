@@ -1,3 +1,5 @@
+//go:build !prod
+
 package main
 
 // Three-way delivery comparison for the ghost-fleet demo:

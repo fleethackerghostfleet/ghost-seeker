@@ -4,7 +4,7 @@ metadata:
   name: ghost-seeker
   version: 0.1.0
   architecture: amd64
-  description: Ghost Seeker ship-to-shore prioritized sync; set INFER_URL=http://edgeml-sidecar:9090 when enabling edge-inference.
+  description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
   - name: SHORE_URL
@@ -36,8 +36,12 @@ variables:
     default: "0"
     prompt: false
   - name: INFER_URL
-    description: Inference URL, or mock; use http://edgeml-sidecar:9090 when edge-inference is enabled.
-    default: mock
+    description: Edge inference sidecar URL (required; prod images have no built-in analyzer stand-in).
+    default: http://edgeml-sidecar:9090
+  - name: SHORE_INFER_URL
+    description: Shore text-embedding inference URL; empty disables text search.
+    default: ""
+    prompt: false
     prompt: false
   - name: SHORE_STORAGE
     description: Shore SQLite persistent volume size.
@@ -48,15 +52,9 @@ variables:
     default: 10Gi
     prompt: false
   - name: FRAMES_HOSTPATH
-    description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop / replay clips). Empty FRAMES_DIR and SCENARIO leave the edge idle until a sensor source is configured.
+    description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop). Production images have no replay; the edge ingests the live input stream.
     default: /var/lib/ghost-seeker/frames
     prompt: false
-  - name: FRAMES_DIR
-    description: Frame directory under /frames to replay the built-in scenario from (edge -frames); empty disables replay.
-    default: ""
-    prompt: false
-  - name: SCENARIO
-    description: Scenario JSON under /frames to replay into the edge store (edge -scenario); empty disables.
     default: ""
     prompt: false
 
@@ -105,7 +103,7 @@ components:
   - name: edge-inference
     default: false
     required: false
-    description: Optional CPU edgeml sidecar; set INFER_URL=http://edgeml-sidecar:9090 to connect the edge.
+    description: Optional CPU edgeml sidecar in this cluster (the INFER_URL default); deploy it or point INFER_URL at another sidecar.
     images:
       - ghost-seeker/edgeml-sidecar:0.1.0
     manifests:

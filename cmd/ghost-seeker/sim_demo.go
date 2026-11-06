@@ -346,3 +346,5 @@ func simulationLinkRate(rate, legacy int64) int64 {
 	}
 	return rate
 }
+
+const linkBpsUsage = "legacy fixed link rate in bits/s (live shaper, or simulation alias for -sim-link-bps)"

@@ -18,3 +18,5 @@ func DevTokenFileFlag(fs *flag.FlagSet) *string {
 }
 
 func loadDevToken(path string) (string, error) { return loadOrCreate(path) }
+
+const devTokenHint = " (or -dev-token-file for a local demo)"

@@ -1,12 +1,15 @@
 # CPU-only static binaries, no CGO (SQLite is pure Go).
 ARG GO_IMAGE=golang:1.26.10-alpine
 FROM ${GO_IMAGE} AS build
+# Production profile by default: demo features are compiled out (AGENTS.md).
+# Demo compose files build with GO_TAGS="".
+ARG GO_TAGS=prod
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN mkdir -p /out /data && chmod 0770 /data \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/...
+    && CGO_ENABLED=0 go build -tags "${GO_TAGS}" -trimpath -ldflags="-s -w" -o /out/ ./cmd/...
 
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 COPY --from=build --chown=65532:65532 /data /data

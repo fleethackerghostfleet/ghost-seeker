@@ -7,5 +7,7 @@ import "embed"
 // Production builds embed the console without static/imagery (demo frames).
 const hasDemoImagery = false
 
-//go:embed static/*.* static/fonts
+//go:embed static/*.* static/brand static/fonts
 var files embed.FS
+
+const demoOceanArchive = ""

@@ -38,3 +38,5 @@ func runSimulationMode(string, *demoFlags, int64, string, bool, *command.Compile
 }
 
 func enableDemoLinkControl(b *shorebridge.Bridge, _ bool) *shorebridge.Bridge { return b }
+
+const linkBpsUsage = "fixed live link shaper rate in bits/s (-1 = automatic)"

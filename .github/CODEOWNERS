@@ -1,0 +1,6 @@
+# Production guardrails (AGENTS.md): changes need review from the owner.
+/.github/ @PCakes1
+/AGENTS.md @PCakes1
+/CLAUDE.md @PCakes1
+/scripts/prod-gate* @PCakes1
+*_prod.go @PCakes1
