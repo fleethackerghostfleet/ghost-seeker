@@ -1,11 +1,14 @@
+//go:build !prod
+
 package retune
 
 import (
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
 )
 
 func TestNegativeDoesNotReplacePositiveLabel(t *testing.T) {

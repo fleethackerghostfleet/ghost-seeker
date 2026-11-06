@@ -2,13 +2,14 @@ package server
 
 import (
 	"encoding/json"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/reviews"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/store"
 )
 
 func TestNegativeReviews(t *testing.T) {

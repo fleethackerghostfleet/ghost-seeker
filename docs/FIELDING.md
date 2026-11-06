@@ -85,7 +85,7 @@ variables.
 | `-listen` | `LISTEN` | `:8081` | Console HTTP listener (sync is outbound to shore) |
 | `-public-hosts` | `GS_PUBLIC_HOSTS` | empty | Additional Host names accepted by the DNS-rebinding guard |
 | `-shore` | `SHORE_URL` | `http://localhost:8080` | Shore base URL |
-| `-infer` | `INFER_URL` | `mock` | Inference URL or `mock` |
+| `-infer` | `INFER_URL` | `mock` (prod: empty, required) | Inference sidecar URL; `mock` exists only in demo builds |
 | `-unit-token` | `GS_UNIT_TOKEN` | unset | HS256 unit token for shore sync |
 | `-unit-token-file` | `GS_UNIT_TOKEN_FILE` | unset | Read unit token from a file; takes precedence over `GS_UNIT_TOKEN` |
 | `-max-bytes` | `GS_EDGE_MAX_BYTES` | `0` (unlimited) | Maximum total retained form payload bytes |
@@ -94,8 +94,8 @@ variables.
 | `-dedup` | `DEDUP` | `hash` | `naive`, `hash`, or `sightings` |
 | `-prioritizer` | `PRIORITIZER` | `edgeml` | Object-level scoring or `tomer` image-level scoring; `tomer` needs a sidecar in `tomer`/`both` mode |
 | `-ui` | `UI_DIR` | `ui` | Static UI directory |
-| `-scenario` | `SCENARIO` | empty | Optional scenario JSON to replay |
-| `-frames` | `FRAMES_DIR` | empty | Optional frame directory to replay |
+| `-scenario` | `SCENARIO` | empty | Demo builds only: scenario JSON to replay |
+| `-frames` | `FRAMES_DIR` | empty | Demo builds only: frame directory to replay |
 | `-period` | — | `5s` | Replay capture period |
 | `-watch-dir` | `GS_WATCH_DIR` | empty | Writable live image spool directory |
 | `-live-source` | `GS_LIVE_SOURCE` | `camera-1` | Default spool/MJPEG source ID |
@@ -114,7 +114,7 @@ variables.
 | `-data` | `DATA_DIR` | `data/shore` | SQLite store |
 | `-listen` | `LISTEN` | `:8080` | Shore HTTP listener |
 | `-public-hosts` | `GS_PUBLIC_HOSTS` | empty | Additional Host names accepted by the DNS-rebinding guard |
-| `-infer` | `INFER_URL` | `mock` | Inference URL for text embedding, or `mock` |
+| `-infer` | `INFER_URL` | `mock` (prod: empty = text search off) | Inference URL for text embedding; `mock` exists only in demo builds |
 | `-require-auth` | `GS_REQUIRE_AUTH` | `true` | Require unit JWTs on SyncService; `false` is for isolated lab links only |
 | `-signing-key` | `GS_SIGNING_KEY` | unset | HS256 signing key; also accepted by mint tool |
 | `-signing-key-file` | `GS_SIGNING_KEY_FILE` | unset | Signing-key file; takes precedence over literal key |
@@ -221,9 +221,11 @@ zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
   --set-variables=SHORE_URL=http://shore.example.internal:8080
 ```
 
-For mock inference, leave `INFER_URL=mock`. To enable the optional edgeml
-component in the same cluster, set `INFER_URL=http://edgeml-sidecar:9090` and
-deploy `edge-inference` alongside `edge`:
+The packaged images are production builds (`-tags prod`, see
+[Production profile](#production-profile-and-prod-gate)): the edge has no
+built-in analyzer, so `INFER_URL` (default `http://edgeml-sidecar:9090`) must
+reach an edgeml sidecar. To run the sidecar in the same cluster, deploy
+`edge-inference` alongside `edge`:
 
 ```sh
 zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
@@ -234,20 +236,17 @@ zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
 Edge can point across clusters to a separately routed sidecar if the network
 permits it.
 
-The edge captures from the authenticated push API, optional live sources below,
-or replay via `-frames`/`FRAMES_DIR` and `-scenario`/`SCENARIO`.
-The packaged edge mounts the node directory `FRAMES_HOSTPATH` (default
-`/var/lib/ghost-seeker/frames`) read-only at `/frames`; with `FRAMES_DIR` and
-`SCENARIO` empty (the defaults) the edge awaits live input. A spool requires a
-separate **writable** mount and `-watch-dir`; the read-only replay mount is not
-a spool. To replay the demo clips, copy `scenarios/ghostfleet_demo`
-(including the `frames/` downloaded by `make demo-clips`) onto the node and point the edge at it:
-
-```sh
-zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
-  --confirm --components=edge \
-  --set-variables=FRAMES_HOSTPATH=/srv/ghost-seeker,SCENARIO=/frames/ghostfleet_demo/scenario.json
-```
+The edge captures from the authenticated push API and the optional live
+sources below (`-watch-dir` spool, `-mjpeg-url`). The packaged edge mounts the
+node directory `FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`)
+read-only at `/frames`; a spool requires a separate **writable** mount and
+`-watch-dir`. Production images have no scenario/frame replay (`-scenario`,
+`-frames`, `-period`, `SCENARIO` and `FRAMES_DIR` exist only in demo builds,
+[Production profile](#production-profile-and-prod-gate)). The Zarf package
+is production-only and does not support replay. To replay the demo clips, use
+the demo compose stack (`deploy/compose/demo.compose.yml`, built with
+`GO_TAGS: ""`; see [DEMO.md](DEMO.md)) or a demo-build edge
+(`go build ./cmd/edge` without `-tags prod`) with `-scenario` and `-frames`.
 
 ## Live input
 
@@ -415,7 +414,7 @@ go test -run TestProdContract ./...
 go test -tags prod -run TestProdContract ./...
 ```
 
-Changing ConfigMap-backed settings (`SCENARIO`, `FRAMES_DIR`, edge caps, and
+Changing ConfigMap-backed settings (`INFER_URL`, edge caps, and
 `SHORE_REQUIRE_AUTH`) or rotating Secret-backed credentials requires restarting
 the affected workload because environment variables are read at pod startup:
 run `kubectl -n ghost-seeker rollout restart statefulset/edge` for edge changes,
@@ -429,8 +428,11 @@ storage-class behavior, and cross-cluster routing have not been verified here.
 
 ## edgeml and offline model files
 
-The sidecar defaults to mock mode and listens on `0.0.0.0:9090` in the
-container. The standard image installs edgeml and CPU `onnxruntime`; mount
+The sidecar image defaults to mock mode (for Go tests and the demo) and listens
+on `0.0.0.0:9090` in the container. The Zarf `edge-inference` component runs
+the real detector (`--detector /models/yolo11n-640/model.onnx`, no `--mock`;
+`make prod-gate` fails if `--mock` appears in deploy/zarf), so it needs the
+model mounted at `/models` before it becomes ready. The standard image installs edgeml and CPU `onnxruntime`; mount
 approved model files read-only at `/models` and override the command to use
 `--detector /models/<detector>.onnx` and optionally
 `--embed /models/<embedding-directory>`. Model acquisition and licensing are
@@ -447,6 +449,7 @@ Real-model inference and tracking in the packaged container remain
 ## Verification and troubleshooting
 
 - `make test`: Go vet plus Go tests.
+- `make prod-gate`: production-profile contract (see below); also run by `make verify`.
 - `node --test web/*.test.cjs`: operator web tests.
 - `python -m pytest -q edgeml/tests`: CPU edgeml tests.
 - `make package-check`: local manifest checks plus kubeconform/Zarf checks when installed.
@@ -557,3 +560,42 @@ callers must retain and retry their input. Each eviction is recorded in the
 `edge.db` `eviction_log` (`item_id`, `bytes`, `score`, `reason`, `ts`, with
 `ts` in Unix milliseconds). `GetStatusResponse.items_evicted` reports the
 cumulative eviction count.
+
+## Production profile and prod gate
+
+Production builds use the Go build tag `prod` (`make build-prod`,
+`deploy/Dockerfile` by default via `ARG GO_TAGS=prod`, and therefore the Zarf
+package images). Demo wiring lives in `*_demo.go` files (`//go:build !prod`)
+with stubs in `*_prod.go` (`//go:build prod`), so `dev`/`main` keep the demo and
+`prod` binaries do not contain it:
+
+- `ghost-seeker` runs only in live mode (`-shore`); without it the binary exits
+  with an error. There is no simulation generator, backfill, `-capture-every`,
+  `-sim-link-bps`, `-auto-cdr`, `-dataset` replay or `-negatives-rate`.
+- No `POST /api/demo/reset` (`server.WithDemoReset`), no `-demo-link-control`
+  (`POST /api/shore/link`), no `-demo-accept-any-token`, no
+  `-dev-token-file` auto-generation and no `-dev-trust-peers`: operators sign in
+  with a real token (`GS_OPERATOR_TOKEN` / `-operator-token-file`) or PIV.
+- The edge has no `-infer mock`, `-scenario`, `-frames` or `-period` replay;
+  shore has no `-infer mock`.
+- The embedded demo imagery (`web/static/imagery`, including the empty-ocean
+  frames) and its catalog (`internal/catalog/imagery.json`) are not embedded.
+- `/api/config` reports `features: {profile, simulation, demoReset, dataset,
+  demoLinkControl}`; the console hides or removes demo-only controls unless the
+  server reports them `true`.
+
+Demo compose files (`deploy/compose/*.yml`) pass `GO_TAGS=""` and keep the demo
+build.
+
+`make prod-gate` (`scripts/prod-gate.sh`) builds every command with
+`-tags prod`, runs `go vet`/`go test -tags prod ./...` and every
+`TestProdContract*` test, scans the prod binaries (`go tool nm`, embedded
+strings and `-h` output) for demo symbols, routes and flags, runs
+`web/prod-features.test.cjs`, checks the Docker/Zarf defaults, and checks that
+the `/api/v1` output API is documented in `docs/api/openapi.yaml`. The
+`prod-gate` GitHub workflow runs it on pull requests to `prod` and `dev`.
+
+**Repository admin action required:** in GitHub branch protection for `prod`,
+mark the `prod-gate` status check as required (and require pull requests).
+Bots and agents cannot change branch protection, so until an admin does this
+the gate is advisory on GitHub. See `AGENTS.md`.
