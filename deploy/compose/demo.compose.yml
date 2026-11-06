@@ -34,7 +34,7 @@ services:
     build: { context: ../../edgeml, dockerfile: Dockerfile, args: { WITH_TRACKING: "1" } }
     image: ghost-seeker/edgeml-sidecar:0.1.0-tracking
     command: ["--listen", "0.0.0.0:9090", "--detector", "/models/yolo11n-640/model.onnx", "--embed", "/models/mobileclip-s1",
-              "--threads", "4", "--fps", "5", "--prioritizer", "both"]
+              "--model-manifest", "/models/manifest.json", "--threads", "4", "--fps", "5", "--prioritizer", "both"]
     environment:
       GHOST_PRIORITY_PATH: /opt/algorithm   # Tomer's ghost_priority for --prioritizer both (numpy + opencv only)
     volumes:

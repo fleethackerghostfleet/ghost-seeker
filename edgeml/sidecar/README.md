@@ -9,6 +9,7 @@ instead of one per frame. Code lives in the package at `edgeml/src/edgeml/sideca
 python -m edgeml.sidecar --listen :9090 \
     --detector ~/models/D/yolo11n-640/model.onnx \
     --embed ~/models/D/mobileclip-s1 \
+    --model-manifest ~/models/D/manifest.json \
     --threads 4 --fps 5
 python -m edgeml.sidecar --listen :9090 --mock           # scripted engine, no models (Go tests / CI)
 ```
@@ -25,7 +26,11 @@ gcloud storage cp -r $B/yolo11n-640 ~/models/D/                                 
 gcloud storage cp $B/clip/mobileclip-s1/{meta.json,model.onnx,text_cache.json} ~/models/D/mobileclip-s1/
 ```
 
-Dependencies: `pip install -e edgeml onnxruntime boxmot` (boxmot pulls torch, but the sidecar never imports it on
+Run `make demo-models` after either fetching or reusing cached demo files to
+create their demo-only TOFU `manifest.json`; production needs independently
+approved provenance instead. See `docs/DEMO.md` for intentional bundle updates.
+
+Dependencies: `pip install -e edgeml onnxruntime onnx boxmot` (boxmot pulls torch, but the sidecar never imports it on
 the hot path: detector and CLIP image tower run on ONNX Runtime, `pin_threads` fixes 4 CPU threads).
 
 `--listen :9090` binds **127.0.0.1** (the service is unauthenticated); use `--listen 0.0.0.0:9090` to expose it. Request
@@ -71,7 +76,7 @@ handling described below; they do not all become ordinary hash-mode items.
 
 ```
 # 1. sidecar (real models, or --mock)
-python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1
+python -m edgeml.sidecar --listen :9090 --detector ~/models/D/yolo11n-640/model.onnx --embed ~/models/D/mobileclip-s1 --model-manifest ~/models/D/manifest.json
 
 # 2. in another terminal, start shore with the local demo signing key
 make run-shore

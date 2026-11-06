@@ -15,6 +15,7 @@ def launch(monkeypatch):
     monkeypatch.setattr(tomer, "TomerPrioritizer", prioritizer)
     monkeypatch.setattr(threads, "pin_threads", pin)
     monkeypatch.setattr(cli.logging, "basicConfig", Mock())
+    monkeypatch.setattr(cli, "verify_models", Mock())
     return serve, engine, prioritizer, pin
 
 
@@ -93,3 +94,36 @@ def test_bad_json_override_does_not_construct_or_serve_engine(launch):
         cli.main(["--det", "fixture.onnx", "--agg", "{"])
     launch[0].assert_not_called()
     launch[1].assert_not_called()
+
+
+def test_models_verified_before_engine_construction(launch):
+    cli.main(["--det", "det/model.onnx", "--embed", "embed", "--model-manifest", "manifest.json",
+              "--prioritizer", "both", "--tomer-model", "tomer/model.onnx", "--tomer-policy", "policy.json",
+              "--tracker", "botsort_reid", "--trk", '{"reid_weights":"reid/weights.pt"}'])
+    cli.verify_models.assert_called_once_with(
+        ["det/model.onnx", "embed", "reid/weights.pt", "tomer/model.onnx", "policy.json"], "manifest.json")
+
+
+def test_reid_never_implicitly_downloads_weights(launch, capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["--det", "det/model.onnx", "--tracker", "botsort_reid"])
+    assert "requires explicit local reid_weights" in capsys.readouterr().err
+    launch[1].assert_not_called()
+
+
+def test_mock_has_no_artifacts_to_verify(launch):
+    cli.main(["--mock"])
+    cli.verify_models.assert_called_once_with([], None)
+
+
+def test_integrity_failure_prevents_initializing_any_loader(launch):
+    cli.verify_models.side_effect = ValueError("SHA-256 mismatch")
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        cli.main(["--det", "det/model.onnx"])
+    for dependency in launch:
+        dependency.assert_not_called()
+
+
+def test_disabled_embedding_is_case_insensitive(launch):
+    cli.main(["--det", "det/model.onnx", "--embed", "NONE"])
+    cli.verify_models.assert_called_once_with(["det/model.onnx"], None)

@@ -128,7 +128,11 @@ def test_corrupt_cache_and_missing_metadata_errors_propagate(tmp_path, monkeypat
         ClipEmbedder(short="not-a-model", backend="ort", onnx_dir=tmp_path)
 
 
-def test_torch_adapter_uses_only_fake_model_tensors_and_tokenizer(monkeypatch):
+@pytest.mark.parametrize("local_weights,short,tokenizer_present", [
+    (False, "mobileclip-s0", False), (True, "mobileclip-s0", False),
+    (True, "siglip-b16", True), (True, "siglip-b16", False),
+])
+def test_torch_adapter_uses_only_fake_model_tensors_and_tokenizer(monkeypatch, tmp_path, local_weights, short, tokenizer_present):
     image_inputs, text_inputs, opened = [], [], []
 
     class Tensor:
@@ -143,6 +147,7 @@ def test_torch_adapter_uses_only_fake_model_tensors_and_tokenizer(monkeypatch):
             return self.values
 
     class Model:
+        context_length = 64
         visual = SimpleNamespace(parameters=lambda: [SimpleNamespace(numel=lambda: 6, element_size=lambda: 4)])
         logit_scale = SimpleNamespace(exp=lambda: SimpleNamespace(item=lambda: 2.0))
         evaluated = False
@@ -166,13 +171,37 @@ def test_torch_adapter_uses_only_fake_model_tensors_and_tokenizer(monkeypatch):
         return model, None, SimpleNamespace(transforms=[norm])
 
     monkeypatch.setitem(sys.modules, "open_clip", SimpleNamespace(create_model_and_transforms=create, get_tokenizer=lambda arch: lambda texts: list(texts)))
+    def local_tokenizer(path, context_length, local_files_only):
+        assert path == str(tmp_path / "tokenizer") and context_length == 64 and local_files_only
+        return lambda texts: list(texts)
+
+    monkeypatch.setitem(sys.modules, "open_clip.tokenizer", SimpleNamespace(HFTokenizer=local_tokenizer))
     monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(no_grad=nullcontext, zeros=lambda *shape: np.zeros(shape, np.float32), from_numpy=lambda x: x))
-    embedder = ClipEmbedder(short="mobileclip-s0")
-    assert opened == [("MobileCLIP2-S0", "dfndr2b")]
+    weights = tmp_path / "text_model.pt"
+    weights.write_bytes(b"fixture")
+    if tokenizer_present:
+        (tmp_path / "tokenizer").mkdir()
+    if short == "siglip-b16" and not tokenizer_present:
+        with pytest.raises(FileNotFoundError, match="local tokenizer directory"):
+            ClipEmbedder(short=short, pretrained_weights=weights)
+        return
+    embedder = ClipEmbedder(short=short, pretrained_weights=weights if local_weights else None)
+    arch = "ViT-B-16-SigLIP" if short == "siglip-b16" else "MobileCLIP2-S0"
+    assert opened == [(arch, str(weights) if local_weights else "dfndr2b")]
     assert model.evaluated and embedder.dim == 2 and embedder.model_bytes == 24
-    assert image_inputs[0].shape == (1, 3, 256, 256)
+    assert image_inputs[0].shape == (1, 3, embedder.size, embedder.size)
     result = embedder.embed_crops([np.zeros((2, 2, 3), np.uint8)])
     np.testing.assert_allclose(result, [[0.6, 0.8]], atol=1e-6)
     assert len(image_inputs) == 2
     np.testing.assert_allclose(embedder.embed_text(["boat", "person"]), [[0, 1], [0, 1]], atol=1e-6)
     assert text_inputs == [["boat", "person"]] and embedder.logit_scale() == 2.0
+
+
+def test_missing_local_torch_weights_never_falls_back_to_download(monkeypatch, tmp_path):
+    def forbid_weights(*args, **kwargs):
+        raise AssertionError("must not load or fetch weights")
+
+    monkeypatch.setitem(sys.modules, "open_clip", SimpleNamespace(create_model_and_transforms=forbid_weights))
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace())
+    with pytest.raises(FileNotFoundError):
+        ClipEmbedder(pretrained_weights=tmp_path / "missing.pt")

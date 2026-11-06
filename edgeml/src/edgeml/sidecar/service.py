@@ -126,11 +126,14 @@ class EdgemlEngine:
         self.embedder = self.classifier = None
         self.clip_name = None
         self._text_tower, self._torch_clip = text_tower, None
+        self._text_weights = None
         if embed and str(embed).lower() != "none":
             from edgeml.embed.clip_embedder import ClipEmbedder
             from edgeml.embed.zeroshot import load_classifier
 
             d = Path(embed).expanduser()
+            if text_tower == "torch":
+                self._text_weights = d / "text_model.pt"
             meta = json.loads((d / "meta.json").read_text())
             clip = ClipEmbedder(meta["model"], backend="ort", onnx_dir=d, threads=threads, precision=meta.get("precision", "fp32"))
             self.embedder = _TextEmbedder(clip)
@@ -264,7 +267,9 @@ class EdgemlEngine:
         if self._torch_clip is None:
             from edgeml.embed.clip_embedder import ClipEmbedder
 
-            self._torch_clip = ClipEmbedder(self.embedder.clip.short, backend="torch")
+            if self._text_weights is None:
+                raise RpcError("failed_precondition", "torch text tower requires local text_model.pt in the verified embed bundle")
+            self._torch_clip = ClipEmbedder(self.embedder.clip.short, backend="torch", pretrained_weights=self._text_weights)
         return self._torch_clip.embed_text(texts)
 
     def capabilities(self) -> dict:

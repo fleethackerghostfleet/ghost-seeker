@@ -12,7 +12,7 @@ case "${1:?go|python|images|secrets|manifests}" in
     python3 -m venv .venv/security
     .venv/security/bin/pip install bandit==1.8.6 pip-audit==2.9.0 pip-licenses==5.5.5
     python3 -m venv .venv/shipped
-    .venv/shipped/bin/pip install ./edgeml onnxruntime
+    .venv/shipped/bin/pip install --require-hashes --only-binary=:all: -r edgeml/requirements.lock
     ;;
   secrets)
     curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz -C "${HOME}/.local/bin" gitleaks

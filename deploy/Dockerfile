@@ -1,5 +1,10 @@
 # CPU-only static binaries, no CGO (SQLite is pure Go).
-ARG GO_IMAGE=golang:1.26.10-alpine
+# golang:1.26.10-alpine (multi-platform index)
+ARG GO_IMAGE=mirror.gcr.io/library/golang@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696
+# gcr.io/distroless/static-debian12:nonroot (multi-platform index)
+ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+# alpine:3.20 (demo-init only)
+ARG DEMO_IMAGE=mirror.gcr.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 FROM ${GO_IMAGE} AS build
 # Production profile by default: demo features are compiled out (AGENTS.md).
 # Demo compose files build with GO_TAGS="".
@@ -11,10 +16,10 @@ COPY . .
 RUN mkdir -p /out /data && chmod 0770 /data \
     && CGO_ENABLED=0 go build -tags "${GO_TAGS}" -trimpath -ldflags="-s -w" -o /out/ ./cmd/...
 
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+FROM ${RUNTIME_IMAGE} AS runtime
 COPY --from=build --chown=65532:65532 /data /data
 WORKDIR /data
-USER nonroot
+USER 65532:65532
 
 FROM runtime AS shore
 COPY --from=build /out/shore /usr/local/bin/shore
@@ -40,7 +45,7 @@ ENTRYPOINT ["/usr/local/bin/edge"]
 # the operator token, the HS256 unit key and the edge JWT into a shared
 # volume, so `make compose-demo` needs no secrets from the user. Not part of
 # the fielding images above.
-FROM alpine:3.20 AS demo-init
+FROM ${DEMO_IMAGE} AS demo-init
 COPY --from=build /out/mint-unit-token /usr/local/bin/mint-unit-token
 COPY deploy/compose/demo-init.sh /usr/local/bin/demo-init
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/demo-init"]

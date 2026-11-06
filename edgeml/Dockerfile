@@ -1,23 +1,24 @@
-ARG PY_IMAGE=python:3.11-slim
+# python:3.11-slim (multi-platform index)
+ARG PY_IMAGE=mirror.gcr.io/library/python@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79
 
 FROM ${PY_IMAGE} AS builder
 ARG WITH_TRACKING=0
 WORKDIR /build
 COPY pyproject.toml ./
+COPY requirements*.lock ./
 COPY src ./src
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir . onnxruntime \
+    && /opt/venv/bin/pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements-build.lock \
     && if [ "$WITH_TRACKING" = "1" ]; then \
-      /opt/venv/bin/pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision \
-      && /opt/venv/bin/pip install --no-cache-dir '.[tracking]' \
-      # boxmot pins the GUI opencv build, whose cv2 needs libGL (absent in slim): keep the headless one at that version
-      && cv=$(/opt/venv/bin/pip show opencv-python 2>/dev/null | sed -n 's/^Version: //p') \
-      && if [ -n "$cv" ]; then \
-        /opt/venv/bin/pip uninstall -y opencv-python opencv-python-headless \
-        && /opt/venv/bin/pip install --no-cache-dir --no-deps "opencv-python-headless==$cv"; \
-      fi \
+      /opt/venv/bin/pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.lock \
+      && /opt/venv/bin/pip install --no-cache-dir --require-hashes --no-build-isolation -r requirements-tracking.lock \
+      && /opt/venv/bin/pip uninstall -y opencv-python opencv-python-headless \
+      && /opt/venv/bin/pip install --no-cache-dir --no-deps --require-hashes --only-binary=:all: -r requirements-headless.lock \
       && rm -rf /opt/venv/lib/python*/site-packages/torch/include; \
+    else \
+      /opt/venv/bin/pip install --no-cache-dir --require-hashes --only-binary=:all: -r requirements.lock; \
     fi \
+    && /opt/venv/bin/pip install --no-cache-dir --no-deps --no-build-isolation . \
     && /opt/venv/bin/python -m pip uninstall --yes setuptools wheel pip
 
 FROM ${PY_IMAGE} AS runtime

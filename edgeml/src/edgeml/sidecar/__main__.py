@@ -5,6 +5,9 @@ import argparse
 import json
 import os
 import logging
+from pathlib import Path
+
+from .integrity import verify_models
 
 
 # D's COCO YOLO11n export fetched by `make demo-models` (the G fine-tune did not win on the locked test, see
@@ -29,6 +32,8 @@ def main(argv=None) -> None:
     ap.add_argument("--engine", default="auto", help="ort | openvino | auto")
     ap.add_argument("--embed", default=None, help="MobileCLIP ONNX export dir (meta.json, model.onnx, text_cache.json); 'none' disables")
     ap.add_argument("--threads", type=int, default=4)
+    ap.add_argument("--model-manifest", default=os.environ.get("EDGEML_MODEL_MANIFEST"),
+                    help="approved SHA-256/source-revision manifest for the read-only model bundle")
     ap.add_argument("--fps", type=float, default=5.0, help="nominal frame rate used when requests carry no captured_at_unix_ms")
     ap.add_argument("--tracker", default="bytetrack")
     ap.add_argument("--asso", default="centroid")
@@ -52,6 +57,26 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
+    paths = []
+    uses_detector = not a.mock and not (a.prioritizer == "tomer" and not a.detector)
+    if uses_detector:
+        a.detector = a.detector or default_detector()
+        if not a.detector:
+            ap.error(f"--detector is required unless --mock or --prioritizer tomer (no {DEFAULT_DETECTOR} found)")
+        paths.append(a.detector)
+        if a.embed and a.embed.lower() != "none":
+            paths.append(a.embed)
+            if a.text_tower == "torch":
+                paths.append(Path(a.embed).expanduser() / "text_model.pt")
+        trk = json.loads(a.trk) if a.trk else {}
+        if a.tracker == "botsort_reid" and not trk.get("reid_weights"):
+            ap.error("botsort_reid requires explicit local reid_weights in --trk")
+        if trk.get("reid_weights"):
+            paths.append(trk["reid_weights"])
+    if a.prioritizer != "edgeml":
+        paths.extend(path for path in (a.tomer_model, a.tomer_policy) if path)
+    verify_models(paths, a.model_manifest)
+
     if a.mock:
         from .service import MockEngine
 
@@ -61,9 +86,6 @@ def main(argv=None) -> None:
 
         engine = NoopEngine()
     else:
-        a.detector = a.detector or default_detector()
-        if not a.detector:
-            ap.error(f"--detector is required unless --mock or --prioritizer tomer (no {DEFAULT_DETECTOR} found)")
         from edgeml.runtime.threads import pin_threads
 
         pin_threads(a.threads)

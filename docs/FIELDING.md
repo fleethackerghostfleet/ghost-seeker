@@ -519,7 +519,9 @@ the real detector (`--detector /models/yolo11n-640/model.onnx`, no `--mock`;
 model mounted at `/models` before it becomes ready. The standard image installs edgeml and CPU `onnxruntime`; mount
 approved model files read-only at `/models` and override the command to use
 `--detector /models/<detector>.onnx` and optionally
-`--embed /models/<embedding-directory>`. Model acquisition and licensing are
+`--embed /models/<embedding-directory>`. Always pass `--model-manifest /models/manifest.json`.
+The manifest must be independently approved for fielding; demo TOFU manifests
+are not production provenance. Model acquisition and licensing are
 outside the runtime; keep Hugging Face offline and telemetry disabled.
 
 Tracking is optional because `boxmot` brings in PyTorch and substantially

@@ -12,7 +12,9 @@ verify:         ## all CI checks locally; fails on missing tools or dirty source
 
 GO_IMAGE ?=
 PY_IMAGE ?=
+RUNTIME_IMAGE ?=
 GO_BUILD_ARG = $(if $(GO_IMAGE),--build-arg GO_IMAGE=$(GO_IMAGE))
+RUNTIME_BUILD_ARG = $(if $(RUNTIME_IMAGE),--build-arg RUNTIME_IMAGE=$(RUNTIME_IMAGE))
 PY_BUILD_ARG = $(if $(PY_IMAGE),--build-arg PY_IMAGE=$(PY_IMAGE))
 SHORE_IMAGE := ghost-seeker/shore:0.1.0
 EDGE_IMAGE := ghost-seeker/edge:0.1.0
@@ -98,9 +100,11 @@ PY ?= python3
 demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unknown_calib.npz into $(MODELS) (GitHub release demo-data-v1 via gh, gcloud fallback)
 	@ok=1; for f in yolo11n-640/model.onnx yolo11n-640/meta.json mobileclip-s1/model.onnx mobileclip-s1/meta.json mobileclip-s1/text_cache.json; do test -s $(MODELS)/$$f || ok=; done; test -n "$$ok" && echo "have models in $(MODELS)" || \
 	  deploy/demo-data.sh models-D.tar.gz $(MODELS) 1 sh -c 'mkdir -p $(MODELS)/mobileclip-s1 && gcloud storage cp -r gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/yolo11n-640 $(MODELS)/ && gcloud storage cp gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/meta.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/model.onnx gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/text_cache.json gs://qwiklabs-gcp-02-34a870014566-ghost-seeker/edgeml/models/D/clip/mobileclip-s1/unknown_calib.npz $(MODELS)/mobileclip-s1/'
+	$(PY) scripts/demo_model_manifest.py "$(MODELS)"
 
-demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
-	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
+demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime onnx first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
+	@test -s "$(MODELS)/manifest.json" || { echo "error: demo model manifest missing — rerun 'make demo-models' (also upgrades cached bundles)"; exit 1; }
+	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --model-manifest $(MODELS)/manifest.json --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
 
 demo-edge: build demo-key ## replay the generated camera feed at 5 fps through the shaped link
 	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
@@ -119,6 +123,7 @@ DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) GS_DEMO_SCENARIO=$(notdir $(DEMO_SCENARIO
 compose-demo: ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
 	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO_SCENARIO)); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (see docs/DEMO.md)"; exit 1; }; done
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (needs gcloud; or MODELS=/path/to/D)"; exit 1; }
+	@test -s "$(MODELS)/manifest.json" || { echo "error: demo model manifest missing — rerun 'make demo-models' (also upgrades cached bundles)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d
 	@echo; echo "open http://localhost:8090   (logs: make compose-demo-logs; stop + reset: make compose-demo-down)"
 	@echo "ship console: make compose-demo-ship   (prints a signed-in http://localhost:8081 URL; contains the demo operator token)"
@@ -137,9 +142,9 @@ compose-demo-down: ## stop the Docker demo and delete its data + credentials (ne
 	$(DEMO_COMPOSE_CMD) down -v --remove-orphans
 
 images:
-	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
-	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
-	docker build $(GO_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
+	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target shore -t $(SHORE_IMAGE) .
+	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target edge -t $(EDGE_IMAGE) .
+	docker build $(GO_BUILD_ARG) $(RUNTIME_BUILD_ARG) -f deploy/Dockerfile --target operator -t $(OPERATOR_IMAGE) .
 	docker build $(PY_BUILD_ARG) -f edgeml/Dockerfile -t $(EDGEML_IMAGE) edgeml
 
 images-save:
@@ -181,8 +186,11 @@ security-go:
 security-python:
 	mkdir -p $(SECURITY_REPORTS)
 	$(BANDIT) -r edgeml/src -lll -f json -o $(SECURITY_REPORTS)/bandit.json
-	$(SHIPPED_PYTHON) -m pip freeze --exclude edgeml --exclude pip --exclude setuptools > $(SECURITY_REPORTS)/python-requirements.txt
-	$(PIP_AUDIT) -r $(SECURITY_REPORTS)/python-requirements.txt --no-deps --disable-pip -f json -o $(SECURITY_REPORTS)/pip-audit.json
+	$(PIP_AUDIT) -r edgeml/requirements.lock --require-hashes --disable-pip -f json -o $(SECURITY_REPORTS)/pip-audit.json
+
+.PHONY: lock-edgeml
+lock-edgeml:
+	bash scripts/lock-edgeml.sh
 
 security-licenses:
 	SHIPPED_PYTHON=$(SHIPPED_PYTHON) $(SECURITY_PYTHON) scripts/security.py licenses
