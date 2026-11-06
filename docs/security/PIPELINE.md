@@ -100,9 +100,10 @@ installed; missing tools or scan/parse errors are not successful gates.
 ## Signing and assessor evidence
 
 Only a **push to prod** publishes scanned images to
-`ghcr.io/<owner>/<repo>/<image>:<commit>`. The separate signing job requires
-all source gates and the image gate to succeed, has `id-token: write`, and
-signs the immutable digests with cosign keyless OIDC/Fulcio/Rekor. Both SBOM
+`ghcr.io/<owner>/<repo>/<image>:<commit>`. The image job only saves the
+scanned images as a short-lived artifact; the separate publish-and-sign job
+requires all source gates and the image gate to succeed before it pushes
+anything, has `id-token: write`, and signs the immutable digests with cosign keyless OIDC/Fulcio/Rekor. Both SBOM
 formats are attested against those same digests. PRs (including forks),
 schedules and dispatches never publish or sign and never receive OIDC
 permission. GHCR package creation/write access must be enabled for the
