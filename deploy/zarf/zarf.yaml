@@ -38,10 +38,10 @@ variables:
   - name: INFER_URL
     description: Edge inference sidecar URL (required; prod images have no built-in analyzer stand-in).
     default: http://edgeml-sidecar:9090
+    prompt: false
   - name: SHORE_INFER_URL
     description: Shore text-embedding inference URL; empty disables text search.
     default: ""
-    prompt: false
     prompt: false
   - name: SHORE_STORAGE
     description: Shore SQLite persistent volume size.
