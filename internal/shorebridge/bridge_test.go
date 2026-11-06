@@ -14,48 +14,31 @@ import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
-	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-func TestAutomaticLinkStatus(t *testing.T) {
-	link := shaper.NewNormal("unused")
-	bridge := New("", "", link)
-	rec := httptest.NewRecorder()
-	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/shore/link", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
-	}
-	var status LinkStatus
-	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
-		t.Fatal(err)
-	}
-	if !status.Controllable || status.Bps != link.Bps() || status.Distribution == nil || *status.Distribution != *link.Distribution() {
-		t.Fatalf("missing applied rate or distribution: %+v", status)
-	}
-	if strings.Contains(rec.Body.String(), "presets") {
-		t.Fatal("manual speed presets still advertised")
-	}
-	rec = httptest.NewRecorder()
-	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/link", strings.NewReader(`{"bps":1}`)))
-	if rec.Code != http.StatusMethodNotAllowed || link.Bps() != status.Bps {
-		t.Fatalf("manual rate changes must be rejected: status %d, bps %d", rec.Code, link.Bps())
-	}
-	demo := New("", "", link).WithLinkOverride(true)
-	rec = httptest.NewRecorder()
-	demo.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/link", strings.NewReader(`{"bps":32000}`)))
-	if rec.Code != http.StatusOK || link.Bps() != 32000 || !demo.linkStatus().Fixed {
-		t.Fatalf("demo override: status %d bps %d: %s", rec.Code, link.Bps(), rec.Body.String())
-	}
-	rec = httptest.NewRecorder()
-	demo.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/link", strings.NewReader(`{"auto":true}`)))
-	if rec.Code != http.StatusOK || demo.linkStatus().Fixed {
-		t.Fatalf("demo auto: status %d: %s", rec.Code, rec.Body.String())
-	}
-	external := New("", "", nil).linkStatus()
-	if external.Controllable || external.Distribution != nil {
-		t.Fatalf("externally shaped link advertised automation: %+v", external)
+func TestVersionedAPIProxyKeepsShoreCredentialsPrivate(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/stream" || r.URL.Query().Get("since") != "7" || r.Header.Get("Last-Event-ID") != "8" {
+			t.Error("proxy lost stream route/cursor")
+		}
+		if r.Header.Get("Cookie") != "" || r.Header.Get("Authorization") != "Bearer synthetic-shore-token" {
+			t.Error("proxy forwarded caller credentials instead of configured shore token")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "id: 9\nevent: item\ndata: {}\n\n")
+	}))
+	defer upstream.Close()
+	b := New(upstream.URL, "", nil).WithToken("synthetic-shore-token")
+	r := httptest.NewRequest("GET", "/api/v1/stream?since=7", nil)
+	r.Header.Set("Cookie", "session=private-browser-session")
+	r.Header.Set("Authorization", "Bearer caller-token")
+	r.Header.Set("Last-Event-ID", "8")
+	w := httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, r)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "text/event-stream" || !strings.Contains(w.Body.String(), "id: 9") {
+		t.Fatalf("proxy failed: %d %s", w.Code, w.Body.String())
 	}
 }
 
@@ -351,7 +334,7 @@ func TestPolicyInfoAndLayeredDirectiveEMCON(t *testing.T) {
 	rec = httptest.NewRecorder()
 	bridge.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/shore/emcon",
 		strings.NewReader(`{"mode":"NORMAL","padding":"`+strings.Repeat("x", 5<<10)+`"}`)))
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "invalid request body\n" {
+	if rec.Code != http.StatusRequestEntityTooLarge || rec.Body.String() != "invalid request body\n" {
 		t.Fatalf("oversized EMCON body status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

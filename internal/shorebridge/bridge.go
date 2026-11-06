@@ -29,6 +29,7 @@ import (
 
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/ids"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/opauth"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/policy"
@@ -264,6 +265,12 @@ type Counts struct {
 // and edge consoles (and to shore blobs it proxies).
 func (b *Bridge) WithToken(token string) *Bridge {
 	b.token = token
+	return b
+}
+
+// WithTransport configures console RPCs and shore proxies before serving.
+func (b *Bridge) WithTransport(transport http.RoundTripper) *Bridge {
+	b.client.Transport = transport
 	return b
 }
 
@@ -955,11 +962,10 @@ func (b *Bridge) Handler() http.Handler {
 	mux.HandleFunc("POST /api/shore/pull", b.requestPull)
 	mux.HandleFunc("POST /api/shore/override", b.override)
 	mux.HandleFunc("GET /api/shore/link", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, b.linkStatus()) })
-	if b.linkOverride {
-		mux.HandleFunc("POST /api/shore/link", b.setLink)
-	}
+	b.registerDemoRoutes(mux)
 	if u, err := url.Parse(b.shore); err == nil {
 		rp := httputil.NewSingleHostReverseProxy(u)
+		rp.Transport = b.client.Transport
 		director := rp.Director
 		// The browser's session cookie stays on this origin; the shore sees
 		// the operator bearer token instead.
@@ -982,39 +988,11 @@ func (b *Bridge) Handler() http.Handler {
 			w.Header().Del("X-Content-Type-Options")
 			rp.ServeHTTP(w, r)
 		}))
+		// The live operator app's token/PIV session protects this read-only
+		// proxy. It exposes shore's durable contract, never the UI overlay.
+		mux.Handle("GET /api/v1/", rp)
 	}
 	return mux
-}
-
-// WithLinkOverride lets a presenter pin the demo link rate (POST /api/shore/link).
-func (b *Bridge) WithLinkOverride(on bool) *Bridge {
-	b.linkOverride = on
-	return b
-}
-
-// setLink pins the demo link rate ({"bps": N}) or restores the automatic
-// distribution ({"auto": true}), so a presenter can make a backlog build.
-func (b *Bridge) setLink(w http.ResponseWriter, r *http.Request) {
-	s, ok := b.link.(LinkSetter)
-	if !ok {
-		http.Error(w, "link is not controlled by this process", http.StatusConflict)
-		return
-	}
-	var in struct {
-		Bps  *int64 `json:"bps"`
-		Auto bool   `json:"auto"`
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
-	if err := decodeJSONBody(r.Body, &in); err != nil || (!in.Auto && (in.Bps == nil || *in.Bps < 0)) {
-		http.Error(w, `body must be {"bps": N>=0} or {"auto": true}`, http.StatusBadRequest)
-		return
-	}
-	if in.Auto {
-		s.SetAuto()
-	} else {
-		s.SetFixed(*in.Bps)
-	}
-	writeJSON(w, b.linkStatus())
 }
 
 func (b *Bridge) linkStatus() LinkStatus {
@@ -1079,7 +1057,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
 		log.Printf("shorebridge: policy request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	if utf8.RuneCountInString(in.Text) > 500 {
@@ -1119,7 +1097,7 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 			if droppedScopedRules {
 				priorWarnings := c.Warnings
 				path := c.Path
-				c = b.Compiler.Review(ruleText, kept, c.DurationMin)
+				c = b.Compiler.Review(ruleText, kept, c.DurationMin, c.Unknown...)
 				c.Path = path
 				c.Warnings = mergeWarnings(priorWarnings, c.Warnings, []string{
 					"Not applied in shore mode: source, attribute and time scopes are not supported by the edge scorer.",
@@ -1134,10 +1112,20 @@ func (b *Bridge) setPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(pol.Interest.SuppressLabels) == 0 && len(pol.Interest.BoostLabels) == 0 {
 			if !droppedScopedRules && pol.Emcon == pb.EmconMode_EMCON_MODE_UNSPECIFIED {
-				pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
-				compiled = nil
+				if compiled == nil {
+					pol.Interest.SuppressLabels, pol.Interest.BoostLabels = Interpret(ruleText)
+				} else {
+					pol.Interest.SuppressLabels, pol.Interest.BoostLabels = interpretKnown(ruleText)
+					if len(pol.Interest.SuppressLabels)+len(pol.Interest.BoostLabels) > 0 {
+						compiled = nil
+					}
+				}
 			}
 		}
+	}
+	if compiled != nil && len(compiled.Unknown) > 0 && len(pol.Interest.SuppressLabels)+len(pol.Interest.BoostLabels) == 0 && mode == "" {
+		http.Error(w, compiled.Readback, http.StatusUnprocessableEntity)
+		return
 	}
 	if durationMin > 0 {
 		pol.ExpiresAtUnixMs = time.Now().Add(time.Duration(durationMin) * time.Minute).UnixMilli()
@@ -1319,7 +1307,7 @@ func (b *Bridge) setEMCON(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	mode, ok := parseEMCON(in.Mode)
@@ -1485,7 +1473,7 @@ func (b *Bridge) requestPull(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
 		log.Printf("shorebridge: pull request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	if in.ItemID == "" {
@@ -1528,7 +1516,7 @@ func (b *Bridge) override(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := decodeJSONBody(r.Body, &in); err != nil {
 		log.Printf("shorebridge: override request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "invalid request body", httpx.RequestBodyStatus(err))
 		return
 	}
 	if in.ItemID == "" {

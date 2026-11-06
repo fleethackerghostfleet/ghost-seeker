@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/httpx"
 )
 
 //go:embed grade.html
@@ -44,11 +46,11 @@ func (s *Session) Handler(allowHosts ...string) http.Handler {
 		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 		d.DisallowUnknownFields()
 		if err := d.Decode(&req); err != nil {
-			http.Error(w, err.Error(), 400)
+			http.Error(w, err.Error(), httpx.RequestBodyStatus(err))
 			return
 		}
 		if err := d.Decode(new(any)); err != io.EOF {
-			http.Error(w, "single JSON object required", 400)
+			http.Error(w, "single JSON object required", httpx.RequestBodyStatus(err))
 			return
 		}
 		if _, ok := s.byID[req.ID]; !ok || req.Tier < 1 || req.Tier > 4 {

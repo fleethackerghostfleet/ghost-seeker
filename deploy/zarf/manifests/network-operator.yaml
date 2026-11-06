@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: operator-ingress
+  namespace: ghost-seeker
+spec:
+  podSelector:
+    matchLabels:
+      app: operator
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: "###ZARF_VAR_OPERATOR_INGRESS_CIDR###"
+      ports:
+        - protocol: TCP
+          port: 8090

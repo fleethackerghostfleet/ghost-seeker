@@ -11,14 +11,14 @@ test('operator navigation and empty briefing explain the next step',()=>{
  assert.match(briefing,/selected.size\?'Create a briefing from the selected ship detections':'Open an image and use Add detection to select ships for the briefing'/);
  assert.match(briefing,/if\(CLS\[d.cls\]\?\.g!=='vessel'\)return/);
  assert.match(briefing,/button.textContent=`\$\{selected.has\(key\)\?'Remove':'Add'\} detection/);
- assert.match(html,/id="pgBrief" aria-label="Briefing workspace"/);
+ assert.match(html,/id="pgBrief"[^>]*aria-label="Briefing workspace"/);
  assert.match(html,/>Tactical Action Officer<br>/);
  assert.match(briefing,/No briefing snapshot yet/);
 });
 
 test('advanced collection settings are together and collapsed, with active directives outside',()=>{
  const html=read('index.html');
- const advanced=html.slice(html.indexOf('<details class="panel"><summary>Advanced settings</summary>'),html.indexOf('<dialog id="wbConfirm">'));
+ const advanced=html.slice(html.indexOf('<details class="panel"><summary>Advanced settings</summary>'),html.indexOf('<dialog id="wbConfirm"'));
  assert.ok(advanced.length>0);
  for(const label of ['Base prioritization model','Effective object weights','Super admin · raw policy (protojson)','Policy audit'])assert.ok(advanced.includes(label),label);
  assert.doesNotMatch(advanced,/<details[^>]*\bopen\b|<h3>Active directives<\/h3>/);
@@ -42,7 +42,7 @@ test('operator review explains that number keys assign a new image priority',()=
  const html=read('index.html');
  assert.match(html,/<p class="rvinstructions"><b>Change this image's priority:<\/b> press 1–4 to set it to P1–P4 and save your review\. Space \/ Enter agrees with the model's suggested priority\.<\/p>/);
  for(const [tier,label] of [[1,'Critical'],[2,'High'],[3,'Routine'],[4,'Low']]){
-  assert.ok(html.includes(`data-a="${tier}"><span class="kb-act">Set P${tier} ${label} &amp; next</span><kbd>${tier}</kbd></button>`));
+  assert.ok(html.includes(`data-a="${tier}"><span class="model-badge">MODEL</span><span class="kb-act">Set P${tier} ${label} &amp; next</span><kbd>${tier}</kbd></button>`));
  }
 });
 

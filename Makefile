@@ -6,7 +6,7 @@ BIN := bin
 
 all: build
 
-.PHONY: verify
+.PHONY: verify prod-gate build-prod
 verify:         ## all CI checks locally; fails on missing tools or dirty source
 	$(VERIFY_PYTHON) tools/verify.py
 
@@ -30,6 +30,13 @@ build:
 test:
 	$(GO) vet ./... && $(GO) test ./...
 
+build-prod:     ## production binaries (-tags prod: demo features compiled out)
+	mkdir -p $(BIN)/prod
+	CGO_ENABLED=0 $(GO) build -tags prod -trimpath -ldflags="-s -w" -o $(BIN)/prod/ ./cmd/...
+
+prod-gate:      ## production contract (AGENTS.md); must pass before any PR to prod
+	GO=$(GO) ./scripts/prod-gate.sh
+
 sim: build      ## FIFO vs prioritized on a contested SATCOM trace, 90 simulated minutes
 	$(BIN)/sim -trace satcom_contested -duration 90m -out sim-results.json
 
@@ -41,21 +48,22 @@ run-edge: build demo-key ## replay the frame zips through the mock analyzer, 1 f
 	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:8080 -frames frames -period 2s -unit-token-file $(DEV_UNIT_TOKEN)
 
 DEMO := scenarios/ghostfleet_demo
-DEMO_SCENARIO = $(or $(wildcard $(DEMO)/scenario.generated.json),$(DEMO)/live.json)
+DEMO_SCENARIO = $(or $(wildcard $(DEMO)/scenario.generated.json),$(DEMO)/scenario.json)
+OCEAN_PREREQ = $(if $(filter 1,$(INCLUDE_OCEAN_SCENES)),demo-ocean)
 
 demo: export INCLUDE_BUCKET_FRAMES := 0
 demo: demo-ship-clips demo-compare ## download the 5 fps clips, run naive vs hash vs sightings vs tomer over the link presets (headless, virtual time)
 	@echo; echo "Live demo: 'make demo-sidecar', 'make demo-shore', 'make demo-ui', 'make demo-edge' in four terminals, open http://localhost:8090 (see docs/DEMO.md)"
 
-demo-clips: demo-ocean ## sync eval clips and GCS frames/*_frames sets; generate the live scenario
+demo-clips: $(OCEAN_PREREQ) ## sync GCS camera sets; INCLUDE_OCEAN_SCENES=1 adds screened ocean scenes
 	INCLUDE_BUCKET_FRAMES=$(or $(INCLUDE_BUCKET_FRAMES),1) $(DEMO)/download.sh
 
-demo-ship-clips: ## prepare eval clips only (GitHub release first, GCS fallback)
+demo-ship-clips: ## prepare eval clips only (GCS primary; release fallback without gcloud auth)
 	INCLUDE_BUCKET_FRAMES=0 $(DEMO)/download.sh
 
 demo-ocean:      ## live-only ocean watch: released crops (demo-data-v1, needs only python3), else regenerated from the LFS ZIP (Pillow)
 	@$(PY) $(DEMO)/ocean.py --have-cache $(DEMO)/frames || deploy/demo-data.sh demo-ocean.tar.gz $(DEMO)/frames/.ocean-crops 1 || echo "demo-ocean: released crops unavailable; regenerating from the LFS ZIP" >&2
-	$(PY) $(DEMO)/ocean.py $(DEMO)/frames
+	$(PY) $(DEMO)/ocean.py $(or $(DEST),$(DEMO)/frames)
 
 demo-compare: build
 	$(DEMO)/compare.sh
@@ -82,7 +90,7 @@ demo-shore: build demo-key
 	$(BIN)/shore -data data/shore -listen :8080 -dev-token-file $(DEV_TOKEN) -signing-key-file $(DEV_KEY)
 
 demo-ui: build   ## Patrick's operator console (index.html / cdr.html) on live shore data + the shaped link the edge talks through (:18080)
-	$(BIN)/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN) -demo-accept-any-token
+	$(BIN)/ghost-seeker -addr 127.0.0.1:8090 -shore http://localhost:8080 -edge http://localhost:8081 -link-listen :18080 -dev-token-file $(DEV_TOKEN)
 
 MODELS ?= $(or $(GS_MODELS),$(HOME)/models/D)
 PY ?= python3
@@ -94,7 +102,7 @@ demo-models:     ## fetch D's ONNX exports (YOLO11n + MobileCLIP-S1) + H's unkno
 demo-sidecar:    ## edgeml inference sidecar on :9090 (pip install -e "edgeml[tracking]" onnxruntime first); SIDECAR_PRIORITIZER=edgeml|tomer|both (both also scores with algorithm/ghost_priority)
 	$(PY) -m edgeml.sidecar --listen :9090 --detector $(MODELS)/yolo11n-640/model.onnx --embed $(MODELS)/mobileclip-s1 --threads 4 --fps 5 --prioritizer $(or $(SIDECAR_PRIORITIZER),both)
 
-demo-edge: build demo-key demo-ocean ## replay the demo clips at 5 fps through the shaped link, one item per sighting (INFER=mock DEDUP=hash for the stub; PRIORITIZER=tomer DEDUP=hash for Tomer's image-level ranking)
+demo-edge: build demo-key ## replay the generated camera feed at 5 fps through the shaped link
 	@umask 077 && $(BIN)/mint-unit-token -id $(EDGE_ID) -ttl 24h -signing-key-file $(DEV_KEY) > $(DEV_UNIT_TOKEN)
 	$(BIN)/edge -id $(EDGE_ID) -data data/edge -listen :8081 -shore http://localhost:18080 -scenario $(DEMO_SCENARIO) -period 200ms -infer $(or $(INFER),http://localhost:9090) -dedup $(or $(DEDUP),sightings) -prioritizer $(or $(PRIORITIZER),edgeml) -dev-token-file $(DEV_TOKEN) -unit-token-file $(DEV_UNIT_TOKEN)
 
@@ -108,7 +116,7 @@ compose:
 DEMO_COMPOSE := deploy/compose/demo.compose.yml
 DEMO_COMPOSE_CMD = GS_MODELS=$(MODELS) GS_DEMO_SCENARIO=$(notdir $(DEMO_SCENARIO)) docker compose -f $(DEMO_COMPOSE)
 
-compose-demo: demo-ocean ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
+compose-demo: ## build + start the live demo in Docker, then open http://localhost:8090 (MODELS=... to point at the models dir)
 	@for p in $$(sed -n 's/.*"path": *"\([^"]*\)".*/\1/p' $(DEMO_SCENARIO)); do test -n "$$(ls $(DEMO)/$$p 2>/dev/null | head -1)" || { echo "error: demo clip $(DEMO)/$$p missing or empty — run 'make demo-clips' first (see docs/DEMO.md)"; exit 1; }; done
 	@test -s $(MODELS)/yolo11n-640/model.onnx && test -s $(MODELS)/mobileclip-s1/model.onnx || { echo "error: models missing in $(MODELS) — run 'make demo-models' first (needs gcloud; or MODELS=/path/to/D)"; exit 1; }
 	$(DEMO_COMPOSE_CMD) up --build -d

@@ -4,11 +4,46 @@ metadata:
   name: ghost-seeker
   version: 0.1.0
   architecture: amd64
-  description: Ghost Seeker ship-to-shore prioritized sync; set INFER_URL=http://edgeml-sidecar:9090 when enabling edge-inference.
+  description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: SHORE_INGRESS_CIDR
+    description: Approved source CIDR as seen at shore for routed ship sync, remote operators and external API clients. Documentation-only default; set for the deployment (never 0.0.0.0/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: EDGE_INGRESS_CIDR
+    description: Approved source CIDR as seen at edge for remote operators and live sensor push clients. Documentation-only default; set for the deployment.
+    default: 192.0.2.0/32
+    prompt: false
+  - name: OPERATOR_INGRESS_CIDR
+    description: Approved source CIDR as seen at the operator UI for browsers or the ingress gateway. Documentation-only default; set for the deployment.
+    default: 192.0.2.0/32
+    prompt: false
+  - name: INFERENCE_INGRESS_CIDR
+    description: Approved source CIDR as seen at inference for separately routed edge/shore clients. Documentation-only default; set when inference is accessed remotely.
+    default: 192.0.2.0/32
+    prompt: false
+  - name: SHORE_TLS_SECRET
+    description: Optional existing kubernetes.io/tls Secret for shore; empty keeps HTTP. Setting this also upgrades the default local shore URLs to HTTPS.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: EDGE_TLS_SECRET
+    description: Optional existing kubernetes.io/tls Secret for edge; empty keeps HTTP.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: SHORE_CA_SECRET
+    description: Optional existing Secret with ca.crt PEM roots for edge and operator shore/edge clients; empty uses system roots.
+    default: ""
+    pattern: '^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    prompt: false
+  - name: OPERATOR_SHORE_URL
+    description: Operator upstream shore URL; its default switches to HTTPS with SHORE_TLS_SECRET. Custom URLs must explicitly use https for TLS endpoints.
+    default: http://shore:8080
+    prompt: false
   - name: SHORE_URL
-    description: Edge-to-shore URL; set to a reachable shore address for shipboard edge deployments.
+    description: Edge-to-shore URL; its default switches to HTTPS with SHORE_TLS_SECRET. Custom URLs must explicitly use https for TLS endpoints.
     default: http://shore.ghost-seeker.svc.cluster.local:8080
     prompt: false
   - name: SHORE_PUBLIC_HOSTS
@@ -36,8 +71,12 @@ variables:
     default: "0"
     prompt: false
   - name: INFER_URL
-    description: Inference URL, or mock; use http://edgeml-sidecar:9090 when edge-inference is enabled.
-    default: mock
+    description: Edge inference sidecar URL (required; prod images have no built-in analyzer stand-in).
+    default: http://edgeml-sidecar:9090
+    prompt: false
+  - name: SHORE_INFER_URL
+    description: Shore text-embedding inference URL; empty disables text search.
+    default: ""
     prompt: false
   - name: SHORE_STORAGE
     description: Shore SQLite persistent volume size.
@@ -48,16 +87,8 @@ variables:
     default: 10Gi
     prompt: false
   - name: FRAMES_HOSTPATH
-    description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop / replay clips). Empty FRAMES_DIR and SCENARIO leave the edge idle until a sensor source is configured.
+    description: Node directory mounted read-only at /frames in the edge pod (sensor frame drop). Production images have no replay; the edge ingests the live input stream.
     default: /var/lib/ghost-seeker/frames
-    prompt: false
-  - name: FRAMES_DIR
-    description: Frame directory under /frames to replay the built-in scenario from (edge -frames); empty disables replay.
-    default: ""
-    prompt: false
-  - name: SCENARIO
-    description: Scenario JSON under /frames to replay into the edge store (edge -scenario); empty disables.
-    default: ""
     prompt: false
 
 components:
@@ -69,6 +100,7 @@ components:
         namespace: ghost-seeker
         files:
           - manifests/namespace.yaml
+          - manifests/network-default-deny.yaml
   - name: shore
     default: true
     required: false
@@ -78,8 +110,10 @@ components:
     manifests:
       - name: shore
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/shore.yaml
+          - manifests/network-shore.yaml
   - name: operator
     default: true
     required: false
@@ -89,8 +123,10 @@ components:
     manifests:
       - name: operator
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/operator.yaml
+          - manifests/network-operator.yaml
   - name: edge
     default: true
     required: false
@@ -100,12 +136,14 @@ components:
     manifests:
       - name: edge
         namespace: ghost-seeker
+        template: true
         files:
           - manifests/edge.yaml
+          - manifests/network-edge.yaml
   - name: edge-inference
     default: false
     required: false
-    description: Optional CPU edgeml sidecar; set INFER_URL=http://edgeml-sidecar:9090 to connect the edge.
+    description: Optional CPU edgeml sidecar in this cluster (the INFER_URL default); deploy it or point INFER_URL at another sidecar.
     images:
       - ghost-seeker/edgeml-sidecar:0.1.0
     manifests:
@@ -113,3 +151,4 @@ components:
         namespace: ghost-seeker
         files:
           - manifests/edge-inference.yaml
+          - manifests/network-edge-inference.yaml

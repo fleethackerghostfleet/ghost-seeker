@@ -92,8 +92,10 @@ Simple command verbs use the fast parser. Category names outside the known
 vocabulary still go through Granite: it can resolve an equivalent term to an
 existing category, or preserve the full phrase as a candidate concept. For
 example, `prioritize fishing vessels` should interpret the category as
-`fishing boat` rather than create a competing experimental label. There is no
-hardcoded synonym table. Granite also extracts qualifiers such as size and color;
+`fishing boat` rather than create a competing experimental label. Whole-phrase
+everyday synonyms of a known category (`whales` -> `marine mammal`, `ferries` ->
+`passenger ship`) resolve from `catalog.Aliases` without a model call; any other
+or qualified phrase (`red whale`) still goes to Granite. Granite also extracts qualifiers such as size and color;
 a candidate category that omits a reported qualifier cannot replace the original
 phrase. The constrained response can select only a supplied
 category or retain the original phrase; malformed or unavailable responses

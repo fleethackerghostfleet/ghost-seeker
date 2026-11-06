@@ -38,6 +38,8 @@ way as the unit sync credential (`internal/unitauth.Credential`):
     unchanged. LAN clients still see `/login`.
   * Scripts may send `Authorization: Bearer <token>` to the web app directly.
   * Unauthenticated: `/api/*`, `/blob/*` and any non-GET → `401` JSON; pages → `302 /login`.
+    The sign-in page's logo files (`/brand/logo.png`, `/brand/favicon-32.png`,
+    `/brand/apple-touch-icon.png`) are served to GET/HEAD without a session.
   * `POST /logout` clears the session; `GET /api/auth` → `{"authenticated":bool,"dev":bool}`.
 * **Production**: set `GS_OPERATOR_TOKEN` (or `_FILE`) on all three processes and
   `GS_DEV_TOKEN_FILE=none` (as `deploy/compose/docker-compose.yml` does); the processes refuse to
@@ -79,7 +81,7 @@ smartcard-logon-only certificates. We therefore use `RequireAnyClientCert` plus
 `VerifyConnection` and explicit local `x509.Verify` with `ExtKeyUsageAny`. The acceptable-CA
 list contains roots and intermediates. The server keypair and CA bundle require restart to change.
 
-**Every HTTP request except `/healthz`:** repeats chain verification, then requires digitalSignature
+**Every HTTP request except `/healthz` and the sign-in page's logo files (`/brand/logo.png`, `/brand/favicon-32.png`, `/brand/apple-touch-icon.png`):** repeats chain verification, then requires digitalSignature
 key usage and either clientAuth or Microsoft smartcard-logon EKU (`Any` alone is insufficient),
 optional RFC 5280 certificate-policy chain validation, revocation for the leaf **and every
 non-root intermediate**, and a users-file lookup. A viewer may GET/HEAD but cannot mutate state;
@@ -227,6 +229,50 @@ docker compose -f deploy/compose/docker-compose.yml --profile piv up --build
 `-shore http://shore:8080` without inserting a second link shaper. The profile does not change
 shore/edge authentication or make their plain HTTP links suitable for untrusted networks.
 
+## 1b. Shore and edge listener TLS (opt-in)
+
+`cmd/shore` and `cmd/edge` retain HTTP by default. Supply both server files to
+enable HTTPS with TLS **1.3 minimum**; an unpaired flag/env setting, unreadable
+file or invalid key pair is a startup error, before opening data stores.
+
+| Binary | Flag | Environment | Purpose |
+|---|---|---|---|
+| shore, edge | `-tls-cert` | `GS_TLS_CERT` | PEM server certificate/chain |
+| shore, edge | `-tls-key` | `GS_TLS_KEY` | PEM private key; required with certificate |
+| edge | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for HTTPS sync to shore |
+| ghost-seeker (live mode) | `-shore-ca` | `GS_SHORE_CA` | PEM CA bundle for shore **and edge** RPCs and shore blob/REST/SSE proxies |
+
+Clients use system roots when no CA file is supplied; a supplied bundle adds
+trust roots rather than replacing the system roots. Missing/empty/invalid CA
+bundles fail startup. HTTPS connections use TLS 1.3+, verify the peer chain and
+the URL hostname, and offer no verification bypass. A shared operator bundle
+can contain multiple private roots if shore and edge use different issuers.
+Certificates must cover the actual URL host/IP, including a TCP shaper's host
+when used. Private CAs must also be trusted by browsers accessing node consoles.
+
+This is server authentication, not client-certificate authentication for sync.
+Unit JWT and operator bearer checks remain required independently; the
+operator app's PIV client-authentication mode is unchanged. Protect private keys,
+provision certificate renewal and restart nodes to load replacements. Inference,
+MJPEG cameras and optional language-model services have separate clients; the
+shore CA option does not configure those connections.
+
+See [deployment notes](../deploy/README.md) for commands and required deployment
+overrides. Compose still needs site-specific TLS mounts, flags and probes. Zarf
+v0.89 supports opt-in TLS directly: empty `SHORE_TLS_SECRET`, `EDGE_TLS_SECRET`
+and `SHORE_CA_SECRET` defaults preserve the original HTTP manifests. Setting a
+listener Secret adds read-only `tls.crt`/`tls.key` mounts, paired server flags
+and HTTPS probes; setting the CA Secret mounts `ca.crt` and supplies `-shore-ca`
+to edge and operator. Configured Secrets/keys are required, with no HTTP fallback
+on missing or invalid credentials. The default local shore URLs upgrade to
+HTTPS with shore TLS; custom `SHORE_URL`/`OPERATOR_SHORE_URL` values must explicitly
+use the appropriate scheme. Keys remain in namespace-local Secrets, not in the
+package. Restrict Secret access, rotate credentials and restart pods to reload
+them. Kubernetes HTTPS health probes skip certificate verification; successful
+probes do not prove chain/hostname trust. Verify authenticated application
+connections separately. Operator browser TLS/PIV and inference/camera transport
+remain separate configuration boundaries.
+
 ## 2. CSRF / cross-origin
 
 * **Host header / DNS rebinding**: shore and edge reject requests with an unknown `Host` using
@@ -289,16 +335,49 @@ curl -s -o /dev/null -w '%{http_code}\n' -d '{}' localhost:8080/ghostseeker.v1.C
 Delete `data/operator.token` to rotate. The Docker compose topology is the production posture
 (explicit `GS_OPERATOR_TOKEN`, `GS_DEV_TOKEN_FILE=none`).
 
+## 5a. Zarf network isolation
+
+The Zarf package includes `networking.k8s.io/v1` NetworkPolicies: namespace-wide
+default-deny **ingress** in the required namespace component, and explicit TCP
+allows alongside each optional workload. All packaged workloads currently use
+the dedicated `ghost-seeker` namespace. Same-namespace pod labels admit
+operator → shore:8080/edge:8081, edge → shore:8080/inference:9090, and optional
+shore text search → inference:9090. Operator-to-edge is ready for deployments
+that configure it; the packaged operator currently disables that connection.
+
+External browsers, API/sensor clients, and routed ship/shore connections use
+configurable source `ipBlock`s, not pod labels from another cluster. Set
+`OPERATOR_INGRESS_CIDR` (UI:8090), `SHORE_INGRESS_CIDR` (sync/API/console:8080),
+`EDGE_INGRESS_CIDR` (console/sensor push:8081), and, if needed,
+`INFERENCE_INGRESS_CIDR` (remote inference:9090). Defaults are documentation-only
+`192.0.2.0/32`, not deployment source addresses. Use approved, narrow CIDRs as
+observed after routing/NAT. See [Fielding](FIELDING.md#zarf-network-isolation)
+for the traffic matrix and split-cluster setup.
+
+These are L3/L4 rules: allowing shore TCP 8080 does not limit clients to
+`/api/v1`; SyncService, ConsoleService and blobs share that listener. Authentication,
+TLS termination and any path restrictions remain separate requirements. Policies
+do not create ingress gateways, expose ClusterIP Services, or constrain
+`kubectl port-forward` authorization. Enforcing CNI support is required; Kubernetes
+API acceptance alone does not prove isolation. Other policies can add permissions.
+
 ## 6. Residual risk / not in scope here
 
-* No TLS inside the repo: terminate TLS in front of every listener; the operator token and
-  session cookie are bearer secrets.
+* TLS is opt-in: enable shore/edge listener TLS (§1b) or terminate TLS at an approved
+  proxy. The operator app supports PIV/mTLS (§1a), but token mode defaults to HTTP
+  and needs a TLS boundary. Operator tokens and session cookies are bearer secrets.
 * The unit JWT authenticates the edge to shore; it does not authenticate plaintext
   shore responses to the edge. Use the TLS boundary above for transport protection.
   Ed25519 policy payload signing is implemented in `internal/policy` and remains
   opt-in: configure shore's `-policy-signing-key` and edge's
   `-require-signed-policy` / `-policy-keys`.
 * Sessions live in process memory: a web-app restart signs everyone out (by design).
+* Zarf ingress rules have static validation and traffic-matrix regression tests,
+  not a runtime cluster/CNI test. Egress is intentionally unrestricted: shore,
+  inference and camera destinations are configurable and deployment-specific;
+  model provisioning/registries and DNS also need a site inventory. A complete
+  egress policy (including DNS) remains a deployment hardening task. Default-deny
+  applies to every pod in `ghost-seeker`, including any extra workloads placed there.
 
 ## 7. Deep scan: before / after
 

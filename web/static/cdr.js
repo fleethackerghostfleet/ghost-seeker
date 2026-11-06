@@ -67,14 +67,27 @@ function renderLearned(directives){
  root.hidden=!learned.length;
  root.innerHTML=learned.length?`<b>Learned from operator</b><ul>${learned.map(d=>`<li>${esc(d.text.slice(prefix.length).trim())}</li>`).join('')}</ul>`:'';
 }
-function renderQueue(){
+let queueTab,queueSelection;
+function renderQueue(follow=false){
+ const queue=$('qlist'),scroll=queue.scrollTop;
+ const tabChanged=queueTab!==view.tab;
+ follow=follow||tabChanged||queueSelection!==view.sel;
+ queueTab=view.tab;queueSelection=view.sel;
  const l=list();
  if(!l.length){$('qlist').innerHTML=`<div class="empty">${view.tab==='received'?'Nothing received on shore yet.<br>Images appear after upload; a live summary may arrive first.':view.tab==='pending'?'No escalations awaiting decision.<br>New ones appear here after upload and watch-floor escalation.':'No decisions yet.'}</div>`;return}
  $('qlist').innerHTML=l.map(it=>`<div class="row ${it.id===view.sel?'on':''} ${it.fresh?'fresh':''}" data-id="${esc(it.id)}">
   <div class="th"><img src="${esc(imageFor(it))}" alt=""><span class="tg" style="background:${tcol(it.tier)}">P${it.tier} ${TN[it.tier]}</span></div>
   <div class="rm"><b>${esc(title(it))}</b><span>${esc(it.src.name)}</span>
   <span>${esc(receipt(it))}</span><span>${esc(reportStatus(it))}</span></div></div>`).join('');
- $('qlist').querySelector('.row.on')?.scrollIntoView({block:'nearest'});
+ queue.scrollTop=tabChanged?0:scroll;
+ if(follow){
+  const selected=queue.querySelector('.row.on');
+  if(selected){
+   const row=selected.getBoundingClientRect(),top=queue.getBoundingClientRect().top+queue.clientTop;
+   if(row.top<top)queue.scrollTop+=row.top-top;
+   else if(row.bottom>top+queue.clientHeight)queue.scrollTop+=row.bottom-top-queue.clientHeight;
+  }
+ }
 }
 function renderStage(){
  const it=items.get(view.sel),old=$('note'),keep=old&&old.dataset.id===view.sel?old.value:'';
@@ -100,9 +113,9 @@ function renderBrief(it){
  $('brief').innerHTML=`<div class="pri" style="--c:${tcol(it.tier)}"><span class="big">P${it.tier}</span><div><b>${TN[it.tier]}</b><span>${datasetMode?'Operator':'Watch-officer'} priority${it.manual&&it.manual!==sug?` · model suggested P${sug} ${TN[sug]}`:''}</span></div></div>
  <div class="meter"><span title="Command score after model scoring and directives">${datasetMode?'Model':'Shore'} score</span><div class="bar"><i style="width:${it.central*100}%;background:${tcol(sug)}"></i></div><b class="mono">${it.central.toFixed(2)}</b></div>
  <div class="meter"><span title="${datasetMode?'Real detector triage score':'Edge score: the initial importance assigned on the ship'}">${datasetMode?'Detector':'Ship'} score</span><div class="bar"><i style="width:${it.edge*100}%"></i></div><b class="mono">${it.edge.toFixed(2)}</b></div>
- <h4>Why it reached ${datasetMode?'you':'shore'}</h4><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||(datasetMode?'<li>High command-model score</li>':'<li>Received over the ship-to-shore link</li>')}</ul>
- <h4 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h4><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
- <h4>Decision</h4>${!it.sent&&!d?'<p>Received for awareness. Command decisions become available when the watch floor sends a report to Commander.</p>':d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
+ <h2>Why it reached ${datasetMode?'you':'shore'}</h2><ul class="why">${f.map(([c,t])=>`<li class="${c}">${esc(t)}</li>`).join('')||(datasetMode?'<li>High command-model score</li>':'<li>Received over the ship-to-shore link</li>')}</ul>
+ <h2 title="Chain of custody: the record of how this image was captured, sent, reviewed and decided">Chain of custody</h2><ol class="chain">${steps.map(([a,b])=>`<li><b>${a}</b><span>${b}</span></li>`).join('')}</ol>
+ <h2>Decision</h2>${!it.sent&&!d?'<p>Received for awareness. Command decisions become available when the watch floor sends a report to Commander.</p>':d?`<div class="decided" style="--c:${d.c}"><b>${d.lab}</b>${it.decisionNote?`<p>“${esc(it.decisionNote)}”</p>`:''}<button class="lnk" id="reopen">Reopen decision (Z)</button></div>`:
  `<textarea id="note" data-id="${esc(it.id)}" maxlength="280" placeholder="Commander's note (optional) · press / to type, Esc to leave"></textarea>
  <div class="decs">${Object.entries(DEC).map(([k,v])=>`<button class="dec" title="${k==='close'?'Record a final decision to take no further action. The image remains stored in Decided.':v.sub}" data-d="${k}" style="--c:${v.c}"><kbd>${v.k.toUpperCase()}</kbd><b>${v.lab}</b><span>${v.sub}</span></button>`).join('')}</div>`}`;
 }
@@ -138,7 +151,7 @@ async function undo(){
  if(!await decide('',id)&&fromStack&&revision===resetRevision)view.undo.push(id);
 }
 function setTab(t){view.tab=t;[...$('tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.t===t))}
-function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue();renderStage()}}
+function step(dir){const l=list(),i=l.findIndex(x=>x.id===view.sel),n=l[Math.max(0,Math.min(l.length-1,i+dir))];if(n&&n.id!==view.sel){view.sel=n.id;renderQueue(true);renderStage()}}
 function setLive(on){$('live').classList.toggle('off',!on);$('live').querySelector('span').textContent=on?'LIVE':'RECONNECTING'}
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 
@@ -163,7 +176,7 @@ function applySnapshot(m){
 }
 async function init(){
  if(typeof gsAuth!=='undefined')await gsAuth.init();
- const c=await api('/api/config');datasetMode=!!c.datasetMode;
+ const c=await api('/api/config');datasetMode=c.features?.dataset===true;
  if(datasetMode){const banner=document.querySelector('.banner');if(banner)banner.textContent='UNCLASSIFIED // FOR TRAINING AND DEMONSTRATION ONLY · REAL IMAGERY · clean v2 dev · COMMANDER FINAL REVIEW'}
  SRC=Object.fromEntries(c.sources.map(s=>[s.id,s]));CLS=c.classes;MODELS=c.models;ATTR_LAB=c.attrLabels;
  $('tabs').onclick=e=>{const b=e.target.closest('button');if(b){setTab(b.dataset.t);view.sel=null;render()}};

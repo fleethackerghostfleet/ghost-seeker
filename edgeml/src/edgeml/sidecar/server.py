@@ -13,6 +13,7 @@ from .service import InferenceService, RpcError
 log = logging.getLogger("edgeml.sidecar")
 
 MAX_BODY_BYTES = 32 << 20  # a 4K JPEG is ~2-3 MB base64; anything near this is not a frame
+REQUEST_TIMEOUT_SECONDS = 10
 
 # connect error code -> HTTP status (connect protocol spec)
 STATUS = {"canceled": 499, "unknown": 500, "invalid_argument": 400, "deadline_exceeded": 504, "not_found": 404,
@@ -24,6 +25,7 @@ STATUS = {"canceled": 499, "unknown": 500, "invalid_argument": 400, "deadline_ex
 def make_handler(svc: InferenceService, quiet: bool = True):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
+        timeout = REQUEST_TIMEOUT_SECONDS
 
         def log_message(self, fmt, *args):  # noqa: N802 - stdlib name
             if not quiet:
@@ -34,6 +36,8 @@ def make_handler(svc: InferenceService, quiet: bool = True):
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
+            if self.close_connection:
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(data)
 
@@ -48,24 +52,42 @@ def make_handler(svc: InferenceService, quiet: bool = True):
         def do_POST(self):  # noqa: N802
             prefix = f"/{svc.SERVICE}/"
             if not self.path.startswith(prefix):
+                self.close_connection = True
                 return self._error("unimplemented", f"unknown service path {self.path}")
             ctype = self.headers.get("Content-Type", "")
             if not ctype.startswith("application/json"):
+                self.close_connection = True
                 return self._send(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, {"code": "unknown", "message": f"unsupported content-type {ctype!r}; this sidecar speaks application/json (connect.WithProtoJSON)"})
             try:
-                n = int(self.headers.get("Content-Length", "0"))
-                if n < 0 or n > MAX_BODY_BYTES:
+                lengths = self.headers.get_all("Content-Length", [])
+                if self.headers.get("Transfer-Encoding") is not None or len(lengths) != 1:
+                    raise ValueError("a single Content-Length is required; Transfer-Encoding is unsupported")
+                length = lengths[0].strip(" \t")
+                if not length.isascii() or not length.isdecimal():
+                    raise ValueError("Content-Length must be a nonnegative integer")
+                n = int(length)
+                if n > MAX_BODY_BYTES:
                     self.close_connection = True
                     return self._send(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"code": "resource_exhausted", "message": f"body {n} bytes exceeds {MAX_BODY_BYTES}"})
-                req = json.loads(self.rfile.read(n) or b"{}")
+                try:
+                    raw = self.rfile.read(n)
+                except TimeoutError:
+                    self.close_connection = True
+                    return self._error("deadline_exceeded", "request body timed out", HTTPStatus.REQUEST_TIMEOUT)
+                if len(raw) != n:
+                    raise ValueError("incomplete request body")
+                req = json.loads(raw or b"{}")
+                if not isinstance(req, dict):
+                    raise ValueError("expected a JSON object")
                 resp = svc.dispatch(self.path[len(prefix):], req)
             except RpcError as e:
                 return self._error(e.code, str(e), getattr(e, "http_status", None))
             except (ValueError, KeyError) as e:
+                self.close_connection = True
                 return self._error("invalid_argument", f"{type(e).__name__}: {e}")
-            except Exception as e:  # noqa: BLE001 - surface as Connect internal error
+            except Exception:  # noqa: BLE001 - surface as Connect internal error
                 log.exception("rpc failed")
-                return self._error("internal", f"{type(e).__name__}: {e}")
+                return self._error("internal", "inference request failed")
             self._send(200, resp)
 
     return Handler

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"testing"
 	"time"
 
@@ -93,5 +94,51 @@ func TestWriteChunkRestartsOnNewHashMidTransfer(t *testing.T) {
 	}
 	if b, err := st.ReadForm(id, full); err != nil || !bytes.Equal(b, orig) {
 		t.Fatalf("stored FULL = %q, %v; want the new bytes", b, err)
+	}
+}
+
+func TestReplacementFormKeepsCompletedReadersImmutable(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx, now := context.Background(), time.Now()
+	old, next := []byte("old-complete-image"), []byte("replacement-complete-image")
+	id, kind := "replace", pb.FormKind_FORM_KIND_FULL
+	if _, done, err := st.WriteChunk(ctx, "edge", &pb.Chunk{ItemId: id, Form: kind, TotalBytes: int64(len(old)), Data: old, ContentHash: hashOf(old)}, now); err != nil || !done {
+		t.Fatal(done, err)
+	}
+	observed, err := st.Get(ctx, id)
+	if err != nil || !observed.Form(kind).Complete {
+		t.Fatal("precondition", err)
+	}
+	first := &pb.Chunk{ItemId: id, Form: kind, TotalBytes: int64(len(next)), Data: next[:8], ContentHash: hashOf(next)}
+	if _, done, err := st.WriteChunk(ctx, "edge", first, now); err != nil || done {
+		t.Fatal(done, err)
+	}
+	// An API reader can have observed the old complete flag before the reset.
+	// Even if it opens the file now, it must see a whole committed version.
+	reader, err := st.OpenForm(id, kind)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	if b, err := st.ReadForm(id, kind); err != nil || !bytes.Equal(b, old) {
+		t.Fatal("published partial replacement", string(b), err)
+	}
+	state, _ := st.Get(ctx, id)
+	if state.Form(kind).Complete {
+		t.Fatal("replacement is not complete yet")
+	}
+	last := &pb.Chunk{ItemId: id, Form: kind, Offset: 8, TotalBytes: int64(len(next)), Data: next[8:], ContentHash: hashOf(next)}
+	if _, done, err := st.WriteChunk(ctx, "edge", last, now); err != nil || !done {
+		t.Fatal(done, err)
+	}
+	if b, err := st.ReadForm(id, kind); err != nil || !bytes.Equal(b, next) {
+		t.Fatal("complete replacement not published", string(b), err)
+	}
+	if b, err := io.ReadAll(reader); err != nil || !bytes.Equal(b, old) {
+		t.Fatal("open reader mutated during replacement", string(b), err)
 	}
 }
