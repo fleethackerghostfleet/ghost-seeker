@@ -12,6 +12,7 @@ def prepare(models, sums, output):
     root = Path(models).resolve(strict=True)
     manifest = Path(sums).read_bytes()
     paths = []
+    normalized = []
     for line in manifest.decode().splitlines():
         match = re.fullmatch(r"[0-9a-fA-F]{64} [ *](.+)", line)
         if not match:
@@ -26,6 +27,7 @@ def prepare(models, sums, output):
         if not source.is_relative_to(source_root) or not source.is_file():
             raise ValueError(f"model must be a file within MODELS: {name}")
         paths.append((path, source))
+        normalized.append(f"{line[:64].lower()}  {path.as_posix()}\n")
     if not paths:
         raise ValueError("MODEL_SUMS must list at least one model file")
     required_catalog = {Path("catalog/colregs_lights.json"), Path("catalog/colregs_night_config.json")}
@@ -42,6 +44,7 @@ def prepare(models, sums, output):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
         destination.chmod(0o644)
+    manifest = "".join(normalized).encode()
     (out / "SHA256SUMS").write_bytes(manifest)
     subprocess.run(["sha256sum", "-c", "SHA256SUMS"], cwd=out, check=True)
     print("MODEL_SHA256=" + hashlib.sha256(manifest).hexdigest())

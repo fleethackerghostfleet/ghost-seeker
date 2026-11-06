@@ -37,6 +37,16 @@ class PrepareTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "missing required catalog entries.*colregs_night_config.json"):
                     module.prepare(root, manifest, root / "out")
 
+    def test_binary_markers_are_normalized(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "model.onnx").write_bytes(b"model")
+            expected = hashlib.sha256(b"model").hexdigest() + "  model.onnx\n" + self.catalog_sums()
+            manifest = root / "sums"
+            manifest.write_text(expected.replace("  ", " *"))
+            module.prepare(root, manifest, root / "out")
+            self.assertEqual((root / "out/SHA256SUMS").read_text(), expected)
+
     def test_empty_unsafe_missing_and_bad_checksum(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -46,7 +56,7 @@ class PrepareTests(unittest.TestCase):
             manifest = root / "sums"
             for index, text in enumerate(["", "bad", *("0" * 64 + "  " + name + "\n"
                     for name in ["/absolute", "../outside", "missing", "model.onnx"])]):
-                manifest.write_text(text)
+                manifest.write_text(text + self.catalog_sums() if text else text)
                 with self.assertRaises((ValueError, OSError, module.subprocess.CalledProcessError)):
                     module.prepare(models, manifest, root / f"out{index}")
 
