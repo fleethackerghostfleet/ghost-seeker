@@ -241,13 +241,6 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 				g.OnBurst(c.Source, resp.Burst.Fps, d, resp.Burst.Reason)
 			}
 		}
-		if g.cfg.Dedup == DedupSightings && hasOpenVocabularyMatch(resp, labels) {
-			// Grid proposals have no tracker identity; retain the matching frame.
-			if row, err := g.existing(ctx, hash); row != nil || err != nil {
-				return row, err
-			}
-			return g.newItem(ctx, c, hash, resp, nil)
-		}
 		if ip := resp.GetImagePriority(); ip != nil && g.cfg.Prioritizer == scoring.PrioritizerTomer && g.cfg.Dedup == DedupHash && ip.NearDuplicate {
 			if id, ok := g.tomerItems[ip.NearestPriorId]; ok {
 				if row, err := g.st.Get(ctx, id); row != nil && err == nil {
@@ -258,6 +251,14 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 		}
 		if g.cfg.Dedup == DedupSightings {
 			g.remember(c, hash)
+			if matches := openVocabularyMatches(resp, labels); len(matches) > 0 {
+				var sightingErr error
+				if len(resp.Sightings) > 0 {
+					_, sightingErr = g.applySightings(ctx, c, hash, resp)
+				}
+				row, err := g.openVocabularyFrame(ctx, c, hash, resp, matches)
+				return row, errors.Join(sightingErr, err)
+			}
 			if len(resp.Sightings) > 0 {
 				return g.applySightings(ctx, c, hash, resp)
 			}
@@ -276,18 +277,48 @@ func (g *Ingester) ingest(ctx context.Context, c *Capture) (*store.Row, error) {
 	return row, err
 }
 
-func hasOpenVocabularyMatch(resp *pb.AnalyzeResponse, labels []string) bool {
+func openVocabularyMatches(resp *pb.AnalyzeResponse, labels []string) []string {
+	var matches []string
 	for _, label := range labels {
 		if !strings.HasPrefix(label, openvocab.Prefix) {
 			continue
 		}
 		for _, detection := range resp.GetDetections() {
 			if detection.GetLabel() == strings.TrimPrefix(label, openvocab.Prefix) {
-				return true
+				matches = append(matches, detection.Label)
+				break
 			}
 		}
 	}
-	return false
+	return matches
+}
+
+// Grid matches have no tracker identity; deduplicate only frames already
+// carrying every current match, never scenes or unrelated tracked contacts.
+func (g *Ingester) openVocabularyFrame(ctx context.Context, c *Capture, hash string, resp *pb.AnalyzeResponse, matches []string) (*store.Row, error) {
+	ids, err := g.st.IDsByHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		row, err := g.st.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if tags := row.Item.GetFeatures().GetTags(); tags["event"] == "scene" || tags["sighting_id"] != "" {
+			continue
+		}
+		stored := map[string]bool{}
+		for _, d := range row.Item.GetFeatures().GetDetections() {
+			stored[d.GetLabel()] = true
+		}
+		if slices.ContainsFunc(matches, func(label string) bool { return !stored[label] }) {
+			continue
+		}
+		atomic.AddInt64(&g.Dups, 1)
+		return row, nil
+	}
+	return g.newItem(ctx, c, hash, resp, nil)
 }
 
 const tomerRingSize = 512
