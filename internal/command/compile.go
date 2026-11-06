@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
@@ -47,6 +48,16 @@ func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
 	}
 	durationMin, rest := extractDuration(text)
 	warnings := make([]string, 0)
+	if c != nil && c.EdgeSubtypes {
+		rules, unknown := parseDirectiveDetailed(rest, true)
+		for _, rule := range rules {
+			for _, class := range rule.Classes {
+				if catalog.EdgeSubtypes[class] {
+					return c.finish(text, rules, unknown, durationMin, "rules", warnings)
+				}
+			}
+		}
+	}
 	if c != nil && c.LLM != nil {
 		draft, err := c.LLM.Draft(ctx, text)
 		if err == nil {
@@ -66,21 +77,21 @@ func (c *Compiler) Compile(ctx context.Context, text string) Compiled {
 		}
 		warnings = append(warnings, fmt.Sprintf("Local LLM unavailable (%s); used rule-based parser.", shortReason(err.Error(), 100)))
 	}
-	rules, unknown := ParseDirectiveDetailed(rest)
+	rules, unknown := parseDirectiveDetailed(rest, c != nil && c.EdgeSubtypes)
 	return c.finish(text, rules, unknown, durationMin, "rules", warnings)
 }
 
 func (c *Compiler) CompileRules(text string) Compiled {
 	durationMin, rest := extractDuration(text)
-	rules, unknown := ParseDirectiveDetailed(rest)
+	rules, unknown := parseDirectiveDetailed(rest, c != nil && c.EdgeSubtypes)
 	return c.finish(text, rules, unknown, durationMin, "rules", []string{})
 }
 
-func (c *Compiler) Review(text string, rules []Rule, durationMin int) Compiled {
+func (c *Compiler) Review(text string, rules []Rule, durationMin int, unknown ...string) Compiled {
 	if durationMin == 0 {
 		durationMin, _ = extractDuration(text)
 	}
-	return c.finish(text, rules, []string{}, durationMin, "edited", []string{})
+	return c.finish(text, rules, unknown, durationMin, "edited", []string{})
 }
 
 func (c *Compiler) finish(text string, rules []Rule, unknown []string, durationMin int, path string, warnings []string) Compiled {
@@ -95,10 +106,44 @@ func (c *Compiler) finish(text string, rules []Rule, unknown []string, durationM
 	}
 	guardWarnings, blocked := guardrails(text, rules, caps, locks)
 	warnings = uniqueStrings(append(warnings, guardWarnings...))
+	readbackText := readback(rules, durationMin)
+	if len(unknown) > 0 {
+		unsupported := c.unsupportedReadback(unknown)
+		if len(rules) == 0 {
+			readbackText = unsupported
+		} else {
+			readbackText += " " + unsupported
+		}
+	}
 	return Compiled{
 		Rules: rules, Unknown: append([]string{}, unknown...), DurationMin: durationMin,
-		Path: path, Readback: readback(rules, durationMin), Warnings: warnings, Blocked: blocked,
+		Path: path, Readback: readbackText, Warnings: warnings, Blocked: blocked,
 	}
+}
+
+func (c *Compiler) unsupportedReadback(concepts []string) string {
+	labels := make([]string, 0, len(catalog.Classes))
+	for label := range catalog.Classes {
+		labels = append(labels, label)
+	}
+	if c != nil && c.EdgeSubtypes {
+		for label := range catalog.EdgeSubtypes {
+			labels = append(labels, label)
+		}
+	}
+	if c != nil && c.Capabilities != nil {
+		caps := c.Capabilities.Capabilities()
+		if !caps.OpenVocabulary {
+			labels = append([]string{}, caps.FixedLabels...)
+		}
+	}
+	labels = uniqueStrings(labels)
+	sort.Strings(labels)
+	quoted := make([]string, len(concepts))
+	for i, concept := range concepts {
+		quoted[i] = fmt.Sprintf("%q", concept)
+	}
+	return "Not supported: " + strings.Join(quoted, ", ") + " — this sensor can detect: " + strings.Join(labels, ", ") + "."
 }
 
 func cloneRules(rules []Rule) []Rule {
@@ -181,8 +226,18 @@ func validateDraft(draft llmDraft) ([]Rule, error) {
 
 func canonicalClass(label string, edgeSubtypes bool) (string, bool) {
 	label = strings.ToLower(strings.TrimSpace(label))
+	if label == "" {
+		return "", false
+	}
 	if _, ok := catalog.Classes[label]; ok {
 		return label, true
+	}
+	if edgeSubtypes {
+		for _, pattern := range edgeConceptPatterns {
+			if pattern.re.FindString(label) == label {
+				return pattern.class, true
+			}
+		}
 	}
 	matches := make([]string, 0, 1)
 	for _, pattern := range synonymPatterns {

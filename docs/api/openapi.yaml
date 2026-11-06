@@ -9,6 +9,12 @@ info:
     operator mode GET /api/v1 is proxied to shore under existing token/PIV
     sessions (viewer roles allowed); cookies and caller credentials never reach shore.
     Receipt cursors and SSE event cursors are distinct decimal sequences.
+    Shore GET routes also support HEAD with the same validation, authentication,
+    status and headers but no response body. Authenticated requests to unknown
+    shore routes return 404; unsupported methods return 405 with an Allow header.
+    These router-level errors use text/plain. The outer host allowlist can
+    reject requests with 403 text/plain before bearer authentication; CORS
+    preflight is handled outside the resource handlers.
 servers:
   - url: /
 security:
@@ -58,6 +64,20 @@ paths:
         '429': {$ref: '#/components/responses/Busy'}
         '503': {$ref: '#/components/responses/Error'}
   /api/v1/items:
+    head:
+      operationId: headItems
+      summary: Read item-page headers without a response body
+      parameters:
+        - {name: since, in: query, schema: {$ref: '#/components/schemas/Cursor'}}
+        - {name: tier, in: query, schema: {$ref: '#/components/schemas/Tier'}}
+        - {name: source, in: query, schema: {$ref: '#/components/schemas/Source'}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
+      responses:
+        '200': {$ref: '#/components/responses/HeadJSON'}
+        '400': {$ref: '#/components/responses/HeadJSON'}
+        '401': {$ref: '#/components/responses/HeadJSON'}
+        '403': {$ref: '#/components/responses/HeadForbidden'}
+        '500': {$ref: '#/components/responses/HeadJSON'}
     get:
       operationId: listItems
       description: >-
@@ -81,9 +101,20 @@ paths:
               schema: {$ref: '#/components/schemas/ItemPage'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/Error'}
   /api/v1/items/{id}:
     parameters:
       - {$ref: '#/components/parameters/ItemID'}
+    head:
+      operationId: headItem
+      summary: Read item headers without a response body
+      responses:
+        '200': {$ref: '#/components/responses/HeadJSON'}
+        '401': {$ref: '#/components/responses/HeadJSON'}
+        '403': {$ref: '#/components/responses/HeadForbidden'}
+        '404': {$ref: '#/components/responses/HeadJSON'}
+        '500': {$ref: '#/components/responses/HeadJSON'}
     get:
       operationId: getItem
       responses:
@@ -93,10 +124,28 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Item'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/Error'}
   /api/v1/items/{id}/image:
     parameters:
       - {$ref: '#/components/parameters/ItemID'}
+    head:
+      operationId: headItemImage
+      summary: Read image headers without a response body
+      parameters:
+        - {name: form, in: query, schema: {type: string, enum: [thumb, crop, full], default: thumb}}
+      responses:
+        '200':
+          description: Same headers as GET, without a response body
+          headers:
+            Content-Type:
+              schema: {type: string, enum: [image/jpeg, image/png, image/webp]}
+        '400': {$ref: '#/components/responses/HeadJSON'}
+        '401': {$ref: '#/components/responses/HeadJSON'}
+        '403': {$ref: '#/components/responses/HeadForbidden'}
+        '404': {$ref: '#/components/responses/HeadJSON'}
+        '500': {$ref: '#/components/responses/HeadJSON'}
     get:
       operationId: getItemImage
       parameters:
@@ -113,8 +162,35 @@ paths:
               schema: {type: string, format: binary}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/Error'}
   /api/v1/stream:
+    head:
+      operationId: headStream
+      summary: Read stream headers without event data
+      description: Uses the same cursor validation and client admission as GET.
+      parameters:
+        - {name: Last-Event-ID, in: header, schema: {$ref: '#/components/schemas/Cursor'}}
+        - {name: since, in: query, schema: {$ref: '#/components/schemas/Cursor'}}
+      responses:
+        '200':
+          description: Same headers as GET, without a response body
+          headers:
+            Content-Type:
+              schema: {type: string, enum: [text/event-stream]}
+        '400': {$ref: '#/components/responses/HeadJSON'}
+        '401': {$ref: '#/components/responses/HeadJSON'}
+        '403': {$ref: '#/components/responses/HeadForbidden'}
+        '410': {$ref: '#/components/responses/HeadJSON'}
+        '429':
+          description: Stream client limit reached; no response body
+          headers:
+            Content-Type:
+              schema: {type: string, enum: [application/json]}
+            Retry-After:
+              schema: {type: string}
+        '503': {$ref: '#/components/responses/HeadJSON'}
     get:
       operationId: streamItems
       description: >-
@@ -125,7 +201,7 @@ paths:
         produce events, as do relative tier changes of other items when arrivals
         or priority updates shift rank boundaries. Duplicate unchanged writes do not. Payloads are the latest
         item state at delivery, not historical snapshots. Last-Event-ID takes
-        precedence over since and resumes strictly after that cursor. Cursors
+        precedence over since when nonempty and resumes strictly after that cursor. Cursors
         survive process restarts (retain the shore SQLite DB). Heartbeat comments
         every 15 seconds; at most 32 event references buffered per client, 64
         concurrent clients, 10-second write deadlines. Ranks are computed once
@@ -154,9 +230,19 @@ paths:
               x-event-data-schema: {$ref: '#/components/schemas/StreamEvent'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '410': {$ref: '#/components/responses/CursorExpired'}
         '429': {$ref: '#/components/responses/Busy'}
+        '503': {$ref: '#/components/responses/Error'}
   /api/v1/health:
+    head:
+      operationId: headHealth
+      summary: Read health headers without a response body
+      responses:
+        '200': {$ref: '#/components/responses/HeadJSON'}
+        '401': {$ref: '#/components/responses/HeadJSON'}
+        '403': {$ref: '#/components/responses/HeadForbidden'}
+        '503': {$ref: '#/components/responses/HeadJSON'}
     get:
       operationId: getHealth
       responses:
@@ -169,8 +255,20 @@ paths:
                   - {$ref: '#/components/schemas/ShoreHealth'}
                   - {$ref: '#/components/schemas/EdgeHealth'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '503': {$ref: '#/components/responses/Error'}
   /api/v1/openapi.yaml:
+    head:
+      operationId: headOpenAPI
+      summary: Read contract headers without a response body
+      responses:
+        '200':
+          description: Same headers as GET, without a response body
+          headers:
+            Content-Type:
+              schema: {type: string, enum: [application/yaml]}
+        '401': {$ref: '#/components/responses/HeadJSON'}
+        '403': {$ref: '#/components/responses/HeadForbidden'}
     get:
       operationId: getOpenAPI
       responses:
@@ -180,6 +278,7 @@ paths:
             application/yaml:
               schema: {type: string}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer}
@@ -190,6 +289,21 @@ components:
       required: true
       schema: {type: string, pattern: '^[A-Za-z0-9_-]{1,64}$'}
   responses:
+    Forbidden:
+      description: Host rejected by the outer host allowlist
+      content:
+        text/plain:
+          schema: {type: string}
+    HeadForbidden:
+      description: Host rejected by the outer host allowlist; no response body
+      headers:
+        Content-Type:
+          schema: {type: string, enum: ['text/plain; charset=utf-8']}
+    HeadJSON:
+      description: Same status and JSON content type as GET, without a response body
+      headers:
+        Content-Type:
+          schema: {type: string, enum: [application/json]}
     CursorExpired:
       description: Stream history expired; resync via GET /api/v1/items and resume from a fresh health stream_cursor
       content:
@@ -224,7 +338,13 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
   schemas:
-    Cursor: {type: string, pattern: '^[0-9]+$'}
+    Cursor:
+      type: string
+      pattern: '^[0-9]+$'
+      description: >-
+        Nonnegative decimal sequence, at most 9223372036854775807 (signed 64-bit).
+        An omitted or empty since starts at zero. Stream cursors ahead of the
+        current journal are rejected with 400; expired stream cursors return 410.
     Source: {type: string, pattern: '^[A-Za-z0-9_.:/-]{1,128}$'}
     Tier: {type: string, enum: [P1, P2, P3, P4]}
     Geo:

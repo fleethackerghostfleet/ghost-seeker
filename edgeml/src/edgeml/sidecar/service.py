@@ -114,7 +114,9 @@ class EdgemlEngine:
 
         self.threads, self.fps, self.tracker_variant, self.asso = threads, fps, tracker, asso
         self.max_lost_s, self.score_thr, self.det_low_thr = max_lost_s, score_thr, det_low_thr
-        self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, det_low_thr))
+        self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
+        self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
+        self.detector = load_detector(Path(detector).expanduser(), engine=engine, threads=threads, score_thr=min(score_thr, self.det_low_thr))
         if anomaly_fallback is not None:
             # H: cheap "anything-on-water" proposer (horizon-band colour anomaly) fills in where YOLO11n is blind
             # (semi-submersibles, small debris); proposals carry label "anomaly" and feed the tracker like detections.
@@ -140,9 +142,6 @@ class EdgemlEngine:
         # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
         # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
         self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})
-        self.trk_params = {**self.TRK_DEFAULTS, **(trk or {})}
-        # the detector floor must admit everything the tracker's low stage accepts (--trk may lower low_thresh)
-        self.det_low_thr = min(self.det_low_thr, float(self.trk_params.get("low_thresh", self.det_low_thr)))
         self.sources: dict[str, _Source] = {}
         self._lock = threading.Lock()
         self.model_id = self.detector.name + (f"+{self.clip_name}" if self.clip_name else "")

@@ -19,8 +19,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/console"
 	"github.com/fleethackerghostfleet/ghost-seeker/edge/ingest"
@@ -41,7 +39,10 @@ func main() {
 	id := flag.String("id", env("EDGE_ID", "edge-1"), "edge id")
 	data := flag.String("data", env("DATA_DIR", "data/edge"), "data directory")
 	listen := flag.String("listen", env("LISTEN", ":8081"), "console listen address")
+	tlsCert := flag.String("tls-cert", env("GS_TLS_CERT", ""), "optional HTTPS server certificate (PEM; requires -tls-key)")
+	tlsKey := flag.String("tls-key", env("GS_TLS_KEY", ""), "optional HTTPS server private key (PEM; requires -tls-cert)")
 	shoreURL := flag.String("shore", env("SHORE_URL", "http://localhost:8080"), "shore base URL (put Toxiproxy here to degrade)")
+	shoreCA := flag.String("shore-ca", env("GS_SHORE_CA", ""), "optional PEM CA bundle added to system roots for HTTPS shore")
 	inferURL := flag.String("infer", env("INFER_URL", defaultInferURL), inferUsage)
 	sceneEvery := flag.Duration("scene-every", 60*time.Second, "sightings mode: store at most one object-free 'scene' frame (FACT+THUMB) per source per interval; 0 = one item per frame")
 	prioritizer := flag.String("prioritizer", env("PRIORITIZER", "edgeml"), "edgeml (object-level: unknownness, labels, confidence) | tomer (algorithm/ghost_priority image-level score; sidecar must run --prioritizer tomer|both)")
@@ -77,6 +78,10 @@ func main() {
 	publicHosts := flag.String("public-hosts", env("GS_PUBLIC_HOSTS", ""), "comma-separated extra Host names browsers and clients use to reach this node (always allowed: localhost, loopback and IP literals, this machine's hostname, the -listen host); requests with any other Host get 403 (DNS-rebinding guard)")
 	replay := registerReplayFlags()
 	flag.Parse()
+	tlsConfig, err := httpx.ServerTLS(*tlsCert, *tlsKey)
+	fatal(err)
+	shoreTransport, err := httpx.ClientTransport(*shoreCA)
+	fatal(err)
 	if *liveBytes <= 0 || *liveQueue < 1 || *liveQueue > 256 || *watchPoll <= 0 || *mjpegFPS <= 0 || *mjpegFPS > 60 || math.IsNaN(*mjpegFPS) {
 		fatal(fmt.Errorf("invalid live ingest limits"))
 	}
@@ -109,7 +114,7 @@ func main() {
 		fatal(err)
 	}
 	clk := clock.Real{}
-	lk := link.NewConnect(*shoreURL, 5*time.Minute, link.NewEstimator(*initBps, 300, 1e9), token)
+	lk := link.NewConnectWithClient(*shoreURL, &http.Client{Timeout: 5 * time.Minute, Transport: shoreTransport}, link.NewEstimator(*initBps, 300, 1e9), token)
 	cfg := scheduler.DefaultConfig(*id)
 	cfg.Tick = *tick
 	cfg.RequireSignedPolicy = *requireSignedPolicy
@@ -175,17 +180,26 @@ func main() {
 	mux.Handle("GET /ship/frames/{seq}", opauth.RequireBearer(operator, svc.ShipFramesHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	httpx.StaticUI(mux, *uiDir, "edge "+*id)
-	srv := httpx.Server(*listen, h2c.NewHandler(httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux), &http2.Server{}))
+	srv := newHTTPServer(*listen, httpx.CORSAllow(httpx.SplitList(*corsOrigins), httpx.NewHostAllowlist(*listen, httpx.SplitList(*publicHosts)), mux))
 	go func() {
 		<-ctx.Done()
 		sctx, c := context.WithTimeout(context.Background(), 3*time.Second)
 		defer c()
 		_ = srv.Shutdown(sctx)
 	}()
-	log.Info("edge console", "listen", *listen, "shore", *shoreURL, "infer", *inferURL)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	log.Info("edge console", "listen", *listen, "shore", *shoreURL, "infer", *inferURL, "tls", tlsConfig != nil)
+	if err := httpx.ListenAndServe(srv, tlsConfig); err != nil && err != http.ErrServerClosed {
 		fatal(err)
 	}
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	srv := httpx.Server(addr, handler)
+	srv.Protocols = new(http.Protocols)
+	srv.Protocols.SetHTTP1(true)
+	srv.Protocols.SetHTTP2(true)
+	srv.Protocols.SetUnencryptedHTTP2(true)
+	return srv
 }
 
 func env(k, def string) string {
