@@ -253,7 +253,7 @@ func (s *Sessions) login(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad form", http.StatusBadRequest)
+			http.Error(w, "bad form", httpx.RequestBodyStatus(err))
 			return
 		}
 		token := strings.TrimSpace(r.PostForm.Get("token"))
