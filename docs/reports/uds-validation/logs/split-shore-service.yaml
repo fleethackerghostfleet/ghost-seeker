@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    meta.helm.sh/release-name: zarf-9022cbb5c66d82dd1f42314c0476c9835c811a94
+    meta.helm.sh/release-namespace: default
+    uds-core.pepr.dev/uds-core-operator: succeeded
+    uds-core.pepr.dev/uds-core-policies: succeeded
+  creationTimestamp: "2026-11-06T16:32:42Z"
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    zarf.dev/package: ghost-seeker-shore
+  name: shore
+  namespace: ghost-seeker-shore
+  resourceVersion: "4016"
+  uid: a68a0daa-fa66-4619-89bd-f36137f10815
+spec:
+  clusterIP: 10.43.31.19
+  clusterIPs:
+  - 10.43.31.19
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - appProtocol: http2
+    name: http
+    port: 8080
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: shore
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}

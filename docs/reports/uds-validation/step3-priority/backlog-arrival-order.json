@@ -1,0 +1,79 @@
+[
+  {
+    "id": "01M6RVWHXV9YMY7Y333W1PC82V",
+    "cursor": "67",
+    "event": "created",
+    "tier": "P1",
+    "score": 0.6362234776966231,
+    "source": "uds-20261106T164314Z-outage-2",
+    "contacts": [
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.87247
+      }
+    ]
+  },
+  {
+    "id": "01M6RVWJFH43GHTYSZ7DNC5VKV",
+    "cursor": "70",
+    "event": "created",
+    "tier": "P2",
+    "score": 0.6304819171851567,
+    "source": "uds-20261106T164314Z-outage-4",
+    "contacts": [
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.86099
+      },
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.82488
+      }
+    ]
+  },
+  {
+    "id": "01M6RVWJTQSHHEZM4JYCZQBPQR",
+    "cursor": "74",
+    "event": "created",
+    "tier": "P3",
+    "score": 0.4386671413079329,
+    "source": "uds-20261106T164314Z-outage-5",
+    "contacts": [
+      {
+        "label": "boat",
+        "ship_type": "",
+        "confidence": 0.47735
+      }
+    ]
+  },
+  {
+    "id": "01M6RVWHPA3SMHDYRXXD88PCGE",
+    "cursor": "75",
+    "event": "created",
+    "tier": "P3",
+    "score": 0.19999755097374597,
+    "source": "uds-20261106T164314Z-outage-1",
+    "contacts": []
+  },
+  {
+    "id": "01M6RVWJ7Y196KWA6GE0FHXA1J",
+    "cursor": "76",
+    "event": "created",
+    "tier": "P4",
+    "score": 0.19999750265093505,
+    "source": "uds-20261106T164314Z-outage-3",
+    "contacts": []
+  },
+  {
+    "id": "01M6RVWK4NVAD32VY83G48MFY9",
+    "cursor": "79",
+    "event": "created",
+    "tier": "P4",
+    "score": 0.19999748272371992,
+    "source": "uds-20261106T164314Z-outage-6",
+    "contacts": []
+  }
+]

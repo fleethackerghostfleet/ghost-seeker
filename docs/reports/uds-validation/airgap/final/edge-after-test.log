@@ -1,0 +1,3 @@
+time=2026-11-06T17:06:55.233Z level=INFO msg="edge console" listen=:8081 shore=https://shore.uds.dev:443 infer=http://edgeml-sidecar:9090 tls=false
+time=2026-11-06T17:06:57.619Z level=INFO msg="ingested camera source" source=airgap-redeployed-offline frame=""
+time=2026-11-06T17:06:59.245Z level=INFO msg="ingested camera source" source=airgap-low-rate frame=""

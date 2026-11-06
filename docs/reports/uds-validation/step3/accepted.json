@@ -1,0 +1,58 @@
+[
+  {
+    "source": "uds-20261106T164117Z-live-0",
+    "result": {
+      "id": "01M6RVRVPG8QG6CQXGB5YAES6J",
+      "duplicate": false
+    },
+    "input": 0
+  },
+  {
+    "source": "uds-20261106T164117Z-outage-1",
+    "result": {
+      "id": "01M6RVRYDEVSJF7Y2SQ0SYBKJK",
+      "duplicate": false
+    },
+    "input": 1
+  },
+  {
+    "source": "uds-20261106T164117Z-outage-2",
+    "result": {
+      "id": "01M6RVRYPJB2E2N3ARPS6QMJHT",
+      "duplicate": false
+    },
+    "input": 2
+  },
+  {
+    "source": "uds-20261106T164117Z-outage-3",
+    "result": {
+      "id": "01M6RVRZ6W48DRPPVYNB2PNDVZ",
+      "duplicate": false
+    },
+    "input": 3
+  },
+  {
+    "source": "uds-20261106T164117Z-outage-4",
+    "result": {
+      "id": "01M6RVRZGV9WW1E7D9TTS78C59",
+      "duplicate": false
+    },
+    "input": 4
+  },
+  {
+    "source": "uds-20261106T164117Z-outage-5",
+    "result": {
+      "id": "01M6RVRZX9G4TR6V7TCA8BMED3",
+      "duplicate": false
+    },
+    "input": 5
+  },
+  {
+    "source": "uds-20261106T164117Z-outage-6",
+    "result": {
+      "id": "01M6RVS0819NN3BQVNC0DW1R0G",
+      "duplicate": false
+    },
+    "input": 6
+  }
+]

@@ -1,0 +1,281 @@
+{
+  "bps": 64000,
+  "elapsed_seconds": 180.87627554000028,
+  "baseline_last_success": 1793984818388,
+  "item_id": "01M6RX7VMJ8QG6CQXGB5YAES6J",
+  "payload_drained": false,
+  "samples": [
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984834419",
+        "queuedItems": "1",
+        "queuedBytes": "226",
+        "unmanifestedItems": "1",
+        "policyId": "default",
+        "linkEstimateBps": 7548612.686064282
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 7548612.686064282,
+        "lastSuccessUnixMs": "1793984818388",
+        "consecutiveFailures": "1"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "9",
+      "bytesSent": "302675",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984849498",
+        "queuedItems": "1",
+        "queuedBytes": "226",
+        "unmanifestedItems": "1",
+        "policyId": "default",
+        "linkEstimateBps": 1887153.1715160706
+      },
+      "link": {
+        "estimateBps": 1887153.1715160706,
+        "lastSuccessUnixMs": "1793984818388",
+        "consecutiveFailures": "2"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "9",
+      "bytesSent": "302675",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984864569",
+        "queuedItems": "1",
+        "queuedBytes": "226",
+        "unmanifestedItems": "1",
+        "policyId": "default",
+        "linkEstimateBps": 1887153.1715160706
+      },
+      "link": {
+        "estimateBps": 1887153.1715160706,
+        "lastSuccessUnixMs": "1793984818388",
+        "consecutiveFailures": "2"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "9",
+      "bytesSent": "302675",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984879597",
+        "queuedItems": "1",
+        "queuedBytes": "226",
+        "unmanifestedItems": "1",
+        "policyId": "default",
+        "linkEstimateBps": 471788.29287901765
+      },
+      "link": {
+        "estimateBps": 471788.29287901765,
+        "lastSuccessUnixMs": "1793984818388",
+        "consecutiveFailures": "3"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "9",
+      "bytesSent": "302675",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984894677",
+        "queuedItems": "1",
+        "queuedBytes": "226",
+        "unmanifestedItems": "1",
+        "policyId": "default",
+        "linkEstimateBps": 117947.07321975441
+      },
+      "link": {
+        "estimateBps": 117947.07321975441,
+        "lastSuccessUnixMs": "1793984818388",
+        "consecutiveFailures": "4"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "9",
+      "bytesSent": "302675",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984909757",
+        "queuedItems": "1",
+        "queuedBytes": "226",
+        "unmanifestedItems": "1",
+        "policyId": "default",
+        "linkEstimateBps": 117947.07321975441
+      },
+      "link": {
+        "estimateBps": 117947.07321975441,
+        "lastSuccessUnixMs": "1793984818388",
+        "consecutiveFailures": "4"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "9",
+      "bytesSent": "302675",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984924835",
+        "queuedItems": "1",
+        "queuedBytes": "129820",
+        "policyId": "default",
+        "linkEstimateBps": 3803080.0436208313
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 3803080.0436208313,
+        "lastSuccessUnixMs": "1793984915521"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "10",
+      "bytesSent": "346660",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984939922",
+        "queuedItems": "1",
+        "queuedBytes": "129820",
+        "policyId": "default",
+        "linkEstimateBps": 475385.0054526039
+      },
+      "link": {
+        "estimateBps": 475385.0054526039,
+        "lastSuccessUnixMs": "1793984915521",
+        "consecutiveFailures": "2"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "10",
+      "bytesSent": "346660",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984955008",
+        "queuedItems": "1",
+        "queuedBytes": "129820",
+        "policyId": "default",
+        "linkEstimateBps": 475385.0054526039
+      },
+      "link": {
+        "estimateBps": 475385.0054526039,
+        "lastSuccessUnixMs": "1793984915521",
+        "consecutiveFailures": "2"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "10",
+      "bytesSent": "346660",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984970076",
+        "queuedItems": "1",
+        "queuedBytes": "129820",
+        "policyId": "default",
+        "linkEstimateBps": 118846.25136315098
+      },
+      "link": {
+        "estimateBps": 118846.25136315098,
+        "lastSuccessUnixMs": "1793984915521",
+        "consecutiveFailures": "3"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "10",
+      "bytesSent": "346660",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984985155",
+        "queuedItems": "1",
+        "queuedBytes": "85301",
+        "policyId": "default",
+        "linkEstimateBps": 982807.2467998526
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 982807.2467998526,
+        "lastSuccessUnixMs": "1793984984133"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "10",
+      "bytesSent": "391179",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793985000233",
+        "queuedItems": "1",
+        "queuedBytes": "85301",
+        "policyId": "default",
+        "linkEstimateBps": 491403.6233999263
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 491403.6233999263,
+        "lastSuccessUnixMs": "1793984984133",
+        "consecutiveFailures": "1"
+      },
+      "itemsTotal": "10",
+      "itemsComplete": "9",
+      "itemsManifested": "10",
+      "bytesSent": "391179",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    }
+  ]
+}

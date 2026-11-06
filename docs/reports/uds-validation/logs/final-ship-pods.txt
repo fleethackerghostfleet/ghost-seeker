@@ -1,0 +1,3 @@
+NAME                             READY   STATUS    RESTARTS   AGE
+edge-0                           2/2     Running   0          2m37s
+edgeml-sidecar-86cb8786b-v2jqz   2/2     Running   0          3m8s

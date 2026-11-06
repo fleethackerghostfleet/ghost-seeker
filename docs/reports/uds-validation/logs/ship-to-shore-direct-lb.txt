@@ -1,0 +1,7 @@
+* Added shore.uds.dev:443:172.18.0.201 to DNS cache
+* Hostname shore.uds.dev was found in DNS cache
+*   Trying 172.18.0.201:443...
+* After 3000ms connect time, move on!
+* connect to 172.18.0.201 port 443 failed: Connection timed out
+* Connection timeout after 3002 ms
+* Closing connection 0

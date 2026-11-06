@@ -1,0 +1,3 @@
+{"alpn":"h2","httpStatus":200,"protocol":"HTTP/2.0","verifiedChains":2}
+{"grpcStatus":"0"}
+{"link":{"up":true,"estimate_bps":64000,"last_success_unix_ms":1793983057179},"success":true}

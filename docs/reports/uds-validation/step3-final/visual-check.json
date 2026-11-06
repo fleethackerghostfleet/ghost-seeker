@@ -1,0 +1,12 @@
+{
+  "url": "https://ghost-seeker.uds.dev:9443/#details",
+  "item_id": "01M6RX44A6VSJF7Y2SQ0SYBKJK",
+  "detail_text": "P1 Critical\nuds-20261106T170451Z-outage-2 \u00b7 17:04:56Z \u00b7 Stored image #100006 \u00b7 1 of 7\n\u2039\n\u203a\n\u00d7",
+  "status_text": "Pipeline counts\nSHIP-TO-SHORE CONNECTION\n1.29 MB/S\nMEASURED BY THE SHIP\n\u203a\nON SHIP\n\u2014\n\u203a\nON SHORE\n7\nRECORDS \u00b7\n7\nDETECTED OBJECTS (\n7\nWITH IMAGE) \u00b7\n0\nCAMERA UPDATES\n\u203a\nDATA TRANSFERRED\n1.45 MB\n\u203a\nDIRECTIVE\nNONE\n\u203a\nSCORING MODEL\nSHIP SCORE\n(BUILT-IN)\n0% OF CAMERA VIEWS STAYED ON THE SHIP (REPEATS) TO SAVE BANDWIDTH\nPhotos filtered automatically\n\nCurrent feed only. Cumulative counts include frames without retained images and images no longer in this feed. Up to 60 photos shown per category. Select a photo to open it.\n\nREPEATS OF EARLIER IMAGES (0)\nLOW VALUE (0)\nLOWERED BY DIRECTIVE (0)\n\nNone right now.",
+  "tls_verification_disabled": false,
+  "screenshots": [
+    "docs/reports/uds-validation/img-final/shore-feed.png",
+    "docs/reports/uds-validation/img-final/shore-item-detail.png",
+    "docs/reports/uds-validation/img-final/shore-link-sync-status.png"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "id": "01M6RWR86RJ2H89AMNH9QW0V35",
+  "receipt_cursor": "17",
+  "tier": "P3",
+  "score": 0.6006219495673742,
+  "reasons": [
+    {
+      "scorer": "edge_priority",
+      "value": 0.6006219495673742,
+      "note": "last reported in the edge manifest"
+    },
+    {
+      "scorer": "unknown",
+      "value": 0,
+      "note": ""
+    }
+  ],
+  "explanation": "Score is the last edge-reported scheduler priority; reasons describe current shore evidence, not a reconstructed edge score. Tier is a relative shore rank, unless pinned by policy; scene overviews are P4.",
+  "contacts": [
+    {
+      "label": "boat",
+      "ship_type": "",
+      "confidence": 0.80137
+    }
+  ],
+  "source": "airgap-redeployed-offline",
+  "edge_id": "edge-1",
+  "captured_at": "2026-11-06T16:58:27.416Z",
+  "received_at": "2026-11-06T16:58:29.8Z",
+  "geo": null,
+  "sensor_type": "",
+  "tags": {},
+  "forms": [
+    {
+      "name": "fact",
+      "available": true,
+      "bytes": 236,
+      "mime": "application/json"
+    },
+    {
+      "name": "thumb",
+      "available": true,
+      "bytes": 2209,
+      "mime": "image/jpeg"
+    },
+    {
+      "name": "crop",
+      "available": true,
+      "bytes": 15463,
+      "mime": "image/jpeg"
+    },
+    {
+      "name": "full",
+      "available": true,
+      "bytes": 284767,
+      "mime": "image/jpeg"
+    }
+  ],
+  "directive_matches": [],
+  "decisions": []
+}

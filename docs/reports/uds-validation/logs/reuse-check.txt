@@ -1,0 +1,145 @@
+NAME           STATUS   AGE
+pepr-system    Active   16m
+istio-system   Active   15m
+Reusing uds-shore (no destructive bundle bootstrap).
+pod/authservice-7bd646879d-fgmwb condition met
+pod/admin-ingressgateway-855f674bf5-7qzrc condition met
+pod/istio-cni-node-b7lml condition met
+pod/istiod-6984f7bfb6-pj7q6 condition met
+pod/ztunnel-hqdl9 condition met
+pod/tenant-ingressgateway-84fb59b7bf-vc9ss condition met
+pod/keycloak-0 condition met
+pod/keycloak-waypoint-59fbc5759f-8kbwv condition met
+pod/coredns-764495658b-s7n9l condition met
+pod/ensure-machine-id-ldmmf condition met
+pod/local-path-provisioner-66fb896885-4dqrz condition met
+pod/metallb-controller-668d6cdc58-pjv2s condition met
+pod/metallb-frr-k8s-5p8w7 condition met
+pod/metallb-frr-k8s-statuscleaner-77f8b4bdd7-642lv condition met
+pod/metallb-speaker-29zb2 condition met
+pod/nginx-gff4b condition met
+pod/pepr-uds-core-849965bd66-8zdgm condition met
+pod/pepr-uds-core-849965bd66-brdrv condition met
+pod/pepr-uds-core-watcher-7bccd5c94f-z68ms condition met
+pod/minio-5995bfd4cf-2rlwz condition met
+pod/agent-hook-759bf6c588-72vmg condition met
+pod/agent-hook-759bf6c588-7wshg condition met
+pod/zarf-docker-registry-5d4d87ffd6-24khv condition met
+NAMESPACE              NAME                                             READY   STATUS    RESTARTS   AGE   IP           NODE                     NOMINATED NODE   READINESS GATES
+authservice            authservice-7bd646879d-fgmwb                     1/1     Running   0          13m   10.42.0.29   k3d-uds-shore-server-0   <none>           <none>
+istio-admin-gateway    admin-ingressgateway-855f674bf5-7qzrc            1/1     Running   0          14m   10.42.0.23   k3d-uds-shore-server-0   <none>           <none>
+istio-system           istio-cni-node-b7lml                             1/1     Running   0          15m   10.42.0.21   k3d-uds-shore-server-0   <none>           <none>
+istio-system           istiod-6984f7bfb6-pj7q6                          1/1     Running   0          15m   10.42.0.20   k3d-uds-shore-server-0   <none>           <none>
+istio-system           ztunnel-hqdl9                                    1/1     Running   0          14m   10.42.0.22   k3d-uds-shore-server-0   <none>           <none>
+istio-tenant-gateway   tenant-ingressgateway-84fb59b7bf-vc9ss           1/1     Running   0          14m   10.42.0.24   k3d-uds-shore-server-0   <none>           <none>
+keycloak               keycloak-0                                       1/1     Running   0          14m   10.42.0.28   k3d-uds-shore-server-0   <none>           <none>
+keycloak               keycloak-waypoint-59fbc5759f-8kbwv               1/1     Running   0          14m   10.42.0.27   k3d-uds-shore-server-0   <none>           <none>
+kube-system            coredns-764495658b-s7n9l                         1/1     Running   0          17m   10.42.0.10   k3d-uds-shore-server-0   <none>           <none>
+kube-system            ensure-machine-id-ldmmf                          1/1     Running   0          17m   10.42.0.5    k3d-uds-shore-server-0   <none>           <none>
+kube-system            local-path-provisioner-66fb896885-4dqrz          1/1     Running   0          17m   10.42.0.6    k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-controller-668d6cdc58-pjv2s              1/1     Running   0          17m   10.42.0.3    k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-frr-k8s-5p8w7                            5/5     Running   0          17m   172.18.0.2   k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-frr-k8s-statuscleaner-77f8b4bdd7-642lv   1/1     Running   0          17m   172.18.0.2   k3d-uds-shore-server-0   <none>           <none>
+kube-system            metallb-speaker-29zb2                            1/1     Running   0          17m   172.18.0.2   k3d-uds-shore-server-0   <none>           <none>
+kube-system            nginx-gff4b                                      1/1     Running   0          17m   10.42.0.4    k3d-uds-shore-server-0   <none>           <none>
+pepr-system            pepr-uds-core-849965bd66-8zdgm                   1/1     Running   0          15m   10.42.0.19   k3d-uds-shore-server-0   <none>           <none>
+pepr-system            pepr-uds-core-849965bd66-brdrv                   1/1     Running   0          15m   10.42.0.17   k3d-uds-shore-server-0   <none>           <none>
+pepr-system            pepr-uds-core-watcher-7bccd5c94f-z68ms           1/1     Running   0          15m   10.42.0.18   k3d-uds-shore-server-0   <none>           <none>
+uds-dev-stack          minio-5995bfd4cf-2rlwz                           1/1     Running   0          17m   10.42.0.8    k3d-uds-shore-server-0   <none>           <none>
+zarf                   agent-hook-759bf6c588-72vmg                      1/1     Running   0          16m   10.42.0.16   k3d-uds-shore-server-0   <none>           <none>
+zarf                   agent-hook-759bf6c588-7wshg                      1/1     Running   0          16m   10.42.0.15   k3d-uds-shore-server-0   <none>           <none>
+zarf                   zarf-docker-registry-5d4d87ffd6-24khv            1/1     Running   0          16m   10.42.0.14   k3d-uds-shore-server-0   <none>           <none>
+NAMESPACE              NAME                      TYPE           CLUSTER-IP      EXTERNAL-IP    PORT(S)                                      AGE   SELECTOR
+authservice            authservice               ClusterIP      10.43.158.168   <none>         10003/TCP                                    13m   app.kubernetes.io/instance=authservice,app.kubernetes.io/name=authservice
+default                kubernetes                ClusterIP      10.43.0.1       <none>         443/TCP                                      18m   <none>
+istio-admin-gateway    admin-ingressgateway      LoadBalancer   10.43.118.108   172.18.0.200   15021:31462/TCP,80:30551/TCP,443:30518/TCP   14m   app=admin-ingressgateway,istio=admin-ingressgateway
+istio-system           istiod                    ClusterIP      10.43.39.87     <none>         15010/TCP,15012/TCP,443/TCP,15014/TCP        15m   app=istiod,istio=pilot
+istio-tenant-gateway   tenant-ingressgateway     LoadBalancer   10.43.77.247    172.18.0.201   15021:32047/TCP,80:31251/TCP,443:31576/TCP   14m   app=tenant-ingressgateway,istio=tenant-ingressgateway
+keycloak               keycloak-headless         ClusterIP      None            <none>         80/TCP,7800/TCP,57800/TCP                    14m   app.kubernetes.io/instance=keycloak,app.kubernetes.io/name=keycloak
+keycloak               keycloak-http             ClusterIP      10.43.163.31    <none>         8080/TCP,9000/TCP                            14m   app.kubernetes.io/instance=keycloak,app.kubernetes.io/name=keycloak
+keycloak               keycloak-waypoint         ClusterIP      10.43.17.189    <none>         15021/TCP,15008/TCP                          14m   gateway.networking.k8s.io/gateway-name=keycloak-waypoint
+kube-system            frr-k8s-webhook-service   ClusterIP      10.43.63.145    <none>         443/TCP                                      17m   app.kubernetes.io/component=statuscleaner
+kube-system            kube-dns                  ClusterIP      10.43.0.10      <none>         53/UDP,53/TCP,9153/TCP                       18m   k8s-app=kube-dns
+kube-system            metallb-webhook-service   ClusterIP      10.43.51.210    <none>         443/TCP                                      17m   app.kubernetes.io/component=controller,app.kubernetes.io/instance=metallb,app.kubernetes.io/name=metallb
+pepr-system            pepr-uds-core             ClusterIP      10.43.1.216     <none>         443/TCP                                      15m   app=pepr-uds-core,pepr.dev/controller=admission
+pepr-system            pepr-uds-core-watcher     ClusterIP      10.43.26.148    <none>         443/TCP                                      15m   app=pepr-uds-core-watcher,pepr.dev/controller=watcher
+uds-dev-stack          minio                     ClusterIP      10.43.107.55    <none>         9000/TCP                                     17m   app=minio,release=minio
+uds-dev-stack          minio-console             ClusterIP      10.43.49.11     <none>         9001/TCP                                     17m   app=minio,release=minio
+zarf                   agent-hook                ClusterIP      10.43.98.188    <none>         443/TCP                                      16m   app=agent-hook
+zarf                   zarf-connect-registry     ClusterIP      10.43.119.10    <none>         5000/TCP                                     16m   <none>
+zarf                   zarf-docker-registry      NodePort       10.43.64.141    <none>         5000:31999/TCP                               17m   app=docker-registry,release=zarf-docker-registry
+NAME           STATUS   AGE
+pepr-system    Active   11m
+istio-system   Active   10m
+Reusing uds-ship (no destructive bundle bootstrap).
+pod/authservice-7bd646879d-296pd condition met
+pod/admin-ingressgateway-855f674bf5-jbl5v condition met
+pod/istio-cni-node-q546d condition met
+pod/istiod-6984f7bfb6-5nqm6 condition met
+pod/ztunnel-bgdwq condition met
+pod/tenant-ingressgateway-84fb59b7bf-8kxvz condition met
+pod/keycloak-0 condition met
+pod/keycloak-waypoint-59fbc5759f-wmhzr condition met
+pod/coredns-6bc64fc85c-9d2g5 condition met
+pod/ensure-machine-id-2hzfd condition met
+pod/local-path-provisioner-66fb896885-pj4fg condition met
+pod/metallb-controller-668d6cdc58-f4rq2 condition met
+pod/metallb-frr-k8s-lwb2n condition met
+pod/metallb-frr-k8s-statuscleaner-77f8b4bdd7-zhrj5 condition met
+pod/metallb-speaker-hn67t condition met
+pod/nginx-9hszc condition met
+pod/pepr-uds-core-5ff6bb89b-2bgl8 condition met
+pod/pepr-uds-core-5ff6bb89b-slj62 condition met
+pod/pepr-uds-core-watcher-659887587-chzzf condition met
+pod/minio-788cc888b6-kzfcj condition met
+pod/agent-hook-759bf6c588-fsntj condition met
+pod/agent-hook-759bf6c588-v6tfb condition met
+pod/zarf-docker-registry-6f998b597-pb74l condition met
+NAMESPACE              NAME                                             READY   STATUS    RESTARTS      AGE     IP           NODE                    NOMINATED NODE   READINESS GATES
+authservice            authservice-7bd646879d-296pd                     1/1     Running   0             15s     10.42.0.33   k3d-uds-ship-server-0   <none>           <none>
+istio-admin-gateway    admin-ingressgateway-855f674bf5-jbl5v            1/1     Running   0             108s    10.42.0.27   k3d-uds-ship-server-0   <none>           <none>
+istio-system           istio-cni-node-q546d                             1/1     Running   0             3m47s   10.42.0.22   k3d-uds-ship-server-0   <none>           <none>
+istio-system           istiod-6984f7bfb6-5nqm6                          1/1     Running   0             9m53s   10.42.0.20   k3d-uds-ship-server-0   <none>           <none>
+istio-system           ztunnel-bgdwq                                    1/1     Running   0             3m36s   10.42.0.23   k3d-uds-ship-server-0   <none>           <none>
+istio-tenant-gateway   tenant-ingressgateway-84fb59b7bf-8kxvz           1/1     Running   0             103s    10.42.0.28   k3d-uds-ship-server-0   <none>           <none>
+keycloak               keycloak-0                                       1/1     Running   0             55s     10.42.0.32   k3d-uds-ship-server-0   <none>           <none>
+keycloak               keycloak-waypoint-59fbc5759f-wmhzr               1/1     Running   0             55s     10.42.0.29   k3d-uds-ship-server-0   <none>           <none>
+kube-system            coredns-6bc64fc85c-9d2g5                         1/1     Running   0             12m     10.42.0.10   k3d-uds-ship-server-0   <none>           <none>
+kube-system            ensure-machine-id-2hzfd                          1/1     Running   0             12m     10.42.0.5    k3d-uds-ship-server-0   <none>           <none>
+kube-system            local-path-provisioner-66fb896885-pj4fg          1/1     Running   0             12m     10.42.0.6    k3d-uds-ship-server-0   <none>           <none>
+kube-system            metallb-controller-668d6cdc58-f4rq2              1/1     Running   0             12m     10.42.0.3    k3d-uds-ship-server-0   <none>           <none>
+kube-system            metallb-frr-k8s-lwb2n                            5/5     Running   0             12m     172.19.0.2   k3d-uds-ship-server-0   <none>           <none>
+kube-system            metallb-frr-k8s-statuscleaner-77f8b4bdd7-zhrj5   1/1     Running   2 (12m ago)   12m     172.19.0.2   k3d-uds-ship-server-0   <none>           <none>
+kube-system            metallb-speaker-hn67t                            1/1     Running   0             12m     172.19.0.2   k3d-uds-ship-server-0   <none>           <none>
+kube-system            nginx-9hszc                                      1/1     Running   0             12m     10.42.0.4    k3d-uds-ship-server-0   <none>           <none>
+pepr-system            pepr-uds-core-5ff6bb89b-2bgl8                    1/1     Running   0             3m21s   10.42.0.24   k3d-uds-ship-server-0   <none>           <none>
+pepr-system            pepr-uds-core-5ff6bb89b-slj62                    1/1     Running   0             3m10s   10.42.0.26   k3d-uds-ship-server-0   <none>           <none>
+pepr-system            pepr-uds-core-watcher-659887587-chzzf            1/1     Running   0             3m21s   10.42.0.25   k3d-uds-ship-server-0   <none>           <none>
+uds-dev-stack          minio-788cc888b6-kzfcj                           1/1     Running   0             12m     10.42.0.8    k3d-uds-ship-server-0   <none>           <none>
+zarf                   agent-hook-759bf6c588-fsntj                      1/1     Running   0             11m     10.42.0.16   k3d-uds-ship-server-0   <none>           <none>
+zarf                   agent-hook-759bf6c588-v6tfb                      1/1     Running   0             11m     10.42.0.15   k3d-uds-ship-server-0   <none>           <none>
+zarf                   zarf-docker-registry-6f998b597-pb74l             1/1     Running   0             11m     10.42.0.14   k3d-uds-ship-server-0   <none>           <none>
+NAMESPACE              NAME                      TYPE           CLUSTER-IP      EXTERNAL-IP    PORT(S)                                      AGE     SELECTOR
+authservice            authservice               ClusterIP      10.43.135.240   <none>         10003/TCP                                    15s     app.kubernetes.io/instance=authservice,app.kubernetes.io/name=authservice
+default                kubernetes                ClusterIP      10.43.0.1       <none>         443/TCP                                      13m     <none>
+istio-admin-gateway    admin-ingressgateway      LoadBalancer   10.43.39.111    172.19.0.200   15021:32735/TCP,80:31605/TCP,443:31844/TCP   108s    app=admin-ingressgateway,istio=admin-ingressgateway
+istio-system           istiod                    ClusterIP      10.43.62.83     <none>         15010/TCP,15012/TCP,443/TCP,15014/TCP        9m54s   app=istiod,istio=pilot
+istio-tenant-gateway   tenant-ingressgateway     LoadBalancer   10.43.173.187   172.19.0.201   15021:30409/TCP,80:32215/TCP,443:32142/TCP   103s    app=tenant-ingressgateway,istio=tenant-ingressgateway
+keycloak               keycloak-headless         ClusterIP      None            <none>         80/TCP,7800/TCP,57800/TCP                    55s     app.kubernetes.io/instance=keycloak,app.kubernetes.io/name=keycloak
+keycloak               keycloak-http             ClusterIP      10.43.55.216    <none>         8080/TCP,9000/TCP                            55s     app.kubernetes.io/instance=keycloak,app.kubernetes.io/name=keycloak
+keycloak               keycloak-waypoint         ClusterIP      10.43.238.78    <none>         15021/TCP,15008/TCP                          55s     gateway.networking.k8s.io/gateway-name=keycloak-waypoint
+kube-system            frr-k8s-webhook-service   ClusterIP      10.43.140.130   <none>         443/TCP                                      12m     app.kubernetes.io/component=statuscleaner
+kube-system            kube-dns                  ClusterIP      10.43.0.10      <none>         53/UDP,53/TCP,9153/TCP                       13m     k8s-app=kube-dns
+kube-system            metallb-webhook-service   ClusterIP      10.43.140.93    <none>         443/TCP                                      12m     app.kubernetes.io/component=controller,app.kubernetes.io/instance=metallb,app.kubernetes.io/name=metallb
+pepr-system            pepr-uds-core             ClusterIP      10.43.166.3     <none>         443/TCP                                      10m     app=pepr-uds-core,pepr.dev/controller=admission
+pepr-system            pepr-uds-core-watcher     ClusterIP      10.43.103.54    <none>         443/TCP                                      10m     app=pepr-uds-core-watcher,pepr.dev/controller=watcher
+uds-dev-stack          minio                     ClusterIP      10.43.130.228   <none>         9000/TCP                                     12m     app=minio,release=minio
+uds-dev-stack          minio-console             ClusterIP      10.43.126.157   <none>         9001/TCP                                     12m     app=minio,release=minio
+zarf                   agent-hook                ClusterIP      10.43.213.7     <none>         443/TCP                                      11m     app=agent-hook
+zarf                   zarf-connect-registry     ClusterIP      10.43.244.207   <none>         5000/TCP                                     11m     <none>
+zarf                   zarf-docker-registry      NodePort       10.43.53.45     <none>         5000:31999/TCP                               11m     app=docker-registry,release=zarf-docker-registry
+NAME        SERVERS   AGENTS   LOADBALANCER
+uds-ship    1/1       0/0      true
+uds-shore   1/1       0/0      true
+k3d-uds-shore 172.18.0.0/16 gateway=172.18.0.1
+k3d-uds-ship 172.19.0.0/16 gateway=172.19.0.1

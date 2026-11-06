@@ -1,0 +1,13 @@
+GS-UDS-AG-FWD  all opt -- in * out *  172.19.0.0/16  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:forward */
+ON
+-N GS-UDS-AG-FWD
+-A GS-UDS-AG-FWD -d 172.19.0.0/16 -m comment --comment "ghost-seeker-uds-airgap:intra" -j RETURN
+-A GS-UDS-AG-FWD -m comment --comment "ghost-seeker-uds-airgap:deny" -j DROP
+-N GS-UDS-AG-HOST
+-A GS-UDS-AG-HOST -d 172.19.0.1/32 -p tcp -m tcp --dport 443 -m comment --comment "ghost-seeker-uds-airgap:shaper" -j RETURN
+-A GS-UDS-AG-HOST -m conntrack --ctdir REPLY -m comment --comment "ghost-seeker-uds-airgap:reply" -j RETURN
+-A GS-UDS-AG-HOST -m comment --comment "ghost-seeker-uds-airgap:deny" -j DROP
+DROP  all opt -- in * out *  0.0.0.0/0  -> 127.0.0.11   /* ghost-seeker-uds-airgap:docker-dns */
+k3d-uds-ship-serverlb Docker DNS: BLOCKED
+DROP  all opt -- in * out *  0.0.0.0/0  -> 127.0.0.11   /* ghost-seeker-uds-airgap:docker-dns */
+k3d-uds-ship-server-0 Docker DNS: BLOCKED

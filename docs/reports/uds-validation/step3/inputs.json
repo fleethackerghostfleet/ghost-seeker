@@ -1,0 +1,51 @@
+[
+  {
+    "archive": "frames/SMD_VIS_Onboard_frames.zip",
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00030.jpg",
+    "sha256": "f83f3f7dd011fe66baa37dcba356a1c2586b74e3e55b41d09acba393c6b3c84b",
+    "bytes": 167367,
+    "local_path": "/home/ubuntu/.local/share/uds-two-cluster/evidence-inputs/capture-0.jpg"
+  },
+  {
+    "archive": "frames/SMD_VIS_Onboard_frames.zip",
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0790/MVI_0790_f00000.jpg",
+    "sha256": "64d7633cfa86c347e30e3d4c9de88ee734d099c73aa49469f817480c53f783a7",
+    "bytes": 200153,
+    "local_path": "/home/ubuntu/.local/share/uds-two-cluster/evidence-inputs/capture-1.jpg"
+  },
+  {
+    "archive": "frames/SMD_VIS_Onboard_frames.zip",
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00300.jpg",
+    "sha256": "4969708cf03b4ffdbfcd0b14fb4b670062b7f60e11a1bb20759058256cc2dc23",
+    "bytes": 147142,
+    "local_path": "/home/ubuntu/.local/share/uds-two-cluster/evidence-inputs/capture-2.jpg"
+  },
+  {
+    "archive": "frames/SMD_VIS_Onboard_frames.zip",
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0790/MVI_0790_f00300.jpg",
+    "sha256": "aeb9e827ba0f0f1b78daaf5dfdb6f53b830bdc7ce805b24ca15bc99da20dae14",
+    "bytes": 177223,
+    "local_path": "/home/ubuntu/.local/share/uds-two-cluster/evidence-inputs/capture-3.jpg"
+  },
+  {
+    "archive": "frames/SMD_VIS_Onboard_frames.zip",
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0799/MVI_0799_f00000.jpg",
+    "sha256": "b6f840c698a48c3fae4323fddd05b149d642fe6fdf809ca4b44bc8e954a6f5dc",
+    "bytes": 85251,
+    "local_path": "/home/ubuntu/.local/share/uds-two-cluster/evidence-inputs/capture-4.jpg"
+  },
+  {
+    "archive": "frames/SMD_VIS_Onboard_frames.zip",
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0801/MVI_0801_f00000.jpg",
+    "sha256": "8de3eb55836cf949c148bacda5a7a14e87b827f821e8fbdd5239eefb98e8e18f",
+    "bytes": 257099,
+    "local_path": "/home/ubuntu/.local/share/uds-two-cluster/evidence-inputs/capture-5.jpg"
+  },
+  {
+    "archive": "frames/30_Days_at_Sea_Timelapse_frames.zip",
+    "member": "30_Days_at_Sea_Timelapse_frames/sec_0201.jpg",
+    "sha256": "7059e5328051fb6d0822c56db41e940dafbbfdc8e69c65cc9df0b7d890b3624a",
+    "bytes": 185807,
+    "local_path": "/home/ubuntu/.local/share/uds-two-cluster/evidence-inputs/capture-6.jpg"
+  }
+]

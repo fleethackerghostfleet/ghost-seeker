@@ -1,0 +1,10 @@
+DROP  all opt -- in * out *  0.0.0.0/0  -> 127.0.0.11   /* ghost-seeker-uds-airgap:docker-dns */
+DROP  all opt -- in * out *  0.0.0.0/0  -> 127.0.0.11   /* ghost-seeker-uds-airgap:docker-dns */
+GS-UDS-AG-FWD  all opt -- in * out *  172.19.0.0/16  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:forward */
+GS-UDS-AG-HOST  all opt -- in * out *  172.19.0.0/16  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:host */
+RETURN  all opt -- in * out *  0.0.0.0/0  -> 172.19.0.0/16   /* ghost-seeker-uds-airgap:intra */
+DROP  all opt -- in * out *  0.0.0.0/0  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:deny */
+RETURN  tcp opt -- in * out *  0.0.0.0/0  -> 172.19.0.1   tcp dpt:443 /* ghost-seeker-uds-airgap:shaper */
+RETURN  all opt -- in * out *  0.0.0.0/0  -> 0.0.0.0/0   ctdir REPLY /* ghost-seeker-uds-airgap:reply */
+DROP  all opt -- in * out *  0.0.0.0/0  -> 0.0.0.0/0   /* ghost-seeker-uds-airgap:deny */
+OFF: only tagged harness rules and empty harness chains removed

@@ -1,0 +1,27 @@
+firewall-on: OK
+firewall-on-again: OK
+blocked-ghcr: OK
+blocked-cloudflare: OK
+blocked-dns: OK
+allowed-shore-tls: OK
+firewall-block-counters: OK
+delete-app-pods: OK
+restarted-edge-ready: OK
+restarted-inference-ready: OK
+restarted-pods: OK
+restarted-events: OK
+restarted-model-checks: OK
+restarted-edgeml: OK
+ship-context: OK
+remove-ship-app: OK
+firewall-off: OK
+firewall-off-again: OK
+firewall-final-status: OK
+Traceback (most recent call last):
+  File "/home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-airgap-verify.py", line 180, in <module>
+    client.rate(16000000)
+  File "/home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-airgap-verify.py", line 132, in main
+    ingest(client, 'restarted-offline', 23)
+  File "/home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-airgap-verify.py", line 29, in run
+    raise RuntimeError(f'{name}: exit {result.returncode}; see {REPORT/(name+".log")}')
+RuntimeError: namespace-deleted: exit 1; see /home/ubuntu/repos/ghost-seeker/docs/reports/uds-validation/airgap/namespace-deleted.log

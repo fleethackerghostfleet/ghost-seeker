@@ -1,0 +1,35 @@
+2026-11-06 16:32:36 INF Creating bundle...
+
+                                                                                
+  🎁 BUNDLE DEFINITION                                                          
+                                                                                
+                                                                                
+
+kind: UDSBundle
+metadata:
+  name: ghost-seeker-shore
+  version: 0.1.0
+  architecture: amd64
+packages:
+- name: ghost-seeker-shore
+  path: ../../../dist
+  ref: 0.1.0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  •  Validating bundle
+  •  Bundle Validated
+
+                                                                                
+  🐕 Fetching Packages                                                          
+                                                                                
+                                                                                
+  •  Fetching package ghost-seeker-shore
+  •  Fetched package: ghost-seeker-shore
+
+                                                                                
+  🚧 Building Bundle                                                            
+                                                                                
+                                                                                
+  •  Creating bundle archive
+  ✔  Created bundle archive at: /home/ubuntu/.local/share/uds-two-cluster/build/prod-b0b377607950-20261106163143-7d98ece6/dist/uds-bundle-ghost-seeker-shore-amd64-0.1.0.tar.zst

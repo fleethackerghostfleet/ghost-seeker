@@ -1,0 +1,3 @@
+NAME            STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+data-edge-0     Bound    pvc-73ba9840-f830-43c9-84c9-02c760c1324e   10Gi       RWO            local-path     <unset>                 23m
+frames-edge-0   Bound    pvc-607061fc-1241-42d1-9f39-f8aa883c0314   10Gi       RWO            local-path     <unset>                 23m

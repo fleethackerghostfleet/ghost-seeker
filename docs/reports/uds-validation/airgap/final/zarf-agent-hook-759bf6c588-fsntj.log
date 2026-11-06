@@ -1,0 +1,18 @@
+2026-11-06 16:58:00 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 16:58:00 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 16:58:00 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 16:58:05 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 16:58:05 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 16:58:05 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 16:58:24 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 16:58:24 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 16:58:24 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 17:04:23 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:04:23 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:04:23 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 17:05:46 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:05:46 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:05:46 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true
+2026-11-06 17:05:47 DBG received admission request method=POST path=/mutate/pod
+2026-11-06 17:05:47 INF using the Zarf registry URL to mutate the Pod registry=127.0.0.1:31999
+2026-11-06 17:05:47 INF webhook execution complete path=/mutate/pod operation=CREATE allowed=true

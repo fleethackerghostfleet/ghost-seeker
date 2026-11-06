@@ -1,0 +1,17 @@
+/models-src/SHA256SUMS: OK
+yolo11n-640/model.onnx: OK
+yolo11n-640/meta.json: OK
+mobileclip-s1/meta.json: OK
+mobileclip-s1/model.onnx: OK
+mobileclip-s1/text_cache.json: OK
+mobileclip-s1/unknown_calib.npz: OK
+catalog/colregs_lights.json: OK
+catalog/colregs_night_config.json: OK
+yolo11n-640/model.onnx: OK
+yolo11n-640/meta.json: OK
+mobileclip-s1/meta.json: OK
+mobileclip-s1/model.onnx: OK
+mobileclip-s1/text_cache.json: OK
+mobileclip-s1/unknown_calib.npz: OK
+catalog/colregs_lights.json: OK
+catalog/colregs_night_config.json: OK

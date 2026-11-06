@@ -1,0 +1,348 @@
+[
+  {
+    "index": 22,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00060.jpg",
+    "best_boat_confidence": 0.80814,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.80814,
+        "box": {
+          "x": 0.43943,
+          "y": 0.15238,
+          "w": 0.32262,
+          "h": 0.14801
+        }
+      }
+    ]
+  },
+  {
+    "index": 23,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00090.jpg",
+    "best_boat_confidence": 0.77753,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.77753,
+        "box": {
+          "x": 0.43088,
+          "y": 0.59279,
+          "w": 0.32647,
+          "h": 0.15139
+        }
+      }
+    ]
+  },
+  {
+    "index": 24,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00120.jpg",
+    "best_boat_confidence": 0.87247,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.87247,
+        "box": {
+          "x": 0.49479,
+          "y": 0.42584,
+          "w": 0.32895,
+          "h": 0.14619
+        }
+      }
+    ]
+  },
+  {
+    "index": 25,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00150.jpg",
+    "best_boat_confidence": 0.80137,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.80137,
+        "box": {
+          "x": 0.55308,
+          "y": 0.23588,
+          "w": 0.33129,
+          "h": 0.15239
+        }
+      }
+    ]
+  },
+  {
+    "index": 26,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00180.jpg",
+    "best_boat_confidence": 0.79322,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.79322,
+        "box": {
+          "x": 0.53948,
+          "y": 0.49949,
+          "w": 0.32818,
+          "h": 0.15589
+        }
+      }
+    ]
+  },
+  {
+    "index": 27,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00210.jpg",
+    "best_boat_confidence": 0.85231,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.85231,
+        "box": {
+          "x": 0.5993,
+          "y": 0.4883,
+          "w": 0.33035,
+          "h": 0.1435
+        }
+      }
+    ]
+  },
+  {
+    "index": 28,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00240.jpg",
+    "best_boat_confidence": 0.82426,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.82426,
+        "box": {
+          "x": 0.65821,
+          "y": 0.29266,
+          "w": 0.33312,
+          "h": 0.15914
+        }
+      }
+    ]
+  },
+  {
+    "index": 29,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00270.jpg",
+    "best_boat_confidence": 0.71965,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.71965,
+        "box": {
+          "x": 0.68039,
+          "y": 0.35433,
+          "w": 0.31851,
+          "h": 0.14496
+        }
+      }
+    ]
+  },
+  {
+    "index": 31,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00330.jpg",
+    "best_boat_confidence": 0.68944,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.68944,
+        "box": {
+          "x": 0.73723,
+          "y": 0.52156,
+          "w": 0.26099,
+          "h": 0.14385
+        }
+      },
+      {
+        "label": "boat",
+        "confidence": 0.47265,
+        "box": {
+          "x": 7e-05,
+          "y": 0.55474,
+          "w": 0.02737,
+          "h": 0.0376
+        }
+      }
+    ]
+  },
+  {
+    "index": 32,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0797/MVI_0797_f00360.jpg",
+    "best_boat_confidence": 0.77987,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.77987,
+        "box": {
+          "x": 0.801,
+          "y": 0.18716,
+          "w": 0.19813,
+          "h": 0.14441
+        }
+      }
+    ]
+  },
+  {
+    "index": 41,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0799/MVI_0799_f00030.jpg",
+    "best_boat_confidence": 0.86099,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.86099,
+        "box": {
+          "x": 0.91288,
+          "y": 0.4144,
+          "w": 0.08663,
+          "h": 0.1632
+        }
+      },
+      {
+        "label": "boat",
+        "confidence": 0.82488,
+        "box": {
+          "x": 0.24731,
+          "y": 0.43514,
+          "w": 0.11329,
+          "h": 0.10401
+        }
+      }
+    ]
+  },
+  {
+    "index": 42,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0799/MVI_0799_f00060.jpg",
+    "best_boat_confidence": 0.80412,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.80412,
+        "box": {
+          "x": 0.92521,
+          "y": 0.31328,
+          "w": 0.07426,
+          "h": 0.165
+        }
+      },
+      {
+        "label": "boat",
+        "confidence": 0.79725,
+        "box": {
+          "x": 0.27988,
+          "y": 0.3138,
+          "w": 0.1158,
+          "h": 0.11612
+        }
+      }
+    ]
+  },
+  {
+    "index": 50,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0799/MVI_0799_f00300.jpg",
+    "best_boat_confidence": 0.49883,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.49883,
+        "box": {
+          "x": 0.00091,
+          "y": 0.29396,
+          "w": 0.08472,
+          "h": 0.0602
+        }
+      }
+    ]
+  },
+  {
+    "index": 51,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0799/MVI_0799_f00330.jpg",
+    "best_boat_confidence": 0.55228,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.55228,
+        "box": {
+          "x": 0.06178,
+          "y": 0.78998,
+          "w": 0.08927,
+          "h": 0.05686
+        }
+      }
+    ]
+  },
+  {
+    "index": 55,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0799/MVI_0799_f00450.jpg",
+    "best_boat_confidence": 0.41326,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.41326,
+        "box": {
+          "x": 0.24882,
+          "y": 0.54374,
+          "w": 0.08067,
+          "h": 0.04783
+        }
+      }
+    ]
+  },
+  {
+    "index": 65,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0801/MVI_0801_f00150.jpg",
+    "best_boat_confidence": 0.72206,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.72206,
+        "box": {
+          "x": 0.00755,
+          "y": 0.06483,
+          "w": 0.25945,
+          "h": 0.12978
+        }
+      },
+      {
+        "label": "boat",
+        "confidence": 0.44851,
+        "box": {
+          "x": 0.97911,
+          "y": 0.24545,
+          "w": 0.02052,
+          "h": 0.03884
+        }
+      }
+    ]
+  },
+  {
+    "index": 66,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0801/MVI_0801_f00180.jpg",
+    "best_boat_confidence": 0.77503,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.77503,
+        "box": {
+          "x": 0.08291,
+          "y": 0.34643,
+          "w": 0.40792,
+          "h": 0.16919
+        }
+      }
+    ]
+  },
+  {
+    "index": 70,
+    "member": "SMD_VIS_Onboard_frames/frames/MVI_0801/MVI_0801_f00300.jpg",
+    "best_boat_confidence": 0.40487,
+    "detections": [
+      {
+        "label": "boat",
+        "confidence": 0.40487,
+        "box": {
+          "x": 0.00811,
+          "y": 0.52325,
+          "w": 0.37797,
+          "h": 0.14105
+        }
+      }
+    ]
+  }
+]

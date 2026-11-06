@@ -1,0 +1,60 @@
+2026-11-06T16:09:34.048784Z	info	FLAG: --outlierLogPath=""
+2026-11-06T16:09:34.048786Z	info	FLAG: --profiling="true"
+2026-11-06T16:09:34.048788Z	info	FLAG: --proxyComponentLogLevel="misc:error"
+2026-11-06T16:09:34.048790Z	info	FLAG: --proxyLogLevel="warning"
+2026-11-06T16:09:34.048791Z	info	FLAG: --serviceCluster="istio-proxy"
+2026-11-06T16:09:34.048793Z	info	FLAG: --stsPort="0"
+2026-11-06T16:09:34.048795Z	info	FLAG: --templateFile=""
+2026-11-06T16:09:34.048797Z	info	FLAG: --tokenManagerPlugin=""
+2026-11-06T16:09:34.048799Z	info	FLAG: --vklog="0"
+2026-11-06T16:09:34.048801Z	info	Version 1.31.2-e2f3a7949a358af7dd901a6f9ccd6ecdd7270271-Clean
+2026-11-06T16:09:34.048928Z	info	Proxy role	ips=[10.42.0.24] type=router id=tenant-ingressgateway-84fb59b7bf-vc9ss.istio-tenant-gateway domain=istio-tenant-gateway.svc.cluster.local
+2026-11-06T16:09:34.048966Z	info	Apply proxy config from env {"proxyMetadata":{"ISTIO_META_ENABLE_HBONE":"true"},"gatewayTopology":{"forwardClientCertDetails":"SANITIZE"},"holdApplicationUntilProxyStarts":true,"image":{"imageType":"distroless"}}
+
+2026-11-06T16:09:34.049925Z	info	cpu limit detected as 2, setting concurrency
+2026-11-06T16:09:34.050077Z	info	Effective config: binaryPath: /usr/local/bin/envoy
+concurrency: 2
+configPath: ./etc/istio/proxy
+controlPlaneAuthPolicy: MUTUAL_TLS
+discoveryAddress: istiod.istio-system.svc:15012
+drainDuration: 45s
+gatewayTopology:
+  forwardClientCertDetails: SANITIZE
+holdApplicationUntilProxyStarts: true
+image:
+  imageType: distroless
+proxyAdminPort: 15000
+proxyMetadata:
+  ISTIO_META_ENABLE_HBONE: "true"
+serviceCluster: istio-proxy
+statNameLength: 189
+statusPort: 15020
+terminationDrainDuration: 5s
+
+2026-11-06T16:09:34.050096Z	info	JWT policy is third-party-jwt
+2026-11-06T16:09:34.050099Z	info	using credential fetcher of JWT type in cluster.local trust domain
+2026-11-06T16:09:34.252128Z	info	Starting default Istio SDS Server
+2026-11-06T16:09:34.252150Z	info	CA Endpoint istiod.istio-system.svc:15012, provider Citadel
+2026-11-06T16:09:34.252173Z	info	Using CA istiod.istio-system.svc:15012 cert with certs: var/run/secrets/istio/root-cert.pem
+2026-11-06T16:09:34.252280Z	info	Opening status port 15020
+2026-11-06T16:09:34.252786Z	info	xdsproxy	Initializing with upstream address "istiod.istio-system.svc:15012" and cluster "Kubernetes"
+2026-11-06T16:09:34.253103Z	info	sds	Starting SDS grpc server
+2026-11-06T16:09:34.253117Z	info	sds	Starting SDS server for workload certificates, will listen on "var/run/secrets/workload-spiffe-uds/socket"
+2026-11-06T16:09:34.253856Z	info	Pilot SAN: [istiod.istio-system.svc]
+2026-11-06T16:09:34.254656Z	info	Starting proxy agent
+2026-11-06T16:09:34.254679Z	info	Envoy command: [-c etc/istio/proxy/envoy-rev.json --drain-time-s 45 --drain-strategy immediate --local-address-ip-version v4 --file-flush-interval-msec 1000 --disable-hot-restart --allow-unknown-static-fields -l warning --component-log-level misc:error --skip-deprecated-logs --concurrency 2]
+2026-11-06T16:09:34.271270Z	info	cache	generated new workload certificate	resourceName=default latency=18.084737ms ttl=23h59m59.728732254s
+2026-11-06T16:09:34.271316Z	info	cache	Root cert has changed, start rotating root cert
+2026-11-06T16:09:34.271340Z	info	cache	returned workload trust anchor from cache	ttl=23h59m59.728659636s
+2026-11-06T16:09:34.305798Z	info	xdsproxy	connected to delta upstream XDS server: istiod.istio-system.svc:15012	id=1
+2026-11-06T16:09:34.317464Z	info	ads	ADS: new connection for node:1
+2026-11-06T16:09:34.317517Z	info	cache	returned workload certificate from cache	ttl=23h59m59.682484428s
+2026-11-06T16:09:34.317600Z	info	ads	ADS: new connection for node:2
+2026-11-06T16:09:34.317659Z	info	cache	returned workload trust anchor from cache	ttl=23h59m59.682341837s
+2026-11-06T16:09:49.308321Z	info	Readiness succeeded in 15.262290102s
+2026-11-06T16:09:49.308622Z	info	Envoy proxy is ready
+[2026-11-06T16:21:30.867Z] "GET /api/v1/ HTTP/2" 404 NR route_not_found - "-" 0 0 0 - "10.42.0.1" "curl/7.81.0" "52073433-5b9e-4eba-94cf-d8aa0cfe567c" "shore.uds.dev:9443" "-" - - 10.42.0.24:443 10.42.0.1:18275 shore.uds.dev -
+[2026-11-06T16:34:53.488Z] "POST /ghostseeker.v1.SyncService/Exchange HTTP/2" 200 - via_upstream - "-" 40 12 6 3 "10.42.0.1" "grpc-go-connect/1.18.1 (go1.26.10)" "375b8cbb-c55b-4d72-883e-03ab35ad5207" "shore.uds.dev:443" "10.42.0.31:8080" outbound|8080||shore.ghost-seeker-shore.svc.cluster.local 10.42.0.24:36924 10.42.0.24:443 10.42.0.1:36761 shore.uds.dev .ship-sync
+[2026-11-06T16:34:55.265Z] "POST /ghostseeker.v1.SyncService/Exchange HTTP/2" 200 - via_upstream - "-" 13 12 1 1 "10.42.0.1" "uds-harness-sync-probe" "87cc4b4e-23ed-477c-b5d6-bc760c888fd6" "shore.uds.dev:443" "10.42.0.31:8080" outbound|8080||shore.ghost-seeker-shore.svc.cluster.local 10.42.0.24:36924 10.42.0.24:443 10.42.0.1:42591 shore.uds.dev .ship-sync
+[2026-11-06T16:34:56.498Z] "POST /ghostseeker.v1.SyncService/Exchange HTTP/2" 200 - via_upstream - "-" 40 12 2 1 "10.42.0.1" "grpc-go-connect/1.18.1 (go1.26.10)" "312367f1-d261-468c-b2b8-29f4bcede71b" "shore.uds.dev:443" "10.42.0.31:8080" outbound|8080||shore.ghost-seeker-shore.svc.cluster.local 10.42.0.24:36924 10.42.0.24:443 10.42.0.1:36761 shore.uds.dev .ship-sync
+[2026-11-06T16:34:59.506Z] "POST /ghostseeker.v1.SyncService/Exchange HTTP/2" 200 - via_upstream - "-" 40 12 1 1 "10.42.0.1" "grpc-go-connect/1.18.1 (go1.26.10)" "010c4479-46f2-43c5-baa6-18fead0b8042" "shore.uds.dev:443" "10.42.0.31:8080" outbound|8080||shore.ghost-seeker-shore.svc.cluster.local 10.42.0.24:36924 10.42.0.24:443 10.42.0.1:36761 shore.uds.dev .ship-sync

@@ -1,0 +1,335 @@
+[
+  {
+    "phase": "before",
+    "at": "2026-11-06T17:04:56.347461+00:00",
+    "edge": {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984696282",
+        "policyId": "default",
+        "linkEstimateBps": 11369063.221418919
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 11369063.221418919,
+        "lastSuccessUnixMs": "1793984696029"
+      },
+      "itemsTotal": "1",
+      "itemsComplete": "1",
+      "itemsManifested": "1",
+      "bytesSent": "309721",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    "shore": {
+      "nodeId": "shore",
+      "role": "shore",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984695894",
+        "queuedItems": "1",
+        "queuedBytes": "262797",
+        "policyId": "default",
+        "linkEstimateBps": 7131888.786895975
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 7131888.786895975,
+        "lastSuccessUnixMs": "1793984696025"
+      },
+      "itemsTotal": "1",
+      "itemsComplete": "1",
+      "itemsManifested": "1",
+      "bytesSent": "309721"
+    },
+    "queue": {},
+    "shore_receipts": 1
+  },
+  {
+    "phase": "during",
+    "at": "2026-11-06T17:05:02.262202+00:00",
+    "edge": {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984702199",
+        "queuedItems": "6",
+        "queuedBytes": "1278",
+        "unmanifestedItems": "6",
+        "policyId": "default",
+        "linkEstimateBps": 1421132.9026773649
+      },
+      "link": {
+        "estimateBps": 1421132.9026773649,
+        "lastSuccessUnixMs": "1793984696029",
+        "consecutiveFailures": "2"
+      },
+      "itemsTotal": "7",
+      "itemsComplete": "1",
+      "itemsManifested": "1",
+      "bytesSent": "309721",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    "shore": {
+      "nodeId": "shore",
+      "role": "shore",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984695894",
+        "queuedItems": "1",
+        "queuedBytes": "262797",
+        "policyId": "default",
+        "linkEstimateBps": 7131888.786895975
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 7131888.786895975,
+        "lastSuccessUnixMs": "1793984696025"
+      },
+      "itemsTotal": "1",
+      "itemsComplete": "1",
+      "itemsManifested": "1",
+      "bytesSent": "309721"
+    },
+    "queue": {
+      "entries": [
+        {
+          "itemId": "01M6RX44A6VSJF7Y2SQ0SYBKJK",
+          "form": "FORM_KIND_FACT",
+          "bytesRemaining": "240",
+          "rank": 0.002650931841799031,
+          "score": {
+            "priority": 0.6362236420317675,
+            "reasons": [
+              {
+                "scorer": "base",
+                "value": 0.2
+              },
+              {
+                "scorer": "confidence",
+                "value": 0.4362350106239319,
+                "note": "boat"
+              },
+              {
+                "scorer": "freshness",
+                "value": 0.9999821314577562
+              }
+            ],
+            "computedAtUnixMs": "1793984696893"
+          },
+          "topLabel": "boat"
+        },
+        {
+          "itemId": "01M6RX44VQ48DRPPVYNB2PNDVZ",
+          "form": "FORM_KIND_FACT",
+          "bytesRemaining": "301",
+          "rank": 0.0020946231956632242,
+          "score": {
+            "priority": 0.6304815818946304,
+            "reasons": [
+              {
+                "scorer": "base",
+                "value": 0.2
+              },
+              {
+                "scorer": "confidence",
+                "value": 0.4304949939250946,
+                "note": "boat"
+              },
+              {
+                "scorer": "freshness",
+                "value": 0.9999787277764403
+              }
+            ],
+            "computedAtUnixMs": "1793984697501"
+          },
+          "topLabel": "boat"
+        },
+        {
+          "itemId": "01M6RX457A9WW1E7D9TTS78C59",
+          "form": "FORM_KIND_FACT",
+          "bytesRemaining": "239",
+          "rank": 0.0018354262454458345,
+          "score": {
+            "priority": 0.43866687266155446,
+            "reasons": [
+              {
+                "scorer": "base",
+                "value": 0.2
+              },
+              {
+                "scorer": "confidence",
+                "value": 0.23867499828338623,
+                "note": "boat"
+              },
+              {
+                "scorer": "freshness",
+                "value": 0.9999814768977864
+              }
+            ],
+            "computedAtUnixMs": "1793984697834"
+          },
+          "topLabel": "boat"
+        },
+        {
+          "itemId": "01M6RX45HHG4TR6V7TCA8BMED3",
+          "form": "FORM_KIND_FACT",
+          "bytesRemaining": "166",
+          "rank": 0.0012048043396198683,
+          "score": {
+            "priority": 0.19999752037689814,
+            "reasons": [
+              {
+                "scorer": "base",
+                "value": 0.2
+              },
+              {
+                "scorer": "freshness",
+                "value": 0.9999876018844907
+              }
+            ],
+            "computedAtUnixMs": "1793984698076"
+          }
+        },
+        {
+          "itemId": "01M6RX44M3B2E2N3ARPS6QMJHT",
+          "form": "FORM_KIND_FACT",
+          "bytesRemaining": "166",
+          "rank": 0.0012048043034375406,
+          "score": {
+            "priority": 0.19999751437063173,
+            "reasons": [
+              {
+                "scorer": "base",
+                "value": 0.2
+              },
+              {
+                "scorer": "freshness",
+                "value": 0.9999875718531587
+              }
+            ],
+            "computedAtUnixMs": "1793984697135"
+          }
+        },
+        {
+          "itemId": "01M6RX441K8QG6CQXGB5YAES6J",
+          "form": "FORM_KIND_FACT",
+          "bytesRemaining": "166",
+          "rank": 0.0012048015910588014,
+          "score": {
+            "priority": 0.19999706411576104,
+            "reasons": [
+              {
+                "scorer": "base",
+                "value": 0.2
+              },
+              {
+                "scorer": "freshness",
+                "value": 0.9999853205788052
+              }
+            ],
+            "computedAtUnixMs": "1793984696574"
+          }
+        }
+      ],
+      "totalItems": "6",
+      "totalBytesRemaining": "1278"
+    },
+    "shore_receipts": 1
+  },
+  {
+    "phase": "low-rate",
+    "at": "2026-11-06T17:05:17.425401+00:00",
+    "edge": {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984717356",
+        "queuedItems": "6",
+        "queuedBytes": "1278",
+        "unmanifestedItems": "6",
+        "policyId": "default",
+        "linkEstimateBps": 1421132.9026773649
+      },
+      "link": {
+        "estimateBps": 1421132.9026773649,
+        "lastSuccessUnixMs": "1793984696029",
+        "consecutiveFailures": "2"
+      },
+      "itemsTotal": "7",
+      "itemsComplete": "1",
+      "itemsManifested": "1",
+      "bytesSent": "309721",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    "shore": {
+      "nodeId": "shore",
+      "role": "shore",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984695894",
+        "queuedItems": "1",
+        "queuedBytes": "262797",
+        "policyId": "default",
+        "linkEstimateBps": 7131888.786895975
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 7131888.786895975,
+        "lastSuccessUnixMs": "1793984696025"
+      },
+      "itemsTotal": "1",
+      "itemsComplete": "1",
+      "itemsManifested": "1",
+      "bytesSent": "309721"
+    },
+    "queue": {},
+    "shore_receipts": 1
+  },
+  {
+    "phase": "after",
+    "at": "2026-11-06T17:05:20.559640+00:00",
+    "edge": {
+      "nodeId": "edge-1",
+      "role": "edge",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984720494",
+        "policyId": "default",
+        "linkEstimateBps": 10331101.095348466
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 10331101.095348466,
+        "lastSuccessUnixMs": "1793984720261"
+      },
+      "itemsTotal": "7",
+      "itemsComplete": "7",
+      "itemsManifested": "7",
+      "bytesSent": "1520887",
+      "policyId": "default",
+      "prioritizer": "edgeml"
+    },
+    "shore": {
+      "nodeId": "shore",
+      "role": "shore",
+      "heartbeat": {
+        "sentAtUnixMs": "1793984719912",
+        "queuedItems": "4",
+        "queuedBytes": "680012",
+        "policyId": "default",
+        "linkEstimateBps": 4986268.766808936
+      },
+      "link": {
+        "up": true,
+        "estimateBps": 4986268.766808936,
+        "lastSuccessUnixMs": "1793984720252"
+      },
+      "itemsTotal": "7",
+      "itemsComplete": "7",
+      "itemsManifested": "7",
+      "bytesSent": "1520887"
+    },
+    "queue": {},
+    "shore_receipts": 7
+  }
+]

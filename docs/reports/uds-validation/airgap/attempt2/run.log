@@ -1,0 +1,11 @@
+firewall-off: OK
+firewall-off-again: OK
+firewall-final-status: OK
+Traceback (most recent call last):
+  File "/home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-airgap-verify.py", line 179, in <module>
+    main()
+  File "/home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-airgap-verify.py", line 108, in main
+    run('firewall-on', [FIREWALL, 'on'])
+  File "/home/ubuntu/repos/ghost-seeker/scripts/uds/two-cluster-airgap-verify.py", line 28, in run
+    raise RuntimeError(f'{name}: exit {result.returncode}; see {REPORT/(name+".log")}')
+RuntimeError: firewall-on: exit 127; see /home/ubuntu/repos/ghost-seeker/docs/reports/uds-validation/airgap/firewall-on.log

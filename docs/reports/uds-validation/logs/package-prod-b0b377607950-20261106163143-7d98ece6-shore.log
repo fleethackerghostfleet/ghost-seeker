@@ -1,0 +1,13 @@
+2026-11-06 16:32:32 INF assembling package path=/home/ubuntu/.local/share/uds-two-cluster/build/prod-b0b377607950-20261106163143-7d98ece6/deploy/zarf/shore
+2026-11-06 16:32:32 INF fetching info for images count=2 destination=/tmp/zarf-1652268991/images
+2026-11-06 16:32:33 WRN unable to find image, attempting pull from docker daemon as fallback image=docker.io/ghost-seeker/shore:prod-b0b377607950-20261106163143-7d98ece6 err=GET "https://registry-1.docker.io/v2/ghost-seeker/shore/manifests/prod-b0b377607950-20261106163143-7d98ece6": response status code 401: unauthorized: authentication required: [map[Action:pull Class: Name:ghost-seeker/shore Type:repository]]
+2026-11-06 16:32:33 WRN unable to find image, attempting pull from docker daemon as fallback image=docker.io/ghost-seeker/operator:prod-b0b377607950-20261106163143-7d98ece6 err=GET "https://registry-1.docker.io/v2/ghost-seeker/operator/manifests/prod-b0b377607950-20261106163143-7d98ece6": response status code 401: unauthorized: authentication required: [map[Action:pull Class: Name:ghost-seeker/operator Type:repository]]
+2026-11-06 16:32:33 INF pulling images count=2
+2026-11-06 16:32:33 INF pulling image from docker daemon name=docker.io/ghost-seeker/shore:prod-b0b377607950-20261106163143-7d98ece6 count=1/2
+2026-11-06 16:32:34 INF pulling image from docker daemon name=docker.io/ghost-seeker/operator:prod-b0b377607950-20261106163143-7d98ece6 count=2/2
+2026-11-06 16:32:34 INF done pulling images count=2 duration=1.2s
+2026-11-06 16:32:34 INF composed components successfully
+2026-11-06 16:32:34 INF generating SBOM
+2026-11-06 16:32:34 INF creating image SBOM reference=docker.io/ghost-seeker/shore:prod-b0b377607950-20261106163143-7d98ece6 count=1/2
+2026-11-06 16:32:35 INF creating image SBOM reference=docker.io/ghost-seeker/operator:prod-b0b377607950-20261106163143-7d98ece6 count=2/2
+2026-11-06 16:32:36 INF writing package to disk path=/home/ubuntu/.local/share/uds-two-cluster/build/prod-b0b377607950-20261106163143-7d98ece6/dist/zarf-package-ghost-seeker-shore-amd64-0.1.0.tar.zst

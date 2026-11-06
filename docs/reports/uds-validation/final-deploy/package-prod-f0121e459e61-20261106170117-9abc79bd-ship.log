@@ -1,0 +1,16 @@
+2026-11-06 17:03:29 INF assembling package path=/home/ubuntu/.local/share/uds-two-cluster/build/prod-f0121e459e61-20261106170117-9abc79bd/deploy/zarf/ship
+2026-11-06 17:03:29 INF fetching info for images count=3 destination=/tmp/zarf-4231580657/images
+2026-11-06 17:03:29 WRN unable to find image, attempting pull from docker daemon as fallback image=docker.io/ghost-seeker/edge:prod-f0121e459e61-20261106170117-9abc79bd err=GET "https://registry-1.docker.io/v2/ghost-seeker/edge/manifests/prod-f0121e459e61-20261106170117-9abc79bd": response status code 401: unauthorized: authentication required: [map[Action:pull Class: Name:ghost-seeker/edge Type:repository]]
+2026-11-06 17:03:29 WRN unable to find image, attempting pull from docker daemon as fallback image=docker.io/ghost-seeker/edgeml-sidecar:prod-f0121e459e61-20261106170117-9abc79bd err=GET "https://registry-1.docker.io/v2/ghost-seeker/edgeml-sidecar/manifests/prod-f0121e459e61-20261106170117-9abc79bd": response status code 401: unauthorized: authentication required: [map[Action:pull Class: Name:ghost-seeker/edgeml-sidecar Type:repository]]
+2026-11-06 17:03:29 WRN unable to find image, attempting pull from docker daemon as fallback image=docker.io/ghost-seeker/edgeml-models:prod-f0121e459e61-20261106170117-9abc79bd err=GET "https://registry-1.docker.io/v2/ghost-seeker/edgeml-models/manifests/prod-f0121e459e61-20261106170117-9abc79bd": response status code 401: unauthorized: authentication required: [map[Action:pull Class: Name:ghost-seeker/edgeml-models Type:repository]]
+2026-11-06 17:03:29 INF pulling images count=3
+2026-11-06 17:03:29 INF pulling image from docker daemon name=docker.io/ghost-seeker/edge:prod-f0121e459e61-20261106170117-9abc79bd count=1/3
+2026-11-06 17:03:38 INF pulling image from docker daemon name=docker.io/ghost-seeker/edgeml-sidecar:prod-f0121e459e61-20261106170117-9abc79bd count=2/3
+2026-11-06 17:03:41 INF pulling image from docker daemon name=docker.io/ghost-seeker/edgeml-models:prod-f0121e459e61-20261106170117-9abc79bd count=3/3
+2026-11-06 17:03:41 INF done pulling images count=3 duration=12.4s
+2026-11-06 17:03:41 INF composed components successfully
+2026-11-06 17:03:41 INF generating SBOM
+2026-11-06 17:03:41 INF creating image SBOM reference=docker.io/ghost-seeker/edge:prod-f0121e459e61-20261106170117-9abc79bd count=1/3
+2026-11-06 17:03:42 INF creating image SBOM reference=docker.io/ghost-seeker/edgeml-sidecar:prod-f0121e459e61-20261106170117-9abc79bd count=2/3
+2026-11-06 17:03:59 INF creating image SBOM reference=docker.io/ghost-seeker/edgeml-models:prod-f0121e459e61-20261106170117-9abc79bd count=3/3
+2026-11-06 17:04:04 INF writing package to disk path=/home/ubuntu/.local/share/uds-two-cluster/build/prod-f0121e459e61-20261106170117-9abc79bd/dist/zarf-package-ghost-seeker-ship-amd64-0.1.0.tar.zst

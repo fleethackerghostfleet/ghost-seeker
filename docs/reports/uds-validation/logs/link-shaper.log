@@ -1,0 +1,34 @@
+2026/11/06 16:27:20 TCP shaper listen=172.19.0.1:19443 target=127.0.0.1:9443 bps=16000000 control=/home/ubuntu/.local/share/uds-two-cluster/link.sock
+2026/11/06 16:28:15 rate set to 0 bits/s
+2026/11/06 16:28:15 rate set to 16000000 bits/s
+2026/11/06 16:31:58 TCP shaper listen=172.19.0.1:443 target=127.0.0.1:9443 bps=16000000 control=/home/ubuntu/.local/share/uds-two-cluster/link.sock
+2026/11/06 16:35:11 rate set to 0 bits/s
+2026/11/06 16:35:27 rate set to 16000000 bits/s
+2026/11/06 16:40:51 rate set to 16000000 bits/s
+2026/11/06 16:40:55 rate set to 16000000 bits/s
+2026/11/06 16:41:17 rate set to 16000000 bits/s
+2026/11/06 16:41:21 rate set to 0 bits/s
+2026/11/06 16:41:27 rate set to 64000 bits/s
+2026/11/06 16:41:43 rate set to 16000000 bits/s
+2026/11/06 16:41:46 rate set to 16000000 bits/s
+2026/11/06 16:43:14 rate set to 16000000 bits/s
+2026/11/06 16:43:19 rate set to 0 bits/s
+2026/11/06 16:43:25 rate set to 64000 bits/s
+2026/11/06 16:43:40 rate set to 16000000 bits/s
+2026/11/06 16:43:43 rate set to 16000000 bits/s
+2026/11/06 16:52:26 rate set to 16000000 bits/s
+2026/11/06 16:53:42 rate set to 16000000 bits/s
+2026/11/06 16:54:17 rate set to 16000000 bits/s
+2026/11/06 16:57:25 rate set to 16000000 bits/s
+2026/11/06 16:58:30 rate set to 64000 bits/s
+2026/11/06 16:59:50 rate set to 16000000 bits/s
+2026/11/06 16:59:50 rate set to 16000000 bits/s
+2026/11/06 17:04:51 rate set to 16000000 bits/s
+2026/11/06 17:04:56 rate set to 0 bits/s
+2026/11/06 17:05:02 rate set to 64000 bits/s
+2026/11/06 17:05:17 rate set to 16000000 bits/s
+2026/11/06 17:05:20 rate set to 16000000 bits/s
+2026/11/06 17:06:58 rate set to 0 bits/s
+2026/11/06 17:06:59 rate set to 64000 bits/s
+2026/11/06 17:10:00 rate set to 16000000 bits/s
+2026/11/06 17:10:00 rate set to 16000000 bits/s
