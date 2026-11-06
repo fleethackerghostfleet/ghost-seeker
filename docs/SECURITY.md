@@ -38,6 +38,8 @@ way as the unit sync credential (`internal/unitauth.Credential`):
     unchanged. LAN clients still see `/login`.
   * Scripts may send `Authorization: Bearer <token>` to the web app directly.
   * Unauthenticated: `/api/*`, `/blob/*` and any non-GET → `401` JSON; pages → `302 /login`.
+    The sign-in page's logo files (`/brand/logo.png`, `/brand/favicon-32.png`,
+    `/brand/apple-touch-icon.png`) are served to GET/HEAD without a session.
   * `POST /logout` clears the session; `GET /api/auth` → `{"authenticated":bool,"dev":bool}`.
 * **Production**: set `GS_OPERATOR_TOKEN` (or `_FILE`) on all three processes and
   `GS_DEV_TOKEN_FILE=none` (as `deploy/compose/docker-compose.yml` does); the processes refuse to
@@ -79,7 +81,7 @@ smartcard-logon-only certificates. We therefore use `RequireAnyClientCert` plus
 `VerifyConnection` and explicit local `x509.Verify` with `ExtKeyUsageAny`. The acceptable-CA
 list contains roots and intermediates. The server keypair and CA bundle require restart to change.
 
-**Every HTTP request except `/healthz`:** repeats chain verification, then requires digitalSignature
+**Every HTTP request except `/healthz` and the sign-in page's logo files (`/brand/logo.png`, `/brand/favicon-32.png`, `/brand/apple-touch-icon.png`):** repeats chain verification, then requires digitalSignature
 key usage and either clientAuth or Microsoft smartcard-logon EKU (`Any` alone is insufficient),
 optional RFC 5280 certificate-policy chain validation, revocation for the leaf **and every
 non-root intermediate**, and a users-file lookup. A viewer may GET/HEAD but cannot mutate state;

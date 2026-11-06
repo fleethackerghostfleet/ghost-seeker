@@ -1,0 +1,54 @@
+{
+  "scope": "Portable delivery verification; private fixtures kept outside Git",
+  "python_tests": {
+    "passed": 72,
+    "suites": 5
+  },
+  "studies": [
+    {
+      "study": "causal",
+      "runs": 2304,
+      "aggregate_json_exact_match": [
+        "runs.json",
+        "summary.json",
+        "metrics.json"
+      ],
+      "transport_logs_exact_match": 2304
+    },
+    {
+      "study": "chunks",
+      "runs": 432,
+      "aggregate_json_exact_match": [
+        "runs.json",
+        "summary.json"
+      ],
+      "transport_logs_exact_match": 432
+    },
+    {
+      "study": "completion",
+      "runs": 144,
+      "aggregate_json_exact_match": [
+        "runs.json",
+        "summary.json"
+      ],
+      "transport_logs_exact_match": 144
+    }
+  ],
+  "go": {
+    "revision": "1a6382ed554c63466c6fc34fafa1bbf0bb70b659",
+    "tracked_snapshot_files": 140,
+    "passed_test_events": 29,
+    "result_json_exact_match": 5,
+    "existing_localhost_test_required_scoped_permission": true,
+    "initial_sandbox_run_failed_only_on_localhost_bind": true
+  },
+  "checks": {
+    "markdown_local_targets_exist": true,
+    "no_personal_absolute_paths": true,
+    "no_private_image_model_annotation_or_rawlog_files": true
+  },
+  "limits": [
+    "Private data needed to repeat study output comparisons",
+    "Go virtual replay does not validate HTTP authentication middleware or physical network timing"
+  ]
+}
