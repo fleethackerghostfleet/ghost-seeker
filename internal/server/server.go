@@ -61,6 +61,7 @@ func New(data *store.Store, options ...Option) *Server {
 	s.policy.onChange = s.publishSnapshot
 	s.registerDemoRoutes()
 	s.mux.HandleFunc("GET /api/config", s.config)
+	s.mux.HandleFunc("GET /api/items/{id}/metadata", s.itemMetadata)
 	s.mux.HandleFunc("GET /api/review-sync", s.reviewSyncList)
 	s.mux.HandleFunc("POST /api/review-sync/proposals", s.reviewSyncCreate)
 	s.mux.HandleFunc("POST /api/review-sync/proposals/{id}/vote", s.reviewSyncVote)
@@ -89,6 +90,17 @@ func New(data *store.Store, options ...Option) *Server {
 	s.mux.Handle("GET /cdr", http.RedirectHandler("/cdr.html", http.StatusFound))
 	s.mux.Handle("GET /", web.Handler())
 	return s
+}
+
+func (s *Server) itemMetadata(w http.ResponseWriter, r *http.Request) {
+	item, ok := s.store.GetItem(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "item not found")
+		return
+	}
+	record := command.BuildMetadata(item)
+	record["capture"].(map[string]any)["sensor"].(map[string]any)["emcon"] = s.policySummary().EMCON.Mode
+	writeJSON(w, http.StatusOK, record)
 }
 
 func (s *Server) SetCompiler(compiler *command.Compiler) {

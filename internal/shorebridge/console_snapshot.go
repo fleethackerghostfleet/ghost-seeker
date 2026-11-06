@@ -119,7 +119,12 @@ func (c *Console) statsLocked() command.Stats {
 	if c.live.Link.Controllable {
 		bytes = c.live.Link.Bytes
 	}
-	return command.Stats{Cap: int(e.ItemsTotal + e.Deduped), Keep: int(e.ItemsTotal), Drop: int(e.Deduped), Bytes: int(bytes), DB: int(s.ItemsTotal)}
+	stats := command.Stats{Cap: int(e.ItemsTotal + e.Deduped), Keep: int(e.ItemsTotal), Drop: int(e.Deduped), Bytes: int(bytes), DB: int(s.ItemsTotal), MetaOnly: e.MetaOnly, MetaOnlyReason: e.MetaOnlyReason}
+	if e.MetaOnlySince != 0 {
+		t := time.UnixMilli(e.MetaOnlySince).UTC()
+		stats.MetaOnlySince = &t
+	}
+	return stats
 }
 
 func (c *Console) snapshotLocked() map[string]any {

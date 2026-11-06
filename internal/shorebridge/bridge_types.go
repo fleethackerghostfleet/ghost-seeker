@@ -58,22 +58,25 @@ type Object struct {
 }
 
 type NodeStatus struct {
-	OK          bool    `json:"ok"`
-	ItemsTotal  int64   `json:"itemsTotal"`
-	Deduped     int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
-	Prioritizer string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
-	Evicted     int64   `json:"itemsEvicted"`
-	ItemsUnique int64   `json:"itemsComplete"`
-	Unknown     int64   `json:"itemsUnknown"`
-	Bytes       int64   `json:"bytes"`
-	Queued      int64   `json:"queuedItems"`
-	QueuedBytes int64   `json:"queuedBytes"`
-	LinkUp      bool    `json:"linkUp"`
-	Failures    int64   `json:"consecutiveFailures"`
-	EstimateBps float64 `json:"estimateBps"`
-	PolicyID    string  `json:"policyId"`
-	LastSeenMs  int64   `json:"lastSeenMs"`
-	Error       string  `json:"error,omitempty"`
+	OK             bool    `json:"ok"`
+	ItemsTotal     int64   `json:"itemsTotal"`
+	Deduped        int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
+	Prioritizer    string  `json:"prioritizer,omitempty"` // edge: scoring backend driving the queue (edgeml | tomer)
+	Evicted        int64   `json:"itemsEvicted"`
+	ItemsUnique    int64   `json:"itemsComplete"`
+	Unknown        int64   `json:"itemsUnknown"`
+	Bytes          int64   `json:"bytes"`
+	Queued         int64   `json:"queuedItems"`
+	QueuedBytes    int64   `json:"queuedBytes"`
+	LinkUp         bool    `json:"linkUp"`
+	Failures       int64   `json:"consecutiveFailures"`
+	EstimateBps    float64 `json:"estimateBps"`
+	PolicyID       string  `json:"policyId"`
+	LastSeenMs     int64   `json:"lastSeenMs"`
+	MetaOnly       bool    `json:"metaOnly"`
+	MetaOnlySince  int64   `json:"metaOnlySince,omitempty"`
+	MetaOnlyReason string  `json:"metaOnlyReason,omitempty"`
+	Error          string  `json:"error,omitempty"`
 }
 
 type Snapshot struct {

@@ -3,7 +3,9 @@ package shorebridge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
+	edgefact "github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 	"io"
 	"log"
 	"net/http"
@@ -138,6 +140,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 		}
 		b.mu.Unlock()
 	} else {
+		b.updateFactVersions(items)
 		snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
 		for _, o := range snap.Objects {
 			o.detectionMin = currentPolicy.GetThresholds().GetDetectionMinConf()
@@ -265,9 +268,85 @@ func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
 		EstimateBps: st.GetLink().GetEstimateBps(),
 		PolicyID:    st.GetPolicyId(),
 		LastSeenMs:  st.GetLink().GetLastSuccessUnixMs(),
+		MetaOnly:    st.GetMetaOnly(), MetaOnlySince: st.GetMetaOnlySinceUnixMs(), MetaOnlyReason: st.GetMetaOnlyReason(),
 	}
 	if n.EstimateBps == 0 {
 		n.EstimateBps = float64(st.GetHeartbeat().GetLinkEstimateBps())
 	}
 	return n
+}
+
+func (b *Bridge) updateFactVersions(items []*pb.ItemView) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, v := range items {
+		for _, form := range v.GetItem().GetForms() {
+			if form.GetKind() != pb.FormKind_FORM_KIND_FACT {
+				continue
+			}
+			complete := false
+			for _, state := range v.GetFormStates() {
+				if state.GetKind() == pb.FormKind_FORM_KIND_FACT {
+					complete = state.GetComplete()
+				}
+			}
+			id := v.GetItem().GetId()
+			version := fmt.Sprintf("%s:%d:%t", form.GetContentHash(), form.GetBytes(), complete)
+			if b.factVersions[id] != version {
+				delete(b.facts, id)
+				b.factVersions[id] = version
+			}
+		}
+	}
+}
+
+func (b *Bridge) fetchFact(ctx context.Context, id string) *edgefact.Fact {
+	b.mu.Lock()
+	if f, ok := b.facts[id]; ok {
+		b.mu.Unlock()
+		return f
+	}
+	version := b.factVersions[id]
+	b.mu.Unlock()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.shore+"/blob/"+id+"/fact", nil)
+	if err != nil {
+		return nil
+	}
+	b.authorize(req)
+	res, err := b.client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return nil
+	}
+	var f edgefact.Fact
+	if json.Unmarshal(raw, &f) != nil || f.ID == "" {
+		var env struct {
+			Fact json.RawMessage `json:"fact"`
+			Data json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal(raw, &env) != nil {
+			return nil
+		}
+		for _, part := range [][]byte{env.Fact, env.Data} {
+			if len(part) > 0 && json.Unmarshal(part, &f) == nil && f.ID != "" {
+				break
+			}
+		}
+	}
+	if f.ID == "" {
+		return nil
+	}
+	b.mu.Lock()
+	if b.factVersions[id] == version {
+		b.facts[id] = &f
+	}
+	b.mu.Unlock()
+	return &f
 }

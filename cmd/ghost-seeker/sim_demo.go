@@ -42,6 +42,7 @@ type demoFlags struct {
 	autoCDR            *time.Duration
 	demoLinkControl    *bool
 	simLinkBps         *int64
+	lowbandHold        *time.Duration
 	admin              *bool
 	policyState        *string
 	devToken           *string
@@ -61,6 +62,7 @@ func registerDemoFlags() *demoFlags {
 	d.autoCDR = flag.Duration("auto-cdr", 15*time.Second, "average interval at which a simulated watch officer escalates the top P1/P2 image to the commander (0 = off)")
 	d.demoLinkControl = flag.Bool("demo-link-control", false, "live mode: allow POST /api/shore/link to pin the shaper rate ({\"bps\":N} or {\"auto\":true}) so a presenter can build a backlog")
 	d.simLinkBps = flag.Int64("sim-link-bps", -1, "simulation: fixed upload rate override in bits/s (-1 = automatic ship bandwidth, 0 = outage)")
+	d.lowbandHold = flag.Duration("lowband-hold", 2*time.Minute, "simulation: sustained low/high link duration before metadata-only mode changes")
 	adminDefault := strings.EqualFold(os.Getenv("GS_ADMIN"), "true") || os.Getenv("GS_ADMIN") == "1"
 	d.admin = flag.Bool("admin", adminDefault, "enable super-admin policy controls")
 	d.policyState = flag.String("policy-state", "", "persist simulation policy state at this path")
@@ -119,6 +121,7 @@ func runSimulationMode(addr string, d *demoFlags, linkBps int64, reviewPath stri
 		reviewPath = "data/reviews-real.jsonl"
 	}
 	data := store.New(*d.retain)
+	data.SetLowbandHold(*d.lowbandHold)
 	var generator *sensor.Generator
 	var replay *reviewdataset.Replay
 	options := []server.Option{server.WithAdmin(*d.admin), server.WithAdminToken(operator), server.WithNodeID("DDG-51")}

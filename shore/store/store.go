@@ -127,6 +127,7 @@ type Item struct {
 
 type FormState struct {
 	Kind       pb.FormKind
+	Hash       string
 	Total      int64
 	Received   int64 // contiguous from 0
 	Complete   bool
@@ -560,7 +561,7 @@ func (s *Store) Get(ctx context.Context, id string) (*Item, error) {
 			return nil, err
 		}
 	}
-	q, err := s.db.QueryContext(ctx, `SELECT kind,total,received,complete,mime,first_at,complete_at FROM forms WHERE item_id=? ORDER BY kind`, id)
+	q, err := s.db.QueryContext(ctx, `SELECT kind,hash,total,received,complete,mime,first_at,complete_at FROM forms WHERE item_id=? ORDER BY kind`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -569,7 +570,7 @@ func (s *Store) Get(ctx context.Context, id string) (*Item, error) {
 		var fs FormState
 		var kind, cpl int
 		var fa, ca int64
-		if err := q.Scan(&kind, &fs.Total, &fs.Received, &cpl, &fs.Mime, &fa, &ca); err != nil {
+		if err := q.Scan(&kind, &fs.Hash, &fs.Total, &fs.Received, &cpl, &fs.Mime, &fa, &ca); err != nil {
 			return nil, err
 		}
 		fs.Kind, fs.Complete = pb.FormKind(kind), cpl == 1

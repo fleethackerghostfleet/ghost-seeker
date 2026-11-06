@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+// Imagery returns the embedded imagery tree (empty in prod builds).
+func Imagery() fs.FS {
+	content, err := fs.Sub(files, "static/imagery")
+	if err != nil {
+		panic(err)
+	}
+	return content
+}
+
 func Handler() http.Handler {
 	content, err := fs.Sub(files, "static")
 	if err != nil {

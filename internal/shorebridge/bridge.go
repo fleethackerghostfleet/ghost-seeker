@@ -8,6 +8,7 @@ package shorebridge
 import (
 	pb "github.com/fleethackerghostfleet/ghost-seeker/gen/ghostseeker/v1"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
+	edgefact "github.com/fleethackerghostfleet/ghost-seeker/internal/fact"
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/shaper"
 	"net/http"
 	"strings"
@@ -44,14 +45,16 @@ type Bridge struct {
 	// nil keeps the simple Interpret path.
 	Compiler *command.Compiler
 
-	mu         sync.Mutex
-	snap       []byte
-	lastGood   *Snapshot
-	lastPolicy *pb.Policy
-	subs       map[chan []byte]struct{}
-	records    map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
-	operator   string
-	edgeNodeID string
+	mu           sync.Mutex
+	snap         []byte
+	subs         map[chan []byte]struct{}
+	records      map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
+	facts        map[string]*edgefact.Fact
+	factVersions map[string]string
+	operator     string
+	edgeNodeID   string
+	lastGood     *Snapshot
+	lastPolicy   *pb.Policy
 
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
 	nextExpiry time.Time                   // earliest timed rule/EMCON/policy deadline seen by the poller
@@ -60,14 +63,16 @@ type Bridge struct {
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	return &Bridge{
-		shore:    strings.TrimRight(shoreURL, "/"),
-		edge:     strings.TrimRight(edgeURL, "/"),
-		link:     link,
-		client:   &http.Client{Timeout: 10 * time.Second},
-		subs:     map[chan []byte]struct{}{},
-		records:  map[string]contactReport{},
-		poke:     make(chan struct{}, 1),
-		operator: DefaultOperator,
+		shore:        strings.TrimRight(shoreURL, "/"),
+		edge:         strings.TrimRight(edgeURL, "/"),
+		link:         link,
+		client:       &http.Client{Timeout: 10 * time.Second},
+		subs:         map[chan []byte]struct{}{},
+		records:      map[string]contactReport{},
+		facts:        map[string]*edgefact.Fact{},
+		factVersions: map[string]string{},
+		poke:         make(chan struct{}, 1),
+		operator:     DefaultOperator,
 	}
 }
 
