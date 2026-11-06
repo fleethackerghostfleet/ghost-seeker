@@ -22,6 +22,10 @@ func TestOpenLanguageReviewRegressions(t *testing.T) {
 	if len(got.Rules) != 2 || got.Rules[0].Type != "boost" || !got.Rules[0].Only || got.Rules[1].Type != "suppress" || !reflect.DeepEqual(got.Rules[1].Classes, []string{"bird"}) {
 		t.Fatalf("ignore … and everything else: %+v", got.Rules)
 	}
+	got = compiler.Compile(context.Background(), "prioritize warships; don't show birds and everything else")
+	if len(got.Rules) != 2 || !got.Rules[0].Only || got.Rules[1].Type != "suppress" {
+		t.Fatalf("don't show … and everything else: %+v", got.Rules)
+	}
 	got = compiler.Compile(context.Background(), "ignore birds but prioritize warships and other contacts")
 	for _, rule := range got.Rules {
 		if rule.Only {
