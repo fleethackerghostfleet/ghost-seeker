@@ -58,9 +58,6 @@ type Object struct {
 }
 
 type NodeStatus struct {
-	MetaOnly       bool    `json:"metaOnly"`
-	MetaOnlySince  int64   `json:"metaOnlySince,omitempty"`
-	MetaOnlyReason string  `json:"metaOnlyReason,omitempty"`
 	OK             bool    `json:"ok"`
 	ItemsTotal     int64   `json:"itemsTotal"`
 	Deduped        int64   `json:"itemsDeduped"`          // edge: captures folded into an existing item (hash/sighting duplicates)
@@ -76,6 +73,9 @@ type NodeStatus struct {
 	EstimateBps    float64 `json:"estimateBps"`
 	PolicyID       string  `json:"policyId"`
 	LastSeenMs     int64   `json:"lastSeenMs"`
+	MetaOnly       bool    `json:"metaOnly"`
+	MetaOnlySince  int64   `json:"metaOnlySince,omitempty"`
+	MetaOnlyReason string  `json:"metaOnlyReason,omitempty"`
 	Error          string  `json:"error,omitempty"`
 }
 

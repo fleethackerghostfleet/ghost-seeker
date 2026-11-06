@@ -852,12 +852,32 @@ function processingHTML(it){
   <li><i></i><div>Shore priority scoring<br><small>${esc(MODELS[state.model].name)}${state.directives.length?` + ${state.directives.length} directive${state.directives.length>1?'s':''}`:''}</small></div><span class="ms">${fmtMs(it.lat.cen)}</span></li>
  </ul></div>`;
 }
+function captureHTML(it){
+ const c=it.capture;if(!c)return '';
+ const keys=['lat','lon','headingDeg','widthPx','heightPx','contentHash','subtype','subtypeConf','unknownness','trackId','trackFrames',...['altM','fovDeg'].filter(k=>c[k]!=null)];
+ const synthetic=new Set(Array.isArray(c.synthetic)?c.synthetic:[]),all=keys.every(k=>synthetic.has(k));
+ const tag='<small class="capture-synthetic" title="This value is simulated, not measured by a sensor.">synthetic</small>';
+ const value=(key,text,title)=>`<span${title==null?'':` title="${esc(title)}"`}>${esc(text??'—')}</span>${!all&&synthetic.has(key)?tag:''}`;
+ const num=(key,dp=0)=>Number.isFinite(c[key])?c[key].toFixed(dp):c[key]??'—';
+ const pct=key=>Number.isFinite(c[key])?`${(c[key]*100).toFixed(0)}%`:c[key]??'—';
+ const row=(label,body)=>`<dt>${esc(label)}</dt><dd>${body}</dd>`;
+ return `<section class="dsec capture"><h3>Capture</h3>${all?'<p class="capture-note" title="These values are simulated, not measured by a sensor.">All capture values shown are synthetic.</p>':''}<dl class="capture-grid">${
+  row('Position',`${value('lat',num('lat',5))}, ${value('lon',num('lon',5))} · ${value('headingDeg',`${num('headingDeg',1)}°`)}`)+
+  (c.altM!=null?row('Altitude',value('altM',`${num('altM',1)} m`)):'')+
+  (c.fovDeg!=null?row('Field of view',value('fovDeg',`${num('fovDeg',1)}°`)):'')+
+  row('Resolution',`${value('widthPx',c.widthPx)} × ${value('heightPx',c.heightPx)} px`)+
+  row('Content hash',value('contentHash',String(c.contentHash??'').slice(0,12),c.contentHash))+
+  row('Subtype',`${value('subtype',c.subtype)} · ${value('subtypeConf',pct('subtypeConf'))}`)+
+  row('Unknownness',value('unknownness',pct('unknownness')))+
+  row('Track',`${value('trackId',c.trackId)} · ${value('trackFrames',c.trackFrames)} frames`)
+ }</dl></section>`;
+}
 function renderDetail(){preserveBandFocus(renderDetailContent)}
 function renderDetailContent(){
  const it=findItem(state.sel);const D=$('drawer');
  if(!it){D.innerHTML='';closeDetail();return}
 	if(isScene(it)){
-	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn" aria-label="Close image details">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody"><p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
+	 D.innerHTML=`<div class="dhead"><div><h2><span class="tier t4">P4 Low</span> Empty water · no contacts</h2><small>${esc(it.src.name)} · ${zulu(it.ts)}</small></div><button id="dClose" class="btn" aria-label="Close image details">×</button></div><div class="dimg" id="dImg">${largeImage(it)}</div><div class="dbody">${captureHTML(it)}<p>Object-free camera overview. No contact review, alerts or escalation.</p>${uploadHTML(it)}${formChipsHTML(it)}${uploadState(it).background?'<p class="hint">FULL stays on ship until explicitly pulled from Cameras.</p>':''}${metadataPanelHTML(it)}</div>`;
 	 $('dClose').onclick=closeDetail;$('dImg').onclick=openZoom;bindMetadataPanel(it);return;
 	}
  const rows=it.dets.map((d,i)=>[d,it.det[i]]).sort((a,b)=>b[1].s-a[1].s);
@@ -868,6 +888,7 @@ function renderDetailContent(){
   <div class="dnav"><button id="dPrev" title="Previous (←)" aria-label="Previous image">‹</button><button id="dNext" title="Next (→)" aria-label="Next image">›</button><button id="dClose" title="Close (Esc)" aria-label="Close image details">×</button></div></div>
  <div class="dimg" id="dImg" title="Enlarge (F)">${largeImage(it)}<span class="zhint">⤢ Enlarge · F</span></div>
  <div class="dbody">
+  ${captureHTML(it)}
   <div class="lbl" style="margin-bottom:6px">Set priority · keys 1–4${it.manual?' · <span style="color:var(--accent);text-transform:none;letter-spacing:0">operator override</span>':''}</div><div class="tierbtns">${[1,2,3,4].map(t=>`<button class="btn tb${t} ${it.tier===t?'on':''}" data-t="${t}">P${t} ${TNAME[t]}</button>`).join('')}<button class="btn" id="dReset" title="Reset to model" aria-label="Reset priority to model" ${it.manual?'':'disabled style="opacity:.4"'}>↺</button></div>
   <div class="scores"><div class="sc" title="${DATASET_MODE?'Detector triage score from real detections':it.live?'Ship score: importance relative to the highest score on shore':'Edge score: the ship’s initial estimate of importance'}"><span>${DATASET_MODE?'Detector score':'Ship score'}</span><b>${it.edge.toFixed(2)}</b></div><div class="sc" title="${DATASET_MODE?'Command-model score after active directives':it.live?'Shore score: relative importance after applying your directive':'Command score: importance after shore scoring and directives'}"><span>${DATASET_MODE?'Model score':'Shore score'}</span><b style="color:${tcol(it.tier)}">${it.central.toFixed(2)}</b></div><div class="sc"><span title="How much active directives changed the base score">Change from directives</span><b style="color:${dl>.04?'var(--accent)':dl<-.04?'#8d99a5':'var(--text)'}">${dl>=0?'+':''}${dl.toFixed(2)}</b></div></div>
   <div class="dsec"><h3>Detections</h3><table><tr><th>Object</th><th>Behavior</th><th class="n" title="Confidence: how sure the computer is about the object label">Confidence</th><th class="n">Score</th></tr>${rows.map(([d,sd])=>{const ship=shipLine(d),visible=shipVisibleLine(d);return`<tr><td>${sd.matched?'<span style="color:var(--accent)">●</span> ':sd.sup?'<span style="color:#8d99a5">○</span> ':''}${esc(clsOf(d.cls).lab)}${ship?`<small class="shipline">${ship}</small>`:''}${visible?`<small class="shipfeatures">${visible}</small>`:''}</td><td style="color:var(--muted)">${Object.keys(ATTR_LAB).filter(a=>d.attrs[a]&&!(a==='dark'&&['other','clutter'].includes(clsOf(d.cls).g))).map(a=>esc(ATTR_LAB[a])).join(', ')||'—'}</td><td class="n">${d.conf.toFixed(2)}</td><td class="n" style="color:${sd.s>=.6?'var(--p1)':sd.s>=.3?'var(--p2)':'var(--muted)'}">${sd.s.toFixed(2)}</td></tr>`}).join('')}</table></div>

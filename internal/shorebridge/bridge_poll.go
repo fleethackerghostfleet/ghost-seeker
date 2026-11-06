@@ -251,6 +251,31 @@ func (b *Bridge) fetchRecord(ctx context.Context, id string) contactReport {
 	return rep
 }
 
+func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
+	n := NodeStatus{
+		OK:          true,
+		ItemsTotal:  st.GetItemsTotal(),
+		Deduped:     st.GetItemsDeduped(),
+		Prioritizer: st.GetPrioritizer(),
+		Evicted:     st.GetItemsEvicted(),
+		ItemsUnique: st.GetItemsComplete(),
+		Unknown:     st.GetItemsUnknown(),
+		Bytes:       st.GetBytesSent(),
+		Queued:      st.GetHeartbeat().GetQueuedItems(),
+		QueuedBytes: st.GetHeartbeat().GetQueuedBytes(),
+		LinkUp:      st.GetLink().GetUp(),
+		Failures:    st.GetLink().GetConsecutiveFailures(),
+		EstimateBps: st.GetLink().GetEstimateBps(),
+		PolicyID:    st.GetPolicyId(),
+		LastSeenMs:  st.GetLink().GetLastSuccessUnixMs(),
+		MetaOnly:    st.GetMetaOnly(), MetaOnlySince: st.GetMetaOnlySinceUnixMs(), MetaOnlyReason: st.GetMetaOnlyReason(),
+	}
+	if n.EstimateBps == 0 {
+		n.EstimateBps = float64(st.GetHeartbeat().GetLinkEstimateBps())
+	}
+	return n
+}
+
 func (b *Bridge) updateFactVersions(items []*pb.ItemView) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -324,29 +349,4 @@ func (b *Bridge) fetchFact(ctx context.Context, id string) *edgefact.Fact {
 	}
 	b.mu.Unlock()
 	return &f
-}
-
-func nodeStatus(st *pb.GetStatusResponse) NodeStatus {
-	n := NodeStatus{
-		OK:          true,
-		ItemsTotal:  st.GetItemsTotal(),
-		Deduped:     st.GetItemsDeduped(),
-		Prioritizer: st.GetPrioritizer(),
-		Evicted:     st.GetItemsEvicted(),
-		ItemsUnique: st.GetItemsComplete(),
-		Unknown:     st.GetItemsUnknown(),
-		Bytes:       st.GetBytesSent(),
-		Queued:      st.GetHeartbeat().GetQueuedItems(),
-		QueuedBytes: st.GetHeartbeat().GetQueuedBytes(),
-		LinkUp:      st.GetLink().GetUp(),
-		Failures:    st.GetLink().GetConsecutiveFailures(),
-		EstimateBps: st.GetLink().GetEstimateBps(),
-		PolicyID:    st.GetPolicyId(),
-		LastSeenMs:  st.GetLink().GetLastSuccessUnixMs(),
-		MetaOnly:    st.GetMetaOnly(), MetaOnlySince: st.GetMetaOnlySinceUnixMs(), MetaOnlyReason: st.GetMetaOnlyReason(),
-	}
-	if n.EstimateBps == 0 {
-		n.EstimateBps = float64(st.GetHeartbeat().GetLinkEstimateBps())
-	}
-	return n
 }
