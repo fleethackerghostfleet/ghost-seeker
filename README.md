@@ -59,12 +59,13 @@ internal/               fact format, virtual clock, scenario loader, http helper
 cmd/edge cmd/shore      the two services
 cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JSON metrics
 algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
-inference/              inference contract notes + model-free Python stub
+inference/              reference/contract notes + manual model-free stub; running sidecar is edgeml/
 edgeml/                 Python detection/tracking/sighting pipeline, real-model sidecar, evaluation reports
 deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
 frames/                 demo imagery (Git LFS zips)
 cmd/ghost-seeker web/   operator web app (Go, in-memory simulation, SSE feed); see "Operator web app" below
 ui/                     API notes for wiring the web app to the edge/shore consoles
+ui-mockup/              static design reference, not served; live workbench is web/static/workbench.js
 scenarios/              replay scenarios (datasets + operator events)
 ```
 
