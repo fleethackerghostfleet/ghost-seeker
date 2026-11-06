@@ -15,7 +15,7 @@ var boostVerbs = []string{"prioritize", "prioritise", "boost", "focus on", "look
 // boost [submarine]. Labels are singularised to match detector labels.
 func Interpret(text string) (suppress, boost []string) {
 	for _, clause := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return r == ';' || r == ',' || r == '.' || r == '\n' }) {
-		clause = strings.TrimSpace(clause)
+		clause = command.StripObservationContext(clause)
 		if clause == "" {
 			continue
 		}

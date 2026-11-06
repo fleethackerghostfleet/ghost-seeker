@@ -56,6 +56,20 @@ func TestPreviewDoesNotMutate(t *testing.T) {
 	}
 }
 
+func TestSimulationWhaleDirective(t *testing.T) {
+	data := store.New(10)
+	data.Add(&command.Item{ID: "whale", SourceID: "EO-P7", TS: time.Now(), Dets: []command.Detection{{Class: "marine mammal", Conf: .95}}}, 0)
+	before := data.Items()[0]
+	response := request(New(data), "POST", "/api/directives", map[string]string{"text": "prioritize whales"})
+	if response.Code != 201 {
+		t.Fatalf("directive: %d %s", response.Code, response.Body)
+	}
+	after := data.Items()[0]
+	if after.Central <= before.Central || after.Tier >= before.Tier {
+		t.Fatalf("whale did not rise: before score=%v tier=%d, after score=%v tier=%d", before.Central, before.Tier, after.Central, after.Tier)
+	}
+}
+
 func TestExplicitDirectiveRulesOverrideText(t *testing.T) {
 	data := store.New(2)
 	app := New(data)
