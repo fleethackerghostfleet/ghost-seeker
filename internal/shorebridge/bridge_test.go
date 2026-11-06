@@ -59,6 +59,42 @@ func TestAutomaticLinkStatus(t *testing.T) {
 	}
 }
 
+func TestFactCacheRefreshesOnReplacement(t *testing.T) {
+	version, reads := "old", 0
+	shore := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case consolePath + "GetStatus":
+			writeProtoResponse(t, w, &pb.GetStatusResponse{})
+		case consolePath + "GetPolicy":
+			writeProtoResponse(t, w, &pb.GetPolicyResponse{})
+		case consolePath + "ListItems":
+			writeProtoResponse(t, w, &pb.ListItemsResponse{Items: []*pb.ItemView{{Item: &pb.Item{Id: "image-1", Type: pb.ItemType_ITEM_TYPE_IMAGE, Forms: []*pb.Form{{Kind: pb.FormKind_FORM_KIND_FACT, ContentHash: version}}}, FormStates: []*pb.FormState{{Kind: pb.FormKind_FORM_KIND_FACT, Complete: true}}}}})
+		case "/blob/image-1/fact":
+			reads++
+			fmt.Fprintf(w, `{"id":"image-1","override":%q}`, version)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer shore.Close()
+	b := New(shore.URL, "", nil)
+	ctx := context.Background()
+	b.refresh(ctx)
+	if f := b.fetchFact(ctx, "image-1"); f == nil || f.Override != "old" {
+		t.Fatalf("initial FACT: %+v", f)
+	}
+	b.refresh(ctx)
+	_ = b.fetchFact(ctx, "image-1")
+	if reads != 1 {
+		t.Fatalf("unchanged FACT fetched %d times", reads)
+	}
+	version = "new"
+	b.refresh(ctx)
+	if f := b.fetchFact(ctx, "image-1"); f == nil || f.Override != "new" {
+		t.Fatalf("replacement FACT not refreshed: %+v", f)
+	}
+}
+
 func TestLiveMetadataEndpointUsesFormStates(t *testing.T) {
 	c := NewConsole(New("", "", nil))
 	c.base["live-1"] = &command.Item{ID: "live-1", TS: time.Unix(100, 0), Live: &command.LiveMeta{

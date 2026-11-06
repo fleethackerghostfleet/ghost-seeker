@@ -70,13 +70,14 @@ type Bridge struct {
 	// nil keeps the simple Interpret path.
 	Compiler *command.Compiler
 
-	mu         sync.Mutex
-	snap       []byte
-	subs       map[chan []byte]struct{}
-	records    map[string]contactReport  // RECORD item id -> its contact report (immutable, fetched once)
-	facts      map[string]*edgefact.Fact // immutable FACT payloads, fetched once
-	operator   string
-	edgeNodeID string
+	mu           sync.Mutex
+	snap         []byte
+	subs         map[chan []byte]struct{}
+	records      map[string]contactReport // RECORD item id -> its contact report (immutable, fetched once)
+	facts        map[string]*edgefact.Fact
+	factVersions map[string]string
+	operator     string
+	edgeNodeID   string
 
 	poke       chan struct{}               // asks Run for an immediate refresh (after an operator action)
 	nextExpiry time.Time                   // earliest timed rule/EMCON/policy deadline seen by the poller
@@ -85,15 +86,16 @@ type Bridge struct {
 
 func New(shoreURL, edgeURL string, link LinkControl) *Bridge {
 	return &Bridge{
-		shore:    strings.TrimRight(shoreURL, "/"),
-		edge:     strings.TrimRight(edgeURL, "/"),
-		link:     link,
-		client:   &http.Client{Timeout: 10 * time.Second},
-		subs:     map[chan []byte]struct{}{},
-		records:  map[string]contactReport{},
-		facts:    map[string]*edgefact.Fact{},
-		poke:     make(chan struct{}, 1),
-		operator: DefaultOperator,
+		shore:        strings.TrimRight(shoreURL, "/"),
+		edge:         strings.TrimRight(edgeURL, "/"),
+		link:         link,
+		client:       &http.Client{Timeout: 10 * time.Second},
+		subs:         map[chan []byte]struct{}{},
+		records:      map[string]contactReport{},
+		facts:        map[string]*edgefact.Fact{},
+		factVersions: map[string]string{},
+		poke:         make(chan struct{}, 1),
+		operator:     DefaultOperator,
 	}
 }
 
@@ -454,6 +456,7 @@ func (b *Bridge) refresh(ctx context.Context) {
 			break
 		}
 	}
+	b.updateFactVersions(items)
 	snap.Objects, snap.Counts = Group(items, suppressed, b.recordReports(ctx, items))
 	for _, o := range snap.Objects {
 		o.detectionMin = currentPolicy.GetThresholds().GetDetectionMinConf()
@@ -560,12 +563,37 @@ func (b *Bridge) fetchRecord(ctx context.Context, id string) contactReport {
 	return rep
 }
 
+func (b *Bridge) updateFactVersions(items []*pb.ItemView) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, v := range items {
+		for _, form := range v.GetItem().GetForms() {
+			if form.GetKind() != pb.FormKind_FORM_KIND_FACT {
+				continue
+			}
+			complete := false
+			for _, state := range v.GetFormStates() {
+				if state.GetKind() == pb.FormKind_FORM_KIND_FACT {
+					complete = state.GetComplete()
+				}
+			}
+			id := v.GetItem().GetId()
+			version := fmt.Sprintf("%s:%d:%t", form.GetContentHash(), form.GetBytes(), complete)
+			if b.factVersions[id] != version {
+				delete(b.facts, id)
+				b.factVersions[id] = version
+			}
+		}
+	}
+}
+
 func (b *Bridge) fetchFact(ctx context.Context, id string) *edgefact.Fact {
 	b.mu.Lock()
 	if f, ok := b.facts[id]; ok {
 		b.mu.Unlock()
 		return f
 	}
+	version := b.factVersions[id]
 	b.mu.Unlock()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.shore+"/blob/"+id+"/fact", nil)
 	if err != nil {
@@ -603,7 +631,9 @@ func (b *Bridge) fetchFact(ctx context.Context, id string) *edgefact.Fact {
 		return nil
 	}
 	b.mu.Lock()
-	b.facts[id] = &f
+	if b.factVersions[id] == version {
+		b.facts[id] = &f
+	}
 	b.mu.Unlock()
 	return &f
 }
