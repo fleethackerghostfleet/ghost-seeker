@@ -57,6 +57,7 @@ const positiveActions = `prioriti\w*|boost|show|report|focus`
 
 var (
 	negativePattern  = regexp.MustCompile(`\b(` + negativeActions + `)\b`)
+	positivePattern  = regexp.MustCompile(`\b(` + positiveActions + `)\b`)
 	onlyPattern      = regexp.MustCompile(`\b(only|exclusively|nothing (else|but))\b`)
 	splitPattern     = regexp.MustCompile(`[,;.]|\bbut\b|\balso\b|\bthen\b`)
 	andActionPattern = regexp.MustCompile(`\band\s+(` + negativeActions + `|` + positiveActions + `)\b`)
@@ -130,8 +131,15 @@ func parseDirectiveDetailed(text string, edgeSubtypes bool) ([]Rule, []string) {
 			continue
 		}
 		if edgeSubtypes {
-			if classes := ObservationClasses(clause); len(classes) > 0 {
-				rules = append(rules, Rule{Type: "boost", Classes: classes})
+			observation, action := strings.TrimSpace(clause), "boost"
+			if loc := negativePattern.FindStringIndex(observation); loc != nil && loc[0] == 0 {
+				action = "suppress"
+				observation = strings.TrimSpace(observation[loc[1]:])
+			} else if loc := positivePattern.FindStringIndex(observation); loc != nil && loc[0] == 0 {
+				observation = strings.TrimPrefix(strings.TrimSpace(observation[loc[1]:]), "on ")
+			}
+			if classes := ObservationClasses(observation); len(classes) > 0 {
+				rules = append(rules, Rule{Type: action, Classes: classes})
 				continue
 			}
 		}

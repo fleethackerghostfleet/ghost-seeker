@@ -21,6 +21,8 @@ func TestWhalePreviewCompileAndApply(t *testing.T) {
 		{"prioritize whales", "boost"},
 		{"look for marine mammals", "boost"},
 		{"ignore whales", "suppress"},
+		{"prioritize whale near the ship", "boost"},
+		{"ignore whales near the ship", "suppress"},
 	} {
 		t.Run(tc.text, func(t *testing.T) {
 			_, _, interpreted := rulesFromBody(tc.text, nil)

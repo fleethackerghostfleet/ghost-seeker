@@ -38,3 +38,16 @@ func TestGenericObservationClasses(t *testing.T) {
 		}
 	}
 }
+
+func TestObservationActions(t *testing.T) {
+	compiler := &Compiler{EdgeSubtypes: true}
+	for _, tc := range []struct{ text, action string }{
+		{"prioritize whale near the ship", "boost"},
+		{"ignore whales near the ship", "suppress"},
+	} {
+		got := compiler.CompileRules(tc.text)
+		if len(got.Rules) != 1 || got.Rules[0].Type != tc.action || !reflect.DeepEqual(got.Rules[0].Classes, []string{"marine mammal"}) || len(got.Unknown) != 0 {
+			t.Errorf("%q = %+v; want %s marine mammal", tc.text, got, tc.action)
+		}
+	}
+}

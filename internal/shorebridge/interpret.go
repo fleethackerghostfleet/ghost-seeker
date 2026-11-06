@@ -55,6 +55,11 @@ func labels(rest string) []string {
 	rest = strings.TrimPrefix(rest, "the ")
 	rest = strings.TrimPrefix(rest, "all ")
 	rest = strings.TrimPrefix(rest, "any ")
+	if strings.Contains(rest, " near ") {
+		if classes := command.ObservationClasses(rest); len(classes) > 0 {
+			return classes
+		}
+	}
 	var out []string
 	for _, part := range strings.Split(rest, " and ") {
 		part = strings.TrimSpace(part)
