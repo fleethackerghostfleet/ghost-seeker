@@ -19,7 +19,9 @@ func TestDemoReviewSeedStartupAndReset(t *testing.T) {
 
 func testDemoReviewSeedAutoEscalation(t *testing.T, backfill int) {
 	data := store.New(100)
-	fillBacklog(data, sensor.NewGenerator(), backfill)
+	generator := sensor.NewGenerator()
+	fillBacklog(data, generator, backfill)
+	whales := newWhaleCadence(data)
 	assertSeed := func() {
 		t.Helper()
 		data.Add(&command.Item{ID: "ordinary-warship", TS: time.Now(), Dets: []command.Detection{{Class: "warship", Conf: .95}}}, 0)
@@ -48,7 +50,7 @@ func testDemoReviewSeedAutoEscalation(t *testing.T, backfill int) {
 			for _, det := range item.Dets {
 				whale = whale || det.Class == "marine mammal"
 			}
-			if item.Img == "" || !whale || item.Reviewed || item.Sent || item.AutoSent {
+			if item.Img == "" || !whale || !item.FeedFirst || item.Manual != 1 || item.Tier != 1 || item.Reviewed || item.Sent || item.AutoSent {
 				t.Fatalf("invalid first review item: %+v", item)
 			}
 			var frame *catalog.LibraryImage
@@ -66,8 +68,8 @@ func testDemoReviewSeedAutoEscalation(t *testing.T, backfill int) {
 				if det.Class != want.Cls || det.Box.X != want.B.X || det.Box.Y != want.B.Y || det.Box.W != want.B.W || det.Box.H != want.B.H || det.Ship != want.Ship {
 					t.Errorf("detection %d = %+v, want catalog detection %+v", i, det, want)
 				}
-				if det.Conf < .55 || det.Conf > .98 {
-					t.Errorf("detection %d confidence = %v, outside [.55, .98]", i, det.Conf)
+				if det.Conf < .86 || det.Conf > .97 {
+					t.Errorf("detection %d confidence = %v, outside [.86, .97]", i, det.Conf)
 				}
 			}
 		}
@@ -76,14 +78,22 @@ func testDemoReviewSeedAutoEscalation(t *testing.T, backfill int) {
 		}
 	}
 	assertSeed()
-	if _, _, ok := seedReviewAfterReset(data, data.Epoch(), time.Now()); ok {
-		t.Fatal("reseeded without reset")
-	}
 	for epoch := uint64(0); epoch < 2; epoch++ {
 		data.Reset()
-		if _, next, ok := seedReviewAfterReset(data, epoch, time.Now()); !ok || next != epoch+1 {
+		item, extra := whales.tick(data, generator, time.Now(), "maritime", nil)
+		if item == nil || !item.ReviewFirst || data.Epoch() != epoch+1 {
 			t.Fatal("reset did not seed review")
 		}
+		data.Add(item, extra)
 		assertSeed()
+		for capture := 1; capture <= whaleEvery; capture++ {
+			item, _ := whales.tick(data, generator, time.Now(), "maritime", nil)
+			if item != nil && item.ReviewFirst {
+				t.Fatal("ordinary capture or cadence whale was pinned for review")
+			}
+			if capture == whaleEvery && !whaleCard(item) {
+				t.Fatal("cadence did not emit a whale")
+			}
+		}
 	}
 }
