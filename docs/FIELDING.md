@@ -239,6 +239,61 @@ zarf package deploy ./zarf-package-ghost-seeker-amd64-0.1.0.tar.zst \
 Edge can point across clusters to a separately routed sidecar if the network
 permits it.
 
+### Zarf network isolation
+
+All manifests use the dedicated `ghost-seeker` namespace; ship and shore are
+split by deploying component subsets into separate clusters, not by different
+hardcoded namespaces. The required namespace component installs default-deny
+ingress for **all** pods there. Each workload component installs its own allow
+policy, so an edge-only install still receives default-deny plus edge allows.
+Existing workload definitions, Service types and ports are unchanged.
+
+| From | To / TCP port | Evidence / condition |
+|---|---|---|
+| Same-namespace `app: operator` | `app: shore` / 8080 | `OPERATOR_SHORE_URL`; bridge console RPCs and blob/API proxy (HTTP or configured TLS) |
+| Same-namespace `app: operator` | `app: edge` / 8081 | `edge.yaml` Service; bridge edge console RPCs when configured (packaged operator has `-edge=`) |
+| Same-namespace `app: edge` | `app: shore` / 8080 | `edge.yaml` `SHORE_URL`; `cmd/edge` sync link |
+| Same-namespace `app: edge` | `app: edgeml-sidecar` / 9090 | `INFER_URL`; `edge-inference.yaml` Service; `edge/inference` client |
+| Same-namespace `app: shore` | `app: edgeml-sidecar` / 9090 | Optional `SHORE_INFER_URL` for shore text-embedding search |
+| `OPERATOR_INGRESS_CIDR` | `app: operator` / 8090 | External browsers or ingress gateway to the operator UI |
+| `SHORE_INGRESS_CIDR` | `app: shore` / 8080 | Routed ship sync, remote operators, external `/api/v1` clients |
+| `EDGE_INGRESS_CIDR` | `app: edge` / 8081 | Remote operator/ship console and authenticated live sensor push API |
+| `INFERENCE_INGRESS_CIDR` | `app: edgeml-sidecar` / 9090 | Edge or shore clients routed from another site/namespace |
+
+The four CIDR variables default to the documentation-only host `192.0.2.0/32`.
+Set each needed variable to an approved source network or gateway `/32` (IPv6
+CIDRs are also valid), not a destination Service IP. Do not use `0.0.0.0/0` or
+`::/0`. Unused external paths can retain the documentation-only default.
+For example, on the **receiving shore cluster**, add
+`--set-variables=SHORE_INGRESS_CIDR=203.0.113.10/32` to the deployment command,
+replacing that example with the ship gateway's actual source address. Set
+`OPERATOR_INGRESS_CIDR` separately for browser/gateway access. On the ship, set
+`EDGE_INGRESS_CIDR` if a remote operator or sensor pushes to edge; on a remote
+inference site, set `INFERENCE_INGRESS_CIDR`. Override `SHORE_URL`/`INFER_URL`
+and public Host allowlists independently; source CIDRs do not provide routing.
+For multiple disjoint approved networks, add narrow site-specific ingress
+policies rather than widening to the entire address space.
+
+Pod-selector peers are restricted to the policy's namespace. For another
+namespace/cluster, use the routed CIDR path (or reviewed site-specific policies).
+Determine the source IP **as seen by the destination pod/CNI**: gateway SNAT,
+node NAT and whether an ingress controller preserves client IPs affect matching.
+Verify enforcement on the actual CNI and topology; these policies have only
+been statically validated here. Kubelet probes/node traffic and administrative
+port-forwarding are not an isolation test; test allowed and denied pod/routed
+connections. A CNI without NetworkPolicy enforcement does not protect the pods.
+Existing additional NetworkPolicies may widen permissions because allows are additive.
+
+The Services remain ClusterIP; provision approved external routing/ingress
+separately. Policies allow a **port**, not a path: shore 8080 also serves sync,
+console and blobs, not just `/api/v1`. Keep application authentication and a TLS
+boundary; use a gateway for HTTP path restrictions. Egress remains unrestricted,
+including DNS. Remote shore/inference URLs, optional cameras, model provisioning
+and registries are not fully specified in the package, so a complete egress
+allowlist cannot be derived safely. Inventory them before adding egress isolation.
+
+### Live edge input
+
 The edge captures from the authenticated push API and the optional live
 sources below (`-watch-dir` spool, `-mjpeg-url`). The packaged edge mounts the
 node directory `FRAMES_HOSTPATH` (default `/var/lib/ghost-seeker/frames`)

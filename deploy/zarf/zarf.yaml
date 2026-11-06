@@ -7,6 +7,22 @@ metadata:
   description: Ghost Seeker ship-to-shore prioritized sync (production images, -tags prod; INFER_URL must reach an edgeml sidecar).
 
 variables:
+  - name: SHORE_INGRESS_CIDR
+    description: Approved source CIDR as seen at shore for routed ship sync, remote operators and external API clients. Documentation-only default; set for the deployment (never 0.0.0.0/0).
+    default: 192.0.2.0/32
+    prompt: false
+  - name: EDGE_INGRESS_CIDR
+    description: Approved source CIDR as seen at edge for remote operators and live sensor push clients. Documentation-only default; set for the deployment.
+    default: 192.0.2.0/32
+    prompt: false
+  - name: OPERATOR_INGRESS_CIDR
+    description: Approved source CIDR as seen at the operator UI for browsers or the ingress gateway. Documentation-only default; set for the deployment.
+    default: 192.0.2.0/32
+    prompt: false
+  - name: INFERENCE_INGRESS_CIDR
+    description: Approved source CIDR as seen at inference for separately routed edge/shore clients. Documentation-only default; set when inference is accessed remotely.
+    default: 192.0.2.0/32
+    prompt: false
   - name: SHORE_TLS_SECRET
     description: Optional existing kubernetes.io/tls Secret for shore; empty keeps HTTP. Setting this also upgrades the default local shore URLs to HTTPS.
     default: ""
@@ -84,6 +100,7 @@ components:
         namespace: ghost-seeker
         files:
           - manifests/namespace.yaml
+          - manifests/network-default-deny.yaml
   - name: shore
     default: true
     required: false
@@ -96,6 +113,7 @@ components:
         template: true
         files:
           - manifests/shore.yaml
+          - manifests/network-shore.yaml
   - name: operator
     default: true
     required: false
@@ -108,6 +126,7 @@ components:
         template: true
         files:
           - manifests/operator.yaml
+          - manifests/network-operator.yaml
   - name: edge
     default: true
     required: false
@@ -120,6 +139,7 @@ components:
         template: true
         files:
           - manifests/edge.yaml
+          - manifests/network-edge.yaml
   - name: edge-inference
     default: false
     required: false
@@ -131,3 +151,4 @@ components:
         namespace: ghost-seeker
         files:
           - manifests/edge-inference.yaml
+          - manifests/network-edge-inference.yaml

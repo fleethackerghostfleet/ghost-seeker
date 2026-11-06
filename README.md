@@ -61,7 +61,7 @@ cmd/sim                 FIFO vs prioritized under a link trace, virtual time, JS
 algorithm/              standalone CPU image providers, color+pHash ranking, whole-JPEG selection/evaluation
 inference/              reference/contract notes + manual model-free stub; running sidecar is edgeml/
 edgeml/                 Python detection/tracking/sighting pipeline, real-model sidecar, evaluation reports
-deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf skeleton
+deploy/                 Dockerfile, docker compose with Toxiproxy link shaping, Zarf package with ingress NetworkPolicies
 frames/                 demo imagery (Git LFS zips)
 cmd/ghost-seeker web/   operator web app (Go, in-memory simulation, SSE feed); see "Operator web app" below
 ui/                     API notes for wiring the web app to the edge/shore consoles
@@ -459,6 +459,10 @@ never its own eviction victim.
 
 ## Status / not done
 
+- Zarf includes namespace-wide default-deny ingress and workload-specific allows.
+  Configure approved external/cross-site source CIDRs before deployment; policies
+  require an enforcing CNI. Egress remains unrestricted and cluster enforcement
+  has not been runtime-tested. See [network isolation](docs/FIELDING.md#zarf-network-isolation).
 - Inference: Go mock, model-free Python stub, and an implemented CPU sidecar
   with ONNX Runtime/OpenVINO detection, tracking, MobileCLIP classification,
   and sighting aggregation. Real models must be provisioned separately; see

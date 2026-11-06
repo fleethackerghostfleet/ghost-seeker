@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ipaddress
 import argparse
 import csv
 import io
@@ -40,6 +41,80 @@ def workload_containers(document: dict) -> tuple[dict, list[dict]]:
     pod_spec = document.get("spec", {}).get("template", {}).get("spec", {})
     containers = list(pod_spec.get("containers", [])) + list(pod_spec.get("initContainers", []))
     return pod_spec, containers
+
+
+def selected_workloads(selector: dict, namespace: str, workloads: list[dict]) -> list[dict]:
+    require(isinstance(selector, dict) and set(selector) <= {"matchLabels"},
+            "network policy selectors must use matchLabels")
+    labels = selector.get("matchLabels", {})
+    require(isinstance(labels, dict), "network policy matchLabels must be a mapping")
+    return [workload for workload in workloads
+            if workload["metadata"]["namespace"] == namespace
+            and all(workload["spec"]["template"]["metadata"]["labels"].get(key) == value
+                    for key, value in labels.items())]
+
+
+def check_network_policies(documents: list[dict], variables: dict[str, dict]) -> int:
+    workloads = [doc for doc in documents if doc["kind"] in WORKLOAD_KINDS]
+    namespaces = {doc["metadata"]["name"] for doc in documents if doc["kind"] == "Namespace"}
+    policies = [doc for doc in documents if doc["kind"] == "NetworkPolicy"]
+    denied = set()
+    for policy in policies:
+        name = policy["metadata"]["name"]
+        namespace = policy["metadata"].get("namespace")
+        require(namespace in namespaces, f"{name}: namespace is not declared")
+        require(policy["apiVersion"] == "networking.k8s.io/v1", f"{name}: wrong NetworkPolicy API")
+        spec = policy["spec"]
+        require(spec.get("policyTypes") == ["Ingress"] and "egress" not in spec,
+                f"{name}: policies must remain ingress-only")
+        selector = spec.get("podSelector")
+        targets = selected_workloads(selector, namespace, workloads)
+        require(bool(targets), f"{name}: target selector matches no workload")
+        ingress = spec.get("ingress")
+        require(isinstance(ingress, list), f"{name}: ingress must be a list")
+        if selector == {} and ingress == []:
+            denied.add(namespace)
+            continue
+        require(bool(selector.get("matchLabels")) and bool(ingress),
+                f"{name}: allow policy must select explicit workloads and rules")
+        for rule in ingress:
+            require(bool(rule.get("from")) and bool(rule.get("ports")),
+                    f"{name}: ingress rule must restrict sources and ports")
+            for peer in rule["from"]:
+                require(set(peer) in ({"podSelector"}, {"ipBlock"}),
+                        f"{name}: source must be a local pod selector or routed CIDR")
+                if "podSelector" in peer:
+                    require(bool(peer["podSelector"].get("matchLabels")),
+                            f"{name}: source selector must not match all pods")
+                    require(bool(selected_workloads(peer["podSelector"], namespace, workloads)),
+                            f"{name}: source selector matches no workload")
+                else:
+                    require(set(peer["ipBlock"]) == {"cidr"}, f"{name}: unexpected ipBlock fields")
+                    cidr = peer["ipBlock"]["cidr"]
+                    match = VARIABLE_PATTERN.fullmatch(cidr)
+                    require(match is not None and match[1] in variables,
+                            f"{name}: routed CIDR must use a declared Zarf variable")
+                    network = ipaddress.ip_network(variables[match[1]]["default"], strict=True)
+                    require(network.prefixlen > 0, f"{name}: unrestricted source CIDR")
+            for port in rule["ports"]:
+                require(set(port) == {"protocol", "port"} and port["protocol"] == "TCP"
+                        and isinstance(port["port"], int) and 1 <= port["port"] <= 65535,
+                        f"{name}: ingress port must be an explicit TCP port")
+                for target in targets:
+                    _, containers = workload_containers(target)
+                    exposed = {entry["containerPort"] for container in containers
+                               for entry in container.get("ports", [])}
+                    require(port["port"] in exposed, f"{name}: port not exposed by selected workload")
+                    services = [doc for doc in documents if doc["kind"] == "Service"
+                                and doc["metadata"].get("namespace") == namespace
+                                and doc["spec"].get("selector") == target["spec"]["selector"]["matchLabels"]]
+                    named_ports = {entry.get("name"): entry["containerPort"] for container in containers
+                                   for entry in container.get("ports", [])}
+                    require(any(named_ports.get(entry.get("targetPort"), entry.get("targetPort", entry["port"])) == port["port"]
+                                for service in services for entry in service["spec"]["ports"]),
+                            f"{name}: port has no matching Service target")
+    require(namespaces <= denied, "every namespace must have a default-deny ingress policy")
+    return len(policies)
 
 
 def package_variables(package: dict, overrides: dict[str, str]) -> dict[str, str]:
@@ -222,6 +297,33 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
         used_variables.update(VARIABLE_PATTERN.findall(path.read_text()))
     undeclared = used_variables - variables.keys()
     require(not undeclared, f"undeclared Zarf variables used: {', '.join(sorted(undeclared))}")
+    owners: dict[Path, set[str]] = {}
+    for component, files in component_files.items():
+        for path in files:
+            owners.setdefault(path, set()).add(component)
+    for path, documents in parsed.items():
+        for policy in (doc for doc in documents if doc["kind"] == "NetworkPolicy"):
+            name = policy["metadata"]["name"]
+            require(path in owners, f"{path.name}: NetworkPolicy not included in a component")
+            labels = policy.get("spec", {}).get("podSelector", {}).get("matchLabels")
+            if not labels:
+                continue
+            workload_owners = {component for workload_path, workload_docs in parsed.items()
+                               for doc in workload_docs if doc["kind"] in WORKLOAD_KINDS
+                               and doc["metadata"].get("namespace") == policy["metadata"].get("namespace")
+                               and all(doc["spec"]["template"]["metadata"]["labels"].get(k) == v
+                                       for k, v in labels.items())
+                               for component in owners.get(workload_path, set())}
+            require(bool(workload_owners & owners[path]),
+                    f"{name}: allow policy must be packaged in the same component as its target workload")
+    network_documents = [doc for documents in parsed.values() for doc in documents
+                         if doc["kind"] != "NetworkPolicy"]
+    network_documents += [doc for path in all_manifest_paths if path.name.startswith("network-")
+                          for doc in read_documents(path)]
+    policy_count = check_network_policies(
+        network_documents,
+        {entry["name"]: entry for entry in package["variables"]},
+    )
 
     for component, files in component_files.items():
         manifest_images: set[str] = set()
@@ -256,6 +358,7 @@ def check(overrides: dict[str, str] | None = None) -> dict[Path, list[dict]]:
         f"validated {len(all_manifest_paths)} manifest files across {len(component_files)} components; "
         f"{len(used_variables)} Zarf variables declared"
     )
+    print(f"validated {policy_count} ingress-only NetworkPolicies: namespace default deny, selectors, Service ports and CIDR defaults")
     return parsed
 
 
