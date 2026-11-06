@@ -296,10 +296,15 @@ func normalizeDirective(text string, edgeSubtypes bool) normalized {
 	out := normalized{}
 	text, out.resolutions = correctSpelling(text)
 	text = normalizeWindows(text)
-	if elseClausePattern.MatchString(text) {
-		out.onlyOthers = true
-		text = elseClausePattern.ReplaceAllString(text, ",")
-	}
+	// "everything else can wait" narrows to the named contacts; a positive
+	// "and other contacts" is left alone.
+	text = elseClausePattern.ReplaceAllStringFunc(text, func(match string) string {
+		if negativeRewrites.MatchString(match) || postNegativeRewrites.MatchString(match) || negativePattern.MatchString(match) {
+			out.onlyOthers = true
+			return ","
+		}
+		return match
+	})
 	placeholders := make([]string, 0)
 	hold := func(value string) string {
 		placeholders = append(placeholders, value)
