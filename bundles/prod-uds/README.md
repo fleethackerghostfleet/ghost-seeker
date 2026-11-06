@@ -39,10 +39,10 @@ The existing `make pin-images` path builds prod-tagged Go images, tracking-enabl
 inference (`EDGEML_TRACKING=1`), and checksum-verified models. Outputs in
 `dist/release/<VERSION>/` include both Zarf packages, both UDS bundles,
 `sbom/{ship,shore}/` exported Zarf SBOMs, the model `THIRD_PARTY_NOTICES.md`,
-`images.lock.json`, `release.json` (git SHA, architecture, refs, local image
-configuration digests and registry digests when present), and `SHA256SUMS`.
-Local Docker images may have no registry digest; config digests are explicitly
-labelled and are not registry manifest digests. Model licensing remains
+`images.lock.json`, `release.json` (git SHA, architecture, refs, Docker image
+IDs and repository digests when present), and `SHA256SUMS`.
+Docker image IDs are recorded separately from repository digests: their meaning
+depends on the Docker storage backend. Model licensing remains
 **UNRESOLVED**: YOLO11n AGPL-3.0 and MobileCLIP Apple terms; notices and OCI
 labels are unchanged. No model redistribution approval is implied.
 
