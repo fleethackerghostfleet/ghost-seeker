@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/fleethackerghostfleet/ghost-seeker/internal/catalog"
+	"github.com/fleethackerghostfleet/ghost-seeker/internal/command"
 )
 
 var suppressVerbs = []string{"ignore", "suppress", "deprioritize", "deprioritise", "mute", "skip", "drop", "hide", "stop showing", "don't show", "do not show", "not interested in"}
@@ -24,6 +25,8 @@ func Interpret(text string) (suppress, boost []string) {
 		} else if verb, rest, ok := leadVerb(clause, boostVerbs); ok {
 			_ = verb
 			boost = append(boost, labels(rest)...)
+		} else if class, ok := command.ObservationClass(clause); ok {
+			boost = append(boost, class)
 		}
 	}
 	return
