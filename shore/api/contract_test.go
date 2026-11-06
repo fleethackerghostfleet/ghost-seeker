@@ -375,6 +375,51 @@ func TestProdContractReplacementImageAvailability(t *testing.T) {
 	s.contract.response(t, "/api/v1/items/{id}/image", "get", r.StatusCode, r.Header.Get("Content-Type"), body)
 }
 
+func TestProdContractTierChangesNotifyExistingItems(t *testing.T) {
+	s := newRig(t)
+	first := s.push(t, 20, false)
+	s.waitImage(t, first)
+	a, err := s.st.Get(s.ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Manifest.Priority = 0
+	if err := s.st.UpsertManifest(s.ctx, "contract-edge", a.Manifest, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	cursor, _ := s.st.EventCursor(s.ctx)
+	stream, reader, cancel := s.stream(t, strconv.FormatInt(cursor, 10))
+	defer cancel()
+	defer stream.Body.Close()
+	second := s.push(t, 21, false)
+	s.waitImage(t, second)
+	b, err := s.st.Get(s.ctx, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Manifest.Priority = 100
+	if err := s.st.UpsertManifest(s.ctx, "contract-edge", b.Manifest, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	waitTier := func(id, tier string) {
+		t.Helper()
+		for range 100 {
+			_, event := readEvent(t, s.contract, reader)
+			item := event["item"].(map[string]any)
+			if item["id"] == id && item["tier"] == tier {
+				return
+			}
+		}
+		t.Fatal("missing existing-item tier update", id, tier)
+	}
+	waitTier(first, "P4")
+	a.Manifest.Priority = 200
+	if err := s.st.UpsertManifest(s.ctx, "contract-edge", a.Manifest, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	waitTier(second, "P4")
+}
+
 func TestProdContractSpoolPaginationAuthAndUpdates(t *testing.T) {
 	s := newRig(t)
 	first := s.push(t, 2, false)

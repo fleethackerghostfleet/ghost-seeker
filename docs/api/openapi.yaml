@@ -122,7 +122,8 @@ paths:
         manifest/payload arrivals, not a retrospective re-sort of history. Each
         event: item block has id: <event cursor> and JSON StreamEvent data. New
         manifests and completed/reset forms, features, overrides and policy writes
-        produce events. Duplicate unchanged writes do not. Payloads are the latest
+        produce events, as do relative tier changes of other items when arrivals
+        or priority updates shift rank boundaries. Duplicate unchanged writes do not. Payloads are the latest
         item state at delivery, not historical snapshots. Last-Event-ID takes
         precedence over since and resumes strictly after that cursor. Cursors
         survive process restarts (retain the shore SQLite DB). Heartbeat comments

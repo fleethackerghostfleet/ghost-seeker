@@ -9,6 +9,14 @@ import (
 // The receipt and event sequences are separate: list pagination sees each item
 // once, while the stream also records subsequent changes. Triggers make the
 // journal atomic with writes from every caller, not just the sync HTTP handler.
+const rankChanges = `
+ INSERT INTO api_events(item_id,kind)
+ SELECT r.item_id,'updated' FROM api_base_tiers r JOIN api_tier_cache c ON c.item_id=r.item_id
+ WHERE r.tier!=c.tier ORDER BY r.seq;
+ INSERT INTO api_tier_cache(item_id,tier) SELECT item_id,tier FROM api_base_tiers WHERE true
+ ON CONFLICT(item_id) DO UPDATE SET tier=excluded.tier;
+`
+
 const apiSchema = `
 CREATE TABLE IF NOT EXISTS api_receipts (
  seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,9 +52,23 @@ END;
 CREATE TRIGGER IF NOT EXISTS api_policy_update AFTER UPDATE ON kv WHEN NEW.k='policy' AND NEW.v IS NOT OLD.v BEGIN
  INSERT INTO api_events(item_id,kind) SELECT item_id,'updated' FROM api_receipts ORDER BY seq;
 END;
+DROP TRIGGER IF EXISTS api_rank_receipt;
+DROP TRIGGER IF EXISTS api_rank_priority;
 INSERT OR IGNORE INTO api_receipts(item_id) SELECT id FROM items WHERE manifest_at>0 ORDER BY manifest_at,rowid;
 INSERT INTO api_events(item_id,kind) SELECT item_id,'created' FROM api_receipts WHERE NOT EXISTS(SELECT 1 FROM api_events) ORDER BY seq;
-`
+CREATE VIEW IF NOT EXISTS api_base_tiers AS
+ SELECT seq,item_id,CASE WHEN rank<=1 OR 1.0*rank/total<=0.10 THEN 1
+ WHEN 1.0*rank/total<=0.35 THEN 2 WHEN 1.0*rank/total<=0.70 THEN 3 ELSE 4 END AS tier FROM (
+ SELECT r.seq,r.item_id,ROW_NUMBER() OVER(ORDER BY i.priority DESC,r.seq) AS rank,COUNT(*) OVER() AS total
+ FROM api_receipts r JOIN items i ON i.id=r.item_id);
+CREATE TABLE IF NOT EXISTS api_tier_cache(item_id TEXT PRIMARY KEY,tier INTEGER NOT NULL);
+INSERT INTO api_tier_cache(item_id,tier) SELECT item_id,tier FROM api_base_tiers WHERE true
+ ON CONFLICT(item_id) DO UPDATE SET tier=excluded.tier;
+CREATE TRIGGER api_rank_receipt AFTER INSERT ON api_receipts BEGIN
+` + rankChanges + `END;
+CREATE TRIGGER api_rank_priority AFTER UPDATE OF priority ON items
+ WHEN NEW.manifest_at>0 AND NEW.priority IS NOT OLD.priority BEGIN
+` + rankChanges + `END;`
 
 type Receipt struct {
 	ID       string

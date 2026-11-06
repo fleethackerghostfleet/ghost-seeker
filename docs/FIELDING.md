@@ -391,7 +391,9 @@ curl -N --header @/run/secrets/operator.header \
 - `/stream` sends `event: item`, decimal `id:` and JSON
   `{cursor,event,item}` for new/updated manifests, features, completed forms,
   policy and persisted decisions. Order is shore arrival/journal order (edge
-  scheduling sends prioritized manifests); not mutable tier order. Each event
+  scheduling sends prioritized manifests); relative tier changes caused by
+  arrivals or priority changes also notify the affected existing items. This is
+  not mutable tier order. Each event
   carries the **latest** item state, not an immutable historical snapshot.
   Save the last fully processed event ID and reconnect with `Last-Event-ID`
   (or `?since=`). Resume is exclusive and survives shore restarts, provided its

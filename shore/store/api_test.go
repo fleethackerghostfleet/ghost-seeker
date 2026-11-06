@@ -41,7 +41,7 @@ func TestAPIJournalReceivedOrderAndRestart(t *testing.T) {
 		t.Fatalf("late manifest lost metadata: %+v, %v", item, err)
 	}
 	events, err := st.Events(ctx, 0, 10)
-	if err != nil || len(events) != 2 || events[0].Kind != "created" {
+	if err != nil || len(events) != 3 || events[0].Kind != "created" {
 		t.Fatalf("events: %+v, %v", events, err)
 	}
 	resume, _ := st.EventCursor(ctx)
@@ -75,7 +75,13 @@ func TestAPIJournalReceivedOrderAndRestart(t *testing.T) {
 		t.Fatal("restart changed event cursor")
 	}
 	events, err = st.Events(ctx, resume, 10)
-	if err != nil || len(events) != 1 || events[0].ID != "first" || events[0].Kind != "updated" {
+	updated := map[string]bool{}
+	for _, e := range events {
+		if e.Kind == "updated" {
+			updated[e.ID] = true
+		}
+	}
+	if err != nil || !updated["first"] || !updated["second"] {
 		t.Fatalf("restart/resume lost journal: %+v, %v", events, err)
 	}
 	rs, err = st.Receipts(ctx, 0, "", 10)
