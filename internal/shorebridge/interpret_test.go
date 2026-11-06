@@ -17,3 +17,10 @@ func TestInterpret(t *testing.T) {
 		t.Fatalf("unexpected %v %v", s, b)
 	}
 }
+
+func TestInterpretMapsSynonymsToEdgeLabels(t *testing.T) {
+	s, b := Interpret("watch for whales and dolphins; ignore ferries")
+	if !reflect.DeepEqual(b, []string{"marine mammal", "marine mammal"}) || !reflect.DeepEqual(s, []string{"passenger ship"}) {
+		t.Fatalf("suppress=%v boost=%v", s, b)
+	}
+}
