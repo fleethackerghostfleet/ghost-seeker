@@ -24,3 +24,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "edgeml.nightlights" = ["*.json"]
+"edgeml.detectors" = ["marine_mammal_text.json"]
