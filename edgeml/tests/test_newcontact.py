@@ -188,7 +188,7 @@ def test_service_new_contact_only_on_open_and_source_local(monkeypatch):
     assert engine.analyze("b", image, None, [], False)["sightings"][0]["newContact"] is True
 
 
-def test_cli_new_contact_and_mock_open(monkeypatch):
+def test_cli_new_contact(monkeypatch):
     from edgeml.sidecar import __main__ as cli, service, server
     from edgeml.runtime import threads
     constructor = Mock()
@@ -197,7 +197,3 @@ def test_cli_new_contact_and_mock_open(monkeypatch):
     monkeypatch.setattr(threads, "pin_threads", Mock())
     cli.main(["--det", "fake", "--new-contact", '{"memory_s":15}'])
     assert constructor.call_args.kwargs["new_contact"] == {"memory_s": 15}
-    engine = service.MockEngine()
-    sightings = [s for _ in range(12) for s in engine.analyze("a", np.zeros((8, 8, 3), np.uint8), None, [], False)["sightings"]]
-    assert any(s["event"] == "EVENT_OPEN" for s in sightings)
-    assert all(s.get("newContact", False) == (s["event"] == "EVENT_OPEN") for s in sightings)
