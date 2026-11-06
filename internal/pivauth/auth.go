@@ -331,11 +331,20 @@ func (a *Authenticator) Authenticate(cs *tls.ConnectionState) (Principal, error)
 			return Principal{}, err
 		}
 	}
+	var authChains [][]*x509.Certificate
+	for _, chain := range chains {
+		if authenticationPurpose(chain) {
+			authChains = append(authChains, chain)
+		}
+	}
+	if len(authChains) == 0 {
+		return Principal{}, reject(KeyUsage, "The certificate chain is not valid for smartcard authentication.")
+	}
 	a.mu.RLock()
 	s := a.state
 	a.mu.RUnlock()
 	var revErr error
-	for _, chain := range chains {
+	for _, chain := range authChains {
 		revErr = nil
 		for i := 0; i < len(chain)-1; i++ {
 			if revErr = a.revocation(chain[i], chain[i+1], s.crls); revErr != nil {
@@ -357,6 +366,33 @@ func (a *Authenticator) Authenticate(cs *tls.ConnectionState) (Principal, error)
 	p.Role = role
 	return p, nil
 }
+
+func authenticationPurpose(chain []*x509.Certificate) bool {
+	const clientAuth, smartcard = 1, 2
+	common := clientAuth | smartcard
+	for _, cert := range chain {
+		if len(cert.ExtKeyUsage) == 0 && len(cert.UnknownExtKeyUsage) == 0 {
+			continue
+		}
+		allowed := 0
+		for _, usage := range cert.ExtKeyUsage {
+			switch usage {
+			case x509.ExtKeyUsageAny:
+				allowed |= clientAuth | smartcard
+			case x509.ExtKeyUsageClientAuth:
+				allowed |= clientAuth
+			}
+		}
+		for _, usage := range cert.UnknownExtKeyUsage {
+			if usage.String() == "1.3.6.1.4.1.311.20.2.2" {
+				allowed |= smartcard
+			}
+		}
+		common &= allowed
+	}
+	return len(chain) > 0 && common != 0
+}
+
 func (a *Authenticator) revocation(cert, issuer *x509.Certificate, crls []*x509.RevocationList) error {
 	if a.cfg.OCSPURL != "" {
 		status, err := a.ocspStatus(cert, issuer)
