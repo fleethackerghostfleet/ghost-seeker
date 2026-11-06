@@ -66,7 +66,7 @@ func TestStripObservationContext(t *testing.T) {
 		"prioritize contacts near shore":       "prioritize contacts near shore",
 		"submarine near the carrier":           "submarine near the carrier",
 		"unicorn near the ship":                "unicorn near the ship",
-		"whale near the ship and ignore birds": "whale near the ship and ignore birds",
+		"whale near the ship and ignore birds": "whale and ignore birds",
 		"":                                     "", "whales sighted": "whales", "cargo ship near the whale": "cargo ship",
 	} {
 		if got := StripObservationContext(input); got != want {
@@ -80,6 +80,24 @@ func TestWhaleDirectiveProbe(t *testing.T) {
 		for _, text := range []string{"ignore whales near the ship", "prioritize whales near the ship", "whale near the ship", "cargo ship near the whale", "prioritize whales", "whales spotted", "look for whales", "prioritize contacts near shore", "submarine near the carrier"} {
 			rules, unknown := parseDirectiveDetailed(text, edge)
 			t.Logf("edgeSubtypes=%v %q -> rules=%+v unknown=%v", edge, text, rules, unknown)
+		}
+	}
+}
+
+func TestObservationContextQualifiers(t *testing.T) {
+	for _, edge := range []bool{false, true} {
+		for _, tc := range []struct {
+			text, action string
+			within       int
+			sources      []string
+		}{
+			{"prioritize whales near the ship last 30 minutes", "boost", 30, nil},
+			{"ignore whales near the ship from UAV-3", "suppress", 0, []string{"UAV-3"}},
+		} {
+			rules, unknown := parseDirectiveDetailed(tc.text, edge)
+			if len(rules) != 1 || rules[0].Type != tc.action || !reflect.DeepEqual(rules[0].Classes, []string{"marine mammal"}) || rules[0].WithinMin != tc.within || len(unknown) != 0 || (len(tc.sources) > 0 && !reflect.DeepEqual(rules[0].Sources, tc.sources)) {
+				t.Errorf("edge=%v %q: rules=%+v unknown=%v", edge, tc.text, rules, unknown)
+			}
 		}
 	}
 }
