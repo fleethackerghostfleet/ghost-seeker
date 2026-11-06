@@ -127,7 +127,13 @@ FAILED edgeml/tests/test_sidecar_protocol.py::test_body_limits_reject_without_wa
 All new thermal tests pass within this run, including no-embedder, low zero-shot
 unknownness and higher-than-floor zero-shot unknownness on duplicate reports.
 
-## Step B: frozen real-IR evaluation
+## Step B: frozen real-IR evaluation — before cover-threshold fix
+
+**Historical results below: every “Live reported” row in this Step B section
+means “before cover-threshold fix”.** Original results and crops are retained as
+`THERMAL_HOTSPOT_assets/results_before_cover_threshold_fix.json` and
+`crops_before_cover_threshold_fix.json`. The B2 section below supersedes actual
+live behavior; original cold-source engine latency here is historical only.
 
 **Evaluation only; no thresholds or production code changed.** Primary held-out
 test: **1,081 images / 4,307 GT boxes / 39 recording groups**. Secondary dev:
@@ -365,3 +371,65 @@ installed for evaluation enable previously skipped tests. Full log:
   The 14 grayscale negatives were already used in Step A tuning.
 * **Synthetic:** generated in-repo by `tools/synth_thermal.py`, no external
   image source; seed/data construction and actual tuning history recorded above.
+
+## Step B2: report-threshold wiring fix (not tuning)
+
+Rebased onto origin/dev `1b4b716`, retaining both live tiling/MOB labeling and
+thermal fallback. Composition: ONNX → `LiveTiledDetector` → optional anomaly →
+thermal, so fallback sees final base detections. Rebase-only pytest:
+`643 passed in 11.66s`.
+
+Engine wiring now forces fusion cover threshold to the engine `score_thr` and
+floors **only emitted fused thermal scores** to that threshold. Standalone
+proposer and standalone fusion retain original scores/defaults. No proposer,
+gate, geometry or tuning thresholds changed. Tests exercise overlapping YOLO
+candidates just below the report cutoff, low thermal scores surviving reports,
+YOLO at the cutoff blocking fallback, configurable cutoffs, composition, and
+unchanged standalone scores.
+
+Re-ran `eval_thermal.py` with the same cache, splits, crops and seed, using
+`--skip-engine-latency`. Current assets are `results.json` and `crops.json`;
+old assets are retained under the explicit `before_cover_threshold_fix` names.
+Actual live now includes the rebased default live tiler; **native fixed** also
+isolates just the cover/report wiring change without tiling. Thus the actual-live
+improvement must not all be attributed to the threshold bug fix. Tiled ONNX
+outputs are separately cached by crop-pixel hash; native outputs reuse the
+original cache. Engine latency was not repeated; no old engine numbers are
+claimed to describe the fixed live path.
+
+| Split | Configuration | Center P/R/F1 (%) | IoU .3 P/R/F1 (%) | IoU .5 P/R/F1 (%) | Proposals/frame |
+|---|---|---|---|---|---:|
+| test | Live before cover-threshold fix | 81.62 / 22.89 / 35.76 | 76.74 / 21.52 / 33.62 | 73.68 / 20.66 / 32.28 | 1.117 |
+| test | Native fixed, no tiling | 64.25 / 24.45 / 35.42 | 57.11 / 21.73 / 31.48 | 54.42 / 20.71 / 30.00 | 1.516 |
+| test | Actual live fixed + default tiling | 68.04 / 32.23 / 43.74 | 57.89 / 27.42 / 37.21 | 53.87 / 25.52 / 34.63 | 1.887 |
+| dev (evaluation only) | Live before cover-threshold fix | 56.75 / 30.12 / 39.36 | 40.08 / 21.28 / 27.80 | 34.39 / 18.25 / 23.85 | 1.037 |
+| dev (evaluation only) | Native fixed, no tiling | 36.78 / 35.83 / 36.30 | 22.07 / 21.50 / 21.78 | 18.85 / 18.37 / 18.60 | 1.904 |
+| dev (evaluation only) | Actual live fixed + default tiling | 39.94 / 43.78 / 41.77 | 23.19 / 25.42 / 24.25 | 18.28 / 20.04 / 19.12 | 2.142 |
+
+On the same **native YOLO-empty** subsets (432 test frames / 1,218 GT; 275 dev /
+378 GT), native-fixed thermal recovery is **101 / 111** center matches
+(8.29% / 29.37% recall), versus **34 / 60 before the fix**. Actual-live fixed
+with tiling recovers **156 / 115** center matches (12.81% / 30.42%); these totals
+include extra tile detections as well as thermal. All criteria, size buckets,
+boat-only and maritime-empty subsets remain available in current JSON.
+
+| Empty control | Fixed actual-live FP/frame | With >=1 FP | FP/MP |
+|---|---:|---:|---:|
+| Same 200 IR crops | 1.005 (201 contacts) | 28.00% | 15.974 |
+| Same 14 SMD grayscale tuning negatives | 0.0714 (1 contact) | 7.14% | 0.0344 |
+
+Unchanged standalone proposer and requested fusion @.35 crop metrics reproduce
+the earlier results exactly. Fixed native recall improves, but exposing previously
+dropped low-score proposals also increases false contacts; this is the expected
+effect of the wiring fix, not grounds to tune against IR.
+
+Cheap timing refresh, mean/p50/p95 ms: proposer **4.276 / 3.052 / 8.495**,
+RGB gate **2.234 / 2.217 / 2.392**. Cached YOLO original timing unchanged.
+Actual-live reconstructed native+tile inference plus thermal stage:
+**138.723 / 97.770 / 292.180 ms**; excludes tiler merge/hash/cache bookkeeping,
+and soft budget admission uses measured call cost, so it is not a fresh
+contiguous end-to-end benchmark. Engine latency refresh intentionally skipped.
+
+Final B2 full suite: `645 passed in 8.47s`. Earlier protocol failures are resolved
+by current origin/dev; no protocol changes made here. Log:
+`~/data/thermal-b2-pytest.log`; evaluator log: `~/data/thermal-eval-b2.log`.

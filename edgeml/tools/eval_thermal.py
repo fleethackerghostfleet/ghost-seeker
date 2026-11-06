@@ -22,7 +22,8 @@ import numpy as np
 import yaml
 
 from edgeml.detectors.anomaly import _iou
-from edgeml.detectors.thermal import ThermalFusionDetector, ThermalHotspotProposer, is_thermal
+from edgeml.detectors.thermal import ThermalFusionDetector, ThermalHotspotProposer, configure_thermal, is_thermal
+from edgeml.detectors.live_tiled import LiveTiledDetector
 from edgeml.detectors.tiled import estimate_horizon_y
 from edgeml.runtime.detectors import MARITIME_KEEP, load_detector
 from edgeml.runtime.threads import pin_threads
@@ -141,6 +142,28 @@ class YoloCache:
         self.path.write_text(json.dumps({"identity": self.identity, "records": self.records}))
 
 
+class CachedLiveBase:
+    name = "cached-live-yolo"
+
+    def __init__(self, cache):
+        self.cache = cache
+        self.image, self.dets, self.ms = None, [], 0.
+        self.inference_ms = 0.
+
+    def detect(self, image):
+        if image is self.image:
+            dets, ms = self.dets, self.ms
+        else:
+            key = "tile:" + hashlib.sha256(image.tobytes()).hexdigest() + str(image.shape)
+            dets, ms = self.cache.detect(key, image)
+        self.inference_ms += ms
+        return dets
+
+    def prepare(self, image, dets, ms):
+        self.image, self.dets, self.ms = image, dets, ms
+        self.inference_ms = 0.
+
+
 def empty_crop(image, gt, rng):
     """One deterministic box-disjoint sea crop; never rescale or mine on outputs."""
     height, width = image.shape[:2]
@@ -244,7 +267,10 @@ def main():
         yolo.detect(warm)
     cache = YoloCache(yolo, args.cache, identity)
     proposer, base35, base_live = ThermalHotspotProposer(), CachedBase(), CachedBase()
-    fusion35, live = ThermalFusionDetector(base35), ThermalFusionDetector(base_live)
+    fusion35 = ThermalFusionDetector(base35)
+    native_fixed, _ = configure_thermal(base_live, {}, score_thr=.35)
+    live_base = CachedLiveBase(cache)
+    live, _ = configure_thermal(LiveTiledDetector(live_base, score_thr=.35), {}, score_thr=.35)
     frames = defaultdict(lambda: defaultdict(list))
     empty_frames, empty_boat_frames = defaultdict(list), defaultdict(list)
     timing = defaultdict(list)
@@ -257,10 +283,13 @@ def main():
         props, pms = timed(proposer.detect, image)
         base35.dets, base_live.dets = yd, raw
         fused, _ = timed(fusion35.detect, image)
+        native_dets = [d for d in native_fixed.detect(image) if d.score >= .35]
+        live_base.prepare(image, raw, yms)
         live_dets, overhead = timed(live.detect, image)
         live_dets = [d for d in live_dets if d.score >= .35]
         boat_dets = [d for d in yd if d.label == "boat"]
-        detections = {"hotspot": props, "yolo": yd, "yolo_boat": boat_dets, "fusion": fused, "live_reported": live_dets}
+        detections = {"hotspot": props, "yolo": yd, "yolo_boat": boat_dets, "fusion": fused,
+                      "native_fixed": native_dets, "live_reported": live_dets}
         for config, ds in detections.items():
             frames[row["eval_split"]][config].append((ds, gt[row["image_id"]]))
             if not yd:
@@ -270,7 +299,7 @@ def main():
         if row["eval_split"] == "test":
             timing["proposer"].append(pms)
             timing["yolo_cached_inference"].append(yms)
-            timing["fusion_reconstructed"].append(yms + overhead)
+            timing["fusion_reconstructed"].append(live_base.inference_ms + live.last_timing_ms["thermal"])
         per_frame.append({"image_id": row["image_id"], "split": row["eval_split"], "gt": len(gt[row["image_id"]]),
                           "detections": {k: [asdict(d) for d in v] for k, v in detections.items()}})
         if (i + 1) % 100 == 0:
@@ -292,8 +321,9 @@ def main():
             continue
         crop, box, fallback = sample
         fallback_count += fallback
-        raw, _ = cache.detect(f"crop:{args.seed}:{row['image_id']}:{box}", crop)
+        raw, yms = cache.detect(f"crop:{args.seed}:{row['image_id']}:{box}", crop)
         base35.dets, base_live.dets = [d for d in raw if d.score >= .35], raw
+        live_base.prepare(crop, raw, yms)
         crop_records.append({"image_id": row["image_id"], "box": box, "horizon_fallback": fallback,
                              "megapixels": crop.shape[0] * crop.shape[1] / 1e6,
                              "hotspot": len(proposer.detect(crop)), "fusion": len(fusion35.detect(crop)),
@@ -304,8 +334,9 @@ def main():
     smd_records = []
     for row in smd_empty:
         image = cv2.cvtColor(cv2.cvtColor(read_image(image_path(args.data_root, row)), cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
-        raw, _ = cache.detect("smd-gray:" + row["image_id"], image)
+        raw, yms = cache.detect("smd-gray:" + row["image_id"], image)
         base35.dets, base_live.dets = [d for d in raw if d.score >= .35], raw
+        live_base.prepare(image, raw, yms)
         smd_records.append({"megapixels": image.shape[0] * image.shape[1] / 1e6, "hotspot": len(proposer.detect(image)),
                             "fusion": len(fusion35.detect(image)), "live_reported": sum(d.score >= .35 for d in live.detect(image))})
     cache.save()

@@ -149,7 +149,7 @@ class EdgemlEngine:
         self.detector = wrap_detector(self.detector, self.embedder, marine_mammal, score_thr)
         from edgeml.detectors.thermal import configure_thermal
 
-        self.detector, self.thermal_unknownness_floor = configure_thermal(self.detector, thermal_fallback)
+        self.detector, self.thermal_unknownness_floor = configure_thermal(self.detector, thermal_fallback, score_thr=self.score_thr)
         # H: realness-gated unknown flag by default (AGG_DEFAULTS) — on synth_unknown dev it removed every false "unknown" on
         # known vessels / sea-only frames while keeping the synthetic unusual contacts flagged (see reports/H_unknown.md).
         self.agg_params = AggregatorParams(**{**self.AGG_DEFAULTS, **(agg or {})})

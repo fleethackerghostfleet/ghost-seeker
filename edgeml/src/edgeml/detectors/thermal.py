@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 import cv2
 import numpy as np
@@ -88,11 +89,12 @@ class ThermalHotspotProposer:
 
 
 class ThermalFusionDetector(AnomalyFusionDetector):
-    def __init__(self, base, proposer=None, mode="when_empty", cover_thr=.25, **kwargs):
+    def __init__(self, base, proposer=None, mode="when_empty", cover_thr=.25, score_floor=None, **kwargs):
         if mode not in {"when_empty", "uncovered"}:
             raise ValueError("thermal mode must be when_empty or uncovered")
         super().__init__(base, proposer or ThermalHotspotProposer(), cover_thr=cover_thr, **kwargs)
         self.mode = mode
+        self.score_floor = score_floor
 
     def detect(self, image_bgr):
         dets = self.base.detect(image_bgr)
@@ -100,11 +102,13 @@ class ThermalFusionDetector(AnomalyFusionDetector):
         props = []
         if is_thermal(image_bgr) and (self.mode == "uncovered" or not any(d.score >= self.cover_thr for d in dets)):
             props = [p for p in self.proposer.detect(image_bgr) if not self._covered(p, dets)]
+            if self.score_floor is not None:
+                props = [replace(p, score=max(self.score_floor, p.score)) for p in props]
         self.last_timing_ms = dict(getattr(self.base, "last_timing_ms", {}) or {}, thermal=(time.perf_counter() - start) * 1000)
         return dets + props
 
 
-def configure_thermal(base, config):
+def configure_thermal(base, config, *, score_thr=None):
     if config is None or config is False:
         return base, .9
     config = {} if config is True else dict(config)
@@ -112,6 +116,8 @@ def configure_thermal(base, config):
     if not 0 <= floor <= 1:
         raise ValueError("thermal unknownness_floor must be in [0, 1]")
     fusion = {k: config.pop(k) for k in ("mode", "cover_thr", "iou_suppress", "pad") if k in config}
+    if score_thr is not None:
+        fusion.update(cover_thr=score_thr, score_floor=score_thr)
     return ThermalFusionDetector(base, ThermalHotspotProposer(**config), **fusion), floor
 
 

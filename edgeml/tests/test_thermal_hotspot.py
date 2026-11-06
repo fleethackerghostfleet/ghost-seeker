@@ -118,6 +118,34 @@ def test_cli_thermal_options(monkeypatch):
     assert constructor.call_args.kwargs["thermal_fallback"] is False
 
 
+@pytest.mark.parametrize("threshold", [.35, .6])
+def test_engine_report_threshold_controls_thermal_fusion(monkeypatch, threshold):
+    from edgeml.runtime import detectors
+    from edgeml.sidecar import service
+    import edgeml.tracking as tracking
+    from edgeml.detectors.live_tiled import LiveTiledDetector
+
+    base = SimpleNamespace(name="fake", detect=Mock(return_value=[Detection([150, 140, 30, 16], threshold - .01, "boat")]))
+    monkeypatch.setattr(detectors, "load_detector", lambda *a, **kw: base)
+    monkeypatch.setattr(tracking, "make_tracker", lambda *a, **kw: SimpleNamespace(update=lambda *a: []))
+    monkeypatch.setattr(service, "frame_report", lambda *a, **kw: None)
+    engine = service.EdgemlEngine("fake", score_thr=threshold, thermal_fallback={"cover_thr": .25})
+    assert isinstance(engine.detector.base, LiveTiledDetector)
+    assert engine.detector.cover_thr == threshold
+    proposal = Detection([150, 140, 30, 16], .31, "thermal contact")
+    engine.detector.proposer = SimpleNamespace(name="fake-proposals", detect=Mock(return_value=[proposal]))
+    response = engine.analyze("ir", sea(), None, [], False)
+    assert [d["label"] for d in response["detections"]] == ["thermal contact"]
+    assert response["detections"][0]["confidence"] == threshold
+    assert proposal.score == .31
+    base.detect.return_value = [Detection([150, 140, 30, 16], threshold, "boat")]
+    engine.detector.proposer.detect.reset_mock()
+    assert [d["label"] for d in engine.analyze("ir", sea(), None, [], False)["detections"]] == ["boat"]
+    engine.detector.proposer.detect.assert_not_called()
+    standalone = ThermalFusionDetector(SimpleNamespace(name="fake", detect=lambda im: []), engine.detector.proposer)
+    assert standalone.detect(sea())[0].score == .31
+
+
 def test_synthetic_is_deterministic_and_has_empty_frames():
     import importlib.util
     from pathlib import Path

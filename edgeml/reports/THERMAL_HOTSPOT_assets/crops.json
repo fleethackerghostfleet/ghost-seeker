@@ -165,7 +165,7 @@
     "megapixels": 0.0768,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 3
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6123",
@@ -207,7 +207,7 @@
     "megapixels": 0.0768,
     "hotspot": 4,
     "fusion": 4,
-    "live_reported": 2
+    "live_reported": 4
   },
   {
     "image_id": "ir_maritime_vessels/train/1_4895",
@@ -235,7 +235,7 @@
     "megapixels": 0.0768,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 2
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6245",
@@ -249,7 +249,7 @@
     "megapixels": 0.0768,
     "hotspot": 5,
     "fusion": 5,
-    "live_reported": 0
+    "live_reported": 5
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6126",
@@ -305,7 +305,7 @@
     "megapixels": 0.0768,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 1
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6240",
@@ -361,7 +361,7 @@
     "megapixels": 0.0768,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 0
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/9_572",
@@ -403,7 +403,7 @@
     "megapixels": 0.0768,
     "hotspot": 3,
     "fusion": 3,
-    "live_reported": 2
+    "live_reported": 3
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6610",
@@ -473,7 +473,7 @@
     "megapixels": 0.0768,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 4
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/1_10196",
@@ -641,7 +641,7 @@
     "megapixels": 0.0768,
     "hotspot": 3,
     "fusion": 3,
-    "live_reported": 0
+    "live_reported": 3
   },
   {
     "image_id": "ir_maritime_vessels/train/1_5895",
@@ -669,7 +669,7 @@
     "megapixels": 0.03552,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 1
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_4703",
@@ -683,7 +683,7 @@
     "megapixels": 0.0768,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 1
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_449",
@@ -725,7 +725,7 @@
     "megapixels": 0.0768,
     "hotspot": 3,
     "fusion": 3,
-    "live_reported": 2
+    "live_reported": 3
   },
   {
     "image_id": "ir_maritime_vessels/train/1_3489",
@@ -809,7 +809,7 @@
     "megapixels": 0.0768,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 5
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/1_4893",
@@ -893,7 +893,7 @@
     "megapixels": 0.0768,
     "hotspot": 3,
     "fusion": 3,
-    "live_reported": 0
+    "live_reported": 3
   },
   {
     "image_id": "ir_maritime_vessels/train/1_5881",
@@ -907,7 +907,7 @@
     "megapixels": 0.0768,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 0
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_3293",
@@ -1215,7 +1215,7 @@
     "megapixels": 0.0768,
     "hotspot": 1,
     "fusion": 1,
-    "live_reported": 0
+    "live_reported": 1
   },
   {
     "image_id": "ir_maritime_vessels/train/1_592",
@@ -1243,7 +1243,7 @@
     "megapixels": 0.06208,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 4
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/1_4912",
@@ -1369,7 +1369,7 @@
     "megapixels": 0.0768,
     "hotspot": 4,
     "fusion": 4,
-    "live_reported": 1
+    "live_reported": 4
   },
   {
     "image_id": "ir_maritime_vessels/train/1_10104",
@@ -1383,7 +1383,7 @@
     "megapixels": 0.0768,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 4
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/9_205",
@@ -1649,7 +1649,7 @@
     "megapixels": 0.0768,
     "hotspot": 1,
     "fusion": 1,
-    "live_reported": 0
+    "live_reported": 1
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6119",
@@ -1691,7 +1691,7 @@
     "megapixels": 0.0768,
     "hotspot": 1,
     "fusion": 1,
-    "live_reported": 0
+    "live_reported": 1
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6305",
@@ -1705,7 +1705,7 @@
     "megapixels": 0.0768,
     "hotspot": 5,
     "fusion": 5,
-    "live_reported": 3
+    "live_reported": 5
   },
   {
     "image_id": "ir_maritime_vessels/train/1_3050",
@@ -1719,7 +1719,7 @@
     "megapixels": 0.06464,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 0
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_3548",
@@ -1789,7 +1789,7 @@
     "megapixels": 0.0768,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 0
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6141",
@@ -1915,7 +1915,7 @@
     "megapixels": 0.0768,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 0
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6255",
@@ -1957,7 +1957,7 @@
     "megapixels": 0.03872,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 1
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_4701",
@@ -1971,7 +1971,7 @@
     "megapixels": 0.0768,
     "hotspot": 4,
     "fusion": 4,
-    "live_reported": 1
+    "live_reported": 4
   },
   {
     "image_id": "ir_maritime_vessels/train/1_10184",
@@ -1985,7 +1985,7 @@
     "megapixels": 0.0768,
     "hotspot": 8,
     "fusion": 8,
-    "live_reported": 0
+    "live_reported": 8
   },
   {
     "image_id": "ir_maritime_vessels/train/1_2456",
@@ -2013,7 +2013,7 @@
     "megapixels": 0.0256,
     "hotspot": 1,
     "fusion": 1,
-    "live_reported": 0
+    "live_reported": 1
   },
   {
     "image_id": "ir_maritime_vessels/train/9_161",
@@ -2055,7 +2055,7 @@
     "megapixels": 0.0768,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 1
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_2459",
@@ -2139,7 +2139,7 @@
     "megapixels": 0.0768,
     "hotspot": 7,
     "fusion": 7,
-    "live_reported": 0
+    "live_reported": 7
   },
   {
     "image_id": "ir_maritime_vessels/train/9_571",
@@ -2181,7 +2181,7 @@
     "megapixels": 0.0768,
     "hotspot": 2,
     "fusion": 2,
-    "live_reported": 0
+    "live_reported": 2
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6235",
@@ -2279,7 +2279,7 @@
     "megapixels": 0.0768,
     "hotspot": 3,
     "fusion": 3,
-    "live_reported": 2
+    "live_reported": 3
   },
   {
     "image_id": "ir_maritime_vessels/train/1_6174",
@@ -2391,7 +2391,7 @@
     "megapixels": 0.0768,
     "hotspot": 7,
     "fusion": 7,
-    "live_reported": 6
+    "live_reported": 7
   },
   {
     "image_id": "ir_maritime_vessels/train/1_3686",
@@ -2419,7 +2419,7 @@
     "megapixels": 0.0768,
     "hotspot": 4,
     "fusion": 4,
-    "live_reported": 0
+    "live_reported": 4
   },
   {
     "image_id": "ir_maritime_vessels/train/9_407",
@@ -2587,7 +2587,7 @@
     "megapixels": 0.0768,
     "hotspot": 5,
     "fusion": 5,
-    "live_reported": 0
+    "live_reported": 5
   },
   {
     "image_id": "ir_maritime_vessels/train/9_563",
@@ -2657,7 +2657,7 @@
     "megapixels": 0.0768,
     "hotspot": 5,
     "fusion": 5,
-    "live_reported": 4
+    "live_reported": 5
   },
   {
     "image_id": "ir_maritime_vessels/train/1_10101",
@@ -2699,7 +2699,7 @@
     "megapixels": 0.0768,
     "hotspot": 3,
     "fusion": 3,
-    "live_reported": 0
+    "live_reported": 3
   },
   {
     "image_id": "ir_maritime_vessels/train/9_551",
@@ -2769,7 +2769,7 @@
     "megapixels": 0.0768,
     "hotspot": 7,
     "fusion": 7,
-    "live_reported": 5
+    "live_reported": 7
   },
   {
     "image_id": "ir_maritime_vessels/train/1_3609",
