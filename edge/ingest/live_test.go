@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/gif"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
@@ -289,5 +291,48 @@ func TestMJPEGReconnectFrameCapAndRate(t *testing.T) {
 	}
 	if err := PullMJPEG(context.Background(), q, "file:///tmp/cam", Metadata{Source: "camera"}, 32, 1); err == nil {
 		t.Fatal("file URL accepted")
+	}
+}
+
+func TestMJPEGContinuousStreamUsesIdleNotLifetimeDeadline(t *testing.T) {
+	q := runningQueue(t, 1)
+	jpg := encJPEG(t, scene(40, 30))
+	camera := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mw := multipart.NewWriter(w)
+		w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary="+mw.Boundary())
+		for range 6 {
+			p, err := mw.CreatePart(textproto.MIMEHeader{"Content-Type": {"image/jpeg"}})
+			if err != nil {
+				return
+			}
+			if _, err := p.Write(jpg); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			if err := pause(r.Context(), 30*time.Millisecond); err != nil {
+				return
+			}
+		}
+		<-r.Context().Done()
+	}))
+	defer camera.Close()
+	client := newMJPEGClient(100 * time.Millisecond)
+	defer client.CloseIdleConnections()
+	if client.Timeout != 0 {
+		t.Fatal("continuous camera has a total response lifetime cap")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	err := mjpegConnection(ctx, client, q, camera.URL, Metadata{Source: "continuous"}, 1<<20, time.Millisecond)
+	var timeout net.Error
+	if !errors.As(err, &timeout) || !timeout.Timeout() || ctx.Err() != nil {
+		t.Fatalf("idle camera did not time out: %v", err)
+	}
+	q.mu.Lock()
+	processed := q.stats["mjpeg:continuous"].Processed
+	q.mu.Unlock()
+	if processed < 4 || time.Since(start) < 200*time.Millisecond {
+		t.Fatal("healthy stream was cut off by total lifetime", processed)
 	}
 }

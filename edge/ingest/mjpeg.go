@@ -7,6 +7,7 @@ import (
 	"math"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -30,7 +31,7 @@ func PullMJPEG(ctx context.Context, q *Queue, rawURL string, m Metadata, maxByte
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxFrameBytes
 	}
-	client := &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: 10 * time.Second}, Timeout: 2 * time.Minute}
+	client := newMJPEGClient(30 * time.Second)
 	defer client.CloseIdleConnections()
 	backoff := 250 * time.Millisecond
 	for ctx.Err() == nil {
@@ -56,6 +57,33 @@ func PullMJPEG(ctx context.Context, q *Queue, rawURL string, m Metadata, maxByte
 		}
 	}
 	return ctx.Err()
+}
+
+type cameraConn struct {
+	net.Conn
+	idle time.Duration
+}
+
+func (c cameraConn) Read(b []byte) (int, error) {
+	if err := c.SetReadDeadline(time.Now().Add(c.idle)); err != nil {
+		return 0, err
+	}
+	return c.Conn.Read(b)
+}
+
+func newMJPEGClient(idle time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	return &http.Client{Transport: &http.Transport{
+		ResponseHeaderTimeout: 10 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dialer.DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			return cameraConn{Conn: conn, idle: idle}, nil
+		},
+	}}
 }
 
 func mjpegConnection(ctx context.Context, client *http.Client, q *Queue, rawURL string, m Metadata, maxBytes int64, period time.Duration) error {
