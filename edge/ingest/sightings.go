@@ -252,21 +252,23 @@ func (g *Ingester) retag(ctx context.Context, id string, s *pb.Sighting) (*store
 	}
 	it.Features.Tags["event"] = eventTag(s.Event)
 	if s.Subtype != "" {
+		changed := it.Features.Tags["subtype"] != s.Subtype
 		it.Features.Tags["subtype"] = s.Subtype
 		synthetic := strings.Split(it.Features.Tags["synthetic"], ",")
-		if slices.Contains(synthetic, "subtype_conf") {
-			detections := append([]*pb.Detection{s.KeyDetection}, it.Features.Detections...)
-			for _, detection := range detections {
+		_, hasConfidence := it.Features.Tags["subtype_conf"]
+		if changed || !hasConfidence || slices.Contains(synthetic, "subtype_conf") {
+			delete(it.Features.Tags, "subtype_conf")
+			synthetic = slices.DeleteFunc(synthetic, func(key string) bool { return key == "subtype" || key == "subtype_conf" || key == "" })
+			for _, detection := range append([]*pb.Detection{s.KeyDetection}, it.Features.Detections...) {
 				if detection != nil && detection.Label == s.Subtype {
 					it.Features.Tags["subtype_conf"] = strconv.FormatFloat(float64(detection.Confidence), 'f', 3, 32)
-					synthetic = slices.DeleteFunc(synthetic, func(key string) bool { return key == "subtype" || key == "subtype_conf" })
-					if len(synthetic) == 0 {
-						delete(it.Features.Tags, "synthetic")
-					} else {
-						it.Features.Tags["synthetic"] = strings.Join(synthetic, ",")
-					}
 					break
 				}
+			}
+			if len(synthetic) == 0 {
+				delete(it.Features.Tags, "synthetic")
+			} else {
+				it.Features.Tags["synthetic"] = strings.Join(synthetic, ",")
 			}
 		}
 	}
