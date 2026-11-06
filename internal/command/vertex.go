@@ -234,7 +234,7 @@ func metadataToken(ctx context.Context) (string, time.Duration, error) {
 }
 
 func commandToken(ctx context.Context, command string) (string, time.Duration, error) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	fields := strings.Fields(command)
 	if len(fields) == 0 {
